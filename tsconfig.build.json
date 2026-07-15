@@ -1,0 +1,10 @@
+{
+  "extends": "@cosyte/tsconfig/library.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "coverage", "test", "**/*.test.ts", "**/*.spec.ts"]
+}

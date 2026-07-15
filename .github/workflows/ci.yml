@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Universal gates from the shared pipeline (typecheck, lint, format, test, coverage, build, attw,
+  # dual ESM/CJS smoke, actionlint) on the standard Node matrix.
+  ci:
+    uses: cosyte/.github/.github/workflows/ci.yml@main
