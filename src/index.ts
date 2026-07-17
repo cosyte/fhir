@@ -196,3 +196,29 @@ export type {
 } from "./terminology/service.js";
 export { collectTerminologyIssues } from "./validate/terminology.js";
 export type { TerminologyOptions } from "./validate/terminology.js";
+
+// Phase 6 — StructureDefinition + US Core profile validation: snapshot generation from a differential,
+// slicing (R4 discriminators value|exists|pattern|type|profile — position is R5-only), fixed[x] vs
+// pattern[x], and must-support as a system obligation (never instance-presence). No profile content
+// is bundled — a caller supplies the US Core (or vendor) StructureDefinitions.
+export { DISCRIMINATOR_TYPES, loadStructureDefinition } from "./profiles/structure-definition.js";
+export type {
+  Derivation,
+  Discriminator,
+  DiscriminatorType,
+  ElementBinding,
+  ElementDefinition,
+  ElementType,
+  Slicing,
+  SlicingRules,
+  StructureDefinition,
+  TypedValue,
+} from "./profiles/structure-definition.js";
+export { FhirProfileError, generateSnapshot, snapshotElements } from "./profiles/snapshot.js";
+export type { BaseResolver } from "./profiles/snapshot.js";
+export { matchesFixed, matchesPattern } from "./profiles/fixed-pattern.js";
+export { pathExists, resolvePath } from "./profiles/navigate.js";
+export { matchSlices, resolveSlices } from "./profiles/slicing.js";
+export type { SliceConstraint, SliceDefinition, SliceMatchResult } from "./profiles/slicing.js";
+export { collectProfileIssues, collectProfileVersionIssues } from "./profiles/validate-profile.js";
+export type { ProfileOptions } from "./profiles/validate-profile.js";

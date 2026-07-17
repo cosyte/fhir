@@ -11,7 +11,20 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–5 landed.** P5 — Terminology binding validation
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–6 landed.** P6 — StructureDefinition + US Core
+  profile validation (the sixth layer): `loadStructureDefinition`; **snapshot generation** from a
+  differential (`generateSnapshot` walks `baseDefinition`, merges/tightens by id, inserts slices, fails
+  closed with `FhirProfileError` on an unresolvable base / cycle); **slicing** (`resolveSlices` /
+  `matchSlices` — R4 discriminators `value|exists|pattern|type|profile`, **`position` R5-only and
+  excluded**; unsupported/insufficient discriminators → `PROFILE_SLICE_UNCHECKED`, never silently
+  passed); **`fixed[x]` (exact) vs `pattern[x]` (subset)** via `matchesFixed` / `matchesPattern`
+  (decimals precision-exact); **must-support as a system obligation** (`MUST_SUPPORT_ABSENT` is
+  **information, never error** — not instance-presence); multi-version `PROFILE_VERSION_MISMATCH`
+  against `meta.profile` pins; a bounded path navigator (`resolvePath` / `pathExists`). Runs inside
+  `validateResource(resource, { profiles, resolveBase })`; **no profile content is bundled** (US
+  Core/vendor SDs are supplied by the caller). Deferred: bundled US Core IG corpus + `validator_cli.jar`
+  differential (Phase 11); `type`/`profile` discriminators, reslicing, invariant `constraint`s (Phase
+  7 FHIRPath). P5 — Terminology binding validation
   (strength-aware, content-free): a frozen **known-systems registry** (`KNOWN_SYSTEMS` /
   `isKnownSystem`, the verified §5 `system` URIs as identities — no SNOMED/CPT/LOINC content vendored,
   ICD-10-PCS/HCPCS deliberately omitted per §10); **binding-strength severity** (`required` → error,
@@ -42,8 +55,11 @@ semantics, and validate it against US Core — without reading the FHIR spec.
   Reads, round-trips, structurally validates, never drops a modifier / status / negation, and now
   surfaces measured values by their true `value[x]` type with UCUM-`code` unit fidelity (P4, never
   converting a unit), and validates code `system`s + binding strength content-free (P5, no
-  terminology content vendored) — but **no** profile / US Core (P6), general FHIRPath invariants
-  (P7), or XML (P8) yet, no code-validity / value-set-membership guarantee without a supplied
+  terminology content vendored), and validates resources against caller-supplied US Core / vendor
+  `StructureDefinition`s — snapshot generation, slicing, fixed/pattern, must-support-as-obligation
+  (P6, no profile content bundled) — but with **no** general FHIRPath invariants / `type`·`profile`
+  slicing discriminators (P7) or XML (P8) yet, no bundled US Core IG corpus or `validator_cli.jar`
+  differential (P11), no code-validity / value-set-membership guarantee without a supplied
   terminology service, and no typed per-resource models. The roadmap lives in
   the meta-repo: `operations/roadmaps/fhir.md` (P0…P11).
 

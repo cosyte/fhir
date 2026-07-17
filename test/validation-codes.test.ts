@@ -33,10 +33,11 @@ describe("validation code / severity / issue-type registries (stable public cont
       INVARIANT: "invariant",
       NOT_SUPPORTED: "not-supported",
       INFORMATIONAL: "informational",
+      BUSINESS_RULE: "business-rule",
     });
   });
 
-  it("pins the validation codes (Phase 2 + Phase 3 safety + Phase 4 quantity + Phase 5 terminology)", () => {
+  it("pins the validation codes (Phase 2 + Phase 3 safety + Phase 4 quantity + Phase 5 terminology + Phase 6 profile)", () => {
     expect(VALIDATION_CODES).toEqual({
       UNKNOWN_ELEMENT: "UNKNOWN_ELEMENT",
       RESOURCE_TYPE_UNKNOWN: "RESOURCE_TYPE_UNKNOWN",
@@ -56,6 +57,12 @@ describe("validation code / severity / issue-type registries (stable public cont
       CODE_SYSTEM_UNKNOWN: "CODE_SYSTEM_UNKNOWN",
       CODE_SYSTEM_UNEXPECTED: "CODE_SYSTEM_UNEXPECTED",
       CODE_NOT_IN_VALUESET: "CODE_NOT_IN_VALUESET",
+      PROFILE_SLICE_UNMATCHED: "PROFILE_SLICE_UNMATCHED",
+      PROFILE_SLICE_UNCHECKED: "PROFILE_SLICE_UNCHECKED",
+      MUST_SUPPORT_ABSENT: "MUST_SUPPORT_ABSENT",
+      PROFILE_VERSION_MISMATCH: "PROFILE_VERSION_MISMATCH",
+      PROFILE_FIXED_MISMATCH: "PROFILE_FIXED_MISMATCH",
+      PROFILE_PATTERN_MISMATCH: "PROFILE_PATTERN_MISMATCH",
     });
   });
 
@@ -85,6 +92,14 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(validationIssue("CODE_SYSTEM_UNKNOWN", "information", "X").type).toBe("code-invalid");
     expect(validationIssue("CODE_SYSTEM_UNEXPECTED", "warning", "X").type).toBe("code-invalid");
     expect(validationIssue("CODE_NOT_IN_VALUESET", "error", "X").type).toBe("code-invalid");
+    expect(validationIssue("PROFILE_SLICE_UNMATCHED", "error", "X").type).toBe("structure");
+    expect(validationIssue("PROFILE_SLICE_UNCHECKED", "information", "X").type).toBe(
+      "informational",
+    );
+    expect(validationIssue("MUST_SUPPORT_ABSENT", "information", "X").type).toBe("informational");
+    expect(validationIssue("PROFILE_VERSION_MISMATCH", "warning", "X").type).toBe("business-rule");
+    expect(validationIssue("PROFILE_FIXED_MISMATCH", "error", "X").type).toBe("value");
+    expect(validationIssue("PROFILE_PATTERN_MISMATCH", "error", "X").type).toBe("value");
   });
 
   it("carries the constraint key only on an invariant finding, never elsewhere", () => {
