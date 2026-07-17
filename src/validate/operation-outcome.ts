@@ -19,17 +19,26 @@
  * @packageDocumentation
  */
 
-import { complex, list, primitive, type FhirComplex } from "../model/index.js";
+import { complex, list, primitive, type FhirComplex, type FhirProperty } from "../model/index.js";
 import { diagnosticFor, ISSUE_SEVERITIES, ISSUE_TYPES, type ValidationIssue } from "./issues.js";
 
 /** Build one `OperationOutcome.issue` complex node from a validation issue. */
 function issueNode(issue: ValidationIssue): FhirComplex {
-  return complex([
+  const properties: FhirProperty[] = [
     { name: "severity", value: primitive(issue.severity) },
     { name: "code", value: primitive(issue.type) },
     { name: "diagnostics", value: primitive(diagnosticFor(issue.code)) },
     { name: "expression", value: list([primitive(issue.expression)]) },
-  ]);
+  ];
+  // An invariant finding names its constraint key in `issue.details.text` — a public FHIR identifier
+  // (e.g. "ait-1"), never an instance value, so the redaction chokepoint holds.
+  if (issue.constraint !== undefined) {
+    properties.splice(3, 0, {
+      name: "details",
+      value: complex([{ name: "text", value: primitive(issue.constraint) }]),
+    });
+  }
+  return complex(properties);
 }
 
 /** The synthetic "all clear" issue emitted when there are no findings. */

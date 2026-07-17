@@ -93,4 +93,25 @@ describe("no PHI in validation output (the Phase-2 redaction chokepoint)", () =>
     }
     expect(nth(result.issues, 0).expression).toBe("Patient.birthDate");
   });
+
+  it("keeps safety findings (modifier / invariant) value-free — only the constraint key surfaces", () => {
+    // A retracted Observation with an unknown modifierExtension and a value: several safety findings,
+    // all of which must carry only locations + coded reasons, never the synthetic marker values.
+    const { resource } = parseResource(
+      '{"resourceType":"Observation","status":"final",' +
+        '"code":{"coding":[{"system":"http://loinc.org","code":"718-7"}]},' +
+        '"dataAbsentReason":{"coding":[{"code":"unknown"}]},' +
+        '"valueQuantity":{"value":99999999.010,"unit":"555-0100"},' +
+        '"modifierExtension":[{"url":"http://example.org/99999999"}]}',
+    );
+    const result = validateResource(resource);
+    const outcomeJson = serializeResource(result.toOperationOutcome());
+    const issuesJson = JSON.stringify(result.issues);
+    for (const marker of SYNTHETIC_MARKERS) {
+      expect(issuesJson).not.toContain(marker);
+      expect(outcomeJson).not.toContain(marker);
+    }
+    // The invariant key IS surfaced (a public spec identifier, not PHI).
+    expect(outcomeJson).toContain("obs-6");
+  });
 });

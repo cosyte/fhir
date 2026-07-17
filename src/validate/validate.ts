@@ -36,6 +36,7 @@ import {
 } from "../model/index.js";
 import { toOperationOutcome } from "./operation-outcome.js";
 import { isPrimitiveType, validatePrimitiveValue } from "./primitives.js";
+import { collectSafetyIssues } from "./safety.js";
 import {
   baseSchema,
   buildRegistry,
@@ -225,6 +226,12 @@ export function validateResource(
       emit(ctx, "CARDINALITY_MIN", `${rt}.${suffix}`);
     }
   }
+
+  // Safety layer (Phase 3): fail-closed modifier extensions (every type), retraction, and the named
+  // status/negation invariants (the six safety types). Independent of the structural schema above —
+  // it keys off `resourceType` and the modifier elements directly, so it runs even for types the
+  // Phase-2 schema does not model.
+  for (const issue of collectSafetyIssues(resource, rt)) ctx.issues.push(issue);
 
   return finalize(ctx);
 }

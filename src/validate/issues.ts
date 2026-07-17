@@ -50,6 +50,10 @@ export const ISSUE_TYPES = {
   VALUE: "value",
   /** A code is not a member of a required-strength value set binding. */
   CODE_INVALID: "code-invalid",
+  /** A content-validation rule (a resource `constraint` / invariant) failed. */
+  INVARIANT: "invariant",
+  /** The content uses a modifier the processor does not support and cannot safely ignore. */
+  NOT_SUPPORTED: "not-supported",
   /** Informational only — carries no defect (e.g. "this resource type has no schema yet"). */
   INFORMATIONAL: "informational",
 } as const;
@@ -81,6 +85,23 @@ export const VALIDATION_CODES = {
   PRIMITIVE_INVALID: "PRIMITIVE_INVALID",
   /** Layer 3 — a `code` value is outside a required-strength enumerated binding. */
   CODE_INVALID: "CODE_INVALID",
+  /**
+   * Safety (Phase 3) — an element carries a `modifierExtension` this library does not understand.
+   * FHIR's `?!` rule forbids ignoring an unknown modifier, so this **fails closed** (an `error`): the
+   * element cannot be safely processed. See {@link ./safety.js}.
+   */
+  UNHANDLED_MODIFIER_EXTENSION: "UNHANDLED_MODIFIER_EXTENSION",
+  /**
+   * Safety (Phase 3) — the resource is marked `entered-in-error` and is therefore **retracted, not
+   * data**. Surfaced as `information` (it is not itself a defect) so a consumer cannot miss it.
+   */
+  RETRACTED_RESOURCE: "RETRACTED_RESOURCE",
+  /**
+   * Safety (Phase 3) — a named resource invariant failed (`ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`,
+   * `obs-6`/`obs-7`). The specific constraint key travels in {@link ValidationIssue.constraint}, and
+   * the severity mirrors the constraint's own (`error`, except the best-practice `con-3` → `warning`).
+   */
+  INVARIANT_VIOLATED: "INVARIANT_VIOLATED",
 } as const;
 
 /** Discriminant union of every {@link VALIDATION_CODES} value. */
@@ -100,6 +121,12 @@ export interface ValidationIssue {
   readonly type: IssueType;
   /** FHIRPath location of the finding. */
   readonly expression: string;
+  /**
+   * The spec constraint key when the finding is an invariant violation (e.g. `"ait-1"`, `"obs-6"`) —
+   * a public FHIR identifier, never an instance value, so it is safe to surface. `undefined` for
+   * every non-invariant finding. It reaches the `OperationOutcome` as `issue.details.text`.
+   */
+  readonly constraint?: string;
 }
 
 /** The fixed R4 `IssueType` each validation code maps to. */
@@ -113,6 +140,9 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   CARDINALITY_MAX: ISSUE_TYPES.STRUCTURE,
   PRIMITIVE_INVALID: ISSUE_TYPES.VALUE,
   CODE_INVALID: ISSUE_TYPES.CODE_INVALID,
+  UNHANDLED_MODIFIER_EXTENSION: ISSUE_TYPES.NOT_SUPPORTED,
+  RETRACTED_RESOURCE: ISSUE_TYPES.INFORMATIONAL,
+  INVARIANT_VIOLATED: ISSUE_TYPES.INVARIANT,
 };
 
 /**
@@ -131,6 +161,12 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   CARDINALITY_MAX: "Element appears more times than its maximum cardinality allows.",
   PRIMITIVE_INVALID: "Primitive value does not match the required lexical form for its datatype.",
   CODE_INVALID: "Code is not in the required value set for this element.",
+  UNHANDLED_MODIFIER_EXTENSION:
+    "Element carries a modifierExtension this processor does not understand; it cannot be safely " +
+    "processed and is rejected (fail-closed).",
+  RETRACTED_RESOURCE:
+    "Resource is marked entered-in-error; it is retracted and must not be treated as active data.",
+  INVARIANT_VIOLATED: "A resource invariant (content-validation constraint) was violated.",
 };
 
 /**
@@ -155,6 +191,7 @@ export function diagnosticFor(code: ValidationCode): string {
  * @param code - The validation code.
  * @param severity - The R4 severity to record (mode-dependent for some codes).
  * @param expression - The FHIRPath location of the finding — never a value.
+ * @param constraint - The spec constraint key, for an invariant finding only (e.g. `"ait-1"`).
  * @example
  * ```ts
  * import { validationIssue } from "@cosyte/fhir";
@@ -165,6 +202,8 @@ export function validationIssue(
   code: ValidationCode,
   severity: ValidationSeverity,
   expression: string,
+  constraint?: string,
 ): ValidationIssue {
-  return { code, severity, type: ISSUE_TYPE_OF[code], expression };
+  const issue: ValidationIssue = { code, severity, type: ISSUE_TYPE_OF[code], expression };
+  return constraint === undefined ? issue : { ...issue, constraint };
 }

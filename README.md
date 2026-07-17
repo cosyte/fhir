@@ -4,16 +4,18 @@
 > JSON codec, and validation, with the same one-line ergonomics as the rest of the `@cosyte/*`
 > parser suite.
 
-**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–2 have landed** — the no-data-loss core (a
-precision-preserving JSON codec and typed primitive model) and the first three validation layers
+**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–3 have landed** — the no-data-loss core (a
+precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
-`OperationOutcome` output (see [What works today](#what-works-today)). It **reads, round-trips, and
-structurally validates**; it does **not** yet do terminology-binding (Phase 5), profile / US Core /
-slicing (Phase 6), or FHIRPath invariant (Phase 7) validation — and the built-in structural schema
-set is the base-resource elements plus `Patient` as a worked demonstrator; other resource types
-validate only against a caller-supplied schema. It is **JSON-only** (XML is Phase 8), with no typed
-per-resource models yet. See the roadmap in the meta-repo, `operations/roadmaps/fhir.md`. Do not
-depend on this package.
+`OperationOutcome` output, and the **safety-critical status & negation model** (`readSafety`,
+fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants — see
+[What works today](#what-works-today)). It **reads, round-trips, structurally validates, and never
+drops a modifier / status / negation**; it does **not** yet do UCUM/Quantity fidelity (Phase 4),
+terminology-binding (Phase 5), profile / US Core / slicing (Phase 6), or general FHIRPath invariant
+(Phase 7) validation — and the built-in structural schema set is the base-resource elements plus
+`Patient` as a worked demonstrator; other resource types validate only against a caller-supplied
+schema. It is **JSON-only** (XML is Phase 8), with no typed per-resource models yet. See the roadmap
+in the meta-repo, `operations/roadmaps/fhir.md`. Do not depend on this package.
 
 ## What works today
 
@@ -71,6 +73,38 @@ serializeResource(validateResource(resource).toOperationOutcome());
 - **Fail-safe:** never a false error — a resource type with no schema degrades to one informational
   `RESOURCE_NOT_MODELED`, not a wall of false unknowns. Built-in schemas: base-resource elements +
   `Patient`; supply your own via `validateResource(resource, { schemas: [...] })`.
+
+And the safety spine — FHIR's modifier (`?!`) elements, surfaced so they can never be silently dropped
+or inverted, and the invariants that harm a patient when read wrong:
+
+```ts
+import { parseResource, readSafety, validateResource } from "@cosyte/fhir";
+
+const { resource } = parseResource(
+  '{"resourceType":"AllergyIntolerance",' +
+    '"clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
+    '"code":{"coding":[{"system":"http://snomed.info/sct","code":"716186003"}]}}',
+);
+
+readSafety(resource).negations; // → ["no-known-allergy"]  (a recorded "no allergy", not an allergy TO it)
+
+// An unknown modifierExtension fails closed — the resource cannot be safely processed.
+const { resource: quirky } = parseResource(
+  '{"resourceType":"Observation","status":"final","modifierExtension":[{"url":"http://vendor.example/x"}]}',
+);
+validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_EXTENSION"]
+```
+
+- **Never-droppable status/negation:** `readSafety` carries `status` / `clinicalStatus` /
+  `verificationStatus` / `doNotPerform` / retraction and a classified `negations` list (`refuted`,
+  `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`, `entered-in-error`) across the six
+  safety resource types. `assertSafeToSummarize` **refuses** (throws) rather than flatten past an
+  unhandled modifier.
+- **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error) — FHIR's
+  `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
+- **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their
+  exact R4 FHIRPath (a general FHIRPath engine is Phase 7). This layer surfaces and enforces — it
+  never reconciles contradictions or infers clinical meaning.
 
 ## What this will be
 

@@ -1,0 +1,11 @@
+{
+  "resourceType": "MedicationRequest",
+  "id": "syn-mr",
+  "status": "active",
+  "intent": "order",
+  "doNotPerform": true,
+  "medicationCodeableConcept": {
+    "coding": [ { "system": "http://www.nlm.nih.gov/research/umls/rxnorm", "code": "197361" } ]
+  },
+  "subject": { "reference": "Patient/syn-1" }
+}
