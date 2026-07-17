@@ -114,4 +114,21 @@ describe("no PHI in validation output (the Phase-2 redaction chokepoint)", () =>
     // The invariant key IS surfaced (a public spec identifier, not PHI).
     expect(outcomeJson).toContain("obs-6");
   });
+
+  it("keeps a terminology finding value-free — the offending code never reaches diagnostics", () => {
+    // A bound medication coding a service reports is not a member; the code value is the marker.
+    const service = {
+      validateCode: () => ({ membership: "not-in" as const }),
+    };
+    const { resource } = parseResource(
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+        '"medicationCodeableConcept":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"99999999"}]}}',
+    );
+    const result = validateResource(resource, { terminology: service });
+    const outcomeJson = serializeResource(result.toOperationOutcome());
+    expect(JSON.stringify(result.issues)).not.toContain("99999999");
+    expect(outcomeJson).not.toContain("99999999");
+    const finding = result.issues.find((i) => i.code === "CODE_NOT_IN_VALUESET");
+    expect(finding?.expression).toContain("MedicationRequest.medicationCodeableConcept.coding");
+  });
 });

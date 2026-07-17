@@ -38,6 +38,9 @@ import { toOperationOutcome } from "./operation-outcome.js";
 import { isPrimitiveType, validatePrimitiveValue } from "./primitives.js";
 import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
+import { collectTerminologyIssues } from "./terminology.js";
+import type { TerminologyBinding } from "../terminology/bindings.js";
+import type { TerminologyService } from "../terminology/service.js";
 import {
   baseSchema,
   buildRegistry,
@@ -63,6 +66,13 @@ export interface ValidateOptions {
   readonly mode?: ValidationMode;
   /** Extra resource schemas, overriding the built-ins by type (Phase 6 feeds these). */
   readonly schemas?: readonly ResourceSchema[];
+  /**
+   * A pluggable terminology service for value-set membership (Phase 5). **None is bundled**; without
+   * one, terminology binding checks degrade to the content-free system checks and never false-error.
+   */
+  readonly terminology?: TerminologyService;
+  /** Extra terminology bindings, overriding the built-ins by element path (Phase 5 / Phase 6). */
+  readonly bindings?: readonly TerminologyBinding[];
 }
 
 /** The result of validating a resource: the findings plus an `OperationOutcome` view of them. */
@@ -238,6 +248,13 @@ export function validateResource(
   // required-unit conformance, and dose quantities. Like the safety layer it keys off the resource
   // model directly (independent of the Phase-2 structural schema).
   for (const issue of collectQuantityIssues(resource, rt)) ctx.issues.push(issue);
+
+  // Terminology binding layer (Phase 5): strength-aware, content-free system checks on bound codings,
+  // plus value-set membership when a terminology service is supplied. Degrades to warnings (never a
+  // false error) with no service. Also keys off the resource model directly.
+  // `options` is a superset of TerminologyOptions (it also carries `mode`/`schemas`), so it satisfies
+  // the layer's contract directly — avoids re-spreading optional fields under exactOptionalPropertyTypes.
+  for (const issue of collectTerminologyIssues(resource, rt, options)) ctx.issues.push(issue);
 
   return finalize(ctx);
 }

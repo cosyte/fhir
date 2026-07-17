@@ -8,6 +8,39 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Terminology binding validation — strength-aware, content-free (Phase 5).** Validate the codes on
+  **bound** elements by their `system` and binding **strength**, without vendoring any SNOMED / CPT /
+  LOINC / RxNorm content (roadmap §5). Every finding stays **value-free**, and **no false error is
+  ever raised without a terminology service** (roadmap §5 fail-safe).
+  - **Frozen known-systems registry** — `KNOWN_SYSTEMS` / `isKnownSystem`, the roadmap §5 verified
+    `system` URIs (LOINC, SNOMED CT, RxNorm, ICD-10-CM, ICD-9-CM, CPT, UCUM, NDC, CVX) as
+    **identities, not content**. The open-question URIs (ICD-10-PCS, HCPCS — roadmap §10) are
+    deliberately **omitted**: an unknown system reads as a safe, non-erroring degrade, never a guess.
+  - **Binding-strength severity** — `required` → error, `extensible` → error-unless (error on a
+    definitive not-in), `preferred` → warning, `example` → information (an example binding can
+    **never** error — rebinding an example code cannot fail). `BindingStrength`,
+    `TERMINOLOGY_BINDINGS`, `buildBindingRegistry`, `BINDING_STRENGTHS` are the public surface.
+  - **Content-free system checks** — a **known** system the value set does not draw from is
+    `CODE_SYSTEM_UNEXPECTED` (strength-scaled — a `warning` for extensible/preferred, since a code
+    from another system may be a justified extension; an `error` for required); an **unknown** system
+    is `CODE_SYSTEM_UNKNOWN` (`information`, never a defect — a local system is not invalid).
+  - **Value-set identities + multi-system elements** — the roadmap-named bindings ship built in:
+    `AllergyIntolerance.code` (extensible, **RxNorm + SNOMED**, both accepted on the one element —
+    roadmap §4.3) and `MedicationRequest`/`MedicationStatement.medicationCodeableConcept` (extensible,
+    **RxNorm**). `ALLERGY_SUBSTANCE_VALUESET` / `MEDICATION_VALUESET` name the VSAC value sets.
+  - **Pluggable terminology-service interface** — `TerminologyService`, `CodeValidationRequest`,
+    `CodeValidationResult`, `CodeMembership`: the one seam through which value-set **content** enters
+    the library, and **none is bundled**. Membership (`CODE_NOT_IN_VALUESET`) is checked only when a
+    service is supplied and definitively answers `not-in`; an `"unknown"` answer — or **no service at
+    all** — emits nothing and degrades to the content-free system checks. The service receives only
+    identities (value-set URL + `system` + `code`), never a resource or a value.
+  - `collectTerminologyIssues` runs inside `validateResource`; `validateResource(resource, {
+terminology, bindings })` supplies a service and/or extra bindings (mirroring Phase 2's `schemas`).
+    The new issue codes `CODE_SYSTEM_UNKNOWN` / `CODE_SYSTEM_UNEXPECTED` / `CODE_NOT_IN_VALUESET` (all
+    `code-invalid`) are snapshot-pinned — a rename is breaking. **Known limitation:** without a
+    supplied terminology service there is **no code-validity / value-set-membership** guarantee beyond
+    `system` + strength (no content is bundled — roadmap §5); per-element US Core binding coverage,
+    profiles (Phase 6), FHIRPath invariants (Phase 7), and XML (Phase 8) remain deferred.
 - **Quantity / UCUM fidelity — results & doses (Phase 4).** The third strand of the P0 safety spine
   (codec · status/negation · units): surface a measured value by the type it actually is, and its unit
   by the code that a machine may act on. Every finding stays **value-free**, and **no unit is ever

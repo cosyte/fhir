@@ -4,21 +4,26 @@
 > JSON codec, and validation, with the same one-line ergonomics as the rest of the `@cosyte/*`
 > parser suite.
 
-**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–4 have landed** — the no-data-loss core (a
+**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–5 have landed** — the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
-fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants), and **Quantity / UCUM
+fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants), **Quantity / UCUM
 fidelity** (the 11-way `Observation.value[x]` discrimination, UCUM-`code` unit fidelity, vital-signs
-required-unit conformance, dose quantities — see [What works today](#what-works-today)). It **reads,
-round-trips, structurally validates, never drops a modifier / status / negation, and surfaces
-measured values by their true type with the UCUM `code` (never the display string, never converted)**;
-it does **not** yet do terminology-binding (Phase 5), profile / US Core / slicing (Phase 6), or
-general FHIRPath invariant (Phase 7) validation — and the built-in structural schema set is the
-base-resource elements plus `Patient` as a worked demonstrator; other resource types validate only
-against a caller-supplied schema. It is **JSON-only** (XML is Phase 8), with no typed per-resource
-models yet, and it **never converts a unit** or evaluates a reference range. See the roadmap in the
-meta-repo, `operations/roadmaps/fhir.md`. Do not depend on this package.
+required-unit conformance, dose quantities), and **strength-aware, content-free terminology binding
+validation** (a frozen known-systems registry, binding-strength severity, the multi-system allergy /
+medication bindings, and a pluggable terminology-service interface — none bundled — see
+[What works today](#what-works-today)). It **reads, round-trips, structurally validates, never drops
+a modifier / status / negation, surfaces measured values by their true type with the UCUM `code`
+(never the display string, never converted), and validates code systems and binding strength without
+vendoring any SNOMED / CPT / LOINC content**; it does **not** yet do profile / US Core / slicing
+(Phase 6) or general FHIRPath invariant (Phase 7) validation — and the built-in structural schema set
+is the base-resource elements plus `Patient` as a worked demonstrator; other resource types validate
+only against a caller-supplied schema. Without a supplied terminology service there is **no
+code-validity / value-set-membership** guarantee beyond `system` + strength (no terminology content is
+bundled — licensing). It is **JSON-only** (XML is Phase 8), with no typed per-resource models yet, and
+it **never converts a unit** or evaluates a reference range. See the roadmap in the meta-repo,
+`operations/roadmaps/fhir.md`. Do not depend on this package.
 
 ## What works today
 
@@ -144,6 +149,42 @@ validateResource(bp).issues.map((i) => i.code); // → ["VITAL_SIGN_UNIT_NONCONF
 - **Dose `Quantity`** (`readMedicationDoses`) for MedicationRequest/Statement, and
   `interpretation` / `referenceRange` surfaced (`readInterpretations` / `readReferenceRanges`) —
   **never** used to auto-convert a unit or compute an abnormal flag.
+
+And terminology binding validation — strength-aware and **content-free**: validate a coding's code
+`system` and its binding **strength** without bundling any SNOMED / CPT / LOINC concept tables, and
+never raise a false error when no terminology service is configured:
+
+```ts
+import { parseResource, validateResource, type TerminologyService } from "@cosyte/fhir";
+
+// AllergyIntolerance.code binds extensibly to a multi-system value set (RxNorm + SNOMED). An
+// ICD-10-CM code is a KNOWN but unexpected system for this binding → a warning, never an error.
+const { resource: allergy } = parseResource(
+  '{"resourceType":"AllergyIntolerance",' +
+    '"clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
+    '"code":{"coding":[{"system":"http://hl7.org/fhir/sid/icd-10-cm","code":"T78.40XA"}]}}',
+);
+validateResource(allergy).issues.map((i) => `${i.code}/${i.severity}`);
+// → ["RESOURCE_NOT_MODELED/information", "CODE_SYSTEM_UNEXPECTED/warning"]  (valid stays true)
+
+// Value-set membership needs content the library does not bundle — supply a terminology service.
+const svc: TerminologyService = {
+  validateCode: ({ code }) => ({ membership: code === "7980" ? "in" : "not-in" }),
+};
+validateResource(allergy, { terminology: svc }); // now membership is checked against your service
+```
+
+- **Frozen known-systems registry** (`KNOWN_SYSTEMS`, `isKnownSystem`) — the verified §5 `system`
+  URIs (LOINC, SNOMED, RxNorm, ICD-10-CM/9-CM, CPT, UCUM, NDC, CVX) as **identities, not content**.
+  An unrecognized system is `CODE_SYSTEM_UNKNOWN` (`information`) — not a defect, just unvalidatable.
+- **Binding-strength severity:** `required` → error, `extensible` → error-unless, `preferred` →
+  warning, `example` → information (an example binding **never** errors). A known system outside a
+  binding's value set is `CODE_SYSTEM_UNEXPECTED` (strength-scaled); a service's definitive `not-in`
+  is `CODE_NOT_IN_VALUESET`. Built-in **multi-system** bindings: allergy substance (RxNorm + SNOMED),
+  medication (RxNorm).
+- **Pluggable terminology service** (`TerminologyService`) — the one seam for value-set content, and
+  **none is bundled** (licensing). With none supplied, checks degrade to the content-free system
+  level and **never false-error**; the service receives only identities, never a resource value.
 
 ## What this will be
 

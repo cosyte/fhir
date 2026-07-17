@@ -11,7 +11,18 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–4 landed.** P4 — Quantity / UCUM fidelity (results
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–5 landed.** P5 — Terminology binding validation
+  (strength-aware, content-free): a frozen **known-systems registry** (`KNOWN_SYSTEMS` /
+  `isKnownSystem`, the verified §5 `system` URIs as identities — no SNOMED/CPT/LOINC content vendored,
+  ICD-10-PCS/HCPCS deliberately omitted per §10); **binding-strength severity** (`required` → error,
+  `extensible` → error-unless, `preferred` → warning, `example` → info and never an error) via
+  `TERMINOLOGY_BINDINGS` / `buildBindingRegistry`; content-free system checks (`CODE_SYSTEM_UNEXPECTED`
+  for a known system outside the binding's value set, `CODE_SYSTEM_UNKNOWN` info for an unrecognized
+  one); the roadmap-named **multi-system** bindings (allergy substance RxNorm + SNOMED, medication
+  RxNorm); and a **pluggable terminology-service interface** (`TerminologyService`, none bundled) that
+  gates the only membership finding (`CODE_NOT_IN_VALUESET`) — with no service, checks degrade to the
+  content-free system level and never false-error (roadmap §5). `collectTerminologyIssues` runs inside
+  `validateResource(resource, { terminology, bindings })`. P4 — Quantity / UCUM fidelity (results
   & doses): `readObservationValue` discriminates the **11-way `Observation.value[x]` choice** (branch
   on the present type — a `"POSITIVE"` string or a `1:64` titer is never read as a number); the
   machine-actionable unit is the UCUM **`code`** (not the `unit` string), shape-checked
@@ -30,8 +41,10 @@ semantics, and validate it against US Core — without reading the FHIR spec.
   unknown `modifierExtension`, `entered-in-error` retraction, and the `ait`/`con`/`obs` invariants).
   Reads, round-trips, structurally validates, never drops a modifier / status / negation, and now
   surfaces measured values by their true `value[x]` type with UCUM-`code` unit fidelity (P4, never
-  converting a unit) — but **no** terminology binding (P5), profile / US Core (P6), general
-  FHIRPath invariants (P7), or XML (P8) yet, and no typed per-resource models. The roadmap lives in
+  converting a unit), and validates code `system`s + binding strength content-free (P5, no
+  terminology content vendored) — but **no** profile / US Core (P6), general FHIRPath invariants
+  (P7), or XML (P8) yet, no code-validity / value-set-membership guarantee without a supplied
+  terminology service, and no typed per-resource models. The roadmap lives in
   the meta-repo: `operations/roadmaps/fhir.md` (P0…P11).
 
 ## Tech Stack (the shared `@cosyte/*` standard)
