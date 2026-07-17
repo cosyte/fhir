@@ -122,6 +122,31 @@ export const VALIDATION_CODES = {
    * preserved and surfaced by its real type — a caller must not read it as a number.
    */
   VALUE_TYPE_UNEXPECTED: "VALUE_TYPE_UNEXPECTED",
+  /**
+   * Terminology (Phase 5) — a bound coding's `system` URI is not in the frozen known-systems registry
+   * (and not one the binding's value set draws from). Always `information` (`code-invalid`): an
+   * unknown system may be a legitimate local/proprietary one, so it is never a defect — it only means
+   * the library cannot validate codes drawn from it. Content-free, so it can never flip validity.
+   */
+  CODE_SYSTEM_UNKNOWN: "CODE_SYSTEM_UNKNOWN",
+  /**
+   * Terminology (Phase 5) — a bound coding uses a **known** code `system` that is not one the
+   * binding's value set draws from (e.g. an ICD-10-CM code where the binding expects RxNorm + SNOMED).
+   * This is the content-free "wrong system for this binding" check — decided from the `system` alone,
+   * with no value-set content. Severity follows the binding strength (`required` → `error`;
+   * `extensible`/`preferred` → `warning`, since a different system may be a legitimate extension;
+   * `example` → none). Compared on the `system` URI, never a code value.
+   */
+  CODE_SYSTEM_UNEXPECTED: "CODE_SYSTEM_UNEXPECTED",
+  /**
+   * Terminology (Phase 5) — a configured terminology service reported that a bound coding's
+   * `(system, code)` is **not a member** of the binding's value set. Severity follows the binding
+   * strength (`required`/`extensible` → `error`; `preferred` → `warning`; `example` → `information`,
+   * never an error). Emitted **only** when a service definitively answers `not-in`; with no service,
+   * or an `unknown` answer, the library degrades to the content-free system checks and never
+   * false-errors (roadmap §5 fail-safe). Value-free — the coding location, never the code itself.
+   */
+  CODE_NOT_IN_VALUESET: "CODE_NOT_IN_VALUESET",
 } as const;
 
 /** Discriminant union of every {@link VALIDATION_CODES} value. */
@@ -166,6 +191,9 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   UCUM_UNIT_UNRECOGNIZED: ISSUE_TYPES.VALUE,
   VITAL_SIGN_UNIT_NONCONFORMANT: ISSUE_TYPES.CODE_INVALID,
   VALUE_TYPE_UNEXPECTED: ISSUE_TYPES.VALUE,
+  CODE_SYSTEM_UNKNOWN: ISSUE_TYPES.CODE_INVALID,
+  CODE_SYSTEM_UNEXPECTED: ISSUE_TYPES.CODE_INVALID,
+  CODE_NOT_IN_VALUESET: ISSUE_TYPES.CODE_INVALID,
 };
 
 /**
@@ -196,6 +224,12 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   VITAL_SIGN_UNIT_NONCONFORMANT:
     "Vital-signs measurement carries a unit the vital-signs profile does not allow for this code.",
   VALUE_TYPE_UNEXPECTED: "Observation value is present but not the expected type for this profile.",
+  CODE_SYSTEM_UNKNOWN:
+    "Coding uses a code system that is not in the known-systems registry; its codes cannot be " +
+    "validated (an unrecognized system is not itself an error).",
+  CODE_SYSTEM_UNEXPECTED: "Coding uses a code system that the bound value set does not draw from.",
+  CODE_NOT_IN_VALUESET:
+    "Coding is not a member of the value set required by this element's binding.",
 };
 
 /**

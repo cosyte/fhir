@@ -163,3 +163,36 @@ export type {
 export { locateDoseQuantities, readMedicationDoses } from "./quantity/dose.js";
 export type { LocatedDoseQuantity } from "./quantity/dose.js";
 export { collectQuantityIssues } from "./validate/quantity.js";
+
+// Phase 5 — terminology binding validation: strength-aware, content-free. Known-systems registry,
+// element→value-set bindings, and a pluggable terminology-service interface (none bundled — §5).
+export {
+  isKnownSystem,
+  KNOWN_SYSTEMS,
+  CPT_SYSTEM,
+  CVX_SYSTEM,
+  ICD9CM_SYSTEM,
+  ICD10CM_SYSTEM,
+  NDC_SYSTEM,
+  RXNORM_SYSTEM,
+} from "./terminology/systems.js";
+export {
+  buildBindingRegistry,
+  ALLERGY_SUBSTANCE_VALUESET,
+  BINDING_STRENGTHS,
+  MEDICATION_VALUESET,
+  TERMINOLOGY_BINDINGS,
+} from "./terminology/bindings.js";
+export type {
+  BindingRegistry,
+  BindingStrength,
+  TerminologyBinding,
+} from "./terminology/bindings.js";
+export type {
+  CodeMembership,
+  CodeValidationRequest,
+  CodeValidationResult,
+  TerminologyService,
+} from "./terminology/service.js";
+export { collectTerminologyIssues } from "./validate/terminology.js";
+export type { TerminologyOptions } from "./validate/terminology.js";
