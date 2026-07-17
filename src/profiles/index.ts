@@ -1,11 +1,40 @@
 /**
- * FHIR profiles — StructureDefinition-driven constraints (US Core the primary target, per the
- * R4 + US Core + SMART regulatory anchor in
- * `documentation/decisions/0004-r4-first-version-strategy.md`).
+ * FHIR profiles — StructureDefinition-driven conformance (Phase 6).
  *
- * Profile validation and slicing depend on FHIRPath (Phase 7) — see
- * `documentation/decisions/0002-fhirpath-dependency-posture.md`.
+ * The profile engine, in dependency order: load a `StructureDefinition`
+ * ({@link ./structure-definition.js}), generate its snapshot from a differential
+ * ({@link ./snapshot.js}), compare `fixed[x]` / `pattern[x]` constraints ({@link ./fixed-pattern.js}),
+ * navigate element paths ({@link ./navigate.js}), match slices ({@link ./slicing.js}), and validate a
+ * resource against a profile ({@link ./validate-profile.js}). US Core is the primary target (the
+ * R4 + US Core + SMART regulatory anchor, ADR 0004), but **no StructureDefinition content is
+ * bundled** — a caller supplies the profiles to validate against, exactly as the terminology layer
+ * takes a terminology service.
  *
- * This barrel is an intentional placeholder for the P0 bootstrap: no parse code this phase.
+ * @packageDocumentation
  */
-export {};
+
+export { DISCRIMINATOR_TYPES, loadStructureDefinition } from "./structure-definition.js";
+export type {
+  Derivation,
+  Discriminator,
+  DiscriminatorType,
+  ElementBinding,
+  ElementDefinition,
+  ElementType,
+  Slicing,
+  SlicingRules,
+  StructureDefinition,
+  TypedValue,
+} from "./structure-definition.js";
+
+export { FhirProfileError, generateSnapshot, snapshotElements } from "./snapshot.js";
+export type { BaseResolver } from "./snapshot.js";
+
+export { matchesFixed, matchesPattern } from "./fixed-pattern.js";
+export { pathExists, resolvePath } from "./navigate.js";
+
+export { matchSlices, resolveSlices } from "./slicing.js";
+export type { SliceConstraint, SliceDefinition, SliceMatchResult } from "./slicing.js";
+
+export { collectProfileIssues, collectProfileVersionIssues } from "./validate-profile.js";
+export type { ProfileOptions } from "./validate-profile.js";

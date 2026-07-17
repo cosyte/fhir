@@ -4,26 +4,30 @@
 > JSON codec, and validation, with the same one-line ergonomics as the rest of the `@cosyte/*`
 > parser suite.
 
-**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–5 have landed** — the no-data-loss core (a
+**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–6 have landed** — the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
 fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants), **Quantity / UCUM
 fidelity** (the 11-way `Observation.value[x]` discrimination, UCUM-`code` unit fidelity, vital-signs
-required-unit conformance, dose quantities), and **strength-aware, content-free terminology binding
+required-unit conformance, dose quantities), **strength-aware, content-free terminology binding
 validation** (a frozen known-systems registry, binding-strength severity, the multi-system allergy /
-medication bindings, and a pluggable terminology-service interface — none bundled — see
-[What works today](#what-works-today)). It **reads, round-trips, structurally validates, never drops
-a modifier / status / negation, surfaces measured values by their true type with the UCUM `code`
-(never the display string, never converted), and validates code systems and binding strength without
-vendoring any SNOMED / CPT / LOINC content**; it does **not** yet do profile / US Core / slicing
-(Phase 6) or general FHIRPath invariant (Phase 7) validation — and the built-in structural schema set
-is the base-resource elements plus `Patient` as a worked demonstrator; other resource types validate
-only against a caller-supplied schema. Without a supplied terminology service there is **no
-code-validity / value-set-membership** guarantee beyond `system` + strength (no terminology content is
-bundled — licensing). It is **JSON-only** (XML is Phase 8), with no typed per-resource models yet, and
-it **never converts a unit** or evaluates a reference range. See the roadmap in the meta-repo,
-`operations/roadmaps/fhir.md`. Do not depend on this package.
+medication bindings, and a pluggable terminology-service interface — none bundled), and
+**StructureDefinition-driven profile validation** (snapshot generation, slicing, `fixed[x]` /
+`pattern[x]`, and must-support as a system obligation — against caller-supplied US Core / vendor
+profiles, none bundled — see [What works today](#what-works-today)). It **reads, round-trips,
+structurally validates, never drops a modifier / status / negation, surfaces measured values by their
+true type with the UCUM `code`** (never the display string, never converted), **validates code systems
+and binding strength without vendoring any SNOMED / CPT / LOINC content, and validates against US Core
+profiles you supply**; it does **not** yet do general FHIRPath invariant / `type`·`profile` slicing
+discriminator validation (Phase 7), and it bundles **no** US Core IG corpus or `validator_cli.jar`
+differential (Phase 11). The built-in structural schema set is the base-resource elements plus
+`Patient` as a worked demonstrator; other resource types validate only against a caller-supplied schema
+or profile. Without a supplied terminology service there is **no code-validity / value-set-membership**
+guarantee beyond `system` + strength (no terminology content is bundled — licensing). It is
+**JSON-only** (XML is Phase 8), with no typed per-resource models yet, and it **never converts a unit**
+or evaluates a reference range. See the roadmap in the meta-repo, `operations/roadmaps/fhir.md`. Do not
+depend on this package.
 
 ## What works today
 
@@ -185,6 +189,50 @@ validateResource(allergy, { terminology: svc }); // now membership is checked ag
 - **Pluggable terminology service** (`TerminologyService`) — the one seam for value-set content, and
   **none is bundled** (licensing). With none supplied, checks degrade to the content-free system
   level and **never false-error**; the service receives only identities, never a resource value.
+
+And StructureDefinition-driven **profile validation** (US Core the target) — snapshot generation,
+slicing, `fixed[x]` / `pattern[x]`, and **must-support as a system obligation**. Like the terminology
+layer it ships the _engine_, not the _content_: you supply the profiles (the published US Core /
+vendor `StructureDefinition`s), and **nothing is bundled**.
+
+```ts
+import { loadStructureDefinition, parseResource, validateResource } from "@cosyte/fhir";
+
+// Load a US Core profile (its published JSON) into a StructureDefinition.
+const profile = loadStructureDefinition(parseResource(usCoreAllergyProfileJson).resource);
+
+const { resource: allergy } = parseResource(
+  '{"resourceType":"AllergyIntolerance",' +
+    '"clinicalStatus":{"coding":[{"code":"active"}]},' +
+    '"code":{"coding":[{"code":"227493005"}]},"patient":{"reference":"Patient/1"}}',
+);
+
+// verificationStatus is must-support and absent → information, NEVER an error (the resource stays valid).
+const { issues, valid } = validateResource(allergy, { profiles: profile ? [profile] : [] });
+valid; // → true
+issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/information", …]
+```
+
+- **Snapshot generation** (`generateSnapshot` / `snapshotElements`) walks `baseDefinition` and merges
+  the differential onto the base snapshot — tightening matched elements by id, inserting slices, and
+  failing closed (`FhirProfileError`) on an unresolvable base or a `baseDefinition` cycle. A caller
+  supplies the base via a resolver; a profile that already ships a snapshot is used as-is.
+- **Slicing** matches each occurrence of a sliced element to a slice by its discriminators. The R4
+  set is `value | exists | pattern | type | profile` (**`position` is R5-only** and excluded). What
+  needs a FHIRPath engine (`type` / `profile` discriminators, reslicing — Phase 7) is reported
+  `PROFILE_SLICE_UNCHECKED` (`information`) — **never silently passed**. An unmatched occurrence under
+  `closed` slicing is `PROFILE_SLICE_UNMATCHED` (error); a missing required slice is `CARDINALITY_MIN`.
+- **`fixed[x]` vs `pattern[x]`** (`matchesFixed` / `matchesPattern`) — `fixed` is exact equality
+  (nothing extra), `pattern` is a subset (extras allowed); decimals compared precision-exactly, never
+  via a float. A mismatch is `PROFILE_FIXED_MISMATCH` / `PROFILE_PATTERN_MISMATCH` (error).
+- **Must-support is a system obligation, not instance-presence** — an absent must-support element is
+  `MUST_SUPPORT_ABSENT` at **`information`, never an error**. A strict client that rejects an absent
+  must-support element is the classic interop bug this rule exists to prevent (roadmap §4/§8).
+- **Multi-version** — a `meta.profile` `canonical|version` pin the supplied set carries at a different
+  version is `PROFILE_VERSION_MISMATCH` (warning) rather than a silent best-effort validation.
+- **Deferred:** the bundled multi-version US Core IG corpus and the `validator_cli.jar` differential
+  (a JVM dev/CI job — Phase 11); invariant `constraint`s and the `type` / `profile` discriminators
+  (need the FHIRPath subset — Phase 7). Every finding is **value-free** (a code + a FHIRPath location).
 
 ## What this will be
 

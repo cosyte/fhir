@@ -8,6 +8,45 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **StructureDefinition + US Core profile validation (Phase 6).** A StructureDefinition-driven profile
+  layer — the sixth validation layer (structure → cardinality → value-domain → terminology →
+  **profile** → invariant). Like the terminology layer it ships the **engine, not the content**: a
+  caller supplies the US Core (or vendor) `StructureDefinition`s and **nothing is bundled**. Every
+  finding stays **value-free** (a code + a FHIRPath location, never an instance value).
+  - **StructureDefinition model + loader** — `loadStructureDefinition` reads a profile out of the
+    generic model (identity, `derivation`, `baseDefinition`, `differential` / `snapshot`, and
+    per-element cardinality, `mustSupport`, `type`, `binding`, `slicing`, `fixed[x]` / `pattern[x]`).
+    Public types: `StructureDefinition`, `ElementDefinition`, `Slicing`, `Discriminator`,
+    `DiscriminatorType`, `TypedValue`, and `DISCRIMINATOR_TYPES` (the R4 discriminator set — with
+    **`position` R5-only and excluded**).
+  - **Snapshot generation** — `generateSnapshot` / `snapshotElements` walk `baseDefinition` and merge
+    the differential onto the base snapshot: matched elements tightened by id, slices inserted, base
+    elements preserved in order. Fails closed with `FhirProfileError` on an unresolvable base or a
+    `baseDefinition` cycle. A profile that already carries a snapshot is used as-is.
+  - **Slicing** — `resolveSlices` / `matchSlices` assign each occurrence of a sliced element to a
+    slice by its discriminators (`value` / `pattern` against the slice's `fixed`/`pattern`; `exists`
+    against slice cardinality). What needs a FHIRPath engine (`type` / `profile` discriminators, R5
+    `position`, empty/insufficient discriminators) is reported `PROFILE_SLICE_UNCHECKED`
+    (`information`) — **never silently passed**. An unmatched occurrence under `closed` slicing is
+    `PROFILE_SLICE_UNMATCHED` (error); a missing required slice is `CARDINALITY_MIN`.
+  - **`fixed[x]` vs `pattern[x]`** — `matchesFixed` (exact equality, nothing extra) vs `matchesPattern`
+    (subset, extras allowed); decimals compared precision-exactly through `FhirDecimal`, never a
+    float. Mismatches are `PROFILE_FIXED_MISMATCH` / `PROFILE_PATTERN_MISMATCH` (error).
+  - **Must-support as a system obligation** — an absent must-support element is `MUST_SUPPORT_ABSENT`
+    at **`information`, never an error** (the roadmap's load-bearing rule: must-support obliges the
+    sender to be able to populate and the receiver to tolerate absence — it is **not** instance
+    presence). A bounded path navigator (`resolvePath` / `pathExists`) resolves element/discriminator
+    paths without the Phase-7 FHIRPath engine.
+  - **Multi-version** — `PROFILE_VERSION_MISMATCH` (warning) when a `meta.profile` `canonical|version`
+    pin is carried by the supplied profile set at a different version. `collectProfileIssues` /
+    `collectProfileVersionIssues` run inside `validateResource(resource, { profiles, resolveBase })`.
+    The new issue codes (`PROFILE_SLICE_UNMATCHED`, `PROFILE_SLICE_UNCHECKED`, `MUST_SUPPORT_ABSENT`,
+    `PROFILE_VERSION_MISMATCH`, `PROFILE_FIXED_MISMATCH`, `PROFILE_PATTERN_MISMATCH`) and the
+    `business-rule` `IssueType` are snapshot-pinned — a rename is breaking.
+  - **Known limitations (deferred):** no bundled multi-version US Core IG corpus and no
+    `validator_cli.jar` differential (a JVM dev/CI job — Phase 11); the `type` / `profile`
+    discriminators, reslicing, and invariant `constraint`s need the FHIRPath subset (Phase 7);
+    profile-declared bindings are covered by the Phase-5 terminology layer, not re-enforced here.
 - **Terminology binding validation — strength-aware, content-free (Phase 5).** Validate the codes on
   **bound** elements by their `system` and binding **strength**, without vendoring any SNOMED / CPT /
   LOINC / RxNorm content (roadmap §5). Every finding stays **value-free**, and **no false error is

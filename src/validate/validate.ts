@@ -39,6 +39,9 @@ import { isPrimitiveType, validatePrimitiveValue } from "./primitives.js";
 import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
 import { collectTerminologyIssues } from "./terminology.js";
+import { collectProfileIssues, collectProfileVersionIssues } from "../profiles/validate-profile.js";
+import type { BaseResolver } from "../profiles/snapshot.js";
+import type { StructureDefinition } from "../profiles/structure-definition.js";
 import type { TerminologyBinding } from "../terminology/bindings.js";
 import type { TerminologyService } from "../terminology/service.js";
 import {
@@ -73,6 +76,18 @@ export interface ValidateOptions {
   readonly terminology?: TerminologyService;
   /** Extra terminology bindings, overriding the built-ins by element path (Phase 5 / Phase 6). */
   readonly bindings?: readonly TerminologyBinding[];
+  /**
+   * Profiles (`StructureDefinition`s) to validate against (Phase 6). **None is bundled** — a caller
+   * supplies the US Core (or vendor) profiles. Every supplied profile whose `type` matches the
+   * resource type is applied (fixed/pattern, must-support, slicing, profile cardinality), and the
+   * resource's `meta.profile` version pins are checked against the supplied set.
+   */
+  readonly profiles?: readonly StructureDefinition[];
+  /**
+   * A resolver from a `baseDefinition` canonical URL to a loaded `StructureDefinition`, used only to
+   * generate a snapshot for a supplied profile that carries a differential but no snapshot (Phase 6).
+   */
+  readonly resolveBase?: BaseResolver;
 }
 
 /** The result of validating a resource: the findings plus an `OperationOutcome` view of them. */
@@ -255,6 +270,24 @@ export function validateResource(
   // `options` is a superset of TerminologyOptions (it also carries `mode`/`schemas`), so it satisfies
   // the layer's contract directly — avoids re-spreading optional fields under exactOptionalPropertyTypes.
   for (const issue of collectTerminologyIssues(resource, rt, options)) ctx.issues.push(issue);
+
+  // Profile layer (Phase 6): validate against each supplied StructureDefinition whose `type` matches
+  // (fixed/pattern, must-support-as-obligation, profile cardinality, slicing), plus the resource's
+  // `meta.profile` version pins against the supplied set. No profile content is bundled — a caller
+  // supplies US Core (or vendor) profiles, exactly as the terminology layer takes a service.
+  if (options.profiles !== undefined && options.profiles.length > 0) {
+    const profileOptions =
+      options.resolveBase === undefined ? {} : { resolve: options.resolveBase };
+    for (const profile of options.profiles) {
+      if (profile.type !== rt) continue;
+      for (const issue of collectProfileIssues(resource, profile, profileOptions)) {
+        ctx.issues.push(issue);
+      }
+    }
+    for (const issue of collectProfileVersionIssues(resource, options.profiles)) {
+      ctx.issues.push(issue);
+    }
+  }
 
   return finalize(ctx);
 }
