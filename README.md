@@ -4,10 +4,14 @@
 > JSON codec, and validation, with the same one-line ergonomics as the rest of the `@cosyte/*`
 > parser suite.
 
-**Status: pre-alpha (`0.0.0`, unpublished).** **Phase 1 has landed** — the no-data-loss core: a
-precision-preserving JSON codec and typed primitive model (see [What works today](#what-works-today)).
-It **reads and round-trips**; it does **not validate yet** (structural, terminology, profile, and
-invariant validation land in later phases), it is **JSON-only** (XML is Phase 8), and it has no typed
+**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–2 have landed** — the no-data-loss core (a
+precision-preserving JSON codec and typed primitive model) and the first three validation layers
+(structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
+`OperationOutcome` output (see [What works today](#what-works-today)). It **reads, round-trips, and
+structurally validates**; it does **not** yet do terminology-binding (Phase 5), profile / US Core /
+slicing (Phase 6), or FHIRPath invariant (Phase 7) validation — and the built-in structural schema
+set is the base-resource elements plus `Patient` as a worked demonstrator; other resource types
+validate only against a caller-supplied schema. It is **JSON-only** (XML is Phase 8), with no typed
 per-resource models yet. See the roadmap in the meta-repo, `operations/roadmaps/fhir.md`. Do not
 depend on this package.
 
@@ -37,6 +41,36 @@ issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", ex
   alignment**; a misaligned value/`_`-array **fails closed** rather than mis-attaching an extension.
 - **Lenient read, spec-clean write** (Postel's Law), `resourceType` resolvable in any position, and a
   `parseReference` classifier (relative / absolute / logical / fragment).
+
+And the first three validation layers — structure, cardinality, and primitive/enumerated-`code`
+value-domain — with a value-free `OperationOutcome`:
+
+```ts
+import { parseResource, validateResource, serializeResource } from "@cosyte/fhir";
+
+const { resource } = parseResource('{"resourceType":"Patient","gender":"masculine","wibble":1}');
+const { issues, valid } = validateResource(resource); // lenient (read) mode by default
+
+valid; // → false
+issues;
+// → [
+//   { code: "UNKNOWN_ELEMENT", severity: "warning",  type: "structure",    expression: "Patient.wibble" },
+//   { code: "CODE_INVALID",    severity: "error",    type: "code-invalid", expression: "Patient.gender" },
+// ]
+
+// Render an OperationOutcome — the diagnostics are value-free (a coded reason + a location, never
+// the offending value "masculine"), the Phase-2 PHI redaction chokepoint.
+serializeResource(validateResource(resource).toOperationOutcome());
+```
+
+- **Layered, severity-tagged** (validation.html): structure (`UNKNOWN_ELEMENT`, `TYPE_MISMATCH`,
+  `CHOICE_AMBIGUOUS`), cardinality (`CARDINALITY_MIN`/`_MAX`), value-domain (`PRIMITIVE_INVALID` with
+  the R4 datatype regexes, `CODE_INVALID` for required-strength enumerations). Terminology, profile,
+  and invariant layers land in later phases.
+- **Lenient vs strict:** an unknown element is a `warning` on read and an `error` under `mode: "strict"`.
+- **Fail-safe:** never a false error — a resource type with no schema degrades to one informational
+  `RESOURCE_NOT_MODELED`, not a wall of false unknowns. Built-in schemas: base-resource elements +
+  `Patient`; supply your own via `validateResource(resource, { schemas: [...] })`.
 
 ## What this will be
 

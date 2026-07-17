@@ -8,6 +8,38 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Structural & cardinality validation + `OperationOutcome` (Phase 2).** The first three validation
+  layers over the Phase-1 model, each finding **value-free** (a stable code, an R4 `IssueType`, and a
+  FHIRPath `expression` location — never the offending value).
+  - **Layer 1 — structure:** `UNKNOWN_ELEMENT` (an element the schema does not define),
+    `RESOURCE_TYPE_UNKNOWN`, `TYPE_MISMATCH` (a node whose shape is wrong for its datatype), and
+    `CHOICE_AMBIGUOUS` (more than one `choice[x]` variant present).
+  - **Layer 2 — cardinality:** `CARDINALITY_MIN` (a required element absent) and `CARDINALITY_MAX`
+    (an element past its maximum).
+  - **Layer 3 — value-domain:** `PRIMITIVE_INVALID` against the FHIR R4 primitive datatype regexes
+    (`date`, `dateTime`, `instant`, `time`, `code`, `id`, `uri`, `oid`, `uuid`, `base64Binary`, and
+    the JSON-number family validated from exact lexical text — never a float), and `CODE_INVALID` for
+    a value outside a **required-strength** enumerated binding. `validatePrimitiveValue` and
+    `PRIMITIVE_TYPES` are public.
+  - **`OperationOutcome` output** (`toOperationOutcome`) — a serializable, value-free resource model
+    with `severity` (R4 `fatal|error|warning|information`; no R5 `success`), `code` (R4 `IssueType`),
+    `expression`, and a `diagnostics` line derived **only** from the code. This one chokepoint is the
+    **PHI redaction boundary** the roadmap places in Phase 2: no instance value can reach a diagnostic.
+  - **Lenient read vs strict emit (Postel's Law):** an unknown element is a `warning` in the default
+    `"lenient"` mode and an `error` under `mode: "strict"`; every other finding is an error regardless.
+  - **Fail-safe / no false errors:** the validator never rejects a whole resource for one recoverable
+    field, and a resource type with no schema degrades to a single informational `RESOURCE_NOT_MODELED`
+    (its own elements left unchecked rather than wrongly flagged). Complex-datatype internals are left
+    to Phase 6.
+  - **Compact, non-`StructureDefinition` schema** (`ResourceSchema` / `ElementSchema` / `buildRegistry`
+    / `baseSchema` / `resolveElement`, with `choice[x]` support) — the seam Phase 6 will feed from real
+    StructureDefinitions. Ships with the base `Resource`/`DomainResource` elements plus a worked
+    `Patient` schema; callers supply others via `validateResource(resource, { schemas: [...] })`.
+  - **Stable public contract:** the `VALIDATION_CODES`, `ISSUE_TYPES`, and `ISSUE_SEVERITIES`
+    registries are snapshot-pinned (a rename is breaking), with a PHI sweep over every emitted
+    `OperationOutcome`. Per-directory ≥90 coverage extended to `src/validate/`.
+  - **Still deferred:** terminology binding beyond required-code enumeration (Phase 5); profile /
+    US Core / slicing / must-support (Phase 6); FHIRPath invariants (Phase 7).
 - **JSON codec + typed primitive model — the no-data-loss core (Phase 1).** The first parsing code:
   a precision-preserving JSON reader, an immutable resource model, and a spec-clean serializer.
   - **`decimal` / `integer64` lexical precision (ADR 0001).** `FhirDecimal` and `FhirInteger64` are
