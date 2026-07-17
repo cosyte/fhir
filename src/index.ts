@@ -134,3 +134,32 @@ export {
   SNOMED_SCT,
 } from "./safety/codes.js";
 export type { Coded } from "./safety/codes.js";
+
+// Phase 4 — Quantity / UCUM fidelity: value[x] discrimination, UCUM code shape, vital-signs units,
+// dose quantities. Never converts a unit.
+export {
+  LOINC_SYSTEM,
+  OBSERVATION_CATEGORY_SYSTEM,
+  readQuantity,
+  requiredVitalSignUnits,
+  UCUM_SYSTEM,
+  validateUcumShape,
+  VITAL_SIGN_UNITS,
+  VITAL_SIGNS_CATEGORY,
+  VITAL_SIGNS_PROFILE,
+} from "./quantity/ucum.js";
+export type { Quantity, UcumShapeVerdict } from "./quantity/ucum.js";
+export {
+  OBSERVATION_VALUE_TYPES,
+  readInterpretations,
+  readObservationValue,
+  readReferenceRanges,
+} from "./quantity/value.js";
+export type {
+  ObservationReferenceRange,
+  ObservationValue,
+  ObservationValueType,
+} from "./quantity/value.js";
+export { locateDoseQuantities, readMedicationDoses } from "./quantity/dose.js";
+export type { LocatedDoseQuantity } from "./quantity/dose.js";
+export { collectQuantityIssues } from "./validate/quantity.js";

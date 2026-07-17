@@ -8,6 +8,44 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Quantity / UCUM fidelity — results & doses (Phase 4).** The third strand of the P0 safety spine
+  (codec · status/negation · units): surface a measured value by the type it actually is, and its unit
+  by the code that a machine may act on. Every finding stays **value-free**, and **no unit is ever
+  converted** (roadmap §4.6/§4.4).
+  - **`readObservationValue(observation)`** discriminates the **11-way `Observation.value[x]` choice**
+    (`valueQuantity` · `valueCodeableConcept` · `valueString` · `valueBoolean` · `valueInteger` ·
+    `valueRange` · `valueRatio` · `valueSampledData` · `valueTime` · `valueDateTime` · `valuePeriod`)
+    by the variant actually present — **never assuming `valueQuantity`**. A `valueString` of `"POSITIVE"`
+    or a titer `valueRatio` of `1:64` is returned as its real type with `quantity: undefined`, so it
+    can never be read as a number. `OBSERVATION_VALUE_TYPES` is the pinned variant set. Works on a
+    `component.value[x]` too (blood-pressure panels discriminate).
+  - **The unit that matters is the UCUM `code`, not the `unit` string.** `readQuantity` keeps `code` /
+    `system` / `unit` / `comparator` / (exact-decimal) `value` distinct; `validateUcumShape` checks a
+    code's **shape** (case-preserving, bracket-balanced) without asserting membership (no UCUM content
+    is bundled — roadmap §5). The **vital-signs required-unit table** (`VITAL_SIGN_UNITS`,
+    `requiredVitalSignUnits`) is the FHIR profile's closed set (weight `g|kg|[lb_av]`, height/head-circ
+    `cm|[in_i]`, temp `Cel|[degF]`, HR/RR `/min`, BP `mm[Hg]`, SpO2/O2-sat `%`, BMI `kg/m2`).
+  - **Dose `Quantity`** — `readMedicationDoses` / `locateDoseQuantities` surface
+    `Dosage.doseAndRate.doseQuantity` for `MedicationRequest` (`dosageInstruction`) and
+    `MedicationStatement` (`dosage`), UCUM-shape-checked the same way (a wrong dose unit is a
+    prescribing hazard).
+  - **`interpretation` and `referenceRange` preserved and surfaced** — `readInterpretations` (the
+    H/L/HH flags) and `readReferenceRanges` (population-qualified bounds as `Quantity`s). Surfaced,
+    **never evaluated**: Phase 4 does not compute an abnormal flag from a value and a range.
+  - **New issue vocabulary:** `UCUM_UNIT_UNRECOGNIZED` (`warning` / `value` — a UCUM-declared unit that
+    is absent or malformed; preserved verbatim, never converted), `VITAL_SIGN_UNIT_NONCONFORMANT`
+    (`error` / `code-invalid` — a vital-signs value whose UCUM `code` or `system` the profile forbids,
+    compared on the **`code`**, never the display string), and `VALUE_TYPE_UNEXPECTED` (`warning` /
+    `value` — a vital sign whose value is present but not a `Quantity`). `collectQuantityIssues` runs
+    inside `validateResource`. The registries stay snapshot-pinned; a rename is breaking. **obs-6**
+    (`dataAbsentReason` ⇔ `value[x]` mutual-exclusion) is already enforced by the Phase-3 safety layer.
+  - **Never a false error.** The vital-signs check fires only when the element declares the vital-signs
+    category (or the vital-signs profile) **and** its own LOINC code is in the closed table; a quantity
+    that declares no UCUM system is legal FHIR and is not flagged. Per-directory ≥90 coverage extended
+    to `src/quantity/`.
+  - **Still deferred:** unit _conversion_ and reference-range _evaluation_ (surfaced, never computed);
+    terminology binding (Phase 5), profile / US Core (Phase 6), the general FHIRPath engine (Phase 7),
+    XML (Phase 8). A consumer can trust _reads_ after this phase.
 - **Safety-critical status & negation model — the fail-closed core (Phase 3).** Surfaces FHIR's
   modifier (`?!`) elements so they can never be silently dropped or inverted, and enforces the
   invariants that harm a patient when read wrong (roadmap §4). All findings stay **value-free**.
