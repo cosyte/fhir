@@ -4,10 +4,39 @@
 > JSON codec, and validation, with the same one-line ergonomics as the rest of the `@cosyte/*`
 > parser suite.
 
-**Status: pre-alpha scaffold (`0.0.0`, unpublished).** This repository currently holds the
-engineering scaffold and the architecture decisions that shape the parser. **There is no parse code
-yet** — the resource model, JSON codec, validation, and profile engine land in subsequent phases
-(see the roadmap in the meta-repo, `operations/roadmaps/fhir.md`). Do not depend on this package.
+**Status: pre-alpha (`0.0.0`, unpublished).** **Phase 1 has landed** — the no-data-loss core: a
+precision-preserving JSON codec and typed primitive model (see [What works today](#what-works-today)).
+It **reads and round-trips**; it does **not validate yet** (structural, terminology, profile, and
+invariant validation land in later phases), it is **JSON-only** (XML is Phase 8), and it has no typed
+per-resource models yet. See the roadmap in the meta-repo, `operations/roadmaps/fhir.md`. Do not
+depend on this package.
+
+## What works today
+
+The no-data-loss core: read FHIR R4 JSON into an immutable model and serialize it back, **without
+ever losing a decimal, a primitive extension, or an exact 64-bit value**.
+
+```ts
+import { parseResource, serializeResource } from "@cosyte/fhir";
+
+const { resource, issues } = parseResource(
+  '{"resourceType":"Observation","valueQuantity":{"value":0.010,"unit":"mg"}}',
+);
+
+// The trailing zero survives — a naive JSON.parse would have made this 0.01.
+serializeResource(resource); // → {"resourceType":"Observation","valueQuantity":{"value":0.010,"unit":"mg"}}
+
+// Diagnostics are value-free (PHI-safe): a code + a FHIRPath location, never the value.
+issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", expression: "Observation.valueQuantity.value" }]
+```
+
+- **`decimal` / `integer64`** are string-backed (`FhirDecimal`, `FhirInteger64`) and never routed
+  through the JS `number` type. `FhirDecimal.equals` is precision-sensitive (`0.010 ≠ 0.01`);
+  `.equalsValue` compares quantity only.
+- **Primitive extensions** (the `_element` sibling) are modeled first-class with **null-padded array
+  alignment**; a misaligned value/`_`-array **fails closed** rather than mis-attaching an extension.
+- **Lenient read, spec-clean write** (Postel's Law), `resourceType` resolvable in any position, and a
+  `parseReference` classifier (relative / absolute / logical / fragment).
 
 ## What this will be
 
