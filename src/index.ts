@@ -103,3 +103,34 @@ export type {
   ResourceSchema,
   SchemaRegistry,
 } from "./validate/schema.js";
+export { collectSafetyIssues } from "./validate/safety.js";
+
+// Phase 3 — the safety spine: never-droppable status/negation surfacing + fail-closed modifiers.
+export {
+  assertSafeToSummarize,
+  FhirSafetyError,
+  readSafety,
+  unhandledModifierExtensions,
+} from "./safety/status.js";
+export type { NegationKind, SafetyReadout } from "./safety/status.js";
+export {
+  codeOf,
+  codingsOf,
+  hasCodeAnySystem,
+  hasCoding,
+  isRetracted,
+  ALLERGY_CLINICAL_SYSTEM,
+  ALLERGY_VERIFICATION_SYSTEM,
+  CONDITION_CATEGORY_SYSTEM,
+  CONDITION_CLINICAL_SYSTEM,
+  CONDITION_VERIFICATION_SYSTEM,
+  ENTERED_IN_ERROR,
+  KNOWN_MODIFIER_EXTENSION_URLS,
+  NO_KNOWN_ALLERGY,
+  NOT_DONE,
+  NOT_TAKEN,
+  REFUTED,
+  SAFETY_RESOURCE_TYPES,
+  SNOMED_SCT,
+} from "./safety/codes.js";
+export type { Coded } from "./safety/codes.js";

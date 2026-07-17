@@ -8,6 +8,39 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Safety-critical status & negation model — the fail-closed core (Phase 3).** Surfaces FHIR's
+  modifier (`?!`) elements so they can never be silently dropped or inverted, and enforces the
+  invariants that harm a patient when read wrong (roadmap §4). All findings stay **value-free**.
+  - **`readSafety(resource)`** — a never-droppable readout of the modifier / status / negation
+    elements across the six safety resource types (AllergyIntolerance, Condition,
+    MedicationRequest/Statement, Observation, Immunization, DiagnosticReport): `status`,
+    `clinicalStatus`, `verificationStatus`, `doNotPerform`, `retracted`, and a classified `negations`
+    list (`refuted`, `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`,
+    `entered-in-error`). SNOMED CT **`716186003` "no known allergy"** is a first-class negation — not
+    an absent resource (which is _unknown_), and not an allergy _to_ the code.
+  - **Fail-closed on an unknown `modifierExtension`.** FHIR's `?!` rule requires rejecting an element
+    whose modifier the consumer does not understand; the library understands none yet, so **any**
+    `modifierExtension` anywhere in **any** resource is `UNHANDLED_MODIFIER_EXTENSION` (error). The
+    read side refuses too: `assertSafeToSummarize` throws `FhirSafetyError` (value-free, locations
+    only) rather than flatten such a resource — the "carries status **or refuses**" contract.
+  - **Named invariants**, hand-evaluated from their exact R4 FHIRPath: **`ait-1`/`ait-2`**
+    (AllergyIntolerance), **`con-3`/`con-4`/`con-5`** (Condition), **`obs-6`/`obs-7`** (Observation),
+    emitted as `INVARIANT_VIOLATED` carrying the constraint key (surfaced in
+    `OperationOutcome.issue.details.text`). Severities mirror the spec — all `error` except the
+    best-practice **`con-3` (`warning`)**, whose literal R4 expression is effectively vacuous (the
+    `category.select($this='problem-list-item')` type-mismatch); we surface its documented _intent_ as
+    a warning so it can never flip `valid`. A general FHIRPath engine is deferred to Phase 7 (ADR 0002)
+    — this phase hand-codes only the safety-critical set.
+  - **`entered-in-error` surfaced as `RETRACTED_RESOURCE`** (information) — a retracted record is not
+    data, and must never be silently missed.
+  - **New issue vocabulary:** `UNHANDLED_MODIFIER_EXTENSION`, `RETRACTED_RESOURCE`,
+    `INVARIANT_VIOLATED`, and R4 issue types `invariant` / `not-supported` (the registries stay
+    snapshot-pinned; a rename is breaking). A `constraint` field on `ValidationIssue` carries the
+    invariant key (a public spec identifier, never PHI). Per-directory ≥90 coverage extended to
+    `src/safety/`.
+  - **Still deferred:** Quantity / UCUM fidelity (Phase 4), terminology binding (Phase 5), profile /
+    US Core (Phase 6), the general FHIRPath invariant engine (Phase 7), XML (Phase 8). This layer
+    surfaces and enforces; it never reconciles contradictions or infers clinical meaning.
 - **Structural & cardinality validation + `OperationOutcome` (Phase 2).** The first three validation
   layers over the Phase-1 model, each finding **value-free** (a stable code, an R4 `IssueType`, and a
   FHIRPath `expression` location — never the offending value).

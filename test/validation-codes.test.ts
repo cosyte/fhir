@@ -24,17 +24,19 @@ describe("validation code / severity / issue-type registries (stable public cont
     });
   });
 
-  it("pins the Phase-2 IssueType subset", () => {
+  it("pins the IssueType subset (Phase 2 + Phase 3 safety additions)", () => {
     expect(ISSUE_TYPES).toEqual({
       STRUCTURE: "structure",
       REQUIRED: "required",
       VALUE: "value",
       CODE_INVALID: "code-invalid",
+      INVARIANT: "invariant",
+      NOT_SUPPORTED: "not-supported",
       INFORMATIONAL: "informational",
     });
   });
 
-  it("pins the Phase-2 validation codes", () => {
+  it("pins the validation codes (Phase 2 + Phase 3 safety additions)", () => {
     expect(VALIDATION_CODES).toEqual({
       UNKNOWN_ELEMENT: "UNKNOWN_ELEMENT",
       RESOURCE_TYPE_UNKNOWN: "RESOURCE_TYPE_UNKNOWN",
@@ -45,6 +47,9 @@ describe("validation code / severity / issue-type registries (stable public cont
       CARDINALITY_MAX: "CARDINALITY_MAX",
       PRIMITIVE_INVALID: "PRIMITIVE_INVALID",
       CODE_INVALID: "CODE_INVALID",
+      UNHANDLED_MODIFIER_EXTENSION: "UNHANDLED_MODIFIER_EXTENSION",
+      RETRACTED_RESOURCE: "RETRACTED_RESOURCE",
+      INVARIANT_VIOLATED: "INVARIANT_VIOLATED",
     });
   });
 
@@ -61,5 +66,15 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(validationIssue("PRIMITIVE_INVALID", "error", "X.y").type).toBe("value");
     expect(validationIssue("CODE_INVALID", "error", "X.y").type).toBe("code-invalid");
     expect(validationIssue("RESOURCE_NOT_MODELED", "information", "X").type).toBe("informational");
+    expect(validationIssue("UNHANDLED_MODIFIER_EXTENSION", "error", "X").type).toBe(
+      "not-supported",
+    );
+    expect(validationIssue("RETRACTED_RESOURCE", "information", "X").type).toBe("informational");
+    expect(validationIssue("INVARIANT_VIOLATED", "error", "X", "ait-1").type).toBe("invariant");
+  });
+
+  it("carries the constraint key only on an invariant finding, never elsewhere", () => {
+    expect(validationIssue("INVARIANT_VIOLATED", "error", "X", "obs-6").constraint).toBe("obs-6");
+    expect(validationIssue("CODE_INVALID", "error", "X.y").constraint).toBeUndefined();
   });
 });

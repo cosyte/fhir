@@ -1,0 +1,10 @@
+{
+  "resourceType": "Observation",
+  "id": "syn-mod",
+  "status": "final",
+  "code": { "coding": [ { "system": "http://loinc.org", "code": "718-7" } ] },
+  "modifierExtension": [
+    { "url": "http://example.org/fhir/StructureDefinition/made-up-modifier", "valueBoolean": true }
+  ],
+  "valueQuantity": { "value": 7.2, "unit": "g/dL", "system": "http://unitsofmeasure.org", "code": "g/dL" }
+}

@@ -1,0 +1,9 @@
+{
+  "resourceType": "MedicationStatement",
+  "id": "syn-ms",
+  "status": "not-taken",
+  "medicationCodeableConcept": {
+    "coding": [ { "system": "http://www.nlm.nih.gov/research/umls/rxnorm", "code": "197361" } ]
+  },
+  "subject": { "reference": "Patient/syn-1" }
+}

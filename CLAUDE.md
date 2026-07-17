@@ -11,14 +11,19 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phase 1 landed** the no-data-loss core: a
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–3 landed.** P1 — the no-data-loss core: a
   precision-preserving JSON codec (`parseResource` / `serializeResource` / `readRawJson`), the
   string-backed `FhirDecimal` / `FhirInteger64` primitives (ADR 0001), the primitive-extension
   (`_`-sibling) model with null-padded array alignment, an immutable generic element model
-  (`FhirComplex` / `FhirList` / `FhirPrimitive`), `parseReference`, and value-free diagnostics. Read
-  and round-trip only — **no validation yet** (structural/terminology/profile/invariant land in
-  P2·P5–P7), **JSON only** (XML is P8), and no typed per-resource models. The roadmap lives in the
-  meta-repo: `operations/roadmaps/fhir.md` (P0…P11).
+  (`FhirComplex` / `FhirList` / `FhirPrimitive`), `parseReference`, and value-free diagnostics. P2 —
+  the first three validation layers (`validateResource`: structure, cardinality, primitive /
+  enumerated-`code` value-domain) with a value-free `OperationOutcome` and the PHI redaction
+  chokepoint. P3 — the safety-critical status & negation spine (`readSafety`, fail-closed on an
+  unknown `modifierExtension`, `entered-in-error` retraction, and the `ait`/`con`/`obs` invariants).
+  Reads, round-trips, structurally validates, and never drops a modifier / status / negation — but
+  **no** UCUM/Quantity fidelity (P4), terminology binding (P5), profile / US Core (P6), general
+  FHIRPath invariants (P7), or XML (P8) yet, and no typed per-resource models. The roadmap lives in
+  the meta-repo: `operations/roadmaps/fhir.md` (P0…P11).
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
