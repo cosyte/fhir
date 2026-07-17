@@ -70,3 +70,36 @@ export {
   ISSUE_CODES,
 } from "./codec/issues.js";
 export type { FatalCode, FhirIssue, IssueCode, IssueSeverity } from "./codec/issues.js";
+
+// Phase 2 — structural / cardinality / value-domain validation + value-free OperationOutcome.
+export { validateResource } from "./validate/validate.js";
+export type { ValidateOptions, ValidationMode, ValidationResult } from "./validate/validate.js";
+export { toOperationOutcome } from "./validate/operation-outcome.js";
+export {
+  diagnosticFor,
+  validationIssue,
+  ISSUE_SEVERITIES,
+  ISSUE_TYPES,
+  VALIDATION_CODES,
+} from "./validate/issues.js";
+export type {
+  IssueType,
+  ValidationCode,
+  ValidationIssue,
+  ValidationSeverity,
+} from "./validate/issues.js";
+export { isPrimitiveType, validatePrimitiveValue, PRIMITIVE_TYPES } from "./validate/primitives.js";
+export type { PrimitiveType } from "./validate/primitives.js";
+export {
+  baseSchema,
+  buildRegistry,
+  isChoice,
+  resolveElement,
+  UNBOUNDED,
+} from "./validate/schema.js";
+export type {
+  ElementSchema,
+  RequiredBinding,
+  ResourceSchema,
+  SchemaRegistry,
+} from "./validate/schema.js";

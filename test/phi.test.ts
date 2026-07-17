@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { FhirCodecError, parseResource } from "../src/index.js";
+import {
+  FhirCodecError,
+  parseResource,
+  serializeResource,
+  validateResource,
+} from "../src/index.js";
 import { nth } from "./_util.js";
 
 /**
@@ -57,5 +62,35 @@ describe("no PHI in diagnostics", () => {
     );
     const serialized = JSON.stringify(issues);
     expect(serialized).not.toContain("555-0100");
+  });
+});
+
+/**
+ * The redaction chokepoint lands in Phase 2: a validation `OperationOutcome` must carry the location
+ * and the coded reason, never the offending value. Sweep the whole outcome — issues object and the
+ * serialized resource — for the synthetic markers that triggered each finding.
+ */
+describe("no PHI in validation output (the Phase-2 redaction chokepoint)", () => {
+  it("keeps a bad-code finding value-free (the offending code never reaches diagnostics)", () => {
+    const { resource } = parseResource('{"resourceType":"Patient","gender":"99999999"}');
+    const result = validateResource(resource);
+    const outcomeJson = serializeResource(result.toOperationOutcome());
+    expect(JSON.stringify(result.issues)).not.toContain("99999999");
+    expect(outcomeJson).not.toContain("99999999");
+    // It still points at where, via a FHIRPath expression.
+    expect(nth(result.issues, 0).expression).toBe("Patient.gender");
+  });
+
+  it("keeps a malformed primitive finding to a location, not the value", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"Patient","birthDate":"1974-12-25-BADXYZ"}',
+    );
+    const result = validateResource(resource);
+    const outcomeJson = serializeResource(result.toOperationOutcome());
+    for (const marker of SYNTHETIC_MARKERS) {
+      expect(JSON.stringify(result.issues)).not.toContain(marker);
+      expect(outcomeJson).not.toContain(marker);
+    }
+    expect(nth(result.issues, 0).expression).toBe("Patient.birthDate");
   });
 });
