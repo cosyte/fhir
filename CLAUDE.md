@@ -11,10 +11,14 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha scaffold (`0.0.0`, unpublished).** P0 (repo bootstrap + the four architecture ADRs) is
-  the current state. **No parse code yet** — the resource model, JSON codec, validation, profiles,
-  and helpers land in later phases. The roadmap lives in the meta-repo: `operations/roadmaps/fhir.md`
-  (P0…P11).
+- **Pre-alpha (`0.0.0`, unpublished).** **Phase 1 landed** the no-data-loss core: a
+  precision-preserving JSON codec (`parseResource` / `serializeResource` / `readRawJson`), the
+  string-backed `FhirDecimal` / `FhirInteger64` primitives (ADR 0001), the primitive-extension
+  (`_`-sibling) model with null-padded array alignment, an immutable generic element model
+  (`FhirComplex` / `FhirList` / `FhirPrimitive`), `parseReference`, and value-free diagnostics. Read
+  and round-trip only — **no validation yet** (structural/terminology/profile/invariant land in
+  P2·P5–P7), **JSON only** (XML is P8), and no typed per-resource models. The roadmap lives in the
+  meta-repo: `operations/roadmaps/fhir.md` (P0…P11).
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
