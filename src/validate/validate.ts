@@ -36,6 +36,7 @@ import {
 } from "../model/index.js";
 import { toOperationOutcome } from "./operation-outcome.js";
 import { isPrimitiveType, validatePrimitiveValue } from "./primitives.js";
+import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
 import {
   baseSchema,
@@ -232,6 +233,11 @@ export function validateResource(
   // it keys off `resourceType` and the modifier elements directly, so it runs even for types the
   // Phase-2 schema does not model.
   for (const issue of collectSafetyIssues(resource, rt)) ctx.issues.push(issue);
+
+  // Quantity / UCUM layer (Phase 4): value[x] type discrimination, UCUM code shape, vital-signs
+  // required-unit conformance, and dose quantities. Like the safety layer it keys off the resource
+  // model directly (independent of the Phase-2 structural schema).
+  for (const issue of collectQuantityIssues(resource, rt)) ctx.issues.push(issue);
 
   return finalize(ctx);
 }

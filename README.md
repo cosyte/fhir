@@ -4,18 +4,21 @@
 > JSON codec, and validation, with the same one-line ergonomics as the rest of the `@cosyte/*`
 > parser suite.
 
-**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–3 have landed** — the no-data-loss core (a
+**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–4 have landed** — the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
-`OperationOutcome` output, and the **safety-critical status & negation model** (`readSafety`,
-fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants — see
-[What works today](#what-works-today)). It **reads, round-trips, structurally validates, and never
-drops a modifier / status / negation**; it does **not** yet do UCUM/Quantity fidelity (Phase 4),
-terminology-binding (Phase 5), profile / US Core / slicing (Phase 6), or general FHIRPath invariant
-(Phase 7) validation — and the built-in structural schema set is the base-resource elements plus
-`Patient` as a worked demonstrator; other resource types validate only against a caller-supplied
-schema. It is **JSON-only** (XML is Phase 8), with no typed per-resource models yet. See the roadmap
-in the meta-repo, `operations/roadmaps/fhir.md`. Do not depend on this package.
+`OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
+fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants), and **Quantity / UCUM
+fidelity** (the 11-way `Observation.value[x]` discrimination, UCUM-`code` unit fidelity, vital-signs
+required-unit conformance, dose quantities — see [What works today](#what-works-today)). It **reads,
+round-trips, structurally validates, never drops a modifier / status / negation, and surfaces
+measured values by their true type with the UCUM `code` (never the display string, never converted)**;
+it does **not** yet do terminology-binding (Phase 5), profile / US Core / slicing (Phase 6), or
+general FHIRPath invariant (Phase 7) validation — and the built-in structural schema set is the
+base-resource elements plus `Patient` as a worked demonstrator; other resource types validate only
+against a caller-supplied schema. It is **JSON-only** (XML is Phase 8), with no typed per-resource
+models yet, and it **never converts a unit** or evaluates a reference range. See the roadmap in the
+meta-repo, `operations/roadmaps/fhir.md`. Do not depend on this package.
 
 ## What works today
 
@@ -105,6 +108,42 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their
   exact R4 FHIRPath (a general FHIRPath engine is Phase 7). This layer surfaces and enforces — it
   never reconciles contradictions or infers clinical meaning.
+
+And Quantity / UCUM fidelity — read a measured value by the type it actually is, and its unit by the
+UCUM **`code`** a machine may act on (never the display string, and **never converted**):
+
+```ts
+import { parseResource, readObservationValue, validateResource } from "@cosyte/fhir";
+
+// value[x] is an 11-way choice — a non-numeric result is never read as a number.
+const { resource: titer } = parseResource(
+  '{"resourceType":"Observation","status":"final","valueString":"POSITIVE"}',
+);
+const v = readObservationValue(titer);
+v?.type; // → "String"     (NOT "Quantity")
+v?.quantity; // → undefined (no number is fabricated)
+
+// A vital sign's unit is checked on the UCUM code, case- and bracket-exact: "mmHg" is not "mm[Hg]".
+const { resource: bp } = parseResource(
+  '{"resourceType":"Observation","status":"final",' +
+    '"category":[{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/observation-category","code":"vital-signs"}]}],' +
+    '"code":{"coding":[{"system":"http://loinc.org","code":"8480-6"}]},' +
+    '"valueQuantity":{"value":120,"unit":"mmHg","system":"http://unitsofmeasure.org","code":"mmHg"}}',
+);
+validateResource(bp).issues.map((i) => i.code); // → ["VITAL_SIGN_UNIT_NONCONFORMANT"]  (should be "mm[Hg]")
+```
+
+- **`readObservationValue`** discriminates the 11 `value[x]` variants (`Quantity`, `CodeableConcept`,
+  `String`, `Boolean`, `Integer`, `Range`, `Ratio`, `SampledData`, `Time`, `DateTime`, `Period`) by
+  the one present — `quantity` is populated **only** for a `Quantity`. `readQuantity` keeps the coded
+  unit (`code`/`system`) distinct from the human `unit`; `validateUcumShape` checks a code's shape.
+- **Vital-signs required-unit** conformance (`VITAL_SIGN_UNIT_NONCONFORMANT`, error) against the FHIR
+  profile's closed table, compared on the UCUM `code`; a UCUM-declared unit that is absent or malformed
+  is `UCUM_UNIT_UNRECOGNIZED` (warning, preserved verbatim); a vital sign whose value is not a Quantity
+  is `VALUE_TYPE_UNEXPECTED` (warning).
+- **Dose `Quantity`** (`readMedicationDoses`) for MedicationRequest/Statement, and
+  `interpretation` / `referenceRange` surfaced (`readInterpretations` / `readReferenceRanges`) —
+  **never** used to auto-convert a unit or compute an abnormal flag.
 
 ## What this will be
 

@@ -1,0 +1,29 @@
+{
+  "resourceType": "MedicationRequest",
+  "id": "syn-rx",
+  "status": "active",
+  "intent": "order",
+  "medicationCodeableConcept": {
+    "coding": [
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "308182"
+      }
+    ]
+  },
+  "dosageInstruction": [
+    {
+      "text": "5 mg once daily",
+      "doseAndRate": [
+        {
+          "doseQuantity": {
+            "value": 5,
+            "unit": "mg",
+            "system": "http://unitsofmeasure.org",
+            "code": "mg"
+          }
+        }
+      ]
+    }
+  ]
+}

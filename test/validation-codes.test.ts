@@ -36,7 +36,7 @@ describe("validation code / severity / issue-type registries (stable public cont
     });
   });
 
-  it("pins the validation codes (Phase 2 + Phase 3 safety additions)", () => {
+  it("pins the validation codes (Phase 2 + Phase 3 safety + Phase 4 quantity additions)", () => {
     expect(VALIDATION_CODES).toEqual({
       UNKNOWN_ELEMENT: "UNKNOWN_ELEMENT",
       RESOURCE_TYPE_UNKNOWN: "RESOURCE_TYPE_UNKNOWN",
@@ -50,6 +50,9 @@ describe("validation code / severity / issue-type registries (stable public cont
       UNHANDLED_MODIFIER_EXTENSION: "UNHANDLED_MODIFIER_EXTENSION",
       RETRACTED_RESOURCE: "RETRACTED_RESOURCE",
       INVARIANT_VIOLATED: "INVARIANT_VIOLATED",
+      UCUM_UNIT_UNRECOGNIZED: "UCUM_UNIT_UNRECOGNIZED",
+      VITAL_SIGN_UNIT_NONCONFORMANT: "VITAL_SIGN_UNIT_NONCONFORMANT",
+      VALUE_TYPE_UNEXPECTED: "VALUE_TYPE_UNEXPECTED",
     });
   });
 
@@ -71,6 +74,11 @@ describe("validation code / severity / issue-type registries (stable public cont
     );
     expect(validationIssue("RETRACTED_RESOURCE", "information", "X").type).toBe("informational");
     expect(validationIssue("INVARIANT_VIOLATED", "error", "X", "ait-1").type).toBe("invariant");
+    expect(validationIssue("UCUM_UNIT_UNRECOGNIZED", "warning", "X").type).toBe("value");
+    expect(validationIssue("VITAL_SIGN_UNIT_NONCONFORMANT", "error", "X").type).toBe(
+      "code-invalid",
+    );
+    expect(validationIssue("VALUE_TYPE_UNEXPECTED", "warning", "X").type).toBe("value");
   });
 
   it("carries the constraint key only on an invariant finding, never elsewhere", () => {

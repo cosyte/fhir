@@ -102,6 +102,26 @@ export const VALIDATION_CODES = {
    * the severity mirrors the constraint's own (`error`, except the best-practice `con-3` → `warning`).
    */
   INVARIANT_VIOLATED: "INVARIANT_VIOLATED",
+  /**
+   * Quantity/UCUM (Phase 4) — a `Quantity` claims the UCUM `system` but its `code` is absent or not a
+   * shape-valid UCUM expression, so the unit cannot be trusted for machine use. A `warning`
+   * (`value`): the value is **preserved verbatim and never converted** — the library does not bundle
+   * UCUM content, so it cannot assert the code *is* a real unit, only that it is present and well-shaped.
+   */
+  UCUM_UNIT_UNRECOGNIZED: "UCUM_UNIT_UNRECOGNIZED",
+  /**
+   * Quantity/UCUM (Phase 4) — a vital-signs Observation's measured value carries a unit the FHIR
+   * vital-signs profile forbids for that LOINC code (wrong UCUM `code`, or a non-UCUM `system`). An
+   * `error` (`code-invalid`): the vital-signs profile *requires* the unit, so a nonconformant one is a
+   * profile violation, compared on the UCUM `code` (case- and bracket-sensitive), never the `unit` string.
+   */
+  VITAL_SIGN_UNIT_NONCONFORMANT: "VITAL_SIGN_UNIT_NONCONFORMANT",
+  /**
+   * Quantity/UCUM (Phase 4) — an Observation whose profile expects a numeric `Quantity` value carries
+   * a different `value[x]` variant instead (e.g. `valueString`). A `warning` (`value`): the value is
+   * preserved and surfaced by its real type — a caller must not read it as a number.
+   */
+  VALUE_TYPE_UNEXPECTED: "VALUE_TYPE_UNEXPECTED",
 } as const;
 
 /** Discriminant union of every {@link VALIDATION_CODES} value. */
@@ -143,6 +163,9 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   UNHANDLED_MODIFIER_EXTENSION: ISSUE_TYPES.NOT_SUPPORTED,
   RETRACTED_RESOURCE: ISSUE_TYPES.INFORMATIONAL,
   INVARIANT_VIOLATED: ISSUE_TYPES.INVARIANT,
+  UCUM_UNIT_UNRECOGNIZED: ISSUE_TYPES.VALUE,
+  VITAL_SIGN_UNIT_NONCONFORMANT: ISSUE_TYPES.CODE_INVALID,
+  VALUE_TYPE_UNEXPECTED: ISSUE_TYPES.VALUE,
 };
 
 /**
@@ -167,6 +190,12 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   RETRACTED_RESOURCE:
     "Resource is marked entered-in-error; it is retracted and must not be treated as active data.",
   INVARIANT_VIOLATED: "A resource invariant (content-validation constraint) was violated.",
+  UCUM_UNIT_UNRECOGNIZED:
+    "Quantity declares the UCUM system but its unit code is absent or not a well-formed UCUM " +
+    "expression; the unit is preserved verbatim and never converted.",
+  VITAL_SIGN_UNIT_NONCONFORMANT:
+    "Vital-signs measurement carries a unit the vital-signs profile does not allow for this code.",
+  VALUE_TYPE_UNEXPECTED: "Observation value is present but not the expected type for this profile.",
 };
 
 /**

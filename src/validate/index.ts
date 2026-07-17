@@ -15,6 +15,7 @@
 export { validateResource } from "./validate.js";
 export type { ValidateOptions, ValidationMode, ValidationResult } from "./validate.js";
 export { collectSafetyIssues } from "./safety.js";
+export { collectQuantityIssues } from "./quantity.js";
 export { toOperationOutcome } from "./operation-outcome.js";
 export {
   diagnosticFor,

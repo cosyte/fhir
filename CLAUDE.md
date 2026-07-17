@@ -11,7 +11,15 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–3 landed.** P1 — the no-data-loss core: a
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–4 landed.** P4 — Quantity / UCUM fidelity (results
+  & doses): `readObservationValue` discriminates the **11-way `Observation.value[x]` choice** (branch
+  on the present type — a `"POSITIVE"` string or a `1:64` titer is never read as a number); the
+  machine-actionable unit is the UCUM **`code`** (not the `unit` string), shape-checked
+  (`validateUcumShape`) but never converted; **vital-signs required-unit** conformance
+  (`VITAL_SIGN_UNIT_NONCONFORMANT`) against the profile's closed table; UCUM shape warnings
+  (`UCUM_UNIT_UNRECOGNIZED`) and `VALUE_TYPE_UNEXPECTED`; dose `Quantity` for
+  MedicationRequest/Statement; `interpretation`/`referenceRange` surfaced but never evaluated. P1 —
+  the no-data-loss core: a
   precision-preserving JSON codec (`parseResource` / `serializeResource` / `readRawJson`), the
   string-backed `FhirDecimal` / `FhirInteger64` primitives (ADR 0001), the primitive-extension
   (`_`-sibling) model with null-padded array alignment, an immutable generic element model
@@ -20,8 +28,9 @@ semantics, and validate it against US Core — without reading the FHIR spec.
   enumerated-`code` value-domain) with a value-free `OperationOutcome` and the PHI redaction
   chokepoint. P3 — the safety-critical status & negation spine (`readSafety`, fail-closed on an
   unknown `modifierExtension`, `entered-in-error` retraction, and the `ait`/`con`/`obs` invariants).
-  Reads, round-trips, structurally validates, and never drops a modifier / status / negation — but
-  **no** UCUM/Quantity fidelity (P4), terminology binding (P5), profile / US Core (P6), general
+  Reads, round-trips, structurally validates, never drops a modifier / status / negation, and now
+  surfaces measured values by their true `value[x]` type with UCUM-`code` unit fidelity (P4, never
+  converting a unit) — but **no** terminology binding (P5), profile / US Core (P6), general
   FHIRPath invariants (P7), or XML (P8) yet, and no typed per-resource models. The roadmap lives in
   the meta-repo: `operations/roadmaps/fhir.md` (P0…P11).
 
