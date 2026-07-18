@@ -8,6 +8,38 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Tier-2 real-world quirk corpus + `validator_cli.jar` differential over it (Phase 10, half b;
+  roadmap §3/§6/§10).** Unblocked by meta-repo **ADR 0018** — "real document" that grounds a quirk
+  now explicitly includes **publicly available real artifacts** (FHIR published examples, the spec's
+  normative rules, US Core, documented public interop defects), not only privately-supplied vendor
+  feeds. The anti-invention rule is unchanged: a genuinely vendor-proprietary deviation absent from
+  every public sample stays grounded-only and is deliberately not encoded.
+  - **Five quirk fixtures** (`test/__fixtures__/quirk-*.json`), each grounded in and citing a public
+    source (`test/quirk-corpus.test.ts` is the provenance record), values synthetic:
+    - `quirk-resourcetype-last.json` — `resourceType` is not the first property (json.html: property
+      order is not significant). Reads clean; strict-emit restores `resourceType` to the front.
+    - `quirk-scientific-decimal.json` — a decimal in exponent notation `1.0e2` (Synthea #675; the R4
+      decimal regex permits an exponent). Read as a valid decimal, flagged
+      `DECIMAL_PRECISION_AT_RISK` (info, never an error), and **preserved byte-for-byte** — a naive
+      `JSON.parse` would coerce it to `100` and destroy the recorded precision.
+    - `quirk-primitive-extension-misaligned.json` — a repeating primitive whose `_`-sibling array
+      length disagrees (HAPI #5738; json.html null-padding). **Fails closed** — a typed, value-free
+      `FhirCodecError`/`PRIMITIVE_EXTENSION_MISALIGNED`, never guessing which value the metadata binds.
+    - `quirk-searchset-paging.json` — a searchset Bundle with `link[relation=next]`
+      (bundle-example.json; Epic/Cerner require following `Bundle.link[next]`). Reads clean; the
+      paging link survives the round-trip (never silently truncates the record).
+    - `quirk-uscore-extensions.json` — US Core race (complex, `ombCategory` OMB 2106-3 + text) and
+      birthsex extensions on a base Patient. Reads clean; every extension and sub-extension is
+      preserved through the round-trip.
+  - **Differential wiring** — `scripts/differential.mjs` now runs this Tier-2 corpus through the JVM
+    `validator_cli.jar` oracle alongside the spec-clean tier, under the same two invariants (never a
+    false _valid_; no spurious error on clean input). A fail-closed reader throw is surfaced as a
+    `fatal` finding. The `differential` CI job scope + comment updated. **Still CI-only** — the oracle
+    is a JVM program with no Java in the dev container, so it has **not** been observed green here.
+  - The two remaining roadmap-§3 quirks — _missing must-support_ (`MUST_SUPPORT_ABSENT`,
+    info-never-error) and _US Core version drift_ (`PROFILE_VERSION_MISMATCH`) — are already exercised
+    by the Phase-6 profile suite; this corpus targets the read-path / codec / Bundle quirks those
+    tests do not reach.
 - **Conformance hardening — fuzz, PHI-leak, and type-level tiers (Phase 11, buildable portion;
   roadmap §6).** The layered accuracy strategy turned into gating tests, plus the read-path robustness
   fixes those tests surfaced. The JVM `validator_cli.jar` differential is **authored but CI-only**

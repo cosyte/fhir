@@ -40,9 +40,8 @@ profiles you supply, and evaluates their FHIRPath invariants** (failing safe to 
 on any unsupported expression); it does **not** yet do `type`·`profile` slicing discriminator or
 reslicing validation (still `PROFILE_SLICE_UNCHECKED`, Phase 7 deferral), and it bundles **no** US Core
 IG corpus. The `validator_cli.jar` **differential is authored but CI-only** (a JVM oracle job — there is
-no Java in the dev container, so it has not been observed green there) and runs over synthetic
-spec-clean inputs; the highest-value **real-vendor quirk-corpus differential is deferred to
-`REAL-CORPUS`** (a quirk is encoded only when a real de-identified document grounds it — none exists). The built-in structural schema set is the base-resource elements plus
+no Java in the dev container, so it has not been observed green there) and now runs over **both** the
+synthetic spec-clean tier **and** the Tier-2 real-world quirk corpus (P10b). The built-in structural schema set is the base-resource elements plus
 `Patient` as a worked demonstrator; other resource types validate only against a caller-supplied schema
 or profile. Without a supplied terminology service there is **no code-validity / value-set-membership**
 guarantee beyond `system` + strength (no terminology content is bundled — licensing). Its XML codec is
@@ -321,12 +320,16 @@ const { resource } = parseResource(vitalSignObservationJson);
 validateResource(resource, { profiles: [...STARTER_PROFILES] });
 ```
 
-- **Deferred to `REAL-CORPUS`:** the Tier-2 real-vendor **quirk** corpus (Epic/Cerner/athena
-  missing-must-support, vendor extensions, paging, version drift, scientific-notation decimals,
-  `_element` misalignment) and its `validator_cli.jar` differential, and named real-vendor profiles. A
-  quirk is encoded only when a **real de-identified vendor document** grounds it — none exists yet, so
-  it is not invented. The synthetic spec-clean fixtures here exercise the API; they assert no vendor
-  misbehavior.
+- **Tier-2 quirk corpus + differential (Phase 10, half b — landed, ADR 0018).** Five quirk fixtures
+  (`test/__fixtures__/quirk-*.json`), each **grounded in a public artifact** and cited in
+  `test/quirk-corpus.test.ts`: a non-first `resourceType` (json.html), a scientific-notation decimal
+  preserved byte-exact (Synthea #675), a primitive-extension `_`-sibling misalignment that **fails
+  closed** (HAPI #5738), a searchset Bundle `link[next]` that survives the round-trip
+  (bundle-example.json), and US Core race + birthsex extensions preserved on a base Patient. The
+  `validator_cli.jar` differential (CI-only) runs over this corpus too. **Values are synthetic;** a
+  genuinely vendor-**proprietary** deviation absent from every public sample stays grounded-only — it is
+  never invented (conventions §PHI). Missing-must-support and version-drift quirks are covered by the
+  Phase-6 profile suite.
 
 ### 8. XML codec + cross-format equivalence (Phase 8)
 
