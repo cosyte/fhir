@@ -87,6 +87,19 @@ export interface ElementBinding {
   readonly valueSet?: string;
 }
 
+/**
+ * One `ElementDefinition.constraint` — a FHIR **invariant**. `key` is the stable identifier
+ * (`ait-1`, `us-core-1`), `severity` is `error` | `warning`, and `expression` is the FHIRPath the
+ * Phase-7 engine evaluates against an instance. `human` (the prose description) is modeled but never
+ * surfaced in a diagnostic (it is spec text, not PHI, but the engine reports the value-free `key`).
+ */
+export interface ElementConstraint {
+  readonly key: string;
+  readonly severity: string;
+  readonly human?: string;
+  readonly expression: string;
+}
+
 /** One allowed type for an element (`code` is the datatype; `profile`/`targetProfile` constrain it). */
 export interface ElementType {
   readonly code: string;
@@ -122,6 +135,8 @@ export interface ElementDefinition {
   readonly pattern?: TypedValue;
   /** The element's terminology binding, when the definition states one. */
   readonly binding?: ElementBinding;
+  /** The element's invariant constraints (FHIRPath), when the definition states any (Phase 7). */
+  readonly constraint?: readonly ElementConstraint[];
 }
 
 /** The modeled slice of a FHIR `StructureDefinition`. */
@@ -232,6 +247,35 @@ function readStringList(node: FhirNode | undefined): readonly string[] | undefin
   return out.length === 0 ? undefined : out;
 }
 
+/** Read one `constraint` (invariant) out of its complex node — needs at least a `key` + `expression`. */
+function readConstraint(node: FhirNode): ElementConstraint | undefined {
+  if (!isComplex(node)) return undefined;
+  const key = primitiveString(getProperty(node, "key"));
+  const severity = primitiveString(getProperty(node, "severity"));
+  const expression = primitiveString(getProperty(node, "expression"));
+  if (key === undefined || expression === undefined) return undefined;
+  const human = primitiveString(getProperty(node, "human"));
+  const constraint: { -readonly [K in keyof ElementConstraint]: ElementConstraint[K] } = {
+    key,
+    severity: severity ?? "error",
+    expression,
+  };
+  if (human !== undefined) constraint.human = human;
+  return constraint;
+}
+
+/** Read the repeating `constraint[]` out of an element definition node. */
+function readConstraints(node: FhirNode | undefined): readonly ElementConstraint[] | undefined {
+  if (node === undefined) return undefined;
+  const items = isList(node) ? node.items : [node];
+  const out: ElementConstraint[] = [];
+  for (const item of items) {
+    const c = readConstraint(item);
+    if (c !== undefined) out.push(c);
+  }
+  return out.length === 0 ? undefined : out;
+}
+
 /** Read the `binding` (strength + valueSet) out of an element definition node. */
 function readBinding(node: FhirNode | undefined): ElementBinding | undefined {
   if (node === undefined || !isComplex(node)) return undefined;
@@ -272,6 +316,7 @@ function readElementDefinition(node: FhirNode): ElementDefinition | undefined {
   const fixed = readTypedValue(node, "fixed");
   const pattern = readTypedValue(node, "pattern");
   const binding = readBinding(getProperty(node, "binding"));
+  const constraint = readConstraints(getProperty(node, "constraint"));
 
   const el: {
     -readonly [K in keyof ElementDefinition]: ElementDefinition[K];
@@ -285,6 +330,7 @@ function readElementDefinition(node: FhirNode): ElementDefinition | undefined {
   if (fixed !== undefined) el.fixed = fixed;
   if (pattern !== undefined) el.pattern = pattern;
   if (binding !== undefined) el.binding = binding;
+  if (constraint !== undefined) el.constraint = constraint;
   return el;
 }
 

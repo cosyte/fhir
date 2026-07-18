@@ -11,7 +11,16 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  * dilute the number.
  */
 export default cosyteVitest({
-  coverageDirs: ["model", "codec", "validate", "safety", "quantity", "terminology", "profiles"],
+  coverageDirs: [
+    "model",
+    "codec",
+    "validate",
+    "safety",
+    "quantity",
+    "terminology",
+    "profiles",
+    "fhirpath",
+  ],
   test: {
     globals: false,
     environment: "node",

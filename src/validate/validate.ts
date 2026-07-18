@@ -40,6 +40,7 @@ import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
 import { collectTerminologyIssues } from "./terminology.js";
 import { collectProfileIssues, collectProfileVersionIssues } from "../profiles/validate-profile.js";
+import { collectInvariantIssues } from "../profiles/invariants.js";
 import type { BaseResolver } from "../profiles/snapshot.js";
 import type { StructureDefinition } from "../profiles/structure-definition.js";
 import type { TerminologyBinding } from "../terminology/bindings.js";
@@ -281,6 +282,12 @@ export function validateResource(
     for (const profile of options.profiles) {
       if (profile.type !== rt) continue;
       for (const issue of collectProfileIssues(resource, profile, profileOptions)) {
+        ctx.issues.push(issue);
+      }
+      // Invariant layer (Phase 7): evaluate the profile's FHIRPath `constraint`s via the bounded
+      // engine. An unevaluable expression is surfaced INVARIANT_UNCHECKED (never a silent pass); the
+      // seven named safety invariants are left to the always-on Phase-3 safety layer.
+      for (const issue of collectInvariantIssues(resource, profile, profileOptions)) {
         ctx.issues.push(issue);
       }
     }

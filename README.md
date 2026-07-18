@@ -4,7 +4,7 @@
 > JSON codec, and validation, with the same one-line ergonomics as the rest of the `@cosyte/*`
 > parser suite.
 
-**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–6 have landed** — the no-data-loss core (a
+**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–7 have landed** — the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
@@ -12,16 +12,20 @@ fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants), *
 fidelity** (the 11-way `Observation.value[x]` discrimination, UCUM-`code` unit fidelity, vital-signs
 required-unit conformance, dose quantities), **strength-aware, content-free terminology binding
 validation** (a frozen known-systems registry, binding-strength severity, the multi-system allergy /
-medication bindings, and a pluggable terminology-service interface — none bundled), and
+medication bindings, and a pluggable terminology-service interface — none bundled),
 **StructureDefinition-driven profile validation** (snapshot generation, slicing, `fixed[x]` /
 `pattern[x]`, and must-support as a system obligation — against caller-supplied US Core / vendor
-profiles, none bundled — see [What works today](#what-works-today)). It **reads, round-trips,
+profiles, none bundled), and **profile-invariant validation through a bounded, vendored FHIRPath
+subset** (an in-repo lexer → parser → evaluator that evaluates a profile's `constraint[]`, reporting
+anything outside the subset `INVARIANT_UNCHECKED` rather than passing it — see
+[What works today](#what-works-today)). It **reads, round-trips,
 structurally validates, never drops a modifier / status / negation, surfaces measured values by their
 true type with the UCUM `code`** (never the display string, never converted), **validates code systems
-and binding strength without vendoring any SNOMED / CPT / LOINC content, and validates against US Core
-profiles you supply**; it does **not** yet do general FHIRPath invariant / `type`·`profile` slicing
-discriminator validation (Phase 7), and it bundles **no** US Core IG corpus or `validator_cli.jar`
-differential (Phase 11). The built-in structural schema set is the base-resource elements plus
+and binding strength without vendoring any SNOMED / CPT / LOINC content, validates against US Core
+profiles you supply, and evaluates their FHIRPath invariants** (failing safe to `INVARIANT_UNCHECKED`
+on any unsupported expression); it does **not** yet do `type`·`profile` slicing discriminator or
+reslicing validation (still `PROFILE_SLICE_UNCHECKED`, Phase 7 deferral), and it bundles **no** US Core
+IG corpus or `validator_cli.jar` differential (Phase 11). The built-in structural schema set is the base-resource elements plus
 `Patient` as a worked demonstrator; other resource types validate only against a caller-supplied schema
 or profile. Without a supplied terminology service there is **no code-validity / value-set-membership**
 guarantee beyond `system` + strength (no terminology content is bundled — licensing). It is
@@ -115,8 +119,9 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error) — FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their
-  exact R4 FHIRPath (a general FHIRPath engine is Phase 7). This layer surfaces and enforces — it
-  never reconciles contradictions or infers clinical meaning.
+  exact R4 FHIRPath by the always-on safety layer. This layer surfaces and enforces — it
+  never reconciles contradictions or infers clinical meaning. Every **other** profile `constraint[]`
+  invariant is evaluated by the Phase-7 FHIRPath engine (below).
 
 And Quantity / UCUM fidelity — read a measured value by the type it actually is, and its unit by the
 UCUM **`code`** a machine may act on (never the display string, and **never converted**):
@@ -230,9 +235,30 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   must-support element is the classic interop bug this rule exists to prevent (roadmap §4/§8).
 - **Multi-version** — a `meta.profile` `canonical|version` pin the supplied set carries at a different
   version is `PROFILE_VERSION_MISMATCH` (warning) rather than a silent best-effort validation.
+- **Invariants** — the profile's `constraint[]` (FHIRPath) are evaluated by a **bounded, vendored
+  FHIRPath engine** (`tokenize` / `parseFhirPath` / `evaluateInvariant`; ADR 0002 — no runtime
+  dependency). A violated constraint is `INVARIANT_VIOLATED` (severity mirroring its `error` |
+  `warning`); an expression outside the subset raises `UnsupportedFhirPathError` and is reported
+  `INVARIANT_UNCHECKED` (`information`) — **surfaced, never assumed to pass**. The seven named safety
+  invariants stay owned by the always-on safety layer; the engine covers every other constraint.
 - **Deferred:** the bundled multi-version US Core IG corpus and the `validator_cli.jar` differential
-  (a JVM dev/CI job — Phase 11); invariant `constraint`s and the `type` / `profile` discriminators
-  (need the FHIRPath subset — Phase 7). Every finding is **value-free** (a code + a FHIRPath location).
+  (a JVM dev/CI job — Phase 11); the `type` / `profile` slicing discriminators and reslicing (still
+  `PROFILE_SLICE_UNCHECKED` — a genuine fail-safe deferral, they need per-occurrence type carriage /
+  recursive profile resolution). Every finding is **value-free** (a code + a FHIRPath location).
+
+```ts
+import { evaluateInvariant, parseResource } from "@cosyte/fhir";
+
+// The bounded FHIRPath engine, judged by the reference validator's boolean coercion.
+const { resource } = parseResource(
+  '{"resourceType":"Observation","valueString":"x","dataAbsentReason":{"text":"n"}}',
+);
+evaluateInvariant("dataAbsentReason.empty() or value.empty()", resource, resource);
+// → { unchecked: false, satisfied: false }  (obs-6 violated: value AND dataAbsentReason both present)
+
+evaluateInvariant("descendants().count() > 0", resource, resource);
+// → { unchecked: true, satisfied: false }  (descendants() is outside the subset — never a false pass)
+```
 
 ## What this will be
 

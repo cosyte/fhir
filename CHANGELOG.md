@@ -8,6 +8,42 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Invariants via a bounded, vendored FHIRPath subset (Phase 7).** The sixth-and-final validation
+  layer — evaluate a profile's `constraint[]` (FHIRPath invariants) against an instance. Per ADR 0002
+  this is a **capped, in-repo FHIRPath subset**: no runtime dependency, no full third-party engine.
+  Every finding stays **value-free** (a code + a FHIRPath location + the constraint `key`, never an
+  instance value).
+  - **The engine** — a real lexer → parser → evaluator (`tokenize`, `parseFhirPath`, `evaluateInvariant`)
+    over the generic model. It implements the FHIRPath the R4 / US Core invariant set actually uses:
+    path navigation (including choice access, `value` → `valueQuantity`), `$this` / `%resource` /
+    `%context`; `exists` / `empty` / `not` / `where` / `all` / `select` / `count` / `first` / `last` /
+    `distinct` / `hasValue` / `children` / `extension` / `intersect`; three-valued `and` / `or` /
+    `xor` / `implies`; `=` / `!=` / `<` / `>` / `<=` / `>=` / `in` / `contains` / `|`; and `is` / `as` /
+    `ofType` on the System primitive types. A constraint is judged by the reference validator's
+    boolean coercion (an empty result is a violation, never a silent pass). Public types: `Expr`,
+    `Token`, `TokenType`, `FpItem`, `FpColl`, `InvariantResult`, plus `convertToBoolean`.
+  - **Fail-safe is non-negotiable** — any construct outside the subset (arithmetic, string functions,
+    `descendants()`, `resolve()`, a FHIR-type `is`/`as`, an unknown operator) raises
+    `UnsupportedFhirPathError`, and the invariant is reported **`INVARIANT_UNCHECKED` (`information`)** —
+    surfaced, **never assumed to pass** (roadmap §6). Lazy `where`/`select`/`all` criteria mean an
+    unsupported sub-term over an empty collection (e.g. `dom-3` on a resource with no `contained`)
+    never fires, so common base constraints still evaluate cleanly.
+  - **Wired into validation** — `collectInvariantIssues` reads `constraint[]` off each supplied
+    profile's snapshot (constraints now parsed by `loadStructureDefinition` and accumulated down the
+    derivation chain by `generateSnapshot`), evaluates them against the resource (root-level) or each
+    present occurrence (nested), and emits `INVARIANT_VIOLATED` (severity mirroring the constraint's
+    `error` | `warning`) or `INVARIANT_UNCHECKED`. Runs inside `validateResource(resource, { profiles })`.
+    New public code `INVARIANT_UNCHECKED`; new type `ElementConstraint`.
+  - **Safety-layer division of labour** — the seven named safety invariants (`ait-1`/`ait-2`,
+    `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`) remain owned by the always-on Phase-3 safety layer (they
+    fire with or without a supplied profile); the generic engine skips those keys to avoid a duplicate
+    finding and covers every **other** constraint (base `ele-1` / `dom-*`, `us-core-*`, vendor
+    invariants). The engine's agreement with the reference validator on the named safety expressions is
+    proven directly against `evaluateInvariant`.
+  - **Deferred (still `PROFILE_SLICE_UNCHECKED`, fail-safe intact):** the `type` / `profile` slicing
+    discriminators and reslicing (they need per-occurrence type carriage / recursive profile
+    resolution); the bundled US Core IG corpus + `validator_cli.jar` differential (Phase 11).
+
 - **StructureDefinition + US Core profile validation (Phase 6).** A StructureDefinition-driven profile
   layer — the sixth validation layer (structure → cardinality → value-domain → terminology →
   **profile** → invariant). Like the terminology layer it ships the **engine, not the content**: a

@@ -105,6 +105,14 @@ export const VALIDATION_CODES = {
    */
   INVARIANT_VIOLATED: "INVARIANT_VIOLATED",
   /**
+   * Invariant (Phase 7) — a profile `constraint`'s FHIRPath `expression` is **outside the bounded
+   * engine's subset** (ADR 0002) and could not be evaluated. Always `information` (`informational`):
+   * the constraint is reported **unchecked, never assumed to pass** (roadmap §6 fail-safe) — the
+   * library does not claim conformance to an invariant it could not test. The constraint `key` travels
+   * in {@link ValidationIssue.constraint}. Value-free (the location + key, never an instance value).
+   */
+  INVARIANT_UNCHECKED: "INVARIANT_UNCHECKED",
+  /**
    * Quantity/UCUM (Phase 4) — a `Quantity` claims the UCUM `system` but its `code` is absent or not a
    * shape-valid UCUM expression, so the unit cannot be trusted for machine use. A `warning`
    * (`value`): the value is **preserved verbatim and never converted** — the library does not bundle
@@ -234,6 +242,7 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   UNHANDLED_MODIFIER_EXTENSION: ISSUE_TYPES.NOT_SUPPORTED,
   RETRACTED_RESOURCE: ISSUE_TYPES.INFORMATIONAL,
   INVARIANT_VIOLATED: ISSUE_TYPES.INVARIANT,
+  INVARIANT_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
   UCUM_UNIT_UNRECOGNIZED: ISSUE_TYPES.VALUE,
   VITAL_SIGN_UNIT_NONCONFORMANT: ISSUE_TYPES.CODE_INVALID,
   VALUE_TYPE_UNEXPECTED: ISSUE_TYPES.VALUE,
@@ -270,6 +279,9 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   RETRACTED_RESOURCE:
     "Resource is marked entered-in-error; it is retracted and must not be treated as active data.",
   INVARIANT_VIOLATED: "A resource invariant (content-validation constraint) was violated.",
+  INVARIANT_UNCHECKED:
+    "A resource invariant could not be evaluated by the bounded FHIRPath engine; it is reported " +
+    "unchecked rather than assumed to pass.",
   UCUM_UNIT_UNRECOGNIZED:
     "Quantity declares the UCUM system but its unit code is absent or not a well-formed UCUM " +
     "expression; the unit is preserved verbatim and never converted.",
