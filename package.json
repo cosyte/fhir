@@ -67,6 +67,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "clean": "rm -rf dist coverage",
+    "pack:docs": "bash scripts/build-docs-artifacts.sh",
     "attw": "attw --pack .",
     "version": "changeset version && node scripts/sync-version.mjs && prettier --write package.json src/index.ts",
     "release": "changeset publish",
