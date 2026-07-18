@@ -227,6 +227,24 @@ export type { ProfileOptions } from "./profiles/validate-profile.js";
 export { collectInvariantIssues } from "./profiles/invariants.js";
 export type { InvariantOptions } from "./profiles/invariants.js";
 
+// Phase 10 (half a) — the profile growth loop: `defineProfile()` authors a `StructureDefinition` in
+// code (the same model `loadStructureDefinition` produces from JSON — one path, no privileged internal
+// shape), and a publishable, spec-grounded profile starter kit dogfoods it. Named real-vendor quirk
+// profiles + the Tier-2 quirk corpus are deferred to REAL-CORPUS (no invented vendor behavior).
+export { defineProfile, InvalidProfileError } from "./profiles/define-profile.js";
+export type {
+  ProfileConstraintSpec,
+  ProfileElementSpec,
+  ProfileSpec,
+} from "./profiles/define-profile.js";
+export {
+  starterProfile,
+  PATIENT_IDENTIFIER_STARTER,
+  STARTER_PROFILE_BASE_URL,
+  STARTER_PROFILES,
+  VITAL_SIGN_OBSERVATION_STARTER,
+} from "./profiles/starter-kit.js";
+
 // Phase 7 — invariants via a bounded, vendored FHIRPath subset (ADR 0002). A lexer → parser → evaluator
 // that evaluates `constraint[]` expressions; an expression outside the subset is reported UNCHECKED,
 // never a silent pass. No runtime dependency, no full third-party engine.

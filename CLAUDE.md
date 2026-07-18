@@ -11,7 +11,21 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 landed.** P9 — Bundles, references, Bulk NDJSON
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 landed; P10 half (a) landed.** P10 (half a) —
+  the profile growth loop (profiling.html): `defineProfile()` authors a `StructureDefinition` in code
+  from an ergonomic `ProfileSpec`/`ProfileElementSpec` and returns the **same model**
+  `loadStructureDefinition` produces from JSON (proven byte-for-byte equal for a valid spec — one
+  path, **no privileged internal shape**), flowing straight into `validateResource({ profiles })`; a
+  conservative writer that throws a value-free `InvalidProfileError` on an author mistake. A
+  publishable, spec-grounded **starter kit** (`VITAL_SIGN_OBSERVATION_STARTER`,
+  `PATIENT_IDENTIFIER_STARTER`, `STARTER_PROFILES`, `starterProfile`, `STARTER_PROFILE_BASE_URL`)
+  dogfoods it — each starter is a `defineProfile()` call, self-contained (differential-only, no bundled
+  base), a _template_ not an authoritative vendor conformance statement. **Half (b) — the Tier-2
+  real-vendor _quirk_ corpus (missing-must-support, vendor extensions, paging, version drift,
+  scientific-notation decimals, `_element` misalignment) + the `validator_cli.jar` differential — is
+  deferred to `REAL-CORPUS`:** a quirk is encoded only when a real de-identified vendor document
+  grounds it (conventions §PHI), none exists, so inventing one is forbidden; named real-vendor profiles
+  are deferred for the same reason. P9 — Bundles, references, Bulk NDJSON
   streaming (bundle.html / references.html / Bulk Data IG): the `Bundle` model + entry-processing
   semantics (`readBundle` / `entryProcessing` / `isAtomicBundle` / `BUNDLE_TYPES`) that keep
   **transaction = all-or-nothing (`"atomic"`) genuinely distinct from batch = independent

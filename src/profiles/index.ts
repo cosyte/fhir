@@ -42,3 +42,14 @@ export type { ProfileOptions } from "./validate-profile.js";
 
 export { collectInvariantIssues } from "./invariants.js";
 export type { InvariantOptions } from "./invariants.js";
+
+export { defineProfile, InvalidProfileError } from "./define-profile.js";
+export type { ProfileConstraintSpec, ProfileElementSpec, ProfileSpec } from "./define-profile.js";
+
+export {
+  starterProfile,
+  PATIENT_IDENTIFIER_STARTER,
+  STARTER_PROFILE_BASE_URL,
+  STARTER_PROFILES,
+  VITAL_SIGN_OBSERVATION_STARTER,
+} from "./starter-kit.js";

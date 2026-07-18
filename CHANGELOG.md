@@ -8,6 +8,35 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Profile growth loop — `defineProfile()` + a spec-grounded starter kit (Phase 10, half a;
+  profiling.html).** The programmatic authoring front door for the profile engine, plus a publishable
+  set of example profiles that dogfood it. Half b (the Tier-2 real-vendor **quirk** corpus and its
+  oracle differential) is **deferred to `REAL-CORPUS`** — a quirk is encoded only when a real,
+  de-identified vendor document grounds it, and none exists yet, so inventing one is forbidden.
+  - **`defineProfile(spec)`** authors a `StructureDefinition` in code from an ergonomic `ProfileSpec` /
+    `ProfileElementSpec` (author-friendly `max: number | "*"`, defaulted constraint `severity`, `id`
+    defaulting to `path`, `sliceName` derived from the id) and returns the **exact same model** the
+    engine already consumes — so `validateResource(resource, { profiles: [defineProfile(spec)] })` just
+    works. It is proven byte-for-byte equal to `loadStructureDefinition(parseResource(equivalentJson))`
+    for a valid spec: **one model, two authoring routes, no privileged internal shape.** As a
+    conservative writer (Postel's Law, emit side) it throws a value-free `InvalidProfileError` on an
+    author mistake — a missing `url` / `type` / element `path`, a negative or non-integer cardinality,
+    a `max` below `min` — rather than degrading silently. It is idempotent on an already-normalized
+    `ElementDefinition` (accepts `UNBOUNDED` as a numeric `max`).
+  - **Profile starter kit** — `VITAL_SIGN_OBSERVATION_STARTER` (grounded in observation-vitalsigns.html
+    and US Core Vital Signs: required `status`, must-support `code`, and a **sliced** `category` — a
+    required `VSCat` slice pins the `vital-signs` coding while the **open** slicing still allows other
+    categories, mirroring the real profile rather than a bare pattern that would reject a valid
+    multi-category Observation) and `PATIENT_IDENTIFIER_STARTER`
+    (grounded in US Core Patient §4.2: `identifier` / `.system` / `.value` required and must-support,
+    deliberately **no** MRN slice and **no** `identifier.type` bind — the wrong-patient-merge hazard).
+    Every starter is authored through the public `defineProfile()` (no blessed internal builder),
+    self-contained (differential-only, no bundled base — roadmap §5), and clearly a _template_, not an
+    authoritative vendor conformance statement. Exposed as `STARTER_PROFILES`, the named profiles,
+    `starterProfile(url)`, and `STARTER_PROFILE_BASE_URL`.
+  - **Deferred, discipline intact:** named real-vendor profiles + the Tier-2 quirk fixtures + the
+    `validator_cli.jar` differential on the quirk corpus → `REAL-CORPUS` (no invented vendor behavior);
+    profiles beyond the shipped starters + US Core are user-supplied.
 - **Bundles, references, and Bulk NDJSON streaming (Phase 9, bundle.html / references.html / the Bulk
   Data Access IG).** The `Bundle` layer: the model, reference resolution with a DoS-safe cycle guard,
   and a streaming NDJSON reader — all value-free and zero-dependency.
