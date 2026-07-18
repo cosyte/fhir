@@ -1,0 +1,5 @@
+{"resourceType":"Patient","id":"1","birthDate":"1980-01-01"}
+{"resourceType":"Observation","id":"2","status":"final","valueQuantity":{"value":0.010,"unit":"mg"}}
+
+{ this is not json
+{"resourceType":"Condition","id":"3","clinicalStatus":{"coding":[{"code":"active"}]}}

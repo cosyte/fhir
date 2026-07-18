@@ -11,7 +11,25 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–8 landed.** P8 — XML codec + cross-format equivalence
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 landed.** P9 — Bundles, references, Bulk NDJSON
+  streaming (bundle.html / references.html / Bulk Data IG): the `Bundle` model + entry-processing
+  semantics (`readBundle` / `entryProcessing` / `isAtomicBundle` / `BUNDLE_TYPES`) that keep
+  **transaction = all-or-nothing (`"atomic"`) genuinely distinct from batch = independent
+  (`"independent"`)** — the artifact + semantics are modeled, transactions are **never executed** (no
+  server; stated non-goal); reference resolution (`resolveReference` / `buildBundleIndex` /
+  `containedIndex`) for relative / absolute / logical / `#fragment` against a Bundle + `contained`
+  closure (a local miss → `"unresolved"`, an out-of-closure target → `"external"`, never
+  false-flagged), keyed version-free; a **DoS-safe cycle guard** (`hasContainedCycle` /
+  `MAX_REFERENCE_DEPTH`) — an iterative, heap-based, three-color DFS that detects and reports a
+  contained reference cycle rather than looping (terminates always, no false positive on a DAG); and a
+  **streaming `application/fhir+ndjson` reader** (`streamNdjson` / `parseNdjsonLine` /
+  `NDJSON_ERROR_CODES`) with **per-line error isolation** (malformed line → isolated value-free error,
+  stream continues, reported by line number never content) and **no whole-file load** (only the current
+  partial line buffered; an unterminated line cut off `LINE_TOO_LONG` and drained without accumulating),
+  each line read through the precision-preserving codec (a decimal never through a JS `number`). New
+  value-free findings wired into `validateResource` for a `Bundle`: `REFERENCE_UNRESOLVED` (warning,
+  preserved), `CONTAINED_CYCLE` (error), `FULLURL_ID_MISMATCH` (error, `urn:uuid` fullUrl exempt); adds
+  the R4 `not-found` `IssueType`. Deferred, fail-safe intact: no transaction **execution**. P8 — XML codec + cross-format equivalence
   (xml.html): a **zero-dependency** FHIR XML codec that reads/writes the **same schema-free model** as
   the JSON codec. `parseResourceXml` (→ shared `ReadResult`) / `serializeResourceXml` (spec-clean,
   byte-for-byte round-trip), a hardened raw reader `readRawXml` (→ `XmlElement` tree) that is **XXE- and

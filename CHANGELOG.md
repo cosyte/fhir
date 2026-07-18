@@ -8,6 +8,44 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Bundles, references, and Bulk NDJSON streaming (Phase 9, bundle.html / references.html / the Bulk
+  Data Access IG).** The `Bundle` layer: the model, reference resolution with a DoS-safe cycle guard,
+  and a streaming NDJSON reader — all value-free and zero-dependency.
+  - **Bundle model + entry-processing semantics** (`readBundle`, `entryProcessing`, `isAtomicBundle`,
+    `BUNDLE_TYPES`). Reads a `Bundle` into an explicit `BundleReadout` and classifies the one
+    distinction a consumer must never blur: **`transaction` = all-or-nothing (`"atomic"`)** vs
+    **`batch` = independent (`"independent"`)**; every other type carries no processing contract
+    (`"none"`). `Bundle.total` is surfaced as its **lexical string**, never a JS `number`. The
+    artifact and its semantics are modeled — **transactions are not executed** (no server here; a
+    stated non-goal).
+  - **Reference resolution** (`resolveReference`, `buildBundleIndex`, `containedIndex`). Classifies
+    and resolves relative / absolute / logical / `#fragment` references against a Bundle + `contained`
+    closure, keyed version-free (`Type/id`, `/_history/{vid}` dropped) and by exact `fullUrl`. A local
+    miss (a fragment naming an absent contained, a relative naming no entry) is `"unresolved"`; a
+    reference to somewhere outside the closure is `"external"` and **never false-flagged**.
+  - **DoS-safe cycle/depth guard** (`hasContainedCycle`, `MAX_REFERENCE_DEPTH`). An **iterative**
+    (heap, not call-stack) three-color depth-first search over the `contained` fragment graph, bounded
+    by a frontier cap. A reference cycle (`#a`→`#b`→`#a`, a self-cycle, a root↔contained loop) is
+    **detected and reported, never followed** — it always terminates, and never false-positives on a
+    legitimate acyclic (DAG) contained graph.
+  - **Streaming Bulk NDJSON reader** (`streamNdjson`, `parseNdjsonLine`, `NDJSON_ERROR_CODES`).
+    Consumes any (async or sync) iterable of `string` / `Uint8Array` chunks — a Node `Readable`, a web
+    `ReadableStream`, a generator — and yields one `NdjsonRecord` per line as bytes arrive, **without
+    loading the whole file** (only the current partial line is buffered; an adversarial unterminated
+    line is cut off `LINE_TOO_LONG` and drained without accumulating memory across chunks). **Per-line
+    error isolation**: a malformed line (`MALFORMED_JSON` / `NOT_A_RESOURCE`) yields an isolated,
+    value-free error — reported by **line number, never line content** — and the stream continues.
+    Each good line is read through the precision-preserving codec, so a decimal is never routed
+    through a JS `number` (ADR 0001).
+  - **New value-free diagnostics**, wired into `validateResource` for a `Bundle`: `REFERENCE_UNRESOLVED`
+    (warning — the reference is **preserved**, never fatal; the target may live outside the closure),
+    `CONTAINED_CYCLE` (error), and `FULLURL_ID_MISMATCH` (error — a RESTful `fullUrl` whose id
+    disagrees with `resource.id`; a `urn:uuid` fullUrl is **exempt**, placing no constraint on the id).
+    Every finding is a FHIRPath _location_, never a value, reference string, id, or fullUrl. Adds the
+    R4 `not-found` `IssueType`.
+  - **Deferred, fail-safe intact:** no transaction **execution** — the library models the Bundle
+    artifact and its all-or-nothing vs independent semantics, not a server that applies them.
+
 - **`docs-content/` producer surface (`DOCS-CONTENT-P8`).** A minimal, contract-compliant docs
   producer: `docs-content/intro.md` + `docs-content/sidebars.json`, plus the `pack:docs` script
   (`scripts/build-docs-artifacts.sh`) that builds the `docs-content.tar.gz` + `source.tar.gz` release

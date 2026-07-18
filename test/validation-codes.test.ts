@@ -24,7 +24,7 @@ describe("validation code / severity / issue-type registries (stable public cont
     });
   });
 
-  it("pins the IssueType subset (Phase 2 + Phase 3 safety additions)", () => {
+  it("pins the IssueType subset (Phase 2 + Phase 3 safety + Phase 9 bundle additions)", () => {
     expect(ISSUE_TYPES).toEqual({
       STRUCTURE: "structure",
       REQUIRED: "required",
@@ -34,6 +34,7 @@ describe("validation code / severity / issue-type registries (stable public cont
       NOT_SUPPORTED: "not-supported",
       INFORMATIONAL: "informational",
       BUSINESS_RULE: "business-rule",
+      NOT_FOUND: "not-found",
     });
   });
 
@@ -64,6 +65,9 @@ describe("validation code / severity / issue-type registries (stable public cont
       PROFILE_VERSION_MISMATCH: "PROFILE_VERSION_MISMATCH",
       PROFILE_FIXED_MISMATCH: "PROFILE_FIXED_MISMATCH",
       PROFILE_PATTERN_MISMATCH: "PROFILE_PATTERN_MISMATCH",
+      REFERENCE_UNRESOLVED: "REFERENCE_UNRESOLVED",
+      CONTAINED_CYCLE: "CONTAINED_CYCLE",
+      FULLURL_ID_MISMATCH: "FULLURL_ID_MISMATCH",
     });
   });
 
@@ -104,6 +108,9 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(validationIssue("PROFILE_VERSION_MISMATCH", "warning", "X").type).toBe("business-rule");
     expect(validationIssue("PROFILE_FIXED_MISMATCH", "error", "X").type).toBe("value");
     expect(validationIssue("PROFILE_PATTERN_MISMATCH", "error", "X").type).toBe("value");
+    expect(validationIssue("REFERENCE_UNRESOLVED", "warning", "X").type).toBe("not-found");
+    expect(validationIssue("CONTAINED_CYCLE", "error", "X").type).toBe("structure");
+    expect(validationIssue("FULLURL_ID_MISMATCH", "error", "X").type).toBe("business-rule");
   });
 
   it("carries the constraint key only on an invariant finding, never elsewhere", () => {
