@@ -4,7 +4,7 @@
 > JSON **and XML** codec, and validation, with the same one-line ergonomics as the rest of the
 > `@cosyte/*` parser suite.
 
-**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–8 have landed** — the no-data-loss core (a
+**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 have landed** — the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
@@ -21,7 +21,10 @@ anything outside the subset `INVARIANT_UNCHECKED` rather than passing it), and a
 codec** (`parseResourceXml` / `serializeResourceXml`) that reads and writes the same schema-free model
 as the JSON codec — with a reader that is **XXE- and billion-laughs-proof by refusal** (any DTD or
 non-predefined entity is refused loudly, never resolved or expanded) and a `nodesEquivalent` oracle for
-JSON↔XML model equivalence — see
+JSON↔XML model equivalence, and **Bundles + references + Bulk NDJSON streaming** (`readBundle` with
+**transaction = all-or-nothing vs batch = independent** semantics — modeled, never executed; reference
+resolution for relative / absolute / logical / `#fragment` with a **DoS-safe cycle guard**; and a
+`streamNdjson` reader with **per-line error isolation** and **no whole-file load**) — see
 [What works today](#what-works-today). It **reads, round-trips,
 structurally validates, never drops a modifier / status / negation, surfaces measured values by their
 true type with the UCUM `code`** (never the display string, never converted), **validates code systems
@@ -311,6 +314,61 @@ serializeResourceXml(fromXml) === xml; // true — spec-clean round-trip
 // The reader refuses an XXE / entity-expansion attack loudly, never resolving or expanding it:
 parseResourceXml('<!DOCTYPE x [ <!ENTITY e SYSTEM "file:///etc/passwd"> ]><Patient/>');
 // throws FhirXmlError { code: "DTD_FORBIDDEN" }
+```
+
+### 9. Bundles, references, and Bulk NDJSON streaming (Phase 9)
+
+Read a `Bundle` into an explicit readout with the one semantic distinction a consumer must never blur —
+**`transaction` is all-or-nothing, `batch` is independent** — resolve the references inside it with a
+**DoS-safe cycle guard**, and stream a Bulk Data `$export` line by line with **per-line error isolation
+and no whole-file load**. The Bundle _artifact_ and its semantics are modeled; a transaction is **never
+executed** (there is no server here).
+
+- **`readBundle` / `entryProcessing` / `isAtomicBundle`** — the `Bundle.type` (`BUNDLE_TYPES`) and its
+  entry-processing contract: `transaction` → `"atomic"` (all-or-nothing), `batch` → `"independent"`,
+  everything else → `"none"`. `Bundle.total` is a lexical string, never a JS `number`.
+- **`resolveReference` / `buildBundleIndex` / `containedIndex`** — resolve relative / absolute /
+  logical / `#fragment` references against a Bundle + `contained` closure. A local miss is
+  `"unresolved"` (flagged, preserved); an external target is `"external"` (never false-flagged).
+- **`hasContainedCycle` / `MAX_REFERENCE_DEPTH`** — a bounded, iterative (heap-based) cycle guard: a
+  `contained` reference cycle is **detected and reported, never followed** — no infinite loop, no stack
+  blow-up, no false positive on a legitimate DAG.
+- **`streamNdjson` / `parseNdjsonLine`** — a streaming `application/fhir+ndjson` reader over any chunk
+  iterable, one resource per line, each read through the precision-preserving codec (a decimal never
+  through a `number`). A malformed line is isolated (reported by **line number, never content**), the
+  stream continues, and memory stays bounded (`LINE_TOO_LONG`).
+- **New findings** (in `validateResource` for a `Bundle`): `REFERENCE_UNRESOLVED` (warning, preserved),
+  `CONTAINED_CYCLE` (error), `FULLURL_ID_MISMATCH` (error — a `urn:uuid` fullUrl is exempt). All
+  value-free (a FHIRPath location, never a value, reference, or id).
+
+```ts
+import { parseResource, readBundle, validateResource, streamNdjson } from "@cosyte/fhir";
+
+const { resource } = parseResource(
+  '{"resourceType":"Bundle","type":"transaction","entry":[' +
+    '{"fullUrl":"urn:uuid:1","resource":{"resourceType":"Patient","id":"1"},' +
+    '"request":{"method":"POST","url":"Patient"}}]}',
+);
+
+readBundle(resource).atomic; // true — a transaction is all-or-nothing (a batch would be false)
+
+// A contained reference cycle is a bounded, typed finding — never an infinite loop:
+const { issues } = validateResource(
+  parseResource(
+    '{"resourceType":"Bundle","type":"collection","entry":[{"resource":' +
+      '{"resourceType":"Observation","id":"o","contained":[' +
+      '{"resourceType":"Observation","id":"a","hasMember":[{"reference":"#b"}]},' +
+      '{"resourceType":"Observation","id":"b","hasMember":[{"reference":"#a"}]}]}}]}',
+  ).resource,
+);
+issues.some((i) => i.code === "CONTAINED_CYCLE"); // true
+
+// Stream a Bulk NDJSON export without loading the file; a bad line is isolated, not fatal:
+for await (const record of streamNdjson(readableChunks)) {
+  if (record.error)
+    console.warn("bad line", record.error.line); // line number, never content
+  else handle(record.resource);
+}
 ```
 
 ## What this will be

@@ -58,6 +58,8 @@ export const ISSUE_TYPES = {
   INFORMATIONAL: "informational",
   /** A business rule / profile-level assertion failed (e.g. a declared profile version is unknown). */
   BUSINESS_RULE: "business-rule",
+  /** A referenced resource could not be found within the resolution closure (a Bundle reference). */
+  NOT_FOUND: "not-found",
 } as const;
 
 /** One of the {@link ISSUE_TYPES} — the R4 `OperationOutcome.issue.code`. */
@@ -201,6 +203,33 @@ export const VALIDATION_CODES = {
    * properties and values, but may carry more) — the weaker sibling of `fixed[x]`. Value-free.
    */
   PROFILE_PATTERN_MISMATCH: "PROFILE_PATTERN_MISMATCH",
+  /**
+   * Bundle (Phase 9) — a `Reference` inside a Bundle entry (or a `#fragment` inside a resource's
+   * `contained`) that could not be resolved within the resolution closure: a fragment whose target
+   * contained resource is absent, or a relative `Type/id` reference naming no entry in the Bundle. A
+   * `warning` (`not-found`) and **never fatal** — the target may legitimately live outside the
+   * supplied closure (a partial Bundle, an external server), so the reference is **preserved**, only
+   * flagged. An absolute/logical reference that is simply external to the Bundle draws **no** finding.
+   * Value-free — the FHIRPath location of the reference, never the reference string itself.
+   */
+  REFERENCE_UNRESOLVED: "REFERENCE_UNRESOLVED",
+  /**
+   * Bundle (Phase 9) — the `#fragment` references among a resource's `contained` resources form a
+   * **cycle** (a → b → a, or a self-reference). An `error` (`structure`): a containment cycle is
+   * malformed and, to a naive transitive resolver, a denial-of-service (an unbounded loop / stack
+   * blow-up). The bounded, iterative cycle guard detects it and reports it here rather than looping —
+   * DoS-safe by construction. Value-free — the location of the `contained` element, never a value.
+   */
+  CONTAINED_CYCLE: "CONTAINED_CYCLE",
+  /**
+   * Bundle (Phase 9) — a Bundle entry's `fullUrl` is a RESTful URL (relative `Type/id` or an absolute
+   * URL ending in `Type/id`) whose id disagrees with the entry `resource.id`. An `error`
+   * (`business-rule`): FHIR requires a RESTful `fullUrl` to be consistent with the resource it wraps,
+   * and a disagreement can cause a reference to resolve to the wrong resource. A `urn:uuid:` (logical)
+   * `fullUrl` places no constraint on `resource.id`, so it never triggers this. Value-free — the
+   * location of the `fullUrl`, never either id.
+   */
+  FULLURL_ID_MISMATCH: "FULLURL_ID_MISMATCH",
 } as const;
 
 /** Discriminant union of every {@link VALIDATION_CODES} value. */
@@ -255,6 +284,9 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   PROFILE_VERSION_MISMATCH: ISSUE_TYPES.BUSINESS_RULE,
   PROFILE_FIXED_MISMATCH: ISSUE_TYPES.VALUE,
   PROFILE_PATTERN_MISMATCH: ISSUE_TYPES.VALUE,
+  REFERENCE_UNRESOLVED: ISSUE_TYPES.NOT_FOUND,
+  CONTAINED_CYCLE: ISSUE_TYPES.STRUCTURE,
+  FULLURL_ID_MISMATCH: ISSUE_TYPES.BUSINESS_RULE,
 };
 
 /**
@@ -308,6 +340,14 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   PROFILE_FIXED_MISMATCH:
     "Element value does not exactly match the value the profile fixes for it.",
   PROFILE_PATTERN_MISMATCH: "Element does not match the pattern the profile requires for it.",
+  REFERENCE_UNRESOLVED:
+    "Reference could not be resolved within the supplied closure; it is preserved and flagged, " +
+    "never dropped (the target may live outside this Bundle).",
+  CONTAINED_CYCLE:
+    "Contained resources reference each other in a cycle; the containment graph is malformed and " +
+    "was reported by the bounded cycle guard rather than followed into an unbounded loop.",
+  FULLURL_ID_MISMATCH:
+    "Bundle entry fullUrl is a RESTful URL whose id disagrees with the wrapped resource's id.",
 };
 
 /**

@@ -1,0 +1,21 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:aa",
+      "resource": { "resourceType": "Patient", "id": "aa" },
+      "request": { "method": "POST", "url": "Patient" }
+    },
+    {
+      "fullUrl": "urn:uuid:bb",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "bb",
+        "status": "final",
+        "subject": { "reference": "urn:uuid:aa" }
+      },
+      "request": { "method": "POST", "url": "Observation" }
+    }
+  ]
+}

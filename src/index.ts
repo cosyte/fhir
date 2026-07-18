@@ -250,3 +250,23 @@ export type { XmlFatalCode } from "./xml/issues.js";
 export { FHIR_XML_NAMESPACE, parseResourceXml, XHTML_NAMESPACE } from "./xml/read.js";
 export { serializeResourceXml } from "./xml/write.js";
 export { nodesEquivalent } from "./xml/equivalence.js";
+
+// Phase 9 — Bundles, references, Bulk NDJSON streaming (bundle.html, references.html, the Bulk Data
+// IG). The Bundle model + entry-processing semantics (transaction = all-or-nothing vs batch =
+// independent — modeled, never executed), reference resolution (relative/absolute/logical/#fragment)
+// with a DoS-safe, bounded cycle guard, fullUrl↔id agreement, and a streaming NDJSON reader with
+// per-line error isolation and no whole-file load. Findings: REFERENCE_UNRESOLVED (warn, preserve),
+// CONTAINED_CYCLE (error), FULLURL_ID_MISMATCH (error).
+export { BUNDLE_TYPES, entryProcessing, isAtomicBundle, readBundle } from "./bundle/types.js";
+export type { BundleEntry, BundleReadout, BundleType, EntryProcessing } from "./bundle/types.js";
+export {
+  buildBundleIndex,
+  containedIndex,
+  hasContainedCycle,
+  resolveReference,
+  MAX_REFERENCE_DEPTH,
+} from "./bundle/references.js";
+export type { BundleIndex, ContainedIndex, ReferenceResolution } from "./bundle/references.js";
+export { parseNdjsonLine, streamNdjson, NDJSON_ERROR_CODES } from "./bundle/ndjson.js";
+export type { NdjsonError, NdjsonErrorCode, NdjsonOptions, NdjsonRecord } from "./bundle/ndjson.js";
+export { collectBundleIssues } from "./validate/bundle.js";

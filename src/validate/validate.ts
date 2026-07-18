@@ -36,6 +36,7 @@ import {
 } from "../model/index.js";
 import { toOperationOutcome } from "./operation-outcome.js";
 import { isPrimitiveType, validatePrimitiveValue } from "./primitives.js";
+import { collectBundleIssues } from "./bundle.js";
 import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
 import { collectTerminologyIssues } from "./terminology.js";
@@ -264,6 +265,12 @@ export function validateResource(
   // required-unit conformance, and dose quantities. Like the safety layer it keys off the resource
   // model directly (independent of the Phase-2 structural schema).
   for (const issue of collectQuantityIssues(resource, rt)) ctx.issues.push(issue);
+
+  // Bundle-integrity layer (Phase 9): for a Bundle, fullUrl↔id agreement, unresolved references, and
+  // the DoS-safe contained-cycle guard. Keys off the resource type, like the layers around it.
+  if (rt === "Bundle") {
+    for (const issue of collectBundleIssues(resource)) ctx.issues.push(issue);
+  }
 
   // Terminology binding layer (Phase 5): strength-aware, content-free system checks on bound codings,
   // plus value-set membership when a terminology service is supplied. Degrades to warnings (never a

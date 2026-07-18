@@ -21,6 +21,7 @@ export default cosyteVitest({
     "profiles",
     "fhirpath",
     "xml",
+    "bundle",
   ],
   test: {
     globals: false,
