@@ -8,6 +8,17 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **`docs-content/` producer surface (`DOCS-CONTENT-P8`).** A minimal, contract-compliant docs
+  producer: `docs-content/intro.md` + `docs-content/sidebars.json`, plus the `pack:docs` script
+  (`scripts/build-docs-artifacts.sh`) that builds the `docs-content.tar.gz` + `source.tar.gz` release
+  artifacts the `cosyte/docs` chrome ingests. Deliberately a **Size-S scaffold stub**: the sidebar is
+  the compliant Overview-only spine (`{"docs":["intro"]}`) and `intro.md` carries an **honest pre-alpha
+  / Coming-Soon status posture** — it mirrors `dicom`/`x12`'s registered-but-disabled state, states
+  what the parser does today and what is not yet here, and marks the full Diátaxis spine
+  (Installation, Quickstart, Core Concepts, Guides, Troubleshooting) as deferred until the parser
+  stabilizes. No invented placeholder categories, no unshipped-API claims; the docs grow with the
+  parser.
+
 - **XML codec + cross-format equivalence (Phase 8, xml.html).** A **zero-dependency** FHIR XML codec
   that reads and writes the **same schema-free model** as the JSON codec, plus the oracle that proves
   the two wire formats agree. The hand-written XML reader is **XXE- and billion-laughs-proof by
