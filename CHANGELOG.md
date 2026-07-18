@@ -8,6 +8,47 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **XML codec + cross-format equivalence (Phase 8, xml.html).** A **zero-dependency** FHIR XML codec
+  that reads and writes the **same schema-free model** as the JSON codec, plus the oracle that proves
+  the two wire formats agree. The hand-written XML reader is **XXE- and billion-laughs-proof by
+  refusal**, not by mitigation.
+  - **Hardened raw reader** (`readRawXml` → `XmlElement` tree). It **refuses any `<!DOCTYPE`**
+    (`DTD_FORBIDDEN`) before parsing a single element — a DTD is the only place XML can _declare_ an
+    entity, so refusing it closes the external-entity (XXE) **and** nested-entity-expansion
+    (billion-laughs) vectors at once — and **refuses any entity reference** beyond the five predefined
+    names and numeric character references (`UNDEFINED_ENTITY`), an independent second guard so no
+    entity is ever resolved, expanded, or fetched. It performs no I/O, resolves no URI, and bounds
+    nesting depth (`MAX_DEPTH_EXCEEDED`): adversarial input yields a typed `FhirXmlError`, never a hang,
+    OOM, fetch, or crash. New public surface: `FhirXmlError`, `XML_FATAL_CODES`, `readRawXml`, and the
+    `XmlElement` / `XmlNode` / `XmlText` / `XmlAttribute` types.
+  - **FHIR XML → model** (`parseResourceXml`) returns the shared `ReadResult` and the **same**
+    `FhirNode` model as `parseResource`: the root/contained element name → a synthetic `resourceType`;
+    a primitive's `value` attribute → its value (kept as the exact lexical **string** — schema-free, no
+    datatype guessed, precision never routed through a `number`); `id`/`extension` co-located as an
+    `id` attribute + child `<extension>`s (the XML form of the JSON `_`-sibling); `Element.id` /
+    `Extension.url` attributes → `id` / `url` properties; repeated elements → a list; a resource-valued
+    element unwrapped to the inner resource. **Narrative `Narrative.div` (XHTML) is carried opaquely as
+    its full serialized string** — the representation FHIR JSON uses — so it round-trips as conformant
+    `<div>…</div>`, never dropped or escaped into an attribute. Lenient (Postel): an unexpected namespace
+    or stray character data is preserved-and-flagged (new value-free issue code `UNEXPECTED_XML_CONTENT`),
+    never rejected.
+  - **Model → FHIR XML** (`serializeResourceXml`) — the spec-clean inverse: compact, canonical FHIR XML
+    that round-trips a spec-clean document **byte-for-byte**. Decimals emit from exact lexical text
+    (never a `number`, ADR 0001); `Resource.id` → child `<id>`, `Element.id` → attribute,
+    `Extension.url` → `url` attribute; control characters escaped round-trip-safe.
+  - **JSON↔XML equivalence** (`nodesEquivalent`) — the "same resource in XML and JSON parses to the
+    same model" oracle, defined **modulo** the two irreducible schema-free ambiguities and only those:
+    primitive lexical form (native `true`/number tokens ≡ `value`-attribute strings) and singleton
+    lists (an array-of-one ≡ a single repeated element). Property names/order, nesting, `id`, and
+    extensions must otherwise match exactly.
+  - **Deferred, fail-safe intact:** the XHTML **structure** inside `Narrative.div` is not modeled or
+    validated (carried as an opaque string — the JSON codec's fidelity — never dropped); typed
+    cross-format _transcoding_ (spec-clean JSON booleans/numbers from an XML-sourced model) needs the
+    datatype schema and is out of this phase; an extension-only element with no value reads as a
+    primitive (value-absent-primitive vs complex-with-only-an-extension is a schema-free ambiguity,
+    documented on `nodesEquivalent` — the safe direction, no data lost); RDF/Turtle is out of scope; the
+    XML-fuzz differential vs `validator_cli.jar` is Phase 11.
+
 - **Invariants via a bounded, vendored FHIRPath subset (Phase 7).** The sixth-and-final validation
   layer — evaluate a profile's `constraint[]` (FHIRPath invariants) against an instance. Per ADR 0002
   this is a **capped, in-repo FHIRPath subset**: no runtime dependency, no full third-party engine.

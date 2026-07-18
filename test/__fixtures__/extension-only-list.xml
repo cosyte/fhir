@@ -1,0 +1,1 @@
+<Patient xmlns="http://hl7.org/fhir"><name><given id="a"><extension url="http://example.org/x"><valueBoolean value="true"/></extension></given><given id="b"/></name></Patient>

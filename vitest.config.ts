@@ -20,6 +20,7 @@ export default cosyteVitest({
     "terminology",
     "profiles",
     "fhirpath",
+    "xml",
   ],
   test: {
     globals: false,

@@ -24,6 +24,7 @@ export type {
 } from "./raw-json.js";
 export {
   decimalPrecisionAtRisk,
+  unexpectedXmlContent,
   unknownProperty,
   FATAL_CODES,
   FhirCodecError,
