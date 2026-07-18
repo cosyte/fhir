@@ -24,7 +24,10 @@ non-predefined entity is refused loudly, never resolved or expanded) and a `node
 JSON↔XML model equivalence, and **Bundles + references + Bulk NDJSON streaming** (`readBundle` with
 **transaction = all-or-nothing vs batch = independent** semantics — modeled, never executed; reference
 resolution for relative / absolute / logical / `#fragment` with a **DoS-safe cycle guard**; and a
-`streamNdjson` reader with **per-line error isolation** and **no whole-file load**) — see
+`streamNdjson` reader with **per-line error isolation** and **no whole-file load**), and a
+**programmatic profile-authoring API** (`defineProfile()` builds a `StructureDefinition` in code — the
+same model `loadStructureDefinition` reads from JSON, one path with no privileged internal shape — plus
+a spec-grounded **starter kit** of example profiles that dogfood it) — see
 [What works today](#what-works-today). It **reads, round-trips,
 structurally validates, never drops a modifier / status / negation, surfaces measured values by their
 true type with the UCUM `code`** (never the display string, never converted), **validates code systems
@@ -270,6 +273,53 @@ evaluateInvariant("dataAbsentReason.empty() or value.empty()", resource, resourc
 evaluateInvariant("descendants().count() > 0", resource, resource);
 // → { unchecked: true, satisfied: false }  (descendants() is outside the subset — never a false pass)
 ```
+
+**Authoring a profile in code — `defineProfile()` (Phase 10, half a).** You don't have to hand-write
+`StructureDefinition` JSON. `defineProfile(spec)` builds one from an ergonomic spec and returns the
+**same model** `loadStructureDefinition` produces — so it flows straight into
+`validateResource({ profiles })`. There is **one authoring path, no privileged internal shape**: the
+built-in starter profiles are `defineProfile()` calls, exactly what you write. As a conservative
+writer it throws a value-free `InvalidProfileError` on an author mistake (a missing `url` / `type` /
+element `path`, a bad cardinality, a `max` below `min`).
+
+```ts
+import { defineProfile, parseResource, primitive, validateResource } from "@cosyte/fhir";
+
+const finalOnly = defineProfile({
+  url: "https://example.org/StructureDefinition/final-observation",
+  type: "Observation",
+  differential: [
+    { path: "Observation.status", fixed: { type: "Code", value: primitive("final") } },
+  ],
+});
+
+const { resource } = parseResource('{"resourceType":"Observation","status":"preliminary"}');
+validateResource(resource, { profiles: [finalOnly] }).issues.map((i) => i.code);
+// → ["PROFILE_FIXED_MISMATCH", …]
+```
+
+A publishable **profile starter kit** ships as worked examples / templates you extend —
+`VITAL_SIGN_OBSERVATION_STARTER` (required `status`, must-support `code`, and a **sliced** `category`
+— a required `VSCat` slice pins the `vital-signs` coding while the open slicing still allows other
+categories, the way the real profile does) and `PATIENT_IDENTIFIER_STARTER` (`identifier` / `.system`
+/ `.value` required + must-support, deliberately **no** MRN slice), plus `STARTER_PROFILES`,
+`starterProfile(url)`, and `STARTER_PROFILE_BASE_URL`. Each is grounded in a public FHIR / US Core
+spec page, self-contained (differential-only, no bundled base), and clearly a template — **not** an
+authoritative vendor conformance statement.
+
+```ts
+import { STARTER_PROFILES, parseResource, validateResource } from "@cosyte/fhir";
+
+const { resource } = parseResource(vitalSignObservationJson);
+validateResource(resource, { profiles: [...STARTER_PROFILES] });
+```
+
+- **Deferred to `REAL-CORPUS`:** the Tier-2 real-vendor **quirk** corpus (Epic/Cerner/athena
+  missing-must-support, vendor extensions, paging, version drift, scientific-notation decimals,
+  `_element` misalignment) and its `validator_cli.jar` differential, and named real-vendor profiles. A
+  quirk is encoded only when a **real de-identified vendor document** grounds it — none exists yet, so
+  it is not invented. The synthetic spec-clean fixtures here exercise the API; they assert no vendor
+  misbehavior.
 
 ### 8. XML codec + cross-format equivalence (Phase 8)
 
