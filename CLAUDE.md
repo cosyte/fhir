@@ -11,7 +11,7 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 landed; P10 half (a) landed; P11 buildable
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 landed; P10 landed (halves a + b); P11 buildable
   tiers landed.** P11 (buildable portion; roadmap §6) — conformance hardening as gating tests: a
   **JSON+XML+NDJSON fuzz tier** (`test/fuzz.test.ts`, `FUZZ_RUNS`-tunable, a dedicated `fuzz` CI job)
   proving adversarial input never crashes/hangs/OOMs — only a **typed** `FhirCodecError`/`FhirXmlError`
@@ -27,9 +27,8 @@ semantics, and validate it against US Core — without reading the FHIR spec.
   `Object.hasOwn`-guarded). New public fatal `FATAL_CODES.MAX_DEPTH_EXCEEDED` (JSON reader bounds
   nesting at 256, matching the XML reader). **Deferred:** the JVM `validator_cli.jar` differential is
   **authored but CI-only** (`scripts/differential.mjs` + a `differential` CI job — no Java in this
-  container, not observed green here) and runs over synthetic spec-clean inputs only; the highest-value
-  **real-vendor quirk-corpus differential is deferred to `REAL-CORPUS`** (no invented quirks —
-  conventions §PHI). P10 (half a) —
+  container, not observed green here); as of **P10b** it runs over **both** the synthetic spec-clean
+  tier **and** the Tier-2 quirk corpus. P10 (half a) —
   the profile growth loop (profiling.html): `defineProfile()` authors a `StructureDefinition` in code
   from an ergonomic `ProfileSpec`/`ProfileElementSpec` and returns the **same model**
   `loadStructureDefinition` produces from JSON (proven byte-for-byte equal for a valid spec — one
@@ -39,11 +38,19 @@ semantics, and validate it against US Core — without reading the FHIR spec.
   `PATIENT_IDENTIFIER_STARTER`, `STARTER_PROFILES`, `starterProfile`, `STARTER_PROFILE_BASE_URL`)
   dogfoods it — each starter is a `defineProfile()` call, self-contained (differential-only, no bundled
   base), a _template_ not an authoritative vendor conformance statement. **Half (b) — the Tier-2
-  real-vendor _quirk_ corpus (missing-must-support, vendor extensions, paging, version drift,
-  scientific-notation decimals, `_element` misalignment) + the `validator_cli.jar` differential — is
-  deferred to `REAL-CORPUS`:** a quirk is encoded only when a real de-identified vendor document
-  grounds it (conventions §PHI), none exists, so inventing one is forbidden; named real-vendor profiles
-  are deferred for the same reason. P9 — Bundles, references, Bulk NDJSON
+  real-world _quirk_ corpus + the `validator_cli.jar` differential over it — landed (ADR 0018):** five
+  quirk fixtures (`test/__fixtures__/quirk-*.json`), each **grounded in a public artifact** and cited
+  in `test/quirk-corpus.test.ts` (the provenance record) — a non-first `resourceType` (json.html), a
+  scientific-notation decimal (Synthea #675, preserved byte-exact + `DECIMAL_PRECISION_AT_RISK`), a
+  primitive-extension `_`-sibling misalignment that **fails closed** (HAPI #5738), a searchset Bundle
+  `link[next]` that survives the round-trip (bundle-example.json), and US Core race + birthsex
+  extensions preserved on a base Patient. Values are synthetic; the PHI-leak sweep auto-covers them.
+  ADR 0018 redefined the anti-invention rule's "real document" to include public artifacts, unblocking
+  this from `REAL-CORPUS`. A genuinely vendor-**proprietary** deviation absent from every public sample
+  stays grounded-only (still forbidden to invent — conventions §PHI); missing-must-support
+  (`MUST_SUPPORT_ABSENT`) and version-drift (`PROFILE_VERSION_MISMATCH`) quirks are already covered by
+  the Phase-6 profile suite. `scripts/differential.mjs` runs this corpus through the oracle in the
+  `differential` CI job (still JVM-only, not observed green here). P9 — Bundles, references, Bulk NDJSON
   streaming (bundle.html / references.html / Bulk Data IG): the `Bundle` model + entry-processing
   semantics (`readBundle` / `entryProcessing` / `isAtomicBundle` / `BUNDLE_TYPES`) that keep
   **transaction = all-or-nothing (`"atomic"`) genuinely distinct from batch = independent

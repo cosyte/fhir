@@ -1,0 +1,34 @@
+{
+  "resourceType": "Bundle",
+  "id": "syn-searchset",
+  "type": "searchset",
+  "total": 3,
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://example.com/base/Observation?patient=syn-1&_count=2"
+    },
+    {
+      "relation": "next",
+      "url": "https://example.com/base/Observation?patient=syn-1&_count=2&page=2"
+    }
+  ],
+  "entry": [
+    {
+      "fullUrl": "https://example.com/base/Observation/syn-obs-1",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "syn-obs-1",
+        "status": "final",
+        "code": { "coding": [{ "system": "http://loinc.org", "code": "8867-4" }] },
+        "valueQuantity": {
+          "value": 80,
+          "unit": "/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        }
+      },
+      "search": { "mode": "match" }
+    }
+  ]
+}
