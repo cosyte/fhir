@@ -11,7 +11,25 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 landed; P10 half (a) landed.** P10 (half a) —
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 landed; P10 half (a) landed; P11 buildable
+  tiers landed.** P11 (buildable portion; roadmap §6) — conformance hardening as gating tests: a
+  **JSON+XML+NDJSON fuzz tier** (`test/fuzz.test.ts`, `FUZZ_RUNS`-tunable, a dedicated `fuzz` CI job)
+  proving adversarial input never crashes/hangs/OOMs — only a **typed** `FhirCodecError`/`FhirXmlError`
+  with a registered fatal, or a bounded rejection; a **PHI-leak tier** (`test/phi-leak.test.ts`, corpus
+  sweep + sentinel battery) gating the value-free-diagnostics contract; a **type-level tier**
+  (`test/public-types.test.ts`, `expect-type`). The fuzz tier surfaced three read-path robustness
+  defects, now fixed: a **decimal DoS** (`0e9999999999999999999` made `FhirDecimal` quantity comparison
+  do `10n ** astronomical-scale` → untyped `RangeError`/hang on the read path — now canonical-form
+  comparison, no exponentiation, semantics unchanged); an **XML entity prototype-chain bypass**
+  (`&constructor;`/`&__proto__;` resolved through `Object.prototype`, bypassing the five-entity
+  allowlist — now `Object.hasOwn`-guarded); and a **validator DoS** (a resource property named
+  `constructor`/`toString` crashed `validateResource` with an uncaught `TypeError` — now
+  `Object.hasOwn`-guarded). New public fatal `FATAL_CODES.MAX_DEPTH_EXCEEDED` (JSON reader bounds
+  nesting at 256, matching the XML reader). **Deferred:** the JVM `validator_cli.jar` differential is
+  **authored but CI-only** (`scripts/differential.mjs` + a `differential` CI job — no Java in this
+  container, not observed green here) and runs over synthetic spec-clean inputs only; the highest-value
+  **real-vendor quirk-corpus differential is deferred to `REAL-CORPUS`** (no invented quirks —
+  conventions §PHI). P10 (half a) —
   the profile growth loop (profiling.html): `defineProfile()` authors a `StructureDefinition` in code
   from an ergonomic `ProfileSpec`/`ProfileElementSpec` and returns the **same model**
   `loadStructureDefinition` produces from JSON (proven byte-for-byte equal for a valid spec — one

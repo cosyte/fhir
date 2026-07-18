@@ -27,7 +27,11 @@ resolution for relative / absolute / logical / `#fragment` with a **DoS-safe cyc
 `streamNdjson` reader with **per-line error isolation** and **no whole-file load**), and a
 **programmatic profile-authoring API** (`defineProfile()` builds a `StructureDefinition` in code — the
 same model `loadStructureDefinition` reads from JSON, one path with no privileged internal shape — plus
-a spec-grounded **starter kit** of example profiles that dogfood it) — see
+a spec-grounded **starter kit** of example profiles that dogfood it), and **conformance hardening**
+(Phase 11, buildable tiers) — JSON + XML + NDJSON **fuzz targets** proving adversarial input never
+crashes / hangs / OOMs (only a _typed_ error or a bounded rejection; the JSON reader now bounds nesting
+with a `MAX_DEPTH_EXCEEDED` fatal, matching the XML reader), a **PHI-leak test tier** gating the
+value-free-diagnostics contract, and **type-level (`expect-type`) tests** on the public surface — see
 [What works today](#what-works-today). It **reads, round-trips,
 structurally validates, never drops a modifier / status / negation, surfaces measured values by their
 true type with the UCUM `code`** (never the display string, never converted), **validates code systems
@@ -35,7 +39,10 @@ and binding strength without vendoring any SNOMED / CPT / LOINC content, validat
 profiles you supply, and evaluates their FHIRPath invariants** (failing safe to `INVARIANT_UNCHECKED`
 on any unsupported expression); it does **not** yet do `type`·`profile` slicing discriminator or
 reslicing validation (still `PROFILE_SLICE_UNCHECKED`, Phase 7 deferral), and it bundles **no** US Core
-IG corpus or `validator_cli.jar` differential (Phase 11). The built-in structural schema set is the base-resource elements plus
+IG corpus. The `validator_cli.jar` **differential is authored but CI-only** (a JVM oracle job — there is
+no Java in the dev container, so it has not been observed green there) and runs over synthetic
+spec-clean inputs; the highest-value **real-vendor quirk-corpus differential is deferred to
+`REAL-CORPUS`** (a quirk is encoded only when a real de-identified document grounds it — none exists). The built-in structural schema set is the base-resource elements plus
 `Patient` as a worked demonstrator; other resource types validate only against a caller-supplied schema
 or profile. Without a supplied terminology service there is **no code-validity / value-set-membership**
 guarantee beyond `system` + strength (no terminology content is bundled — licensing). Its XML codec is

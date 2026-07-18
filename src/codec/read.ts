@@ -271,6 +271,7 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
  *
  * @param input - JSON text, or a {@link RawJson} tree from {@link readRawJson}.
  * @throws FhirCodecError (`MALFORMED_JSON`) when the input is not a JSON object.
+ * @throws FhirCodecError (`MAX_DEPTH_EXCEEDED`) when text input nests past the reader's depth bound.
  * @throws FhirCodecError (`PRIMITIVE_EXTENSION_MISALIGNED`) when a value/`_`-sibling pair is misaligned.
  * @example
  * ```ts

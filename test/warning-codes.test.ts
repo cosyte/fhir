@@ -22,10 +22,11 @@ describe("issue & fatal code registries (stable public contract)", () => {
     });
   });
 
-  it("pins the Phase-1 fatal codes", () => {
+  it("pins the fatal codes (Phase 1 + the Phase-11 depth-bound DoS guard)", () => {
     expect(FATAL_CODES).toEqual({
       MALFORMED_JSON: "MALFORMED_JSON",
       PRIMITIVE_EXTENSION_MISALIGNED: "PRIMITIVE_EXTENSION_MISALIGNED",
+      MAX_DEPTH_EXCEEDED: "MAX_DEPTH_EXCEEDED",
     });
   });
 

@@ -8,6 +8,54 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Conformance hardening — fuzz, PHI-leak, and type-level tiers (Phase 11, buildable portion;
+  roadmap §6).** The layered accuracy strategy turned into gating tests, plus the read-path robustness
+  fixes those tests surfaced. The JVM `validator_cli.jar` differential is **authored but CI-only**
+  (there is no Java in the dev container — it has not been observed green here), and the highest-value
+  real-vendor **quirk-corpus** differential is **deferred to `REAL-CORPUS`** (a quirk is encoded only
+  when a real de-identified document grounds it — conventions §PHI — and none exists yet).
+  - **JSON + XML fuzz tier** (`test/fuzz.test.ts`) — adversarial JSON/XML/NDJSON at fuzz-scale run
+    counts (CI-tunable via `FUZZ_RUNS`; a dedicated `fuzz` CI job raises it to 20 000): XXE /
+    billion-laughs / undefined entities, deep nesting, `_element` misalignment, huge /
+    scientific-notation numbers, `resourceType` games, prototype-chain keys, and truncation +
+    structural mutation of the real corpus. The proven contract: adversarial input **never crashes /
+    hangs / OOMs** — it becomes a _typed_ `FhirCodecError` / `FhirXmlError` with a registered fatal
+    code, or a bounded rejection, never an untyped throw.
+  - **PHI-leak test tier** (`test/phi-leak.test.ts`) — the value-free-diagnostics contract (§7) as a
+    gate: a corpus sweep plus an injected-sentinel battery assert no PHI-bearing input value ever
+    reaches any `OperationOutcome` / issue / error output (a finding carries a coded reason and a
+    FHIRPath location, never a value). Generalizes the hand-picked `phi.test.ts` cases to the whole
+    corpus.
+  - **Type-level tier** (`test/public-types.test.ts`) — `expect-type` assertions on the public type
+    surface (the `kind`/`type`-discriminated unions a consumer switches on, `PrimitiveValue` never
+    being a JS `number`, the value-free `FhirIssue` shape), checked by `tsc`.
+  - **New fatal `FATAL_CODES.MAX_DEPTH_EXCEEDED`** — the JSON reader now bounds nesting at 256
+    (matching the XML reader) and refuses a pathological tower of `[[[[…]]]]` / `{"a":{…}}` with a
+    typed, value-free fatal instead of a V8 stack overflow. Real FHIR nests far shallower and is
+    unaffected.
+  - **Differential harness** (`scripts/differential.mjs`) + a CI `differential` job that provisions the
+    JVM oracle over the synthetic spec-clean corpus, enforcing "never a false _valid_" and "no spurious
+    error on clean input" on issue presence / severity / location (never text — ours is PHI-redacted).
+    Authored, not yet observed green locally.
+
+### Fixed
+
+- **Decimal DoS on the read path.** `FhirDecimal` quantity comparison aligned scales with
+  `10n ** BigInt(scaleDiff)`; an adversarial literal such as `0e9999999999999999999` (finite as a
+  double but of astronomical scale) made that exponentiation throw an untyped `RangeError` — or hang
+  building a multi-gigabyte BigInt — via the codec's precision check. Comparison is now done in a
+  canonical form (coefficient stripped of trailing factors of ten, zero collapsed) that **never
+  exponentiates**; quantity- and precision-equality semantics are unchanged, verified against the
+  existing decimal suite.
+- **XML entity prototype-chain bypass.** The reader resolved a predefined entity with a bare
+  `PREDEFINED[body]`, so `&constructor;` / `&toString;` / `&__proto__;` read through `Object.prototype`
+  and bypassed the five-entity allowlist. Now guarded by `Object.hasOwn` — only the five predefined
+  entities resolve; every other named entity is refused (`UNDEFINED_ENTITY`).
+- **Validator DoS via a prototype-named property.** A resource whose property was literally named
+  `constructor` / `toString` / `valueOf` / `hasOwnProperty` made the schema lookup read an inherited
+  `Object.prototype` member and crash `validateResource` with an uncaught `TypeError`. Now guarded by
+  `Object.hasOwn` — an adversarial resource can no longer fault the validator.
+
 - **Profile growth loop — `defineProfile()` + a spec-grounded starter kit (Phase 10, half a;
   profiling.html).** The programmatic authoring front door for the profile engine, plus a publishable
   set of example profiles that dogfood it. Half b (the Tier-2 real-vendor **quirk** corpus and its

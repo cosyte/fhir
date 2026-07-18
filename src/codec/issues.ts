@@ -114,8 +114,8 @@ export function unexpectedXmlContent(expression: string): FhirIssue {
 }
 
 /**
- * Stable string codes for the reader's unrecoverable fatals. Locked to two: everything less severe
- * is a recoverable {@link FhirIssue}.
+ * Stable string codes for the reader's unrecoverable fatals. Everything less severe is a recoverable
+ * {@link FhirIssue}.
  */
 export const FATAL_CODES = {
   /** The input is not well-formed JSON. */
@@ -126,6 +126,14 @@ export const FATAL_CODES = {
    * (cf. HAPI #5738). Fails closed — see the module doc.
    */
   PRIMITIVE_EXTENSION_MISALIGNED: "PRIMITIVE_EXTENSION_MISALIGNED",
+  /**
+   * JSON nested deeper than the reader's fixed bound. Well-formed but pathological input (a tower of
+   * `[[[[…]]]]` / `{"a":{"a":…}}`) is refused as a **DoS guard** — turning what would otherwise be a
+   * V8 stack overflow (`RangeError`, environment-dependent, untyped) into a typed, value-free fatal
+   * carrying a byte `offset`. Mirrors the XML reader's `MAX_DEPTH_EXCEEDED` (roadmap §6 fuzzing: deep
+   * nesting must never crash/hang/OOM — always a typed error or a bounded rejection).
+   */
+  MAX_DEPTH_EXCEEDED: "MAX_DEPTH_EXCEEDED",
 } as const;
 
 /** Discriminant union of every {@link FATAL_CODES} value. */

@@ -198,7 +198,11 @@ export function resolveElement(
 ):
   | { readonly element: ElementSchema; readonly datatype: string; readonly base: string }
   | undefined {
-  const direct = elements[property];
+  // `Object.hasOwn` guard, not a bare `elements[property]`: a resource property literally named
+  // `constructor` / `toString` / `valueOf` / `hasOwnProperty` would otherwise read an inherited
+  // `Object.prototype` member (a `Function`, not an `ElementSchema`) and crash `isChoice` on its
+  // absent `.types`. An adversarial resource must not be able to fault the validator. Own-property only.
+  const direct = Object.hasOwn(elements, property) ? elements[property] : undefined;
   if (direct !== undefined && !isChoice(direct)) {
     return { element: direct, datatype: direct.types[0] ?? "", base: property };
   }
