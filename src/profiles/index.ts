@@ -19,6 +19,7 @@ export type {
   Discriminator,
   DiscriminatorType,
   ElementBinding,
+  ElementConstraint,
   ElementDefinition,
   ElementType,
   Slicing,
@@ -38,3 +39,6 @@ export type { SliceConstraint, SliceDefinition, SliceMatchResult } from "./slici
 
 export { collectProfileIssues, collectProfileVersionIssues } from "./validate-profile.js";
 export type { ProfileOptions } from "./validate-profile.js";
+
+export { collectInvariantIssues } from "./invariants.js";
+export type { InvariantOptions } from "./invariants.js";

@@ -24,7 +24,11 @@
  * @packageDocumentation
  */
 
-import type { ElementDefinition, StructureDefinition } from "./structure-definition.js";
+import type {
+  ElementConstraint,
+  ElementDefinition,
+  StructureDefinition,
+} from "./structure-definition.js";
 
 /** A resolver from a canonical URL to a loaded {@link StructureDefinition} (for `baseDefinition`). */
 export type BaseResolver = (canonicalUrl: string) => StructureDefinition | undefined;
@@ -65,6 +69,14 @@ function mergeElement(base: ElementDefinition, diff: ElementDefinition): Element
   if (diff.pattern !== undefined) merged.pattern = diff.pattern;
   if (diff.binding !== undefined) merged.binding = diff.binding;
   if (diff.sliceName !== undefined) merged.sliceName = diff.sliceName;
+  // Invariants are *additive* down the derivation chain (profiling.html): a profile adds constraints
+  // to those it inherits. Accumulate by key, letting a same-key differential constraint win.
+  if (diff.constraint !== undefined) {
+    const byKey = new Map<string, ElementConstraint>();
+    for (const c of base.constraint ?? []) byKey.set(c.key, c);
+    for (const c of diff.constraint) byKey.set(c.key, c);
+    merged.constraint = [...byKey.values()];
+  }
   return merged;
 }
 

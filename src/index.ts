@@ -207,6 +207,7 @@ export type {
   Discriminator,
   DiscriminatorType,
   ElementBinding,
+  ElementConstraint,
   ElementDefinition,
   ElementType,
   Slicing,
@@ -222,3 +223,17 @@ export { matchSlices, resolveSlices } from "./profiles/slicing.js";
 export type { SliceConstraint, SliceDefinition, SliceMatchResult } from "./profiles/slicing.js";
 export { collectProfileIssues, collectProfileVersionIssues } from "./profiles/validate-profile.js";
 export type { ProfileOptions } from "./profiles/validate-profile.js";
+export { collectInvariantIssues } from "./profiles/invariants.js";
+export type { InvariantOptions } from "./profiles/invariants.js";
+
+// Phase 7 — invariants via a bounded, vendored FHIRPath subset (ADR 0002). A lexer → parser → evaluator
+// that evaluates `constraint[]` expressions; an expression outside the subset is reported UNCHECKED,
+// never a silent pass. No runtime dependency, no full third-party engine.
+export {
+  convertToBoolean,
+  evaluateInvariant,
+  parseFhirPath,
+  tokenize,
+  UnsupportedFhirPathError,
+} from "./fhirpath/index.js";
+export type { Expr, FpColl, FpItem, InvariantResult, Token, TokenType } from "./fhirpath/index.js";

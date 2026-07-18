@@ -11,7 +11,24 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–6 landed.** P6 — StructureDefinition + US Core
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–7 landed.** P7 — invariants via a bounded, vendored
+  FHIRPath subset (the sixth-and-final validation layer, ADR 0002): an in-repo FHIRPath **lexer →
+  parser → evaluator** (`tokenize` / `parseFhirPath` / `evaluateInvariant`; no runtime dependency, no
+  full third-party engine) that evaluates a profile's `constraint[]` against an instance. The subset
+  covers the R4 / US Core invariant surface — path/choice navigation, `$this`/`%resource`/`%context`,
+  `exists`/`empty`/`not`/`where`/`all`/`select`/`count`/`first`/`last`/`distinct`/`hasValue`/`children`/
+  `extension`/`intersect`, three-valued `and`/`or`/`xor`/`implies`, `=`/`!=`/`<`/`>`/`<=`/`>=`/`in`/
+  `contains`/`|`, and System-type `is`/`as`/`ofType` — judged by the reference validator's boolean
+  coercion (empty → violation, never a silent pass). `collectInvariantIssues` (wired into
+  `validateResource({ profiles })`) emits `INVARIANT_VIOLATED` (severity mirrors the constraint's
+  `error`|`warning`) or, for **any** expression outside the subset, `INVARIANT_UNCHECKED` (information)
+  via `UnsupportedFhirPathError` — surfaced, **never assumed to pass** (roadmap §6 fail-safe).
+  `loadStructureDefinition` now parses `constraint[]` (`ElementConstraint`); `generateSnapshot`
+  accumulates invariants down the derivation chain. The seven named safety invariants
+  (`ait`/`con`/`obs`) stay owned by the always-on Phase-3 safety layer (the engine skips those keys and
+  covers every other constraint). Deferred, fail-safe intact: `type`/`profile` slicing discriminators
+  and reslicing (still `PROFILE_SLICE_UNCHECKED`); bundled US Core IG corpus + `validator_cli.jar`
+  differential (Phase 11). P6 — StructureDefinition + US Core
   profile validation (the sixth layer): `loadStructureDefinition`; **snapshot generation** from a
   differential (`generateSnapshot` walks `baseDefinition`, merges/tightens by id, inserts slices, fails
   closed with `FhirProfileError` on an unresolvable base / cycle); **slicing** (`resolveSlices` /
@@ -57,8 +74,10 @@ semantics, and validate it against US Core — without reading the FHIR spec.
   converting a unit), and validates code `system`s + binding strength content-free (P5, no
   terminology content vendored), and validates resources against caller-supplied US Core / vendor
   `StructureDefinition`s — snapshot generation, slicing, fixed/pattern, must-support-as-obligation
-  (P6, no profile content bundled) — but with **no** general FHIRPath invariants / `type`·`profile`
-  slicing discriminators (P7) or XML (P8) yet, no bundled US Core IG corpus or `validator_cli.jar`
+  (P6, no profile content bundled) — and evaluates profile `constraint[]` invariants through a bounded
+  in-repo FHIRPath engine, reporting anything outside the subset `INVARIANT_UNCHECKED` rather than
+  passing it (P7) — but with **no** `type`·`profile` slicing discriminators / reslicing (still
+  `PROFILE_SLICE_UNCHECKED`) or XML (P8) yet, no bundled US Core IG corpus or `validator_cli.jar`
   differential (P11), no code-validity / value-set-membership guarantee without a supplied
   terminology service, and no typed per-resource models. The roadmap lives in
   the meta-repo: `operations/roadmaps/fhir.md` (P0…P11).
