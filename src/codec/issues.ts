@@ -1,5 +1,6 @@
 /**
- * Codec diagnostics — the warning registry and the typed fatal for the JSON reader.
+ * Codec diagnostics — the value-free warning registry shared by the JSON **and** XML readers, plus
+ * the typed fatal for the JSON reader (the XML reader has its own {@link ../xml/issues.js FhirXmlError}).
  *
  * Two tiers, mirroring the cosyte parser convention (`hl7`'s warnings/errors split):
  *
@@ -45,6 +46,13 @@ export const ISSUE_CODES = {
    * lenient read). Warning severity: nothing was lost, but a consumer may want to know.
    */
   UNKNOWN_PROPERTY: "UNKNOWN_PROPERTY",
+  /**
+   * The XML reader met content it did not expect at this position and could not map to the model —
+   * non-whitespace character data on a FHIR element (FHIR elements carry values in the `value`
+   * attribute, not as text, except the deferred narrative `<div>`), or a default namespace other
+   * than the FHIR one. Warning severity: preserved-and-flagged, nothing rejected.
+   */
+  UNEXPECTED_XML_CONTENT: "UNEXPECTED_XML_CONTENT",
 } as const;
 
 /** Discriminant union of every {@link ISSUE_CODES} value. */
@@ -90,6 +98,19 @@ export function decimalPrecisionAtRisk(expression: string): FhirIssue {
  */
 export function unknownProperty(expression: string): FhirIssue {
   return { code: ISSUE_CODES.UNKNOWN_PROPERTY, severity: "warning", expression };
+}
+
+/**
+ * Build a {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT} issue at `expression` (XML reader only).
+ *
+ * @example
+ * ```ts
+ * import { unexpectedXmlContent } from "@cosyte/fhir";
+ * const issue = unexpectedXmlContent("Observation.status");
+ * ```
+ */
+export function unexpectedXmlContent(expression: string): FhirIssue {
+  return { code: ISSUE_CODES.UNEXPECTED_XML_CONTENT, severity: "warning", expression };
 }
 
 /**

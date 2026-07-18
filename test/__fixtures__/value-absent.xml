@@ -1,0 +1,1 @@
+<Observation xmlns="http://hl7.org/fhir"><id value="absent"/><status value="final"/><valueQuantity><value><extension url="http://hl7.org/fhir/StructureDefinition/data-absent-reason"><valueCode value="unknown"/></extension></value><unit value="mg"/></valueQuantity></Observation>

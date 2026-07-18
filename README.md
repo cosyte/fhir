@@ -1,10 +1,10 @@
 # @cosyte/fhir
 
 > Developer-focused FHIR toolkit for Node.js and TypeScript — an **R4-first** resource model, a
-> JSON codec, and validation, with the same one-line ergonomics as the rest of the `@cosyte/*`
-> parser suite.
+> JSON **and XML** codec, and validation, with the same one-line ergonomics as the rest of the
+> `@cosyte/*` parser suite.
 
-**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–7 have landed** — the no-data-loss core (a
+**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–8 have landed** — the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
@@ -17,8 +17,12 @@ medication bindings, and a pluggable terminology-service interface — none bund
 `pattern[x]`, and must-support as a system obligation — against caller-supplied US Core / vendor
 profiles, none bundled), and **profile-invariant validation through a bounded, vendored FHIRPath
 subset** (an in-repo lexer → parser → evaluator that evaluates a profile's `constraint[]`, reporting
-anything outside the subset `INVARIANT_UNCHECKED` rather than passing it — see
-[What works today](#what-works-today)). It **reads, round-trips,
+anything outside the subset `INVARIANT_UNCHECKED` rather than passing it), and a **zero-dependency XML
+codec** (`parseResourceXml` / `serializeResourceXml`) that reads and writes the same schema-free model
+as the JSON codec — with a reader that is **XXE- and billion-laughs-proof by refusal** (any DTD or
+non-predefined entity is refused loudly, never resolved or expanded) and a `nodesEquivalent` oracle for
+JSON↔XML model equivalence — see
+[What works today](#what-works-today). It **reads, round-trips,
 structurally validates, never drops a modifier / status / negation, surfaces measured values by their
 true type with the UCUM `code`** (never the display string, never converted), **validates code systems
 and binding strength without vendoring any SNOMED / CPT / LOINC content, validates against US Core
@@ -28,10 +32,14 @@ reslicing validation (still `PROFILE_SLICE_UNCHECKED`, Phase 7 deferral), and it
 IG corpus or `validator_cli.jar` differential (Phase 11). The built-in structural schema set is the base-resource elements plus
 `Patient` as a worked demonstrator; other resource types validate only against a caller-supplied schema
 or profile. Without a supplied terminology service there is **no code-validity / value-set-membership**
-guarantee beyond `system` + strength (no terminology content is bundled — licensing). It is
-**JSON-only** (XML is Phase 8), with no typed per-resource models yet, and it **never converts a unit**
-or evaluates a reference range. See the roadmap in the meta-repo, `operations/roadmaps/fhir.md`. Do not
-depend on this package.
+guarantee beyond `system` + strength (no terminology content is bundled — licensing). Its XML codec is
+schema-free like the JSON one, so an XML-sourced primitive is kept as its lexical string and **typed
+cross-format transcoding** (emitting spec-clean JSON booleans/numbers from an XML model) needs the
+datatype schema and is not yet done; the XHTML **structure** inside `Narrative.div` is not modeled or
+validated (carried opaquely as a string — the JSON codec's fidelity — never dropped), and RDF/Turtle is
+out of scope. It has no typed per-resource models
+yet, and it **never converts a unit** or evaluates a reference range. See the roadmap in the meta-repo,
+`operations/roadmaps/fhir.md`. Do not depend on this package.
 
 ## What works today
 
@@ -258,6 +266,51 @@ evaluateInvariant("dataAbsentReason.empty() or value.empty()", resource, resourc
 
 evaluateInvariant("descendants().count() > 0", resource, resource);
 // → { unchecked: true, satisfied: false }  (descendants() is outside the subset — never a false pass)
+```
+
+### 8. XML codec + cross-format equivalence (Phase 8)
+
+A **zero-dependency** FHIR XML codec that reads and writes the **same schema-free model** as the JSON
+codec — so a resource is equivalent whichever wire format it arrived in. The hand-written reader is
+**XXE- and billion-laughs-proof by refusal**: it refuses any `<!DOCTYPE` (a DTD is the only place XML
+can declare an entity) and any entity reference beyond the five predefined names and numeric character
+references, performs no I/O, resolves no URI, and bounds nesting depth — adversarial input is a typed
+`FhirXmlError`, never a hang, OOM, fetch, or crash.
+
+- **`parseResourceXml`** returns the same `ReadResult` (`{ resource, issues }`) as `parseResource`,
+  mapping the FHIR XML conventions (element name → `resourceType`, `value` attribute → primitive value
+  kept as its lexical string, `id`/`extension` co-located, repeated elements → a list, resource-valued
+  elements unwrapped, narrative `Narrative.div` carried opaquely as its full XHTML string — the FHIR
+  JSON representation — so it round-trips as conformant `<div>…</div>`, never dropped). Lenient: an
+  unexpected namespace or stray text is preserved-and-flagged (`UNEXPECTED_XML_CONTENT`), never rejected.
+- **`serializeResourceXml`** emits compact, spec-clean FHIR XML that round-trips a spec-clean document
+  **byte-for-byte** (decimals byte-exact, never through a `number`).
+- **`nodesEquivalent`** is the JSON↔XML equivalence oracle — equal _modulo_ the two irreducible
+  schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
+  `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).
+
+```ts
+import {
+  parseResource,
+  parseResourceXml,
+  serializeResourceXml,
+  nodesEquivalent,
+} from "@cosyte/fhir";
+
+const xml =
+  '<Patient xmlns="http://hl7.org/fhir"><active value="true"/>' +
+  '<name><given value="Jane"/></name></Patient>';
+
+const fromXml = parseResourceXml(xml).resource;
+const fromJson = parseResource(
+  '{"resourceType":"Patient","active":true,"name":[{"given":["Jane"]}]}',
+).resource;
+nodesEquivalent(fromXml, fromJson); // true — same model from either wire format
+serializeResourceXml(fromXml) === xml; // true — spec-clean round-trip
+
+// The reader refuses an XXE / entity-expansion attack loudly, never resolving or expanding it:
+parseResourceXml('<!DOCTYPE x [ <!ENTITY e SYSTEM "file:///etc/passwd"> ]><Patient/>');
+// throws FhirXmlError { code: "DTD_FORBIDDEN" }
 ```
 
 ## What this will be

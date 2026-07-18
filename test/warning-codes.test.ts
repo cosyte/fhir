@@ -14,10 +14,11 @@ import {
  * rename fails loudly.
  */
 describe("issue & fatal code registries (stable public contract)", () => {
-  it("pins the Phase-1 issue codes", () => {
+  it("pins the issue codes (Phase 1 + the Phase-8 XML-reader code)", () => {
     expect(ISSUE_CODES).toEqual({
       DECIMAL_PRECISION_AT_RISK: "DECIMAL_PRECISION_AT_RISK",
       UNKNOWN_PROPERTY: "UNKNOWN_PROPERTY",
+      UNEXPECTED_XML_CONTENT: "UNEXPECTED_XML_CONTENT",
     });
   });
 

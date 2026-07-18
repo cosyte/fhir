@@ -11,7 +11,28 @@ semantics, and validate it against US Core — without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–7 landed.** P7 — invariants via a bounded, vendored
+- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–8 landed.** P8 — XML codec + cross-format equivalence
+  (xml.html): a **zero-dependency** FHIR XML codec that reads/writes the **same schema-free model** as
+  the JSON codec. `parseResourceXml` (→ shared `ReadResult`) / `serializeResourceXml` (spec-clean,
+  byte-for-byte round-trip), a hardened raw reader `readRawXml` (→ `XmlElement` tree) that is **XXE- and
+  billion-laughs-proof by refusal** — it refuses any `<!DOCTYPE` (`DTD_FORBIDDEN`, closing the XXE and
+  billion-laughs vectors at once) and any entity beyond the five predefined + numeric character
+  references (`UNDEFINED_ENTITY`), does no I/O, resolves no URI, and bounds depth (`MAX_DEPTH_EXCEEDED`)
+  — via `FhirXmlError` / `XML_FATAL_CODES`. Mapping: root/contained element name → synthetic
+  `resourceType`; `value` attribute → primitive value **kept as its lexical string** (schema-free, no
+  datatype guessed, precision never through a `number`); `id`/`extension` co-located (`id` attr + child
+  `<extension>`s — the XML `_`-sibling); `Element.id`/`Extension.url` attrs → `id`/`url` props; repeated
+  elements → list; resource-valued element unwrapped; narrative `Narrative.div` carried **opaquely** as
+  its full XHTML string (the FHIR JSON representation) → round-trips as conformant `<div>…</div>`, never
+  dropped/escaped. `nodesEquivalent` is the JSON↔XML equivalence oracle — equal **modulo** primitive
+  lexical form and singleton lists (array-of-one ≡ one element), and only those. Lenient reads
+  preserve-and-flag an unexpected namespace / stray text (new value-free issue code
+  `UNEXPECTED_XML_CONTENT`). Deferred, fail-safe intact: XHTML **structure** inside `div` not
+  modeled/validated (carried opaque, never dropped); typed cross-format transcoding (spec-clean JSON
+  booleans/numbers from an XML model) needs the datatype schema; an extension-only element with no value
+  reads as a primitive (schema-free ambiguity, documented on `nodesEquivalent`, safe direction);
+  RDF/Turtle out of scope; XML-fuzz differential vs `validator_cli.jar` (Phase 11). P7 —
+  invariants via a bounded, vendored
   FHIRPath subset (the sixth-and-final validation layer, ADR 0002): an in-repo FHIRPath **lexer →
   parser → evaluator** (`tokenize` / `parseFhirPath` / `evaluateInvariant`; no runtime dependency, no
   full third-party engine) that evaluates a profile's `constraint[]` against an instance. The subset
@@ -76,9 +97,10 @@ semantics, and validate it against US Core — without reading the FHIR spec.
   `StructureDefinition`s — snapshot generation, slicing, fixed/pattern, must-support-as-obligation
   (P6, no profile content bundled) — and evaluates profile `constraint[]` invariants through a bounded
   in-repo FHIRPath engine, reporting anything outside the subset `INVARIANT_UNCHECKED` rather than
-  passing it (P7) — but with **no** `type`·`profile` slicing discriminators / reslicing (still
-  `PROFILE_SLICE_UNCHECKED`) or XML (P8) yet, no bundled US Core IG corpus or `validator_cli.jar`
-  differential (P11), no code-validity / value-set-membership guarantee without a supplied
+  passing it (P7), and reads & writes **FHIR XML** into the same model as JSON — the two wire formats
+  proven equivalent, the reader XXE/billion-laughs-proof by refusal (P8) — but with **no** `type`·`profile`
+  slicing discriminators / reslicing (still `PROFILE_SLICE_UNCHECKED`), no bundled US Core IG corpus or
+  `validator_cli.jar` differential (P11), no code-validity / value-set-membership guarantee without a supplied
   terminology service, and no typed per-resource models. The roadmap lives in
   the meta-repo: `operations/roadmaps/fhir.md` (P0…P11).
 
