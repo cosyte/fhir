@@ -71,18 +71,44 @@ function decompose(raw: string): DecimalParts | null {
 }
 
 /**
- * Compare two decompositions for exact mathematical equality by aligning their scales with BigInt
- * multiplication — never a float subtraction. `0.010` and `0.01` compare **equal** here (same
- * quantity); precision is compared separately by {@link FhirDecimal.equals}.
+ * Put a decomposition into a canonical form — coefficient stripped of its trailing factors of ten
+ * (with the scale adjusted to match), and zero collapsed to `(0, 0)` — so two decompositions denote
+ * the same quantity **iff** their canonical `(coefficient, scale)` pairs are identical.
+ *
+ * This exists to make {@link valueEquals} exponentiation-free (see its note). The work is bounded by
+ * the coefficient's digit count (one `% 10n` / `/ 10n` per trailing zero), never by the exponent's
+ * magnitude, so an adversarial `0e9999999999999999999` cannot blow it up.
+ *
+ * @internal
+ */
+function canonical(parts: DecimalParts): DecimalParts {
+  if (parts.coefficient === 0n) return { coefficient: 0n, scale: 0 };
+  let coefficient = parts.coefficient;
+  let scale = parts.scale;
+  while (coefficient % 10n === 0n) {
+    coefficient /= 10n;
+    scale -= 1;
+  }
+  return { coefficient, scale };
+}
+
+/**
+ * Compare two decompositions for exact quantity equality. `0.010` and `0.01` compare **equal** here
+ * (same quantity); precision is compared separately by {@link FhirDecimal.equals}.
+ *
+ * **Never exponentiates.** The previous approach aligned scales with `10n ** (scaleDiff)`, which is a
+ * DoS hazard: an adversarial literal such as `0e9999999999999999999` decomposes to a scale of
+ * astronomical magnitude, and `10n ** thatMagnitude` throws `RangeError: Maximum BigInt size
+ * exceeded` (or, for merely-large magnitudes, hangs building a multi-gigabyte BigInt). Comparing
+ * canonical forms instead is bounded by digit count, so the read path (which calls this via
+ * {@link wouldLosePrecisionAsDouble}) can never be crashed or hung by a hostile number.
  *
  * @internal
  */
 function valueEquals(a: DecimalParts, b: DecimalParts): boolean {
-  if (a.scale === b.scale) return a.coefficient === b.coefficient;
-  const commonScale = Math.max(a.scale, b.scale);
-  const aligned = (parts: DecimalParts): bigint =>
-    parts.coefficient * 10n ** BigInt(commonScale - parts.scale);
-  return aligned(a) === aligned(b);
+  const na = canonical(a);
+  const nb = canonical(b);
+  return na.coefficient === nb.coefficient && na.scale === nb.scale;
 }
 
 /**
@@ -137,6 +163,9 @@ export class FhirDecimal {
   public toBigInt(): bigint {
     const parts = decompose(this.raw);
     if (parts === null) throw new RangeError("FhirDecimal.raw is not a valid number");
+    // Zero is integer-valued 0n at any scale — short-circuit before any `10n ** scale`, so a hostile
+    // `0e9999999999999999999` returns 0n instead of exploding the exponentiation.
+    if (parts.coefficient === 0n) return 0n;
     if (parts.scale === 0) return parts.coefficient;
     if (parts.scale < 0) return parts.coefficient * 10n ** BigInt(-parts.scale);
     const divisor = 10n ** BigInt(parts.scale);

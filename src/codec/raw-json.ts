@@ -60,6 +60,15 @@ export interface RawNull {
 /** Any node in the raw JSON tree. */
 export type RawJson = RawObject | RawArray | RawString | RawNumber | RawBool | RawNull;
 
+/**
+ * The maximum object/array nesting depth the reader will descend before refusing with
+ * `MAX_DEPTH_EXCEEDED`. FHIR resources — even a Bundle of documents with contained resources — nest
+ * far shallower than this; the bound exists only to turn a pathological adversarial document (a tower
+ * of `[[[[…]]]]` or `{"a":{"a":…}}`) into a typed error instead of a V8 stack overflow. Kept equal to
+ * the XML reader's `MAX_DEPTH` (256) so the two codecs bound the same data model identically.
+ */
+const MAX_DEPTH = 256;
+
 /** Character codes used by the tokenizer. Plain numeric constants (not an enum) so comparisons
  * against `charCodeAt()` results stay number-vs-number. */
 const Code = {
@@ -111,7 +120,7 @@ class RawJsonReader {
     if (this.#pos >= this.#src.length) {
       throw this.fail("Unexpected end of input: the document is empty");
     }
-    const value = this.parseValue();
+    const value = this.parseValue(0);
     this.skipWhitespace();
     if (this.#pos < this.#src.length) {
       throw this.fail("Unexpected trailing content after the top-level JSON value");
@@ -134,13 +143,22 @@ class RawJsonReader {
     }
   }
 
-  private parseValue(): RawJson {
+  private parseValue(depth: number): RawJson {
+    // Refuse pathological nesting as a DoS guard, before descending — a typed fatal instead of a V8
+    // stack overflow (mirrors the XML reader's MAX_DEPTH bound over the same data model).
+    if (depth > MAX_DEPTH) {
+      throw new FhirCodecError(
+        FATAL_CODES.MAX_DEPTH_EXCEEDED,
+        `JSON nesting exceeded the reader's depth bound (${String(MAX_DEPTH)}); refused as a DoS guard.`,
+        { offset: this.#pos },
+      );
+    }
     const c = this.#peek();
     switch (c) {
       case Code.OpenBrace:
-        return this.parseObject();
+        return this.parseObject(depth);
       case Code.OpenBracket:
-        return this.parseArray();
+        return this.parseArray(depth);
       case Code.Quote:
         return { t: "str", value: this.parseString() };
       case Code.LowerT:
@@ -163,7 +181,7 @@ class RawJsonReader {
     throw this.fail(`Invalid literal: expected "${word}"`);
   }
 
-  private parseObject(): RawObject {
+  private parseObject(depth: number): RawObject {
     this.#pos++; // consume '{'
     const members: RawMember[] = [];
     this.skipWhitespace();
@@ -179,7 +197,7 @@ class RawJsonReader {
       if (this.#peek() !== Code.Colon) throw this.fail("Expected ':' after object key");
       this.#pos++;
       this.skipWhitespace();
-      members.push({ key, value: this.parseValue() });
+      members.push({ key, value: this.parseValue(depth + 1) });
       this.skipWhitespace();
       const c = this.#peek();
       if (c === Code.Comma) {
@@ -194,7 +212,7 @@ class RawJsonReader {
     }
   }
 
-  private parseArray(): RawArray {
+  private parseArray(depth: number): RawArray {
     this.#pos++; // consume '['
     const items: RawJson[] = [];
     this.skipWhitespace();
@@ -204,7 +222,7 @@ class RawJsonReader {
     }
     for (;;) {
       this.skipWhitespace();
-      items.push(this.parseValue());
+      items.push(this.parseValue(depth + 1));
       this.skipWhitespace();
       const c = this.#peek();
       if (c === Code.Comma) {
@@ -323,8 +341,9 @@ class RawJsonReader {
 
 /**
  * Parse a JSON document into a {@link RawJson} tree that preserves number literals verbatim and
- * member order. Throws {@link FhirCodecError} (`MALFORMED_JSON`) on invalid input, with a byte
- * `offset` and no snippet.
+ * member order. Throws {@link FhirCodecError} (`MALFORMED_JSON`) on invalid input, or
+ * (`MAX_DEPTH_EXCEEDED`) when nesting passes the reader's fixed depth bound — both value-free, with a
+ * byte `offset` and no snippet.
  *
  * @param src - The JSON text.
  * @example

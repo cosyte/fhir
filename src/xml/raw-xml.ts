@@ -322,7 +322,10 @@ class RawXmlReader {
     if (body.startsWith("#")) {
       return this.decodeNumericReference(body, start);
     }
-    const replacement = PREDEFINED[body];
+    // `Object.hasOwn` guard, not a bare `PREDEFINED[body]`: a bare index read would find inherited
+    // `Object.prototype` members (`&constructor;`, `&toString;`, `&__proto__;`, …) and wrongly treat
+    // them as "defined", resolving an entity the five-name allowlist never declared. Own-property only.
+    const replacement = Object.hasOwn(PREDEFINED, body) ? PREDEFINED[body] : undefined;
     if (replacement === undefined) {
       throw new FhirXmlError(
         XML_FATAL_CODES.UNDEFINED_ENTITY,
