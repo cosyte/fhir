@@ -8,6 +8,29 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Security-scaffolding parity with the sibling parsers (FHIR-SCAFFOLD-GAPS).** Registering the 7
+  back-filled repos in drift coverage surfaced three `fhir`-only gaps against `config`'s
+  `drift-manifest.json` (`requiredScripts` / `requiredWorkflows`), now closed by mirroring what every
+  other cosyte parser already ships:
+  - **PHI commit-scanner** (`scripts/phi-scan.ts`, `pnpm phi-scan`) — a zero-dependency,
+    FHIR-shape-aware detective tripwire. It parses each synthetic fixture (JSON / NDJSON) or scans
+    element/`value`-attribute pairs (XML) and inspects only PHI-bearing elements keyed by FHIR element
+    name — HumanName `family` / `given` / `text` (recursing into `contained` / `entry.resource`),
+    `birthDate` / `deceasedDateTime`, SSN- / 9-digit-shaped `identifier` / `telecom` values (and
+    dashed SSNs anywhere), phones without the `555` convention, `Address.line` / `.text`, and
+    emails — refusing any realistic-PHI-shaped token not declared synthetic in
+    `scripts/phi-allow-list.txt`. A plain-string `name` (`Organization.name`) is a resource label and
+    is never name-scanned; the XML `<value>` scan is scoped to `<telecom>` / `<identifier>` blocks so
+    an overloaded `Quantity.value` is never misread. `src/` gets a conservative dashed-SSN + email
+    pass. Runs at pre-commit (`simple-git-hooks --staged`) and in CI (`run-phi-scan: true`);
+    `scripts/verify.sh` now reports `phi-scan ✓`. A whole-file bypass requires `--allow-fixture` plus
+    an audit entry in `phi-scan-overrides.md`.
+  - **`.github/workflows/codeql.yml`** — thin caller of the reusable `cosyte/.github` CodeQL workflow.
+  - **`.github/workflows/scorecard.yml`** — thin caller of the reusable OpenSSF Scorecard workflow.
+
+  Additive dev-tooling / CI only — no change to the published package surface or runtime behavior;
+  the runtime-dependency count stays zero (`tsx` + `simple-git-hooks` are dev dependencies).
+
 - **Tier-2 real-world quirk corpus + `validator_cli.jar` differential over it (Phase 10, half b;
   roadmap §3/§6/§10).** Unblocked by meta-repo **ADR 0018** — "real document" that grounds a quirk
   now explicitly includes **publicly available real artifacts** (FHIR published examples, the spec's
