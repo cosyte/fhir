@@ -11,6 +11,7 @@
       }
     ]
   },
+  "subject": { "reference": "Patient/syn-1" },
   "dosageInstruction": [
     {
       "text": "5 mg once daily",

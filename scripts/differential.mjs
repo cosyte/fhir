@@ -64,6 +64,13 @@ const FIXTURE_DIR = fileURLToPath(new URL("../test/__fixtures__/", import.meta.u
  * The synthetic, spec-clean tier-(a) corpus this gate runs over. These are self-authored synthetic
  * resources (no PHI, no invented vendor quirk) that the oracle should find valid. Bundles / NDJSON /
  * deliberately-quirky fixtures are intentionally excluded — the quirk differential is REAL-CORPUS.
+ *
+ * "Spec-clean" is a hard contract: each MUST carry every element the base spec (and any spec-mandated
+ * profile the oracle auto-applies) requires, or the oracle rejects it and the tier is a lie. So
+ * `observation-vitals-bp` carries the vital-signs-profile-mandatory `subject` + `effective[x]`;
+ * `medicationrequest-dose` carries the base-mandatory `MedicationRequest.subject` (1..1,
+ * medicationrequest.html); and `observation-decimals` uses a non-vital-sign lab LOINC so no
+ * vital-signs profile is auto-applied to what is really a decimal-precision test vehicle.
  */
 const SPEC_CLEAN = [
   "patient.json",
@@ -89,6 +96,18 @@ const QUIRK_CORPUS = [
 
 const ERRORISH = new Set(["fatal", "error"]);
 
+/**
+ * The US Core IG the oracle loads (`-ig`) so it can resolve US Core extension definitions. Without it,
+ * the validator flags a `us-core-*` extension URL it cannot resolve as "not allowed here" — an artifact
+ * of the *oracle's* missing package, not a conformance defect in the instance (the base spec permits
+ * extensions, and `@cosyte/fhir` deliberately preserves-and-flags unknown extensions rather than
+ * rejecting them — roadmap §10 fail-safe). Loading US Core is the roadmap's documented oracle
+ * configuration ("validates against base + IG profiles, US Core via `-ig <pkg#ver>`") and the 6.1.0
+ * baseline (roadmap §3). It does not force US Core profiles onto instances that do not declare them in
+ * `meta.profile`; it only makes the extension definitions resolvable.
+ */
+const US_CORE_IG = "hl7.fhir.us.core#6.1.0";
+
 /** Resolve the validator jar from the environment; a missing jar is a clean skip, not a failure. */
 function resolveJar() {
   const jar = process.env.VALIDATOR_CLI_JAR;
@@ -106,9 +125,13 @@ function resolveJar() {
 function oracleIssues(jar, file) {
   const out = join(mkdtempSync(join(tmpdir(), "fhir-diff-")), "outcome.json");
   try {
-    execFileSync("java", ["-jar", jar, file, "-version", "4.0.1", "-output", out], {
-      stdio: ["ignore", "ignore", "inherit"],
-    });
+    execFileSync(
+      "java",
+      ["-jar", jar, file, "-version", "4.0.1", "-ig", US_CORE_IG, "-output", out],
+      {
+        stdio: ["ignore", "ignore", "inherit"],
+      },
+    );
   } catch {
     // The CLI exits non-zero when it finds validation errors — that is data, not a harness failure.
     // The OperationOutcome is still written; fall through and read it.
