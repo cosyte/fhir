@@ -1,0 +1,50 @@
+# scripts/phi-allow-list.txt
+#
+# PHI-scan allow-list — the positive declaration that a fixture's identifiers
+# are synthetic. `scripts/phi-scan.ts` reads this file; any realistic-PHI-shaped
+# token NOT covered here is a hit. A FHIR resource *could* carry an inline
+# `"_synthetic": true` marker, but that would corrupt the very round-trip the
+# fixtures prove, so this allow-list is the synthetic-fixture declaration
+# mechanism instead — the same approach `@cosyte/dicom` uses for binary `.dcm`
+# files and `@cosyte/x12` for byte-strict `.edi`.
+#
+# Format: `<TAG> <value>` per line. `#` comments and blank lines are ignored.
+#   NAME <token>          synthetic person-name word (HumanName family / given /
+#                         text), matched case-insensitively
+#   DOB <YYYY-MM-DD|YYYY> synthetic date of birth (birthDate / deceasedDateTime),
+#                         normalized to digits before comparison
+#   ADDR <street line>    synthetic street address (Address.line / .text),
+#                         matched case-insensitively
+#   ID <value>            synthetic id that legitimately matches an SSN- /
+#                         9-digit- / phone-shaped value (identifier / telecom)
+#   EMAILDOMAIN <domain>  reserved / test email domain that is allowed to appear
+#
+# To add a new synthetic fixture: reuse the tokens below, or append new ones here
+# and commit. Adding a token is a reviewed, intentional act — never silent.
+
+# --- Synthetic patient / person names ---
+# The canonical FHIR R4 patient-example person (Peter James Chalmers) plus the
+# spec's "Jane Q Public" alias, both published synthetic examples.
+NAME CHALMERS
+NAME PETER
+NAME JAMES
+NAME JANE
+NAME PUBLIC
+# The repo's own coined synthetic tokens (self-evidently fake).
+NAME SYNTHFAMILY
+NAME SYNTHGIVEN
+NAME SYNTHMIDDLE
+
+# --- Synthetic dates of birth (birthDate) ---
+DOB 1974-12-25
+DOB 1970-01-01
+DOB 1980-01-01
+
+# --- Synthetic identifiers (identifier.value / telecom.value) ---
+ID SYN-0001
+
+# --- Reserved / test email domains (RFC 2606 + FHIR example host) ---
+EMAILDOMAIN example.com
+EMAILDOMAIN example.org
+EMAILDOMAIN example.net
+EMAILDOMAIN hospital.example.org

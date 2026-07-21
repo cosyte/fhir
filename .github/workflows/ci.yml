@@ -17,8 +17,12 @@ jobs:
   # Universal gates from the shared pipeline (typecheck, lint, format, test, coverage, build, attw,
   # dual ESM/CJS smoke, actionlint) on the standard Node matrix. The full test suite — including the
   # P11 fuzz, PHI-leak, and type-level tiers — runs here at the default iteration count and gates.
+  # fhir ships a PHI scanner (scripts/phi-scan.ts), so the shared pipeline's optional PHI-scan step
+  # is switched on.
   ci:
     uses: cosyte/.github/.github/workflows/ci.yml@main
+    with:
+      run-phi-scan: true
 
   # P11 fuzz tier at fuzz-scale (FHIR-P11): the JSON + XML adversarial harness (XXE, billion-laughs,
   # deep nesting, `_element` games, huge/scientific numbers, prototype-chain keys) run at a raised
