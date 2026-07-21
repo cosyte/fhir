@@ -13,6 +13,8 @@
     }
   ],
   "code": { "coding": [{ "system": "http://loinc.org", "code": "85354-9" }] },
+  "subject": { "reference": "Patient/syn-1" },
+  "effectiveDateTime": "2026-01-01T09:00:00Z",
   "component": [
     {
       "code": { "coding": [{ "system": "http://loinc.org", "code": "8480-6" }] },

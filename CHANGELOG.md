@@ -6,6 +6,42 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **`differential` CI check red on `main` — 5 "FALSE VALID" invariant violations reconciled against the
+  oracle (FHIR-DIFFERENTIAL-RED).** The non-required `differential` job (the `validator_cli.jar` oracle
+  over the spec-clean + Tier-2 quirk corpora) was failing: on five fixtures the parser reported no
+  errors while the oracle reported errors. Each was reconciled firsthand against the live oracle
+  (`org.hl7.fhir.core`, R4 `4.0.1`, US Core `6.1.0`) — the findings were **incomplete fixtures**, not a
+  parser conformance gap, so the fix completes the fixtures to be genuinely spec-clean rather than
+  weakening the comparison:
+  - **`medicationrequest-dose.json`** — added the base-mandatory `MedicationRequest.subject` (R4
+    cardinality **1..1**, medicationrequest.html). The dose `doseQuantity` (`5 mg`, UCUM `mg`) is
+    unchanged; the existing dose-unit tests still pass.
+  - **`observation-vitals-bp.json`** — added the vital-signs-profile-mandatory `subject` +
+    `effectiveDateTime` (observation-vitalsigns.html: an Observation with a vital-signs LOINC SHALL
+    conform to the vital-signs profile, which requires both). The systolic/diastolic `mm[Hg]`
+    components are unchanged.
+  - **`observation-decimals.json`** (+ its `.xml` twin) — re-coded from the body-weight vital-sign
+    LOINC `29463-7` (which makes the oracle auto-apply the body-weight profile and demand
+    category/subject/effective) to the **non-vital lab LOINC `718-7`** (Hemoglobin). The fixture's job
+    is decimal-precision preservation, not vital-signs conformance; a lab observation is not
+    auto-profiled, so the four decimal edge values (`70.0`, `0.0000000010`, `9223372036854775807`,
+    `0.010`) round-trip byte-for-byte exactly as before.
+  - **`quirk-searchset-paging.json`** — completed the embedded heart-rate (`8867-4`) Observation with
+    `category` (vital-signs) + `subject` + `effectiveDateTime` so it is spec-clean. The paging quirk
+    under test (`Bundle.link[relation=next]` surviving the round-trip) is untouched.
+  - **`quirk-uscore-extensions.json`** — the oracle's two findings were both oracle-side artifacts, not
+    instance defects: (1) `us-core-race` "could not be found" because the harness ran the oracle
+    **without US Core loaded**, and (2) an `example.org` identifier system the validator refuses. Fixed
+    by loading the US Core IG in the harness (`differential.mjs` now passes `-ig hl7.fhir.us.core#6.1.0`
+    — the roadmap's documented oracle configuration) and moving the synthetic MRN off `example.org`.
+    The parser is correct to accept the resource (roadmap §10 fail-safe: unknown extensions are
+    preserved-and-flagged, never rejected).
+
+  Fixtures only (synthetic, CC0/spec-grounded values; the PHI sweep covers them) plus the one harness
+  IG flag — no change to the published package surface, runtime behavior, or the zero runtime deps.
+
 ### Added
 
 - **Security-scaffolding parity with the sibling parsers (FHIR-SCAFFOLD-GAPS).** Registering the 7
