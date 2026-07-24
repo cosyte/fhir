@@ -1,5 +1,5 @@
 /**
- * FHIR resource model — the typed, immutable, wire-agnostic representation of FHIR resources and
+ * FHIR resource model, the typed, immutable, wire-agnostic representation of FHIR resources and
  * datatypes.
  *
  * Phase 1 lands the **no-data-loss core**: the two precision-preserving primitives

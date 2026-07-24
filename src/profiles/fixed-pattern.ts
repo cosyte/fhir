@@ -3,16 +3,16 @@
  *
  * A profile can pin an element's value two ways (elementdefinition.html):
  *
- * - **`fixed[x]`** is an **equality** constraint — the element SHALL equal the fixed value *exactly*,
+ * - **`fixed[x]`** is an **equality** constraint, the element SHALL equal the fixed value *exactly*,
  *   with no additional content. On a complex value that means the same properties, recursively fixed,
  *   and nothing more.
- * - **`pattern[x]`** is a **subset** constraint — the element SHALL contain *at least* the properties
+ * - **`pattern[x]`** is a **subset** constraint, the element SHALL contain *at least* the properties
  *   and values the pattern names, but may carry others. This is the far more common profiling tool
  *   (US Core uses `pattern` almost everywhere it constrains a value), precisely because it does not
  *   forbid the extra codings / extensions a real instance carries.
  *
- * Comparison is structural and **precision-exact** — a `decimal` is compared through
- * {@link ../model/decimal.js}, never a float — and it never echoes a value, so a mismatch reported by
+ * Comparison is structural and **precision-exact**, a `decimal` is compared through
+ * {@link ../model/decimal.js}, never a float, and it never echoes a value, so a mismatch reported by
  * the profile layer stays value-free. Primitive `id` / `extension` metadata on the constraint side is
  * ignored (a `fixed`/`pattern` constrains the value, not its primitive metadata).
  *
@@ -77,7 +77,7 @@ export function matchesFixed(instance: FhirNode | undefined, fixed: FhirNode): b
 }
 
 /**
- * Whether an instance node **matches** a `pattern[x]` value — contains at least the pattern's content.
+ * Whether an instance node **matches** a `pattern[x]` value, contains at least the pattern's content.
  *
  * @param instance - The instance node (or `undefined` when the element is absent).
  * @param pattern - The profile's pattern value node.
@@ -96,7 +96,7 @@ export function matchesFixed(instance: FhirNode | undefined, fixed: FhirNode): b
  * const pattern = complex([
  *   { name: "coding", value: list([complex([{ name: "code", value: primitive("vital-signs") }])]) },
  * ]);
- * matchesPattern(instance, pattern); // true — the extra system/display are allowed
+ * matchesPattern(instance, pattern); // true, the extra system/display are allowed
  * ```
  */
 export function matchesPattern(instance: FhirNode | undefined, pattern: FhirNode): boolean {
@@ -118,7 +118,7 @@ export function matchesPattern(instance: FhirNode | undefined, pattern: FhirNode
   });
 }
 
-/** Whether a primitive node carries only metadata (no value) — ignored on the constraint side. */
+/** Whether a primitive node carries only metadata (no value), ignored on the constraint side. */
 function isMetadataOnly(node: FhirNode): boolean {
   return isPrimitive(node) && node.value === undefined;
 }

@@ -13,7 +13,7 @@ function codes(json: string): string[] {
   return collectBundleIssues(parseResource(json).resource).map((i) => i.code);
 }
 
-describe("collectBundleIssues — Bundle integrity findings", () => {
+describe("collectBundleIssues: Bundle integrity findings", () => {
   it("flags a RESTful fullUrl whose id disagrees with resource.id (error)", () => {
     const issues = collectBundleIssues(
       parseResource(
@@ -100,7 +100,7 @@ describe("collectBundleIssues — Bundle integrity findings", () => {
   });
 });
 
-describe("validateResource — Bundle-integrity layer wiring (Phase 9)", () => {
+describe("validateResource: Bundle-integrity layer wiring (Phase 9)", () => {
   it("surfaces the bundle findings through validateResource and fails on an error", () => {
     const { resource } = parseResource(
       '{"resourceType":"Bundle","type":"collection","entry":[' +

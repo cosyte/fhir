@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { decimal, FhirDecimal, wouldLosePrecisionAsDouble } from "../src/index.js";
 
-describe("FhirDecimal — lexical precision (ADR 0001)", () => {
+describe("FhirDecimal: lexical precision (ADR 0001)", () => {
   it("preserves the exact lexical text, trailing zeros included", () => {
     expect(decimal("0.010").toString()).toBe("0.010");
     expect(decimal("70.0").toString()).toBe("70.0");
@@ -23,7 +23,7 @@ describe("FhirDecimal — lexical precision (ADR 0001)", () => {
     expect(() => decimal("NaN")).toThrow(TypeError);
   });
 
-  describe("equals — precision-sensitive (the FHIR default)", () => {
+  describe("equals: precision-sensitive (the FHIR default)", () => {
     it("treats 0.010 and 0.01 as different (trailing zero is significant)", () => {
       expect(decimal("0.010").equals(decimal("0.01"))).toBe(false);
     });
@@ -37,7 +37,7 @@ describe("FhirDecimal — lexical precision (ADR 0001)", () => {
     });
   });
 
-  describe("equalsValue — quantity-only", () => {
+  describe("equalsValue: quantity-only", () => {
     it("treats 0.010 and 0.01 as the same quantity", () => {
       expect(decimal("0.010").equalsValue(decimal("0.01"))).toBe(true);
     });
@@ -71,7 +71,7 @@ describe("FhirDecimal — lexical precision (ADR 0001)", () => {
     });
   });
 
-  describe("toNumber — the one deliberately-lossy path", () => {
+  describe("toNumber: the one deliberately-lossy path", () => {
     it("converts to a JS number when the caller accepts the loss", () => {
       expect(decimal("0.5").toNumber()).toBe(0.5);
     });

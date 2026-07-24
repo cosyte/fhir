@@ -1,20 +1,20 @@
 /**
- * FHIR-P11 PHI-leak test tier (roadmap §7 — "Redaction is tested").
+ * FHIR-P11 PHI-leak test tier (roadmap §7, "Redaction is tested").
  *
  * A FHIR resource is PHI by default and the library's own diagnostics are the leak vector. The
  * value-free-diagnostics contract (`OperationOutcome`/error findings carry a coded reason plus a
- * FHIRPath *location* or a byte offset — never a resource *value*) is turned here into a **gating
+ * FHIRPath *location* or a byte offset, never a resource *value*) is turned here into a **gating
  * test**: run the whole fixture corpus through the full pipeline (JSON parse, validate + emit an
  * `OperationOutcome`, XML parse) and assert that no PHI-bearing input value ever appears in any
  * emitted diagnostic.
  *
  * Two layers:
  *
- *  1. **Sentinel battery** — resources whose every §4 PHI-bearing position (name, MRN, DOB, dose /
+ *  1. **Sentinel battery**, resources whose every §4 PHI-bearing position (name, MRN, DOB, dose /
  *     lab decimal, free-text SIG, narrative) holds a *distinctive* sentinel value that cannot occur
  *     structurally. Any sentinel in any output is an unambiguous leak.
- *  2. **Corpus sweep** — for every fixture, every PHI-*candidate* leaf value (see {@link isPhiCandidate}
- *     — names, dates, numbers, free text; NOT resource-type names, canonical URIs, or spec enumeration
+ *  2. **Corpus sweep**, for every fixture, every PHI-*candidate* leaf value (see {@link isPhiCandidate}:
+ *     names, dates, numbers, free text; NOT resource-type names, canonical URIs, or spec enumeration
  *     codes, which are content-free-safe and legitimately root/label a finding) must be absent from
  *     the pipeline's diagnostics. This is the regression net over the real corpus.
  *
@@ -35,7 +35,7 @@ import {
 
 const FIXTURE_DIR = new URL("./__fixtures__/", import.meta.url);
 
-/** Resource-type names root every FHIRPath expression, so they legitimately appear — not PHI. */
+/** Resource-type names root every FHIRPath expression, so they legitimately appear, not PHI. */
 const RESOURCE_TYPES: ReadonlySet<string> = new Set([
   "Patient",
   "Observation",
@@ -55,15 +55,15 @@ const RESOURCE_TYPES: ReadonlySet<string> = new Set([
 
 /**
  * Whether a leaf value is a PHI candidate that must never surface in a diagnostic. Excludes the
- * three classes a value-free finding is *allowed* to name — none of which is PHI:
+ * three classes a value-free finding is *allowed* to name, none of which is PHI:
  *
  *  - resource-type names (the root of every FHIRPath `expression`);
- *  - canonical / system URIs (`http(s)://…`, `urn:…`) — content-free identifiers;
- *  - spec enumeration codes — a short `lower-case-with-hyphens` token (`final`, `entered-in-error`,
+ *  - canonical / system URIs (`http(s)://…`, `urn:…`), content-free identifiers;
+ *  - spec enumeration codes, a short `lower-case-with-hyphens` token (`final`, `entered-in-error`,
  *    `vital-signs`, `laboratory`, `male`, …). Status/category codes are explicitly not PHI (§3).
  *
- * Everything else — a name (`Chalmers`), a date (`1974-12-25`), a number (`70.0`, `9223372036854775807`),
- * a free-text SIG (`5 mg once daily`) — is swept. Single characters are excluded: they collide with
+ * Everything else, a name (`Chalmers`), a date (`1974-12-25`), a number (`70.0`, `9223372036854775807`),
+ * a free-text SIG (`5 mg once daily`), is swept. Single characters are excluded: they collide with
  * array indices in FHIRPath expressions and carry no PHI signal.
  */
 function isPhiCandidate(value: string): boolean {
@@ -101,7 +101,7 @@ function diagnosticSurfaceForJson(text: string): string {
     parts.push(JSON.stringify(result.issues));
     parts.push(serializeResource(result.toOperationOutcome()));
   } catch (err) {
-    // A typed fatal is still a diagnostic surface — its message/location must be value-free too.
+    // A typed fatal is still a diagnostic surface, its message/location must be value-free too.
     parts.push(err instanceof Error ? err.message : String(err));
     if (err && typeof err === "object" && "expression" in err) {
       parts.push((err as { expression?: string }).expression ?? "");
@@ -117,7 +117,7 @@ const XML_FIXTURE_NAMES: readonly string[] = readdirSync(FIXTURE_DIR).filter((f)
   f.endsWith(".xml"),
 );
 
-describe("PHI-leak tier: corpus sweep — no PHI-candidate value reaches any JSON diagnostic", () => {
+describe("PHI-leak tier: corpus sweep, no PHI-candidate value reaches any JSON diagnostic", () => {
   it("has JSON fixtures to sweep", () => {
     expect(JSON_FIXTURE_NAMES.length).toBeGreaterThan(0);
   });
@@ -135,7 +135,7 @@ describe("PHI-leak tier: corpus sweep — no PHI-candidate value reaches any JSO
   }
 });
 
-describe("PHI-leak tier: corpus sweep — no PHI-candidate value reaches any XML diagnostic", () => {
+describe("PHI-leak tier: corpus sweep, no PHI-candidate value reaches any XML diagnostic", () => {
   for (const name of XML_FIXTURE_NAMES) {
     it(`${name}: every PHI-candidate value is absent from the XML parse diagnostics`, () => {
       const text = readFileSync(new URL(name, FIXTURE_DIR), "utf8");
@@ -160,7 +160,7 @@ describe("PHI-leak tier: corpus sweep — no PHI-candidate value reaches any XML
 
 // ── Sentinel battery ─────────────────────────────────────────────────────────────────────────────
 
-/** Distinctive sentinels that cannot occur structurally — any appearance is an unambiguous leak. */
+/** Distinctive sentinels that cannot occur structurally, any appearance is an unambiguous leak. */
 const SENTINELS = {
   familyName: "Zzyxxsentinelfamily",
   givenName: "Qqvarsentinelgiven",
@@ -181,11 +181,11 @@ const SENTINEL_RESOURCES: readonly string[] = [
     identifier: [{ system: "http://hospital.example/mrn", value: SENTINELS.mrn }],
     name: [{ family: SENTINELS.familyName, given: [SENTINELS.givenName] }],
     telecom: [{ system: "phone", value: SENTINELS.phone }],
-    gender: "notacode", // triggers a value-domain finding — its diagnostic must stay value-free
+    gender: "notacode", // triggers a value-domain finding, its diagnostic must stay value-free
     birthDate: SENTINELS.dob,
   }),
   // Observation with a big/tiny decimal on the precision path. Built as raw JSON text (not
-  // JSON.stringify) so the sentinel decimals stay lexical — a JS number literal would both lose
+  // JSON.stringify) so the sentinel decimals stay lexical, a JS number literal would both lose
   // precision at runtime and defeat the point of a distinctive decimal sentinel.
   `{"resourceType":"Observation","status":"final","code":{"text":"${SENTINELS.freeText}"},` +
     `"valueQuantity":{"value":${SENTINELS.bigDecimal},"unit":"mg/dL"},` +
@@ -222,7 +222,7 @@ const SENTINEL_RESOURCES: readonly string[] = [
   }),
 ];
 
-describe("PHI-leak tier: sentinel battery — no sentinel value reaches any diagnostic", () => {
+describe("PHI-leak tier: sentinel battery, no sentinel value reaches any diagnostic", () => {
   const sentinelValues = Object.values(SENTINELS);
 
   for (const [index, text] of SENTINEL_RESOURCES.entries()) {
@@ -238,7 +238,7 @@ describe("PHI-leak tier: sentinel battery — no sentinel value reaches any diag
       const { resource } = parseResource(text);
       const result = validateResource(resource);
       // A resource with a bad code / bad status / unknown modifier / precision risk must surface
-      // *something* — otherwise there is no diagnostic to leak through and the test proves nothing.
+      // *something*, otherwise there is no diagnostic to leak through and the test proves nothing.
       const { issues } = parseResource(text);
       expect(result.issues.length + issues.length).toBeGreaterThan(0);
     }

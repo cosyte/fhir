@@ -1,7 +1,7 @@
 /**
  * The `StructureDefinition` model and loader (Phase 6, the profile engine's front door).
  *
- * A FHIR `StructureDefinition` (profiling.html, structuredefinition.html) is itself a FHIR resource —
+ * A FHIR `StructureDefinition` (profiling.html, structuredefinition.html) is itself a FHIR resource,
  * it describes a resource type or a *profile* (a constrained variant, e.g. a US Core profile) as a
  * list of {@link ElementDefinition}s. This module models the slice of a StructureDefinition the
  * validator needs and reads it out of the generic {@link FhirComplex} model produced by the codec, so
@@ -11,7 +11,7 @@
  * `type` / `kind` / `derivation` / `baseDefinition`), the `differential` and `snapshot` element lists,
  * and per-element cardinality, `mustSupport`, `type`, `binding`, `slicing`, and the `fixed[x]` /
  * `pattern[x]` constraints. Narrative, mapping, and documentation fields the validator does not act on
- * are ignored (lenient read — an unmodeled field is never an error).
+ * are ignored (lenient read, an unmodeled field is never an error).
  *
  * **No StructureDefinition content is bundled.** Like the terminology layer (roadmap §5), this ships
  * the *engine*, not the *content*: a caller supplies the US Core (or vendor) StructureDefinitions to
@@ -33,7 +33,7 @@ import { FhirDecimal } from "../model/decimal.js";
 import { primitiveBoolean, primitiveString } from "../safety/codes.js";
 import { UNBOUNDED } from "../validate/schema.js";
 
-/** `StructureDefinition.derivation` — how a definition relates to its base. */
+/** `StructureDefinition.derivation`, how a definition relates to its base. */
 export type Derivation = "specialization" | "constraint";
 
 /**
@@ -52,7 +52,7 @@ export const DISCRIMINATOR_TYPES: readonly DiscriminatorType[] = [
   "profile",
 ];
 
-/** `ElementDefinition.slicing.rules` — whether content outside the named slices is allowed. */
+/** `ElementDefinition.slicing.rules`, whether content outside the named slices is allowed. */
 export type SlicingRules = "closed" | "open" | "openAtEnd";
 
 /** One slicing discriminator: how to tell instances of different slices apart. */
@@ -88,7 +88,7 @@ export interface ElementBinding {
 }
 
 /**
- * One `ElementDefinition.constraint` — a FHIR **invariant**. `key` is the stable identifier
+ * One `ElementDefinition.constraint`, a FHIR **invariant**. `key` is the stable identifier
  * (`ait-1`, `us-core-1`), `severity` is `error` | `warning`, and `expression` is the FHIRPath the
  * Phase-7 engine evaluates against an instance. `human` (the prose description) is modeled but never
  * surfaced in a diagnostic (it is spec text, not PHI, but the engine reports the value-free `key`).
@@ -115,7 +115,7 @@ export interface ElementType {
 export interface ElementDefinition {
   /** The dotted element path from the resource root. */
   readonly path: string;
-  /** The element id — carries slice names as `:sliceName` segments. Defaults to `path` when absent. */
+  /** The element id, carries slice names as `:sliceName` segments. Defaults to `path` when absent. */
   readonly id: string;
   /** The slice this element defines, when it is a slice (from `sliceName` or the id's `:` segment). */
   readonly sliceName?: string;
@@ -141,7 +141,7 @@ export interface ElementDefinition {
 
 /** The modeled slice of a FHIR `StructureDefinition`. */
 export interface StructureDefinition {
-  /** The canonical URL — the identity a profile is referenced by (`meta.profile`, `baseDefinition`). */
+  /** The canonical URL, the identity a profile is referenced by (`meta.profile`, `baseDefinition`). */
   readonly url: string;
   /** The business version, when stated (e.g. US Core `"6.1.0"`). Part of the `canonical|version` key. */
   readonly version?: string;
@@ -247,7 +247,7 @@ function readStringList(node: FhirNode | undefined): readonly string[] | undefin
   return out.length === 0 ? undefined : out;
 }
 
-/** Read one `constraint` (invariant) out of its complex node — needs at least a `key` + `expression`. */
+/** Read one `constraint` (invariant) out of its complex node, needs at least a `key` + `expression`. */
 function readConstraint(node: FhirNode): ElementConstraint | undefined {
   if (!isComplex(node)) return undefined;
   const key = primitiveString(getProperty(node, "key"));
@@ -361,7 +361,7 @@ function readElementList(node: FhirNode | undefined): readonly ElementDefinition
  *
  * Reads the identity, derivation, and the `differential` / `snapshot` element lists. Lenient: a field
  * the validator does not act on is ignored, and a malformed sub-node degrades to `undefined` rather
- * than throwing — a profile a consumer supplies is data, and data is read Postel-style.
+ * than throwing, a profile a consumer supplies is data, and data is read Postel-style.
  *
  * @param resource - A `StructureDefinition` resource model (e.g. from `parseResource`).
  * @returns The modeled {@link StructureDefinition}, or `undefined` when the resource is not one / lacks a `type`.

@@ -1,13 +1,13 @@
 /**
- * The FHIRPath tokenizer (Phase 7, the bounded invariant engine — ADR 0002).
+ * The FHIRPath tokenizer (Phase 7, the bounded invariant engine, ADR 0002).
  *
  * FHIR resource `constraint`s (invariants) are expressed in **FHIRPath**, a collection-oriented
  * expression language. Evaluating them needs a real lexer → parser → evaluator; this module is the
  * first stage, turning an expression string into a flat token stream. It is deliberately a **bounded
  * subset** (ADR 0002: implement-a-vendored-subset, no runtime dependency, no full third-party engine):
- * it recognises the token classes the R4 / US Core invariant set uses — path identifiers, string /
+ * it recognises the token classes the R4 / US Core invariant set uses, path identifiers, string /
  * number / boolean literals, environment variables (`%resource`), special variables (`$this`), and the
- * operator/punctuation symbols — and **refuses anything it does not recognise** by throwing
+ * operator/punctuation symbols, and **refuses anything it does not recognise** by throwing
  * {@link ./errors.js UnsupportedFhirPathError}, so a construct outside the subset can never be
  * silently mis-tokenised into a wrong parse (the roadmap §6 fail-safe: unevaluable → *unchecked*,
  * never a false pass).
@@ -132,7 +132,7 @@ function readDelimitedIdentifier(input: string, start: number): { value: string;
   throw new UnsupportedFhirPathError("unterminated delimited identifier");
 }
 
-/** Read a numeric literal (integer or decimal, no exponent — FHIRPath number literals have none). */
+/** Read a numeric literal (integer or decimal, no exponent, FHIRPath number literals have none). */
 function readNumber(input: string, start: number): { value: string; next: number } {
   let i = start;
   while (i < input.length && isDigit(input.charAt(i))) i += 1;
@@ -147,7 +147,7 @@ function readNumber(input: string, start: number): { value: string; next: number
  * Tokenise a FHIRPath expression into a flat {@link Token} stream.
  *
  * @param input - The FHIRPath expression source.
- * @returns The tokens, in order (no end-of-input sentinel — the parser tracks its own position).
+ * @returns The tokens, in order (no end-of-input sentinel, the parser tracks its own position).
  * @throws UnsupportedFhirPathError on any character the bounded subset does not recognise, so an
  *   out-of-subset construct fails loudly rather than mis-lexing into a wrong parse.
  * @example

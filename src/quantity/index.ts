@@ -4,7 +4,7 @@
  * Three things a machine can silently get wrong on a measured value, surfaced here so it cannot:
  *
  * - **`Observation.value[x]` is an 11-way choice.** {@link readObservationValue} branches on the
- *   variant actually present ({@link ./value.js}) — never assuming `valueQuantity` — so a
+ *   variant actually present ({@link ./value.js}), never assuming `valueQuantity`, so a
  *   `valueString` of `"POSITIVE"` or a titer `valueRatio` is not read as a number.
  * - **The unit that matters is the UCUM `code`, not the `unit` string.** {@link readQuantity} keeps
  *   them distinct and {@link validateUcumShape} shape-checks the code ({@link ./ucum.js}); the

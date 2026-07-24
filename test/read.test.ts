@@ -17,7 +17,7 @@ import {
 } from "../src/index.js";
 import { nth } from "./_util.js";
 
-describe("parseResource — the read path", () => {
+describe("parseResource: the read path", () => {
   it("resolves resourceType from any position", () => {
     const { resource } = parseResource('{"id":"1","active":true,"resourceType":"Patient"}');
     expect(resourceType(resource)).toBe("Patient");
@@ -95,7 +95,7 @@ describe("parseResource — the read path", () => {
 
   it("preserves a complex array that carries a stray _sibling, flagging the sibling (no silent loss)", () => {
     // Regression: a `_`-sibling on a complex array must not misroute the objects to the primitive
-    // path and delete them — they are preserved and the stray sibling is flagged.
+    // path and delete them, they are preserved and the stray sibling is flagged.
     const { resource, issues } = parseResource(
       '{"resourceType":"Patient","contact":[{"name":{"text":"X"}}],"_contact":[{"id":"z"}]}',
     );

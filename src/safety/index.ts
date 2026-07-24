@@ -1,5 +1,5 @@
 /**
- * The safety spine — never-droppable surfacing of FHIR's modifier / status / negation elements
+ * The safety spine, never-droppable surfacing of FHIR's modifier / status / negation elements
  * (Phase 3). The read side ({@link ./status.js}) carries the modifiers into an explicit readout and
  * refuses to summarize past an unhandled `modifierExtension`; the terminology ({@link ./codes.js})
  * is the closed set of spec-defined status / negation / retraction identifiers the readout speaks.

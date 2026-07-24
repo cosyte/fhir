@@ -1,5 +1,5 @@
 /**
- * The XML read path: a raw {@link XmlElement} tree → the immutable {@link FhirNode} model — the same
+ * The XML read path: a raw {@link XmlElement} tree → the immutable {@link FhirNode} model, the same
  * model the JSON reader produces (roadmap Phase 8, xml.html).
  *
  * FHIR XML encodes the same information model as FHIR JSON through different mechanisms, and this
@@ -7,30 +7,30 @@
  * the same resource read from JSON (compared with {@link ./equivalence.js nodesEquivalent}). The
  * mapping (xml.html):
  *
- * - **The root/contained element name is the resource type** — there is no `resourceType` property on
+ * - **The root/contained element name is the resource type**, there is no `resourceType` property on
  *   the wire, so the reader synthesizes one (`resourceType` → the element name) as the first property,
  *   matching the JSON model.
  * - **A primitive's value is the `value` attribute** (`<active value="true"/>`), and its `id` /
- *   `extension` metadata are an `id` attribute and child `<extension>` elements — the XML co-location
+ *   `extension` metadata are an `id` attribute and child `<extension>` elements, the XML co-location
  *   of what JSON splits into the `_`-sibling. The reader is **schema-free** like the JSON reader, so a
  *   primitive value is kept as its exact lexical **string** (`"true"`, `"0.010"`); it never guesses a
  *   FHIR datatype to coerce a boolean or a decimal, and precision is preserved because the text is
  *   never routed through a `number`. Cross-format *equivalence* is therefore defined modulo lexical
  *   form (see {@link ./equivalence.js}).
  * - **A repeating element becomes a list**; a single occurrence is a single node (JSON always uses an
- *   array for a repeatable element — the one irreducible schema-free ambiguity, reconciled by the
+ *   array for a repeatable element, the one irreducible schema-free ambiguity, reconciled by the
  *   singleton-list rule in {@link ./equivalence.js}).
  * - **`Element.id` is an attribute, `Resource.id` a child element**; both land as an `id` property,
  *   and **`Extension.url` is an attribute** that lands as a `url` property.
  * - **A resource-valued element** (`<contained><Patient>…</Patient></contained>`) is unwrapped to the
  *   inner resource, matching JSON where the value *is* the resource object.
  *
- * The narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string — the same
- * representation FHIR JSON uses for `Narrative.div` — so it round-trips as conformant `<div>…</div>`
+ * The narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, the same
+ * representation FHIR JSON uses for `Narrative.div`, so it round-trips as conformant `<div>…</div>`
  * and is never dropped or escaped into an attribute; its XHTML structure is not modeled or validated
  * (matching the JSON codec's fidelity). Reading is otherwise lenient (Postel's Law): an unexpected
  * namespace or stray character data is preserved-and-flagged, never rejected. Only genuinely
- * unrecoverable input (a malformed document, a refused DTD/entity) throws — see {@link ./raw-xml.js}
+ * unrecoverable input (a malformed document, a refused DTD/entity) throws, see {@link ./raw-xml.js}
  * / {@link ./issues.js}.
  *
  * @packageDocumentation
@@ -50,7 +50,7 @@ import { readRawXml, type XmlElement, type XmlNode } from "./raw-xml.js";
 
 /** The FHIR XML namespace; the default namespace of every FHIR resource element. */
 export const FHIR_XML_NAMESPACE = "http://hl7.org/fhir";
-/** The XHTML namespace of a FHIR narrative `<div>` (deferred in Phase 8 — preserved-and-flagged). */
+/** The XHTML namespace of a FHIR narrative `<div>` (deferred in Phase 8, preserved-and-flagged). */
 export const XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /** Whether an XML tag name is a FHIR resource type (UpperCamelCase) vs an element name (lowerCamelCase). */
@@ -69,7 +69,7 @@ function valueAttribute(element: XmlElement): string | undefined {
   return element.attributes.find((a) => a.name === "value")?.value;
 }
 
-/** Serialize an XML node back to a canonical string — used to carry a narrative `<div>` opaquely. */
+/** Serialize an XML node back to a canonical string, used to carry a narrative `<div>` opaquely. */
 function serializeXml(node: XmlNode): string {
   if (node.type === "text") {
     return node.value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -167,7 +167,7 @@ function buildNode(occurrences: XmlElement[], path: string, issues: FhirIssue[])
   return buildSingle(only, path, issues);
 }
 
-/** Build the model node for one element occurrence — resource-valued, primitive, or complex. */
+/** Build the model node for one element occurrence, resource-valued, primitive, or complex. */
 function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): FhirNode {
   const children = elementChildren(element.children);
   const hasValue = valueAttribute(element) !== undefined;
@@ -182,11 +182,11 @@ function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): Fh
     return readComplex(children[0], path, issues, { isResource: true });
   }
 
-  // A narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string — exactly the
+  // A narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, exactly the
   // representation FHIR JSON uses for `Narrative.div` (a string). The reader does not model the XHTML
   // element tree, but it never drops or garbles it: the writer re-emits this string verbatim, so a
   // narrative round-trips as conformant `<div>…</div>`, not an escaped attribute. (The XHTML structure
-  // itself is not validated — the same fidelity as the JSON codec.)
+  // itself is not validated, the same fidelity as the JSON codec.)
   if (element.name === "div") {
     return primitive(serializeXml(element));
   }
@@ -206,7 +206,7 @@ function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): Fh
       );
     }
     // A primitive carries only `value`, `id`, and child `<extension>`s; flag any other attribute
-    // (a stray `url`, an xmlns on a nested primitive, …) as unknown — preserved, never rejected.
+    // (a stray `url`, an xmlns on a nested primitive, …) as unknown, preserved, never rejected.
     for (const attr of element.attributes) {
       if (attr.name !== "value" && attr.name !== "id") {
         issues.push(unknownProperty(`${path}.@${attr.name}`));
@@ -221,7 +221,7 @@ function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): Fh
 
 /**
  * Read a FHIR resource from XML text (or an already-parsed {@link XmlElement} tree) into the immutable
- * model, gathering value-free issues — the same {@link ReadResult} the JSON {@link ../codec/read.js
+ * model, gathering value-free issues, the same {@link ReadResult} the JSON {@link ../codec/read.js
  * parseResource} returns. Throws {@link ./issues.js FhirXmlError} on malformed XML or a refused
  * DTD/entity (XXE / billion-laughs safe).
  *

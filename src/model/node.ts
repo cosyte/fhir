@@ -1,21 +1,21 @@
 /**
- * The generic FHIR element model — a wire-agnostic, loss-free tree.
+ * The generic FHIR element model, a wire-agnostic, loss-free tree.
  *
  * FHIR is already structured data, so unlike a delimited-text parser this library's model is a
  * faithful element tree rather than a re-tokenization. Phase 1 deliberately models the *structure*
  * generically (typed per-resource models arrive in later phases) while typing the two primitives
- * that a naive implementation corrupts — `decimal` (see {@link FhirDecimal}) and `integer64`. The
+ * that a naive implementation corrupts, `decimal` (see {@link FhirDecimal}) and `integer64`. The
  * tree preserves everything the wire carried: property order, primitive metadata, and exact decimal
  * text.
  *
  * Three node kinds cover every FHIR element:
  *
- * - {@link FhirComplex} — an object element (a resource, a `Coding`, a `HumanName`, an extension…):
+ * - {@link FhirComplex}, an object element (a resource, a `Coding`, a `HumanName`, an extension…):
  *   an **insertion-ordered** list of named properties.
- * - {@link FhirList} — a repeating element: an ordered list of nodes.
- * - {@link FhirPrimitive} — a leaf: a value plus the `id` / `extension` metadata that FHIR JSON
+ * - {@link FhirList}, a repeating element: an ordered list of nodes.
+ * - {@link FhirPrimitive}, a leaf: a value plus the `id` / `extension` metadata that FHIR JSON
  *   carries in the `_`-sibling. Crucially the metadata is modeled as a **first-class** part of the
- *   primitive, not as a literal `_`-prefixed key — architecture ADR 0003 requires this so the XML
+ *   primitive, not as a literal `_`-prefixed key, architecture ADR 0003 requires this so the XML
  *   codec (Phase 8) can attach the same metadata without a JSON-shaped assumption leaking into the
  *   model.
  *
@@ -30,13 +30,13 @@ import type { FhirDecimal } from "./decimal.js";
 /** The scalar value a {@link FhirPrimitive} can hold. `decimal` is a {@link FhirDecimal}; every
  * other primitive (`string`, `code`, `uri`, `date`, `boolean`, `integer`, …) reduces to one of
  * these three at the structural level. `undefined` means the value is absent but metadata is
- * present (the `_`-sibling-only case — e.g. an extension on a primitive that carries no value). */
+ * present (the `_`-sibling-only case, e.g. an extension on a primitive that carries no value). */
 export type PrimitiveValue = string | boolean | FhirDecimal;
 
 /**
  * A primitive (leaf) element: a value plus its optional `id` and `extension` metadata.
  *
- * `value` is `undefined` exactly when the element has no value of its own but does carry metadata —
+ * `value` is `undefined` exactly when the element has no value of its own but does carry metadata,
  * the FHIR case where a primitive slot is `null` in the value array but an object in the
  * `_`-sibling array. At least one of `value`, `id`, `extension` is meaningful for the node to exist.
  *

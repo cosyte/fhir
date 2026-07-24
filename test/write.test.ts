@@ -18,7 +18,7 @@ function resource(
   return complex([{ name: "resourceType", value: primitive(type) }, ...extra]);
 }
 
-describe("serializeResource — the write path", () => {
+describe("serializeResource: the write path", () => {
   it("emits resourceType first even when it is not first in the model", () => {
     const model = complex([
       { name: "id", value: primitive("1") },

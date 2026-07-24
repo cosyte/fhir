@@ -26,7 +26,7 @@ function fixture(name: string): string {
   return readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf8");
 }
 
-/** The paired JSON + XML golden files — the same resource in both wire formats. */
+/** The paired JSON + XML golden files, the same resource in both wire formats. */
 const PAIRS = [
   "patient",
   "observation-decimals",
@@ -136,7 +136,7 @@ describe("JSON↔XML model equivalence", () => {
   });
 });
 
-describe("XML reader — schema-free model mapping", () => {
+describe("XML reader: schema-free model mapping", () => {
   it("synthesizes resourceType from the root element name", () => {
     const { resource } = parseResourceXml(`<Patient ${FHIR_NS}/>`);
     const rt = req(resource.properties[0]);
@@ -182,7 +182,7 @@ describe("XML reader — schema-free model mapping", () => {
     expect(resource.properties.some((p) => p.name === "active")).toBe(true);
   });
 
-  it("flags an unexpected default namespace (lenient — preserved)", () => {
+  it("flags an unexpected default namespace (lenient: preserved)", () => {
     const { issues } = parseResourceXml(
       `<Patient xmlns="http://example.com/wrong"><active value="true"/></Patient>`,
     );
@@ -203,13 +203,13 @@ describe("XML reader — schema-free model mapping", () => {
     expect(issues.some((i) => i.code === ISSUE_CODES.UNKNOWN_PROPERTY)).toBe(true);
   });
 
-  it("carries narrative <div> as an opaque XHTML string — conformant emit, no data loss on round-trip", () => {
+  it("carries narrative <div> as an opaque XHTML string: conformant emit, no data loss on round-trip", () => {
     const src = `<Patient ${FHIR_NS}><text><status value="generated"/><div xmlns="http://www.w3.org/1999/xhtml"><p class="lead">Hi &amp; bye</p><br/></div></text></Patient>`;
     const { resource, issues } = parseResourceXml(src);
     expect(issues).toHaveLength(0); // fully carried (like FHIR JSON), not flagged unsupported
     const text = req(resource.properties.find((p) => p.name === "text")).value as FhirComplex;
     const div = req(text.properties.find((p) => p.name === "div")).value;
-    // The full <div> element (wrapper + xmlns) is preserved — exactly the FHIR JSON representation.
+    // The full <div> element (wrapper + xmlns) is preserved, exactly the FHIR JSON representation.
     expect(isPrimitive(div) && div.value).toBe(
       '<div xmlns="http://www.w3.org/1999/xhtml"><p class="lead">Hi &amp; bye</p><br/></div>',
     );
@@ -295,8 +295,8 @@ describe("XML writer", () => {
   });
 });
 
-describe("XML reader — safety: XXE / billion-laughs / DoS (roadmap §6)", () => {
-  it("refuses any DOCTYPE (closes XXE) — loudly, before any element", () => {
+describe("XML reader: safety: XXE / billion-laughs / DoS (roadmap §6)", () => {
+  it("refuses any DOCTYPE (closes XXE): loudly, before any element", () => {
     const xxe =
       '<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>' +
       `<Patient ${FHIR_NS}><name><family value="&xxe;"/></name></Patient>`;
@@ -370,7 +370,7 @@ describe("XML reader — safety: XXE / billion-laughs / DoS (roadmap §6)", () =
   });
 });
 
-describe("XML reader — well-formedness fatals", () => {
+describe("XML reader: well-formedness fatals", () => {
   const cases: readonly (readonly [string, string])[] = [
     ["empty document", "   "],
     ["unterminated tag", `<Patient ${FHIR_NS}`],

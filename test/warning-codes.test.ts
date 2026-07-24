@@ -9,7 +9,7 @@ import {
 } from "../src/index.js";
 
 /**
- * The public issue/fatal code registries are a stable contract — a rename is a breaking change
+ * The public issue/fatal code registries are a stable contract, a rename is a breaking change
  * (roadmap Phase 2 snapshots the full set). This suite pins the Phase-1 codes so an accidental
  * rename fails loudly.
  */

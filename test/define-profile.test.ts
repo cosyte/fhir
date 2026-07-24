@@ -14,7 +14,7 @@ import {
 } from "../src/index.js";
 import { req } from "./_util.js";
 
-describe("defineProfile — authoring", () => {
+describe("defineProfile: authoring", () => {
   it("builds a StructureDefinition the engine consumes", () => {
     const sd = defineProfile({
       url: "http://example.org/StructureDefinition/final-observation",
@@ -108,10 +108,10 @@ describe("defineProfile — authoring", () => {
   });
 });
 
-describe("defineProfile — dogfoods the public path (no privileged internal shape)", () => {
+describe("defineProfile: dogfoods the public path (no privileged internal shape)", () => {
   it("produces the same model as loadStructureDefinition on the equivalent JSON", () => {
     // One profile authored two ways: programmatically, and as raw StructureDefinition JSON read back
-    // through the codec. They must converge on an identical StructureDefinition — the whole point of
+    // through the codec. They must converge on an identical StructureDefinition, the whole point of
     // the growth loop is that a built-in profile and a user's profile are the same kind of object.
     const spec: ProfileSpec = {
       url: "http://example.org/StructureDefinition/example",
@@ -230,7 +230,7 @@ describe("defineProfile — dogfoods the public path (no privileged internal sha
   });
 });
 
-describe("defineProfile — flows into validateResource", () => {
+describe("defineProfile: flows into validateResource", () => {
   it("a fixed[x] authored in code flags a mismatching instance", () => {
     const profile = defineProfile({
       url: "http://x",

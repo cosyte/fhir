@@ -7,7 +7,7 @@ import { decimal, isPrimitiveType, PRIMITIVE_TYPES, validatePrimitiveValue } fro
  * spec's own (datatypes.html); these cases pin the well-formed / malformed boundary and the
  * shape-vs-lexical distinction (`type-mismatch` vs `invalid`).
  */
-describe("validatePrimitiveValue — R4 datatype value-domain", () => {
+describe("validatePrimitiveValue: R4 datatype value-domain", () => {
   it("recognizes the primitive type names", () => {
     expect(isPrimitiveType("date")).toBe(true);
     expect(isPrimitiveType("code")).toBe(true);
@@ -83,7 +83,7 @@ describe("validatePrimitiveValue — R4 datatype value-domain", () => {
     expect(validatePrimitiveValue("# heading\n\ntext", "markdown")).toBe("ok");
   });
 
-  it("says nothing (ok) about a non-primitive datatype — that is a structural concern", () => {
+  it("says nothing (ok) about a non-primitive datatype: that is a structural concern", () => {
     expect(validatePrimitiveValue("anything", "HumanName")).toBe("ok");
   });
 });

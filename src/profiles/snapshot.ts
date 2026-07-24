@@ -1,23 +1,23 @@
 /**
- * Snapshot generation from a differential (Phase 6, the heaviest single piece — profiling.html).
+ * Snapshot generation from a differential (Phase 6, the heaviest single piece, profiling.html).
  *
  * A FHIR profile is usually authored as a **differential**: only the elements it constrains, expressed
  * relative to the resource it profiles. To validate an instance you need the **snapshot**: the full,
  * flattened element list with every base element present and each differential constraint applied.
  * Published IGs ship the snapshot too, but a profile that carries only a differential must have one
- * generated — walk the `baseDefinition` chain to the base resource's snapshot, then overlay the
+ * generated, walk the `baseDefinition` chain to the base resource's snapshot, then overlay the
  * differential element by element.
  *
  * The merge is by element **id** (which encodes slice membership as `path:sliceName`): a differential
  * element whose id matches a base element **tightens** it (cardinality, `mustSupport`, `fixed` /
- * `pattern`, `binding`, `slicing`, `type`); a differential element with no match — a **slice**, or a
- * newly-constrained descendant — is **inserted** next to the element it belongs under. The base is
+ * `pattern`, `binding`, `slicing`, `type`); a differential element with no match, a **slice**, or a
+ * newly-constrained descendant, is **inserted** next to the element it belongs under. The base is
  * resolved through a caller-supplied {@link BaseResolver}: **no StructureDefinition content is
  * bundled**, so the caller provides the base resource's definition (a base R4 SD carries a full
  * snapshot, so the recursion bottoms out there).
  *
  * **Known limitation (deferred):** re-slicing and deep re-parenting of a slice's descendant elements
- * are not modeled — slice *membership* is resolved from the slice element and any descendant
+ * are not modeled, slice *membership* is resolved from the slice element and any descendant
  * `fixed`/`pattern` constraints (see {@link ./slicing.js}), which covers the US Core slice shapes,
  * but a profile that re-slices an inherited slice is out of this phase's scope.
  *

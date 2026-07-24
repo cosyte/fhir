@@ -21,7 +21,7 @@ function load(name: string): ReturnType<typeof parseResource>["resource"] {
   return parseResource(fixture(name)).resource;
 }
 
-describe("readSafety — surfacing the modifier / status / negation elements", () => {
+describe("readSafety: surfacing the modifier / status / negation elements", () => {
   it("surfaces 'no known allergy' (SNOMED 716186003) as a first-class negation, not an allergy", () => {
     const safety = readSafety(load("allergy-no-known.json"));
     expect(safety.noKnownAllergy).toBe(true);
@@ -38,7 +38,7 @@ describe("readSafety — surfacing the modifier / status / negation elements", (
   });
 
   it("never drops 'refuted' when verificationStatus carries more than one coding (any position)", () => {
-    // A local/translation coding first, the standard 'refuted' second — normal FHIR, not malformed.
+    // A local/translation coding first, the standard 'refuted' second, normal FHIR, not malformed.
     // Reading only the first coding would silently lose the refutation and read the record positive.
     const condition = readSafety(
       parseResource(
@@ -145,14 +145,14 @@ describe("readSafety — surfacing the modifier / status / negation elements", (
   });
 });
 
-describe("readSafety — carries status or refuses (the fail-closed contract)", () => {
+describe("readSafety: carries status or refuses (the fail-closed contract)", () => {
   it("flags an unhandled modifierExtension and marks the resource unsafe to summarize", () => {
     const safety = readSafety(load("unknown-modifier.json"));
     expect(safety.safeToSummarize).toBe(false);
     expect(safety.unhandledModifierExtensions).toEqual(["Observation.modifierExtension[0]"]);
   });
 
-  it("assertSafeToSummarize refuses (throws) on an unhandled modifierExtension — value-free", () => {
+  it("assertSafeToSummarize refuses (throws) on an unhandled modifierExtension: value-free", () => {
     const resource = load("unknown-modifier.json");
     let error: FhirSafetyError | undefined;
     try {
@@ -162,7 +162,7 @@ describe("readSafety — carries status or refuses (the fail-closed contract)", 
     }
     expect(error).toBeInstanceOf(FhirSafetyError);
     expect(error?.locations).toEqual(["Observation.modifierExtension[0]"]);
-    // The refusal names locations only — never a resource value.
+    // The refusal names locations only, never a resource value.
     expect(error?.message).not.toContain("7.2");
     expect(error?.message).not.toContain("718-7");
   });
@@ -193,7 +193,7 @@ describe("readSafety — carries status or refuses (the fail-closed contract)", 
     ]);
   });
 
-  it("treats a plain (non-modifier) extension as safe — only modifierExtension fails closed", () => {
+  it("treats a plain (non-modifier) extension as safe: only modifierExtension fails closed", () => {
     const withExtension = parseResource(
       JSON.stringify({
         resourceType: "Condition",
@@ -205,7 +205,7 @@ describe("readSafety — carries status or refuses (the fail-closed contract)", 
   });
 });
 
-describe("readSafety — edge cases", () => {
+describe("readSafety: edge cases", () => {
   it("leaves doNotPerform undefined for a MedicationRequest that omits it", () => {
     const safety = readSafety(
       parseResource('{"resourceType":"MedicationRequest","status":"active","intent":"order"}')
@@ -254,7 +254,7 @@ describe("negation never collapses to positive across a round-trip", () => {
       expect(before.negations).toContain(negation);
       const roundTripped = readSafety(parseResource(serializeResource(load(file))).resource);
       expect(roundTripped.negations).toContain(negation);
-      // The negation set is identical — nothing added, nothing dropped.
+      // The negation set is identical, nothing added, nothing dropped.
       expect([...roundTripped.negations].sort()).toEqual([...before.negations].sort());
     });
   }

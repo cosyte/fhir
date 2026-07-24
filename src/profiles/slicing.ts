@@ -1,5 +1,5 @@
 /**
- * Slicing — assigning instance occurrences of a repeating element to the profile's named slices
+ * Slicing, assigning instance occurrences of a repeating element to the profile's named slices
  * (Phase 6, elementdefinition.html §slicing).
  *
  * A profile can **slice** a repeating element: split it into named sub-groups, each with its own
@@ -13,7 +13,7 @@
  * value at the discriminator path must match the slice's `fixed[x]` / `pattern[x]` there) and
  * **`exists`** (the element's presence must match the slice's cardinality there). A `type` or
  * `profile` discriminator, an R5 `position`, an empty discriminator set, or a slice that declares no
- * constraint at a discriminator path is **not guessed** — the whole slicing is reported *unchecked*
+ * constraint at a discriminator path is **not guessed**, the whole slicing is reported *unchecked*
  * (`PROFILE_SLICE_UNCHECKED`) so membership is never silently assumed to pass or fail (roadmap §6
  * fail-safe). Full evaluation of the deferred kinds lands with Phase 7's FHIRPath subset.
  *
@@ -144,7 +144,7 @@ function discriminatorHolds(
 /**
  * Assign each instance occurrence of a sliced element to a slice (or none), per the discriminators.
  *
- * Returns `unchecked: true` — and no assignments the caller should act on — when membership cannot be
+ * Returns `unchecked: true`, and no assignments the caller should act on, when membership cannot be
  * evaluated: an empty discriminator set, any discriminator of an unsupported type (`type`, `profile`,
  * R5 `position`, …), or any slice that declares no constraint at a discriminator path. The library
  * does **not** guess a slice assignment it cannot justify.

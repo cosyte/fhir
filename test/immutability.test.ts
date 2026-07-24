@@ -38,7 +38,7 @@ describe("immutability (roadmap: immutable model)", () => {
     const { resource } = parseResource(golden("primitive-extensions.json"));
     const before = serializeResource(resource);
     // Attempt to mutate the model's arrays in place; the model is typed readonly, but a determined
-    // caller can still try at runtime. A defensive copy on serialize is not promised — what is
+    // caller can still try at runtime. A defensive copy on serialize is not promised, what is
     // promised is that reading twice from an untouched model is identical (previous test), and that
     // parsing does not alias the caller's input. Here we assert serialize is a pure read.
     const again = serializeResource(parseResource(before).resource);

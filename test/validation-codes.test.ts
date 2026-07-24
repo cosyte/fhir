@@ -10,7 +10,7 @@ import {
 } from "../src/index.js";
 
 /**
- * The Phase-2 validation vocabulary is a stable public contract — a rename is a breaking change
+ * The Phase-2 validation vocabulary is a stable public contract, a rename is a breaking change
  * (the roadmap snapshots the issue-code set here). These pin the exact registries so an accidental
  * rename fails loudly, and confirm every code has a value-free diagnostic and a correct IssueType.
  */

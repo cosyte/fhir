@@ -9,7 +9,7 @@ import {
   type ValidationCode,
 } from "../src/index.js";
 
-describe("toOperationOutcome — the value-free wire form", () => {
+describe("toOperationOutcome: the value-free wire form", () => {
   it("emits a spec-shaped OperationOutcome with severity / code / diagnostics / expression", () => {
     const issues = [validationIssue("CODE_INVALID", "error", "Patient.gender")];
     const json = serializeResource(toOperationOutcome(issues));
@@ -25,11 +25,11 @@ describe("toOperationOutcome — the value-free wire form", () => {
     expect(json).toContain('"resourceType":"OperationOutcome"');
     expect(json).toContain('"severity":"information"');
     expect(json).toContain('"code":"informational"');
-    // An OperationOutcome.issue is 1..* — never an empty array.
+    // An OperationOutcome.issue is 1..*, never an empty array.
     expect(json).not.toContain('"issue":[]');
   });
 
-  it("diagnostics carry no value — a location plus a coded reason only", () => {
+  it("diagnostics carry no value: a location plus a coded reason only", () => {
     // Build one issue for every code and prove the serialized outcome contains no interpolated data.
     const allCodes = Object.values(VALIDATION_CODES) as ValidationCode[];
     const issues = allCodes.map((code) =>

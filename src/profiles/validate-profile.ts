@@ -1,26 +1,26 @@
 /**
- * The profile validation layer (Phase 6) — validate a resource against a `StructureDefinition`.
+ * The profile validation layer (Phase 6), validate a resource against a `StructureDefinition`.
  *
  * This is the sixth validation layer (roadmap §6: structure → cardinality → value-domain → terminology
  * → **profile** → invariant). Given a resource model and a profile, it walks the profile's snapshot
  * (generating one from the differential when needed, {@link ./snapshot.js}) and checks, per element:
  *
- * - **must-support** — an absent must-support element is `MUST_SUPPORT_ABSENT` (**`information`, never
+ * - **must-support**, an absent must-support element is `MUST_SUPPORT_ABSENT` (**`information`, never
  *   an error**): must-support is a *system obligation*, not an instance-presence requirement (roadmap
  *   §8). This is the single rule the roadmap is most emphatic about.
- * - **`fixed[x]` / `pattern[x]`** — a value that is not exactly the fixed value is
+ * - **`fixed[x]` / `pattern[x]`**, a value that is not exactly the fixed value is
  *   `PROFILE_FIXED_MISMATCH`; one that does not contain the pattern is `PROFILE_PATTERN_MISMATCH`
  *   (both `error`). {@link ./fixed-pattern.js} draws the equality-vs-subset distinction.
- * - **profile-tightened cardinality** — an element the profile makes required (min ≥ 1) that is absent
+ * - **profile-tightened cardinality**, an element the profile makes required (min ≥ 1) that is absent
  *   is `CARDINALITY_MIN`; one exceeding a profile max is `CARDINALITY_MAX`.
- * - **slicing** — each occurrence of a sliced element is matched to a slice ({@link ./slicing.js}); an
+ * - **slicing**, each occurrence of a sliced element is matched to a slice ({@link ./slicing.js}); an
  *   unmatched occurrence under `closed` slicing is `PROFILE_SLICE_UNMATCHED`, a required slice with no
  *   occurrence is `CARDINALITY_MIN`, and a slicing whose discriminator cannot be evaluated is
  *   `PROFILE_SLICE_UNCHECKED` (never silently passed).
  *
- * Every finding is **value-free** — a code, a severity, and a FHIRPath location, never a value.
+ * Every finding is **value-free**, a code, a severity, and a FHIRPath location, never a value.
  * **Deferred:** binding enforcement from profile bindings (the terminology layer already covers
- * bindings — Phase 5), the `profile`/`type` discriminators and reslicing (need FHIRPath — Phase 7),
+ * bindings, Phase 5), the `profile`/`type` discriminators and reslicing (need FHIRPath, Phase 7),
  * and invariant `constraint`s (Phase 7).
  *
  * @packageDocumentation
@@ -57,7 +57,7 @@ function occurrencesOf(nodes: readonly FhirNode[]): FhirNode[] {
 /**
  * One evaluation context for an element: a present occurrence of the element's **parent** and this
  * element's occurrences *within it*. Cardinality is defined relative to the parent
- * (elementdefinition.html), so a `1..1` child is "one per parent", not "one in the whole resource" —
+ * (elementdefinition.html), so a `1..1` child is "one per parent", not "one in the whole resource",
  * evaluating it against a root-flattened count would false-error a conformant repeating backbone.
  */
 interface ParentGroup {
@@ -76,7 +76,7 @@ function leafOf(elementPath: string): string {
 /**
  * Group an element's instance occurrences by the parent occurrence they belong to. A top-level
  * element (parent = the resource) yields a single group; a nested element yields one group per
- * present parent occurrence, and **no groups at all when the parent is absent** — an absent optional
+ * present parent occurrence, and **no groups at all when the parent is absent**, an absent optional
  * parent means its required children simply do not apply (no false cardinality error).
  */
 function parentGroups(resource: FhirComplex, rt: string, elementPath: string): ParentGroup[] {
@@ -121,7 +121,7 @@ export function collectProfileIssues(
   const issues: ValidationIssue[] = [];
 
   for (const el of snapshot) {
-    if (el.path === profile.type) continue; // the root element — nothing to check on the resource itself.
+    if (el.path === profile.type) continue; // the root element, nothing to check on the resource itself.
     if (el.sliceName !== undefined) continue; // slice elements are handled via their sliced parent below.
 
     const groups = parentGroups(resource, rt, el.path);
@@ -129,7 +129,7 @@ export function collectProfileIssues(
     const leaf = leafOf(el.path);
     const totalChildren = groups.reduce((n, g) => n + g.children.length, 0);
 
-    // must-support: informational, never an error (roadmap §8 — the load-bearing rule). Evaluated at
+    // must-support: informational, never an error (roadmap §8, the load-bearing rule). Evaluated at
     // the element level (absent across every present parent) so an optional repeat does not multiply it.
     if (el.mustSupport === true && totalChildren === 0) {
       issues.push(validationIssue("MUST_SUPPORT_ABSENT", ISSUE_SEVERITIES.INFORMATION, el.path));
@@ -224,7 +224,7 @@ function collectSlicingIssues(
 /**
  * Collect `PROFILE_VERSION_MISMATCH` findings by comparing the resource's declared `meta.profile`
  * canonicals against the supplied profile set. A declared `canonical|version` whose canonical is
- * supplied at a **different** version is flagged (`warning`) — the roadmap requires flagging an
+ * supplied at a **different** version is flagged (`warning`), the roadmap requires flagging an
  * unknown profile version rather than silently validating against a different one. A canonical that is
  * not supplied at all is *not* flagged here (it simply was not validated), and a declaration with no
  * version pin never mismatches.

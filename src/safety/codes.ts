@@ -2,7 +2,7 @@
  * The safety-critical terminology and the primitive semantics for reading it out of the generic
  * model (Phase 3, the fail-closed status & negation spine).
  *
- * FHIR marks a handful of elements with the **modifier flag (`?!`)** — `status`, `clinicalStatus`,
+ * FHIR marks a handful of elements with the **modifier flag (`?!`)**, `status`, `clinicalStatus`,
  * `verificationStatus`, `doNotPerform`, and the `not-taken` / `not-done` / `entered-in-error` codes.
  * By FHIR's conformance rules a modifier element is **never an optional read**: a consumer that does
  * not understand it must *refuse* the element, not process it as if the modifier were absent
@@ -10,9 +10,9 @@
  * elements carry, plus the small set of value-free readers that pull them out of a {@link FhirComplex}
  * without a typed per-resource model (those arrive in a later phase).
  *
- * **No terminology content is bundled** (roadmap §5 — SNOMED/LOINC/RxNorm licensing). What ships here
+ * **No terminology content is bundled** (roadmap §5, SNOMED/LOINC/RxNorm licensing). What ships here
  * is a *closed* set of spec-defined identifiers: the `entered-in-error` retraction code, the status
- * negation codes (`not-taken`, `not-done`), and SNOMED CT `716186003` "no known allergy" — the one
+ * negation codes (`not-taken`, `not-done`), and SNOMED CT `716186003` "no known allergy", the one
  * positive negation the roadmap names as a first-class concept (a recorded assertion of *no allergy*,
  * which is neither an absent resource nor an allergy *to* something). These are stable spec
  * identifiers, not licensed concept tables.
@@ -34,7 +34,7 @@ import {
 export const SNOMED_SCT = "http://snomed.info/sct";
 
 /**
- * SNOMED CT `716186003` "No known allergy" — a **positive** record that the patient has no known
+ * SNOMED CT `716186003` "No known allergy", a **positive** record that the patient has no known
  * allergy. Per roadmap §4.3 this is a first-class negation: it is *not* an absent AllergyIntolerance
  * (absence = *unknown*), and it must *not* be read as an allergy to code `716186003`. Other
  * "no known X allergy" substance-specific concepts (drug/food/environmental) are recognized by the
@@ -42,37 +42,37 @@ export const SNOMED_SCT = "http://snomed.info/sct";
  */
 export const NO_KNOWN_ALLERGY = "716186003";
 
-/** The `entered-in-error` code — the universal "this record is retracted, not data" value. */
+/** The `entered-in-error` code, the universal "this record is retracted, not data" value. */
 export const ENTERED_IN_ERROR = "entered-in-error";
 
-/** `MedicationStatement.status = not-taken` — a negation: the medication was **not** taken. */
+/** `MedicationStatement.status = not-taken`, a negation: the medication was **not** taken. */
 export const NOT_TAKEN = "not-taken";
 
-/** `Immunization.status = not-done` — a negation: the vaccine was **not** given. */
+/** `Immunization.status = not-done`, a negation: the vaccine was **not** given. */
 export const NOT_DONE = "not-done";
 
 /** AllergyIntolerance `clinicalStatus` code system (`allergyintolerance.html`). */
 export const ALLERGY_CLINICAL_SYSTEM =
   "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical";
-/** AllergyIntolerance `verificationStatus` code system — the system ait-1/ait-2 pin. */
+/** AllergyIntolerance `verificationStatus` code system, the system ait-1/ait-2 pin. */
 export const ALLERGY_VERIFICATION_SYSTEM =
   "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification";
-/** Condition `clinicalStatus` code system (`condition.html`) — the system con-4 pins. */
+/** Condition `clinicalStatus` code system (`condition.html`), the system con-4 pins. */
 export const CONDITION_CLINICAL_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-clinical";
-/** Condition `verificationStatus` code system — the system con-3/con-5 pin. */
+/** Condition `verificationStatus` code system, the system con-3/con-5 pin. */
 export const CONDITION_VERIFICATION_SYSTEM =
   "http://terminology.hl7.org/CodeSystem/condition-ver-status";
 /** Condition `category` code system carrying `problem-list-item` (the con-3 trigger). */
 export const CONDITION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-category";
 
-/** `refuted` — an AllergyIntolerance/Condition asserted to be *not* present after investigation. */
+/** `refuted`, an AllergyIntolerance/Condition asserted to be *not* present after investigation. */
 export const REFUTED = "refuted";
 
 /**
  * The `modifierExtension` URLs this library understands. It is **empty**: no standard
  * `modifierExtension` is handled yet, so *every* `modifierExtension` an instance carries is unknown
  * and the validator fails closed on it ({@link ../validate/safety.js}). The set exists as the seam a
- * later phase widens deliberately — a URL is added here only alongside code that actually honors that
+ * later phase widens deliberately, a URL is added here only alongside code that actually honors that
  * modifier's meaning. Widening it silently would re-introduce the exact hazard the FHIR `?!` rule
  * exists to prevent.
  */
@@ -94,7 +94,7 @@ export const SAFETY_RESOURCE_TYPES: ReadonlySet<string> = new Set([
   "DiagnosticReport",
 ]);
 
-/** A (system, code) pair read out of a `Coding` — either half may be absent on a quirky instance. */
+/** A (system, code) pair read out of a `Coding`, either half may be absent on a quirky instance. */
 export interface Coded {
   readonly system: string | undefined;
   readonly code: string | undefined;
@@ -231,7 +231,7 @@ export function codeOf(node: FhirNode | undefined, preferredSystem?: string): st
 }
 
 /**
- * Whether a `choice[x]` element is present by any of its type variants — e.g. `choicePresent(obs,
+ * Whether a `choice[x]` element is present by any of its type variants, e.g. `choicePresent(obs,
  * "value")` is `true` for `valueQuantity`, `valueString`, … A variant is `<base>` immediately
  * followed by an upper-case letter, so `value` never matches an unrelated `valueless`-style name.
  *
@@ -255,7 +255,7 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
 }
 
 /**
- * Whether a resource is **retracted** — marked `entered-in-error` and therefore not to be treated as
+ * Whether a resource is **retracted**, marked `entered-in-error` and therefore not to be treated as
  * active data (roadmap §4.8). Read fail-safe: a `status` primitive of `entered-in-error` (Observation,
  * Immunization, DiagnosticReport, MedicationRequest/Statement) **or** a `verificationStatus` carrying
  * `entered-in-error` under any system (AllergyIntolerance, Condition). Over-surfacing a retraction is

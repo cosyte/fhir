@@ -3,7 +3,7 @@
  *
  * `JSON.parse` is **non-conformant for FHIR** (architecture ADR 0001, json.html): it maps every JSON
  * number to an IEEE-754 double, so `0.010` becomes `0.01` and a 64-bit-range integer loses its
- * low-order digits *before* any FHIR-aware code runs. A reviver cannot recover this — it only sees
+ * low-order digits *before* any FHIR-aware code runs. A reviver cannot recover this, it only sees
  * the already-corrupted `number`. So the reader here is a small recursive-descent JSON parser whose
  * only job beyond correctness is to hand every number token back as its **exact source text**.
  *
@@ -40,7 +40,7 @@ export interface RawString {
   readonly value: string;
 }
 
-/** A JSON number node, preserved as its **exact** source text — never a JavaScript `number`. */
+/** A JSON number node, preserved as its **exact** source text, never a JavaScript `number`. */
 export interface RawNumber {
   readonly t: "num";
   readonly raw: string;
@@ -62,7 +62,7 @@ export type RawJson = RawObject | RawArray | RawString | RawNumber | RawBool | R
 
 /**
  * The maximum object/array nesting depth the reader will descend before refusing with
- * `MAX_DEPTH_EXCEEDED`. FHIR resources — even a Bundle of documents with contained resources — nest
+ * `MAX_DEPTH_EXCEEDED`. FHIR resources, even a Bundle of documents with contained resources, nest
  * far shallower than this; the bound exists only to turn a pathological adversarial document (a tower
  * of `[[[[…]]]]` or `{"a":{"a":…}}`) into a typed error instead of a V8 stack overflow. Kept equal to
  * the XML reader's `MAX_DEPTH` (256) so the two codecs bound the same data model identically.
@@ -144,7 +144,7 @@ class RawJsonReader {
   }
 
   private parseValue(depth: number): RawJson {
-    // Refuse pathological nesting as a DoS guard, before descending — a typed fatal instead of a V8
+    // Refuse pathological nesting as a DoS guard, before descending, a typed fatal instead of a V8
     // stack overflow (mirrors the XML reader's MAX_DEPTH bound over the same data model).
     if (depth > MAX_DEPTH) {
       throw new FhirCodecError(
@@ -342,7 +342,7 @@ class RawJsonReader {
 /**
  * Parse a JSON document into a {@link RawJson} tree that preserves number literals verbatim and
  * member order. Throws {@link FhirCodecError} (`MALFORMED_JSON`) on invalid input, or
- * (`MAX_DEPTH_EXCEEDED`) when nesting passes the reader's fixed depth bound — both value-free, with a
+ * (`MAX_DEPTH_EXCEEDED`) when nesting passes the reader's fixed depth bound, both value-free, with a
  * byte `offset` and no snippet.
  *
  * @param src - The JSON text.
@@ -350,7 +350,7 @@ class RawJsonReader {
  * ```ts
  * import { readRawJson } from "@cosyte/fhir";
  * const tree = readRawJson('{"v":0.010}');
- * // the number node carries raw === "0.010" — the trailing zero is intact
+ * // the number node carries raw === "0.010", the trailing zero is intact
  * ```
  */
 export function readRawJson(src: string): RawJson {

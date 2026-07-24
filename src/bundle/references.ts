@@ -5,16 +5,16 @@
  * A FHIR `Reference.reference` comes in four forms ({@link ../model/reference.js parseReference}
  * classifies them): a `#fragment` into the same resource's `contained`, a relative `Type/id`, an
  * absolute URL, or a logical (`urn:`) identifier. This module resolves them against the closure the
- * caller actually holds — a {@link BundleIndex} (entries keyed by `fullUrl` and `Type/id`) and a
- * {@link ContainedIndex} (a resource's `contained` keyed by id) — and says, honestly, one of three
- * things: `"resolved"`, `"unresolved"` (a local miss — flagged, never dropped), or `"external"` (a
- * reference to somewhere outside the closure — not a defect, so never flagged).
+ * caller actually holds, a {@link BundleIndex} (entries keyed by `fullUrl` and `Type/id`) and a
+ * {@link ContainedIndex} (a resource's `contained` keyed by id), and says, honestly, one of three
+ * things: `"resolved"`, `"unresolved"` (a local miss, flagged, never dropped), or `"external"` (a
+ * reference to somewhere outside the closure, not a defect, so never flagged).
  *
  * **The cycle guard (DoS-safety).** A naive "resolve this and everything it points to" walk loops
  * forever on a reference cycle (`#a` → `#b` → `#a`) and can blow the stack on a deeply-nested one.
  * {@link hasContainedCycle} builds the `contained` fragment graph and runs an **iterative** (heap, not
  * call-stack) depth-first search with a bounded frontier ({@link MAX_REFERENCE_DEPTH}) and three-color
- * marking — so a cycle is *detected and reported*, never followed. It always terminates.
+ * marking, so a cycle is *detected and reported*, never followed. It always terminates.
  *
  * @packageDocumentation
  */
@@ -25,7 +25,7 @@ import { parseReference } from "../model/reference.js";
 
 /**
  * A hard cap on the depth-first frontier the cycle guard will hold at once. A `contained` fragment
- * graph deeper than this is treated as pathological (reported as a cycle) rather than walked — a
+ * graph deeper than this is treated as pathological (reported as a cycle) rather than walked, a
  * belt-and-suspenders bound on memory on top of the three-color visited marking that already
  * guarantees termination.
  */
@@ -41,7 +41,7 @@ export interface BundleIndex {
 
 /** A resolvable index of one resource's `contained` resources, for `#fragment` resolution. */
 export interface ContainedIndex {
-  /** The containing resource itself — the target of a bare `#` fragment. */
+  /** The containing resource itself, the target of a bare `#` fragment. */
   readonly root: FhirComplex;
   /** Contained resources keyed by their logical `id` (matches `#id`). */
   readonly byId: ReadonlyMap<string, FhirComplex>;
@@ -101,7 +101,7 @@ export function containedIndex(resource: FhirComplex): ContainedIndex {
 
 /**
  * Build a {@link BundleIndex} from a `Bundle`, keying every entry resource by both its `fullUrl` and,
- * where derivable, a `Type/id` — so a relative, absolute, or logical reference can each find it.
+ * where derivable, a `Type/id`, so a relative, absolute, or logical reference can each find it.
  *
  * @param bundle - A `Bundle` resource model.
  * @example
@@ -151,7 +151,7 @@ export function buildBundleIndex(bundle: FhirComplex): BundleIndex {
  * Resolution is honest about its closure: a `#fragment` resolves only within `contained`; a relative
  * `Type/id` only within the Bundle. A local miss is `"unresolved"` (the caller flags it,
  * `REFERENCE_UNRESOLVED`, and preserves the reference). An absolute or logical reference that is not
- * in the Bundle is `"external"` — it points somewhere this library was never given, which is **not** a
+ * in the Bundle is `"external"`, it points somewhere this library was never given, which is **not** a
  * defect, so it draws no finding.
  *
  * @param reference - The `Reference.reference` string.
@@ -184,7 +184,7 @@ export function resolveReference(
   if (parsed.kind === "relative") {
     if (bundle === undefined) return { status: "external" };
     // Key on the parsed Type/id (dropping any `/_history/{vid}` suffix) so a versioned relative
-    // reference `Patient/1/_history/2` still resolves against the `Patient/1` entry — the index is
+    // reference `Patient/1/_history/2` still resolves against the `Patient/1` entry, the index is
     // keyed version-free, exactly as the absolute branch below.
     const key =
       parsed.type !== undefined && parsed.id !== undefined
@@ -267,10 +267,10 @@ interface Frame {
 /**
  * Whether a resource's `contained` resources reference each other (or the root) in a **cycle**.
  *
- * Builds the fragment graph — one node per contained resource id plus the root (`""`), an edge for
- * each `#fragment` reference — and runs an iterative three-color DFS. Because the DFS is heap-based
+ * Builds the fragment graph, one node per contained resource id plus the root (`""`), an edge for
+ * each `#fragment` reference, and runs an iterative three-color DFS. Because the DFS is heap-based
  * (not recursive) and marks visited nodes, it **always terminates**: a cycle is reported, never
- * followed. This is the DoS guard the roadmap requires — a reference cycle becomes a typed
+ * followed. This is the DoS guard the roadmap requires, a reference cycle becomes a typed
  * `CONTAINED_CYCLE` finding, never an infinite loop or a stack overflow.
  *
  * @param resource - The resource whose `contained` set to check.
@@ -283,7 +283,7 @@ interface Frame {
  *     '{"resourceType":"Observation","id":"a","hasMember":[{"reference":"#b"}]},' +
  *     '{"resourceType":"Observation","id":"b","hasMember":[{"reference":"#a"}]}]}',
  * );
- * hasContainedCycle(resource); // true — a → b → a
+ * hasContainedCycle(resource); // true, a → b → a
  * ```
  */
 export function hasContainedCycle(resource: FhirComplex): boolean {
@@ -304,7 +304,7 @@ export function hasContainedCycle(resource: FhirComplex): boolean {
     color.set(start, GRAY);
     const stack: Frame[] = [{ node: start, edge: 0 }];
     while (stack.length > 0) {
-      if (stack.length > MAX_REFERENCE_DEPTH) return true; // pathologically deep — treat as a cycle
+      if (stack.length > MAX_REFERENCE_DEPTH) return true; // pathologically deep, treat as a cycle
       const frame = stack[stack.length - 1];
       if (frame === undefined) break;
       const edges = graph.get(frame.node) ?? [];

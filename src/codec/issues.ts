@@ -1,20 +1,20 @@
 /**
- * Codec diagnostics — the value-free warning registry shared by the JSON **and** XML readers, plus
+ * Codec diagnostics, the value-free warning registry shared by the JSON **and** XML readers, plus
  * the typed fatal for the JSON reader (the XML reader has its own {@link ../xml/issues.js FhirXmlError}).
  *
  * Two tiers, mirroring the cosyte parser convention (`hl7`'s warnings/errors split):
  *
- * - **Warnings** ({@link FhirIssue}) are recoverable — the reader keeps going and preserves the
+ * - **Warnings** ({@link FhirIssue}) are recoverable, the reader keeps going and preserves the
  *   data, accumulating a value-free issue so the consumer knows what was tolerated.
- * - **Fatals** ({@link FhirCodecError}) are unrecoverable — malformed JSON, or a primitive/`_`-sibling
+ * - **Fatals** ({@link FhirCodecError}) are unrecoverable, malformed JSON, or a primitive/`_`-sibling
  *   array whose lengths disagree so the reader cannot know which value an extension belongs to. The
  *   latter fails *closed*: guessing the alignment could attach an extension to the wrong clinical
  *   value, so the reader refuses rather than risk it.
  *
  * **PHI discipline (roadmap §7).** A FHIR resource is PHI by default, and diagnostics are the leak
  * vector. Every issue and every error here is **value-free by construction**: it carries a coded
- * `code`, a `severity`, and an `expression` (a FHIRPath *location* such as `Patient.name[0].given[1]`)
- * — never the offending value. The `FhirCodecError` for malformed JSON carries a byte `offset`, not
+ * `code`, a `severity`, and an `expression` (a FHIRPath *location* such as `Patient.name[0].given[1]`),
+ * never the offending value. The `FhirCodecError` for malformed JSON carries a byte `offset`, not
  * the surrounding text.
  *
  * @packageDocumentation
@@ -29,25 +29,25 @@
  * import { parseResource, ISSUE_CODES } from "@cosyte/fhir";
  * const { issues } = parseResource(json);
  * if (issues.some((i) => i.code === ISSUE_CODES.DECIMAL_PRECISION_AT_RISK)) {
- *   // a value here would have been corrupted by a naive JSON.parse — we preserved it
+ *   // a value here would have been corrupted by a naive JSON.parse, we preserved it
  * }
  * ```
  */
 export const ISSUE_CODES = {
   /**
    * A numeric primitive whose exact value would have been corrupted by routing it through a
-   * JavaScript `number` — trailing-zero precision, more than ~15 significant digits, or magnitude
+   * JavaScript `number`, trailing-zero precision, more than ~15 significant digits, or magnitude
    * past the safe-integer range. Informational: the reader preserved it losslessly; this flags that
    * the protection mattered here.
    */
   DECIMAL_PRECISION_AT_RISK: "DECIMAL_PRECISION_AT_RISK",
   /**
-   * A property the reader did not expect at this position and preserved verbatim (Postel's Law —
+   * A property the reader did not expect at this position and preserved verbatim (Postel's Law,
    * lenient read). Warning severity: nothing was lost, but a consumer may want to know.
    */
   UNKNOWN_PROPERTY: "UNKNOWN_PROPERTY",
   /**
-   * The XML reader met content it did not expect at this position and could not map to the model —
+   * The XML reader met content it did not expect at this position and could not map to the model,
    * non-whitespace character data on a FHIR element (FHIR elements carry values in the `value`
    * attribute, not as text, except the deferred narrative `<div>`), or a default namespace other
    * than the FHIR one. Warning severity: preserved-and-flagged, nothing rejected.
@@ -65,7 +65,7 @@ export type IssueSeverity = "warning" | "information";
  * A single value-free diagnostic accumulated during a lenient read.
  *
  * `expression` is a FHIRPath location into the document (e.g. `Bundle.entry[2].resource.ofType(Patient).name[0].given[1]`,
- * or a simpler `Patient.birthDate`) — it says *where* without echoing *what*. It never contains a
+ * or a simpler `Patient.birthDate`), it says *where* without echoing *what*. It never contains a
  * resource value, so an issue is safe to log.
  */
 export interface FhirIssue {
@@ -123,15 +123,15 @@ export const FATAL_CODES = {
   /**
    * A primitive value array and its `_`-sibling array have different lengths, so the null-padded
    * index alignment is broken and the reader cannot know which value each extension belongs to
-   * (cf. HAPI #5738). Fails closed — see the module doc.
+   * (cf. HAPI #5738). Fails closed, see the module doc.
    */
   PRIMITIVE_EXTENSION_MISALIGNED: "PRIMITIVE_EXTENSION_MISALIGNED",
   /**
    * JSON nested deeper than the reader's fixed bound. Well-formed but pathological input (a tower of
-   * `[[[[…]]]]` / `{"a":{"a":…}}`) is refused as a **DoS guard** — turning what would otherwise be a
+   * `[[[[…]]]]` / `{"a":{"a":…}}`) is refused as a **DoS guard**, turning what would otherwise be a
    * V8 stack overflow (`RangeError`, environment-dependent, untyped) into a typed, value-free fatal
    * carrying a byte `offset`. Mirrors the XML reader's `MAX_DEPTH_EXCEEDED` (roadmap §6 fuzzing: deep
-   * nesting must never crash/hang/OOM — always a typed error or a bounded rejection).
+   * nesting must never crash/hang/OOM, always a typed error or a bounded rejection).
    */
   MAX_DEPTH_EXCEEDED: "MAX_DEPTH_EXCEEDED",
 } as const;
@@ -142,7 +142,7 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
 /**
  * Thrown by the JSON reader on an unrecoverable structural failure. Carries the coded reason, a
  * FHIRPath `expression` location (for a misalignment) or an `offset` byte position (for malformed
- * JSON), and — by design — **no** slice of the offending input, because that slice could be PHI.
+ * JSON), and, by design, **no** slice of the offending input, because that slice could be PHI.
  *
  * @example
  * ```ts
@@ -165,7 +165,7 @@ export class FhirCodecError extends Error {
 
   /**
    * @param code - The fatal reason.
-   * @param message - A PHI-safe description — must not embed any input value.
+   * @param message - A PHI-safe description, must not embed any input value.
    * @param location - Either a FHIRPath `expression` or a byte `offset`.
    * @internal
    */

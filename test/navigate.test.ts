@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseResource, pathExists, resolvePath, isPrimitive } from "../src/index.js";
 import { nth } from "./_util.js";
 
-describe("resolvePath — bounded element-path navigation", () => {
+describe("resolvePath: bounded element-path navigation", () => {
   const { resource } = parseResource(
     JSON.stringify({
       resourceType: "Observation",

@@ -1,10 +1,10 @@
 /**
- * The safety readout — a never-droppable surfacing of a resource's modifier / status / negation
+ * The safety readout, a never-droppable surfacing of a resource's modifier / status / negation
  * elements (Phase 3). This is the read-side counterpart to the validator's fail-closed layer
  * ({@link ../validate/safety.js}).
  *
  * The roadmap's fail-safe rule (§4.8): the library "surfaces status / verification / clinical-status
- * / `doNotPerform` / `not-taken` / `not-done` prominently — any 'flatten/summary' helper carries them
+ * / `doNotPerform` / `not-taken` / `not-done` prominently, any 'flatten/summary' helper carries them
  * or refuses." {@link readSafety} is that carry: given any of the six safety resource types it pulls
  * every modifier element into one explicit structure, classifies the **negations** (so a positive
  * summary can never silently swallow a "refuted" / "not-taken" / "not-done" / "do-not-perform" /
@@ -55,31 +55,31 @@ function verificationSystemFor(rt: string | undefined): string | undefined {
 }
 
 /**
- * A classified negation — an explicit *negative* assertion that must never collapse into its positive
+ * A classified negation, an explicit *negative* assertion that must never collapse into its positive
  * on a summary or a round-trip. One value per distinct FHIR negation mechanism the phase covers.
  */
 export type NegationKind =
-  /** `verificationStatus = refuted` — asserted, after investigation, to be **not** present. */
+  /** `verificationStatus = refuted`, asserted, after investigation, to be **not** present. */
   | "refuted"
-  /** SNOMED CT `716186003` in `AllergyIntolerance.code` — a recorded "no known allergy". */
+  /** SNOMED CT `716186003` in `AllergyIntolerance.code`, a recorded "no known allergy". */
   | "no-known-allergy"
-  /** `MedicationRequest.doNotPerform = true` — an instruction to **not** give the medication. */
+  /** `MedicationRequest.doNotPerform = true`, an instruction to **not** give the medication. */
   | "do-not-perform"
-  /** `MedicationStatement.status = not-taken` — the medication was **not** taken. */
+  /** `MedicationStatement.status = not-taken`, the medication was **not** taken. */
   | "not-taken"
-  /** `Immunization.status = not-done` — the vaccine was **not** given. */
+  /** `Immunization.status = not-done`, the vaccine was **not** given. */
   | "not-done"
-  /** `entered-in-error` anywhere — the record is retracted, not data. */
+  /** `entered-in-error` anywhere, the record is retracted, not data. */
   | "entered-in-error";
 
 /**
  * The complete, value-free safety readout of a resource. Every modifier element the six safety
- * resource types can carry has a slot here, present or `undefined` — so a consumer building a summary
+ * resource types can carry has a slot here, present or `undefined`, so a consumer building a summary
  * reads them explicitly rather than forgetting one.
  *
  * **`negations` (and `retracted`) are the authoritative safety reads.** The single-code convenience
  * fields (`clinicalStatus` / `verificationStatus`) surface the *preferred*-system coding of a
- * `CodeableConcept` — on a multi-coding value whose standard coding is absent they fall back to the
+ * `CodeableConcept`, on a multi-coding value whose standard coding is absent they fall back to the
  * first coding, which may be a local/translation code. The classified `negations` are derived from
  * **all** codings under any system, so a refutation / retraction can never hide there. Read a safety
  * decision off `negations` / `retracted`, not off the raw status string.
@@ -95,20 +95,20 @@ export interface SafetyReadout {
   readonly verificationStatus: string | undefined;
   /** `MedicationRequest.doNotPerform`, when present. */
   readonly doNotPerform: boolean | undefined;
-  /** Whether the resource is marked `entered-in-error` (retracted, not data) — authoritative. */
+  /** Whether the resource is marked `entered-in-error` (retracted, not data), authoritative. */
   readonly retracted: boolean;
   /** Whether this is a recorded "no known allergy" (SNOMED `716186003`), not an allergy *to* it. */
   readonly noKnownAllergy: boolean;
-  /** Every negation the resource asserts (from all codings, any system) — the authoritative safety read. */
+  /** Every negation the resource asserts (from all codings, any system), the authoritative safety read. */
   readonly negations: readonly NegationKind[];
   /** FHIRPath locations of `modifierExtension`s this library does not understand (fail-closed). */
   readonly unhandledModifierExtensions: readonly string[];
-  /** `false` when an unhandled `modifierExtension` is present — the resource must not be flattened. */
+  /** `false` when an unhandled `modifierExtension` is present, the resource must not be flattened. */
   readonly safeToSummarize: boolean;
 }
 
 /**
- * Collect the FHIRPath locations of every `modifierExtension` whose URL this library cannot honor —
+ * Collect the FHIRPath locations of every `modifierExtension` whose URL this library cannot honor,
  * a deep walk of the whole resource, so a modifier nested in a backbone element or a contained
  * resource is caught too.
  *
@@ -194,7 +194,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
 
   const negations: NegationKind[] = [];
   if (retracted) negations.push(ENTERED_IN_ERROR);
-  // Detect `refuted` from *any* coding on verificationStatus, not the single surfaced code — a
+  // Detect `refuted` from *any* coding on verificationStatus, not the single surfaced code, a
   // CodeableConcept legitimately carries several codings (a local/translation coding alongside the
   // standard one), and `refuted` may not be first. Reading only the first coding would silently drop
   // the refutation and read the record as positive, the exact harm this layer exists to prevent.
@@ -223,7 +223,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
 /**
  * A refusal raised when a caller tries to flatten or summarize a resource that carries a
  * `modifierExtension` this library does not understand. FHIR's `?!` rule forbids ignoring an
- * unhandled modifier, so the safe move is to **refuse** — value-free, carrying only the locations.
+ * unhandled modifier, so the safe move is to **refuse**, value-free, carrying only the locations.
  *
  * @example
  * ```ts
@@ -265,7 +265,7 @@ export class FhirSafetyError extends Error {
  * ```ts
  * import { assertSafeToSummarize, parseResource } from "@cosyte/fhir";
  * const { resource } = parseResource('{"resourceType":"Condition","clinicalStatus":{}}');
- * assertSafeToSummarize(resource); // ok — no unhandled modifier
+ * assertSafeToSummarize(resource); // ok, no unhandled modifier
  * ```
  */
 export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): void {

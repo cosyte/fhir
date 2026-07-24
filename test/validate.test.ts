@@ -11,7 +11,7 @@ import {
   type ValidationCode,
 } from "../src/index.js";
 
-/** Parse then validate — the common path. */
+/** Parse then validate, the common path. */
 function check(
   json: string,
   options?: Parameters<typeof validateResource>[1],
@@ -39,7 +39,7 @@ const VITALS: ResourceSchema = {
   },
 };
 
-describe("validateResource — layer 1 (structure)", () => {
+describe("validateResource: layer 1 (structure)", () => {
   it("flags a resource with no resourceType and stops", () => {
     const result = check('{"id":"1"}');
     expect(codes(result)).toEqual(["RESOURCE_TYPE_UNKNOWN"]);
@@ -59,7 +59,7 @@ describe("validateResource — layer 1 (structure)", () => {
     expect(strict.valid).toBe(false);
   });
 
-  it("degrades safely on an unmodeled resource type — info, not false errors", () => {
+  it("degrades safely on an unmodeled resource type: info, not false errors", () => {
     const result = check('{"resourceType":"Device","serialNumber":"abc","status":"active"}');
     // No schema for Device → one informational note, and its own elements are NOT flagged unknown.
     expect(codes(result)).toEqual(["RESOURCE_NOT_MODELED"]);
@@ -84,7 +84,7 @@ describe("validateResource — layer 1 (structure)", () => {
   });
 });
 
-describe("validateResource — layer 2 (cardinality)", () => {
+describe("validateResource: layer 2 (cardinality)", () => {
   it("flags a missing required element", () => {
     const result = check('{"resourceType":"Vitals","note":["ok"]}', { schemas: [VITALS] });
     expect(codes(result)).toContain("CARDINALITY_MIN");
@@ -110,7 +110,7 @@ describe("validateResource — layer 2 (cardinality)", () => {
   });
 });
 
-describe("validateResource — layer 3 (value-domain)", () => {
+describe("validateResource: layer 3 (value-domain)", () => {
   it("flags a primitive that fails its datatype pattern", () => {
     const result = check('{"resourceType":"Patient","birthDate":"2013-13-40"}');
     expect(codes(result)).toEqual(["PRIMITIVE_INVALID"]);
@@ -145,19 +145,19 @@ describe("validateResource — layer 3 (value-domain)", () => {
 
   it("skips a metadata-only primitive (extension without a value)", () => {
     const result = check('{"resourceType":"Patient","birthDate":null,"_birthDate":{"id":"bd"}}');
-    // No value to lexically validate — must not produce a PRIMITIVE_INVALID.
+    // No value to lexically validate, must not produce a PRIMITIVE_INVALID.
     expect(codes(result)).not.toContain("PRIMITIVE_INVALID");
     expect(result.valid).toBe(true);
   });
 });
 
-describe("validateResource — choice[x]", () => {
+describe("validateResource: choice[x]", () => {
   it("resolves a choice variant and validates its chosen datatype", () => {
     const result = check('{"resourceType":"Patient","deceasedBoolean":true}');
     expect(result.issues).toEqual([]);
   });
 
-  it("flags an ambiguous choice once — not also as a spurious cardinality-max", () => {
+  it("flags an ambiguous choice once: not also as a spurious cardinality-max", () => {
     const result = check(
       '{"resourceType":"Patient","deceasedBoolean":true,"deceasedDateTime":"2020"}',
     );
@@ -186,7 +186,7 @@ describe("validateResource — choice[x]", () => {
   });
 });
 
-describe("validateResource — model edge cases and OperationOutcome", () => {
+describe("validateResource: model edge cases and OperationOutcome", () => {
   it("recurses into a nested list occurrence", () => {
     // Hand-build a model whose element value is a list-of-lists (defensive path in the walk).
     const resource = complex([

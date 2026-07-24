@@ -1,13 +1,13 @@
 /**
  * Medication **dose `Quantity`** surfacing (Phase 4). A prescribed or reported dose lives in
- * `Dosage.doseAndRate.dose[x]` — a choice of `doseQuantity` (an amount) or `doseRange`. The
+ * `Dosage.doseAndRate.dose[x]`, a choice of `doseQuantity` (an amount) or `doseRange`. The
  * `doseQuantity`'s UCUM unit is the same fidelity problem as an Observation value's (roadmap §4.4/§4.6):
  * the machine-actionable unit is the **`code`**, and a wrong or dropped dose unit is a direct
  * prescribing hazard. This module locates the dose quantities so they can be surfaced and UCUM-checked;
  * it **never** converts a dose unit.
  *
  * The `Dosage` list is `dosageInstruction` on `MedicationRequest` and `dosage` on
- * `MedicationStatement` — both are the `Dosage` datatype, so both are walked.
+ * `MedicationStatement`, both are the `Dosage` datatype, so both are walked.
  *
  * @packageDocumentation
  */
@@ -75,7 +75,7 @@ export function locateDoseQuantities(resource: FhirComplex, rt: string): Located
 }
 
 /**
- * Surface every medication **dose `Quantity`** as a {@link Quantity} — the coded UCUM unit kept
+ * Surface every medication **dose `Quantity`** as a {@link Quantity}, the coded UCUM unit kept
  * distinct from the display string, the value an exact decimal. Reads `MedicationRequest`
  * (`dosageInstruction`) and `MedicationStatement` (`dosage`).
  *

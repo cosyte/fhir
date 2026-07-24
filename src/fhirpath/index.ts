@@ -1,11 +1,11 @@
 /**
- * The bounded FHIRPath engine (Phase 7, ADR 0002) — lexer → parser → evaluator, plus the
+ * The bounded FHIRPath engine (Phase 7, ADR 0002), lexer → parser → evaluator, plus the
  * invariant-oriented {@link evaluateInvariant} entry point the validator uses.
  *
  * This is a **vendored, capped subset** of FHIRPath, not a general engine and not a runtime
  * dependency: it evaluates the `constraint.expression`s and discriminator-shaped paths the R4 /
  * US Core invariant set uses, and **refuses everything else** by raising
- * {@link ./errors.js UnsupportedFhirPathError}. The refusal is the feature — the validator turns it
+ * {@link ./errors.js UnsupportedFhirPathError}. The refusal is the feature, the validator turns it
  * into `INVARIANT_UNCHECKED` (roadmap §6 fail-safe: an expression the subset cannot evaluate is
  * reported unchecked, never silently passed).
  *
@@ -28,7 +28,7 @@ export type { FpColl, FpItem } from "./evaluate.js";
 export interface InvariantResult {
   /**
    * `true` when the bounded subset could not lex/parse/evaluate the expression. The caller reports
-   * this as `INVARIANT_UNCHECKED` — **the invariant is never treated as satisfied when unchecked**.
+   * this as `INVARIANT_UNCHECKED`, **the invariant is never treated as satisfied when unchecked**.
    */
   readonly unchecked: boolean;
   /** Whether the constraint is satisfied. Meaningful only when {@link unchecked} is `false`. */
@@ -39,8 +39,8 @@ export interface InvariantResult {
  * Evaluate one FHIRPath invariant `expression` against a focus node.
  *
  * The result is judged by {@link convertToBoolean} (empty → not satisfied), matching the reference
- * validator's coercion. **Fail-safe:** any {@link UnsupportedFhirPathError} — or any other evaluation
- * error — yields `{ unchecked: true, satisfied: false }`; the engine never reports a constraint
+ * validator's coercion. **Fail-safe:** any {@link UnsupportedFhirPathError}, or any other evaluation
+ * error, yields `{ unchecked: true, satisfied: false }`; the engine never reports a constraint
  * *satisfied* on a failure, so an unevaluable expression is surfaced as unchecked, never a false pass.
  *
  * @param expression - The FHIRPath constraint expression (e.g. `dataAbsentReason.empty() or value.empty()`).

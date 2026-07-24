@@ -1,5 +1,5 @@
 /**
- * The typed, unrecoverable fatals of the XML reader — and, above all, the **safety refusals** that
+ * The typed, unrecoverable fatals of the XML reader, and, above all, the **safety refusals** that
  * make the zero-dependency reader XXE- and billion-laughs-proof (roadmap §6).
  *
  * FHIR is transported as text, so the fuzz/attack surface of an XML codec is entity expansion and
@@ -7,19 +7,19 @@
  * constructs those attacks need, loudly and up front, rather than by trying to bound their blast
  * radius after the fact:
  *
- * - **No DTD.** A `<!DOCTYPE …>` declaration is the only place an XML document can *define* an entity
- *   — a nested internal entity (the billion-laughs / exponential-expansion DoS) or an external one
- *   (`SYSTEM "file:///…"` / a URL — the XXE information-disclosure and SSRF vector). The reader
+ * - **No DTD.** A `<!DOCTYPE …>` declaration is the only place an XML document can *define* an entity:
+ *   a nested internal entity (the billion-laughs / exponential-expansion DoS) or an external one
+ *   (`SYSTEM "file:///…"` / a URL, the XXE information-disclosure and SSRF vector). The reader
  *   refuses **any** DOCTYPE with {@link XML_FATAL_CODES.DTD_FORBIDDEN} before parsing a single
  *   element, so no entity is ever declared, and therefore none can be expanded or resolved.
  * - **No entities beyond the five predefined + numeric character references.** With DTDs refused, the
  *   only legal entity references are `&amp; &lt; &gt; &quot; &apos;` and `&#…;` / `&#x…;`. Any other
- *   `&name;` is, by construction, undefined — the reader refuses it with
+ *   `&name;` is, by construction, undefined, the reader refuses it with
  *   {@link XML_FATAL_CODES.UNDEFINED_ENTITY} rather than resolve, expand, or silently drop it. This
  *   is a second, independent guard: even a reference to an entity a (refused) DTD might have declared
  *   never resolves. Numeric character references do not nest, so no expansion bomb is possible.
  *
- * The reader never performs I/O and never resolves a URI, so there is no external fetch to disable —
+ * The reader never performs I/O and never resolves a URI, so there is no external fetch to disable,
  * the design simply gives it nothing to fetch. A pathologically deep element nesting is bounded by
  * {@link XML_FATAL_CODES.MAX_DEPTH_EXCEEDED} so adversarial input yields a typed error, never a stack
  * overflow.
@@ -45,10 +45,10 @@ export const XML_FATAL_CODES = {
   /**
    * An entity reference other than the five predefined (`&amp; &lt; &gt; &quot; &apos;`) or a
    * numeric character reference. Undefined by construction (DTDs are refused), so it is refused
-   * rather than resolved — never expanded, never fetched, never dropped.
+   * rather than resolved, never expanded, never fetched, never dropped.
    */
   UNDEFINED_ENTITY: "UNDEFINED_ENTITY",
-  /** Element nesting deeper than the reader's fixed bound — refused as a DoS guard, never a crash. */
+  /** Element nesting deeper than the reader's fixed bound, refused as a DoS guard, never a crash. */
   MAX_DEPTH_EXCEEDED: "MAX_DEPTH_EXCEEDED",
 } as const;
 
@@ -56,9 +56,9 @@ export const XML_FATAL_CODES = {
 export type XmlFatalCode = (typeof XML_FATAL_CODES)[keyof typeof XML_FATAL_CODES];
 
 /**
- * Thrown by the XML reader on an unrecoverable failure — a well-formedness error, a **refused** DTD
+ * Thrown by the XML reader on an unrecoverable failure, a well-formedness error, a **refused** DTD
  * or entity (the safety refusals), or nesting past the depth bound. Carries the coded reason and a
- * byte `offset`, and — by design — **no** slice of the offending input, because that slice could be
+ * byte `offset`, and, by design, **no** slice of the offending input, because that slice could be
  * PHI (roadmap §7).
  *
  * @example
@@ -80,7 +80,7 @@ export class FhirXmlError extends Error {
 
   /**
    * @param code - The fatal reason.
-   * @param message - A PHI-safe description — must not embed any input value.
+   * @param message - A PHI-safe description, must not embed any input value.
    * @param offset - The byte offset where the failure was detected.
    * @internal
    */

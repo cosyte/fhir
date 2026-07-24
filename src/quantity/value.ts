@@ -1,5 +1,5 @@
 /**
- * The `Observation.value[x]` choice — typed by the **present** variant, never assumed (Phase 4).
+ * The `Observation.value[x]` choice, typed by the **present** variant, never assumed (Phase 4).
  *
  * `Observation.value[x]` is an **11-way choice** (`valueQuantity`, `valueCodeableConcept`,
  * `valueString`, `valueBoolean`, `valueInteger`, `valueRange`, `valueRatio`, `valueSampledData`,
@@ -11,7 +11,7 @@
  * caveat), so a blood-pressure panel's systolic/diastolic components discriminate too.
  *
  * `interpretation` (the H/L/HH abnormal flags) and `referenceRange` (population-qualified) are
- * surfaced here too — Phase 4 preserves and exposes them; it never *computes* an abnormal flag from a
+ * surfaced here too, Phase 4 preserves and exposes them; it never *computes* an abnormal flag from a
  * value and a range (roadmap §4.6 known limitations).
  *
  * @packageDocumentation
@@ -47,7 +47,7 @@ export type ObservationValueType = (typeof OBSERVATION_VALUE_TYPES)[number];
  * The discriminated reading of an `Observation.value[x]` (or a `component.value[x]`). `type` names the
  * variant that is present; `quantity` is populated **only** when `type === "Quantity"`, so a caller
  * that wants a number must check the type first. `ambiguous` lists any *additional* variants also
- * present — a `value[x]` is a `0..1` choice, so a non-empty `ambiguous` is a structural defect (the
+ * present, a `value[x]` is a `0..1` choice, so a non-empty `ambiguous` is a structural defect (the
  * kind the structural validator reports as `CHOICE_AMBIGUOUS` once Observation is a modeled schema,
  * Phase 6). This reader surfaces it here regardless, so the extra variant is never silently dropped.
  */
@@ -88,7 +88,7 @@ function presentValues(node: FhirComplex): { type: ObservationValueType; node: F
  * import { parseResource, readObservationValue } from "@cosyte/fhir";
  * const { resource } = parseResource('{"resourceType":"Observation","valueString":"POSITIVE"}');
  * const v = readObservationValue(resource);
- * v?.type;     // "String" — NOT a Quantity; reading it as a number would be wrong
+ * v?.type;     // "String", NOT a Quantity; reading it as a number would be wrong
  * v?.quantity; // undefined
  * ```
  */
@@ -106,18 +106,18 @@ export function readObservationValue(node: FhirComplex): ObservationValue | unde
 
 /** A single `Observation.referenceRange` entry, surfaced (never used to compute an abnormal flag). */
 export interface ObservationReferenceRange {
-  /** `referenceRange.low` — the inclusive lower bound, when present. */
+  /** `referenceRange.low`, the inclusive lower bound, when present. */
   readonly low: Quantity | undefined;
-  /** `referenceRange.high` — the inclusive upper bound, when present. */
+  /** `referenceRange.high`, the inclusive upper bound, when present. */
   readonly high: Quantity | undefined;
   /** `referenceRange.type` codings (e.g. `normal`, `treatment`), when present. */
   readonly type: readonly Coded[];
-  /** `referenceRange.text` — a free-text range when the bounds are not machine-comparable. */
+  /** `referenceRange.text`, a free-text range when the bounds are not machine-comparable. */
   readonly text: string | undefined;
 }
 
 /**
- * Surface every `Observation.referenceRange` entry — population-qualified bounds preserved as
+ * Surface every `Observation.referenceRange` entry, population-qualified bounds preserved as
  * {@link Quantity}s, not evaluated. A reference range is meaningful only alongside its qualifiers
  * (`appliesTo`, `age`), which are preserved in the model; this reader exposes the bounds and type.
  *
@@ -150,7 +150,7 @@ export function readReferenceRanges(observation: FhirComplex): ObservationRefere
 }
 
 /**
- * Surface the `Observation.interpretation` codings (the abnormal flags — H/L/HH/LL/A/N…). Preserved
+ * Surface the `Observation.interpretation` codings (the abnormal flags, H/L/HH/LL/A/N…). Preserved
  * and exposed; never derived from a value and a reference range (Phase 4 does not compute).
  *
  * @param observation - An `Observation` complex node.

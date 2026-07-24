@@ -25,7 +25,7 @@ function parse(obj: unknown) {
   return parseResource(JSON.stringify(obj)).resource;
 }
 
-describe("loadStructureDefinition — remaining branches", () => {
+describe("loadStructureDefinition: remaining branches", () => {
   it("reads type profiles, a strength-only binding, and drops an unknown derivation / bad max / non-int min", () => {
     const sd = loadSd({
       resourceType: "StructureDefinition",
@@ -90,7 +90,7 @@ describe("loadStructureDefinition — remaining branches", () => {
   });
 });
 
-describe("generateSnapshot — mergeElement overrides every stated field", () => {
+describe("generateSnapshot: mergeElement overrides every stated field", () => {
   it("overlays max, mustSupport, slicing, type, fixed, pattern, and binding onto a matched base element", () => {
     const base = loadSd({
       resourceType: "StructureDefinition",
@@ -223,7 +223,7 @@ describe("generateSnapshot — mergeElement overrides every stated field", () =>
   });
 });
 
-describe("navigate + slicing — remaining branches", () => {
+describe("navigate + slicing: remaining branches", () => {
   it("resolvePath returns nothing when stepping into a non-complex leaf", () => {
     const { resource } = parseResource('{"resourceType":"Patient","active":true}');
     expect(resolvePath(resource, "active.value")).toEqual([]);
@@ -319,7 +319,7 @@ describe("navigate + slicing — remaining branches", () => {
   });
 });
 
-describe("validate-profile — remaining branches", () => {
+describe("validate-profile: remaining branches", () => {
   it("indexes the FHIRPath location of a mismatch only on a repeating element", () => {
     const profile = loadSd({
       resourceType: "StructureDefinition",
@@ -402,7 +402,7 @@ describe("validate-profile — remaining branches", () => {
         ],
       },
     });
-    // Two vital-signs occurrences (slice max 1 exceeded) plus one unmatched — open rules allow the unmatched.
+    // Two vital-signs occurrences (slice max 1 exceeded) plus one unmatched, open rules allow the unmatched.
     const obs = parse({
       resourceType: "Observation",
       category: [

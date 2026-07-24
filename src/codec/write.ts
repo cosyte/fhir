@@ -1,7 +1,7 @@
 /**
  * The JSON write path: the {@link FhirNode} model → spec-clean FHIR JSON text.
  *
- * The writer is the conservative half of Postel's Law — it always emits well-formed, canonical FHIR
+ * The writer is the conservative half of Postel's Law, it always emits well-formed, canonical FHIR
  * JSON. Two details are load-bearing for the no-data-loss guarantee (json.html):
  *
  * - **Decimals are emitted from their exact lexical text** ({@link FhirDecimal.raw}), unquoted, so a
@@ -13,7 +13,7 @@
  * The one canonical-ordering rule applied on emit is hoisting `resourceType` to the front of a
  * resource object; every other property keeps the model's insertion order, so a spec-clean document
  * round-trips byte-for-byte. String values and object keys are escaped via `JSON.stringify` (correct
- * and canonical for strings — only numbers need the raw-text treatment).
+ * and canonical for strings, only numbers need the raw-text treatment).
  *
  * @packageDocumentation
  */
@@ -32,7 +32,7 @@ function emitScalar(value: PrimitiveValue | undefined): string {
   if (value === undefined) return "null";
   if (typeof value === "string") return JSON.stringify(value);
   if (typeof value === "boolean") return value ? "true" : "false";
-  // FhirDecimal — emit its exact lexical text, unquoted. This is the whole point of ADR 0001.
+  // FhirDecimal, emit its exact lexical text, unquoted. This is the whole point of ADR 0001.
   return value.raw;
 }
 
@@ -77,7 +77,7 @@ function emitListProperty(name: string, node: FhirList): string[] {
   const anyMeta = primitives.some(hasMeta);
   const entries: string[] = [];
   // Emit the value array only when at least one item has a value. When every value is absent (an
-  // extension-only repeating primitive) the value array would be all-`null` — non-canonical — so we
+  // extension-only repeating primitive) the value array would be all-`null`, non-canonical, so we
   // emit the `_`-sibling array alone, which round-trips to the same value-absent list.
   if (anyValue) {
     const values = primitives.map((item) => emitScalar(item.value)).join(",");
@@ -134,7 +134,7 @@ function emitComplex(node: FhirComplex): string {
  * Serialize a resource (or any {@link FhirComplex}) to spec-clean, compact FHIR JSON text.
  *
  * @param node - The resource model to serialize.
- * @returns Canonical JSON text — decimals byte-exact, primitive metadata split back into
+ * @returns Canonical JSON text, decimals byte-exact, primitive metadata split back into
  *   `_`-siblings with null-padded array alignment, `resourceType` first.
  * @example
  * ```ts

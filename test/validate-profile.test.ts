@@ -23,7 +23,7 @@ function codes(issues: readonly ValidationIssue[]): string[] {
   return issues.map((i) => i.code);
 }
 
-/** A US-Core-shaped AllergyIntolerance profile (snapshot form) — must-support + required elements. */
+/** A US-Core-shaped AllergyIntolerance profile (snapshot form), must-support + required elements. */
 const allergyProfile = loadSd({
   resourceType: "StructureDefinition",
   url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-allergyintolerance",
@@ -65,7 +65,7 @@ const allergyProfile = loadSd({
   },
 });
 
-describe("collectProfileIssues — must-support as a system obligation", () => {
+describe("collectProfileIssues: must-support as a system obligation", () => {
   it("flags an absent must-support element as information, never an error", () => {
     const allergy = parse({
       resourceType: "AllergyIntolerance",
@@ -113,7 +113,7 @@ describe("collectProfileIssues — must-support as a system obligation", () => {
   });
 });
 
-describe("collectProfileIssues — cardinality is per parent, not root-flattened", () => {
+describe("collectProfileIssues: cardinality is per parent, not root-flattened", () => {
   // A backbone (0..*) with a required (1..*/1..1) child: cardinality is relative to the parent.
   const nested = loadSd({
     resourceType: "StructureDefinition",
@@ -160,7 +160,7 @@ describe("collectProfileIssues — cardinality is per parent, not root-flattened
   });
 });
 
-describe("collectProfileIssues — fixed[x] and pattern[x]", () => {
+describe("collectProfileIssues: fixed[x] and pattern[x]", () => {
   const fixedStatus = loadSd({
     resourceType: "StructureDefinition",
     url: "http://x/fixed-status",
@@ -224,7 +224,7 @@ describe("collectProfileIssues — fixed[x] and pattern[x]", () => {
   });
 });
 
-describe("collectProfileIssues — slicing", () => {
+describe("collectProfileIssues: slicing", () => {
   const vitalsProfile = loadSd({
     resourceType: "StructureDefinition",
     url: "http://x/vitals",
@@ -318,7 +318,7 @@ describe("collectProfileIssues — slicing", () => {
   });
 });
 
-describe("collectProfileVersionIssues — meta.profile version pins", () => {
+describe("collectProfileVersionIssues: meta.profile version pins", () => {
   it("flags a declared canonical|version whose canonical is supplied at a different version", () => {
     const obs = parse({
       resourceType: "AllergyIntolerance",
@@ -367,10 +367,10 @@ describe("collectProfileVersionIssues — meta.profile version pins", () => {
   });
 });
 
-describe("validateResource — Phase 6 profile layer wiring", () => {
+describe("validateResource: Phase 6 profile layer wiring", () => {
   it("runs the profile layer only when profiles are supplied", () => {
     // clinicalStatus present (satisfies the Phase-3 ait-1 invariant); verificationStatus is the one
-    // absent must-support element — an info finding that must not push the resource invalid.
+    // absent must-support element, an info finding that must not push the resource invalid.
     const allergy = parse({
       resourceType: "AllergyIntolerance",
       clinicalStatus: { coding: [{ code: "active" }] },

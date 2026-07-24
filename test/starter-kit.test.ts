@@ -29,7 +29,7 @@ const CLEAN_VITAL = JSON.stringify({
   code: { coding: [{ system: "http://loinc.org", code: "8867-4" }] },
 });
 
-/** A synthetic Observation whose only category is laboratory — the required VSCat slice is absent. */
+/** A synthetic Observation whose only category is laboratory, the required VSCat slice is absent. */
 const LAB_CATEGORY = JSON.stringify({
   resourceType: "Observation",
   status: "final",
@@ -47,7 +47,7 @@ const LAB_CATEGORY = JSON.stringify({
 });
 
 /**
- * A synthetic vital-sign Observation that *also* carries a laboratory category — a conformant instance
+ * A synthetic vital-sign Observation that *also* carries a laboratory category, a conformant instance
  * the sliced (not bare-pattern) profile must accept. A bare pattern on the repeating element would
  * wrongly reject the extra category; the VSCat slice + open slicing allows it.
  */
@@ -77,7 +77,7 @@ const MULTI_CATEGORY = JSON.stringify({
 
 describe("profile starter kit", () => {
   it("is authored through the public defineProfile path (dogfood check)", () => {
-    // Re-running defineProfile against a starter's own reconstructed spec yields the same object —
+    // Re-running defineProfile against a starter's own reconstructed spec yields the same object,
     // i.e. a starter is nothing more than a defineProfile call, no privileged internal builder.
     for (const p of STARTER_PROFILES) {
       expect(p.url.startsWith(STARTER_PROFILE_BASE_URL)).toBe(true);
@@ -145,7 +145,7 @@ describe("profile starter kit", () => {
 
   it("treats a missing must-support identifier field as information, never an error", () => {
     // A Patient with an identifier that carries a value but no system: `identifier.system` is
-    // must-support-absent (information — the load-bearing rule) and cardinality-min (error).
+    // must-support-absent (information, the load-bearing rule) and cardinality-min (error).
     const { resource } = parseResource(
       JSON.stringify({
         resourceType: "Patient",

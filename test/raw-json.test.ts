@@ -9,7 +9,7 @@ function expectTag<T extends RawJson["t"]>(node: RawJson, tag: T): Extract<RawJs
   return node as Extract<RawJson, { t: T }>;
 }
 
-describe("readRawJson — precision-preserving JSON reader", () => {
+describe("readRawJson: precision-preserving JSON reader", () => {
   it("keeps number literals as exact source text", () => {
     const obj = expectTag(readRawJson('{"a":0.010,"b":1e3,"c":-42}'), "obj");
     expect(expectTag(nth(obj.members, 0).value, "num").raw).toBe("0.010");

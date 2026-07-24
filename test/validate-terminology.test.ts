@@ -40,7 +40,7 @@ describe("content-free system checks (no terminology service needed)", () => {
     expect(result.valid).toBe(true);
   });
 
-  it("passes an RxNorm-coded allergy substance (the other expected system — multi-system accepted)", () => {
+  it("passes an RxNorm-coded allergy substance (the other expected system: multi-system accepted)", () => {
     const result = check(
       '{"resourceType":"AllergyIntolerance","clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
         '"code":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"7980"}]}}',
@@ -68,11 +68,11 @@ describe("content-free system checks (no terminology service needed)", () => {
     expect(finding?.severity).toBe("warning");
     expect(finding?.type).toBe("code-invalid");
     expect(finding?.expression).toBe("AllergyIntolerance.code.coding[0].system");
-    // A warning never flips validity — an extensible binding may use another system if justified.
+    // A warning never flips validity, an extensible binding may use another system if justified.
     expect(result.valid).toBe(true);
   });
 
-  it("notes (information) an UNKNOWN system — a local system is not a defect", () => {
+  it("notes (information) an UNKNOWN system: a local system is not a defect", () => {
     const result = check(
       '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
         '"medicationCodeableConcept":{"coding":[{"system":"http://example.org/local-drugs","code":"XYZ"}]}}',
@@ -185,7 +185,7 @@ describe("membership checks (terminology service supplied)", () => {
     expect(result.valid).toBe(true);
   });
 
-  it("degrades on an 'unknown' service answer — no finding (never guess)", () => {
+  it("degrades on an 'unknown' service answer: no finding (never guess)", () => {
     const result = check(
       '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
         '"medicationCodeableConcept":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"9999999"}]}}',
