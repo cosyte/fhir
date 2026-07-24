@@ -3,7 +3,7 @@
 This file logs every `--allow-fixture <path>` bypass invocation of
 `scripts/phi-scan.ts`. The scanner refuses to honor a `--allow-fixture <path>`
 flag UNLESS this file contains an entry referencing the same path. The committed
-log is intentionally annoying — it discourages bypass and creates an audit
+log is intentionally annoying: it discourages bypass and creates an audit
 trail. Prefer extending `scripts/phi-allow-list.txt` (a token-level, reviewed
 declaration) over a whole-file bypass.
 
@@ -11,12 +11,12 @@ declaration) over a whole-file bypass.
 
 `scripts/phi-scan.ts` is FHIR-shape-aware. It parses each synthetic fixture and
 inspects only the elements that actually carry each PHI category, keyed by the
-FHIR element name — not a blind text regex, which would trip on coded values and
+FHIR element name, not a blind text regex, which would trip on coded values and
 resource labels. It runs the structured scan on files under `test/__fixtures__/`
 by wire-format extension (`.json`, `.xml`, `.ndjson`); `src/` gets a conservative
 dashed-SSN + email pass only, so a JSDoc `@example` embedding a
 `{"resourceType":"Patient",…}` snippet with synthetic names is never parsed as a
-resource. `test/*.ts` is not walked at all — the PHI-leak suite ships a sentinel
+resource. `test/*.ts` is not walked at all: the PHI-leak suite ships a sentinel
 battery of deliberately PHI-shaped strings, and scanning it would flag the very
 sentinels that exist to be flagged.
 
@@ -24,7 +24,7 @@ A key distinction keeps the name detector honest: FHIR `name` is a **HumanName**
 (object / array) only on Patient / Practitioner / RelatedPerson / Person and the
 `contact` backbone; on Organization / Location / StructureDefinition it is a
 plain **string** resource label. The scanner name-scans only a HumanName
-object/array — a string `name` is skipped, so `Organization.name`
+object/array: a string `name` is skipped, so `Organization.name`
 ("Good Health Clinic") never false-flags. The walk recurses into `contained`,
 `entry.resource`, and every `value[x]`, so a name nested in a contained resource
 or a Bundle entry is still reached.
@@ -41,12 +41,12 @@ or a Bundle entry is still reached.
 ## Documented limitations
 
 - **Free-text PHI** in an opaque `Narrative.div` or an `Annotation.text` is
-  covered only by the cross-cutting dashed-SSN + email pass — a bare name in
+  covered only by the cross-cutting dashed-SSN + email pass: a bare name in
   narrative prose is not caught structurally (the same limitation the HL7 scanner
   documents for `OBX-5` / `NTE` free text). Keep narrative synthetic.
 - **MRN detection** is deliberately limited to the 9-digit (SSN-strength) shape;
   short (6–8 digit) synthetic MRNs are common and numeric-noisy in FHIR, so they
-  are not gated — declare a realistic MRN in the `ID` allow-list if a fixture
+  are not gated. Declare a realistic MRN in the `ID` allow-list if a fixture
   needs one, or prefix it (`MRN-…`).
 - The **XML** pass is regex-based over `<element value="…"/>` pairs (tolerant of
   the malformed fragment a leaked document arrives as); it does not build a DOM.

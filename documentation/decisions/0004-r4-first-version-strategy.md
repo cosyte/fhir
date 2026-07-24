@@ -1,4 +1,4 @@
-# 0004 — Version strategy: R4-first (`4.0.1`), R5 / DSTU2 read-tolerance only
+# 0004. Version strategy: R4-first (`4.0.1`), R5 / DSTU2 read-tolerance only
 
 - **Status:** Accepted
 - **Date:** 2026-07-15
@@ -28,13 +28,13 @@ up in real integrations.
 
 ## Decision
 
-**R4 `4.0.1` is the first-class, fully-modeled version** — the version the model, JSON codec,
+**R4 `4.0.1` is the first-class, fully-modeled version**: the version the model, JSON codec,
 validation, and profiles (US Core) target. **R5 `5.0.0` and DSTU2 `1.0.2` get read-tolerance
 only**, not full modeling/validation/emit.
 
 - **R4 (`4.0.1`):** full read + write + validation + US Core profiles. The default and the certified
   target.
-- **R5 (`5.0.0`) and DSTU2 (`1.0.2`):** the reader ingests them leniently (Postel's Law) —
+- **R5 (`5.0.0`) and DSTU2 (`1.0.2`):** the reader ingests them leniently (Postel's Law):
   version-detected, structurally parsed, unknown/version-specific fields **preserved and flagged**,
   not fully validated and not emitted. Read-tolerance means "don't lose data and don't lie," not
   "certified support."
@@ -44,11 +44,11 @@ only**, not full modeling/validation/emit.
 
 ## Consequences
 
-- **Effort concentrates on the market that exists** — R4 + US Core + SMART, the ONC-certified
-  surface — instead of being spread across five versions.
+- **Effort concentrates on the market that exists** (R4 + US Core + SMART, the ONC-certified
+  surface) instead of being spread across five versions.
 - **Legacy and next-gen ingest still work** at the read-tolerant level: a DSTU2 resource from an
   older Epic endpoint or an R5 resource is parsed and preserved (flagged as non-first-class) rather
-  than rejected — important for real integration feeds.
+  than rejected, important for real integration feeds.
 - **Read-tolerance has a hard honesty rule:** a version we don't fully model is never silently
   validated as if it were R4. Unmodeled version-specific content is preserved and marked, so a
   consumer is never told a resource is "valid" against rules that don't apply to it.
