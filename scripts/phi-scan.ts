@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 /**
- * `@cosyte/fhir` PHI scanner — the CI / pre-commit half of the PHI commit-gate.
+ * `@cosyte/fhir` PHI scanner, the CI / pre-commit half of the PHI commit-gate.
  *
- * Pure Node. Zero runtime deps (it does NOT import the package's own codec — a
+ * Pure Node. Zero runtime deps (it does NOT import the package's own codec, a
  * commit gate must run without a build and must tolerate the malformed /
  * fragmentary document a real leaked resource arrives as, which the strict codec
  * would reject). Walks the synthetic FHIR test fixtures (`test/__fixtures__/`,
@@ -19,13 +19,13 @@
  * declaration that a fixture's identifiers are fake. Any realistic-PHI-shaped
  * token not covered by the allow-list is a hit. Adding a new synthetic fixture
  * therefore means either reusing known-synthetic tokens or consciously extending
- * the allow-list — a reviewed act, never silent.
+ * the allow-list, a reviewed act, never silent.
  *
  * Detection is FHIR-shape-aware, NOT a blind text regex: the scanner parses each
  * resource (JSON / NDJSON) or scans the element/value-attribute pairs (XML) and
  * inspects only the elements that actually carry each PHI category, keyed by the
  * FHIR element name (`name` HumanName, `birthDate`, `telecom`, `address`,
- * `identifier`). That is deliberate — a `name` that is a plain string
+ * `identifier`). That is deliberate, a `name` that is a plain string
  * (`Organization.name`, `StructureDefinition.name`) is a resource label, not a
  * person, and is never name-scanned; only a HumanName object/array is. See
  * `phi-scan-overrides.md` for the category → element map and the limitations.
@@ -57,7 +57,7 @@ const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
 
 // Roots walked in "all" mode. `test/__fixtures__` gets the full FHIR-aware scan;
 // `src` gets a conservative text pass (dashed-SSN + non-test email only) because
-// it is hand-written code, not data — JSDoc `@example` FHIR snippets carry
+// it is hand-written code, not data, JSDoc `@example` FHIR snippets carry
 // synthetic names / ids that must not trip the structured detectors. `test/*.ts`
 // is deliberately NOT walked: the PHI-leak suite ships a sentinel battery of
 // deliberately PHI-shaped strings to prove the redaction contract, and scanning
@@ -66,7 +66,7 @@ const FIXTURE_ROOT = join(REPO_ROOT, "test", "__fixtures__");
 const SRC_ROOT = join(REPO_ROOT, "src");
 
 // Name tokens that are honorific / degree / suffix codes, never a person's
-// identifying name — extracted alongside real name tokens and skipped.
+// identifying name, extracted alongside real name tokens and skipped.
 const NAME_NOISE_TOKENS = new Set<string>([
   "MD",
   "DO",
@@ -171,7 +171,7 @@ function parseArgs(argv: string[]): Args {
   }
 
   // An `--allow-fixture` path is a *subtractive* acknowledgement on a broader
-  // scan, never a scan target on its own — so it also seeds the positional path
+  // scan, never a scan target on its own, so it also seeds the positional path
   // set. That makes `--allow-fixture X` mean "scan X, but allow it" (proving the
   // override gate actually subtracts a scanned target) instead of a silent no-op.
   const scanPaths = paths.length > 0 ? paths : [...allowFixtures];
@@ -310,7 +310,7 @@ function gitIgnored(paths: string[]): Set<string> {
   const ignored = new Set<string>();
   if (paths.length === 0) return ignored;
   try {
-    // SECURITY: array-form execFileSync, no shell. Default (Buffer) encoding —
+    // SECURITY: array-form execFileSync, no shell. Default (Buffer) encoding,
     // `encoding: "buffer"` with `input` is rejected by Node.
     const out = execFileSync("git", ["check-ignore", "--stdin", "-z"], {
       input: paths.map(normalizePath).join("\0"),
@@ -320,7 +320,7 @@ function gitIgnored(paths: string[]): Set<string> {
       if (p.length > 0) ignored.add(p);
     }
   } catch {
-    // `git check-ignore` exits 1 when nothing matches — treat as none ignored.
+    // `git check-ignore` exits 1 when nothing matches, treat as none ignored.
   }
   return ignored;
 }
@@ -388,7 +388,7 @@ function nameTokens(value: string): string[] {
   for (const raw of value.split(/[^\p{L}]+/u)) {
     if (raw.length === 0) continue;
     if (!/\p{L}/u.test(raw)) continue;
-    // A single Latin letter is a middle initial — not identifying. A single CJK
+    // A single Latin letter is a middle initial, not identifying. A single CJK
     // ideograph / kana / hangul IS a name (Chinese/Korean surnames are 1 char).
     const isCjk = /[぀-ヿ㐀-鿿가-힯]/u.test(raw);
     if (raw.length < 2 && !isCjk) continue;
@@ -464,7 +464,7 @@ function checkAddressLine(
   }
 }
 
-/** A ContactPoint.value or Identifier.value — phone / email / SSN shape checks. */
+/** A ContactPoint.value or Identifier.value, phone / email / SSN shape checks. */
 function checkContactValue(
   path: string,
   location: string,
@@ -548,7 +548,7 @@ function scanHumanName(node: unknown, path: string, location: string, allow: All
       if (typeof g === "string") checkNameString(path, `${location}.given`, g, allow, hits);
     }
   }
-  // prefix / suffix are honorifics / generational suffixes — not scanned.
+  // prefix / suffix are honorifics / generational suffixes, not scanned.
 }
 
 function scanTelecom(node: unknown, path: string, location: string, allow: AllowList, hits: Hit[]): void {
@@ -592,7 +592,7 @@ function scanIdentifier(node: unknown, path: string, location: string, allow: Al
  * Walk the parsed resource. Known PHI-bearing element keys are dispatched to
  * their category detector; every value is then recursed into so a nested
  * resource (`contained`, `entry.resource`, an extension's `value[x]`) is reached.
- * The dispatch keys are never recursed *as* their category twice — the generic
+ * The dispatch keys are never recursed *as* their category twice, the generic
  * recursion into e.g. a HumanName object visits `family` / `given` as bare
  * strings, which are not dispatch keys.
  */
@@ -715,7 +715,7 @@ function scanXmlText(target: Target, text: string, allow: AllowList, hits: Hit[]
 /**
  * A file gets the full structured FHIR scan only when it is fixture-like (under
  * `test/__fixtures__/`) with a FHIR wire-format extension. Hand-written `src/`
- * code — even a `.ts` file embedding a `{"resourceType":"Patient",…}` example —
+ * code, even a `.ts` file embedding a `{"resourceType":"Patient",…}` example,
  * gets the conservative dashed-SSN + email pass instead, because a JSDoc
  * `@example` carries synthetic names that must not trip the structured detectors.
  */
@@ -738,7 +738,7 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
     scanJsonText(target, text, allow, hits);
   } else {
     // Non-fixture target (hand-written src, or a non-FHIR fixture file):
-    // conservative shape pass only — no structured model to lean on.
+    // conservative shape pass only, no structured model to lean on.
     scanCommonShapes(target.path, text, allow, hits);
   }
 }
@@ -749,7 +749,7 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
 
 function report(hits: Hit[]): void {
   if (hits.length === 0) {
-    process.stdout.write("[phi-scan] OK — no hits\n");
+    process.stdout.write("[phi-scan] OK, no hits\n");
     return;
   }
   const byPath = new Map<string, Hit[]>();

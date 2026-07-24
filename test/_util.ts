@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 
 /**
- * Assert a value is present and return it narrowed — a lint-clean stand-in for the non-null
+ * Assert a value is present and return it narrowed, a lint-clean stand-in for the non-null
  * assertion operator (`!`), which the shared ESLint config forbids. Use for array/`Map` reads under
  * `noUncheckedIndexedAccess` where the test logically knows the element exists.
  */

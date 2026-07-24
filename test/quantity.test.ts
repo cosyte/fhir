@@ -29,7 +29,7 @@ function obs(body: Record<string, unknown>): ReturnType<typeof parseResource>["r
   return parseResource(JSON.stringify({ resourceType: "Observation", ...body })).resource;
 }
 
-describe("readObservationValue — the 11-way value[x] discrimination (never assume Quantity)", () => {
+describe("readObservationValue: the 11-way value[x] discrimination (never assume Quantity)", () => {
   it("exposes exactly the eleven R4 value[x] variants, in declared order", () => {
     expect(OBSERVATION_VALUE_TYPES).toEqual([
       "Quantity",
@@ -106,7 +106,7 @@ describe("readObservationValue — the 11-way value[x] discrimination (never ass
   });
 });
 
-describe("readQuantity — the coded UCUM unit is distinct from the display string", () => {
+describe("readQuantity: the coded UCUM unit is distinct from the display string", () => {
   it("keeps code and unit separate and the value as an exact decimal", () => {
     const q = readQuantity(
       parseResource(
@@ -116,7 +116,7 @@ describe("readQuantity — the coded UCUM unit is distinct from the display stri
     expect(q?.unit).toBe("units");
     expect(q?.code).toBe("U");
     expect(q?.system).toBe("http://unitsofmeasure.org");
-    // Trailing-zero precision preserved (ADR 0001 — never through a JS number).
+    // Trailing-zero precision preserved (ADR 0001, never through a JS number).
     expect(q?.value?.toString()).toBe("0.010");
   });
 
@@ -144,7 +144,7 @@ describe("readQuantity — the coded UCUM unit is distinct from the display stri
   });
 });
 
-describe("validateUcumShape — structural (case/brackets), never membership", () => {
+describe("validateUcumShape: structural (case/brackets), never membership", () => {
   it("accepts well-formed UCUM codes including brackets, slashes, and annotations", () => {
     for (const code of [
       "mm[Hg]",
@@ -167,7 +167,7 @@ describe("validateUcumShape — structural (case/brackets), never membership", (
     }
   });
 
-  it("is case-sensitive-preserving — it does not normalize, it only checks shape", () => {
+  it("is case-sensitive-preserving: it does not normalize, it only checks shape", () => {
     // Both are shape-valid; distinguishing Cel from a wrong-case variant is the caller's unit check.
     expect(validateUcumShape("Cel")).toBe("ok");
     expect(validateUcumShape("cel")).toBe("ok");
@@ -225,7 +225,7 @@ describe("interpretation & referenceRange are surfaced and preserved (not evalua
   });
 });
 
-describe("readMedicationDoses — dose Quantity surfaced with its coded unit", () => {
+describe("readMedicationDoses: dose Quantity surfaced with its coded unit", () => {
   it("reads MedicationRequest dosageInstruction doseQuantity", () => {
     const rx = load("medicationrequest-dose.json");
     const doses = readMedicationDoses(rx, resourceType(rx));

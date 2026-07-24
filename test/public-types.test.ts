@@ -1,5 +1,5 @@
 /**
- * FHIR-P11 type-level tier (roadmap Phase 11 — "type-level (`expect-type`) tests on the public
+ * FHIR-P11 type-level tier (roadmap Phase 11, "type-level (`expect-type`) tests on the public
  * surface").
  *
  * The public API's *types* are part of its contract: the discriminated unions a consumer switches on
@@ -53,7 +53,7 @@ describe("public types: the codec surface", () => {
     expectTypeOf<ReadResult["issues"]>().toEqualTypeOf<readonly FhirIssue[]>();
   });
 
-  it("FhirIssue is exactly { code; severity; expression } — a location, never a value", () => {
+  it("FhirIssue is exactly { code; severity; expression }: a location, never a value", () => {
     expectTypeOf<FhirIssue>().toEqualTypeOf<{
       readonly code: IssueCode;
       readonly severity: IssueSeverity;
@@ -69,8 +69,8 @@ describe("public types: the codec surface", () => {
   });
 });
 
-describe("public types: precision preservation (ADR 0001 — never a JS number)", () => {
-  it("PrimitiveValue is string | boolean | FhirDecimal — a decimal is never a `number`", () => {
+describe("public types: precision preservation (ADR 0001, never a JS number)", () => {
+  it("PrimitiveValue is string | boolean | FhirDecimal: a decimal is never a `number`", () => {
     expectTypeOf<PrimitiveValue>().toEqualTypeOf<string | boolean | FhirDecimal>();
     // The load-bearing negative: a JS number is NOT assignable to a primitive value.
     expectTypeOf<number>().not.toExtend<PrimitiveValue>();
@@ -93,7 +93,7 @@ describe("public types: the discriminated unions a consumer switches on", () => 
   it("Observation.value[x] is discriminated by an eleven-way `type` suffix", () => {
     expectTypeOf(readObservationValue).returns.toEqualTypeOf<ObservationValue | undefined>();
     expectTypeOf<ObservationValue["type"]>().toEqualTypeOf<ObservationValueType>();
-    // The 11-way choice includes the non-numeric branches — reading is never number-only.
+    // The 11-way choice includes the non-numeric branches, reading is never number-only.
     expectTypeOf<
       "Quantity" | "CodeableConcept" | "String" | "Boolean"
     >().toExtend<ObservationValueType>();

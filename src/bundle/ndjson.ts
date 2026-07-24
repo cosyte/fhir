@@ -4,18 +4,18 @@
  * A `$export` produces newline-delimited JSON: **one FHIR resource per line**, files that routinely
  * reach gigabytes. Two properties are non-negotiable, and this module is built around them:
  *
- * 1. **No whole-file load.** {@link streamNdjson} consumes an async (or sync) iterable of chunks —
- *    a Node `Readable`, a web `ReadableStream`, a generator — and yields one {@link NdjsonRecord} per
+ * 1. **No whole-file load.** {@link streamNdjson} consumes an async (or sync) iterable of chunks,
+ *    a Node `Readable`, a web `ReadableStream`, a generator, and yields one {@link NdjsonRecord} per
  *    line as the bytes arrive. It buffers only the current partial line, never the file. A single line
  *    that grows past {@link NdjsonOptions.maxLineBytes} without a newline is cut off as a
  *    `LINE_TOO_LONG` record (a defense against an adversarial unterminated line exhausting memory).
  * 2. **Per-line error isolation.** A malformed line (bad JSON, or valid JSON that is not a resource)
- *    yields a record whose `error` is set and whose `resource` is absent — the stream **continues**.
+ *    yields a record whose `error` is set and whose `resource` is absent, the stream **continues**.
  *    One poisoned line never aborts the export, and the failure is reported by **line number, never
- *    line content** (roadmap §7 — the content could be PHI).
+ *    line content** (roadmap §7, the content could be PHI).
  *
  * Each good line is read through {@link ../codec/read.js parseResource}, so decimal precision and
- * primitive-extension alignment are preserved exactly as for a single resource — NDJSON never routes
+ * primitive-extension alignment are preserved exactly as for a single resource, NDJSON never routes
  * a value through `JSON.parse` (ADR 0001).
  *
  * @packageDocumentation
@@ -34,20 +34,20 @@ export const NDJSON_ERROR_CODES = {
   MALFORMED_JSON: "MALFORMED_JSON",
   /** The line is valid JSON but not a resource (not a JSON object at the top level). */
   NOT_A_RESOURCE: "NOT_A_RESOURCE",
-  /** The line exceeded {@link NdjsonOptions.maxLineBytes} with no newline — cut off, not buffered. */
+  /** The line exceeded {@link NdjsonOptions.maxLineBytes} with no newline, cut off, not buffered. */
   LINE_TOO_LONG: "LINE_TOO_LONG",
 } as const;
 
 /** One of the {@link NDJSON_ERROR_CODES}. */
 export type NdjsonErrorCode = (typeof NDJSON_ERROR_CODES)[keyof typeof NDJSON_ERROR_CODES];
 
-/** A value-free, isolated failure for a single NDJSON line — carries the line number, never content. */
+/** A value-free, isolated failure for a single NDJSON line, carries the line number, never content. */
 export interface NdjsonError {
   /** The 1-based line number of the failing line. */
   readonly line: number;
   /** The coded reason. */
   readonly code: NdjsonErrorCode;
-  /** A value-free description of the *kind* of failure — never the line's text. */
+  /** A value-free description of the *kind* of failure, never the line's text. */
   readonly message: string;
 }
 
@@ -70,7 +70,7 @@ export interface NdjsonRecord {
 export interface NdjsonOptions {
   /**
    * The maximum bytes a single line may reach before a newline forces a `LINE_TOO_LONG` cut-off
-   * (the no-whole-file-load / DoS guard). Default 16 MiB — comfortably above any real resource, far
+   * (the no-whole-file-load / DoS guard). Default 16 MiB, comfortably above any real resource, far
    * below a memory hazard.
    */
   readonly maxLineBytes?: number;
@@ -97,7 +97,7 @@ function ndjsonError(line: number, code: NdjsonErrorCode): NdjsonError {
  * streaming reader provides.
  *
  * @param line - The raw line text (without its trailing newline). A blank/whitespace-only line yields
- *   neither a resource nor an error — an empty record — so callers can skip it.
+ *   neither a resource nor an error, an empty record, so callers can skip it.
  * @param lineNumber - The 1-based line number to stamp on the record. Defaults to 1.
  * @returns The {@link NdjsonRecord}.
  * @example
@@ -127,7 +127,7 @@ export function parseNdjsonLine(line: string, lineNumber = 1): NdjsonRecord {
     result = parseResource(raw);
   } catch (err) {
     // A structurally-unreadable object (e.g. a broken `_`-sibling alignment) is a JSON object but not
-    // a well-formed resource — isolated to this line, never aborting the stream.
+    // a well-formed resource, isolated to this line, never aborting the stream.
     if (err instanceof FhirCodecError) {
       return {
         line: lineNumber,
@@ -150,7 +150,7 @@ function decodeChunk(
 }
 
 /**
- * Stream `application/fhir+ndjson`, yielding one {@link NdjsonRecord} per line as bytes arrive —
+ * Stream `application/fhir+ndjson`, yielding one {@link NdjsonRecord} per line as bytes arrive,
  * **without ever loading the whole file** and with **per-line error isolation**.
  *
  * The source is any (async or sync) iterable of `string` or `Uint8Array` chunks: a Node `Readable`
@@ -208,7 +208,7 @@ export async function* streamNdjson(
     if (draining) {
       // Still discarding the remainder of an over-long line and this chunk carried no newline (a
       // newline would have ended the drain in the loop above). Drop the buffered remainder so memory
-      // stays bounded across arbitrarily many newline-free chunks — the no-whole-file-load guard.
+      // stays bounded across arbitrarily many newline-free chunks, the no-whole-file-load guard.
       buffer = "";
     } else if (buffer.length > maxLineBytes) {
       // An unterminated line past the cap is cut off here, not buffered forever, then drained.

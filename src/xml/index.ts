@@ -1,5 +1,5 @@
 /**
- * FHIR XML codec (Phase 8, xml.html) — read (parse) and write (serialize) between FHIR XML and the
+ * FHIR XML codec (Phase 8, xml.html), read (parse) and write (serialize) between FHIR XML and the
  * shared {@link ../model/node.js FhirNode} model, plus cross-format equivalence.
  *
  * Zero-dependency and hardened: the reader ({@link ./raw-xml.js}) is XXE- and billion-laughs-proof by

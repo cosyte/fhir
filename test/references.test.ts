@@ -14,7 +14,7 @@ const bundleJson =
   '{"fullUrl":"urn:uuid:1","resource":{"resourceType":"Patient","id":"p1"}},' +
   '{"fullUrl":"https://ex.org/fhir/Observation/9","resource":{"resourceType":"Observation","id":"9","status":"final"}}]}';
 
-describe("resolveReference — the four reference forms", () => {
+describe("resolveReference: the four reference forms", () => {
   const { resource } = parseResource(bundleJson);
   const index = buildBundleIndex(resource);
 
@@ -92,7 +92,7 @@ describe("resolveReference — the four reference forms", () => {
   });
 });
 
-describe("hasContainedCycle — the DoS-safe cycle guard", () => {
+describe("hasContainedCycle: the DoS-safe cycle guard", () => {
   it("detects a two-node contained cycle (a → b → a)", () => {
     const { resource } = parseResource(
       '{"resourceType":"Observation","id":"root","contained":[' +
@@ -118,7 +118,7 @@ describe("hasContainedCycle — the DoS-safe cycle guard", () => {
     expect(hasContainedCycle(resource)).toBe(true);
   });
 
-  it("passes an acyclic contained graph (a DAG) — the common, legitimate case", () => {
+  it("passes an acyclic contained graph (a DAG): the common, legitimate case", () => {
     const { resource } = parseResource(
       '{"resourceType":"MedicationRequest","id":"root",' +
         '"medicationReference":{"reference":"#med"},"contained":[' +

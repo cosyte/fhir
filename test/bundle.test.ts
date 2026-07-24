@@ -15,7 +15,7 @@ function fixture(name: string): string {
   return readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf8");
 }
 
-describe("readBundle — the Bundle model + entry-processing semantics", () => {
+describe("readBundle: the Bundle model + entry-processing semantics", () => {
   it("pins the R4 bundle-type value set", () => {
     expect(BUNDLE_TYPES).toEqual({
       DOCUMENT: "document",
@@ -46,7 +46,7 @@ describe("readBundle — the Bundle model + entry-processing semantics", () => {
     expect(first.hasResource).toBe(true);
   });
 
-  it("classifies batch as independent — the semantics are genuinely distinct from transaction", () => {
+  it("classifies batch as independent: the semantics are genuinely distinct from transaction", () => {
     const { resource } = parseResource(fixture("bundle-batch.json"));
     const bundle = readBundle(resource);
     expect(bundle.type).toBe("batch");

@@ -1,7 +1,7 @@
 /**
  * FHIR R4 primitive datatype value-domain validation (validation layer 3, the datatype half).
  *
- * Each FHIR R4 primitive type carries a lexical constraint — a regular expression published in the
+ * Each FHIR R4 primitive type carries a lexical constraint, a regular expression published in the
  * spec (datatypes.html §Primitive Types). This module holds those patterns verbatim (anchored) and
  * validates a model value against a declared datatype. It is deliberately **resource-independent**:
  * given a value and its datatype name, it can say whether the value is well-formed, without any
@@ -11,7 +11,7 @@
  * The model already stores primitives losslessly: strings as JS strings, `boolean` as a JS boolean,
  * and every JSON number (`integer`, `unsignedInt`, `positiveInt`, `decimal`, `integer64`) as a
  * {@link ../model/decimal.js} carrying its exact lexical text. So validation reads the lexical form
- * from the model (a string, or `FhirDecimal.raw`) and tests the datatype's pattern — never a float.
+ * from the model (a string, or `FhirDecimal.raw`) and tests the datatype's pattern, never a float.
  *
  * @packageDocumentation
  */
@@ -67,8 +67,8 @@ export function isPrimitiveType(name: string): name is PrimitiveType {
 
 /**
  * The R4 lexical patterns, verbatim from the spec (datatypes.html), anchored with `^…$`. Types whose
- * value-domain is enforced by the model rather than a regex — `boolean` (a JS boolean),
- * `string`/`markdown` (any non-control text) — are handled in {@link validatePrimitiveValue} rather
+ * value-domain is enforced by the model rather than a regex, `boolean` (a JS boolean),
+ * `string`/`markdown` (any non-control text), are handled in {@link validatePrimitiveValue} rather
  * than here. `integer64` shares the `integer` pattern (a 64-bit-range signed integer; the model
  * preserves the exact magnitude, so only the lexical shape is checked here).
  *
@@ -121,7 +121,7 @@ function lexicalForm(value: PrimitiveValue): string {
  * lexical form fails the datatype's pattern. The caller maps these to `TYPE_MISMATCH` /
  * `PRIMITIVE_INVALID` issues.
  *
- * An unknown (non-primitive) datatype name yields `"ok"` — a complex datatype is validated
+ * An unknown (non-primitive) datatype name yields `"ok"`, a complex datatype is validated
  * structurally elsewhere, not here; this function speaks only for the primitives it knows.
  *
  * @param value - The model primitive value.

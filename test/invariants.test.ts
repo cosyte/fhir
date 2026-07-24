@@ -23,7 +23,7 @@ function codes(issues: readonly ValidationIssue[]): string[] {
   return issues.map((i) => i.code);
 }
 
-describe("loadStructureDefinition — constraint parsing", () => {
+describe("loadStructureDefinition: constraint parsing", () => {
   it("reads key / severity / human / expression, defaulting severity to error", () => {
     const sd = loadSd({
       resourceType: "StructureDefinition",
@@ -55,7 +55,7 @@ describe("loadStructureDefinition — constraint parsing", () => {
   });
 });
 
-describe("generateSnapshot — invariants accumulate down the derivation chain", () => {
+describe("generateSnapshot: invariants accumulate down the derivation chain", () => {
   it("merges base + differential constraints by key (differential wins)", () => {
     const base = loadSd({
       resourceType: "StructureDefinition",
@@ -192,7 +192,7 @@ describe("collectInvariantIssues", () => {
       },
     });
     // A resource that *violates* ait-1 (no clinicalStatus, not entered-in-error) draws nothing from
-    // the invariant engine — the safety layer is authoritative for it.
+    // the invariant engine, the safety layer is authoritative for it.
     const issues = collectInvariantIssues(parse({ resourceType: "AllergyIntolerance" }), withAit);
     expect(issues).toEqual([]);
   });
@@ -285,7 +285,7 @@ describe("collectInvariantIssues", () => {
   });
 });
 
-describe("validateResource — Phase 7 invariant layer wiring", () => {
+describe("validateResource: Phase 7 invariant layer wiring", () => {
   const profile = loadSd({
     resourceType: "StructureDefinition",
     url: "http://x/obs",
@@ -310,7 +310,7 @@ describe("validateResource — Phase 7 invariant layer wiring", () => {
     expect(codes(result.issues)).toContain("INVARIANT_VIOLATED");
     expect(codes(result.issues)).toContain("INVARIANT_UNCHECKED"); // matches() is outside the subset
     expect(result.valid).toBe(false);
-    // The UNCHECKED finding is information — it must never itself flip validity.
+    // The UNCHECKED finding is information, it must never itself flip validity.
     const unchecked = req(result.issues.find((i) => i.code === "INVARIANT_UNCHECKED"));
     expect(unchecked.severity).toBe("information");
   });

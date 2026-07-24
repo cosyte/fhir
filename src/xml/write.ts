@@ -1,13 +1,13 @@
 /**
  * The XML write path: the {@link FhirNode} model → spec-clean FHIR XML text (roadmap Phase 8, xml.html).
  *
- * The writer is the conservative half of Postel's Law — it always emits well-formed, canonical FHIR
+ * The writer is the conservative half of Postel's Law, it always emits well-formed, canonical FHIR
  * XML, the exact inverse of {@link ./read.js}:
  *
  * - a resource complex is emitted as an element named by its `resourceType` (the property itself is
- *   not emitted — it *is* the tag), and the root carries the FHIR default namespace;
+ *   not emitted, it *is* the tag), and the root carries the FHIR default namespace;
  * - a primitive's value becomes the `value` attribute, its `id` an `id` attribute, and its extensions
- *   child `<extension>` elements — the XML co-location of the JSON `_`-sibling;
+ *   child `<extension>` elements, the XML co-location of the JSON `_`-sibling;
  * - `Resource.id` is emitted as a child `<id value="…"/>` element while `Element.id` is an attribute,
  *   and `Extension.url` is emitted as the `url` attribute, exactly matching how the reader consumes them;
  * - a list emits one element per item (repeating elements); a resource-valued element wraps the inner
@@ -30,11 +30,11 @@ import {
 } from "../model/node.js";
 import { FHIR_XML_NAMESPACE } from "./read.js";
 
-/** Serialize a scalar primitive value to its lexical text (decimal from exact `raw` — never a `number`). */
+/** Serialize a scalar primitive value to its lexical text (decimal from exact `raw`, never a `number`). */
 function scalarText(value: PrimitiveValue): string {
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";
-  return value.raw; // FhirDecimal — exact lexical form (ADR 0001).
+  return value.raw; // FhirDecimal, exact lexical form (ADR 0001).
 }
 
 /** Escape a string for use inside a double-quoted XML attribute value (round-trip-safe). */
@@ -49,7 +49,7 @@ function escapeAttr(text: string): string {
     .replace(/\r/g, "&#13;");
 }
 
-/** The `resourceType` of a complex (its string value), if it carries one — i.e. it is a resource. */
+/** The `resourceType` of a complex (its string value), if it carries one, i.e. it is a resource. */
 function resourceTypeOf(node: FhirComplex): string | undefined {
   const property = node.properties.find((p) => p.name === "resourceType");
   if (
@@ -144,7 +144,7 @@ function writeElement(
 }
 
 /**
- * Serialize a resource (or any {@link FhirComplex}) to spec-clean, compact FHIR XML text — the exact
+ * Serialize a resource (or any {@link FhirComplex}) to spec-clean, compact FHIR XML text, the exact
  * inverse of {@link parseResourceXml}. Decimals are emitted byte-exact (never through a `number`),
  * primitive metadata is co-located (`id` attribute + child `<extension>`s), repeating elements are
  * repeated, and the root carries the FHIR namespace.

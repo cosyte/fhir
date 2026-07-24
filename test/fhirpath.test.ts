@@ -60,7 +60,7 @@ describe("tokenize", () => {
   });
 });
 
-describe("parseFhirPath — precedence", () => {
+describe("parseFhirPath: precedence", () => {
   it("binds 'and' tighter than 'or', and comparison tighter than 'and'", () => {
     const ast = parseFhirPath("a = 1 and b = 2 or c = 3");
     // → (( a=1 and b=2 ) or c=3 )
@@ -84,7 +84,7 @@ describe("parseFhirPath — precedence", () => {
   });
 });
 
-describe("convertToBoolean — matches the reference validator's coercion", () => {
+describe("convertToBoolean: matches the reference validator's coercion", () => {
   it("treats empty as false and a single non-boolean as true", () => {
     expect(convertToBoolean([])).toBe(false);
     expect(convertToBoolean([{ t: "bool", value: false }])).toBe(false);
@@ -99,7 +99,7 @@ describe("convertToBoolean — matches the reference validator's coercion", () =
   });
 });
 
-describe("evaluateInvariant — core navigation, existence, logic", () => {
+describe("evaluateInvariant: core navigation, existence, logic", () => {
   it("navigates paths and evaluates exists()/empty()", () => {
     const obs = { resourceType: "Observation", status: "final" };
     expect(evalOn("status.exists()", obs).satisfied).toBe(true);
@@ -137,7 +137,7 @@ describe("evaluateInvariant — core navigation, existence, logic", () => {
     expect(evalOn("category.coding.where(code = 'nope').empty()", obs).satisfied).toBe(true);
   });
 
-  it("evaluates ele-1 (hasValue or children over id) — passes for a real resource", () => {
+  it("evaluates ele-1 (hasValue or children over id): passes for a real resource", () => {
     // ele-1: `hasValue() or (children().count() > id.count())`
     const expr = "hasValue() or (children().count() > id.count())";
     expect(evalOn(expr, { resourceType: "Patient", gender: "female" }).satisfied).toBe(true);
@@ -151,7 +151,7 @@ describe("evaluateInvariant — core navigation, existence, logic", () => {
   });
 });
 
-describe("evaluateInvariant — agrees with the oracle on the named R4 invariants", () => {
+describe("evaluateInvariant: agrees with the oracle on the named R4 invariants", () => {
   // ait-1: clinicalStatus SHALL be present unless verificationStatus = entered-in-error.
   const ait1 =
     "verificationStatus.coding.where(system = 'http://terminology.hl7.org/CodeSystem/allergyintolerance-verification' and code = 'entered-in-error').exists() or clinicalStatus.exists()";
@@ -227,7 +227,7 @@ describe("evaluateInvariant — agrees with the oracle on the named R4 invariant
 
   it("complex equality is order-independent by field name (JSON key order is not significant)", () => {
     // The obs-7 clash, but the component Coding writes {code, system} where the top-level writes
-    // {system, code}. FHIR JSON key order is not significant, so this MUST still be a violation — a
+    // {system, code}. FHIR JSON key order is not significant, so this MUST still be a violation, a
     // positional comparison would silently pass a violated constraint (the non-negotiable failure mode).
     const expr =
       "value.empty() or component.code.where(coding.intersect(%resource.code.coding).exists()).empty()";
@@ -255,7 +255,7 @@ describe("evaluateInvariant — agrees with the oracle on the named R4 invariant
   });
 });
 
-describe("evaluateInvariant — operators, functions, and literals across the subset", () => {
+describe("evaluateInvariant: operators, functions, and literals across the subset", () => {
   const patient = {
     resourceType: "Patient",
     active: true,
@@ -339,7 +339,7 @@ describe("evaluateInvariant — operators, functions, and literals across the su
   });
 });
 
-describe("evaluateInvariant — fail-safe (unchecked, never a false pass)", () => {
+describe("evaluateInvariant: fail-safe (unchecked, never a false pass)", () => {
   it("reports an unsupported function as unchecked, never satisfied", () => {
     const r = evalOn("descendants().exists()", { resourceType: "Patient", id: "1" });
     expect(r.unchecked).toBe(true);
@@ -360,7 +360,7 @@ describe("evaluateInvariant — fail-safe (unchecked, never a false pass)", () =
     expect(evalOn("%ucum.exists()", { resourceType: "Observation" }).unchecked).toBe(true);
   });
 
-  it("does not throw out of the engine — every failure is caught into unchecked", () => {
+  it("does not throw out of the engine: every failure is caught into unchecked", () => {
     expect(() => evalOn("@@@", { resourceType: "Patient" })).not.toThrow();
     expect(evalOn("@@@", { resourceType: "Patient" }).unchecked).toBe(true);
   });
@@ -393,7 +393,7 @@ describe("evaluateInvariant — fail-safe (unchecked, never a false pass)", () =
   });
 });
 
-describe("tokenize / parseFhirPath — remaining lexer & parser branches", () => {
+describe("tokenize / parseFhirPath: remaining lexer & parser branches", () => {
   it("lexes delimited identifiers, quoted env vars, and decimals", () => {
     expect(tokenize("`status`")[0]).toEqual({ type: "identifier", value: "status", pos: 0 });
     expect(tokenize("%'vs'")[0]).toEqual({ type: "envvar", value: "vs", pos: 0 });
@@ -432,7 +432,7 @@ describe("tokenize / parseFhirPath — remaining lexer & parser branches", () =>
   });
 });
 
-describe("evaluateInvariant — remaining evaluator branches", () => {
+describe("evaluateInvariant: remaining evaluator branches", () => {
   const patient = {
     resourceType: "Patient",
     name: [
@@ -499,7 +499,7 @@ describe("evaluateInvariant — remaining evaluator branches", () => {
   });
 });
 
-describe("tokenize — every string escape and number-boundary branch", () => {
+describe("tokenize: every string escape and number-boundary branch", () => {
   it("unescapes the full escape set", () => {
     expect(tokenize("'\\'\\`\\\\\\/\\f\\r\\n\\t'")[0]?.value).toBe("'`\\/\f\r\n\t");
   });
@@ -513,7 +513,7 @@ describe("tokenize — every string escape and number-boundary branch", () => {
   });
 });
 
-describe("evaluateInvariant — boolean-node coercion in logic operators", () => {
+describe("evaluateInvariant: boolean-node coercion in logic operators", () => {
   const r = { resourceType: "Patient", active: true };
   it("coerces a boolean element node in a logical operator", () => {
     expect(evalOn("active and active", r).satisfied).toBe(true);

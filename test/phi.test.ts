@@ -10,7 +10,7 @@ import { nth } from "./_util.js";
 
 /**
  * PHI posture (roadmap §7): a FHIR resource is PHI by default and the codec's own diagnostics are
- * the leak vector. Every issue and every error the reader produces must be **value-free** — a coded
+ * the leak vector. Every issue and every error the reader produces must be **value-free**, a coded
  * reason plus a FHIRPath location or a byte offset, never the offending value. These synthetic
  * "PHI-like" markers must appear nowhere in any emitted diagnostic.
  */
@@ -67,8 +67,8 @@ describe("no PHI in diagnostics", () => {
 
 /**
  * The redaction chokepoint lands in Phase 2: a validation `OperationOutcome` must carry the location
- * and the coded reason, never the offending value. Sweep the whole outcome — issues object and the
- * serialized resource — for the synthetic markers that triggered each finding.
+ * and the coded reason, never the offending value. Sweep the whole outcome, issues object and the
+ * serialized resource, for the synthetic markers that triggered each finding.
  */
 describe("no PHI in validation output (the Phase-2 redaction chokepoint)", () => {
   it("keeps a bad-code finding value-free (the offending code never reaches diagnostics)", () => {
@@ -94,7 +94,7 @@ describe("no PHI in validation output (the Phase-2 redaction chokepoint)", () =>
     expect(nth(result.issues, 0).expression).toBe("Patient.birthDate");
   });
 
-  it("keeps safety findings (modifier / invariant) value-free — only the constraint key surfaces", () => {
+  it("keeps safety findings (modifier / invariant) value-free: only the constraint key surfaces", () => {
     // A retracted Observation with an unknown modifierExtension and a value: several safety findings,
     // all of which must carry only locations + coded reasons, never the synthetic marker values.
     const { resource } = parseResource(
@@ -115,7 +115,7 @@ describe("no PHI in validation output (the Phase-2 redaction chokepoint)", () =>
     expect(outcomeJson).toContain("obs-6");
   });
 
-  it("keeps a terminology finding value-free — the offending code never reaches diagnostics", () => {
+  it("keeps a terminology finding value-free: the offending code never reaches diagnostics", () => {
     // A bound medication coding a service reports is not a member; the code value is the marker.
     const service = {
       validateCode: () => ({ membership: "not-in" as const }),

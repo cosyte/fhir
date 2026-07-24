@@ -4,7 +4,7 @@
  * Profile validation and slicing discriminators are expressed as **element paths** relative to a
  * resource or a slice element (e.g. `clinicalStatus.coding.code`, `value[x]`, `$this`). This module
  * resolves such a path to the set of model nodes it selects, flattening repeating elements and
- * honoring `[x]` choice variants. It is a deliberately small, FHIRPath-*shaped* navigator — not the
+ * honoring `[x]` choice variants. It is a deliberately small, FHIRPath-*shaped* navigator, not the
  * FHIRPath engine (that is Phase 7, ADR 0002): it walks dotted member access and choice suffixes,
  * which is exactly what StructureDefinition discriminator paths and fixed/pattern locations use, and
  * nothing more (no functions, no filters, no arithmetic).
@@ -61,7 +61,7 @@ function step(node: FhirNode, name: string): FhirNode[] {
 }
 
 /**
- * Whether an element path selects at least one node on `node` — the `exists` primitive used by the
+ * Whether an element path selects at least one node on `node`, the `exists` primitive used by the
  * `exists` slicing discriminator and by cardinality checks.
  *
  * @param node - The starting node.

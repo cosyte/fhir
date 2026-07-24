@@ -6,13 +6,13 @@
  *
  * 1. **UCUM shape.** A `Quantity` that declares the UCUM `system` but whose `code` is absent or
  *    malformed cannot be trusted for machine use → `UCUM_UNIT_UNRECOGNIZED` (`warning`). The value is
- *    preserved verbatim and **never converted** — the library bundles no UCUM content, so it asserts
+ *    preserved verbatim and **never converted**, the library bundles no UCUM content, so it asserts
  *    presence + shape, never membership. A quantity that declares no UCUM system is legal FHIR and is
  *    not flagged (no false error).
  * 2. **Vital-signs required units.** For an Observation (or component) that *is* a table-keyed vital
  *    sign, the FHIR vital-signs profile requires a specific UCUM `code`. A wrong code, or a non-UCUM
  *    `system`, is `VITAL_SIGN_UNIT_NONCONFORMANT` (`error`), compared on the UCUM **`code`**
- *    (case- and bracket-sensitive) — never the `unit` string. A vital sign whose value is present but
+ *    (case- and bracket-sensitive), never the `unit` string. A vital sign whose value is present but
  *    is **not** a Quantity is `VALUE_TYPE_UNEXPECTED` (`warning`).
  * 3. **Dose units.** `MedicationRequest`/`MedicationStatement` dose quantities are UCUM-shape-checked
  *    the same way (a wrong dose unit is a prescribing hazard).
@@ -127,21 +127,21 @@ function checkValueChoice(
   issues: ValidationIssue[],
 ): void {
   const value = readObservationValue(element);
-  if (value === undefined) return; // no value[x] — nothing to check (dataAbsentReason is obs-6).
+  if (value === undefined) return; // no value[x], nothing to check (dataAbsentReason is obs-6).
 
   const valuePath = `${path}.${value.property}`;
 
-  // UCUM shape on a Quantity value — every observation, warning-only, preserve-and-flag.
+  // UCUM shape on a Quantity value, every observation, warning-only, preserve-and-flag.
   if (value.type === "Quantity") checkUcumShape(value.quantity, valuePath, issues);
 
   if (!vital) return;
 
   // The vital-signs profile requires a specific UCUM code for this element's own LOINC code.
   const required = requiredUnitsFor(element);
-  if (required === undefined) return; // not a table-keyed vital sign — left unchecked (no false error).
+  if (required === undefined) return; // not a table-keyed vital sign, left unchecked (no false error).
 
   if (value.type !== "Quantity") {
-    // A vital sign whose value is present but not a Quantity — surface, do not read as a number.
+    // A vital sign whose value is present but not a Quantity, surface, do not read as a number.
     issues.push(validationIssue("VALUE_TYPE_UNEXPECTED", ISSUE_SEVERITIES.WARNING, valuePath));
     return;
   }

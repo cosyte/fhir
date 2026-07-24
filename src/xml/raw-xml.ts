@@ -3,18 +3,18 @@
  *
  * This is the XML analogue of {@link ../codec/raw-json.js readRawJson}: a small recursive-descent
  * reader that turns XML text into a raw tree ({@link XmlNode}) preserving element order, attributes,
- * and text — with **no** external dependency and, by construction, **no** entity-expansion or
+ * and text, with **no** external dependency and, by construction, **no** entity-expansion or
  * external-entity attack surface. The two hardening decisions live in {@link ./issues.js} and are
  * enforced here:
  *
- * 1. a `<!DOCTYPE …>` is refused (`DTD_FORBIDDEN`) before any element is parsed, so no entity — internal
- *    (billion-laughs) or external (XXE) — is ever *declared*; and
+ * 1. a `<!DOCTYPE …>` is refused (`DTD_FORBIDDEN`) before any element is parsed, so no entity, internal
+ *    (billion-laughs) or external (XXE), is ever *declared*; and
  * 2. any entity reference beyond the five predefined names and numeric character references is refused
  *    (`UNDEFINED_ENTITY`), so none is ever *resolved*.
  *
  * The reader performs no I/O, resolves no URI, and bounds nesting depth, so adversarial input yields a
  * typed {@link ./issues.js FhirXmlError}, never a hang, an OOM, a fetch, or a crash. It maps the FHIR
- * datatype layer no more than {@link ../codec/raw-json.js} maps FHIR JSON — that is the job of
+ * datatype layer no more than {@link ../codec/raw-json.js} maps FHIR JSON, that is the job of
  * {@link ./read.js}. Its only concern beyond well-formedness is to hand text and attribute values back
  * with the five predefined entities and numeric character references decoded, and everything else
  * verbatim.
@@ -49,7 +49,7 @@ export type XmlNode = XmlElement | XmlText;
 
 /**
  * The maximum element-nesting depth the reader will descend before refusing with
- * `MAX_DEPTH_EXCEEDED`. FHIR resources — even a Bundle of documents with contained resources — nest
+ * `MAX_DEPTH_EXCEEDED`. FHIR resources, even a Bundle of documents with contained resources, nest
  * far shallower than this; the bound exists only to turn a pathological adversarial document into a
  * typed error instead of a stack overflow.
  */
@@ -110,7 +110,7 @@ class RawXmlReader {
 
   /**
    * Skip the document prolog: whitespace, an optional XML declaration, comments and processing
-   * instructions — and refuse a DTD. This is the first line of the safety guarantee: a `<!DOCTYPE`
+   * instructions, and refuse a DTD. This is the first line of the safety guarantee: a `<!DOCTYPE`
    * is refused here, before any element (and hence any entity) is seen.
    */
   private skipProlog(): void {
@@ -134,7 +134,7 @@ class RawXmlReader {
         );
       } else if (this.#startsWith("<!")) {
         // Any other markup declaration at this level (a stray CDATA, an entity/element decl) is
-        // either a DTD fragment or unsupported — refuse rather than guess.
+        // either a DTD fragment or unsupported, refuse rather than guess.
         throw new FhirXmlError(
           XML_FATAL_CODES.DTD_FORBIDDEN,
           "An unsupported markup declaration (<!…>) is refused outside of element content.",
@@ -303,7 +303,7 @@ class RawXmlReader {
    * Decode one entity reference at `#pos`. Accepts only the five predefined names and numeric
    * character references; **refuses** anything else with `UNDEFINED_ENTITY`. A named entity cannot
    * be legally defined (DTDs are refused), so refusing here means the reader never resolves, expands,
-   * or fetches — the core of the XXE / billion-laughs guarantee.
+   * or fetches, the core of the XXE / billion-laughs guarantee.
    */
   private parseEntity(): string {
     const start = this.#pos;
@@ -368,7 +368,7 @@ class RawXmlReader {
 /**
  * Parse an XML document into a raw {@link XmlElement} tree, preserving element/attribute order and
  * decoding the five predefined entities and numeric character references. **Refuses** any DTD
- * (`DTD_FORBIDDEN`) or non-predefined entity (`UNDEFINED_ENTITY`), and bounds nesting depth — so it
+ * (`DTD_FORBIDDEN`) or non-predefined entity (`UNDEFINED_ENTITY`), and bounds nesting depth, so it
  * is XXE- and billion-laughs-safe and never crashes on adversarial input. Throws
  * {@link FhirXmlError} on any refusal or well-formedness error, with a byte `offset` and no snippet.
  *

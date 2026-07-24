@@ -3,13 +3,13 @@
  * Sync the `VERSION` constant in `src/index.ts` with `package.json`'s `version`.
  *
  * Why this exists: `VERSION` is a public export, but the version bump is owned by Changesets, which
- * only rewrites `package.json`. Without this step the package would publish a `VERSION` that *lies* —
+ * only rewrites `package.json`. Without this step the package would publish a `VERSION` that *lies*,
  * `0.0.1` on the registry, `"0.0.0"` from the export. The `version` script (which the shared release
  * workflow invokes as `pnpm run version`) runs `changeset version` and then this, so the bump and the
  * constant always land in the same "Version Packages" commit.
  *
  * The guard against drift is `test/sanity.test.ts`, which compares the export against `package.json`
- * at test time. Skipping this script makes that test go red — deliberately.
+ * at test time. Skipping this script makes that test go red, deliberately.
  *
  * Idempotent; exits non-zero if the declaration can't be found (a rename must not silently no-op).
  */
@@ -31,7 +31,7 @@ const declaration = /^export const VERSION: string = "[^"]*";$/m;
 if (!declaration.test(source)) {
   console.error(
     'sync-version: could not find `export const VERSION: string = "...";` in src/index.ts.\n' +
-      "The declaration was renamed or reformatted — update this script alongside it.",
+      "The declaration was renamed or reformatted, update this script alongside it.",
   );
   process.exit(1);
 }

@@ -1,5 +1,5 @@
 /**
- * The bounded FHIRPath evaluator (Phase 7, the invariant engine — ADR 0002).
+ * The bounded FHIRPath evaluator (Phase 7, the invariant engine, ADR 0002).
  *
  * FHIRPath is **collection-oriented**: every expression evaluates to an ordered collection of items,
  * and every operation maps a collection to a collection. This evaluator walks an {@link ./parser.js Expr}
@@ -7,22 +7,22 @@
  * US Core invariant set actually uses:
  *
  * - **navigation** (`a.b.c`, choice access `value` → `valueQuantity`), `$this`, `%resource` / `%context`;
- * - **existence / filtering** — `exists`, `empty`, `not`, `where`, `all`, `select`, `count`, `first`,
+ * - **existence / filtering**, `exists`, `empty`, `not`, `where`, `all`, `select`, `count`, `first`,
  *   `last`, `distinct`, `hasValue`, `children`, `extension`, `intersect`;
- * - **logic** — `and` / `or` / `xor` / `implies` with FHIRPath three-valued (empty-propagating) truth;
- * - **comparison / membership / union** — `=`, `!=`, `<`, `>`, `<=`, `>=`, `in`, `contains`, `|`;
+ * - **logic**, `and` / `or` / `xor` / `implies` with FHIRPath three-valued (empty-propagating) truth;
+ * - **comparison / membership / union**, `=`, `!=`, `<`, `>`, `<=`, `>=`, `in`, `contains`, `|`;
  * - **type tests** on the System primitive types (`is` / `as` / `ofType` for `Boolean` / `String` /
  *   `Integer` / `Decimal`).
  *
- * Everything else — arithmetic, string functions, `descendants()`, `resolve()`, FHIR-type `is`/`as`
- * (a generic model carries no datatype name) — raises {@link ./errors.js UnsupportedFhirPathError}.
+ * Everything else, arithmetic, string functions, `descendants()`, `resolve()`, FHIR-type `is`/`as`
+ * (a generic model carries no datatype name), raises {@link ./errors.js UnsupportedFhirPathError}.
  * That is the whole safety contract (roadmap §6): the engine **never guesses**. `where`/`select`/`all`
  * evaluate their criteria *lazily per item*, so an unsupported sub-term inside a filter over an empty
- * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires —
+ * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires,
  * exactly the common case that lets base constraints like `dom-3` pass without implementing their full
  * machinery.
  *
- * A constraint is **satisfied** iff {@link convertToBoolean} of the result is `true` — matching the
+ * A constraint is **satisfied** iff {@link convertToBoolean} of the result is `true`, matching the
  * reference validator's coercion (empty → false, a single non-boolean item → true), so an unmet or
  * empty result is a violation, never a silent pass.
  *
@@ -49,7 +49,7 @@ export type FpItem =
   | { readonly t: "str"; readonly value: string }
   | { readonly t: "num"; readonly value: number };
 
-/** A FHIRPath collection — the value every expression evaluates to. */
+/** A FHIRPath collection, the value every expression evaluates to. */
 export type FpColl = readonly FpItem[];
 
 /** The ambient evaluation context: the root resource (`%resource`) and the original focus (`%context`). */
@@ -88,12 +88,12 @@ function scalarEquals(a: PrimitiveValue | number, b: PrimitiveValue | number): b
 
 /**
  * FHIRPath structural equality of two model nodes. Per the FHIRPath spec (§ Equals): a **complex
- * type** is equal when it has the *same set of named child properties* and each is recursively equal —
+ * type** is equal when it has the *same set of named child properties* and each is recursively equal,
  * **order-independent by field name** (FHIR JSON does not make object key order significant, so a
  * `Coding` written `{code, system}` equals one written `{system, code}`). A **collection / repeating
  * element** is order-*dependent* (compared item-by-item in order). Getting the complex case wrong in
  * the positional direction would let `=` / `intersect` / `in` / `contains` silently miss a match and
- * pass a violated constraint — the one failure mode the invariant layer must never produce.
+ * pass a violated constraint, the one failure mode the invariant layer must never produce.
  */
 function nodesEqual(a: FhirNode, b: FhirNode): boolean {
   if (isPrimitive(a) && isPrimitive(b)) {
@@ -156,7 +156,7 @@ function navigateItem(node: FhirNode, name: string): FpItem[] {
       .flatMap((p) => wrap(p.value));
   }
   // A primitive's only navigable children are its `_`-sibling metadata (id + extensions). Any other
-  // member — or a member on a non-primitive leaf — selects nothing.
+  // member, or a member on a non-primitive leaf, selects nothing.
   if (isPrimitive(node) && name === "extension") {
     return (node.extension ?? []).map((ext) => ({ t: "node", node: ext }));
   }
@@ -171,7 +171,7 @@ function navigate(focus: FpColl, name: string): FpItem[] {
   return focus.flatMap((item) => (item.t === "node" ? navigateItem(item.node, name) : []));
 }
 
-/** The immediate child nodes of an item (used by `children()` — resourceType is type info, not a child). */
+/** The immediate child nodes of an item (used by `children()`, resourceType is type info, not a child). */
 function childrenOf(item: FpItem): FpItem[] {
   if (item.t !== "node") return [];
   if (isComplex(item.node)) {
@@ -195,7 +195,7 @@ function childrenOf(item: FpItem): FpItem[] {
  * @example
  * ```ts
  * import { convertToBoolean } from "@cosyte/fhir";
- * convertToBoolean([]); // false — an empty result fails a constraint, never silently passes
+ * convertToBoolean([]); // false, an empty result fails a constraint, never silently passes
  * ```
  */
 export function convertToBoolean(coll: FpColl): boolean {
@@ -377,7 +377,7 @@ function applyFunction(
   }
 }
 
-/** `extension(url)` — the extensions (on the input) whose `url` equals the argument string. */
+/** `extension(url)`, the extensions (on the input) whose `url` equals the argument string. */
 function applyExtension(
   input: FpColl,
   args: readonly Expr[],

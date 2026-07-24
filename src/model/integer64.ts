@@ -1,9 +1,9 @@
 /**
- * `FhirInteger64` — the string-backed representation of a FHIR `integer64` primitive (added in R5).
+ * `FhirInteger64`, the string-backed representation of a FHIR `integer64` primitive (added in R5).
  *
  * Its range is the full signed 64-bit integer, `-9223372036854775808 … 9223372036854775807`, which
  * exceeds JavaScript's `Number.MAX_SAFE_INTEGER` (`2^53 − 1`). Precisely because of that, FHIR
- * encodes `integer64` in JSON as a **string**, not a number — and parsing that string through
+ * encodes `integer64` in JSON as a **string**, not a number, and parsing that string through
  * `Number` would silently drop the low-order digits of a large identifier. Like `FhirDecimal`
  * (architecture ADR 0001), `FhirInteger64` is string-backed and exposes a lazy `bigint` view for
  * arithmetic; it never routes the value through `number`.
@@ -34,7 +34,7 @@ const INT64_MAX = 2n ** 63n - 1n;
  * import { integer64 } from "@cosyte/fhir";
  * const big = integer64("9223372036854775807");
  * big.toString();  // "9223372036854775807"
- * big.toBigInt();  // 9223372036854775807n — exact, no 2^53 truncation
+ * big.toBigInt();  // 9223372036854775807n, exact, no 2^53 truncation
  * ```
  */
 export class FhirInteger64 {
@@ -52,13 +52,13 @@ export class FhirInteger64 {
     this.raw = raw;
   }
 
-  /** The exact lexical form — what the serializer emits (as a JSON string, per FHIR). */
+  /** The exact lexical form, what the serializer emits (as a JSON string, per FHIR). */
   public toString(): string {
     return this.raw;
   }
 
   /**
-   * The value as a `bigint` — exact across the whole 64-bit range. Computed once and cached.
+   * The value as a `bigint`, exact across the whole 64-bit range. Computed once and cached.
    */
   public toBigInt(): bigint {
     this.#value ??= BigInt(this.raw);

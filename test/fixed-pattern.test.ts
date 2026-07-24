@@ -14,7 +14,7 @@ function coding(fields: Record<string, string>) {
   ]);
 }
 
-describe("matchesFixed — exact equality", () => {
+describe("matchesFixed: exact equality", () => {
   it("compares primitives by value", () => {
     expect(matchesFixed(primitive("active"), primitive("active"))).toBe(true);
     expect(matchesFixed(primitive("inactive"), primitive("active"))).toBe(false);
@@ -57,7 +57,7 @@ describe("matchesFixed — exact equality", () => {
   });
 });
 
-describe("matchesPattern — subset match", () => {
+describe("matchesPattern: subset match", () => {
   it("allows extra content the pattern does not name", () => {
     const pattern = coding({ code: "vital-signs" });
     const instance = coding({ system: "http://s", code: "vital-signs", display: "Vitals" });

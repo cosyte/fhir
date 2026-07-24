@@ -1,7 +1,7 @@
 /**
- * FHIR terminology — the content-free binding layer (Phase 5).
+ * FHIR terminology, the content-free binding layer (Phase 5).
  *
- * Three pieces, all **identities, not content** (roadmap §5 — no SNOMED/CPT/LOINC concept tables are
+ * Three pieces, all **identities, not content** (roadmap §5, no SNOMED/CPT/LOINC concept tables are
  * vendored): the frozen {@link ./systems.js known-systems registry}, the
  * {@link ./bindings.js element→value-set bindings} with their strengths, and the pluggable
  * {@link ./service.js terminology-service interface} through which a consumer supplies the value-set

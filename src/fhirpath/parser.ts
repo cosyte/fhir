@@ -1,17 +1,17 @@
 /**
- * The FHIRPath parser — a recursive-descent parser over the {@link ./lexer.js} token stream that
- * builds a typed {@link Expr} AST (Phase 7, the bounded invariant engine — ADR 0002).
+ * The FHIRPath parser, a recursive-descent parser over the {@link ./lexer.js} token stream that
+ * builds a typed {@link Expr} AST (Phase 7, the bounded invariant engine, ADR 0002).
  *
  * It implements the full FHIRPath **operator precedence** (implies < or/xor < and < in/contains <
  * equality < is/as < inequality < union < additive < multiplicative < unary < invocation/indexer), so
- * every expression the subset accepts is parsed with the *correct* structure — mis-parsing a
+ * every expression the subset accepts is parsed with the *correct* structure, mis-parsing a
  * precedence level would let a wrong tree evaluate to a wrong boolean, the one failure mode worse than
  * "unchecked". Anything the grammar does not recognise (an unexpected token, a trailing token, a
  * malformed call) raises {@link ./errors.js UnsupportedFhirPathError}: the evaluator's fail-safe
- * treats a parse failure exactly like an unsupported evaluation — the invariant is reported
+ * treats a parse failure exactly like an unsupported evaluation, the invariant is reported
  * *unchecked*, never silently passed.
  *
- * Note the grammar is **broad on purpose** — it parses operators (`*`, `div`, `&`, `~`, …) and
+ * Note the grammar is **broad on purpose**, it parses operators (`*`, `div`, `&`, `~`, …) and
  * functions the *evaluator* does not implement. That is deliberate: parsing them into a well-formed
  * tree and letting the evaluator raise `UnsupportedFhirPathError` at the exact unsupported node keeps
  * the "unchecked, never mis-evaluated" contract precise, rather than rejecting a whole expression at
@@ -47,7 +47,7 @@ export type Expr =
   /** Type operator: `operand is Type` / `operand as Type` (the type is a possibly-qualified name). */
   | { readonly kind: "typeop"; readonly op: string; readonly operand: Expr; readonly type: string };
 
-/** Keyword operators — identifiers the parser must read as operators, not path segments. */
+/** Keyword operators, identifiers the parser must read as operators, not path segments. */
 const KEYWORD_OPS: ReadonlySet<string> = new Set([
   "and",
   "or",
@@ -326,7 +326,7 @@ class Parser {
  * @param expression - The FHIRPath source (e.g. an `ElementDefinition.constraint.expression`).
  * @returns The parsed expression tree.
  * @throws UnsupportedFhirPathError when the expression is malformed or uses a token the bounded subset
- *   does not recognise — the caller's fail-safe reports the invariant *unchecked*, never passed.
+ *   does not recognise, the caller's fail-safe reports the invariant *unchecked*, never passed.
  * @example
  * ```ts
  * import { parseFhirPath } from "@cosyte/fhir";

@@ -1,14 +1,14 @@
 /**
- * Cross-format model equivalence — the oracle for "the same resource in XML and in JSON parses to the
+ * Cross-format model equivalence, the oracle for "the same resource in XML and in JSON parses to the
  * same model" (roadmap Phase 8: *JSON↔XML model equivalence*).
  *
  * The JSON and XML readers produce the **same** {@link FhirNode} model, but two differences are
  * irreducible without a datatype schema (which the schema-free codec deliberately does not consult),
- * so equivalence is defined *modulo* them — and only them:
+ * so equivalence is defined *modulo* them, and only them:
  *
  * 1. **Lexical primitive form.** JSON has native `true`/`false` and number tokens, so its reader yields
  *    a boolean or a {@link ../model/decimal.js FhirDecimal}; XML carries every primitive as the string
- *    of its `value` attribute. `true` ≡ `"true"` and `FhirDecimal("0.010")` ≡ `"0.010"` — compared by
+ *    of its `value` attribute. `true` ≡ `"true"` and `FhirDecimal("0.010")` ≡ `"0.010"`, compared by
  *    their canonical lexical text. (Decimal precision is preserved either way: the string is never
  *    routed through a `number`.)
  * 2. **Singleton lists.** FHIR JSON always encodes a repeatable element as an array, so a single
@@ -17,18 +17,18 @@
  *    item. A multi-item list matches element-for-element.
  *
  * Everything else must match exactly: property names **and order**, nesting, `id`, and extensions. The
- * comparison is value-free in spirit — it inspects structure and lexical form, and is used in tests and
+ * comparison is value-free in spirit, it inspects structure and lexical form, and is used in tests and
  * by consumers verifying a transcode, not to build a PHI-carrying diff.
  *
  * **Two schema-free corner cases** where the two readers legitimately diverge (and equivalence does
- * *not* paper over them — they are honest limitations, not silent passes):
+ * *not* paper over them, they are honest limitations, not silent passes):
  *
- * - An **extension-only element with no value** — `<x><extension …/></x>` in XML vs `{"x":{…}}` (a
+ * - An **extension-only element with no value**, `<x><extension …/></x>` in XML vs `{"x":{…}}` (a
  *   complex) vs `{"_x":{…}}` (a value-absent primitive) in JSON. Without a datatype schema the XML
  *   reader cannot tell a value-absent *primitive* from a *complex* that happens to hold only an
  *   extension, and models it as a primitive; the JSON form disambiguates via the `_`-sibling. Such a
  *   pair may compare non-equivalent. It is the safe direction (no data is lost; XML→XML round-trips).
- * - **Narrative `<div>`** — carried as an opaque XHTML string on both sides, so two narratives compare
+ * - **Narrative `<div>`**, carried as an opaque XHTML string on both sides, so two narratives compare
  *   equivalent only when their XHTML text is byte-identical (XHTML has insignificant whitespace the
  *   codec does not normalize across formats).
  *
@@ -45,7 +45,7 @@ function canonicalScalar(value: PrimitiveValue | undefined): string | undefined 
   return value.raw; // FhirDecimal
 }
 
-/** Unwrap a one-item list to its sole item, repeatedly (a singleton list ≡ its element — see module doc). */
+/** Unwrap a one-item list to its sole item, repeatedly (a singleton list ≡ its element, see module doc). */
 function unwrapSingleton(node: FhirNode): FhirNode {
   let current = node;
   while (current.kind === "list" && current.items.length === 1) {
@@ -93,7 +93,7 @@ function complexesEquivalent(a: FhirComplex, b: FhirComplex): boolean {
 }
 
 /**
- * Whether two model nodes are equivalent modulo primitive lexical form and singleton lists — the
+ * Whether two model nodes are equivalent modulo primitive lexical form and singleton lists, the
  * definition of JSON↔XML model equivalence (see the module doc). Reflexive, symmetric, and transitive
  * over the schema-free model.
  *

@@ -1,27 +1,27 @@
 /**
  * The terminology binding validation layer (Phase 5, strength-aware and content-free).
  *
- * Layered on the Phase-2/3/4 validators, this checks the codes on **bound** elements — an element the
- * binding registry ({@link ../terminology/bindings.js}) maps to a value set — for two kinds of
+ * Layered on the Phase-2/3/4 validators, this checks the codes on **bound** elements, an element the
+ * binding registry ({@link ../terminology/bindings.js}) maps to a value set, for two kinds of
  * problem, at a severity that follows the binding **strength**:
  *
  * 1. **System (content-free, no service needed).** A bound coding's `system` is checked against the
  *    binding's known systems and the frozen {@link ../terminology/systems.js known-systems registry}:
- *    - a system the binding's value set does **not** draw from is `CODE_SYSTEM_UNEXPECTED` — an
+ *    - a system the binding's value set does **not** draw from is `CODE_SYSTEM_UNEXPECTED`, an
  *      `error` for a `required` binding, a `warning` for `extensible`/`preferred` (a code from another
  *      system may be a legitimate extension), nothing for `example`;
- *    - a system not in the registry at all is `CODE_SYSTEM_UNKNOWN` (`information`) — an unrecognized
+ *    - a system not in the registry at all is `CODE_SYSTEM_UNKNOWN` (`information`), an unrecognized
  *      (perhaps local) system is not a defect; the library just cannot validate its codes.
  * 2. **Membership (needs a terminology service).** When a {@link ../terminology/service.js
  *    TerminologyService} is supplied and the system is one the binding expects, the coding is checked
  *    for value-set membership. A definitive `not-in` is `CODE_NOT_IN_VALUESET` at the strength's
  *    severity (`required`/`extensible` → `error`, `preferred` → `warning`, `example` →
- *    `information`). An `"unknown"` answer — or **no service at all** — emits nothing: the layer
+ *    `information`). An `"unknown"` answer, or **no service at all**, emits nothing: the layer
  *    degrades to the content-free system checks and never invents a false "not a member" error
  *    (roadmap §5 fail-safe).
  *
  * **example never errors.** An `example`-strength binding is illustrative; a non-member is
- * `information` at most and a wrong system draws nothing — rebinding an example code can never fail
+ * `information` at most and a wrong system draws nothing, rebinding an example code can never fail
  * validation (roadmap §6).
  *
  * Every finding is **value-free**: a code / severity / FHIRPath location, never a code value or a
@@ -46,7 +46,7 @@ import {
   type ValidationSeverity,
 } from "./issues.js";
 
-/** Terminology inputs to {@link collectTerminologyIssues} — both optional (both degrade cleanly). */
+/** Terminology inputs to {@link collectTerminologyIssues}, both optional (both degrade cleanly). */
 export interface TerminologyOptions {
   /**
    * A pluggable terminology service for value-set membership. **None is bundled**; with none
@@ -79,7 +79,7 @@ interface LocatedCoding {
  *   '{"resourceType":"AllergyIntolerance",' +
  *     '"code":{"coding":[{"system":"http://hl7.org/fhir/sid/icd-10-cm","code":"T78.40XA"}]}}',
  * );
- * // Extensible binding (RxNorm + SNOMED) — ICD-10-CM is a known but unexpected system → one warning.
+ * // Extensible binding (RxNorm + SNOMED), ICD-10-CM is a known but unexpected system → one warning.
  * collectTerminologyIssues(resource, "AllergyIntolerance");
  * ```
  */
@@ -133,20 +133,20 @@ function checkCoding(
   issues: ValidationIssue[],
 ): void {
   const { system, code, path } = coding;
-  // A systemless coding cannot be reasoned about (system is what identifies the code system) — no
+  // A systemless coding cannot be reasoned about (system is what identifies the code system), no
   // terminology finding (a bare code is a structural oddity for other layers, never a false error).
   if (system === undefined) return;
 
   const expectedSystem = binding.systems === undefined || binding.systems.includes(system);
   if (!expectedSystem) {
     if (isKnownSystem(system)) {
-      // A known system the value set does not draw from — strength-scaled, never for `example`.
+      // A known system the value set does not draw from, strength-scaled, never for `example`.
       const severity = systemUnexpectedSeverity(binding.strength);
       if (severity !== undefined) {
         issues.push(validationIssue("CODE_SYSTEM_UNEXPECTED", severity, `${path}.system`));
       }
     } else {
-      // An unrecognized system — informational only; codes from it cannot be validated.
+      // An unrecognized system, informational only; codes from it cannot be validated.
       issues.push(
         validationIssue("CODE_SYSTEM_UNKNOWN", ISSUE_SEVERITIES.INFORMATION, `${path}.system`),
       );
@@ -154,7 +154,7 @@ function checkCoding(
     return; // A wrong/unknown system is decided; do not also ask a service about membership.
   }
 
-  // The binding declares no closed system set and the system is unrecognized — cannot validate.
+  // The binding declares no closed system set and the system is unrecognized, cannot validate.
   if (binding.systems === undefined && !isKnownSystem(system)) {
     issues.push(
       validationIssue("CODE_SYSTEM_UNKNOWN", ISSUE_SEVERITIES.INFORMATION, `${path}.system`),
@@ -176,7 +176,7 @@ function checkCoding(
  * Severity for a **known** coding system that is not one the binding's value set draws from
  * (content-free). `required` → `error` (the value set is a closed system set, so a foreign system is
  * definitively not a member); `extensible`/`preferred` → `warning` (a different system may be a
- * justified extension — degrade, never false-error); `example` → none.
+ * justified extension, degrade, never false-error); `example` → none.
  */
 function systemUnexpectedSeverity(strength: BindingStrength): ValidationSeverity | undefined {
   switch (strength) {
@@ -193,7 +193,7 @@ function systemUnexpectedSeverity(strength: BindingStrength): ValidationSeverity
 /**
  * Severity for a coding a terminology service reports is **not a member** of the value set.
  * `required`/`extensible` → `error` (roadmap's required→error, extensible→error-unless); `preferred`
- * → `warning`; `example` → `information` (illustrative only — never an error).
+ * → `warning`; `example` → `information` (illustrative only, never an error).
  */
 function notInSeverity(strength: BindingStrength): ValidationSeverity | undefined {
   switch (strength) {

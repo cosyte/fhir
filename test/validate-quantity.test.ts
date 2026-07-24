@@ -143,7 +143,7 @@ describe("vital-signs required-unit conformance (compared on the UCUM code, not 
   });
 });
 
-describe("UCUM shape — warn on a UCUM-declared unit that is absent or malformed", () => {
+describe("UCUM shape: warn on a UCUM-declared unit that is absent or malformed", () => {
   it("warns when a UCUM-system quantity's code is malformed (whitespace)", () => {
     const result = check(
       '{"resourceType":"Observation","status":"final","valueQuantity":{"value":1,"unit":"mm Hg","system":"http://unitsofmeasure.org","code":"mm Hg"}}',

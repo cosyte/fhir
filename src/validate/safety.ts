@@ -6,18 +6,18 @@
  * things:
  *
  * 1. **Unhandled `modifierExtension` → fail closed.** FHIR's modifier rule (`?!`, roadmap §4.8): a
- *    consumer that does not understand a `modifierExtension` MUST reject the element — it must not
+ *    consumer that does not understand a `modifierExtension` MUST reject the element, it must not
  *    process it as if the modifier were absent. This library understands *no* modifier extensions yet
  *    ({@link ../safety/codes.js} `KNOWN_MODIFIER_EXTENSION_URLS` is empty), so **any** `modifierExtension`
- *    anywhere in the resource is an `error` (`UNHANDLED_MODIFIER_EXTENSION`). This check is universal —
+ *    anywhere in the resource is an `error` (`UNHANDLED_MODIFIER_EXTENSION`). This check is universal,
  *    every resource type, not only the six safety types.
  * 2. **Retraction surfaced.** A resource marked `entered-in-error` is retracted, not data
- *    (`RETRACTED_RESOURCE`, `information`) — surfaced so a consumer cannot silently treat it as active.
- * 3. **The named invariants** — `ait-1`/`ait-2` (AllergyIntolerance), `con-3`/`con-4`/`con-5`
- *    (Condition), `obs-6`/`obs-7` (Observation) — hand-evaluated against the model from their exact
+ *    (`RETRACTED_RESOURCE`, `information`), surfaced so a consumer cannot silently treat it as active.
+ * 3. **The named invariants**, `ait-1`/`ait-2` (AllergyIntolerance), `con-3`/`con-4`/`con-5`
+ *    (Condition), `obs-6`/`obs-7` (Observation), hand-evaluated against the model from their exact
  *    R4 FHIRPath (`INVARIANT_VIOLATED`, with the constraint key on the issue). Each expression and
  *    severity is transcribed verbatim from the R4 StructureDefinition; see the per-check notes.
- *    (A general FHIRPath engine is Phase 7 — ADR 0002; Phase 3 hand-codes only this safety-critical set.)
+ *    (A general FHIRPath engine is Phase 7, ADR 0002; Phase 3 hand-codes only this safety-critical set.)
  *
  * This layer **surfaces and enforces**; it never reconciles contradictions or infers clinical meaning
  * (roadmap §4, known limitations).
@@ -59,14 +59,14 @@ import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issue
 export function collectSafetyIssues(resource: FhirComplex, rt: string): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
-  // 1. Fail closed on any modifierExtension we do not understand — every resource type.
+  // 1. Fail closed on any modifierExtension we do not understand, every resource type.
   for (const location of unhandledModifierExtensions(resource, rt)) {
     issues.push(validationIssue("UNHANDLED_MODIFIER_EXTENSION", ISSUE_SEVERITIES.ERROR, location));
   }
 
   if (!SAFETY_RESOURCE_TYPES.has(rt)) return issues;
 
-  // 2. Surface a retracted (entered-in-error) resource — not a defect, but never to be missed.
+  // 2. Surface a retracted (entered-in-error) resource, not a defect, but never to be missed.
   if (isRetracted(resource)) {
     const at =
       primitiveString(getProperty(resource, "status")) === ENTERED_IN_ERROR
@@ -106,9 +106,9 @@ function invariant(
  * AllergyIntolerance invariants (both `error`).
  *
  * - **ait-1** `verificationStatus.coding.where(system = '…-verification' and code = 'entered-in-error')`
- *   `.exists() or clinicalStatus.exists()` — clinicalStatus SHALL be present unless verificationStatus
+ *   `.exists() or clinicalStatus.exists()`, clinicalStatus SHALL be present unless verificationStatus
  *   is entered-in-error.
- * - **ait-2** `… .empty() or clinicalStatus.empty()` — clinicalStatus SHALL NOT be present when
+ * - **ait-2** `… .empty() or clinicalStatus.empty()`, clinicalStatus SHALL NOT be present when
  *   verificationStatus is entered-in-error.
  */
 function checkAllergyIntolerance(resource: FhirComplex, issues: ValidationIssue[]): void {
@@ -132,17 +132,17 @@ function checkAllergyIntolerance(resource: FhirComplex, issues: ValidationIssue[
  * - **con-3** (`warning`, best-practice): `clinicalStatus.exists() or verificationStatus.coding`
  *   `.where(system='…condition-ver-status' and code = 'entered-in-error').exists() or`
  *   `category.select($this='problem-list-item').empty()`. R4's literal last disjunct is effectively
- *   vacuous — `category.select($this='problem-list-item')` compares a `CodeableConcept` to a string,
- *   which never matches — so a strict reading makes con-3 never fire, and the official validator
+ *   vacuous, `category.select($this='problem-list-item')` compares a `CodeableConcept` to a string,
+ *   which never matches, so a strict reading makes con-3 never fire, and the official validator
  *   agrees. It is a *best-practice* (`warning`) constraint, and the SD's own explanation is "most
  *   systems will expect a clinicalStatus … for problem-list-items managed over time." We surface that
  *   **intent** as a `warning` (never `error`, so it can never flip `valid`), rather than reproduce a
  *   no-op: a problem-list-item with no clinicalStatus and not entered-in-error draws con-3.
  * - **con-4** (`error`): `abatement.empty() or clinicalStatus.coding.where(system='…condition-clinical'`
- *   `and (code='resolved' or code='remission' or code='inactive')).exists()` — an abated condition's
+ *   `and (code='resolved' or code='remission' or code='inactive')).exists()`, an abated condition's
  *   clinicalStatus must be resolved/remission/inactive.
  * - **con-5** (`error`): `verificationStatus.coding.where(system='…condition-ver-status' and`
- *   `code='entered-in-error').empty() or clinicalStatus.empty()` — clinicalStatus SHALL NOT be present
+ *   `code='entered-in-error').empty() or clinicalStatus.empty()`, clinicalStatus SHALL NOT be present
  *   when verificationStatus is entered-in-error.
  */
 function checkCondition(resource: FhirComplex, issues: ValidationIssue[]): void {
@@ -154,7 +154,7 @@ function checkCondition(resource: FhirComplex, issues: ValidationIssue[]): void 
   const clinicalStatus = getProperty(resource, "clinicalStatus");
   const clinicalPresent = clinicalStatus !== undefined;
 
-  // con-3 (warning, intent — see note above).
+  // con-3 (warning, intent, see note above).
   const problemListItem = hasCoding(
     getProperty(resource, "category"),
     CONDITION_CATEGORY_SYSTEM,
@@ -183,13 +183,13 @@ function checkCondition(resource: FhirComplex, issues: ValidationIssue[]): void 
 /**
  * Observation invariants (both `error`).
  *
- * - **obs-6** `dataAbsentReason.empty() or value.empty()` — `dataAbsentReason` SHALL only be present
+ * - **obs-6** `dataAbsentReason.empty() or value.empty()`, `dataAbsentReason` SHALL only be present
  *   when there is no `value[x]`.
  * - **obs-7** `value.empty() or component.code.where(coding.intersect(%resource.code.coding).exists())`
- *   `.empty()` — if a component repeats the Observation's own `code`, the top-level `value[x]` SHALL
+ *   `.empty()`, if a component repeats the Observation's own `code`, the top-level `value[x]` SHALL
  *   NOT be present. The R4 `intersect` compares whole `Coding`s (system, version, code, display,
  *   userSelected); we deliberately match on the concept identity `(system, code)` alone. That is a
- *   *narrowing* — it can only ever flag more (a component that repeats the concept but differs in
+ *   *narrowing*, it can only ever flag more (a component that repeats the concept but differs in
  *   display/version), never fewer, so it can produce a false `error` but never a false *valid* (the
  *   direction the fail-safe rule forbids). It also tracks obs-7's intent ("don't restate the value
  *   under the same concept") more closely than a display-sensitive equality would.

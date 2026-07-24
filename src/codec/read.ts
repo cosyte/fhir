@@ -5,13 +5,13 @@
  * roadmap §4.1):
  *
  * 1. **Decimal precision.** Number tokens arrive from {@link readRawJson} as exact source text and
- *    become {@link FhirDecimal} values — never a JavaScript `number`. A token that a naive
+ *    become {@link FhirDecimal} values, never a JavaScript `number`. A token that a naive
  *    `JSON.parse` would have corrupted raises a value-free `DECIMAL_PRECISION_AT_RISK` issue.
  * 2. **Primitive-extension (`_`-sibling) alignment.** A primitive's value and its `id`/`extension`
  *    metadata live in two parallel JSON properties (`given` and `_given`), index-aligned with
  *    `null` placeholders for repeating primitives. The reader merges them into single
  *    {@link FhirPrimitive} nodes. If the two arrays disagree in length the alignment is broken and
- *    the reader **fails closed** — throwing `PRIMITIVE_EXTENSION_MISALIGNED` rather than guessing
+ *    the reader **fails closed**, throwing `PRIMITIVE_EXTENSION_MISALIGNED` rather than guessing
  *    which value an extension belongs to (guessing could attach it to the wrong clinical value).
  *
  * Reading is lenient elsewhere (Postel's Law): an unexpected shape is preserved and flagged, not
@@ -138,7 +138,7 @@ function readComplex(node: RawJson, path: string, issues: FhirIssue[]): FhirComp
 /**
  * Whether an array should be read as a primitive list (scalar/`null` items) vs a complex list.
  *
- * The value array's own items are authoritative — the presence of a `_`-sibling is a hint, **not**
+ * The value array's own items are authoritative, the presence of a `_`-sibling is a hint, **not**
  * proof of a primitive array. A complex array that carries a stray `_`-sibling (malformed FHIR) must
  * still be read as complex so its objects are preserved-and-flagged, never misrouted to the primitive
  * path and dropped. Only when there is no value array at all (a `_`-sibling-only, value-absent list)
@@ -178,7 +178,7 @@ function buildPrimitiveList(
     const itemPath = `${path}[${String(i)}]`;
     const rawValue = valueItems[i];
     // A non-scalar where a primitive value belongs (malformed mixed array) has no primitive
-    // representation — flag it rather than drop it silently.
+    // representation, flag it rather than drop it silently.
     if (rawValue !== undefined && (rawValue.t === "obj" || rawValue.t === "arr")) {
       issues.push(unknownProperty(itemPath));
     }
@@ -226,7 +226,7 @@ function buildNode(
     return buildComplexList(valueArr ?? { t: "arr", items: [] }, meta, path, issues);
   }
 
-  // A complex (object) element — its id/extension are inline, so any `_`-sibling is misplaced.
+  // A complex (object) element, its id/extension are inline, so any `_`-sibling is misplaced.
   if (value?.t === "obj") {
     if (meta !== undefined)
       issues.push(unknownProperty(`${path} (unexpected _-sibling on an object)`));

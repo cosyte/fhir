@@ -22,9 +22,9 @@ import {
 } from "../src/index.js";
 
 /**
- * The known-systems registry is a **frozen set of identities** (roadmap §5) — verified URIs only, no
+ * The known-systems registry is a **frozen set of identities** (roadmap §5), verified URIs only, no
  * content. These pin which systems are recognized and confirm the open-question ones (ICD-10-PCS,
- * HCPCS — roadmap §10) are deliberately absent rather than guessed.
+ * HCPCS, roadmap §10) are deliberately absent rather than guessed.
  */
 describe("known-systems registry (identities only, verified URIs)", () => {
   it("recognizes every roadmap §5 verified system URI", () => {
@@ -51,8 +51,8 @@ describe("known-systems registry (identities only, verified URIs)", () => {
     expect(NDC_SYSTEM).toBe("http://hl7.org/fhir/sid/ndc");
   });
 
-  it("does NOT guess the open-question URIs (ICD-10-PCS, HCPCS — roadmap §10)", () => {
-    // Absence reads as 'unknown' — a safe non-erroring degrade, never a false identity.
+  it("does NOT guess the open-question URIs (ICD-10-PCS, HCPCS: roadmap §10)", () => {
+    // Absence reads as 'unknown', a safe non-erroring degrade, never a false identity.
     expect(isKnownSystem("http://hl7.org/fhir/sid/icd-10-pcs")).toBe(false);
     expect(isKnownSystem("urn:oid:2.16.840.1.113883.6.285")).toBe(false); // HCPCS OID
   });
@@ -62,7 +62,7 @@ describe("known-systems registry (identities only, verified URIs)", () => {
   });
 });
 
-/** The binding registry — the roadmap-named multi-system elements, plus caller overrides. */
+/** The binding registry, the roadmap-named multi-system elements, plus caller overrides. */
 describe("terminology bindings (identities + strength, extensible built-ins)", () => {
   it("binds AllergyIntolerance.code extensibly to the multi-system substance value set", () => {
     const binding = buildBindingRegistry()("AllergyIntolerance.code");
@@ -134,7 +134,7 @@ describe("terminology-service interface (pluggable, none bundled)", () => {
     expect(
       service.validateCode({ valueSet: "http://other", system: RXNORM_SYSTEM, code: "x" }),
     ).toEqual({ membership: "unknown" });
-    // The request carries only identities — never a resource or a patient value.
+    // The request carries only identities, never a resource or a patient value.
     expect(Object.keys(seen[0] ?? {}).sort()).toEqual(["code", "system", "valueSet"]);
   });
 });

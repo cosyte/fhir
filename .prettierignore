@@ -5,7 +5,7 @@ coverage/
 # Dependencies
 node_modules/
 
-# Lockfiles (never reformat — tool-owned)
+# Lockfiles (never reformat, tool-owned)
 pnpm-lock.yaml
 package-lock.json
 yarn.lock

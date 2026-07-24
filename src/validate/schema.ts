@@ -1,8 +1,8 @@
 /**
- * The compact element schema the Phase-2 validator walks — a **non-StructureDefinition** description
+ * The compact element schema the Phase-2 validator walks, a **non-StructureDefinition** description
  * of a resource's direct elements: cardinality, datatype(s), and any required-strength code binding.
  *
- * This is deliberately *not* a FHIR `StructureDefinition` and not a snapshot generator — that engine
+ * This is deliberately *not* a FHIR `StructureDefinition` and not a snapshot generator, that engine
  * (loading StructureDefinitions, generating snapshots from differentials, slicing, US Core profiles)
  * is Phase 6. Phase 2 needs only enough shape to run layers 1–3, so it uses a hand-authored,
  * hierarchy-free record. Phase 6 will *feed* this engine from real StructureDefinitions; the schema
@@ -12,7 +12,7 @@
  * elements (which are the same on every resource), and **`Patient`** as the one worked demonstrator
  * that proves the engine validates a real R4 resource end-to-end. Every other resource type is
  * "not modeled yet" and degrades safely (see {@link ./validate.js}) rather than emitting false
- * errors — full per-resource + US Core coverage arrives in Phase 6. Cardinalities are cited from the
+ * errors, full per-resource + US Core coverage arrives in Phase 6. Cardinalities are cited from the
  * R4 base definitions (resource.html, domainresource.html, patient.html).
  *
  * @packageDocumentation
@@ -30,7 +30,7 @@ export interface ElementSchema {
   /**
    * The allowed datatype name(s). One entry for a normal element; several for a `choice[x]` element
    * (see {@link isChoice}). Primitive names are validated by {@link ./primitives.js}; complex names
-   * (e.g. `HumanName`) are validated structurally (cardinality + node shape) only — their internals
+   * (e.g. `HumanName`) are validated structurally (cardinality + node shape) only, their internals
    * need the datatype's own definition, which is Phase 6.
    */
   readonly types: readonly string[];
@@ -73,7 +73,7 @@ export function isChoice(element: ElementSchema): boolean {
  * The direct elements shared by every resource: `Resource` (`id`, `meta`, `implicitRules`,
  * `language`) plus `DomainResource` (`text`, `contained`, `extension`, `modifierExtension`). All are
  * optional in the base definitions. `language` binds to CommonLanguages at *preferred* strength in
- * R4 — **not** required — so it is not enumerated here (terminology binding is Phase 5).
+ * R4, **not** required, so it is not enumerated here (terminology binding is Phase 5).
  * *(resource.html, domainresource.html)*
  */
 const BASE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
@@ -87,7 +87,7 @@ const BASE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   modifierExtension: { min: 0, max: UNBOUNDED, types: ["Extension"] },
 };
 
-/** R4 `AdministrativeGender` — the required binding on `Patient.gender`. *(patient.html)* */
+/** R4 `AdministrativeGender`, the required binding on `Patient.gender`. *(patient.html)* */
 const ADMINISTRATIVE_GENDER = ["male", "female", "other", "unknown"] as const;
 
 /**
@@ -137,10 +137,10 @@ function withBase(schema: ResourceSchema): ResourceSchema {
 }
 
 /**
- * A base-elements-only schema for a resource type — the universally-true `Resource` /
+ * A base-elements-only schema for a resource type, the universally-true `Resource` /
  * `DomainResource` elements, and nothing resource-specific. Used to validate a resource whose type
  * is not modeled in Phase 2 **without** emitting false "unknown element" findings for its own
- * (unmodeled) elements — the safe degrade.
+ * (unmodeled) elements, the safe degrade.
  *
  * @param type - The resource type name.
  * @returns A schema carrying only the base elements.
@@ -166,7 +166,7 @@ export function baseSchema(type: string): ResourceSchema {
  * import { buildRegistry } from "@cosyte/fhir";
  * const registry = buildRegistry();
  * registry("Patient"); // the built-in Patient schema, base elements merged in
- * registry("Device");  // undefined — not modeled in Phase 2
+ * registry("Device");  // undefined, not modeled in Phase 2
  * ```
  */
 export function buildRegistry(extra: readonly ResourceSchema[] = []): SchemaRegistry {

@@ -60,7 +60,7 @@ const profile = loadSd({
 
 const resolve: BaseResolver = (url) => (url === base.url ? base : undefined);
 
-describe("generateSnapshot — differential merged onto the base snapshot", () => {
+describe("generateSnapshot: differential merged onto the base snapshot", () => {
   const snapshot = generateSnapshot(profile, resolve);
 
   it("tightens a matched base element in place (status gains mustSupport)", () => {
@@ -115,7 +115,7 @@ describe("snapshotElements", () => {
   });
 });
 
-describe("generateSnapshot — fail-safe", () => {
+describe("generateSnapshot: fail-safe", () => {
   it("throws FhirProfileError when the base cannot be resolved", () => {
     expect(() => generateSnapshot(profile, () => undefined)).toThrow(FhirProfileError);
   });

@@ -1,11 +1,11 @@
 /**
- * `Reference` string classification — the read side of FHIR references.
+ * `Reference` string classification, the read side of FHIR references.
  *
  * A FHIR `Reference.reference` string comes in four shapes (references.html), and confusing them is
  * a correctness hazard: a fragment points *inside* the same resource, a relative reference names a
  * resource on the same server, an absolute reference names one anywhere, and a logical reference
  * (a `urn:` or a bare token) is not a resolvable RESTful URL at all. This module classifies the
- * string and pulls out the resource type / id / version when they are present — it does **not**
+ * string and pulls out the resource type / id / version when they are present, it does **not**
  * resolve the reference (following a reference to its target, cycle-guarded, is Phase 9).
  *
  * @packageDocumentation
@@ -102,7 +102,7 @@ export function parseReference(raw: string): ParsedReference {
     };
   }
 
-  // Everything else — `urn:uuid:`, `urn:oid:`, a bare token — is a logical reference.
+  // Everything else, `urn:uuid:`, `urn:oid:`, a bare token, is a logical reference.
   return { raw, kind: "logical" };
 }
 

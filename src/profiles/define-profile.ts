@@ -1,28 +1,28 @@
 /**
- * `defineProfile()` — author a {@link StructureDefinition} in code (Phase 10, half a: the profile
+ * `defineProfile()`, author a {@link StructureDefinition} in code (Phase 10, half a: the profile
  * growth loop).
  *
  * The profile engine (Phase 6) validates a resource against a {@link StructureDefinition}. Until now
  * the only way to obtain one was to `parseResource(structureDefinitionJson)` and
- * `loadStructureDefinition()` it — i.e. a caller had to hand-write (or fetch) raw FHIR
+ * `loadStructureDefinition()` it, i.e. a caller had to hand-write (or fetch) raw FHIR
  * `StructureDefinition` JSON. `defineProfile()` is the **programmatic authoring** front door: it takes
  * an ergonomic {@link ProfileSpec} and returns the exact same {@link StructureDefinition} object the
  * engine consumes, so a consumer who hits a resource the base does not constrain can write the
  * constraint in TypeScript and feed it straight into `validateResource({ profiles })`.
  *
  * **One public path, no privileged internal shape.** The built-in starter profiles ({@link
- * ./starter-kit.js}) are authored through *this same function* — there is no separate, blessed internal
+ * ./starter-kit.js}) are authored through *this same function*, there is no separate, blessed internal
  * representation for "our" profiles versus a user's. `defineProfile(spec)` is byte-for-byte equivalent
  * to `loadStructureDefinition(parseResource(equivalentJson).resource)` for every valid spec (proven in
  * the test suite): the two authoring routes converge on one model. That equivalence is the whole point
- * of the growth loop — dogfooding the public API keeps it honest.
+ * of the growth loop, dogfooding the public API keeps it honest.
  *
  * **The writer is conservative (Postel's Law, emit side).** Unlike `loadStructureDefinition` (a
  * lenient *reader* of possibly-messy supplied JSON, which degrades malformed input), `defineProfile` is
- * an *authoring* surface: it throws {@link InvalidProfileError} on an author mistake — a missing `url`
- * / `type` / element `path`, a negative or non-integer cardinality, a `max` below `min` — so the error
+ * an *authoring* surface: it throws {@link InvalidProfileError} on an author mistake, a missing `url`
+ * / `type` / element `path`, a negative or non-integer cardinality, a `max` below `min`, so the error
  * surfaces at authoring time, not as a silent no-op at validation time. Every message is value-free
- * (profile metadata — URLs, paths, numbers — never instance data).
+ * (profile metadata, URLs, paths, numbers, never instance data).
  *
  * @packageDocumentation
  */
@@ -40,7 +40,7 @@ import type {
 } from "./structure-definition.js";
 
 /**
- * Thrown by {@link defineProfile} when a spec is malformed — the conservative-writer guard. The
+ * Thrown by {@link defineProfile} when a spec is malformed, the conservative-writer guard. The
  * message is value-free: it names profile metadata (a `url`, an element `path`, a cardinality number),
  * never instance data. A profile is not PHI, but the same value-free discipline is kept throughout.
  *
@@ -83,12 +83,12 @@ export interface ProfileConstraintSpec {
  * The ergonomic authoring shape for one element. Mirrors {@link ElementDefinition}, but `max` accepts
  * the author-friendly `"*"` (normalized to {@link UNBOUNDED}) and `constraint` takes
  * {@link ProfileConstraintSpec} (whose `severity` defaults). `id` defaults to `path`; `sliceName` is
- * derived from the id's `:` segment when omitted — exactly as `loadStructureDefinition` does.
+ * derived from the id's `:` segment when omitted, exactly as `loadStructureDefinition` does.
  */
 export interface ProfileElementSpec {
   /** The dotted element path from the resource root (e.g. `Observation.status`). Required. */
   readonly path: string;
-  /** The element id — carries slice names as `:sliceName`. Defaults to `path`. */
+  /** The element id, carries slice names as `:sliceName`. Defaults to `path`. */
   readonly id?: string;
   /** The slice this element defines. Defaults to the id's `:sliceName` segment when present. */
   readonly sliceName?: string;
@@ -102,7 +102,7 @@ export interface ProfileElementSpec {
   readonly slicing?: Slicing;
   /** The allowed types, when the profile constrains them. */
   readonly type?: readonly ElementType[];
-  /** A `fixed[x]` equality constraint (a FHIR type name + a model node — build with `complex`/`primitive`/`list`). */
+  /** A `fixed[x]` equality constraint (a FHIR type name + a model node, build with `complex`/`primitive`/`list`). */
   readonly fixed?: TypedValue;
   /** A `pattern[x]` subset constraint (a FHIR type name + a model node). */
   readonly pattern?: TypedValue;
@@ -118,7 +118,7 @@ export interface ProfileElementSpec {
  * {@link ProfileElementSpec}s.
  */
 export interface ProfileSpec {
-  /** The canonical URL — the identity the profile is referenced by. Required. */
+  /** The canonical URL, the identity the profile is referenced by. Required. */
   readonly url: string;
   /** The business version (e.g. `"6.1.0"`), when the profile is versioned. */
   readonly version?: string;
@@ -178,7 +178,7 @@ function toElementDefinition(spec: ProfileElementSpec): ElementDefinition {
   }
   let max: number | undefined;
   if (spec.max !== undefined) {
-    // A numeric max must be a non-negative integer or {@link UNBOUNDED} (Infinity) — accepting the
+    // A numeric max must be a non-negative integer or {@link UNBOUNDED} (Infinity), accepting the
     // latter keeps `defineProfile` idempotent on an already-normalized `ElementDefinition` (whose `*`
     // is UNBOUNDED), so re-authoring a loaded profile round-trips.
     if (
@@ -216,7 +216,7 @@ function toElementDefinition(spec: ProfileElementSpec): ElementDefinition {
 /**
  * Author a {@link StructureDefinition} programmatically from an ergonomic {@link ProfileSpec}.
  *
- * The result is the *same* model the profile engine consumes — pass it straight to
+ * The result is the *same* model the profile engine consumes, pass it straight to
  * `validateResource(resource, { profiles: [defineProfile(spec)] })`. It is identical to what
  * `loadStructureDefinition` produces from the equivalent FHIR `StructureDefinition` JSON: one model,
  * two authoring routes.

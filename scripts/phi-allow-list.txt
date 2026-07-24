@@ -1,11 +1,11 @@
 # scripts/phi-allow-list.txt
 #
-# PHI-scan allow-list — the positive declaration that a fixture's identifiers
+# PHI-scan allow-list, the positive declaration that a fixture's identifiers
 # are synthetic. `scripts/phi-scan.ts` reads this file; any realistic-PHI-shaped
 # token NOT covered here is a hit. A FHIR resource *could* carry an inline
 # `"_synthetic": true` marker, but that would corrupt the very round-trip the
 # fixtures prove, so this allow-list is the synthetic-fixture declaration
-# mechanism instead — the same approach `@cosyte/dicom` uses for binary `.dcm`
+# mechanism instead, the same approach `@cosyte/dicom` uses for binary `.dcm`
 # files and `@cosyte/x12` for byte-strict `.edi`.
 #
 # Format: `<TAG> <value>` per line. `#` comments and blank lines are ignored.
@@ -20,7 +20,7 @@
 #   EMAILDOMAIN <domain>  reserved / test email domain that is allowed to appear
 #
 # To add a new synthetic fixture: reuse the tokens below, or append new ones here
-# and commit. Adding a token is a reviewed, intentional act — never silent.
+# and commit. Adding a token is a reviewed, intentional act, never silent.
 
 # --- Synthetic patient / person names ---
 # The canonical FHIR R4 patient-example person (Peter James Chalmers) plus the

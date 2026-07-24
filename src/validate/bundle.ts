@@ -1,22 +1,22 @@
 /**
- * The Bundle-integrity validation layer (Phase 9) — the findings a `Bundle` earns beyond
+ * The Bundle-integrity validation layer (Phase 9), the findings a `Bundle` earns beyond
  * per-resource validation: unresolved references, `contained` reference cycles, and `fullUrl`↔`id`
  * disagreement. Keys off the resource being a `Bundle`, exactly as the safety / quantity / terminology
  * layers key off the resource type, and is wired into {@link ./validate.js validateResource}.
  *
  * Three value-free findings (all consistent with the P1–P8 diagnostic model):
  *
- * - **`FULLURL_ID_MISMATCH`** (error) — an entry whose `fullUrl` is a RESTful URL (`Type/id`) that
+ * - **`FULLURL_ID_MISMATCH`** (error), an entry whose `fullUrl` is a RESTful URL (`Type/id`) that
  *   disagrees with the wrapped `resource.id`. A `urn:uuid:` fullUrl constrains nothing, so it is
  *   exempt.
- * - **`REFERENCE_UNRESOLVED`** (warning) — a `#fragment` naming an absent contained resource, or a
+ * - **`REFERENCE_UNRESOLVED`** (warning), a `#fragment` naming an absent contained resource, or a
  *   relative `Type/id` naming no entry in the Bundle. Never fatal: the reference is preserved, the
  *   target may live outside the Bundle. An absolute/logical reference that is simply external draws
  *   nothing.
- * - **`CONTAINED_CYCLE`** (error) — a resource whose `contained` resources reference each other in a
+ * - **`CONTAINED_CYCLE`** (error), a resource whose `contained` resources reference each other in a
  *   cycle, caught by the bounded, iterative cycle guard rather than an unbounded resolver loop.
  *
- * Every finding is a FHIRPath *location*, never a value — a resource id, a reference string, and a
+ * Every finding is a FHIRPath *location*, never a value, a resource id, a reference string, and a
  * fullUrl are all kept out of the emitted issue.
  *
  * @packageDocumentation

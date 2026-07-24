@@ -15,8 +15,8 @@ permissions:
 
 jobs:
   # Universal gates from the shared pipeline (typecheck, lint, format, test, coverage, build, attw,
-  # dual ESM/CJS smoke, actionlint) on the standard Node matrix. The full test suite — including the
-  # P11 fuzz, PHI-leak, and type-level tiers — runs here at the default iteration count and gates.
+  # dual ESM/CJS smoke, actionlint) on the standard Node matrix. The full test suite, including the
+  # P11 fuzz, PHI-leak, and type-level tiers, runs here at the default iteration count and gates.
   # fhir ships a PHI scanner (scripts/phi-scan.ts), so the shared pipeline's optional PHI-scan step
   # is switched on.
   ci:
@@ -27,7 +27,7 @@ jobs:
   # P11 fuzz tier at fuzz-scale (FHIR-P11): the JSON + XML adversarial harness (XXE, billion-laughs,
   # deep nesting, `_element` games, huge/scientific numbers, prototype-chain keys) run at a raised
   # iteration count, plus the PHI-leak sweep. The contract: adversarial input never crashes / hangs /
-  # OOMs — always a typed error or a bounded rejection, and no value ever reaches a diagnostic.
+  # OOMs, always a typed error or a bounded rejection, and no value ever reaches a diagnostic.
   fuzz:
     runs-on: ubuntu-latest
     steps:
@@ -43,10 +43,10 @@ jobs:
           FUZZ_RUNS: "20000"
         run: pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts
 
-  # Differential vs the official validator (`org.hl7.fhir.core` / validator_cli.jar) — roadmap §6.
+  # Differential vs the official validator (`org.hl7.fhir.core` / validator_cli.jar), roadmap §6.
   # AUTHORED, NOT YET PROVEN: the oracle is a JVM program, so this gate can only run here (never in the
   # dev container). It runs over BOTH the synthetic spec-clean tier (P11) AND the Tier-2 real-world
-  # quirk corpus (P10b, unblocked by ADR 0018 — grounded in FHIR published examples + public IG
+  # quirk corpus (P10b, unblocked by ADR 0018, grounded in FHIR published examples + public IG
   # samples, provenance in test/quirk-corpus.test.ts). A genuinely vendor-proprietary quirk absent from
   # every public sample stays grounded-only and is not in the corpus (inventing one is forbidden).
   differential:
@@ -67,7 +67,7 @@ jobs:
             https://github.com/hapifhir/org.hl7.fhir.core/releases/latest/download/validator_cli.jar
       - name: Differential (synthetic spec-clean + Tier-2 quirk corpora)
         # ubuntu-latest ships a Temurin JDK; $JAVA_HOME_21_X64 is set by the runner image. The
-        # differential harness invokes `java` from PATH — no unpinned setup-java action needed.
+        # differential harness invokes `java` from PATH, no unpinned setup-java action needed.
         env:
           VALIDATOR_CLI_JAR: ${{ runner.temp }}/validator_cli.jar
         run: |

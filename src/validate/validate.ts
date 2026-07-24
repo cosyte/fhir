@@ -4,19 +4,19 @@
  * Given a resource model (from `parseResource`) and a schema ({@link ./schema.js}), the validator
  * walks the resource once and produces value-free {@link ValidationIssue}s across three layers:
  *
- * 1. **Structure** — an element the resource's schema does not define is `UNKNOWN_ELEMENT`; a resource
+ * 1. **Structure**, an element the resource's schema does not define is `UNKNOWN_ELEMENT`; a resource
  *    with no `resourceType` is `RESOURCE_TYPE_UNKNOWN`; a `choice[x]` with more than one variant is
  *    `CHOICE_AMBIGUOUS`; a node whose shape does not match its datatype is `TYPE_MISMATCH`.
- * 2. **Cardinality** — a required element (min ≥ 1) that is absent is `CARDINALITY_MIN`; an element
+ * 2. **Cardinality**, a required element (min ≥ 1) that is absent is `CARDINALITY_MIN`; an element
  *    appearing more than its max is `CARDINALITY_MAX`.
- * 3. **Value-domain** — a primitive whose lexical form fails its datatype pattern is
+ * 3. **Value-domain**, a primitive whose lexical form fails its datatype pattern is
  *    `PRIMITIVE_INVALID`; a `code` outside a required-strength binding is `CODE_INVALID`.
  *
  * **Lenient vs strict (Postel's Law).** The only mode-sensitive rule is the unknown element: in
- * `"lenient"` (the read default) it is a `warning` — the codec preserved it, and a consumer may want
- * to know — while in `"strict"` (the emit posture) it is an `error`. Every other finding is an error
+ * `"lenient"` (the read default) it is a `warning`, the codec preserved it, and a consumer may want
+ * to know, while in `"strict"` (the emit posture) it is an `error`. Every other finding is an error
  * regardless of mode. **Fail-safe:** the validator never rejects a whole resource for one recoverable
- * field, and it **never emits a false error** — a resource type it has no schema for degrades to a
+ * field, and it **never emits a false error**, a resource type it has no schema for degrades to a
  * single informational `RESOURCE_NOT_MODELED` (its own elements are left unchecked rather than
  * wrongly flagged), and complex datatype internals are left to Phase 6 rather than guessed at.
  *
@@ -79,7 +79,7 @@ export interface ValidateOptions {
   /** Extra terminology bindings, overriding the built-ins by element path (Phase 5 / Phase 6). */
   readonly bindings?: readonly TerminologyBinding[];
   /**
-   * Profiles (`StructureDefinition`s) to validate against (Phase 6). **None is bundled** — a caller
+   * Profiles (`StructureDefinition`s) to validate against (Phase 6). **None is bundled**, a caller
    * supplies the US Core (or vendor) profiles. Every supplied profile whose `type` matches the
    * resource type is applied (fixed/pattern, must-support, slicing, profile cardinality), and the
    * resource's `meta.profile` version pins are checked against the supplied set.
@@ -121,7 +121,7 @@ function emit(ctx: Ctx, code: ValidationCode, expression: string): void {
   ctx.issues.push(validationIssue(code, severityFor(code, ctx.mode), expression));
 }
 
-/** The occurrences of an element node as (leaf, path) pairs — one for a singleton, N for a list. */
+/** The occurrences of an element node as (leaf, path) pairs, one for a singleton, N for a list. */
 function occurrences(
   node: FhirNode,
   path: string,
@@ -148,7 +148,7 @@ function checkLeaf(
     return;
   }
   if (isList(leaf)) {
-    // A nested list where a single element belongs — recurse into its items.
+    // A nested list where a single element belongs, recurse into its items.
     for (const inner of occurrences(leaf, path))
       checkLeaf(ctx, inner.leaf, datatype, element, inner.path);
     return;
@@ -160,7 +160,7 @@ function checkLeaf(
     emit(ctx, "TYPE_MISMATCH", path);
     return;
   }
-  if (leaf.value === undefined) return; // metadata-only primitive (extension without a value) — nothing to check.
+  if (leaf.value === undefined) return; // metadata-only primitive (extension without a value), nothing to check.
 
   const verdict = validatePrimitiveValue(leaf.value, datatype);
   if (verdict === "type-mismatch") emit(ctx, "TYPE_MISMATCH", path);
@@ -256,7 +256,7 @@ export function validateResource(
   }
 
   // Safety layer (Phase 3): fail-closed modifier extensions (every type), retraction, and the named
-  // status/negation invariants (the six safety types). Independent of the structural schema above —
+  // status/negation invariants (the six safety types). Independent of the structural schema above,
   // it keys off `resourceType` and the modifier elements directly, so it runs even for types the
   // Phase-2 schema does not model.
   for (const issue of collectSafetyIssues(resource, rt)) ctx.issues.push(issue);
@@ -276,12 +276,12 @@ export function validateResource(
   // plus value-set membership when a terminology service is supplied. Degrades to warnings (never a
   // false error) with no service. Also keys off the resource model directly.
   // `options` is a superset of TerminologyOptions (it also carries `mode`/`schemas`), so it satisfies
-  // the layer's contract directly — avoids re-spreading optional fields under exactOptionalPropertyTypes.
+  // the layer's contract directly, avoids re-spreading optional fields under exactOptionalPropertyTypes.
   for (const issue of collectTerminologyIssues(resource, rt, options)) ctx.issues.push(issue);
 
   // Profile layer (Phase 6): validate against each supplied StructureDefinition whose `type` matches
   // (fixed/pattern, must-support-as-obligation, profile cardinality, slicing), plus the resource's
-  // `meta.profile` version pins against the supplied set. No profile content is bundled — a caller
+  // `meta.profile` version pins against the supplied set. No profile content is bundled, a caller
   // supplies US Core (or vendor) profiles, exactly as the terminology layer takes a service.
   if (options.profiles !== undefined && options.profiles.length > 0) {
     const profileOptions =

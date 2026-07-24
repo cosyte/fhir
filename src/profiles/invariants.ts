@@ -1,5 +1,5 @@
 /**
- * The invariant validation layer (Phase 7) — evaluate a profile's `constraint[]` (FHIRPath invariants)
+ * The invariant validation layer (Phase 7), evaluate a profile's `constraint[]` (FHIRPath invariants)
  * against an instance, the sixth-and-final validation layer (roadmap §6: structure → cardinality →
  * value-domain → terminology → profile → **invariant**).
  *
@@ -10,11 +10,11 @@
  *
  * - a **violated** constraint → `INVARIANT_VIOLATED`, its severity mirroring the constraint's own
  *   (`error` | `warning`), carrying the constraint `key`;
- * - an expression the engine **cannot evaluate** → `INVARIANT_UNCHECKED` (`information`) — surfaced,
+ * - an expression the engine **cannot evaluate** → `INVARIANT_UNCHECKED` (`information`), surfaced,
  *   **never silently passed** (roadmap §6 fail-safe).
  *
  * **The seven named safety invariants (`ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`) are
- * skipped here** — the always-on Phase-3 safety layer ({@link ../validate/safety.js}) owns them,
+ * skipped here**, the always-on Phase-3 safety layer ({@link ../validate/safety.js}) owns them,
  * hand-evaluated from their exact R4 FHIRPath so they fire *with or without* a supplied profile.
  * Evaluating them again from a profile snapshot would double the finding at a different location. The
  * generic engine covers **every other** constraint a supplied profile carries (base `ele-1` / `dom-*`,

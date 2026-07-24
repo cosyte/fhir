@@ -6,7 +6,7 @@ import { parseResource, readSafety, serializeResource, type NegationKind } from 
 /**
  * The property the roadmap names for Phase 3: **a negation never collapses to its positive on a
  * round-trip.** For each FHIR negation mechanism we build the minimal resource that carries it,
- * round-trip it through the codec, and assert the negation is still surfaced afterward — never
+ * round-trip it through the codec, and assert the negation is still surfaced afterward, never
  * silently dropped, never flipped to an empty (positive-reading) safety readout.
  */
 

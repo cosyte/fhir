@@ -3,7 +3,7 @@
  *
  * A FHIR `Bundle` is a container for a list of resources, tagged by a `type` that fixes what the
  * container *means*. This module reads a Bundle into an explicit, value-free {@link BundleReadout}
- * and — crucially — classifies the one semantic distinction that a consumer must never blur:
+ * and, crucially, classifies the one semantic distinction that a consumer must never blur:
  *
  * - **`transaction` is all-or-nothing.** Every entry is applied as a single atomic unit: either all
  *   succeed or the whole Bundle is rolled back, and entries may be interdependent (a POST that another
@@ -17,7 +17,7 @@
  * {@link entryProcessing} returns `"none"`.
  *
  * **Non-goal (stated, not built).** This library models the Bundle *artifact* and its semantics. It
- * does **not** execute a transaction or a batch — there is no server here, nothing is applied, nothing
+ * does **not** execute a transaction or a batch, there is no server here, nothing is applied, nothing
  * is rolled back. `entryProcessing` tells a caller *how a server would treat the entries*; honoring
  * that contract is the server's job (or `pathways`'), not this library's.
  *
@@ -37,11 +37,11 @@ export const BUNDLE_TYPES = {
   DOCUMENT: "document",
   /** A message (first entry is a `MessageHeader`). */
   MESSAGE: "message",
-  /** A set of actions applied **atomically** — all-or-nothing. */
+  /** A set of actions applied **atomically**, all-or-nothing. */
   TRANSACTION: "transaction",
   /** The server's reply to a `transaction`. */
   TRANSACTION_RESPONSE: "transaction-response",
-  /** A set of actions applied **independently** — one failing does not roll back the rest. */
+  /** A set of actions applied **independently**, one failing does not roll back the rest. */
   BATCH: "batch",
   /** The server's reply to a `batch`. */
   BATCH_RESPONSE: "batch-response",
@@ -53,31 +53,31 @@ export const BUNDLE_TYPES = {
   COLLECTION: "collection",
 } as const;
 
-/** One of the {@link BUNDLE_TYPES} — the R4 `Bundle.type`. */
+/** One of the {@link BUNDLE_TYPES}, the R4 `Bundle.type`. */
 export type BundleType = (typeof BUNDLE_TYPES)[keyof typeof BUNDLE_TYPES];
 
 /**
- * How a server would process a Bundle's entries — the artifact-level semantic contract.
+ * How a server would process a Bundle's entries, the artifact-level semantic contract.
  *
- * - `"atomic"` — a `transaction`: all-or-nothing, entries may be interdependent.
- * - `"independent"` — a `batch`: each entry on its own, no rollback across entries.
- * - `"none"` — every other type: not a processing request, no entry contract.
+ * - `"atomic"`, a `transaction`: all-or-nothing, entries may be interdependent.
+ * - `"independent"`, a `batch`: each entry on its own, no rollback across entries.
+ * - `"none"`, every other type: not a processing request, no entry contract.
  */
 export type EntryProcessing = "atomic" | "independent" | "none";
 
 /**
  * The entry-processing semantics for a `Bundle.type` (bundle.html). This is the all-or-nothing
  * (`transaction`) vs independent (`batch`) distinction, modeled explicitly so a caller never has to
- * re-derive it — and never conflates the two.
+ * re-derive it, and never conflates the two.
  *
  * @param type - The `Bundle.type` code (or any string; unknown types are `"none"`).
  * @returns `"atomic"` for `transaction`, `"independent"` for `batch`, `"none"` otherwise.
  * @example
  * ```ts
  * import { entryProcessing } from "@cosyte/fhir";
- * entryProcessing("transaction"); // "atomic"      — all-or-nothing
- * entryProcessing("batch");       // "independent" — entries stand alone
- * entryProcessing("searchset");   // "none"        — not a processing request
+ * entryProcessing("transaction"); // "atomic"     , all-or-nothing
+ * entryProcessing("batch");       // "independent", entries stand alone
+ * entryProcessing("searchset");   // "none"       , not a processing request
  * ```
  */
 export function entryProcessing(type: string | undefined): EntryProcessing {
@@ -102,7 +102,7 @@ export function isAtomicBundle(type: string | undefined): boolean {
 }
 
 /**
- * One entry of a {@link BundleReadout} — value-free, structural facts only.
+ * One entry of a {@link BundleReadout}, value-free, structural facts only.
  *
  * `request`/`response` presence and the request method/url are surfaced (a `transaction`/`batch`
  * entry carries a `request`; a `*-response` entry carries a `response`) so a caller can see the
@@ -111,7 +111,7 @@ export function isAtomicBundle(type: string | undefined): boolean {
 export interface BundleEntry {
   /** Zero-based position of the entry in `Bundle.entry`. */
   readonly index: number;
-  /** The entry `fullUrl`, when present — the identity a reference resolves against. */
+  /** The entry `fullUrl`, when present, the identity a reference resolves against. */
   readonly fullUrl: string | undefined;
   /** Whether the entry carries an inline `resource`. */
   readonly hasResource: boolean;
@@ -135,7 +135,7 @@ export interface BundleEntry {
  *
  * `atomic` restates {@link entryProcessing} `=== "atomic"` for ergonomics: **`true` means the entries
  * are all-or-nothing (a `transaction`)**, `false` means they are independent or the type carries no
- * processing contract. Nothing here is executed — see the module doc.
+ * processing contract. Nothing here is executed, see the module doc.
  */
 export interface BundleReadout {
   /** `Bundle.type`, or `undefined` if absent. */
@@ -144,7 +144,7 @@ export interface BundleReadout {
   readonly processing: EntryProcessing;
   /** `true` exactly for a `transaction` (all-or-nothing); `false` for `batch` and everything else. */
   readonly atomic: boolean;
-  /** `Bundle.total` (a `searchset` count), kept as its **lexical string** — never a JS `number`. */
+  /** `Bundle.total` (a `searchset` count), kept as its **lexical string**, never a JS `number`. */
   readonly total: string | undefined;
   /** The entries, in document order. */
   readonly entries: readonly BundleEntry[];
@@ -196,13 +196,13 @@ function readEntry(entryNode: FhirNode, index: number): BundleEntry {
 }
 
 /**
- * Read a `Bundle` resource into a value-free {@link BundleReadout} — its type, entry-processing
+ * Read a `Bundle` resource into a value-free {@link BundleReadout}, its type, entry-processing
  * semantics, and one entry per `Bundle.entry`. Lenient: a Bundle with no `type` reads with
  * `type: undefined` / `processing: "none"`, and a malformed entry reads with empty fields rather than
- * throwing (Postel's Law — nothing is dropped, the shape is surfaced).
+ * throwing (Postel's Law, nothing is dropped, the shape is surfaced).
  *
  * @param bundle - A `Bundle` resource model (typically from `parseResource`).
- * @returns The {@link BundleReadout}. Nothing is executed — see the module doc.
+ * @returns The {@link BundleReadout}. Nothing is executed, see the module doc.
  * @example
  * ```ts
  * import { parseResource, readBundle } from "@cosyte/fhir";
@@ -212,7 +212,7 @@ function readEntry(entryNode: FhirNode, index: number): BundleEntry {
  *     '"request":{"method":"POST","url":"Patient"}}]}',
  * );
  * const bundle = readBundle(resource);
- * bundle.atomic;                 // true — a transaction is all-or-nothing
+ * bundle.atomic;                 // true, a transaction is all-or-nothing
  * bundle.entries[0]?.fullUrl;    // "urn:uuid:1"
  * bundle.entries[0]?.requestMethod; // "POST"
  * ```

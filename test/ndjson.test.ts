@@ -33,7 +33,7 @@ async function* asyncChunks(
   for (const chunk of chunks) yield chunk;
 }
 
-describe("parseNdjsonLine — one line, isolated", () => {
+describe("parseNdjsonLine: one line, isolated", () => {
   it("reads a good line into a resource", () => {
     const record = parseNdjsonLine('{"resourceType":"Patient","id":"1"}', 1);
     expect(record.line).toBe(1);
@@ -82,7 +82,7 @@ describe("parseNdjsonLine — one line, isolated", () => {
   });
 });
 
-describe("streamNdjson — streaming, per-line isolation, no whole-file load", () => {
+describe("streamNdjson: streaming, per-line isolation, no whole-file load", () => {
   it("streams the export fixture: good resources, a skipped blank, an isolated bad line", async () => {
     const text = fixture("export.ndjson");
     const records = await collect(streamNdjson(asyncChunks([text])));
@@ -94,7 +94,7 @@ describe("streamNdjson — streaming, per-line isolation, no whole-file load", (
     expect(nth(errors, 0).error?.code).toBe(NDJSON_ERROR_CODES.MALFORMED_JSON);
     // The malformed line is line 4 (line 3 was blank and skipped but still counted).
     expect(nth(errors, 0).line).toBe(4);
-    // The stream did not abort — the resource after the bad line still arrived.
+    // The stream did not abort, the resource after the bad line still arrived.
     expect(nth(resources, 2).line).toBe(5);
   });
 

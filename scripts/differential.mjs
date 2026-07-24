@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * Differential test against the official FHIR validator (`org.hl7.fhir.core` / `validator_cli.jar`)
- * — roadmap §6, "The differential oracle is the official validator."
+ * Differential test against the official FHIR validator (`org.hl7.fhir.core` / `validator_cli.jar`).
+ * Roadmap §6, "The differential oracle is the official validator."
  *
  * ────────────────────────────────────────────────────────────────────────────────────────────────
  * WHY THIS IS A CI-ONLY GATE, NOT A LOCAL ONE
  * ────────────────────────────────────────────────────────────────────────────────────────────────
  * The oracle is a **JVM** program. The zero-dependency rule binds the *published package*, not the
- * test harness — but it does mean this gate needs a Java runtime + the `validator_cli.jar`, neither of
+ * test harness, but it does mean this gate needs a Java runtime + the `validator_cli.jar`, neither of
  * which is present in the default dev container. So this script runs on GitHub Actions (the
  * `differential` job in `.github/workflows/ci.yml`, which provisions Temurin 21 and downloads the
- * jar) and is a no-op-with-clear-skip elsewhere. **It has not been observed green in this container —
+ * jar) and is a no-op-with-clear-skip elsewhere. **It has not been observed green in this container,
  * do not read its presence as a proven differential.**
  *
  * WHAT IT PROVES (over the synthetic spec-clean corpus only)
@@ -18,13 +18,13 @@
  * The corpus here is **tier (a): synthetic, spec-clean** resources (roadmap §6). The two invariants:
  *
  *   1. **Never a false *valid*.** If the oracle reports an `error`/`fatal` on a resource, `@cosyte/fhir`
- *      must NOT report it clean. This is the safety-critical direction — a validator that passes what
+ *      must NOT report it clean. This is the safety-critical direction, a validator that passes what
  *      the authoritative implementation fails is dangerous. Enforced hard (a violation exits non-zero).
  *   2. **No spurious errors on clean input.** On a resource the oracle finds clean, we must not invent
  *      an `error`/`fatal`. Enforced hard.
  *
- * Comparison is on **issue presence + severity bucket + location**, never on diagnostic *text* — we
- * deliberately diverge on text (ours is PHI-redacted; the oracle echoes values — roadmap §7). Where we
+ * Comparison is on **issue presence + severity bucket + location**, never on diagnostic *text*, we
+ * deliberately diverge on text (ours is PHI-redacted; the oracle echoes values, roadmap §7). Where we
  * are a deliberate *subset* validator (we do not yet check every profile/terminology rule the oracle
  * does), the oracle finding an extra WARNING/INFORMATION we don't is a **documented delta**, printed
  * but not failed.
@@ -34,7 +34,7 @@
  * The differential's highest-value corpus is the **real-world quirk set** (tier (b), roadmap §3/§6).
  * ADR 0018 unblocked it: a quirk is still encoded only when a **real document grounds it**, but "real
  * document" now explicitly includes **publicly available real artifacts** (FHIR published examples,
- * the spec's normative rules, US Core, documented public interop defects) — not only private vendor
+ * the spec's normative rules, US Core, documented public interop defects), not only private vendor
  * feeds. So the quirk corpus ({@link QUIRK_CORPUS}) is now differential-tested here alongside the
  * spec-clean tier. Its provenance (each fixture → its public source) lives in `test/quirk-corpus.test.ts`.
  * A genuinely vendor-proprietary deviation absent from every public sample stays grounded-only and is
@@ -43,8 +43,8 @@
  * The two invariants apply to the quirk corpus unchanged. One quirk fixture (the HAPI-#5738 primitive-
  * extension misalignment) is designed to **fail closed**: `parseResource` throws a typed fatal, which
  * this harness surfaces as a `fatal` finding. A fail-closed *parse refusal* is exempt from Invariant 2
- * (spurious error): refusing unrecoverable structure is the safe, conservative direction — permitted
- * even where a more lenient oracle tolerates the input — and it can never be a false *valid* (we
+ * (spurious error): refusing unrecoverable structure is the safe, conservative direction, permitted
+ * even where a more lenient oracle tolerates the input, and it can never be a false *valid* (we
  * errored). Invariant 1 still applies in full.
  *
  * @packageDocumentation
@@ -63,7 +63,7 @@ const FIXTURE_DIR = fileURLToPath(new URL("../test/__fixtures__/", import.meta.u
 /**
  * The synthetic, spec-clean tier-(a) corpus this gate runs over. These are self-authored synthetic
  * resources (no PHI, no invented vendor quirk) that the oracle should find valid. Bundles / NDJSON /
- * deliberately-quirky fixtures are intentionally excluded — the quirk differential is REAL-CORPUS.
+ * deliberately-quirky fixtures are intentionally excluded, the quirk differential is REAL-CORPUS.
  *
  * "Spec-clean" is a hard contract: each MUST carry every element the base spec (and any spec-mandated
  * profile the oracle auto-applies) requires, or the oracle rejects it and the tier is a lie. So
@@ -83,7 +83,7 @@ const SPEC_CLEAN = [
 /**
  * The Tier-2 real-world quirk corpus (FHIR-P10b). Each fixture reproduces a documented public interop
  * quirk (see `test/quirk-corpus.test.ts` for the per-fixture grounding + citation). All are valid FHIR
- * the oracle finds clean — except `quirk-primitive-extension-misaligned.json`, which is malformed
+ * the oracle finds clean, except `quirk-primitive-extension-misaligned.json`, which is malformed
  * (broken `_`-sibling alignment, HAPI #5738); the oracle rejects it and so do we (fail-closed throw).
  */
 const QUIRK_CORPUS = [
@@ -98,10 +98,10 @@ const ERRORISH = new Set(["fatal", "error"]);
 
 /**
  * The US Core IG the oracle loads (`-ig`) so it can resolve US Core extension definitions. Without it,
- * the validator flags a `us-core-*` extension URL it cannot resolve as "not allowed here" — an artifact
+ * the validator flags a `us-core-*` extension URL it cannot resolve as "not allowed here", an artifact
  * of the *oracle's* missing package, not a conformance defect in the instance (the base spec permits
  * extensions, and `@cosyte/fhir` deliberately preserves-and-flags unknown extensions rather than
- * rejecting them — roadmap §10 fail-safe). Loading US Core is the roadmap's documented oracle
+ * rejecting them, roadmap §10 fail-safe). Loading US Core is the roadmap's documented oracle
  * configuration ("validates against base + IG profiles, US Core via `-ig <pkg#ver>`") and the 6.1.0
  * baseline (roadmap §3). It does not force US Core profiles onto instances that do not declare them in
  * `meta.profile`; it only makes the extension definitions resolvable.
@@ -113,7 +113,7 @@ function resolveJar() {
   const jar = process.env.VALIDATOR_CLI_JAR;
   if (!jar) {
     console.log(
-      "differential: VALIDATOR_CLI_JAR is not set (no JVM oracle available) — SKIPPING.\n" +
+      "differential: VALIDATOR_CLI_JAR is not set (no JVM oracle available), SKIPPING.\n" +
         "  This gate runs on GitHub Actions (the `differential` job), not in the dev container.",
     );
     process.exit(0);
@@ -133,7 +133,7 @@ function oracleIssues(jar, file) {
       },
     );
   } catch {
-    // The CLI exits non-zero when it finds validation errors — that is data, not a harness failure.
+    // The CLI exits non-zero when it finds validation errors, that is data, not a harness failure.
     // The OperationOutcome is still written; fall through and read it.
   }
   const outcome = JSON.parse(readFileSync(out, "utf8"));
@@ -147,7 +147,7 @@ function oracleIssues(jar, file) {
 /**
  * Our own findings, normalized to the same { severity, location } shape (text deliberately dropped),
  * plus `parseRefused`: whether the reader **failed closed** on unrecoverable input (a thrown
- * `FhirCodecError` — e.g. the HAPI-#5738 `_`-sibling misalignment). A fail-closed refusal is a genuine
+ * `FhirCodecError`, e.g. the HAPI-#5738 `_`-sibling misalignment). A fail-closed refusal is a genuine
  * `fatal` finding, never swallowed; the flag lets the caller treat it as the *safe, conservative*
  * direction (see Invariant 2) rather than a spurious error, since refusing malformed structure is
  * always permitted even where a more lenient oracle happens to tolerate it.
@@ -189,10 +189,10 @@ function main() {
     const oracleErrors = oracle.filter((i) => ERRORISH.has(i.severity));
     const ourErrors = ours.filter((i) => ERRORISH.has(i.severity));
 
-    // Invariant 1 — never a false valid: the oracle errored, we did not.
+    // Invariant 1, never a false valid: the oracle errored, we did not.
     if (oracleErrors.length > 0 && ourErrors.length === 0) {
       console.error(
-        `✗ FALSE VALID: ${name} — oracle reports ${oracleErrors.length} error(s), we report none.`,
+        `✗ FALSE VALID: ${name}, oracle reports ${oracleErrors.length} error(s), we report none.`,
       );
       for (const e of oracleErrors)
         console.error(`    oracle ${e.severity} @ ${e.location || "(root)"}`);
@@ -200,14 +200,14 @@ function main() {
       continue;
     }
 
-    // Invariant 2 — no spurious errors on clean input: the oracle was clean, we errored.
+    // Invariant 2, no spurious errors on clean input: the oracle was clean, we errored.
     // A fail-closed *parse refusal* is exempt: refusing unrecoverable structure (a broken `_`-sibling
-    // alignment) is the safe, conservative direction — allowed even where a more lenient oracle
+    // alignment) is the safe, conservative direction, allowed even where a more lenient oracle
     // tolerates it. It cannot be a false *valid* (we errored), and stricter-than-the-oracle on
     // malformed structure is not a defect. Only a spurious *validation* error is flagged here.
     if (oracleErrors.length === 0 && ourErrors.length > 0 && !parseRefused) {
       console.error(
-        `✗ SPURIOUS ERROR: ${name} — oracle is clean, we report ${ourErrors.length} error(s).`,
+        `✗ SPURIOUS ERROR: ${name}, oracle is clean, we report ${ourErrors.length} error(s).`,
       );
       for (const e of ourErrors)
         console.error(`    ours ${e.severity} @ ${e.location || "(root)"}`);
@@ -216,7 +216,7 @@ function main() {
     }
     if (oracleErrors.length === 0 && parseRefused) {
       console.log(
-        `✓ ${name}: reader failed closed (safe refusal); oracle lenient — exempt from Invariant 2.`,
+        `✓ ${name}: reader failed closed (safe refusal); oracle lenient, exempt from Invariant 2.`,
       );
       continue;
     }
@@ -227,13 +227,13 @@ function main() {
       `✓ ${name}: oracle ${oracleErrors.length} err / ${oracle.length} total; ` +
         `ours ${ourErrors.length} err / ${ours.length} total` +
         (delta > 0
-          ? ` (delta ${String(delta)}: oracle's extra profile/terminology findings — expected)`
+          ? ` (delta ${String(delta)}: oracle's extra profile/terminology findings, expected)`
           : ""),
     );
   }
 
   if (violations > 0) {
-    console.error(`\ndifferential: ${String(violations)} invariant violation(s) — see above.`);
+    console.error(`\ndifferential: ${String(violations)} invariant violation(s), see above.`);
     process.exit(1);
   }
   console.log(
