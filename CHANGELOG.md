@@ -44,6 +44,34 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Em-dash CI gate (EMDASH-CONFORMANCE, part 1).** The cosyte brand rule bans `U+2014` outright
+  (founder directive 2026-07-24; knowledgebase `06-brand/voice-and-tone.md`), and names commit
+  messages explicitly. It was enforced in CI in only three repos of ten; this repo was clean but
+  ungated, so nothing stopped it regressing. Ported `knowledgebase`'s scanner
+  (`scripts/check-no-emdash.sh`) and wired it into a dedicated `no-emdash` workflow that checks every
+  tracked file plus the PR title, PR body, and branch commit messages. Nothing else changes: no
+  source, fixture, or public-surface change, and no content churn (measured at the port: 175 tracked
+  files, 0 hits, no binaries).
+  - **The scanner refuses to report green from a scan it did not complete**, which is the point of
+    copying this variant rather than writing a fresh one. It pins `LC_ALL=C.UTF-8` (under an unset or
+    non-UTF-8 locale GNU grep 3.8 aborts on a `\x{NNNN}` pattern, and the naive shape discards that on
+    stderr and prints OK over a real violation); self-tests against a known em dash before believing a
+    clean result; builds the file list as its own command so a failed `git ls-files` stops the run;
+    refuses an empty file list; reads `git ls-files -z` through `xargs -0` so a C-quoted non-ASCII
+    path is never mistaken for a filename; passes `-e` and `--` so a tracked file named `-q` cannot
+    silence a batch; anchors at the repo top level so a run from a subdirectory cannot under-report;
+    and fails if the scan writes anything to stderr. Two residuals are inherited from the source
+    script and left in parity with it on purpose, rather than fixed in this repo alone: the stderr
+    capture binds to the scanning `grep`, not to the exclusion filter ahead of it in the pipeline
+    (no realistic trigger found), and the script necessarily excludes itself, since it has to name
+    the encodings it bans. The encoded-form matching is literal, so it is a floor: an unusual casing
+    or a dropped semicolon can pass the gate and still breaks the rule.
+  - **The gate is a separate workflow, not a step in `ci.yml`.** The message half needs the
+    non-default `edited` pull_request trigger (an em dash added to a PR description after the last
+    push otherwise lands unseen through the squash-merge subject), and `ci.yml` carries a Node matrix,
+    a 20,000-iteration fuzz job, and a JVM differential that are far too heavy to re-run on every
+    description edit.
+
 - **Security-scaffolding parity with the sibling parsers (FHIR-SCAFFOLD-GAPS).** Registering the 7
   back-filled repos in drift coverage surfaced three `fhir`-only gaps against `config`'s
   `drift-manifest.json` (`requiredScripts` / `requiredWorkflows`), now closed by mirroring what every

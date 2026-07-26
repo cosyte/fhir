@@ -1,0 +1,91 @@
+name: Em-dash gate
+
+# The brand rule (founder directive 2026-07-24, written down in the knowledgebase
+# repo at 06-brand/voice-and-tone.md) bans U+2014 outright across every cosyte
+# surface, and names commit messages explicitly. This workflow is the CI half of
+# that rule for this repo: the tracked files, and the text that is not a file.
+#
+# WHY A SEPARATE WORKFLOW, not a step in ci.yml.
+#
+# The message half needs the `edited` pull_request activity type. `edited` is not
+# a default, and without it a title or body changed after the last push is never
+# re-checked, so an em dash added to a PR description after the last green run
+# reaches main unseen. That matters here because the repo squash-merges: on a
+# multi-commit PR the PR title becomes the subject and the body becomes the
+# message that lands.
+#
+# ci.yml cannot afford that trigger. It runs the shared pipeline over a
+# {node 22, 24} matrix, plus a fuzz job at FUZZ_RUNS=20000, plus a differential
+# job that downloads validator_cli.jar and runs a JVM oracle over two corpora.
+# Re-running all of it every time someone fixes a typo in a PR description buys
+# no extra safety and costs a great deal. This workflow is a checkout and one
+# bash script, so it can afford the noisier trigger. Same call website made
+# (website#52) and the same reason.
+#
+# WHY NOT IN THE REUSABLE PIPELINE (cosyte/.github). The gate needs
+# scripts/check-no-emdash.sh present in the calling repo, and the correct variant
+# of that script differs per repo: text-only repos use knowledgebase's, repos that
+# track binaries need website's NUL-partition variant. A job in the shared
+# pipeline would break every caller that has neither. The gate is per-repo until
+# every caller carries the script.
+#
+# Both halves live in one workflow rather than two so the em-dash gate needs only
+# one copy of the checkout boilerplate; they are two steps of one job because the
+# second is meaningless if the first could not run at all.
+#
+# Run the file half locally with:  bash scripts/check-no-emdash.sh
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  no-emdash:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Full history: the message step below reads the PR's commit range, and
+          # the default shallow clone does not contain the base commit.
+          fetch-depth: 0
+
+      - name: Check tracked files
+        run: bash scripts/check-no-emdash.sh
+
+      # A squash merge composes its message from the PR title, the PR body, and
+      # the branch commits, so all three are checked. Pull requests only: on a
+      # push to main the message is already written, and this gate exists to stop
+      # it landing.
+      - name: Check PR title, body, and commit messages
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Collect first, scan second, and set the shell options here rather than
+          # trust the runner's default: piping the collection straight into the
+          # scanner would hide a failed `git log` (a rewritten base commit, or a
+          # future edit that drops fetch-depth) behind a clean title and body, and
+          # the gate would print OK over commits it never read. The title and body
+          # arrive through env, never interpolated into the script, so a PR
+          # description cannot inject shell.
+          set -euo pipefail
+          {
+            printf '%s\n' "$PR_TITLE"
+            printf '%s\n' "$PR_BODY"
+            git log --format=%B "$BASE_SHA..$HEAD_SHA"
+          } > "$RUNNER_TEMP/pr-messages.txt"
+          bash scripts/check-no-emdash.sh --stdin "the PR title, body, or commit messages" \
+            < "$RUNNER_TEMP/pr-messages.txt"

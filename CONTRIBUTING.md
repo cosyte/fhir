@@ -29,6 +29,14 @@ Before filing, please:
    discussion.
 5. Write a descriptive commit message. Imperative mood (`feat(codec): ...`, `fix(model): ...`) is
    encouraged but not enforced.
+6. **No em dashes (`U+2014`), anywhere.** The cosyte brand rule bans the character outright, and it
+   names commit messages explicitly, so the ban covers tracked files, the PR title, the PR body, and
+   every commit on the branch. CI enforces all four (`.github/workflows/no-emdash.yml`), and you can
+   run the file half locally with `bash scripts/check-no-emdash.sh`. The fix is to rewrite with a
+   period, colon, comma, or parentheses. Re-encoding is not a way around the rule: the gate also
+   matches the usual URL-escaped, backslash-u, and HTML-entity spellings. It matches those
+   literally, though, so an unusual casing or a dropped semicolon can pass the gate and is still a
+   violation. The gate is a floor, not the definition of the rule.
 
 ## Dev setup
 
@@ -40,6 +48,8 @@ pnpm build       # dual ESM + CJS + .d.ts via tsup
 pnpm typecheck   # tsc --noEmit
 pnpm lint        # eslint, --max-warnings=0
 pnpm test        # vitest run
+
+bash scripts/check-no-emdash.sh   # brand gate: no U+2014 in any tracked file
 ```
 
 ## Architecture decisions
