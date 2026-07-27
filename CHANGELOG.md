@@ -9,7 +9,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 ### Changed
 
 - **Patch bump to `0.0.3` purely to give npm support a fresh, never-attempted version to trace
-  (FHIR-NPM-NAME).** This release carries **no change to the package surface**: no new or removed
+  (FHIR-NPM-NAME).** This entry carries **no change to the package surface**: no new or removed
   exports, no behaviour change, no fixture change, no dependency change. `@cosyte/fhir` has never
   reached the registry, because npm's name-similarity filter rejects the scoped name with `E403` on
   account of the unscoped `fhir` package. A support request was filed 2026-07-23 and npm support
