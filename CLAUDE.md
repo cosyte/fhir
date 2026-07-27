@@ -11,7 +11,11 @@ semantics, and validate it against US Core, without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 landed; P10 landed (halves a + b); P11 buildable
+- **Pre-alpha, unpublished on npm.** No version of `@cosyte/fhir` has ever reached the registry:
+  every publish attempt is rejected with `E403` by npm's name-similarity filter, on account of the
+  unscoped `fhir` package (FHIR-NPM-NAME; support request filed 2026-07-23). `package.json`
+  therefore runs ahead of the registry rather than behind it, so read the version there and never
+  infer it from npm. **Phases 1–9 landed; P10 landed (halves a + b); P11 buildable
   tiers landed.** P11 (buildable portion; roadmap §6): conformance hardening as gating tests: a
   **JSON+XML+NDJSON fuzz tier** (`test/fuzz.test.ts`, `FUZZ_RUNS`-tunable, a dedicated `fuzz` CI job)
   proving adversarial input never crashes/hangs/OOMs: only a **typed** `FhirCodecError`/`FhirXmlError`

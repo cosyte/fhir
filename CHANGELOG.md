@@ -6,6 +6,18 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Patch bump to `0.0.3` purely to give npm support a fresh, never-attempted version to trace
+  (FHIR-NPM-NAME).** This release carries **no change to the package surface**: no new or removed
+  exports, no behaviour change, no fixture change, no dependency change. `@cosyte/fhir` has never
+  reached the registry, because npm's name-similarity filter rejects the scoped name with `E403` on
+  account of the unscoped `fhir` package. A support request was filed 2026-07-23 and npm support
+  asked for a version that has never been attempted, so they can trace the rejection end to end.
+  `0.0.1` and `0.0.2` have both already been attempted (the most recent, run `30043979616` on
+  2026-07-23), so re-firing either would only add a second attempt at a version already traced.
+  `0.0.3` exists to produce that clean trace, and for no other reason.
+
 ### Fixed
 
 - **`differential` CI check red on `main`: 5 "FALSE VALID" invariant violations reconciled against the
