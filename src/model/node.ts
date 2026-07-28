@@ -66,7 +66,7 @@ export interface FhirProperty {
  * hoists `resourceType` to the front where present (the one canonical-ordering rule FHIR requires).
  *
  * `properties` holds at most one entry per name. FHIR JSON requires property names to be unique
- * (json.html: "Property names SHALL be unique"), and a repeating element is an array, never a
+ * (json.html §2.6.2: "Property names SHALL be unique"), and a repeating element is an array, never a
  * repeated name. A non-conformant document that repeats a name is still read (the reader is
  * lenient), and the members the first-wins rule did not put in `properties` are kept in
  * {@link duplicates} rather than discarded, so nothing the wire carried is lost and a safety read

@@ -72,7 +72,7 @@ interface Grouped {
  * Group an object's members into `{ base → value }` and `{ base → meta }` maps, preserving the
  * first-seen order of base names across both.
  *
- * FHIR JSON requires unique property names (json.html: "Property names SHALL be unique") and
+ * FHIR JSON requires unique property names (json.html §2.6.2: "Property names SHALL be unique") and
  * expresses a repeating element as an array, so a repeated name is a document defect. RFC 8259 §4
  * leaves the winner undefined ("the behavior of software that receives such an object is
  * unpredictable"), and neither position is more authoritative than the other: whichever we picked, a
@@ -133,11 +133,26 @@ function scalarValue(node: RawJson, path: string, issues: FhirIssue[]): Primitiv
   }
 }
 
-/** Read a primitive's `_`-sibling object into `{ id, extension }`. */
+/**
+ * Read a primitive's `_`-sibling object into `{ id, extension }`.
+ *
+ * A repeated name here follows the **same** first-wins rule as every other object, and raises the
+ * same `DUPLICATE_PROPERTY`, so the codec never resolves a duplicate two different ways. The
+ * shadowed member is not carried on the model: a primitive's metadata is an R4 `Element` (`id` and
+ * `extension` only, no `modifierExtension`), so nothing here feeds a safety verdict, and a slot for
+ * it on every primitive node would buy no verdict. That limitation is stated on
+ * {@link ../safety/status.js} `shadowedProperties`, which walks object elements.
+ */
 function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue[]): PrimitiveMeta {
   if (metaNode === undefined || metaNode.t !== "obj") return {};
   const result: { id?: string; extension?: readonly FhirComplex[] } = {};
+  const seen = new Set<string>();
   for (const member of metaNode.members) {
+    if (seen.has(member.key)) {
+      issues.push(duplicateProperty(`${path}._${member.key}`));
+      continue;
+    }
+    seen.add(member.key);
     if (member.key === "id" && member.value.t === "str") {
       result.id = member.value.value;
     } else if (member.key === "extension" && member.value.t === "arr") {
@@ -287,9 +302,15 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
   // Members a repeated property name shadowed: read them into the model too (a dropped value cannot
   // be reasoned about later) and flag each one, so a caller is never handed one arbitrary value out
   // of several with a clean result.
+  const reported = new Set<string>();
   const duplicates = grouped.shadowed.map((member) => {
     const childPath = basePath === "" ? member.base : `${basePath}.${member.base}`;
-    issues.push(duplicateProperty(childPath));
+    // One issue per element, however many members shadowed it (a name and its `_`-sibling can each
+    // repeat): the FHIRPath location is the same, so a second issue would say nothing new.
+    if (!reported.has(member.base)) {
+      reported.add(member.base);
+      issues.push(duplicateProperty(childPath));
+    }
     return {
       name: member.base,
       value: member.isMeta

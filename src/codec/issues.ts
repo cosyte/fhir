@@ -54,7 +54,7 @@ export const ISSUE_CODES = {
    */
   UNEXPECTED_XML_CONTENT: "UNEXPECTED_XML_CONTENT",
   /**
-   * A JSON object repeated a property name. FHIR JSON requires unique property names (json.html:
+   * A JSON object repeated a property name. FHIR JSON requires unique property names (json.html §2.6.2:
    * "Property names SHALL be unique") and expresses repetition with an array, so a repeated name is
    * a document defect with no defined winner: RFC 8259 §4 says "the behavior of software that
    * receives such an object is unpredictable". The reader keeps the first value in the node's

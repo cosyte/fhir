@@ -12,7 +12,7 @@
  *    anywhere in the resource is an `error` (`UNHANDLED_MODIFIER_EXTENSION`). This check is universal,
  *    every resource type, not only the six safety types.
  * 2. **A repeated property name → fail closed.** FHIR JSON requires unique property names
- *    (json.html: "Property names SHALL be unique") and expresses a repeating element as an array, so
+ *    (json.html §2.6.2: "Property names SHALL be unique") and expresses a repeating element as an array, so
  *    a name written twice violates a `SHALL` and leaves the element holding two values that RFC 8259
  *    §4 gives no rule for ranking. That is an `error` (`DUPLICATE_PROPERTY`), universal like the
  *    modifier check: a `status` written twice must never validate clean.

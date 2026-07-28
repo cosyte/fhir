@@ -139,11 +139,12 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`, `entered-in-error`) across the six
   safety resource types. `assertSafeToSummarize` **refuses** (throws) rather than flatten past an
   unhandled modifier.
-- **A safety verdict is never asserted over a value the document left ambiguous.** The negation reads
-  run over every coding on a `CodeableConcept` and every value written under a repeated property
-  name, so a retraction cannot hide in the one a single-value lookup skipped; and where a repeated
-  name leaves an element with two values, `safeToSummarize` is `false` with the locations in
-  `shadowedProperties` instead of an affirmative answer.
+- **A safety verdict is never asserted over a value the document left ambiguous.** Each negation read
+  runs over every coding on a `CodeableConcept` and every value written for the element it reads
+  (`status`, `verificationStatus`, `code`, `doNotPerform`), so a retraction or a refutation cannot
+  hide in the one a single-value lookup skipped; and where a repeated property name leaves an element
+  with two values, `safeToSummarize` is `false` with the locations in `shadowedProperties` instead of
+  an affirmative answer.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their

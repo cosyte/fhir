@@ -16,17 +16,18 @@
  * is "right", never converts, never infers clinical meaning (known limitations).
  *
  * That last sentence is load-bearing where a document wrote a property name twice. FHIR JSON forbids
- * that (json.html) and RFC 8259 §4 leaves the winner undefined, so the element genuinely holds two
- * values and picking one would be exactly the reconciliation this layer does not do. Two rules follow.
- * The negation reads run over **all** of them, because a retraction the sender wrote must not go
- * unreported. And the readout stops claiming the resource is summarizable: `safeToSummarize` is
- * `false` with the locations in `shadowedProperties`, so a caller gets a refusal rather than an
- * affirmative verdict computed over one arbitrary half of the document.
+ * that (json.html §2.6.2) and RFC 8259 §4 leaves the winner undefined, so the element genuinely holds
+ * two values and picking one would be exactly the reconciliation this layer does not do. Two rules
+ * follow. Each negation read runs over **every** value written for the element it reads, because a
+ * retraction the sender wrote must not go unreported. And the readout stops claiming the resource is
+ * summarizable: `safeToSummarize` is `false` with the locations in `shadowedProperties`, so a caller
+ * gets a refusal rather than an affirmative verdict computed over one arbitrary half of the document.
  *
  * @packageDocumentation
  */
 
 import {
+  getAllProperties,
   getProperty,
   isComplex,
   isList,
@@ -54,6 +55,17 @@ import {
   SNOMED_SCT,
   typeOf,
 } from "./codes.js";
+
+/**
+ * `MedicationRequest.doNotPerform`, read across every value the document wrote for it. A `true`
+ * anywhere wins: the element is an instruction *not* to give a medication, so over-surfacing it is
+ * safe and missing it is not. Otherwise the first value written is surfaced unchanged.
+ */
+function readDoNotPerform(resource: FhirComplex): boolean | undefined {
+  const values = getAllProperties(resource, "doNotPerform");
+  if (values.some((node) => primitiveBoolean(node) === true)) return true;
+  return primitiveBoolean(values[0]);
+}
 
 /** The `clinicalStatus` code system to prefer when surfacing a code, by resource type. */
 function clinicalSystemFor(rt: string | undefined): string | undefined {
@@ -97,9 +109,11 @@ export type NegationKind =
  * *preferred*-system coding of a `CodeableConcept`, falling back to the first coding when the
  * standard one is absent (which may be a local/translation code), and the first member written when a
  * non-conformant document repeated a property name. The classified `negations` are derived from
- * **all** codings under any system and **all** members written under a repeated name, so a refutation
- * or a retraction can never hide there. Read a safety decision off `negations` / `retracted`, not off
- * the raw status string, and check `safeToSummarize` before flattening anything.
+ * **every** coding under any system and **every** value written for the element each negation reads
+ * (`status`, `verificationStatus`, `code`, `doNotPerform`), including the ones a repeated property
+ * name shadowed, so a refutation or a retraction cannot hide in the value a single-value lookup
+ * skipped. Read a safety decision off `negations` / `retracted`, not off the raw status string, and
+ * check `safeToSummarize` before flattening anything.
  */
 export interface SafetyReadout {
   /** The `resourceType`, or `undefined` if the resource carries none. */
@@ -157,13 +171,19 @@ export function unhandledModifierExtensions(resource: FhirComplex, path: string)
 
 /**
  * Collect the FHIRPath locations where the document wrote a property name more than once, a deep
- * walk of the whole resource. FHIR JSON requires unique property names (json.html: "Property names
- * SHALL be unique") and expresses repetition with an array, so this is empty for every conformant
- * document; a non-empty result means an element carries several values and RFC 8259 §4 gives no rule
- * for choosing between them.
+ * walk of the whole resource. FHIR JSON requires unique property names (json.html §2.6.2: "Property
+ * names SHALL be unique") and expresses repetition with an array, so this is empty for every
+ * conformant document; a non-empty result means an element carries several values and RFC 8259 §4
+ * gives no rule for choosing between them.
  *
  * The location names the element, not the individual member: FHIRPath has no way to address "the
- * second `status` member", so a name written twice reports its element's path once.
+ * second `status` member", so a name written twice reports its element's path once, however many
+ * members shadowed it.
+ *
+ * **Scope: object elements.** A repeated name inside a primitive's `_`-sibling (its R4 `Element`
+ * metadata, which is `id` and `extension`, never `modifierExtension`) is reported by the reader as a
+ * `DUPLICATE_PROPERTY` issue but does not appear here: nothing in that metadata feeds a safety
+ * verdict, so it cannot make one wrong.
  *
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
@@ -203,8 +223,14 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
  */
 function walkComplex(node: FhirComplex, path: string, out: SafetyWalk): void {
   for (const property of node.properties) visitProperty(property, path, out);
+  const reported = new Set<string>();
   for (const property of node.duplicates ?? []) {
-    out.shadowed.push(`${path}.${property.name}`);
+    // One location per element, however many members shadowed it: FHIRPath cannot address the
+    // individual members, so repeating the same path would be noise a caller cannot act on.
+    if (!reported.has(property.name)) {
+      reported.add(property.name);
+      out.shadowed.push(`${path}.${property.name}`);
+    }
     visitProperty(property, path, out);
   }
 }
@@ -258,30 +284,44 @@ function descend(node: FhirNode, path: string, out: SafetyWalk): void {
  */
 export function readSafety(resource: FhirComplex): SafetyReadout {
   const rt = typeOf(resource);
+  // The convenience fields surface one value: the first written, and for a CodeableConcept the
+  // preferred-system coding. The negation reads below never go through them.
   const status = primitiveString(getProperty(resource, "status"));
   const clinicalStatus = codeOf(getProperty(resource, "clinicalStatus"), clinicalSystemFor(rt));
-  const verificationStatusNode = getProperty(resource, "verificationStatus");
-  const verificationStatus = codeOf(verificationStatusNode, verificationSystemFor(rt));
-  const doNotPerform =
-    rt === "MedicationRequest"
-      ? primitiveBoolean(getProperty(resource, "doNotPerform"))
-      : undefined;
+  const verificationStatus = codeOf(
+    getProperty(resource, "verificationStatus"),
+    verificationSystemFor(rt),
+  );
+
+  // Every negation is read across *all* the values the document wrote for its element, and (via
+  // `codingsOf`) across all the codings inside each. Two documents motivate this and they are the
+  // same hazard: a CodeableConcept legitimately carries several codings and the negation may not be
+  // in the first, and a non-conformant document may write an element's name twice and put the
+  // negation in the member a single-value lookup skips. Reading one of several written values and
+  // reporting the record as positive is the exact harm this layer exists to prevent. Over-surfacing
+  // a negation is safe; missing one is not.
+  const anyValue = (name: string, match: (node: FhirNode) => boolean): boolean =>
+    getAllProperties(resource, name).some(match);
+
+  const doNotPerform = rt === "MedicationRequest" ? readDoNotPerform(resource) : undefined;
   const noKnownAllergy =
     rt === "AllergyIntolerance" &&
-    hasCoding(getProperty(resource, "code"), SNOMED_SCT, NO_KNOWN_ALLERGY);
+    anyValue("code", (node) => hasCoding(node, SNOMED_SCT, NO_KNOWN_ALLERGY));
   const retracted = isRetracted(resource);
 
   const negations: NegationKind[] = [];
   if (retracted) negations.push(ENTERED_IN_ERROR);
-  // Detect `refuted` from *any* coding on verificationStatus, not the single surfaced code, a
-  // CodeableConcept legitimately carries several codings (a local/translation coding alongside the
-  // standard one), and `refuted` may not be first. Reading only the first coding would silently drop
-  // the refutation and read the record as positive, the exact harm this layer exists to prevent.
-  if (hasCodeAnySystem(verificationStatusNode, REFUTED)) negations.push(REFUTED);
+  if (anyValue("verificationStatus", (node) => hasCodeAnySystem(node, REFUTED))) {
+    negations.push(REFUTED);
+  }
   if (noKnownAllergy) negations.push("no-known-allergy");
   if (doNotPerform === true) negations.push("do-not-perform");
-  if (rt === "MedicationStatement" && status === NOT_TAKEN) negations.push(NOT_TAKEN);
-  if (rt === "Immunization" && status === NOT_DONE) negations.push(NOT_DONE);
+  if (rt === "MedicationStatement" && anyValue("status", (n) => primitiveString(n) === NOT_TAKEN)) {
+    negations.push(NOT_TAKEN);
+  }
+  if (rt === "Immunization" && anyValue("status", (n) => primitiveString(n) === NOT_DONE)) {
+    negations.push(NOT_DONE);
+  }
 
   const { modifiers, shadowed } = walkSafety(resource, rt ?? "$this");
 

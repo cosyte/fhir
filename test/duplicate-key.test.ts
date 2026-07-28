@@ -170,6 +170,116 @@ describe("the safety readout no longer affirms over a value it did not rank", ()
   });
 });
 
+/**
+ * Every negation kind, not only the retraction the defect was reported against. `readSafety` calls
+ * `negations` the authoritative safety read, so each one has to survive the same duplicate that
+ * hid the retraction: a negation reported for one kind and silently dropped for the other five would
+ * be the same defect wearing a different code.
+ */
+describe("every negation kind is read across all the values written for its element", () => {
+  it("finds `refuted` in a shadowed verificationStatus", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"Condition","verificationStatus":{"coding":[{"code":"confirmed"}]},' +
+        '"verificationStatus":{"coding":[{"code":"refuted"}]}}',
+    );
+    expect(readSafety(resource).negations).toContain("refuted");
+  });
+
+  it("finds a retraction in a duplicate `code` inside one Coding", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"Condition",' +
+        '"verificationStatus":{"coding":[{"code":"confirmed","code":"entered-in-error"}]}}',
+    );
+    const safety = readSafety(resource);
+    expect(safety.retracted).toBe(true);
+    expect(safety.negations).toContain("entered-in-error");
+    expect(validateResource(resource).issues.map((i) => i.code)).toContain("RETRACTED_RESOURCE");
+  });
+
+  it("finds `not-taken` in a shadowed MedicationStatement status", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"MedicationStatement","status":"completed","status":"not-taken"}',
+    );
+    expect(readSafety(resource).negations).toContain("not-taken");
+  });
+
+  it("finds `not-done` in a shadowed Immunization status", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"Immunization","status":"completed","status":"not-done"}',
+    );
+    expect(readSafety(resource).negations).toContain("not-done");
+  });
+
+  it("finds `do-not-perform` in a shadowed doNotPerform, and surfaces it as true", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"MedicationRequest","status":"active","doNotPerform":false,' +
+        '"doNotPerform":true}',
+    );
+    const safety = readSafety(resource);
+    expect(safety.doNotPerform).toBe(true);
+    expect(safety.negations).toContain("do-not-perform");
+  });
+
+  it("finds a recorded no-known-allergy in a shadowed AllergyIntolerance code", () => {
+    // SNOMED CT 716186003 "No known allergy", the one concept this library encodes by identity.
+    const { resource } = parseResource(
+      '{"resourceType":"AllergyIntolerance","code":{"text":"synthetic"},' +
+        '"code":{"coding":[{"system":"http://snomed.info/sct","code":"716186003"}]}}',
+    );
+    const safety = readSafety(resource);
+    expect(safety.noKnownAllergy).toBe(true);
+    expect(safety.negations).toContain("no-known-allergy");
+  });
+
+  it("leaves a conformant multi-coding CodeableConcept reading exactly as before", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"Condition","clinicalStatus":{"coding":[' +
+        '{"system":"http://terminology.hl7.org/CodeSystem/condition-clinical","code":"active"},' +
+        '{"system":"http://example.org/local","code":"A"}]}}',
+    );
+    const safety = readSafety(resource);
+    expect(safety.clinicalStatus).toBe("active");
+    expect(safety.negations).toEqual([]);
+    expect(safety.safeToSummarize).toBe(true);
+  });
+});
+
+describe("the `_`-sibling resolves a repeated name the same way the rest of the codec does", () => {
+  const META_DUP =
+    '{"resourceType":"Patient","birthDate":"1970-01-01","_birthDate":{"id":"a","id":"b"}}';
+
+  it("is first-wins, not last-wins (one rule across the whole codec)", () => {
+    const { resource } = parseResource(META_DUP);
+    const birthDate = getProperty(resource, "birthDate");
+    expect(birthDate?.kind === "primitive" ? birthDate.id : undefined).toBe("a");
+  });
+
+  it("reports it rather than dropping it in silence", () => {
+    const { issues } = parseResource(META_DUP);
+    expect(issues).toContainEqual({
+      code: ISSUE_CODES.DUPLICATE_PROPERTY,
+      severity: "warning",
+      expression: "Patient.birthDate._id",
+    });
+  });
+});
+
+describe("a location is reported once per element, however many members shadowed it", () => {
+  it("collapses a repeated name and a repeated `_`-sibling onto one location", () => {
+    const { resource, issues } = parseResource(
+      '{"resourceType":"Observation","status":"final","status":"amended",' +
+        '"_status":{"id":"a"},"_status":{"id":"b"}}',
+    );
+    expect(
+      issues.filter((i) => i.code === ISSUE_CODES.DUPLICATE_PROPERTY).map((i) => i.expression),
+    ).toEqual(["Observation.status"]);
+    expect(readSafety(resource).shadowedProperties).toEqual(["Observation.status"]);
+    expect(
+      validateResource(resource).issues.filter((i) => i.code === "DUPLICATE_PROPERTY"),
+    ).toHaveLength(1);
+  });
+});
+
 describe("the validator rejects a document that broke the unique-name rule", () => {
   it("emits DUPLICATE_PROPERTY as an error and reports the resource invalid", () => {
     const { resource } = parseResource(RETRACTION_LAST);

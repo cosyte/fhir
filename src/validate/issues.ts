@@ -97,7 +97,7 @@ export const VALIDATION_CODES = {
   UNHANDLED_MODIFIER_EXTENSION: "UNHANDLED_MODIFIER_EXTENSION",
   /**
    * Safety, the document wrote a property name more than once, so an element holds several values
-   * and nothing says which the sender meant. FHIR JSON requires unique property names (json.html:
+   * and nothing says which the sender meant. FHIR JSON requires unique property names (json.html §2.6.2:
    * "Property names SHALL be unique") and expresses repetition with an array, so this is a violated
    * `SHALL` and an `error`. The reader keeps every value (see {@link ../model/node.js} `duplicates`),
    * so this reports an ambiguity, never a loss.

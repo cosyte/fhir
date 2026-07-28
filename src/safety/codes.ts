@@ -22,7 +22,6 @@
 
 import {
   getAllProperties,
-  getProperty,
   isComplex,
   isList,
   isPrimitive,
@@ -139,6 +138,13 @@ export function primitiveBoolean(node: FhirNode | undefined): boolean | undefine
  * Every `Coding` reachable from a node that is a `CodeableConcept` (or a list of them). Flattens a
  * repeating element (e.g. `Condition.category`) and tolerates a `CodeableConcept` with no `coding`.
  *
+ * Read across **every** value a non-conformant document wrote: all `coding` members, and every
+ * `system` x `code` combination inside one `Coding` that repeated either name. Both are the same
+ * fail-safe rule the retraction read uses, and both can only ever **add** pairs, so a detection built
+ * on this over-reports rather than misses. A conformant `Coding` has one `system` and one `code`, so
+ * it yields exactly one pair and this is a no-op there. The first pair is still the first value
+ * written, which is what {@link codeOf} surfaces.
+ *
  * @param node - A `CodeableConcept` node, a list of them, or `undefined`.
  * @returns The `(system, code)` pairs, in document order.
  * @example
@@ -154,15 +160,17 @@ export function codingsOf(node: FhirNode | undefined): Coded[] {
   if (node === undefined) return [];
   if (isList(node)) return node.items.flatMap((item) => codingsOf(item));
   if (!isComplex(node)) return [];
-  const coding = getProperty(node, "coding");
-  const codings = coding === undefined ? [] : isList(coding) ? coding.items : [coding];
+  const codings = getAllProperties(node, "coding").flatMap((coding) =>
+    isList(coding) ? [...coding.items] : [coding],
+  );
   const out: Coded[] = [];
   for (const item of codings) {
     if (!isComplex(item)) continue;
-    out.push({
-      system: primitiveString(getProperty(item, "system")),
-      code: primitiveString(getProperty(item, "code")),
-    });
+    const systems = getAllProperties(item, "system").map((n) => primitiveString(n));
+    const codes = getAllProperties(item, "code").map((n) => primitiveString(n));
+    for (const system of systems.length > 0 ? systems : [undefined]) {
+      for (const code of codes.length > 0 ? codes : [undefined]) out.push({ system, code });
+    }
   }
   return out;
 }

@@ -155,11 +155,21 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   duplicates outright, and last-wins would only move the blind spot); what changed is that the
   shadowed member is now **kept** (`FhirComplex.duplicates`, read via `getAllProperties`) and
   **reported** (`ISSUE_CODES.DUPLICATE_PROPERTY` warning on read, `VALIDATION_CODES.DUPLICATE_PROPERTY`
-  **error** in `validateResource`), and that `readSafety` **stops affirming**: the retraction read runs
-  over every value written for `status`/`verificationStatus` (so the reported case now reads
-  `retracted: true`), and any repeated name anywhere sets `safeToSummarize: false` with the locations in
-  `SafetyReadout.shadowedProperties` (`assertSafeToSummarize` throws). The writer still emits one
-  member per name, deliberately: both would be invalid FHIR. P2:
+  **error** in `validateResource`), and that `readSafety` **stops affirming**: **all six** negation reads
+  now run over every value written for the element each reads (`status`, `verificationStatus`, `code`,
+  `doNotPerform`), and `codingsOf` reads every `coding` plus every `system`x`code` pair inside a repeated
+  `Coding` name, so the reported case reads `retracted: true` and a retraction nested one level inside a
+  `CodeableConcept` is caught too; and any repeated name anywhere sets `safeToSummarize: false` with the
+  locations in `SafetyReadout.shadowedProperties` (`assertSafeToSummarize` throws). The `_`-sibling was
+  **last**-wins and silent; it is now first-wins + flagged like everywhere else (its shadowed member is
+  not modeled: an R4 `Element` carries `id`/`extension` only, so it cannot make a verdict wrong). The
+  writer still emits one member per name, deliberately: both would be invalid FHIR.
+  **Refuter pass one (`conformance-refuter`, REFUTED) drove all of that**; it also left two
+  `PRE-EXISTING` majors/minors as backlog lines, NOT fixed here: `readObservationValue` still returns
+  one of two written `valueQuantity` values with no signal on its own surface (no issue channel), and
+  read -> write -> read **launders** the defect (the writer emits the conformant survivor, so the
+  re-read is `valid: true`, `safeToSummarize: true`); `serializeResource`/`serializeResourceXml` return a
+  bare string with no channel to say so. P2:
   the first three validation layers (`validateResource`: structure, cardinality, primitive /
   enumerated-`code` value-domain) with a value-free `OperationOutcome` and the PHI redaction
   chokepoint. P3: the safety-critical status & negation spine (`readSafety`, fail-closed on an
