@@ -1,6 +1,6 @@
 /**
  * The FHIRPath parser, a recursive-descent parser over the {@link ./lexer.js} token stream that
- * builds a typed {@link Expr} AST (Phase 7, the bounded invariant engine, ADR 0002).
+ * builds a typed {@link Expr} AST (the bounded invariant engine).
  *
  * It implements the full FHIRPath **operator precedence** (implies < or/xor < and < in/contains <
  * equality < is/as < inequality < union < additive < multiplicative < unary < invocation/indexer), so

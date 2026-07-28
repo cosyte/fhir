@@ -2,11 +2,11 @@
  * FHIR resource model, the typed, immutable, wire-agnostic representation of FHIR resources and
  * datatypes.
  *
- * Phase 1 lands the **no-data-loss core**: the two precision-preserving primitives
- * ({@link FhirDecimal}, {@link FhirInteger64}, architecture ADR 0001) and a generic element tree
- * ({@link FhirNode}) that faithfully preserves structure, property order, and primitive metadata
- * (architecture ADR 0003). Typed per-resource models (Observation, Patient, …) arrive in later
- * phases; this barrel is their foundation.
+ * The **no-data-loss core**: the two precision-preserving primitives
+ * ({@link FhirDecimal}, {@link FhirInteger64}) and a generic element tree
+ * ({@link FhirNode}) that faithfully preserves structure, property order, and primitive metadata.
+ * Typed per-resource models (Observation, Patient, …) are not part of the model yet; this barrel is
+ * their foundation.
  */
 
 export { FhirDecimal, decimal, wouldLosePrecisionAsDouble } from "./decimal.js";

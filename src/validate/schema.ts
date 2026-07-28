@@ -1,18 +1,17 @@
 /**
- * The compact element schema the Phase-2 validator walks, a **non-StructureDefinition** description
+ * The compact element schema the validator walks, a **non-StructureDefinition** description
  * of a resource's direct elements: cardinality, datatype(s), and any required-strength code binding.
  *
  * This is deliberately *not* a FHIR `StructureDefinition` and not a snapshot generator, that engine
  * (loading StructureDefinitions, generating snapshots from differentials, slicing, US Core profiles)
- * is Phase 6. Phase 2 needs only enough shape to run layers 1–3, so it uses a hand-authored,
- * hierarchy-free record. Phase 6 will *feed* this engine from real StructureDefinitions; the schema
- * type is the seam between the two.
+ * is separate ({@link ../profiles/index.js}). This layer needs only enough shape to run layers 1–3,
+ * so it uses a hand-authored, hierarchy-free record; the schema type is the seam between the two.
  *
  * **What ships built-in here is intentionally minimal:** the base `Resource` / `DomainResource`
  * elements (which are the same on every resource), and **`Patient`** as the one worked demonstrator
  * that proves the engine validates a real R4 resource end-to-end. Every other resource type is
  * "not modeled yet" and degrades safely (see {@link ./validate.js}) rather than emitting false
- * errors, full per-resource + US Core coverage arrives in Phase 6. Cardinalities are cited from the
+ * errors. Cardinalities are cited from the
  * R4 base definitions (resource.html, domainresource.html, patient.html).
  *
  * @packageDocumentation
@@ -31,7 +30,7 @@ export interface ElementSchema {
    * The allowed datatype name(s). One entry for a normal element; several for a `choice[x]` element
    * (see {@link isChoice}). Primitive names are validated by {@link ./primitives.js}; complex names
    * (e.g. `HumanName`) are validated structurally (cardinality + node shape) only, their internals
-   * need the datatype's own definition, which is Phase 6.
+   * need the datatype's own definition, which this schema does not carry.
    */
   readonly types: readonly string[];
   /** A required-strength enumerated `code` binding, when the element has one. */
@@ -40,7 +39,7 @@ export interface ElementSchema {
 
 /** A required-strength value-set binding to a fixed set of `code` values. */
 export interface RequiredBinding {
-  /** Only `"required"` bindings are enforced in Phase 2; weaker strengths are Phase 5 (terminology). */
+  /** Only `"required"` bindings are enforced here; weaker strengths are the terminology layer's. */
   readonly strength: "required";
   /** The complete enumerated code set. */
   readonly codes: readonly string[];
@@ -73,7 +72,7 @@ export function isChoice(element: ElementSchema): boolean {
  * The direct elements shared by every resource: `Resource` (`id`, `meta`, `implicitRules`,
  * `language`) plus `DomainResource` (`text`, `contained`, `extension`, `modifierExtension`). All are
  * optional in the base definitions. `language` binds to CommonLanguages at *preferred* strength in
- * R4, **not** required, so it is not enumerated here (terminology binding is Phase 5).
+ * R4, **not** required, so it is not enumerated here.
  * *(resource.html, domainresource.html)*
  */
 const BASE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
@@ -94,7 +93,7 @@ const ADMINISTRATIVE_GENDER = ["male", "female", "other", "unknown"] as const;
  * `Patient` direct elements, from the R4 base StructureDefinition (patient.html). All are optional in
  * base R4 (Patient has no mandatory direct element). `gender` carries the one required binding.
  * `deceased[x]` and `multipleBirth[x]` are `choice[x]` elements. Complex-typed elements are checked
- * for cardinality and node shape only in Phase 2.
+ * for cardinality and node shape only.
  */
 const PATIENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
@@ -120,7 +119,7 @@ const PATIENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   link: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
 };
 
-/** The built-in schemas that ship in Phase 2 (base elements are merged into each). */
+/** The built-in schemas (base elements are merged into each). */
 const BUILTIN_SCHEMAS: readonly ResourceSchema[] = [
   { type: "Patient", elements: PATIENT_ELEMENTS },
 ];
@@ -139,7 +138,7 @@ function withBase(schema: ResourceSchema): ResourceSchema {
 /**
  * A base-elements-only schema for a resource type, the universally-true `Resource` /
  * `DomainResource` elements, and nothing resource-specific. Used to validate a resource whose type
- * is not modeled in Phase 2 **without** emitting false "unknown element" findings for its own
+ * is not modeled **without** emitting false "unknown element" findings for its own
  * (unmodeled) elements, the safe degrade.
  *
  * @param type - The resource type name.
@@ -157,7 +156,7 @@ export function baseSchema(type: string): ResourceSchema {
 /**
  * Build a {@link SchemaRegistry} from the built-in schemas plus any caller-supplied ones. A
  * caller schema for a type replaces the built-in for that type (so a consumer can, for example,
- * provide a resource type Phase 2 does not ship). Base elements are always merged in.
+ * provide a resource type this package does not ship). Base elements are always merged in.
  *
  * @param extra - Additional resource schemas to register (override built-ins by type).
  * @returns A resolver from resource type to its merged schema.
@@ -166,7 +165,7 @@ export function baseSchema(type: string): ResourceSchema {
  * import { buildRegistry } from "@cosyte/fhir";
  * const registry = buildRegistry();
  * registry("Patient"); // the built-in Patient schema, base elements merged in
- * registry("Device");  // undefined, not modeled in Phase 2
+ * registry("Device");  // undefined, not modeled
  * ```
  */
 export function buildRegistry(extra: readonly ResourceSchema[] = []): SchemaRegistry {

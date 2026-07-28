@@ -1,7 +1,8 @@
 /**
- * The terminology binding validation layer (Phase 5, strength-aware and content-free).
+ * The terminology binding validation layer (strength-aware and content-free).
  *
- * Layered on the Phase-2/3/4 validators, this checks the codes on **bound** elements, an element the
+ * Layered on the structural, safety, and quantity validators, this checks the codes on **bound**
+ * elements, an element the
  * binding registry ({@link ../terminology/bindings.js}) maps to a value set, for two kinds of
  * problem, at a severity that follows the binding **strength**:
  *
@@ -18,11 +19,11 @@
  *    severity (`required`/`extensible` → `error`, `preferred` → `warning`, `example` →
  *    `information`). An `"unknown"` answer, or **no service at all**, emits nothing: the layer
  *    degrades to the content-free system checks and never invents a false "not a member" error
- *    (roadmap §5 fail-safe).
+ *    (fail-safe).
  *
  * **example never errors.** An `example`-strength binding is illustrative; a non-member is
  * `information` at most and a wrong system draws nothing, rebinding an example code can never fail
- * validation (roadmap §6).
+ * validation.
  *
  * Every finding is **value-free**: a code / severity / FHIRPath location, never a code value or a
  * resource value. The value-set identity is used only to call the service, never emitted.
@@ -53,7 +54,7 @@ export interface TerminologyOptions {
    * supplied, membership checks are skipped and the layer degrades to the content-free system checks.
    */
   readonly terminology?: TerminologyService;
-  /** Extra element bindings, overriding the built-ins by path (Phase 6 profiles feed these). */
+  /** Extra element bindings, overriding the built-ins by path (profiles feed these). */
   readonly bindings?: readonly TerminologyBinding[];
 }
 
@@ -192,7 +193,7 @@ function systemUnexpectedSeverity(strength: BindingStrength): ValidationSeverity
 
 /**
  * Severity for a coding a terminology service reports is **not a member** of the value set.
- * `required`/`extensible` → `error` (roadmap's required→error, extensible→error-unless); `preferred`
+ * `required`/`extensible` → `error` (required→error, extensible→error-unless); `preferred`
  * → `warning`; `example` → `information` (illustrative only, never an error).
  */
 function notInSeverity(strength: BindingStrength): ValidationSeverity | undefined {

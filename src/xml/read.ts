@@ -1,6 +1,6 @@
 /**
  * The XML read path: a raw {@link XmlElement} tree → the immutable {@link FhirNode} model, the same
- * model the JSON reader produces (roadmap Phase 8, xml.html).
+ * model the JSON reader produces (xml.html).
  *
  * FHIR XML encodes the same information model as FHIR JSON through different mechanisms, and this
  * reader translates each back to the shared model so a resource read from XML is **equivalent** to
@@ -50,7 +50,7 @@ import { readRawXml, type XmlElement, type XmlNode } from "./raw-xml.js";
 
 /** The FHIR XML namespace; the default namespace of every FHIR resource element. */
 export const FHIR_XML_NAMESPACE = "http://hl7.org/fhir";
-/** The XHTML namespace of a FHIR narrative `<div>` (deferred in Phase 8, preserved-and-flagged). */
+/** The XHTML namespace of a FHIR narrative `<div>` (preserved-and-flagged). */
 export const XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /** Whether an XML tag name is a FHIR resource type (UpperCamelCase) vs an element name (lowerCamelCase). */

@@ -1,5 +1,5 @@
 /**
- * `fixed[x]` and `pattern[x]` constraint comparison (Phase 6).
+ * `fixed[x]` and `pattern[x]` constraint comparison.
  *
  * A profile can pin an element's value two ways (elementdefinition.html):
  *

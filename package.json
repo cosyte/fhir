@@ -1,7 +1,7 @@
 {
   "name": "@cosyte/fhir",
   "version": "0.0.3",
-  "description": "Developer-focused FHIR toolkit for Node.js and TypeScript, R4-first resource model, JSON codec, and validation. Pre-alpha scaffold.",
+  "description": "Developer-focused FHIR toolkit for Node.js and TypeScript, R4-first resource model, JSON and XML codec, and layered validation. Pre-alpha.",
   "keywords": [
     "fhir",
     "r4",
@@ -77,6 +77,7 @@
     "attw": "attw --pack .",
     "phi-scan": "tsx scripts/phi-scan.ts",
     "check:no-emdash": "bash scripts/check-no-emdash.sh",
+    "check:no-internal-refs": "bash scripts/check-no-internal-refs.sh",
     "version": "changeset version && node scripts/sync-version.mjs && prettier --write package.json src/index.ts",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",

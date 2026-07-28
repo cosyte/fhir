@@ -1,7 +1,7 @@
 /**
  * `FhirDecimal`, the string-backed representation of a FHIR `decimal` primitive.
  *
- * The single most important commitment of the codec (architecture ADR 0001): a FHIR `decimal`
+ * The single most important commitment of the codec: a FHIR `decimal`
  * value NEVER passes through the JavaScript `number` type, not on read, not on compare, not on
  * write. `JSON.parse('{"v":0.010}').v` is `0.01` in JavaScript: the trailing zero is destroyed
  * before any of our code runs, and `0.1 + 0.2 !== 0.3`. The FHIR spec makes trailing-zero precision
@@ -177,7 +177,7 @@ export class FhirDecimal {
 
   /**
    * The value as a JavaScript `number`. **Lossy and deliberately explicit**: this is the one place
-   * the float hazard ADR 0001 warns about is allowed in, and only because the caller named it. For
+   * the float hazard is allowed in, and only because the caller named it. For
    * values with more than ~15 significant digits, trailing-zero precision, or magnitude beyond
    * `Number.MAX_SAFE_INTEGER`, the result is not exact. Prefer {@link FhirDecimal.toString} or
    * {@link FhirDecimal.toBigInt}.

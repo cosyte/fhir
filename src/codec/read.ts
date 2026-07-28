@@ -1,8 +1,7 @@
 /**
  * The JSON read path: a {@link RawJson} tree → the immutable {@link FhirNode} model.
  *
- * This is where the two silent-data-loss hazards of a FHIR JSON codec are handled (json.html,
- * roadmap §4.1):
+ * This is where the two silent-data-loss hazards of a FHIR JSON codec are handled (json.html):
  *
  * 1. **Decimal precision.** Number tokens arrive from {@link readRawJson} as exact source text and
  *    become {@link FhirDecimal} values, never a JavaScript `number`. A token that a naive
@@ -57,7 +56,7 @@ interface Grouped {
 /**
  * Group an object's members into `{ base → value }` and `{ base → meta }` maps, preserving the
  * first-seen order of base names across both. Duplicate keys keep the first occurrence (FHIR
- * forbids duplicates; refining that is a later validation phase).
+ * forbids duplicates; refining that is a validation concern, not a codec one).
  *
  * @internal
  */

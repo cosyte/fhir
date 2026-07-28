@@ -1,13 +1,12 @@
 /**
- * The profile validation layer (Phase 6), validate a resource against a `StructureDefinition`.
+ * The profile validation layer, validate a resource against a `StructureDefinition`.
  *
- * This is the sixth validation layer (roadmap §6: structure → cardinality → value-domain → terminology
+ * This is the sixth validation layer (structure → cardinality → value-domain → terminology
  * → **profile** → invariant). Given a resource model and a profile, it walks the profile's snapshot
  * (generating one from the differential when needed, {@link ./snapshot.js}) and checks, per element:
  *
  * - **must-support**, an absent must-support element is `MUST_SUPPORT_ABSENT` (**`information`, never
- *   an error**): must-support is a *system obligation*, not an instance-presence requirement (roadmap
- *   §8). This is the single rule the roadmap is most emphatic about.
+ *   an error**): must-support is a *system obligation*, not an instance-presence requirement.
  * - **`fixed[x]` / `pattern[x]`**, a value that is not exactly the fixed value is
  *   `PROFILE_FIXED_MISMATCH`; one that does not contain the pattern is `PROFILE_PATTERN_MISMATCH`
  *   (both `error`). {@link ./fixed-pattern.js} draws the equality-vs-subset distinction.
@@ -20,8 +19,8 @@
  *
  * Every finding is **value-free**, a code, a severity, and a FHIRPath location, never a value.
  * **Deferred:** binding enforcement from profile bindings (the terminology layer already covers
- * bindings, Phase 5), the `profile`/`type` discriminators and reslicing (need FHIRPath, Phase 7),
- * and invariant `constraint`s (Phase 7).
+ * bindings), the `profile`/`type` discriminators and reslicing (need FHIRPath),
+ * and invariant `constraint`s.
  *
  * @packageDocumentation
  */
@@ -224,7 +223,7 @@ function collectSlicingIssues(
 /**
  * Collect `PROFILE_VERSION_MISMATCH` findings by comparing the resource's declared `meta.profile`
  * canonicals against the supplied profile set. A declared `canonical|version` whose canonical is
- * supplied at a **different** version is flagged (`warning`), the roadmap requires flagging an
+ * supplied at a **different** version is flagged (`warning`): flagging an
  * unknown profile version rather than silently validating against a different one. A canonical that is
  * not supplied at all is *not* flagged here (it simply was not validated), and a declaration with no
  * version pin never mismatches.

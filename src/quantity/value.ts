@@ -1,18 +1,18 @@
 /**
- * The `Observation.value[x]` choice, typed by the **present** variant, never assumed (Phase 4).
+ * The `Observation.value[x]` choice, typed by the **present** variant, never assumed.
  *
  * `Observation.value[x]` is an **11-way choice** (`valueQuantity`, `valueCodeableConcept`,
  * `valueString`, `valueBoolean`, `valueInteger`, `valueRange`, `valueRatio`, `valueSampledData`,
  * `valueTime`, `valueDateTime`, `valuePeriod`). A consumer that assumes `valueQuantity` and reads a
  * `valueString` of `"POSITIVE"` or a titer `valueRatio` of `1:64` as a number produces a wrong
- * clinical value (roadmap §4.6). {@link readObservationValue} branches on the variant that is actually
+ * clinical value. {@link readObservationValue} branches on the variant that is actually
  * present and reports it, so a caller must handle the type it got rather than the one it expected. The
  * same reader works on a `component` (its `value[x]` is the identical choice, minus the SampledData
  * caveat), so a blood-pressure panel's systolic/diastolic components discriminate too.
  *
  * `interpretation` (the H/L/HH abnormal flags) and `referenceRange` (population-qualified) are
- * surfaced here too, Phase 4 preserves and exposes them; it never *computes* an abnormal flag from a
- * value and a range (roadmap §4.6 known limitations).
+ * surfaced here too, this layer preserves and exposes them; it never *computes* an abnormal flag from a
+ * value and a range (known limitations).
  *
  * @packageDocumentation
  */
@@ -48,8 +48,8 @@ export type ObservationValueType = (typeof OBSERVATION_VALUE_TYPES)[number];
  * variant that is present; `quantity` is populated **only** when `type === "Quantity"`, so a caller
  * that wants a number must check the type first. `ambiguous` lists any *additional* variants also
  * present, a `value[x]` is a `0..1` choice, so a non-empty `ambiguous` is a structural defect (the
- * kind the structural validator reports as `CHOICE_AMBIGUOUS` once Observation is a modeled schema,
- * Phase 6). This reader surfaces it here regardless, so the extra variant is never silently dropped.
+ * kind the structural validator reports as `CHOICE_AMBIGUOUS` once Observation is a modeled
+ * schema). This reader surfaces it here regardless, so the extra variant is never silently dropped.
  */
 export interface ObservationValue {
   /** The present variant's type suffix (e.g. `"Quantity"`, `"String"`, `"CodeableConcept"`). */
@@ -151,7 +151,7 @@ export function readReferenceRanges(observation: FhirComplex): ObservationRefere
 
 /**
  * Surface the `Observation.interpretation` codings (the abnormal flags, H/L/HH/LL/A/N…). Preserved
- * and exposed; never derived from a value and a reference range (Phase 4 does not compute).
+ * and exposed; never derived from a value and a reference range (this layer does not compute).
  *
  * @param observation - An `Observation` complex node.
  * @returns The interpretation codings across every `interpretation` CodeableConcept (`[]` when none).

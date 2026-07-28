@@ -1,6 +1,6 @@
 /**
  * Cross-format model equivalence, the oracle for "the same resource in XML and in JSON parses to the
- * same model" (roadmap Phase 8: *JSON↔XML model equivalence*).
+ * same model".
  *
  * The JSON and XML readers produce the **same** {@link FhirNode} model, but two differences are
  * irreducible without a datatype schema (which the schema-free codec deliberately does not consult),

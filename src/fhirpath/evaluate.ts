@@ -1,5 +1,5 @@
 /**
- * The bounded FHIRPath evaluator (Phase 7, the invariant engine, ADR 0002).
+ * The bounded FHIRPath evaluator (the invariant engine).
  *
  * FHIRPath is **collection-oriented**: every expression evaluates to an ordered collection of items,
  * and every operation maps a collection to a collection. This evaluator walks an {@link ./parser.js Expr}
@@ -16,7 +16,7 @@
  *
  * Everything else, arithmetic, string functions, `descendants()`, `resolve()`, FHIR-type `is`/`as`
  * (a generic model carries no datatype name), raises {@link ./errors.js UnsupportedFhirPathError}.
- * That is the whole safety contract (roadmap §6): the engine **never guesses**. `where`/`select`/`all`
+ * That is the whole safety contract: the engine **never guesses**. `where`/`select`/`all`
  * evaluate their criteria *lazily per item*, so an unsupported sub-term inside a filter over an empty
  * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires,
  * exactly the common case that lets base constraints like `dom-3` pass without implementing their full

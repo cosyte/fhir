@@ -1,15 +1,14 @@
 /**
  * FHIR validation, the layered structural / cardinality / value-domain validator and its
- * `OperationOutcome` output (Phase 2, validation layers 1–3).
+ * `OperationOutcome` output (validation layers 1–3).
  *
  * Postel's Law holds here too: a lenient read warns-and-preserves an unknown element while a strict
  * emit errors on it. Every finding is **value-free**, a coded reason plus a FHIRPath location, and
  * the human-readable `diagnostics` that reach an `OperationOutcome` are derived only from the code
  * (the redaction chokepoint), so no resource value can leak.
  *
- * Terminology binding beyond required-code enumeration (Phase 5), profile / slicing / must-support
- * (Phase 6), and FHIRPath invariants (Phase 7) arrive with the phases that own them. FHIRPath itself
- * is governed by `documentation/decisions/0002-fhirpath-dependency-posture.md`.
+ * Terminology binding beyond required-code enumeration, profile / slicing / must-support, and
+ * FHIRPath invariants are layered on by the modules that own them.
  */
 
 export { validateResource } from "./validate.js";

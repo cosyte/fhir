@@ -1,5 +1,5 @@
 /**
- * The `Bundle` model and its **entry-processing semantics** (Phase 9, bundle.html).
+ * The `Bundle` model and its **entry-processing semantics** (bundle.html).
  *
  * A FHIR `Bundle` is a container for a list of resources, tagged by a `type` that fixes what the
  * container *means*. This module reads a Bundle into an explicit, value-free {@link BundleReadout}
@@ -28,7 +28,7 @@ import { getProperty, isComplex, isList, isPrimitive } from "../model/index.js";
 import type { FhirComplex, FhirNode } from "../model/index.js";
 
 /**
- * The R4 `Bundle.type` value set (`valueset-bundle-type`), in full. The seven Phase-9 headline types
+ * The R4 `Bundle.type` value set (`valueset-bundle-type`), in full. The seven headline types
  * plus the two server-reply variants a real feed carries, so an incoming `transaction-response` /
  * `batch-response` classifies rather than falling through. Frozen via `as const`.
  */

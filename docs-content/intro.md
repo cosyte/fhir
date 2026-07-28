@@ -13,15 +13,12 @@ JSON **and** XML codec, and layered validation, with the same one-line ergonomic
 
 :::note Status: pre-alpha, docs are a growing stub
 
-`@cosyte/fhir` is **pre-alpha (`0.0.0`) and not yet published to npm.** It is **registered in the docs
-site but disabled** until it cuts its first release: the same lifecycle the other parsers passed
-through before they went live.
+`@cosyte/fhir` is **pre-alpha and not yet published to npm.** It is **registered in the docs site but
+disabled** until it cuts its first release.
 
-This page is a deliberately **minimal scaffold**. The full documentation spine (Installation,
-Quickstart, Core Concepts, Guides, and Troubleshooting) is **not written yet**; it lands as the
-parser stabilizes toward its first alpha, so the docs grow *with* the library rather than ahead of
-it. Until then, the [repository README](https://github.com/cosyte/fhir#readme) and its
-`CHANGELOG.md` are the authoritative, always-current account of what the parser does.
+The full documentation spine (Installation, Quickstart, Core Concepts, Guides, and Troubleshooting)
+is **not written yet**. Until then, the [repository README](https://github.com/cosyte/fhir#readme)
+and its `CHANGELOG.md` are the authoritative, always-current account of what the parser does.
 
 :::
 
@@ -60,6 +57,5 @@ Honestly, and by design for a pre-alpha:
   validation (`PROFILE_SLICE_UNCHECKED`), and no `validator_cli.jar` differential yet.
 - **No narrative or full-guide documentation**: see the status note above.
 
-For the precise, phase-by-phase record of what has landed and what is deferred, read the
-[repository README](https://github.com/cosyte/fhir#readme) and `CHANGELOG.md`. This page will be
-expanded into the canonical documentation spine once the parser reaches that milestone.
+For the precise record of what is in the package and what is deferred, read the
+[repository README](https://github.com/cosyte/fhir#readme) and `CHANGELOG.md`.

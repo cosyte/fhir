@@ -1,8 +1,8 @@
 /**
- * The **pluggable terminology-service interface** (Phase 5). None is bundled.
+ * The **pluggable terminology-service interface**. None is bundled.
  *
  * Validating that a code is a *member* of a value set needs the value set's expansion, i.e. the
- * SNOMED / LOINC / RxNorm / CPT content the library deliberately does **not** vendor (roadmap §5
+ * SNOMED / LOINC / RxNorm / CPT content the library deliberately does **not** vendor (
  * licensing). That work is delegated to a terminology service a consumer supplies: a small interface
  * with one operation, `$validate-code`-shaped, so an adapter over a real terminology server (HL7's
  * `tx.fhir.org`, a VSAC-backed service, an in-house expansion) can satisfy it.
@@ -11,7 +11,7 @@
  * service that cannot decide (offline, value set not loaded, code system not installed) says so, and
  * the validator degrades to the system-level, content-free checks rather than inventing a verdict.
  * With **no** service configured at all, the validator behaves as if every membership question
- * returned `"unknown"`: it never emits a false "not a member" error (roadmap §5 fail-safe).
+ * returned `"unknown"`: it never emits a false "not a member" error (fail-safe).
  *
  * The library ships **no implementation**, wiring a real one is a consumer/`pathways` concern. This
  * module defines only the contract.

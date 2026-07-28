@@ -1,6 +1,6 @@
 /**
  * The typed, unrecoverable fatals of the XML reader, and, above all, the **safety refusals** that
- * make the zero-dependency reader XXE- and billion-laughs-proof (roadmap §6).
+ * make the zero-dependency reader XXE- and billion-laughs-proof.
  *
  * FHIR is transported as text, so the fuzz/attack surface of an XML codec is entity expansion and
  * external-entity resolution, not byte framing. The reader here is hardened by **refusing** the two
@@ -24,7 +24,7 @@
  * {@link XML_FATAL_CODES.MAX_DEPTH_EXCEEDED} so adversarial input yields a typed error, never a stack
  * overflow.
  *
- * Every message is **value-free** (roadmap §7): it carries a coded reason and a byte `offset`, never
+ * Every message is **value-free**: it carries a coded reason and a byte `offset`, never
  * a slice of the offending document, because that slice could be PHI.
  *
  * @packageDocumentation
@@ -59,7 +59,7 @@ export type XmlFatalCode = (typeof XML_FATAL_CODES)[keyof typeof XML_FATAL_CODES
  * Thrown by the XML reader on an unrecoverable failure, a well-formedness error, a **refused** DTD
  * or entity (the safety refusals), or nesting past the depth bound. Carries the coded reason and a
  * byte `offset`, and, by design, **no** slice of the offending input, because that slice could be
- * PHI (roadmap §7).
+ * PHI.
  *
  * @example
  * ```ts

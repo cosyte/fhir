@@ -1,5 +1,5 @@
 /**
- * The `StructureDefinition` model and loader (Phase 6, the profile engine's front door).
+ * The `StructureDefinition` model and loader (the profile engine's front door).
  *
  * A FHIR `StructureDefinition` (profiling.html, structuredefinition.html) is itself a FHIR resource,
  * it describes a resource type or a *profile* (a constrained variant, e.g. a US Core profile) as a
@@ -13,7 +13,7 @@
  * `pattern[x]` constraints. Narrative, mapping, and documentation fields the validator does not act on
  * are ignored (lenient read, an unmodeled field is never an error).
  *
- * **No StructureDefinition content is bundled.** Like the terminology layer (roadmap §5), this ships
+ * **No StructureDefinition content is bundled.** Like the terminology layer, this ships
  * the *engine*, not the *content*: a caller supplies the US Core (or vendor) StructureDefinitions to
  * validate against. That keeps the package zero-dependency and content-free while still letting a
  * consumer run real US Core conformance by loading the published (CC0) IG profiles.
@@ -38,7 +38,7 @@ export type Derivation = "specialization" | "constraint";
 
 /**
  * The R4 discriminator types (`valueset-discriminator-type`) a slicing may use to tell its slices
- * apart. **`position` is R5-only and is deliberately not a member here** (roadmap Phase 6): an R4
+ * apart. **`position` is R5-only and is deliberately not a member here**: an R4
  * profile that carries it is treated as an unsupported discriminator, not silently accepted.
  */
 export type DiscriminatorType = "value" | "exists" | "pattern" | "type" | "profile";
@@ -90,7 +90,7 @@ export interface ElementBinding {
 /**
  * One `ElementDefinition.constraint`, a FHIR **invariant**. `key` is the stable identifier
  * (`ait-1`, `us-core-1`), `severity` is `error` | `warning`, and `expression` is the FHIRPath the
- * Phase-7 engine evaluates against an instance. `human` (the prose description) is modeled but never
+ * engine evaluates against an instance. `human` (the prose description) is modeled but never
  * surfaced in a diagnostic (it is spec text, not PHI, but the engine reports the value-free `key`).
  */
 export interface ElementConstraint {
@@ -135,7 +135,7 @@ export interface ElementDefinition {
   readonly pattern?: TypedValue;
   /** The element's terminology binding, when the definition states one. */
   readonly binding?: ElementBinding;
-  /** The element's invariant constraints (FHIRPath), when the definition states any (Phase 7). */
+  /** The element's invariant constraints (FHIRPath), when the definition states any. */
   readonly constraint?: readonly ElementConstraint[];
 }
 
@@ -172,7 +172,7 @@ function parseMax(node: FhirNode | undefined): number | undefined {
 
 /**
  * Parse a FHIR `min` (an `unsignedInt` primitive) to a number, or `undefined`. The precision-
- * preserving codec models every JSON number as a {@link FhirDecimal} (ADR 0001), so a well-formed
+ * preserving codec models every JSON number as a {@link FhirDecimal}, so a well-formed
  * `min` arrives as an integer-valued decimal; a non-integer or non-numeric `min` (malformed input)
  * degrades to `undefined` rather than throwing.
  */

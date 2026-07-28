@@ -219,3 +219,49 @@ Mirrors the three disciplines in the meta-repo's `documentation/conventions.md`.
    `[Unreleased]` entry per meaningful change.
 3. **Crew + knowledgebase loop**: if the public API changes, flag/update the matching `crew`
    healthcare skill (`fhir-resource-design`) + the KB product doc.
+4. **No internal project bookkeeping on a public surface** (founder directive, 2026-07-27). What a
+   consumer reads (`README.md`, `docs-content/`, the npm `description`, a release body, the JSDoc
+   their editor renders, the text their log prints) says what the software does and what changed.
+   Item identifiers (`FHIR-P10`), phase and wave language, ADR numbers, meta-repo paths and "how
+   this got built" commentary belong in the changeset, `CHANGELOG.md`, the commit, the PR and the
+   roadmap. It is a **translation** at the boundary, not a deletion, and when you strip an
+   identifier off the front of a line, repair the head: a fragment reads worse than the text it
+   replaced. Gated by `pnpm check:no-internal-refs` (`.github/workflows/no-internal-refs.yml`, job
+   id `no-internal-refs`). The gate keys on known project prefixes, so **a new programme prefix has
+   to be added to it by hand**; and it catches identifiers, not English sentences about our process,
+   so the reviewer still owns half the rule.
+
+   **Three source surfaces, three different answers.** `/** */` doc comments compile into
+   `dist/*.d.ts` and render in a consumer's editor, so they are **gated** (they were the larger half
+   here by an order of magnitude: 255 hits against 23 on the whole public markdown surface). String
+   literals reach a consumer as message text, so they are **gated too** (measured zero hits here,
+   because this library's diagnostics are value-free by contract, an `IssueCode` plus a FHIRPath
+   expression). `//` and plain `/* */` comments are **not gated** and identifiers are **welcome** in
+   them, because **the convention says source comments are a place identifiers belong**. That is the
+   whole reason. **Do not justify this boundary from what reaches `dist/`** (everything in `src/`
+   does: `dist` is `files[0]`, there is no `.npmignore`, and `dist/*.map` carries every tracked
+   source byte in `sourcesContent`). The line is what a consumer is **shown**, not what lands on
+   their disk. Also: **removing a doc comment to satisfy the gate is a regression**, not a fix.
+
+   **This copy of the gate diverges from `hl7`/`ncpdp` in exactly one place, and the divergence is a
+   REMOVAL: there is no `slice` rule here.** `slice` is R4 vocabulary in this package
+   (`ElementDefinition.slicing`, `sliceName`), not our jargon. Measured with the sibling rule
+   enabled: **41 matches, one of them ours.** A 1-in-41 rule tells a remediator to rewrite reference
+   material, which is the defect the whole gate exists to prevent, and no lookahead narrows it
+   because the collision is with the head noun. The ordinal arm of the phase rule
+   ("thirteenth slice") still fires. **Do not paste the rule back without re-measuring.**
+
+   **Two holes worth knowing, both left open on purpose.** (a) The identifier form this repo
+   actually writes, `FHIR-P10b`, is **not** caught: the trailing lowercase suffix breaks the word
+   boundary, and the bare `P10b` / `P9` forms have no prefix to key on. Closing either needs a
+   `P\d+`-shaped rule, which in an earlier `hl7` draft corrupted the ICD-10-CM codes in
+   "Map ICD-10 P07, P22 and P29" and truncated the range "P00-P96"; this README carries ICD-10-CM
+   codes today. The widening belongs in the one shared prefix list, not in a divergent copy.
+   (b) `phase` at the end of a clause ("decoded this phase.") is not caught, inherited from `hl7`
+   for the clinical-English collision. Both are the reviewer's catch.
+
+   **`CHANGELOG.md` is deliberately NOT scanned even though it ships inside the npm tarball.** The
+   convention names it as one of the places identifiers belong, and rewriting a released changelog's
+   history destroys the traceability that same convention preserves. That contradiction is
+   ecosystem-wide, `hl7` and `ncpdp` exclude it on identical reasoning, and it is **recorded, not
+   decided** here.

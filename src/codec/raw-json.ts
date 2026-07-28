@@ -1,7 +1,7 @@
 /**
  * A precision-preserving JSON reader.
  *
- * `JSON.parse` is **non-conformant for FHIR** (architecture ADR 0001, json.html): it maps every JSON
+ * `JSON.parse` is **non-conformant for FHIR** (json.html): it maps every JSON
  * number to an IEEE-754 double, so `0.010` becomes `0.01` and a 64-bit-range integer loses its
  * low-order digits *before* any FHIR-aware code runs. A reviver cannot recover this, it only sees
  * the already-corrupted `number`. So the reader here is a small recursive-descent JSON parser whose

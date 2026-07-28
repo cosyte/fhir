@@ -1,12 +1,12 @@
 /**
- * The bounded FHIRPath engine (Phase 7, ADR 0002), lexer → parser → evaluator, plus the
+ * The bounded FHIRPath engine, lexer → parser → evaluator, plus the
  * invariant-oriented {@link evaluateInvariant} entry point the validator uses.
  *
  * This is a **vendored, capped subset** of FHIRPath, not a general engine and not a runtime
  * dependency: it evaluates the `constraint.expression`s and discriminator-shaped paths the R4 /
  * US Core invariant set uses, and **refuses everything else** by raising
  * {@link ./errors.js UnsupportedFhirPathError}. The refusal is the feature, the validator turns it
- * into `INVARIANT_UNCHECKED` (roadmap §6 fail-safe: an expression the subset cannot evaluate is
+ * into `INVARIANT_UNCHECKED` (fail-safe: an expression the subset cannot evaluate is
  * reported unchecked, never silently passed).
  *
  * @packageDocumentation
