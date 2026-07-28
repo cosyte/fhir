@@ -16,6 +16,12 @@
  *    a name written twice violates a `SHALL` and leaves the element holding two values that RFC 8259
  *    §4 gives no rule for ranking. That is an `error` (`DUPLICATE_PROPERTY`), universal like the
  *    modifier check: a `status` written twice must never validate clean.
+ * 2b. **A `0..1` safety element wrapped in an array → fail closed.** FHIR JSON writes a single-valued
+ *    element as a name/value pair and reserves the array for a repeating element (json.html §2.6.2.2), so
+ *    `{"status":["entered-in-error"]}` is a non-conformant encoding in which a single-value read finds
+ *    no code at all. Same `error` posture (`ARRAY_WRAPPED_SCALAR`), and it matters because
+ *    array-wrapping every element is ordinary generic XML-to-JSON converter output, the usual route a
+ *    C-CDA or v2 feed takes to a FHIR surface.
  * 3. **Retraction surfaced.** A resource marked `entered-in-error` is retracted, not data
  *    (`RETRACTED_RESOURCE`, `information`), surfaced so a consumer cannot silently treat it as active.
  * 4. **The named invariants**, `ait-1`/`ait-2` (AllergyIntolerance), `con-3`/`con-4`/`con-5`
@@ -42,10 +48,14 @@ import {
   ENTERED_IN_ERROR,
   hasCoding,
   isRetracted,
-  primitiveString,
+  primitiveStrings,
   SAFETY_RESOURCE_TYPES,
 } from "../safety/codes.js";
-import { shadowedProperties, unhandledModifierExtensions } from "../safety/status.js";
+import {
+  arrayWrappedScalars,
+  shadowedProperties,
+  unhandledModifierExtensions,
+} from "../safety/status.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issues.js";
 
 /**
@@ -78,14 +88,22 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
     issues.push(validationIssue("DUPLICATE_PROPERTY", ISSUE_SEVERITIES.ERROR, location));
   }
 
+  // 2b. A `0..1` safety element wrapped in an array is the same fault by a different route: FHIR JSON
+  // reserves the array for a repeating element, so the encoding is non-conformant and a single-value
+  // read finds nothing in it. Universal like the two above, and for the same reason: it is what stops
+  // the validator returning `valid` for a document whose retraction is sitting inside a wrapper.
+  for (const location of arrayWrappedScalars(resource, rt)) {
+    issues.push(validationIssue("ARRAY_WRAPPED_SCALAR", ISSUE_SEVERITIES.ERROR, location));
+  }
+
   if (!SAFETY_RESOURCE_TYPES.has(rt)) return issues;
 
   // 3. Surface a retracted (entered-in-error) resource, not a defect, but never to be missed. The
   // location read matches `isRetracted`'s own fail-safe read over every value written for `status`,
   // so a retraction in a member a repeated name shadowed is still reported at `status`.
   if (isRetracted(resource)) {
-    const retractedStatus = getAllProperties(resource, "status").some(
-      (node) => primitiveString(node) === ENTERED_IN_ERROR,
+    const retractedStatus = getAllProperties(resource, "status").some((node) =>
+      primitiveStrings(node).includes(ENTERED_IN_ERROR),
     );
     const at = retractedStatus ? `${rt}.status` : `${rt}.verificationStatus`;
     issues.push(validationIssue("RETRACTED_RESOURCE", ISSUE_SEVERITIES.INFORMATION, at));

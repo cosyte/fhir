@@ -104,6 +104,17 @@ export const VALIDATION_CODES = {
    */
   DUPLICATE_PROPERTY: "DUPLICATE_PROPERTY",
   /**
+   * Safety, a single-valued (`0..1`) safety element, or `resourceType`, arrived wrapped in a JSON
+   * array. FHIR JSON writes a single-valued element as a name/value pair and uses an array only for a
+   * repeating element (json.html §2.6.2.2), so this is a non-conformant encoding and an `error`. It is the
+   * shape a **generic XML-to-JSON converter** produces for every element, which is how a C-CDA or v2
+   * feed commonly reaches a FHIR surface, and left unreported it reaches the same harm as a repeated
+   * property name: a single-value read finds no code in the array, so a retraction or a negation the
+   * sender wrote goes unreported and the record reads live. Nothing is lost, the wrapper is preserved
+   * and the safety layer reads through it; this reports that the encoding was ambiguous.
+   */
+  ARRAY_WRAPPED_SCALAR: "ARRAY_WRAPPED_SCALAR",
+  /**
    * Safety, the resource is marked `entered-in-error` and is therefore **retracted, not
    * data**. Surfaced as `information` (it is not itself a defect) so a consumer cannot miss it.
    */
@@ -278,6 +289,7 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   CODE_INVALID: ISSUE_TYPES.CODE_INVALID,
   UNHANDLED_MODIFIER_EXTENSION: ISSUE_TYPES.NOT_SUPPORTED,
   DUPLICATE_PROPERTY: ISSUE_TYPES.STRUCTURE,
+  ARRAY_WRAPPED_SCALAR: ISSUE_TYPES.STRUCTURE,
   RETRACTED_RESOURCE: ISSUE_TYPES.INFORMATIONAL,
   INVARIANT_VIOLATED: ISSUE_TYPES.INVARIANT,
   INVARIANT_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
@@ -320,6 +332,9 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   DUPLICATE_PROPERTY:
     "Property name appears more than once on this object; FHIR requires unique property names and " +
     "uses an array for a repeating element, so the element's value is ambiguous.",
+  ARRAY_WRAPPED_SCALAR:
+    "Single-valued element is wrapped in an array; FHIR JSON writes a 0..1 element as a name/value " +
+    "pair and uses an array only for a repeating element, so the element's encoding is ambiguous.",
   RETRACTED_RESOURCE:
     "Resource is marked entered-in-error; it is retracted and must not be treated as active data.",
   INVARIANT_VIOLATED: "A resource invariant (content-validation constraint) was violated.",

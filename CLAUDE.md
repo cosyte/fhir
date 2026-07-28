@@ -170,15 +170,85 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   read -> write -> read **launders** the defect (the writer emits the conformant survivor, so the
   re-read is `valid: true`, `safeToSummarize: true`); `serializeResource`/`serializeResourceXml` return a
   bare string with no channel to say so. **Pass two (NOT REFUTED) filed two more `PRE-EXISTING` ones,
-  the first worth queuing ahead of the next slice:** an **array-wrapped `0..1` element** reaches this
+  the first worth queuing ahead of the next slice** -- and **`FHIR-ARRAY-WRAPPED-SCALAR`
+  (2026-07-28) closed BOTH of them.** They were: an **array-wrapped `0..1` element** reaching that
   item's exact harm shape with no duplicate key at all (`{"resourceType":"Observation","status":
 ["entered-in-error"]}` -> `retracted: false`, `negations: []`, `safeToSummarize: true`,
   `valid: true`, zero issues, because `primitiveString` returns `undefined` for a list and there is no
   cardinality check without a per-resource model, and array-wrapping every element is realistic
-  generic XML->JSON converter output); and a **duplicated `resourceType` shadows the type gate**,
+  generic XML->JSON converter output); and a **duplicated `resourceType` shadowing the type gate**,
   since `typeOf` is a first-wins single-value read (`{"resourceType":"Observation","resourceType":
-"MedicationStatement","status":"not-taken"}` -> `negations: []`, though now at least `valid: false`
-  and `safeToSummarize: false`). P2:
+"MedicationStatement","status":"not-taken"}` -> `negations: []`). **Both are one defect** once you
+  see it: the type gate is what every type-scoped negation hangs off, so a single-value read of it is
+  the narrowest hole in the whole safety claim, and an array wrapper and a duplicate name are just two
+  ways to reach it. The fix has three parts. **(1)** The negation reads read _through_ an array
+  wrapper as well as across every written value (`primitiveStrings`/`primitiveBooleans`, internal,
+  recursive); `SafetyReadout.status`/`.resourceType` do too. **(2)** `readSafety` considers **every**
+  type the document names (`typesOf`, internal); `typeOf` is deliberately **unchanged** and still the
+  strict single-value read, because a _structural_ verdict should reject an unreadable type, not guess
+  one. **(3)** New `VALIDATION_CODES.ARRAY_WRAPPED_SCALAR` (**error**, `structure`) +
+  `SafetyReadout.arrayWrappedScalars` + `arrayWrappedScalars()` (public, mirroring
+  `shadowedProperties`), so the library **stops affirming**: `safeToSummarize` is `false` and
+  `assertSafeToSummarize` throws. `validateResource` also no longer returns early on an unreadable
+  `resourceType` without running the safety layer.
+  **The cardinality table is scoped ON PURPOSE and must not be widened casually**
+  (`SAFETY_SCALAR_ELEMENTS` = `status`/`clinicalStatus`/`verificationStatus`/`doNotPerform`/`code`, on
+  a **resource root** of a `SAFETY_RESOURCE_TYPES` type, plus `resourceType` on any root). It is the
+  cardinality of the closed set the safety layer already reads, **not** a per-resource model. A
+  name-only, depth-free rule emits a **false error on a conformant document**: `Questionnaire.code`
+  and `ElementDefinition.code` are both `0..*` in R4. That bound is pinned by tests in
+  `test/array-wrapped-scalar.test.ts` (25 assertions), not asserted in prose.
+  **The `conformance-refuter` REFUTED this slice THREE times, and the scope it ended at is narrower
+  than the scope it started at. Read this before touching `codingsOf`.** Pass one: the fix covered the
+  wrapper around the _element_ but `codingsOf` still read `Coding.system` / `Coding.code` with the
+  single-value `primitiveString`, and **those are `0..1` too** (datatypes.html), so one pair of
+  brackets around an inner `Coding.code` still produced the item's exact verdict on the three worst
+  reads in the library: a **refuted** allergy read as active, a recorded **"no known allergy"** read as
+  an allergy _to_ `716186003`, and a retracted Condition read as live. Pass one also caught two factual
+  errors, both corrected: the citation (the array rule is json.html **§2.6.2.2**, not §2.1) and
+  `MedicationRequest.status` (**`1..1`**, not `0..1`).
+  **Pass two and pass three then refuted two successive attempts to close that inner read**, and the
+  reason is worth keeping: `Coding.system` and `Coding.code` feed `codingsOf`'s `system` x `code`
+  **CROSS-PRODUCT**, so any rule yielding more than one value on either side **manufactures a
+  `(system, code)` pair the sender never wrote** -- and `NO_KNOWN_ALLERGY` is the one negation that is
+  a **positive clinical assertion**, so inventing it claims a patient has no known allergy over a
+  record that names an allergen. Missing a retraction withholds information; asserting an absence of
+  allergy does not. **The two directions are not equally safe, which is why the obvious fix is not.**
+  Attempt one read every value and manufactured the pair outright. Attempt two read only a
+  "single-valued" wrapper and **still** did, because it counted _strings_ rather than _array
+  positions_, and a FHIR JSON `null` is a real position marker, not padding (`["716186003", null]` is
+  two entries), so `[null, "...sct"]` x `["716186003", null]` still produced `(sct, 716186003)`.
+  **So `codingsOf` was reverted to its `main` behaviour and the inner wrapper is a DECLARED GAP, not a
+  claim.** That was the ADR 0016 termination call: the same sub-problem had failed to converge twice,
+  there is no fourth pass, and a pure revert ships no ungraded behaviour. Everything the slice does
+  ship is element-level and was graded green. **`FHIR-CODING-SCALAR-WRAPPER` is the follow-up item and
+  it is a real one** -- a refuted allergy and a "no known allergy" are still misread through an inner
+  wrapper on `main` today. Whoever takes it: the predicate must count **array positions**, not string
+  values, and the property to hold is "never invent a pair the sender did not write" (already pinned in
+  `test/array-wrapped-scalar.test.ts`).
+  **Left open, deliberately, each pinned by a test rather than a sentence:** **Left open, deliberately, each pinned by a test rather than a sentence:** (a) an array-wrapped
+  `value[x]` draws **no** `ARRAY_WRAPPED_SCALAR` (outside the closed set; widening to every R4 `0..1`
+  element _is_ the per-resource model), and `readObservationValue` still has no issue channel of its
+  own, though it fails **safe** on this route (reports the present variant, `quantity: undefined`, so
+  no wrong number is handed out); (b) the JSON reader does **not model a nested array** -- `[["x"]]`
+  reads as a list holding an **empty complex** and the inner value is dropped with only an
+  `UNKNOWN_PROPERTY` warning, which is a real read-path data-loss gap in a package whose P1 claim is
+  "no data loss", worth its own item; the document is at least **refused**, never affirmed. (c) The
+  read -> write -> read **laundering** is duplicate-key-only: the array route round-trips faithfully
+  (the writer emits the list back), so the re-read reproduces the finding rather than losing it. That
+  is now pinned, so a future writer change cannot quietly introduce the laundering. (d) `PRE-EXISTING`,
+  filed by the same refuter pass: a **document-supplied `resourceType` reaches the diagnostic
+  `expression` prefix** (`ARRAY_WRAPPED_SCALAR@<whatever the document put there>.resourceType`, and on
+  into the `OperationOutcome`). Same class as `emit(ctx, "RESOURCE_NOT_MODELED", rt)` already on
+  `main`, so not introduced here, though this slice's new early-return branch creates another
+  instance. `resourceType` is a type discriminator so realistic PHI exposure is remote, but the
+  value-free-diagnostics contract is stated without that qualification. Worth its own item.
+  (e) `PRE-EXISTING`, and the one to pick up first: `serializeResourceXml` **normalizes a singleton
+  wrapper away** (JSON `{"status":["entered-in-error"]}` -> `<status value="entered-in-error"/>` ->
+  re-read `valid: true`, `safeToSummarize: true`). Clinical content survives (`retracted: true` on
+  both sides) and XML genuinely cannot express a singleton wrapper, so this is a narrower laundering
+  than the duplicate-key one, but it is a **cross-format** route by which the encoding complaint
+  disappears. P2:
   the first three validation layers (`validateResource`: structure, cardinality, primitive /
   enumerated-`code` value-domain) with a value-free `OperationOutcome` and the PHI redaction
   chokepoint. P3: the safety-critical status & negation spine (`readSafety`, fail-closed on an

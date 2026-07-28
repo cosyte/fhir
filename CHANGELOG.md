@@ -8,6 +8,75 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **An array-wrapped `0..1` element reached the same harm as the duplicate-key defect, with no
+  duplicate key at all (`FHIR-ARRAY-WRAPPED-SCALAR`).**
+  `{"resourceType":"Observation","status":["entered-in-error"]}` read back `retracted: false`,
+  `negations: []`, `safeToSummarize: true`, `valid: true` and an **empty issue list**. FHIR JSON
+  writes a `0..1` element as a name/value pair and reserves the array for a repeating element
+  (json.html §2.6.2.2), so `primitiveString` asked the list for its string value, got `undefined`, and
+  the retraction the sender wrote was never reported. `FHIR-DUPLICATE-KEY-RETRACTION` closed the
+  duplicate-key route to that verdict; this route was still open, and the safety claim was only as
+  strong as its narrowest hole. Pre-existing, filed by the pass-two refuter on that slice and
+  reproduced on `main` at `9c372f2`.
+  **This is not an exotic input**, which is why it was queued ahead of the next slice: array-wrapping
+  every element is ordinary generic XML-to-JSON converter output, and that is exactly how a C-CDA or
+  v2 feed reaches a FHIR surface in practice. In that shape the wrapper sits on `resourceType` too.
+  **Three changes, all in the fail-safe direction, none of which touches a conformant document.**
+  1. **The negation reads see through the wrapper.** `isRetracted` and every classified negation in
+     `readSafety` already ran over _every value written_ for the element they read (the duplicate-key
+     fix); they now also read _through an array wrapper_ on each of those values, recursively. The
+     convenience fields `SafetyReadout.status` and `SafetyReadout.resourceType` read through it too,
+     so they no longer report `undefined` for an element the document plainly carries.
+  2. **The type gate is read fail-safe, which also closes the duplicated-`resourceType` sibling.** A
+     type-scoped negation (`not-taken`, `not-done`, `no-known-allergy`) is only looked for once the
+     gate names the type, so a single-value gate was the narrowest hole in the whole safety claim.
+     Both non-conformant shapes reached it: `{"resourceType":["MedicationStatement"],"status":
+["not-taken"]}` and `{"resourceType":"Observation","resourceType":"MedicationStatement",
+"status":"not-taken"}` each reported `negations: []`. `readSafety` now considers **every** type
+     the document names (a new internal `typesOf`); both report `not-taken`. `typeOf` is unchanged
+     and still the strict single-value read, because a _structural_ verdict should reject an
+     unreadable type rather than guess one.
+  3. **The library stops affirming.** A new `ARRAY_WRAPPED_SCALAR` validation code (**error**,
+     `structure`) is raised for an array around `resourceType`, or around one of the single-valued
+     safety elements (`status`, `clinicalStatus`, `verificationStatus`, `doNotPerform`, `code`), on a
+     resource root, so `validateResource` cannot return `valid` for such a document. `readSafety`
+     reports the same locations on the new `SafetyReadout.arrayWrappedScalars`, sets
+     `safeToSummarize` to `false`, and `assertSafeToSummarize` throws, exactly as for a repeated
+     property name. `validateResource` also no longer returns early on an unreadable `resourceType`
+     without running the safety layer: it runs it against the type the document names, so an
+     array-wrapped type gate no longer draws a bare `RESOURCE_TYPE_UNKNOWN` and says nothing about
+     the retraction in the document.
+     **The cardinality check is scoped, deliberately and not timidly**, to that closed element set on a
+     resource root of a safety resource type (plus `resourceType` on any root). R4 defines repeating
+     elements under the same names elsewhere (`Questionnaire.code` and `ElementDefinition.code` are both
+     `0..*`), so a name-only, depth-free rule would emit a **false error on a conformant document**,
+     which the validator's fail-safe contract forbids. Deciding cardinality anywhere else needs a
+     per-resource model, which this library does not have and this layer must not become; that bound is
+     pinned by tests rather than asserted in prose.
+     **One wrapper is deliberately NOT covered, and it is the same defect one level down:** an array
+     around a `Coding.system` / `Coding.code` _inside_ a `CodeableConcept`. Those are `0..1` too
+     (datatypes.html), so a negation written inside one is still missed, and no location is reported
+     for it. It is left open on purpose rather than by oversight. Unlike the element-level wrapper,
+     those two values feed `codingsOf`'s `system` x `code` **cross-product**, so any rule that yields
+     more than one value on either side **manufactures a `(system, code)` pair the sender never
+     wrote**, and one of the pairs matched there is SNOMED `716186003` "no known allergy", a
+     **positive clinical assertion** that would then be made over a record naming an allergen.
+     Missing a retraction withholds information; asserting an absence of allergy does not, so the two
+     directions are not equally safe and the obvious fix is not obviously right. Two candidate
+     predicates were written and both were refuted by the conformance gate during this change, the
+     second because it counted strings rather than array positions and a FHIR JSON `null` is a real
+     position marker. That read is therefore **unchanged from before this release**, and the bound is
+     pinned by test rather than described in prose.
+     **Behaviour change worth reading before upgrading:** `SafetyReadout` gains a field, and
+     `safeToSummarize` is now `false` where it was `true` for these documents. That is the point of the
+     fix, but a caller that treats `safeToSummarize` as a gate will now refuse input it previously
+     accepted. The codec, the element model, and `parseResource` / `serializeResource` are **untouched**.
+     **Two related defects were left alone on purpose**, both pinned by tests so a future change to them
+     is deliberate: `readObservationValue` still has no issue channel of its own (it fails safe on this
+     route, reporting the present variant and no `quantity`, so no wrong number is handed out), and the
+     JSON reader still does not model a _nested_ array (`[["x"]]` reads as a list holding an empty
+     object, flagged `UNKNOWN_PROPERTY`; the document is refused, never affirmed).
+
 - **A duplicate JSON property name silently dropped the later value, and `readSafety` then affirmed
   the wrong answer (FHIR-DUPLICATE-KEY-RETRACTION).**
   `{"resourceType":"Observation","status":"final",…,"status":"entered-in-error"}` lost the
