@@ -40,6 +40,7 @@ import { isPrimitiveType, validatePrimitiveValue } from "./primitives.js";
 import { collectBundleIssues } from "./bundle.js";
 import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
+import { typesOf } from "../safety/codes.js";
 import { collectTerminologyIssues } from "./terminology.js";
 import { collectProfileIssues, collectProfileVersionIssues } from "../profiles/validate-profile.js";
 import { collectInvariantIssues } from "../profiles/invariants.js";
@@ -202,6 +203,16 @@ export function validateResource(
   const rt = resourceType(resource);
   if (rt === undefined || rt === "") {
     emit(ctx, "RESOURCE_TYPE_UNKNOWN", "$this");
+    // The structural layers below need a type and there is none to read strictly. The safety layer
+    // does not: it keys off the modifier elements directly. Returning here is what let an
+    // array-wrapped type gate (`{"resourceType":["Observation"],"status":["entered-in-error"]}`, plain
+    // generic XML-to-JSON converter output) draw a bare "no resourceType" and say nothing at all about
+    // the retraction sitting in the document. Run the safety layer against the type the document
+    // names fail-safe, so the retraction and the wrapper are both reported.
+    const named = typesOf(resource)[0];
+    if (named !== undefined && named !== "") {
+      for (const issue of collectSafetyIssues(resource, named)) ctx.issues.push(issue);
+    }
     return finalize(ctx);
   }
 

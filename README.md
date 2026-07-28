@@ -144,10 +144,21 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   unhandled modifier.
 - **A safety verdict is never asserted over a value the document left ambiguous.** Each negation read
   runs over every coding on a `CodeableConcept` and every value written for the element it reads
-  (`status`, `verificationStatus`, `code`, `doNotPerform`), so a retraction or a refutation cannot
-  hide in the one a single-value lookup skipped; and where a repeated property name leaves an element
-  with two values, `safeToSummarize` is `false` with the locations in `shadowedProperties` instead of
-  an affirmative answer.
+  (`resourceType`, `status`, `verificationStatus`, `code`, `doNotPerform`), **including through an
+  array wrapper around the element**, so a retraction or a refutation cannot hide in the one a
+  single-value lookup skipped. One wrapper is a known gap and is documented as one: an array around a
+  `Coding.system` / `Coding.code` _inside_ a `CodeableConcept` is not read through. Where a repeated property name leaves an element with two values, `safeToSummarize` is
+  `false` with the locations in `shadowedProperties` instead of an affirmative answer.
+- **A single-valued element wrapped in an array is read, and reported.** FHIR JSON writes a `0..1`
+  element as a name/value pair and uses an array only for a repeating element, so
+  `{"resourceType":"Observation","status":["entered-in-error"]}` is non-conformant, and a plain
+  single-value read finds no code in it at all. It is realistic input, because a generic XML-to-JSON
+  converter array-wraps every element it emits. The negation reads see through the wrapper, an
+  `ARRAY_WRAPPED_SCALAR` issue (error) says where it was, and `safeToSummarize` is `false` with the
+  locations in `arrayWrappedScalars`. The check covers `resourceType` and the single-valued safety
+  elements on a resource root; deciding cardinality elsewhere would need a per-resource model, and R4
+  genuinely does define repeating elements under some of the same names (`Questionnaire.code`), so a
+  name-only rule would report a conformant document as broken.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their

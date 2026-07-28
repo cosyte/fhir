@@ -10,6 +10,7 @@
  */
 
 export {
+  arrayWrappedScalars,
   assertSafeToSummarize,
   FhirSafetyError,
   readSafety,
