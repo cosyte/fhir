@@ -11,7 +11,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 - **No internal project bookkeeping on any surface a consumer reads (PUBLIC-SURFACE-HYGIENE, founder
   directive 2026-07-27).** `README.md`, `docs-content/`, the npm `description`, and every `/** */`
   doc comment that compiles into `dist/index.d.ts` are swept of item identifiers, phase and wave
-  language, ADR numbers, meta-repo paths and "how this got built" commentary. A consumer's editor
+  language, ADR numbers, meta-repo paths and "how this got built" commentary. **The gate below
+  catches identifiers, not English**, so the by-hand half of that sweep is not claimed complete: a
+  sentence whose only fault is that it describes how the artifact came to exist reads like ordinary
+  prose and stays a reviewer's catch. A consumer's editor
   hover and the package front page now describe what the software does; the traceability stays where
   the convention puts it, in this file, the commits, the PRs and the roadmap. **No behaviour change,
   no API change:** no export was added, removed or renamed, and no doc comment was deleted (JSDoc

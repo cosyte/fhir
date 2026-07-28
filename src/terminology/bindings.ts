@@ -63,7 +63,7 @@ export interface TerminologyBinding {
 /**
  * US Core AllergyIntolerance substance value set, VSAC `2.16.840.1.113762.1.4.1186.8`, an
  * **extensible** binding drawing from **RxNorm** (drug) **+ SNOMED CT** (food/environmental and the
- * "no known allergy" negation concepts). The multi-system composition the calls out:
+ * "no known allergy" negation concepts). The multi-system composition means
  * the validator must accept *both* systems on this one element. *(US Core AllergyIntolerance)*
  */
 export const ALLERGY_SUBSTANCE_VALUESET =
@@ -72,7 +72,7 @@ export const ALLERGY_SUBSTANCE_VALUESET =
 /**
  * US Core medication value set, VSAC `2.16.840.1.113762.1.4.1010.4`, an **extensible** binding to
  * **RxNorm**. Bound on `MedicationRequest`/`MedicationStatement` `medicationCodeableConcept`.
- * *(US Core MedicationRequest §4.4)*
+ * *(US Core MedicationRequest)*
  */
 export const MEDICATION_VALUESET =
   "http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1010.4";

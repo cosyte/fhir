@@ -56,7 +56,7 @@ interface Grouped {
 /**
  * Group an object's members into `{ base → value }` and `{ base → meta }` maps, preserving the
  * first-seen order of base names across both. Duplicate keys keep the first occurrence (FHIR
- * forbids duplicates; refining that is a validation concern, not a codec one).
+ * forbids duplicates).
  *
  * @internal
  */

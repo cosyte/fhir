@@ -2,8 +2,8 @@
  * The **pluggable terminology-service interface**. None is bundled.
  *
  * Validating that a code is a *member* of a value set needs the value set's expansion, i.e. the
- * SNOMED / LOINC / RxNorm / CPT content the library deliberately does **not** vendor (
- * licensing). That work is delegated to a terminology service a consumer supplies: a small interface
+ * SNOMED / LOINC / RxNorm / CPT content the library deliberately does **not** vendor
+ * (licensing). That work is delegated to a terminology service a consumer supplies: a small interface
  * with one operation, `$validate-code`-shaped, so an adapter over a real terminology server (HL7's
  * `tx.fhir.org`, a VSAC-backed service, an in-house expansion) can satisfy it.
  *

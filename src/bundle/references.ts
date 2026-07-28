@@ -270,7 +270,7 @@ interface Frame {
  * Builds the fragment graph, one node per contained resource id plus the root (`""`), an edge for
  * each `#fragment` reference, and runs an iterative three-color DFS. Because the DFS is heap-based
  * (not recursive) and marks visited nodes, it **always terminates**: a cycle is reported, never
- * followed. This is the DoS guard the roadmap requires, a reference cycle becomes a typed
+ * followed. This is the DoS guard: a reference cycle becomes a typed
  * `CONTAINED_CYCLE` finding, never an infinite loop or a stack overflow.
  *
  * @param resource - The resource whose `contained` set to check.

@@ -35,7 +35,7 @@ export const SNOMED_SCT = "http://snomed.info/sct";
 
 /**
  * SNOMED CT `716186003` "No known allergy", a **positive** record that the patient has no known
- * allergy. Per this is a first-class negation: it is *not* an absent AllergyIntolerance
+ * allergy. This is a first-class negation: it is *not* an absent AllergyIntolerance
  * (absence = *unknown*), and it must *not* be read as an allergy to code `716186003`. Other
  * "no known X allergy" substance-specific concepts (drug/food/environmental) are recognized by the
  * same mechanism when terminology work lands; only this concept is encoded here.

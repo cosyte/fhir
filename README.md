@@ -4,7 +4,7 @@
 > JSON **and XML** codec, and validation, with the same one-line ergonomics as the rest of the
 > `@cosyte/*` parser suite.
 
-**Status: pre-alpha, unpublished.** What the package contains: the no-data-loss core (a
+**Status: pre-alpha, unpublished.** What is built: the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
@@ -201,7 +201,7 @@ const svc: TerminologyService = {
 validateResource(allergy, { terminology: svc }); // now membership is checked against your service
 ```
 
-- **Frozen known-systems registry** (`KNOWN_SYSTEMS`, `isKnownSystem`): the verified §5 `system`
+- **Frozen known-systems registry** (`KNOWN_SYSTEMS`, `isKnownSystem`): the verified `system`
   URIs (LOINC, SNOMED, RxNorm, ICD-10-CM/9-CM, CPT, UCUM, NDC, CVX) as **identities, not content**.
   An unrecognized system is `CODE_SYSTEM_UNKNOWN` (`information`): not a defect, just unvalidatable.
 - **Binding-strength severity:** `required` → error, `extensible` → error-unless, `preferred` →
