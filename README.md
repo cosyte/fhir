@@ -4,7 +4,7 @@
 > JSON **and XML** codec, and validation, with the same one-line ergonomics as the rest of the
 > `@cosyte/*` parser suite.
 
-**Status: pre-alpha (`0.0.0`, unpublished).** **Phases 1–9 have landed**: the no-data-loss core (a
+**Status: pre-alpha, unpublished.** What is built: the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
@@ -27,8 +27,8 @@ resolution for relative / absolute / logical / `#fragment` with a **DoS-safe cyc
 `streamNdjson` reader with **per-line error isolation** and **no whole-file load**), and a
 **programmatic profile-authoring API** (`defineProfile()` builds a `StructureDefinition` in code: the
 same model `loadStructureDefinition` reads from JSON, one path with no privileged internal shape, plus
-a spec-grounded **starter kit** of example profiles that dogfood it), and **conformance hardening**
-(Phase 11, buildable tiers): JSON + XML + NDJSON **fuzz targets** proving adversarial input never
+a spec-grounded **starter kit** of example profiles that dogfood it), and **conformance hardening**:
+JSON + XML + NDJSON **fuzz targets** proving adversarial input never
 crashes / hangs / OOMs (only a _typed_ error or a bounded rejection; the JSON reader now bounds nesting
 with a `MAX_DEPTH_EXCEEDED` fatal, matching the XML reader), a **PHI-leak test tier** gating the
 value-free-diagnostics contract, and **type-level (`expect-type`) tests** on the public surface. See
@@ -38,10 +38,10 @@ true type with the UCUM `code`** (never the display string, never converted), **
 and binding strength without vendoring any SNOMED / CPT / LOINC content, validates against US Core
 profiles you supply, and evaluates their FHIRPath invariants** (failing safe to `INVARIANT_UNCHECKED`
 on any unsupported expression); it does **not** yet do `type`·`profile` slicing discriminator or
-reslicing validation (still `PROFILE_SLICE_UNCHECKED`, Phase 7 deferral), and it bundles **no** US Core
+reslicing validation (still `PROFILE_SLICE_UNCHECKED`), and it bundles **no** US Core
 IG corpus. The `validator_cli.jar` **differential is authored but CI-only** (a JVM oracle job: there is
 no Java in the dev container, so it has not been observed green there) and now runs over **both** the
-synthetic spec-clean tier **and** the Tier-2 real-world quirk corpus (P10b). The built-in structural schema set is the base-resource elements plus
+synthetic spec-clean corpus **and** the real-world quirk corpus. The built-in structural schema set is the base-resource elements plus
 `Patient` as a worked demonstrator; other resource types validate only against a caller-supplied schema
 or profile. Without a supplied terminology service there is **no code-validity / value-set-membership**
 guarantee beyond `system` + strength (no terminology content is bundled: licensing). Its XML codec is
@@ -50,8 +50,7 @@ cross-format transcoding** (emitting spec-clean JSON booleans/numbers from an XM
 datatype schema and is not yet done; the XHTML **structure** inside `Narrative.div` is not modeled or
 validated (carried opaquely as a string (the JSON codec's fidelity), never dropped), and RDF/Turtle is
 out of scope. It has no typed per-resource models
-yet, and it **never converts a unit** or evaluates a reference range. See the roadmap in the meta-repo,
-`operations/roadmaps/fhir.md`. Do not depend on this package.
+yet, and it **never converts a unit** or evaluates a reference range. Do not depend on this package.
 
 ## What works today
 
@@ -97,14 +96,13 @@ issues;
 // ]
 
 // Render an OperationOutcome: the diagnostics are value-free (a coded reason + a location, never
-// the offending value "masculine"), the Phase-2 PHI redaction chokepoint.
+// the offending value "masculine"), the PHI redaction chokepoint.
 serializeResource(validateResource(resource).toOperationOutcome());
 ```
 
 - **Layered, severity-tagged** (validation.html): structure (`UNKNOWN_ELEMENT`, `TYPE_MISMATCH`,
   `CHOICE_AMBIGUOUS`), cardinality (`CARDINALITY_MIN`/`_MAX`), value-domain (`PRIMITIVE_INVALID` with
-  the R4 datatype regexes, `CODE_INVALID` for required-strength enumerations). Terminology, profile,
-  and invariant layers land in later phases.
+  the R4 datatype regexes, `CODE_INVALID` for required-strength enumerations).
 - **Lenient vs strict:** an unknown element is a `warning` on read and an `error` under `mode: "strict"`.
 - **Fail-safe:** never a false error: a resource type with no schema degrades to one informational
   `RESOURCE_NOT_MODELED`, not a wall of false unknowns. Built-in schemas: base-resource elements +
@@ -141,7 +139,7 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their
   exact R4 FHIRPath by the always-on safety layer. This layer surfaces and enforces. It
   never reconciles contradictions or infers clinical meaning. Every **other** profile `constraint[]`
-  invariant is evaluated by the Phase-7 FHIRPath engine (below).
+  invariant is evaluated by the FHIRPath engine (below).
 
 And Quantity / UCUM fidelity: read a measured value by the type it actually is, and its unit by the
 UCUM **`code`** a machine may act on (never the display string, and **never converted**):
@@ -203,7 +201,7 @@ const svc: TerminologyService = {
 validateResource(allergy, { terminology: svc }); // now membership is checked against your service
 ```
 
-- **Frozen known-systems registry** (`KNOWN_SYSTEMS`, `isKnownSystem`): the verified §5 `system`
+- **Frozen known-systems registry** (`KNOWN_SYSTEMS`, `isKnownSystem`): the verified `system`
   URIs (LOINC, SNOMED, RxNorm, ICD-10-CM/9-CM, CPT, UCUM, NDC, CVX) as **identities, not content**.
   An unrecognized system is `CODE_SYSTEM_UNKNOWN` (`information`): not a defect, just unvalidatable.
 - **Binding-strength severity:** `required` → error, `extensible` → error-unless, `preferred` →
@@ -244,7 +242,7 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   supplies the base via a resolver; a profile that already ships a snapshot is used as-is.
 - **Slicing** matches each occurrence of a sliced element to a slice by its discriminators. The R4
   set is `value | exists | pattern | type | profile` (**`position` is R5-only** and excluded). What
-  needs a FHIRPath engine (`type` / `profile` discriminators, reslicing, Phase 7) is reported
+  needs a FHIRPath engine (`type` / `profile` discriminators, reslicing) is reported
   `PROFILE_SLICE_UNCHECKED` (`information`): **never silently passed**. An unmatched occurrence under
   `closed` slicing is `PROFILE_SLICE_UNMATCHED` (error); a missing required slice is `CARDINALITY_MIN`.
 - **`fixed[x]` vs `pattern[x]`** (`matchesFixed` / `matchesPattern`): `fixed` is exact equality
@@ -252,17 +250,17 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   via a float. A mismatch is `PROFILE_FIXED_MISMATCH` / `PROFILE_PATTERN_MISMATCH` (error).
 - **Must-support is a system obligation, not instance-presence**: an absent must-support element is
   `MUST_SUPPORT_ABSENT` at **`information`, never an error**. A strict client that rejects an absent
-  must-support element is the classic interop bug this rule exists to prevent (roadmap §4/§8).
+  must-support element is the classic interop bug this rule exists to prevent.
 - **Multi-version**: a `meta.profile` `canonical|version` pin the supplied set carries at a different
   version is `PROFILE_VERSION_MISMATCH` (warning) rather than a silent best-effort validation.
 - **Invariants**: the profile's `constraint[]` (FHIRPath) are evaluated by a **bounded, vendored
-  FHIRPath engine** (`tokenize` / `parseFhirPath` / `evaluateInvariant`; ADR 0002, no runtime
+  FHIRPath engine** (`tokenize` / `parseFhirPath` / `evaluateInvariant`; no runtime
   dependency). A violated constraint is `INVARIANT_VIOLATED` (severity mirroring its `error` |
   `warning`); an expression outside the subset raises `UnsupportedFhirPathError` and is reported
   `INVARIANT_UNCHECKED` (`information`): **surfaced, never assumed to pass**. The seven named safety
   invariants stay owned by the always-on safety layer; the engine covers every other constraint.
 - **Deferred:** the bundled multi-version US Core IG corpus and the `validator_cli.jar` differential
-  (a JVM dev/CI job, Phase 11); the `type` / `profile` slicing discriminators and reslicing (still
+  (a JVM dev/CI job); the `type` / `profile` slicing discriminators and reslicing (still
   `PROFILE_SLICE_UNCHECKED`: a genuine fail-safe deferral, they need per-occurrence type carriage /
   recursive profile resolution). Every finding is **value-free** (a code + a FHIRPath location).
 
@@ -280,7 +278,7 @@ evaluateInvariant("descendants().count() > 0", resource, resource);
 // → { unchecked: true, satisfied: false }  (descendants() is outside the subset, never a false pass)
 ```
 
-**Authoring a profile in code: `defineProfile()` (Phase 10, half a).** You don't have to hand-write
+**Authoring a profile in code: `defineProfile()`.** You don't have to hand-write
 `StructureDefinition` JSON. `defineProfile(spec)` builds one from an ergonomic spec and returns the
 **same model** `loadStructureDefinition` produces, so it flows straight into
 `validateResource({ profiles })`. There is **one authoring path, no privileged internal shape**: the
@@ -320,7 +318,7 @@ const { resource } = parseResource(vitalSignObservationJson);
 validateResource(resource, { profiles: [...STARTER_PROFILES] });
 ```
 
-- **Tier-2 quirk corpus + differential (Phase 10, half b, landed, ADR 0018).** Five quirk fixtures
+- **Real-world quirk corpus + differential.** Five quirk fixtures
   (`test/__fixtures__/quirk-*.json`), each **grounded in a public artifact** and cited in
   `test/quirk-corpus.test.ts`: a non-first `resourceType` (json.html), a scientific-notation decimal
   preserved byte-exact (Synthea #675), a primitive-extension `_`-sibling misalignment that **fails
@@ -328,10 +326,9 @@ validateResource(resource, { profiles: [...STARTER_PROFILES] });
   (bundle-example.json), and US Core race + birthsex extensions preserved on a base Patient. The
   `validator_cli.jar` differential (CI-only) runs over this corpus too. **Values are synthetic;** a
   genuinely vendor-**proprietary** deviation absent from every public sample stays grounded-only. It is
-  never invented (conventions §PHI). Missing-must-support and version-drift quirks are covered by the
-  Phase-6 profile suite.
+  never invented. Missing-must-support and version-drift quirks are covered by the profile suite.
 
-### 8. XML codec + cross-format equivalence (Phase 8)
+### XML codec and cross-format equivalence
 
 A **zero-dependency** FHIR XML codec that reads and writes the **same schema-free model** as the JSON
 codec, so a resource is equivalent whichever wire format it arrived in. The hand-written reader is
@@ -376,7 +373,7 @@ parseResourceXml('<!DOCTYPE x [ <!ENTITY e SYSTEM "file:///etc/passwd"> ]><Patie
 // throws FhirXmlError { code: "DTD_FORBIDDEN" }
 ```
 
-### 9. Bundles, references, and Bulk NDJSON streaming (Phase 9)
+### Bundles, references, and Bulk NDJSON streaming
 
 Read a `Bundle` into an explicit readout with the one semantic distinction a consumer must never blur
 (**`transaction` is all-or-nothing, `batch` is independent**), resolve the references inside it with a
@@ -442,19 +439,18 @@ semantics, and validates against structural rules and US Core profiles, mirrorin
 
 ## Architecture decisions
 
-The four decisions that shape everything downstream are recorded as ADRs before any code lands:
+The decisions that shape everything downstream:
 
-| ADR                                                                        | Decision                                                                                                                                                                                 |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`0001`](documentation/decisions/0001-decimal-integer64-representation.md) | `decimal` / `integer64` are **string-backed** and preserve lexical precision. `0.010` is never silently normalized to `0.01`, and these primitives never round-trip through JS `number`. |
-| [`0002`](documentation/decisions/0002-fhirpath-dependency-posture.md)      | **FHIRPath**: implement a bounded, vendored subset in-repo, no runtime dependency, no full third-party engine. Needed for invariants and slicing (Phase 7).                              |
-| [`0003`](documentation/decisions/0003-xml-scope-deferred.md)               | **JSON-first.** XML serialization is deferred to Phase 8.                                                                                                                                |
-| [`0004`](documentation/decisions/0004-r4-first-version-strategy.md)        | **R4-first** (`4.0.1`), the US regulatory anchor. R5 and DSTU2 are **read-tolerance only**.                                                                                              |
+- `decimal` / `integer64` are **string-backed** and preserve lexical precision. `0.010` is never
+  silently normalized to `0.01`, and these primitives never round-trip through JS `number`.
+- **FHIRPath**: a bounded, vendored subset in-repo, no runtime dependency, no full third-party
+  engine.
+- **R4-first** (`4.0.1`), the US regulatory anchor. R5 and DSTU2 are **read-tolerance only**.
 
 ## Tech stack
 
-Inherited from the shared `@cosyte/*` standard (the meta-repo's `documentation/conventions.md` is the
-source of truth), by depending on the published `@cosyte/*` config packages, not by copying files:
+Inherited from the shared `@cosyte/*` standard, by depending on the published `@cosyte/*` config
+packages, not by copying files:
 
 - **TypeScript** (strict) via `@cosyte/tsconfig`, target **ES2023**, `NodeNext`.
 - **Dual ESM + CJS + `.d.ts`** build via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate.

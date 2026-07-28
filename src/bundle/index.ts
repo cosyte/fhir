@@ -1,5 +1,5 @@
 /**
- * Bundles, references, and Bulk NDJSON streaming (Phase 9). The internal barrel for the `bundle/`
+ * Bundles, references, and Bulk NDJSON streaming. The internal barrel for the `bundle/`
  * layer: the `Bundle` model + entry-processing semantics, reference resolution + the DoS-safe cycle
  * guard, and the streaming `application/fhir+ndjson` reader. Re-exported from the package root.
  *

@@ -1,5 +1,5 @@
 /**
- * Bulk Data `application/fhir+ndjson` streaming (Phase 9, the Bulk Data Access IG).
+ * Bulk Data `application/fhir+ndjson` streaming (the Bulk Data Access IG).
  *
  * A `$export` produces newline-delimited JSON: **one FHIR resource per line**, files that routinely
  * reach gigabytes. Two properties are non-negotiable, and this module is built around them:
@@ -12,11 +12,11 @@
  * 2. **Per-line error isolation.** A malformed line (bad JSON, or valid JSON that is not a resource)
  *    yields a record whose `error` is set and whose `resource` is absent, the stream **continues**.
  *    One poisoned line never aborts the export, and the failure is reported by **line number, never
- *    line content** (roadmap §7, the content could be PHI).
+ *    line content** (the content could be PHI).
  *
  * Each good line is read through {@link ../codec/read.js parseResource}, so decimal precision and
  * primitive-extension alignment are preserved exactly as for a single resource, NDJSON never routes
- * a value through `JSON.parse` (ADR 0001).
+ * a value through `JSON.parse`.
  *
  * @packageDocumentation
  */

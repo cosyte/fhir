@@ -1,7 +1,7 @@
 /**
- * Medication **dose `Quantity`** surfacing (Phase 4). A prescribed or reported dose lives in
+ * Medication **dose `Quantity`** surfacing. A prescribed or reported dose lives in
  * `Dosage.doseAndRate.dose[x]`, a choice of `doseQuantity` (an amount) or `doseRange`. The
- * `doseQuantity`'s UCUM unit is the same fidelity problem as an Observation value's (roadmap §4.4/§4.6):
+ * `doseQuantity`'s UCUM unit is the same fidelity problem as an Observation value's:
  * the machine-actionable unit is the **`code`**, and a wrong or dropped dose unit is a direct
  * prescribing hazard. This module locates the dose quantities so they can be surfaced and UCUM-checked;
  * it **never** converts a dose unit.

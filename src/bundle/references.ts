@@ -1,6 +1,6 @@
 /**
  * Reference resolution within a Bundle and a resource's `contained` set, plus the **DoS-safe cycle
- * guard** (Phase 9, references.html).
+ * guard** (references.html).
  *
  * A FHIR `Reference.reference` comes in four forms ({@link ../model/reference.js parseReference}
  * classifies them): a `#fragment` into the same resource's `contained`, a relative `Type/id`, an
@@ -270,7 +270,7 @@ interface Frame {
  * Builds the fragment graph, one node per contained resource id plus the root (`""`), an edge for
  * each `#fragment` reference, and runs an iterative three-color DFS. Because the DFS is heap-based
  * (not recursive) and marks visited nodes, it **always terminates**: a cycle is reported, never
- * followed. This is the DoS guard the roadmap requires, a reference cycle becomes a typed
+ * followed. This is the DoS guard: a reference cycle becomes a typed
  * `CONTAINED_CYCLE` finding, never an infinite loop or a stack overflow.
  *
  * @param resource - The resource whose `contained` set to check.

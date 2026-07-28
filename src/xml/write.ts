@@ -1,5 +1,5 @@
 /**
- * The XML write path: the {@link FhirNode} model → spec-clean FHIR XML text (roadmap Phase 8, xml.html).
+ * The XML write path: the {@link FhirNode} model → spec-clean FHIR XML text (xml.html).
  *
  * The writer is the conservative half of Postel's Law, it always emits well-formed, canonical FHIR
  * XML, the exact inverse of {@link ./read.js}:
@@ -15,7 +15,7 @@
  *
  * Output is compact (no insignificant whitespace), so a spec-clean document round-trips **byte-for-byte**
  * through {@link ./read.js}. A decimal value is emitted from its exact lexical text and never routes
- * through a JavaScript `number` (ADR 0001). Narrative `<div>` XHTML is deferred (Phase 8) and is not
+ * through a JavaScript `number`. Narrative `<div>` XHTML is deferred and is not
  * produced by the writer.
  *
  * @packageDocumentation

@@ -1,5 +1,5 @@
 /**
- * The layered structural / cardinality / value-domain validator (Phase 2, validation layers 1–3).
+ * The layered structural / cardinality / value-domain validator (validation layers 1–3).
  *
  * Given a resource model (from `parseResource`) and a schema ({@link ./schema.js}), the validator
  * walks the resource once and produces value-free {@link ValidationIssue}s across three layers:
@@ -18,10 +18,11 @@
  * regardless of mode. **Fail-safe:** the validator never rejects a whole resource for one recoverable
  * field, and it **never emits a false error**, a resource type it has no schema for degrades to a
  * single informational `RESOURCE_NOT_MODELED` (its own elements are left unchecked rather than
- * wrongly flagged), and complex datatype internals are left to Phase 6 rather than guessed at.
+ * wrongly flagged), and complex datatype internals are left to the profile layer rather than
+ * guessed at.
  *
- * **Not in Phase 2:** terminology binding beyond required-code enumeration (Phase 5), profile /
- * slicing / must-support (Phase 6), FHIRPath invariants (Phase 7). The built-in schema set is base
+ * **Not in this layer:** terminology binding beyond required-code enumeration, profile /
+ * slicing / must-support, FHIRPath invariants. The built-in schema set is base
  * elements + `Patient`; other resource types validate only when the caller supplies a schema.
  *
  * @packageDocumentation
@@ -69,17 +70,17 @@ export type ValidationMode = "lenient" | "strict";
 export interface ValidateOptions {
   /** Lenient (read, the default) or strict (emit). Only affects the severity of unknown elements. */
   readonly mode?: ValidationMode;
-  /** Extra resource schemas, overriding the built-ins by type (Phase 6 feeds these). */
+  /** Extra resource schemas, overriding the built-ins by type (profiles feed these). */
   readonly schemas?: readonly ResourceSchema[];
   /**
-   * A pluggable terminology service for value-set membership (Phase 5). **None is bundled**; without
+   * A pluggable terminology service for value-set membership. **None is bundled**; without
    * one, terminology binding checks degrade to the content-free system checks and never false-error.
    */
   readonly terminology?: TerminologyService;
-  /** Extra terminology bindings, overriding the built-ins by element path (Phase 5 / Phase 6). */
+  /** Extra terminology bindings, overriding the built-ins by element path. */
   readonly bindings?: readonly TerminologyBinding[];
   /**
-   * Profiles (`StructureDefinition`s) to validate against (Phase 6). **None is bundled**, a caller
+   * Profiles (`StructureDefinition`s) to validate against. **None is bundled**, a caller
    * supplies the US Core (or vendor) profiles. Every supplied profile whose `type` matches the
    * resource type is applied (fixed/pattern, must-support, slicing, profile cardinality), and the
    * resource's `meta.profile` version pins are checked against the supplied set.
@@ -87,7 +88,7 @@ export interface ValidateOptions {
   readonly profiles?: readonly StructureDefinition[];
   /**
    * A resolver from a `baseDefinition` canonical URL to a loaded `StructureDefinition`, used only to
-   * generate a snapshot for a supplied profile that carries a differential but no snapshot (Phase 6).
+   * generate a snapshot for a supplied profile that carries a differential but no snapshot.
    */
   readonly resolveBase?: BaseResolver;
 }

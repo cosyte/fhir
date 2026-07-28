@@ -1,5 +1,5 @@
 /**
- * Quantity / UCUM fidelity for results and doses (Phase 4, the P0 safety spine's third strand).
+ * Quantity / UCUM fidelity for results and doses.
  *
  * Three things a machine can silently get wrong on a measured value, surfaced here so it cannot:
  *

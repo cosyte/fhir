@@ -1,8 +1,8 @@
 /**
- * The Quantity / UCUM validation layer (Phase 4, results & doses fidelity).
+ * The Quantity / UCUM validation layer (results & doses fidelity).
  *
- * Layered on the Phase-2/3 validators, this checks the parts of a measured value that harm a patient
- * when read wrong (roadmap §4.6/§4.4). It produces value-free {@link ValidationIssue}s for three things:
+ * Layered on the structural and safety validators, this checks the parts of a measured value that
+ * harm a patient when read wrong. It produces value-free {@link ValidationIssue}s for three things:
  *
  * 1. **UCUM shape.** A `Quantity` that declares the UCUM `system` but whose `code` is absent or
  *    malformed cannot be trusted for machine use → `UCUM_UNIT_UNRECOGNIZED` (`warning`). The value is
@@ -20,7 +20,7 @@
  * **Never a false error.** The vital-signs check fires only when the element declares the vital-signs
  * category (or the vital-signs profile) **and** its own LOINC code is in the closed required-unit
  * table; anything else is left unchecked rather than wrongly flagged. This layer surfaces and
- * enforces; it never converts a unit or evaluates a reference range (roadmap §4.6 known limitations).
+ * enforces; it never converts a unit or evaluates a reference range (known limitations).
  *
  * @packageDocumentation
  */

@@ -6,7 +6,7 @@
  * resource on the same server, an absolute reference names one anywhere, and a logical reference
  * (a `urn:` or a bare token) is not a resolvable RESTful URL at all. This module classifies the
  * string and pulls out the resource type / id / version when they are present, it does **not**
- * resolve the reference (following a reference to its target, cycle-guarded, is Phase 9).
+ * resolve the reference.
  *
  * @packageDocumentation
  */

@@ -1,9 +1,9 @@
 /**
  * The safety readout, a never-droppable surfacing of a resource's modifier / status / negation
- * elements (Phase 3). This is the read-side counterpart to the validator's fail-closed layer
+ * elements. This is the read-side counterpart to the validator's fail-closed layer
  * ({@link ../validate/safety.js}).
  *
- * The roadmap's fail-safe rule (§4.8): the library "surfaces status / verification / clinical-status
+ * The fail-safe rule: the library "surfaces status / verification / clinical-status
  * / `doNotPerform` / `not-taken` / `not-done` prominently, any 'flatten/summary' helper carries them
  * or refuses." {@link readSafety} is that carry: given any of the six safety resource types it pulls
  * every modifier element into one explicit structure, classifies the **negations** (so a positive
@@ -13,7 +13,7 @@
  * throws rather than let a caller flatten a resource whose modifier it cannot honor.
  *
  * This layer **surfaces**; it does not reconcile. It never decides which of two contradictory statuses
- * is "right", never converts, never infers clinical meaning (roadmap §4, known limitations).
+ * is "right", never converts, never infers clinical meaning (known limitations).
  *
  * @packageDocumentation
  */
@@ -56,7 +56,7 @@ function verificationSystemFor(rt: string | undefined): string | undefined {
 
 /**
  * A classified negation, an explicit *negative* assertion that must never collapse into its positive
- * on a summary or a round-trip. One value per distinct FHIR negation mechanism the phase covers.
+ * on a summary or a round-trip. One value per distinct FHIR negation mechanism this library covers.
  */
 export type NegationKind =
   /** `verificationStatus = refuted`, asserted, after investigation, to be **not** present. */
@@ -160,7 +160,7 @@ function descend(node: FhirNode, path: string, out: string[]): void {
 
 /**
  * Read the safety-critical modifier / status / negation elements out of a resource, never dropping
- * one. Works for the six safety resource types (roadmap §4.3–4.8); for any other type the modifier
+ * one. Works for the six safety resource types; for any other type the modifier
  * slots are `undefined` and only the universal retraction / modifier-extension reads apply.
  *
  * @param resource - The resource model (typically from `parseResource`).

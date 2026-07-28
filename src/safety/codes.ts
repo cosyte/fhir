@@ -1,19 +1,19 @@
 /**
  * The safety-critical terminology and the primitive semantics for reading it out of the generic
- * model (Phase 3, the fail-closed status & negation spine).
+ * model (the fail-closed status & negation spine).
  *
  * FHIR marks a handful of elements with the **modifier flag (`?!`)**, `status`, `clinicalStatus`,
  * `verificationStatus`, `doNotPerform`, and the `not-taken` / `not-done` / `entered-in-error` codes.
  * By FHIR's conformance rules a modifier element is **never an optional read**: a consumer that does
- * not understand it must *refuse* the element, not process it as if the modifier were absent
- * (roadmap §4.8). This module holds the code-system URIs and the negation/retraction concepts those
+ * not understand it must *refuse* the element, not process it as if the modifier were absent.
+ * This module holds the code-system URIs and the negation/retraction concepts those
  * elements carry, plus the small set of value-free readers that pull them out of a {@link FhirComplex}
- * without a typed per-resource model (those arrive in a later phase).
+ * without a typed per-resource model (those are not modeled yet).
  *
- * **No terminology content is bundled** (roadmap §5, SNOMED/LOINC/RxNorm licensing). What ships here
+ * **No terminology content is bundled** (SNOMED/LOINC/RxNorm licensing). What ships here
  * is a *closed* set of spec-defined identifiers: the `entered-in-error` retraction code, the status
  * negation codes (`not-taken`, `not-done`), and SNOMED CT `716186003` "no known allergy", the one
- * positive negation the roadmap names as a first-class concept (a recorded assertion of *no allergy*,
+ * positive negation modeled as a first-class concept (a recorded assertion of *no allergy*,
  * which is neither an absent resource nor an allergy *to* something). These are stable spec
  * identifiers, not licensed concept tables.
  *
@@ -35,10 +35,10 @@ export const SNOMED_SCT = "http://snomed.info/sct";
 
 /**
  * SNOMED CT `716186003` "No known allergy", a **positive** record that the patient has no known
- * allergy. Per roadmap §4.3 this is a first-class negation: it is *not* an absent AllergyIntolerance
+ * allergy. This is a first-class negation: it is *not* an absent AllergyIntolerance
  * (absence = *unknown*), and it must *not* be read as an allergy to code `716186003`. Other
  * "no known X allergy" substance-specific concepts (drug/food/environmental) are recognized by the
- * same mechanism when terminology work lands; only the roadmap-named concept is encoded here.
+ * same mechanism when terminology work lands; only this concept is encoded here.
  */
 export const NO_KNOWN_ALLERGY = "716186003";
 
@@ -72,16 +72,16 @@ export const REFUTED = "refuted";
  * The `modifierExtension` URLs this library understands. It is **empty**: no standard
  * `modifierExtension` is handled yet, so *every* `modifierExtension` an instance carries is unknown
  * and the validator fails closed on it ({@link ../validate/safety.js}). The set exists as the seam a
- * later phase widens deliberately, a URL is added here only alongside code that actually honors that
+ * change widens deliberately, a URL is added here only alongside code that actually honors that
  * modifier's meaning. Widening it silently would re-introduce the exact hazard the FHIR `?!` rule
  * exists to prevent.
  */
 export const KNOWN_MODIFIER_EXTENSION_URLS: ReadonlySet<string> = new Set<string>();
 
 /**
- * The six resource types whose modifier/status/negation elements this phase surfaces and whose
- * invariants it enforces (roadmap §4.3–4.8). `MedicationStatement` rides alongside `MedicationRequest`
- * (the roadmap's "MedicationRequest·Statement"). Modifier-extension fail-closed is universal (every
+ * The six resource types whose modifier/status/negation elements this library surfaces and whose
+ * invariants it enforces. `MedicationStatement` rides alongside `MedicationRequest`.
+ * Modifier-extension fail-closed is universal (every
  * resource); retraction and the named invariants are scoped to these types.
  */
 export const SAFETY_RESOURCE_TYPES: ReadonlySet<string> = new Set([
@@ -256,7 +256,7 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
 
 /**
  * Whether a resource is **retracted**, marked `entered-in-error` and therefore not to be treated as
- * active data (roadmap §4.8). Read fail-safe: a `status` primitive of `entered-in-error` (Observation,
+ * active data. Read fail-safe: a `status` primitive of `entered-in-error` (Observation,
  * Immunization, DiagnosticReport, MedicationRequest/Statement) **or** a `verificationStatus` carrying
  * `entered-in-error` under any system (AllergyIntolerance, Condition). Over-surfacing a retraction is
  * safe; missing one is not.

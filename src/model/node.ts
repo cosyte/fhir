@@ -2,8 +2,8 @@
  * The generic FHIR element model, a wire-agnostic, loss-free tree.
  *
  * FHIR is already structured data, so unlike a delimited-text parser this library's model is a
- * faithful element tree rather than a re-tokenization. Phase 1 deliberately models the *structure*
- * generically (typed per-resource models arrive in later phases) while typing the two primitives
+ * faithful element tree rather than a re-tokenization. It deliberately models the *structure*
+ * generically (typed per-resource models are not part of it yet) while typing the two primitives
  * that a naive implementation corrupts, `decimal` (see {@link FhirDecimal}) and `integer64`. The
  * tree preserves everything the wire carried: property order, primitive metadata, and exact decimal
  * text.
@@ -15,8 +15,8 @@
  * - {@link FhirList}, a repeating element: an ordered list of nodes.
  * - {@link FhirPrimitive}, a leaf: a value plus the `id` / `extension` metadata that FHIR JSON
  *   carries in the `_`-sibling. Crucially the metadata is modeled as a **first-class** part of the
- *   primitive, not as a literal `_`-prefixed key, architecture ADR 0003 requires this so the XML
- *   codec (Phase 8) can attach the same metadata without a JSON-shaped assumption leaking into the
+ *   primitive, not as a literal `_`-prefixed key, so the XML
+ *   codec can attach the same metadata without a JSON-shaped assumption leaking into the
  *   model.
  *
  * Every node is deeply `readonly`: the model is immutable, and the reader never hands back a

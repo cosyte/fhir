@@ -1,21 +1,21 @@
 /**
  * Slicing, assigning instance occurrences of a repeating element to the profile's named slices
- * (Phase 6, elementdefinition.html §slicing).
+ * (elementdefinition.html §slicing).
  *
  * A profile can **slice** a repeating element: split it into named sub-groups, each with its own
  * constraints, told apart by one or more **discriminators**. R4 defines the discriminator types
  * `value | exists | pattern | type | profile` (`valueset-discriminator-type`); **`position` is
  * R5-only** and is treated here as unsupported, never silently accepted.
  *
- * **What this phase evaluates, and what it defers.** Full discriminator evaluation needs a FHIRPath
- * engine (roadmap §10 item 1, Phase 7). This phase evaluates the discriminator kinds reachable with
+ * **What this module evaluates, and what it defers.** Full discriminator evaluation needs a FHIRPath
+ * engine. This module evaluates the discriminator kinds reachable with
  * the bounded path navigator ({@link ./navigate.js}): **`value`** and **`pattern`** (the instance's
  * value at the discriminator path must match the slice's `fixed[x]` / `pattern[x]` there) and
  * **`exists`** (the element's presence must match the slice's cardinality there). A `type` or
  * `profile` discriminator, an R5 `position`, an empty discriminator set, or a slice that declares no
  * constraint at a discriminator path is **not guessed**, the whole slicing is reported *unchecked*
- * (`PROFILE_SLICE_UNCHECKED`) so membership is never silently assumed to pass or fail (roadmap §6
- * fail-safe). Full evaluation of the deferred kinds lands with Phase 7's FHIRPath subset.
+ * (`PROFILE_SLICE_UNCHECKED`) so membership is never silently assumed to pass or fail
+ * (fail-safe). Full evaluation of the deferred kinds needs the FHIRPath engine.
  *
  * @packageDocumentation
  */
@@ -26,7 +26,7 @@ import { pathExists, resolvePath } from "./navigate.js";
 import type { ElementDefinition } from "./structure-definition.js";
 import type { FhirNode } from "../model/index.js";
 
-/** The discriminator kinds this phase can evaluate without a FHIRPath engine. */
+/** The discriminator kinds this module can evaluate without a FHIRPath engine. */
 const SUPPORTED_DISCRIMINATORS: ReadonlySet<string> = new Set(["value", "pattern", "exists"]);
 
 /** One `fixed[x]` / `pattern[x]` constraint a slice imposes, at a path relative to the slice element. */

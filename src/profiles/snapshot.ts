@@ -1,5 +1,5 @@
 /**
- * Snapshot generation from a differential (Phase 6, the heaviest single piece, profiling.html).
+ * Snapshot generation from a differential (the heaviest single piece, profiling.html).
  *
  * A FHIR profile is usually authored as a **differential**: only the elements it constrains, expressed
  * relative to the resource it profiles. To validate an instance you need the **snapshot**: the full,
@@ -19,7 +19,7 @@
  * **Known limitation (deferred):** re-slicing and deep re-parenting of a slice's descendant elements
  * are not modeled, slice *membership* is resolved from the slice element and any descendant
  * `fixed`/`pattern` constraints (see {@link ./slicing.js}), which covers the US Core slice shapes,
- * but a profile that re-slices an inherited slice is out of this phase's scope.
+ * but a profile that re-slices an inherited slice is out of scope here.
  *
  * @packageDocumentation
  */

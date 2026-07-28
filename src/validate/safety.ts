@@ -1,11 +1,11 @@
 /**
- * The safety validation layer (Phase 3, the fail-closed status & negation spine).
+ * The safety validation layer (the fail-closed status & negation spine).
  *
- * Layered on top of the Phase-2 structural validator, this layer enforces the parts of FHIR that,
- * read wrong, harm a patient (roadmap §4). It produces value-free {@link ValidationIssue}s for three
+ * Layered on top of the structural validator, this layer enforces the parts of FHIR that,
+ * read wrong, harm a patient. It produces value-free {@link ValidationIssue}s for three
  * things:
  *
- * 1. **Unhandled `modifierExtension` → fail closed.** FHIR's modifier rule (`?!`, roadmap §4.8): a
+ * 1. **Unhandled `modifierExtension` → fail closed.** FHIR's modifier rule (`?!`): a
  *    consumer that does not understand a `modifierExtension` MUST reject the element, it must not
  *    process it as if the modifier were absent. This library understands *no* modifier extensions yet
  *    ({@link ../safety/codes.js} `KNOWN_MODIFIER_EXTENSION_URLS` is empty), so **any** `modifierExtension`
@@ -17,10 +17,11 @@
  *    (Condition), `obs-6`/`obs-7` (Observation), hand-evaluated against the model from their exact
  *    R4 FHIRPath (`INVARIANT_VIOLATED`, with the constraint key on the issue). Each expression and
  *    severity is transcribed verbatim from the R4 StructureDefinition; see the per-check notes.
- *    (A general FHIRPath engine is Phase 7, ADR 0002; Phase 3 hand-codes only this safety-critical set.)
+ *    (A general FHIRPath engine is {@link ../fhirpath/index.js}; this layer hand-codes only this
+ *    safety-critical set.)
  *
  * This layer **surfaces and enforces**; it never reconciles contradictions or infers clinical meaning
- * (roadmap §4, known limitations).
+ * (known limitations).
  *
  * @packageDocumentation
  */

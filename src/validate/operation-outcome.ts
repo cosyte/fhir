@@ -1,5 +1,5 @@
 /**
- * The `OperationOutcome` builder, the value-free wire form of a validation result (Phase 2).
+ * The `OperationOutcome` builder, the value-free wire form of a validation result.
  *
  * `OperationOutcome` is FHIR's standard "here is what I found" resource (operationoutcome.html). The
  * builder turns a list of {@link ValidationIssue}s into an immutable {@link FhirComplex} model that
@@ -13,7 +13,7 @@
  *
  * An `OperationOutcome.issue` is `1..*`, it must carry at least one issue. When validation found
  * nothing, {@link toOperationOutcome} emits a single `information` / `informational` "all clear"
- * issue rather than an (invalid) empty one. R4 has no `success` severity (that is R5, roadmap §10),
+ * issue rather than an (invalid) empty one. R4 has no `success` severity (that is R5),
  * so the all-clear is `information`.
  *
  * @packageDocumentation

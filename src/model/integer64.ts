@@ -4,13 +4,13 @@
  * Its range is the full signed 64-bit integer, `-9223372036854775808 … 9223372036854775807`, which
  * exceeds JavaScript's `Number.MAX_SAFE_INTEGER` (`2^53 − 1`). Precisely because of that, FHIR
  * encodes `integer64` in JSON as a **string**, not a number, and parsing that string through
- * `Number` would silently drop the low-order digits of a large identifier. Like `FhirDecimal`
- * (architecture ADR 0001), `FhirInteger64` is string-backed and exposes a lazy `bigint` view for
+ * `Number` would silently drop the low-order digits of a large identifier. Like `FhirDecimal`,
+ * `FhirInteger64` is string-backed and exposes a lazy `bigint` view for
  * arithmetic; it never routes the value through `number`.
  *
- * In this phase the JSON reader preserves an `integer64` losslessly as an ordinary string primitive
- * (a string cannot lose precision), because typing a field *as* `integer64` requires the schema
- * layer that lands in a later phase. `FhirInteger64` is the typed primitive that field will resolve
+ * The JSON reader preserves an `integer64` losslessly as an ordinary string primitive
+ * (a string cannot lose precision), because typing a field *as* `integer64` requires the datatype
+ * schema. `FhirInteger64` is the typed primitive that field will resolve
  * to, and is available now for callers constructing a model by hand.
  *
  * @packageDocumentation

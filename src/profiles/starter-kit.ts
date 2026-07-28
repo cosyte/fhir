@@ -1,15 +1,14 @@
 /**
- * The publishable **profile starter kit** (Phase 10, half a), spec-grounded example profiles, each
+ * The publishable **profile starter kit**, spec-grounded example profiles, each
  * authored through the public {@link defineProfile} API.
  *
  * These are *templates*, not authoritative conformance statements. Each is a small, self-contained
  * `StructureDefinition` a consumer can pass straight to `validateResource({ profiles })`, read as a
  * worked example, or copy as the skeleton for their own site/vendor profile. Every constraint here is
- * grounded in a **public FHIR / US Core specification page** already cited in the roadmap, nothing is
+ * grounded in a **public FHIR / US Core specification page**, nothing is
  * invented, and no instance data is encoded. (A *named real-vendor* profile, one that asserts a
- * specific EHR's real-world constraints, is deliberately **out of this slice**: like the Tier-2 quirk
- * corpus, it may only be encoded when a real, de-identified vendor artifact grounds it, and is
- * deferred to `REAL-CORPUS`.)
+ * specific EHR's real-world constraints, is deliberately **out of scope here**: it may only be
+ * encoded when a real, de-identified vendor artifact grounds it.)
  *
  * **They dogfood the public path.** Nothing here reaches for a privileged internal builder: a starter
  * profile is `defineProfile(spec)`, exactly what a user writes. That is the point of the growth
@@ -17,7 +16,7 @@
  *
  * **Self-contained by design.** Each starter carries only a `differential` and no `baseDefinition`, so
  * it validates the elements it names without a base-resource resolver or any bundled base
- * `StructureDefinition` (roadmap §5: no profile content is bundled). A *derived* profile in production
+ * `StructureDefinition` (no profile content is bundled). A *derived* profile in production
  * would set `baseDefinition` and be validated with the base resource's snapshot available; these
  * starters trade that for running out of the box as teaching examples.
  *
@@ -40,7 +39,7 @@ export const STARTER_PROFILE_BASE_URL = "https://cosyte.com/fhir/StructureDefini
  * signs profile constrains `category` (a slice, **not** a bare pattern on the repeating element, a
  * bare pattern would wrongly require *every* category entry to be `vital-signs` and reject a valid
  * multi-category Observation). It exercises the profile engine's `pattern`/`$this` slicing
- * discriminator. Fixed UCUM units per vital sign are surfaced by the Phase-4 quantity layer
+ * discriminator. Fixed UCUM units per vital sign are surfaced by the quantity layer
  * (`VITAL_SIGN_UNITS`), not re-encoded here.
  */
 export const VITAL_SIGN_OBSERVATION_STARTER: StructureDefinition = defineProfile({
@@ -85,11 +84,11 @@ export const VITAL_SIGN_OBSERVATION_STARTER: StructureDefinition = defineProfile
 });
 
 /**
- * A **`Patient` identifier** starter, grounded in US Core Patient (roadmap §4.2). It marks
+ * A **`Patient` identifier** starter, grounded in US Core Patient. It marks
  * `identifier`, `identifier.system`, and `identifier.value` required + must-support, a patient
  * identity is the `(system, value)` tuple. It deliberately does **not** slice an "MRN" slice and does
  * **not** bind `identifier.type`: US Core does neither, and inventing an MRN slice is exactly the
- * wrong-patient-merge hazard the roadmap warns against.
+ * wrong-patient-merge hazard.
  */
 export const PATIENT_IDENTIFIER_STARTER: StructureDefinition = defineProfile({
   url: `${STARTER_PROFILE_BASE_URL}/starter-patient-identifier`,

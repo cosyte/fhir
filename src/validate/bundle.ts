@@ -1,10 +1,10 @@
 /**
- * The Bundle-integrity validation layer (Phase 9), the findings a `Bundle` earns beyond
+ * The Bundle-integrity validation layer, the findings a `Bundle` earns beyond
  * per-resource validation: unresolved references, `contained` reference cycles, and `fullUrl`↔`id`
  * disagreement. Keys off the resource being a `Bundle`, exactly as the safety / quantity / terminology
  * layers key off the resource type, and is wired into {@link ./validate.js validateResource}.
  *
- * Three value-free findings (all consistent with the P1–P8 diagnostic model):
+ * Three value-free findings (all consistent with the diagnostic model):
  *
  * - **`FULLURL_ID_MISMATCH`** (error), an entry whose `fullUrl` is a RESTful URL (`Type/id`) that
  *   disagrees with the wrapped `resource.id`. A `urn:uuid:` fullUrl constrains nothing, so it is

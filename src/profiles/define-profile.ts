@@ -1,8 +1,7 @@
 /**
- * `defineProfile()`, author a {@link StructureDefinition} in code (Phase 10, half a: the profile
- * growth loop).
+ * `defineProfile()`, author a {@link StructureDefinition} in code.
  *
- * The profile engine (Phase 6) validates a resource against a {@link StructureDefinition}. Until now
+ * The profile engine validates a resource against a {@link StructureDefinition}. Until now
  * the only way to obtain one was to `parseResource(structureDefinitionJson)` and
  * `loadStructureDefinition()` it, i.e. a caller had to hand-write (or fetch) raw FHIR
  * `StructureDefinition` JSON. `defineProfile()` is the **programmatic authoring** front door: it takes
@@ -14,8 +13,8 @@
  * ./starter-kit.js}) are authored through *this same function*, there is no separate, blessed internal
  * representation for "our" profiles versus a user's. `defineProfile(spec)` is byte-for-byte equivalent
  * to `loadStructureDefinition(parseResource(equivalentJson).resource)` for every valid spec (proven in
- * the test suite): the two authoring routes converge on one model. That equivalence is the whole point
- * of the growth loop, dogfooding the public API keeps it honest.
+ * the test suite): the two authoring routes converge on one model. That equivalence is the whole
+ * point: dogfooding the public API keeps it honest.
  *
  * **The writer is conservative (Postel's Law, emit side).** Unlike `loadStructureDefinition` (a
  * lenient *reader* of possibly-messy supplied JSON, which degrades malformed input), `defineProfile` is
@@ -75,7 +74,7 @@ export interface ProfileConstraintSpec {
   readonly severity?: string;
   /** The prose description (spec text, never surfaced in a diagnostic). */
   readonly human?: string;
-  /** The FHIRPath expression the Phase-7 engine evaluates. */
+  /** The FHIRPath expression the engine evaluates. */
   readonly expression: string;
 }
 
@@ -108,7 +107,7 @@ export interface ProfileElementSpec {
   readonly pattern?: TypedValue;
   /** The element's terminology binding (strength + value-set identity). */
   readonly binding?: ElementBinding;
-  /** The element's invariant constraints (Phase 7 FHIRPath). */
+  /** The element's invariant constraints (FHIRPath). */
   readonly constraint?: readonly ProfileConstraintSpec[];
 }
 

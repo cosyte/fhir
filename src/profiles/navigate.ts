@@ -1,11 +1,11 @@
 /**
- * Element-path navigation over the generic model (Phase 6 support for the profile engine).
+ * Element-path navigation over the generic model (support for the profile engine).
  *
  * Profile validation and slicing discriminators are expressed as **element paths** relative to a
  * resource or a slice element (e.g. `clinicalStatus.coding.code`, `value[x]`, `$this`). This module
  * resolves such a path to the set of model nodes it selects, flattening repeating elements and
  * honoring `[x]` choice variants. It is a deliberately small, FHIRPath-*shaped* navigator, not the
- * FHIRPath engine (that is Phase 7, ADR 0002): it walks dotted member access and choice suffixes,
+ * FHIRPath engine: it walks dotted member access and choice suffixes,
  * which is exactly what StructureDefinition discriminator paths and fixed/pattern locations use, and
  * nothing more (no functions, no filters, no arithmetic).
  *

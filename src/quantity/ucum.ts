@@ -1,14 +1,14 @@
 /**
- * UCUM unit fidelity for FHIR `Quantity` (Phase 4, the results & doses safety spine).
+ * UCUM unit fidelity for FHIR `Quantity` (the results & doses safety spine).
  *
  * FHIR carries a measured value as a `Quantity`, a number plus a coded unit. The unit that a
  * machine may act on is the **`code`** (a UCUM expression under `system` = `http://unitsofmeasure.org`),
  * **not** the human-readable `unit` string: `code` is case-sensitive and bracket-literal (`mm[Hg]`,
  * `[lb_av]`, `Cel`), while `unit` is free text a display might localize. Reading the `unit` string
- * where the `code` was meant is a unit-confusion hazard (roadmap §4.6). This module surfaces the
- * `code`, checks its **shape** (not its membership, no UCUM content is bundled, roadmap §5), and
+ * where the `code` was meant is a unit-confusion hazard. This module surfaces the
+ * `code`, checks its **shape** (not its membership, no UCUM content is bundled), and
  * holds the FHIR **vital-signs required-unit table**. It **never converts** a unit, an unrecognized
- * unit is preserved verbatim and flagged, never inferred (roadmap §4.6 fail-safe).
+ * unit is preserved verbatim and flagged, never inferred (fail-safe).
  *
  * @packageDocumentation
  */
@@ -41,9 +41,9 @@ export const VITAL_SIGNS_PROFILE = "http://hl7.org/fhir/StructureDefinition/vita
  * pressure panel `85354-9`) carry no top-level value and so are not keyed here; their measured
  * components (e.g. systolic `8480-6`) are.
  *
- * This is a **closed, spec-defined** set of stable identifiers (like the Phase-3 status codes), not a
+ * This is a **closed, spec-defined** set of stable identifiers (like the status codes), not a
  * licensed terminology table. A LOINC code absent from this table is left unchecked (a clean degrade,
- * never a false error), and the table is the seam a later terminology phase widens.
+ * never a false error), and the table is the seam a later terminology change widens.
  */
 export const VITAL_SIGN_UNITS: ReadonlyMap<string, readonly string[]> = new Map<
   string,
@@ -82,7 +82,7 @@ export function requiredVitalSignUnits(loincCode: string): readonly string[] | u
 
 /**
  * The value-free reading of a FHIR `Quantity` element. `value` is a {@link FhirDecimal}, the exact
- * lexical number, never routed through a JS float (ADR 0001), and `code`/`system` are the
+ * lexical number, never routed through a JS float, and `code`/`system` are the
  * machine-actionable unit, kept distinct from the human `unit` string.
  */
 export interface Quantity {
@@ -140,8 +140,8 @@ export type UcumShapeVerdict = "ok" | "invalid";
 
 /**
  * Whether a string is a **shape-valid** UCUM code. This checks structure only, it does **not**
- * assert the code names a real UCUM unit (that needs the UCUM content, which is not bundled, roadmap
- * §5). A code is `"invalid"` when it is empty, contains whitespace (UCUM codes never do), or has
+ * assert the code names a real UCUM unit (that needs the UCUM content, which is not bundled).
+ * A code is `"invalid"` when it is empty, contains whitespace (UCUM codes never do), or has
  * unbalanced `[]` / `{}` / `()`. Curly-brace annotations (`{RBC}`) are stripped before the whitespace
  * and bracket checks, since their inner text is unconstrained. Everything else is `"ok"`, a
  * conservative pass, so a well-formed but exotic unit is never wrongly rejected. The only consumer of

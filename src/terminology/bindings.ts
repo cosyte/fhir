@@ -1,13 +1,13 @@
 /**
  * Terminology **bindings**, the map from an element to the value set it draws from and the strength
- * of that binding (Phase 5).
+ * of that binding.
  *
  * A FHIR element binds to a value set at one of four strengths (terminologies.html), and the strength
  * governs how severe a non-conforming code is:
  *
  * - **required**, the code SHALL be from the value set (a violation is an `error`).
  * - **extensible**, the code SHALL be from the value set *unless* no code in it covers the concept
- *   (a violation is an `error` unless justified, roadmap's "error-unless").
+ *   (a violation is an `error` unless justified, "error-unless").
  * - **preferred**, the code SHOULD be from the value set (a violation is a `warning`).
  * - **example**, the value set is illustrative only (a non-member is `information` at most, and
  *   **never** an error, rebinding an example code must not fail).
@@ -19,10 +19,10 @@
  * the wrong system for a value set built from RxNorm + SNOMED, even though it cannot confirm the code
  * itself is a member (that needs {@link ./service.js}).
  *
- * **The built-in set is intentionally the roadmap-named multi-system elements only**, allergy
+ * **The built-in set is intentionally the multi-system elements only**, allergy
  * substance (RxNorm + SNOMED) and medication (RxNorm). Full per-element US Core binding coverage is a
- * profile concern (Phase 6); a consumer supplies more bindings via `validateResource(resource, {
- * bindings: [...] })`, exactly as Phase 2 takes extra `schemas`.
+ * profile concern; a consumer supplies more bindings via `validateResource(resource, {
+ * bindings: [...] })`, exactly as the validator takes extra `schemas`.
  *
  * @packageDocumentation
  */
@@ -63,7 +63,7 @@ export interface TerminologyBinding {
 /**
  * US Core AllergyIntolerance substance value set, VSAC `2.16.840.1.113762.1.4.1186.8`, an
  * **extensible** binding drawing from **RxNorm** (drug) **+ SNOMED CT** (food/environmental and the
- * "no known allergy" negation concepts). The multi-system composition the roadmap §4.3 calls out:
+ * "no known allergy" negation concepts). The multi-system composition means
  * the validator must accept *both* systems on this one element. *(US Core AllergyIntolerance)*
  */
 export const ALLERGY_SUBSTANCE_VALUESET =
@@ -72,14 +72,14 @@ export const ALLERGY_SUBSTANCE_VALUESET =
 /**
  * US Core medication value set, VSAC `2.16.840.1.113762.1.4.1010.4`, an **extensible** binding to
  * **RxNorm**. Bound on `MedicationRequest`/`MedicationStatement` `medicationCodeableConcept`.
- * *(US Core MedicationRequest §4.4)*
+ * *(US Core MedicationRequest)*
  */
 export const MEDICATION_VALUESET =
   "http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1010.4";
 
 /**
- * The built-in bindings, the roadmap-named multi-system elements. Deliberately minimal: broad US
- * Core element coverage is Phase 6 (profiles). Each is **extensible**, so a code outside its systems
+ * The built-in bindings, the multi-system elements. Deliberately minimal: broad US
+ * Core element coverage is a profile concern. Each is **extensible**, so a code outside its systems
  * is a `warning` (a possible legitimate extension), never a false `error`.
  */
 export const TERMINOLOGY_BINDINGS: readonly TerminologyBinding[] = [
@@ -109,7 +109,7 @@ export type BindingRegistry = (path: string) => TerminologyBinding | undefined;
 /**
  * Build a {@link BindingRegistry} from the built-in bindings plus any caller-supplied ones. A
  * caller binding for a path replaces the built-in for that path, so a consumer can override or add
- * element bindings (Phase 6 feeds these from real profiles).
+ * element bindings (real profiles feed these).
  *
  * @param extra - Additional bindings to register (override built-ins by path).
  * @returns A resolver from element path to its binding.

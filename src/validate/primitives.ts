@@ -5,8 +5,7 @@
  * spec (datatypes.html §Primitive Types). This module holds those patterns verbatim (anchored) and
  * validates a model value against a declared datatype. It is deliberately **resource-independent**:
  * given a value and its datatype name, it can say whether the value is well-formed, without any
- * StructureDefinition. Which element *is* which datatype is the schema's job ({@link ./schema.js});
- * Phase 6 supplies that from real StructureDefinitions.
+ * StructureDefinition. Which element *is* which datatype is the schema's job ({@link ./schema.js}).
  *
  * The model already stores primitives losslessly: strings as JS strings, `boolean` as a JS boolean,
  * and every JSON number (`integer`, `unsignedInt`, `positiveInt`, `decimal`, `integer64`) as a

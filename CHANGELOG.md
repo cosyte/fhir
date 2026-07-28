@@ -8,6 +8,54 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **No internal project bookkeeping on any surface a consumer reads (PUBLIC-SURFACE-HYGIENE, founder
+  directive 2026-07-27).** `README.md`, `docs-content/`, the npm `description`, and every `/** */`
+  doc comment that compiles into `dist/index.d.ts` are swept of item identifiers, phase and wave
+  language, ADR numbers, meta-repo paths and "how this got built" commentary. **The gate below
+  catches identifiers, not English**, so the by-hand half of that sweep is not claimed complete: a
+  sentence whose only fault is that it describes how the artifact came to exist reads like ordinary
+  prose and stays a reviewer's catch. A consumer's editor
+  hover and the package front page now describe what the software does; the traceability stays where
+  the convention puts it, in this file, the commits, the PRs and the roadmap. **No behaviour change,
+  no API change:** no export was added, removed or renamed, and no doc comment was deleted (JSDoc
+  with `@example` on every public export is a hard guardrail; the sentences were translated, not
+  dropped). Two consumer-visible corrections came out of the sweep: the README's status line
+  claimed version `0.0.0` (the package has never been `0.0.0`, and npm is the only source of truth
+  for the version), and the "Architecture decisions" table asserted that XML serialization was
+  deferred, which the shipped XML codec had already made false. Measured against the gate below, on
+  this tree: public surface **23 -> 0**, `src/` doc comments **255 -> 0**, `src/` string literals
+  **0 -> 0**, `dist/index.d.ts` **134 -> 0**. The npm `description` also drops the word "scaffold"
+  and now names the XML codec and the layered validation the package actually ships.
+
+### Added
+
+- **`scripts/check-no-internal-refs.sh` + a `no-internal-refs` CI job, so the sweep above cannot
+  regress.** Ported from `hl7`'s reference gate (hl7#62, hl7#64) by way of `ncpdp`'s copy
+  (ncpdp#36), which carries three fixes the original does not: a fourth pass over `src/` string
+  literals, a plural stem in the phase rule, and `/` in the ADR separator class. Run it with
+  `pnpm check:no-internal-refs`; it is also on the meta-repo's `scripts/verify.sh fhir` ladder. Five
+  rules over four surfaces (public markdown, npm metadata, `src/` doc comments, `src/` string
+  literals), each scanned line by line **and** paragraph-joined so a violation that straddles a line
+  wrap cannot hide. The script self-tests before it reports, in both directions: every rule must
+  still match its own positive sample **and** must still let through the reference material it is
+  most likely to destroy (`FHIR-R4`, `HL7-V2`, `US-Core`, ICD-10-CM `T78.40XA`, the range `P00-P96`,
+  LOINC `8480-6`, the `ait-1` / `con-3` / `obs-6` invariant ids, the `no-known-allergy` and
+  `vital-signs` codes, a Phase III oncology trial). It refuses to print OK from a scan that did not
+  read all of its input.
+  - **`CHANGELOG.md` is deliberately not scanned**, even though it ships inside the npm tarball: the
+    convention names it as one of the places identifiers belong, and rewriting a released
+    changelog's history would destroy the traceability that same convention preserves. That
+    contradiction is ecosystem-wide; it is recorded here, not decided here.
+  - **The sibling copies' `slice` rule is deliberately not carried.** `slice` is normative R4
+    vocabulary in this package (`ElementDefinition.slicing`, `sliceName`), not internal jargon:
+    measured with the rule enabled, 41 matches, exactly one of them ours. A rule that is wrong 40
+    times out of 41 tells a remediator to rewrite the reference material the gate exists to protect.
+  - **Two stated holes:** the `FHIR-P10b` identifier form (a trailing lowercase suffix) and the bare
+    `P10b` / `P9` forms are not caught, because closing them needs a `P\d+`-shaped rule of the kind
+    that has previously corrupted ICD-10-CM codes; and `phase` at the end of a clause is not caught,
+    inherited from `hl7` for its collision with ordinary clinical English. Both are stated rather
+    than discovered later.
+
 - **Patch bump to `0.0.3` purely to give npm support a fresh, never-attempted version to trace
   (FHIR-NPM-NAME).** This entry carries **no change to the package surface**: no new or removed
   exports, no behaviour change, no fixture change, no dependency change. `@cosyte/fhir` has never
