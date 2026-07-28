@@ -35,7 +35,13 @@
  * @packageDocumentation
  */
 
-import type { FhirComplex, FhirNode, FhirPrimitive, PrimitiveValue } from "../model/node.js";
+import type {
+  FhirComplex,
+  FhirNode,
+  FhirPrimitive,
+  FhirProperty,
+  PrimitiveValue,
+} from "../model/node.js";
 
 /** The canonical lexical text of a primitive value (`undefined` stays `undefined`). */
 function canonicalScalar(value: PrimitiveValue | undefined): string | undefined {
@@ -79,17 +85,36 @@ function primitivesEquivalent(a: FhirPrimitive, b: FhirPrimitive): boolean {
   );
 }
 
-/** Whether two complexes are equivalent (same property names, in the same order, with equivalent values). */
-function complexesEquivalent(a: FhirComplex, b: FhirComplex): boolean {
-  if (a.properties.length !== b.properties.length) return false;
-  return a.properties.every((property, i) => {
-    const other = b.properties[i];
+/** Whether two property lists match name-for-name, in order, with equivalent values. */
+function propertiesEquivalent(
+  a: readonly FhirProperty[] | undefined,
+  b: readonly FhirProperty[] | undefined,
+): boolean {
+  const left = a ?? [];
+  const right = b ?? [];
+  if (left.length !== right.length) return false;
+  return left.every((property, i) => {
+    const other = right[i];
     return (
       other !== undefined &&
       property.name === other.name &&
       nodesEquivalent(property.value, other.value)
     );
   });
+}
+
+/**
+ * Whether two complexes are equivalent (same property names, in the same order, with equivalent
+ * values). Members a repeated property name shadowed have to match too: a JSON object that wrote
+ * `status` twice carries a value its XML counterpart does not, and calling those equivalent would
+ * hide exactly the value the duplicate obscured. XML has no such construct, so this is only ever
+ * reachable from a non-conformant JSON document.
+ */
+function complexesEquivalent(a: FhirComplex, b: FhirComplex): boolean {
+  return (
+    propertiesEquivalent(a.properties, b.properties) &&
+    propertiesEquivalent(a.duplicates, b.duplicates)
+  );
 }
 
 /**

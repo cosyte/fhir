@@ -78,6 +78,11 @@ issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", ex
   alignment**; a misaligned value/`_`-array **fails closed** rather than mis-attaching an extension.
 - **Lenient read, spec-clean write** (Postel's Law), `resourceType` resolvable in any position, and a
   `parseReference` classifier (relative / absolute / logical / fragment).
+- **A repeated property name is read, not resolved.** FHIR requires unique property names and JSON
+  leaves the winner undefined, so both values are kept (`getAllProperties` reads them, `getProperty`
+  still returns the first) and a `DUPLICATE_PROPERTY` issue says where. The element is genuinely
+  ambiguous, so nothing downstream pretends otherwise: it validates as an error, and the safety
+  readout declines to summarize it rather than answering from one arbitrary half of the document.
 
 And the first three validation layers (structure, cardinality, and primitive/enumerated-`code`
 value-domain) with a value-free `OperationOutcome`:
@@ -134,6 +139,11 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`, `entered-in-error`) across the six
   safety resource types. `assertSafeToSummarize` **refuses** (throws) rather than flatten past an
   unhandled modifier.
+- **A safety verdict is never asserted over a value the document left ambiguous.** The negation reads
+  run over every coding on a `CodeableConcept` and every value written under a repeated property
+  name, so a retraction cannot hide in the one a single-value lookup skipped; and where a repeated
+  name leaves an element with two values, `safeToSummarize` is `false` with the locations in
+  `shadowedProperties` instead of an affirmative answer.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their

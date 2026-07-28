@@ -6,6 +6,44 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A duplicate JSON property name silently dropped the later value, and `readSafety` then affirmed
+  the wrong answer (FHIR-DUPLICATE-KEY-RETRACTION).**
+  `{"resourceType":"Observation","status":"final",…,"status":"entered-in-error"}` lost the
+  retraction: the reader's first-wins grouping discarded the second member, and the safety readout
+  reported `retracted: false, safeToSummarize: true` with an **empty issue list**. A retracted
+  observation was presented as safe to summarise, and the caller's only signal was a clean return.
+  Pre-existing, found by the `PUBLIC-SURFACE-HYGIENE` refuter and reproduced on `main` at `d72c554`.
+  **Three separable decisions, only two of them changed.**
+  1. **Which value wins is UNCHANGED: still first-wins.** RFC 8259 §4 leaves duplicate names
+     undefined ("the behavior of software that receives such an object is unpredictable"), FHIR
+     forbids them outright (json.html: "Property names SHALL be unique"), and neither position is
+     more authoritative: with `status` written twice the retraction can sit on either side, so
+     flipping to last-wins would have moved the blind spot rather than closed it, while silently
+     changing what every existing caller reads. Ranking the members is the reconciliation this
+     library does not do.
+  2. **A duplicate name is now reported** rather than tolerated in silence: a `DUPLICATE_PROPERTY`
+     read issue (warning) at the element's FHIRPath location, and a `DUPLICATE_PROPERTY` validation
+     issue (**error**, `structure`) so `validateResource` cannot return `valid` for a document that
+     broke a `SHALL`. The shadowed member is also **kept** rather than discarded, on the new
+     `FhirComplex.duplicates`, so the information is no longer lost between the raw tree and the
+     model.
+  3. **`readSafety` no longer asserts a verdict over a value it did not rank.** The retraction read
+     now runs over **every** value written for `status` / `verificationStatus`, the same fail-safe
+     rule already applied across a multi-coding `CodeableConcept`, so the reported document now reads
+     `retracted: true` with `entered-in-error` in `negations`. And any repeated property name
+     anywhere in the resource sets `safeToSummarize: false` with the locations in the new
+     `shadowedProperties`, so a caller gets a refusal instead of an affirmative answer computed from
+     one arbitrary half of the document. `assertSafeToSummarize` throws on it.
+
+- **Three consequences of the above, named because each is a behaviour change in its own right.** A
+  repeated name can no longer hide an unhandled `modifierExtension`, because the fail-closed walk now
+  descends into shadowed members. The JSON/XML equivalence oracle no longer calls a document carrying
+  a shadowed member equivalent to one without it. And the writer continues to emit one member per
+  name, which is now a **deliberate** narrowing rather than a silent one: emitting both would produce
+  invalid FHIR, and emit is the wrong place to resolve an ambiguity the reader already reported.
+
 ### Changed
 
 - **No internal project bookkeeping on any surface a consumer reads (PUBLIC-SURFACE-HYGIENE, founder
@@ -29,6 +67,14 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Public surface for the duplicate-name work above:** `getAllProperties(node, name)` (every value
+  written under a name, in document order, the fail-safe counterpart to `getProperty`),
+  `shadowedProperties(resource, path)` (the FHIRPath locations of members a repeated name shadowed),
+  `duplicateProperty(expression)` (the read-issue factory), `ISSUE_CODES.DUPLICATE_PROPERTY`,
+  `VALIDATION_CODES.DUPLICATE_PROPERTY`, the optional `FhirComplex.duplicates` field (absent on every
+  conformant document), an optional second argument to `complex()`, and
+  `SafetyReadout.shadowedProperties`. `FhirSafetyError` now also covers the repeated-name refusal, so
+  its `locations` and message are no longer modifier-extension-specific.
 - **`scripts/check-no-internal-refs.sh` + a `no-internal-refs` CI job, so the sweep above cannot
   regress.** Ported from `hl7`'s reference gate (hl7#62, hl7#64) by way of `ncpdp`'s copy
   (ncpdp#36), which carries three fixes the original does not: a fourth pass over `src/` string

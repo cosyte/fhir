@@ -146,7 +146,20 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   precision-preserving JSON codec (`parseResource` / `serializeResource` / `readRawJson`), the
   string-backed `FhirDecimal` / `FhirInteger64` primitives (ADR 0001), the primitive-extension
   (`_`-sibling) model with null-padded array alignment, an immutable generic element model
-  (`FhirComplex` / `FhirList` / `FhirPrimitive`), `parseReference`, and value-free diagnostics. P2:
+  (`FhirComplex` / `FhirList` / `FhirPrimitive`), `parseReference`, and value-free diagnostics.
+  **`FHIR-DUPLICATE-KEY-RETRACTION` (2026-07-28) closed a silent, unsafe-direction defect in this
+  core:** a duplicate JSON property name dropped the later value (first-wins, no issue), so
+  `{"status":"final",…,"status":"entered-in-error"}` lost the retraction and `readSafety` reported
+  `retracted: false, safeToSummarize: true`. Of the three separable decisions, **which value wins is
+  deliberately unchanged** (still first-wins: RFC 8259 §4 leaves it undefined, FHIR json.html forbids
+  duplicates outright, and last-wins would only move the blind spot); what changed is that the
+  shadowed member is now **kept** (`FhirComplex.duplicates`, read via `getAllProperties`) and
+  **reported** (`ISSUE_CODES.DUPLICATE_PROPERTY` warning on read, `VALIDATION_CODES.DUPLICATE_PROPERTY`
+  **error** in `validateResource`), and that `readSafety` **stops affirming**: the retraction read runs
+  over every value written for `status`/`verificationStatus` (so the reported case now reads
+  `retracted: true`), and any repeated name anywhere sets `safeToSummarize: false` with the locations in
+  `SafetyReadout.shadowedProperties` (`assertSafeToSummarize` throws). The writer still emits one
+  member per name, deliberately: both would be invalid FHIR. P2:
   the first three validation layers (`validateResource`: structure, cardinality, primitive /
   enumerated-`code` value-domain) with a value-free `OperationOutcome` and the PHI redaction
   chokepoint. P3: the safety-critical status & negation spine (`readSafety`, fail-closed on an

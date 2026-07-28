@@ -53,6 +53,15 @@ export const ISSUE_CODES = {
    * than the FHIR one. Warning severity: preserved-and-flagged, nothing rejected.
    */
   UNEXPECTED_XML_CONTENT: "UNEXPECTED_XML_CONTENT",
+  /**
+   * A JSON object repeated a property name. FHIR JSON requires unique property names (json.html:
+   * "Property names SHALL be unique") and expresses repetition with an array, so a repeated name is
+   * a document defect with no defined winner: RFC 8259 §4 says "the behavior of software that
+   * receives such an object is unpredictable". The reader keeps the first value in the node's
+   * `properties`, keeps the rest in its `duplicates` (nothing is discarded), and raises this. Warning
+   * severity: the data survived, but any single-value read of that element is now arbitrary.
+   */
+  DUPLICATE_PROPERTY: "DUPLICATE_PROPERTY",
 } as const;
 
 /** Discriminant union of every {@link ISSUE_CODES} value. */
@@ -111,6 +120,22 @@ export function unknownProperty(expression: string): FhirIssue {
  */
 export function unexpectedXmlContent(expression: string): FhirIssue {
   return { code: ISSUE_CODES.UNEXPECTED_XML_CONTENT, severity: "warning", expression };
+}
+
+/**
+ * Build a {@link ISSUE_CODES.DUPLICATE_PROPERTY} issue at `expression`.
+ *
+ * The location names the element, not the individual member: FHIRPath addresses elements, and a
+ * repeated JSON name is not addressable, so both the surviving and the shadowed member report here.
+ *
+ * @example
+ * ```ts
+ * import { duplicateProperty } from "@cosyte/fhir";
+ * const issue = duplicateProperty("Observation.status");
+ * ```
+ */
+export function duplicateProperty(expression: string): FhirIssue {
+  return { code: ISSUE_CODES.DUPLICATE_PROPERTY, severity: "warning", expression };
 }
 
 /**

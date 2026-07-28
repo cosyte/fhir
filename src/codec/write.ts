@@ -15,6 +15,14 @@
  * round-trips byte-for-byte. String values and object keys are escaped via `JSON.stringify` (correct
  * and canonical for strings, only numbers need the raw-text treatment).
  *
+ * The **one** input the writer cannot round-trip is a document that repeated a property name. FHIR
+ * requires unique property names (json.html), so writing both members back would emit a document
+ * that is invalid by the rule the writer exists to uphold; the node's `duplicates` are therefore not
+ * emitted and one value per name is written. That narrowing is deliberate and it is never silent: the
+ * reader raised `DUPLICATE_PROPERTY` on the way in, the validator rejects such a resource, and the
+ * safety readout refuses to summarize it. Emit is the wrong place to resolve the ambiguity, so the
+ * writer does not try.
+ *
  * @packageDocumentation
  */
 

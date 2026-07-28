@@ -21,6 +21,7 @@ export { FhirDecimal, decimal, wouldLosePrecisionAsDouble } from "./model/decima
 export { FhirInteger64, integer64 } from "./model/integer64.js";
 export {
   complex,
+  getAllProperties,
   getProperty,
   isComplex,
   isList,
@@ -58,6 +59,7 @@ export type {
 } from "./codec/raw-json.js";
 export {
   decimalPrecisionAtRisk,
+  duplicateProperty,
   unexpectedXmlContent,
   unknownProperty,
   FATAL_CODES,
@@ -105,6 +107,7 @@ export {
   assertSafeToSummarize,
   FhirSafetyError,
   readSafety,
+  shadowedProperties,
   unhandledModifierExtensions,
 } from "./safety/status.js";
 export type { NegationKind, SafetyReadout } from "./safety/status.js";

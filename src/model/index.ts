@@ -13,6 +13,7 @@ export { FhirDecimal, decimal, wouldLosePrecisionAsDouble } from "./decimal.js";
 export { FhirInteger64, integer64 } from "./integer64.js";
 export {
   complex,
+  getAllProperties,
   getProperty,
   isComplex,
   isList,

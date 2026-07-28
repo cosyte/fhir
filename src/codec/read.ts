@@ -12,6 +12,12 @@
  *    {@link FhirPrimitive} nodes. If the two arrays disagree in length the alignment is broken and
  *    the reader **fails closed**, throwing `PRIMITIVE_EXTENSION_MISALIGNED` rather than guessing
  *    which value an extension belongs to (guessing could attach it to the wrong clinical value).
+ * 3. **A repeated property name.** FHIR JSON requires unique names (json.html) and RFC 8259 §4
+ *    leaves the winner undefined, so a name written twice is a defect with two equally (un)plausible
+ *    values. The element keeps the first, but the shadowed member is kept on the node's `duplicates`
+ *    rather than dropped, and a `DUPLICATE_PROPERTY` issue is raised. That is what lets a
+ *    safety-classifying read see both values and refuse to affirm a verdict over a value it did not
+ *    rank, instead of quietly reporting the one it happened to keep.
  *
  * Reading is lenient elsewhere (Postel's Law): an unexpected shape is preserved and flagged, not
  * rejected. Only genuinely unrecoverable structure (malformed JSON, broken `_`-alignment) throws.
@@ -31,6 +37,7 @@ import {
 } from "../model/node.js";
 import {
   decimalPrecisionAtRisk,
+  duplicateProperty,
   unknownProperty,
   FATAL_CODES,
   FhirCodecError,
@@ -46,17 +53,32 @@ export interface ReadResult {
   readonly issues: readonly FhirIssue[];
 }
 
+/** A member a repeated JSON property name shadowed, kept rather than discarded. */
+interface Shadowed {
+  readonly base: string;
+  readonly isMeta: boolean;
+  readonly node: RawJson;
+}
+
 /** Mutable grouping of a base property with its optional `_`-sibling, in first-seen order. */
 interface Grouped {
   readonly order: string[];
   readonly value: Map<string, RawJson>;
   readonly meta: Map<string, RawJson>;
+  readonly shadowed: Shadowed[];
 }
 
 /**
  * Group an object's members into `{ base → value }` and `{ base → meta }` maps, preserving the
- * first-seen order of base names across both. Duplicate keys keep the first occurrence (FHIR
- * forbids duplicates).
+ * first-seen order of base names across both.
+ *
+ * FHIR JSON requires unique property names (json.html: "Property names SHALL be unique") and
+ * expresses a repeating element as an array, so a repeated name is a document defect. RFC 8259 §4
+ * leaves the winner undefined ("the behavior of software that receives such an object is
+ * unpredictable"), and neither position is more authoritative than the other: whichever we picked, a
+ * `status` written twice can carry the retraction on the side we dropped. So the reader ranks
+ * nothing new, keeps the **first** occurrence as the element's value, and collects the rest in
+ * `shadowed` so the value is still readable and the ambiguity is still visible downstream.
  *
  * @internal
  */
@@ -64,6 +86,7 @@ function group(obj: RawObject): Grouped {
   const order: string[] = [];
   const value = new Map<string, RawJson>();
   const meta = new Map<string, RawJson>();
+  const shadowed: Shadowed[] = [];
   const seen = new Set<string>();
   for (const member of obj.members) {
     const isMeta = member.key.startsWith("_") && member.key.length > 1;
@@ -73,9 +96,10 @@ function group(obj: RawObject): Grouped {
       order.push(base);
     }
     const target = isMeta ? meta : value;
-    if (!target.has(base)) target.set(base, member.value);
+    if (target.has(base)) shadowed.push({ base, isMeta, node: member.value });
+    else target.set(base, member.value);
   }
-  return { order, value, meta };
+  return { order, value, meta, shadowed };
 }
 
 /** A scalar (non-object, non-array) raw node. */
@@ -260,7 +284,20 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
       value: buildNode(grouped.value.get(name), grouped.meta.get(name), childPath, issues),
     };
   });
-  return complex(properties);
+  // Members a repeated property name shadowed: read them into the model too (a dropped value cannot
+  // be reasoned about later) and flag each one, so a caller is never handed one arbitrary value out
+  // of several with a clean result.
+  const duplicates = grouped.shadowed.map((member) => {
+    const childPath = basePath === "" ? member.base : `${basePath}.${member.base}`;
+    issues.push(duplicateProperty(childPath));
+    return {
+      name: member.base,
+      value: member.isMeta
+        ? buildNode(undefined, member.node, childPath, issues)
+        : buildNode(member.node, undefined, childPath, issues),
+    };
+  });
+  return complex(properties, duplicates);
 }
 
 /**

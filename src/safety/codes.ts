@@ -21,6 +21,7 @@
  */
 
 import {
+  getAllProperties,
   getProperty,
   isComplex,
   isList,
@@ -261,6 +262,12 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * `entered-in-error` under any system (AllergyIntolerance, Condition). Over-surfacing a retraction is
  * safe; missing one is not.
  *
+ * "Fail-safe" is read across **every** value the document wrote for those elements, not just the one
+ * a single-value lookup returns. A `CodeableConcept` legitimately carries several codings and the
+ * retraction may not be in the first; a non-conformant document may write `status` twice and put the
+ * retraction in the one that lost. Both are the same hazard: reading one of several written values
+ * and reporting the record as live.
+ *
  * @param resource - The resource model.
  * @returns `true` when the resource is marked entered-in-error.
  * @example
@@ -271,8 +278,13 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * ```
  */
 export function isRetracted(resource: FhirComplex): boolean {
-  if (primitiveString(getProperty(resource, "status")) === ENTERED_IN_ERROR) return true;
-  return hasCodeAnySystem(getProperty(resource, "verificationStatus"), ENTERED_IN_ERROR);
+  const retractedStatus = getAllProperties(resource, "status").some(
+    (node) => primitiveString(node) === ENTERED_IN_ERROR,
+  );
+  if (retractedStatus) return true;
+  return getAllProperties(resource, "verificationStatus").some((node) =>
+    hasCodeAnySystem(node, ENTERED_IN_ERROR),
+  );
 }
 
 /**
