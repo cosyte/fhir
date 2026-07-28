@@ -169,7 +169,16 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   one of two written `valueQuantity` values with no signal on its own surface (no issue channel), and
   read -> write -> read **launders** the defect (the writer emits the conformant survivor, so the
   re-read is `valid: true`, `safeToSummarize: true`); `serializeResource`/`serializeResourceXml` return a
-  bare string with no channel to say so. P2:
+  bare string with no channel to say so. **Pass two (NOT REFUTED) filed two more `PRE-EXISTING` ones,
+  the first worth queuing ahead of the next slice:** an **array-wrapped `0..1` element** reaches this
+  item's exact harm shape with no duplicate key at all (`{"resourceType":"Observation","status":
+["entered-in-error"]}` -> `retracted: false`, `negations: []`, `safeToSummarize: true`,
+  `valid: true`, zero issues, because `primitiveString` returns `undefined` for a list and there is no
+  cardinality check without a per-resource model, and array-wrapping every element is realistic
+  generic XML->JSON converter output); and a **duplicated `resourceType` shadows the type gate**,
+  since `typeOf` is a first-wins single-value read (`{"resourceType":"Observation","resourceType":
+"MedicationStatement","status":"not-taken"}` -> `negations: []`, though now at least `valid: false`
+  and `safeToSummarize: false`). P2:
   the first three validation layers (`validateResource`: structure, cardinality, primitive /
   enumerated-`code` value-domain) with a value-free `OperationOutcome` and the PHI redaction
   chokepoint. P3: the safety-critical status & negation spine (`readSafety`, fail-closed on an

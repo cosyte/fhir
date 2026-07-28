@@ -177,8 +177,10 @@ export function unhandledModifierExtensions(resource: FhirComplex, path: string)
  * gives no rule for choosing between them.
  *
  * The location names the element, not the individual member: FHIRPath has no way to address "the
- * second `status` member", so a name written twice reports its element's path once, however many
- * members shadowed it.
+ * second `status` member", so one object element reports its path once however many members shadowed
+ * the name there. Two *different* objects that each repeat the same name still report separately, and
+ * where those objects are themselves duplicates of each other the two locations read identically, for
+ * the same reason: the path is all FHIRPath can say.
  *
  * **Scope: object elements.** A repeated name inside a primitive's `_`-sibling (its R4 `Element`
  * metadata, which is `id` and `extension`, never `modifierExtension`) is reported by the reader as a

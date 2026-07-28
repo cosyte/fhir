@@ -1,7 +1,7 @@
 /**
  * The JSON read path: a {@link RawJson} tree → the immutable {@link FhirNode} model.
  *
- * This is where the two silent-data-loss hazards of a FHIR JSON codec are handled (json.html):
+ * This is where the three silent-data-loss hazards of a FHIR JSON codec are handled (json.html):
  *
  * 1. **Decimal precision.** Number tokens arrive from {@link readRawJson} as exact source text and
  *    become {@link FhirDecimal} values, never a JavaScript `number`. A token that a naive
@@ -12,12 +12,14 @@
  *    {@link FhirPrimitive} nodes. If the two arrays disagree in length the alignment is broken and
  *    the reader **fails closed**, throwing `PRIMITIVE_EXTENSION_MISALIGNED` rather than guessing
  *    which value an extension belongs to (guessing could attach it to the wrong clinical value).
- * 3. **A repeated property name.** FHIR JSON requires unique names (json.html) and RFC 8259 §4
+ * 3. **A repeated property name.** FHIR JSON requires unique names (json.html §2.6.2) and RFC 8259 §4
  *    leaves the winner undefined, so a name written twice is a defect with two equally (un)plausible
- *    values. The element keeps the first, but the shadowed member is kept on the node's `duplicates`
- *    rather than dropped, and a `DUPLICATE_PROPERTY` issue is raised. That is what lets a
- *    safety-classifying read see both values and refuse to affirm a verdict over a value it did not
- *    rank, instead of quietly reporting the one it happened to keep.
+ *    values. The element keeps the first and a `DUPLICATE_PROPERTY` issue is raised, everywhere. On an
+ *    **object** element the shadowed member is additionally kept on the node's `duplicates` rather
+ *    than dropped, which is what lets a safety-classifying read see both values and refuse to affirm
+ *    a verdict over a value it did not rank, instead of quietly reporting the one it happened to
+ *    keep. Inside a **primitive's `_`-sibling** the shadowed member is not modeled and the read is
+ *    flagged only, for the reason given on {@link readMeta}.
  *
  * Reading is lenient elsewhere (Postel's Law): an unexpected shape is preserved and flagged, not
  * rejected. Only genuinely unrecoverable structure (malformed JSON, broken `_`-alignment) throws.
@@ -305,8 +307,9 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
   const reported = new Set<string>();
   const duplicates = grouped.shadowed.map((member) => {
     const childPath = basePath === "" ? member.base : `${basePath}.${member.base}`;
-    // One issue per element, however many members shadowed it (a name and its `_`-sibling can each
-    // repeat): the FHIRPath location is the same, so a second issue would say nothing new.
+    // One issue per element on this object, however many members shadowed the name here (a name and
+    // its `_`-sibling can each repeat): the FHIRPath location is the same, so a second issue would
+    // say nothing new. Two different objects that each repeat a name still report separately.
     if (!reported.has(member.base)) {
       reported.add(member.base);
       issues.push(duplicateProperty(childPath));

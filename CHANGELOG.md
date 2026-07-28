@@ -23,12 +23,15 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
      flipping to last-wins would have moved the blind spot rather than closed it, while silently
      changing what every existing caller reads. Ranking the members is the reconciliation this
      library does not do.
-  2. **A duplicate name is now reported** rather than tolerated in silence: a `DUPLICATE_PROPERTY`
-     read issue (warning) at the element's FHIRPath location, and a `DUPLICATE_PROPERTY` validation
-     issue (**error**, `structure`) so `validateResource` cannot return `valid` for a document that
-     broke a `SHALL`. The shadowed member is also **kept** rather than discarded, on the new
-     `FhirComplex.duplicates`, so the information is no longer lost between the raw tree and the
-     model.
+  2. **A duplicate name is now reported** rather than tolerated in silence, on every path: a
+     `DUPLICATE_PROPERTY` read issue (warning) at the element's FHIRPath location. On an **object**
+     element it is also a `DUPLICATE_PROPERTY` validation issue (**error**, `structure`), so
+     `validateResource` cannot return `valid` for such a document, and the shadowed member is
+     **kept** rather than discarded, on the new `FhirComplex.duplicates`, so the information is no
+     longer lost between the raw tree and the model. Inside a **primitive's `_`-sibling** the read
+     issue is the whole of it: that metadata is an R4 `Element` (`id` and `extension`, never
+     `modifierExtension`), so nothing there feeds a verdict, and validation and the safety readout
+     are deliberately unaffected.
   3. **`readSafety` no longer asserts a verdict over a value it did not rank.** **All six** negation
      kinds are now read across **every** value the document wrote for the element each one reads, the
      same fail-safe rule already applied across a multi-coding `CodeableConcept`: `entered-in-error`
@@ -36,12 +39,18 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
      `verificationStatus`, `no-known-allergy` over every `code`, `do-not-perform` over every
      `doNotPerform` (a `true` anywhere wins, and is what `SafetyReadout.doNotPerform` surfaces), and
      `codingsOf` reads every `coding` member plus every `system` x `code` pair inside a `Coding` that
-     repeated one, so a retraction one level down inside a `CodeableConcept` is caught too. Those
-     reads can only ever **add** a negation, never remove one. So the reported document now reads
-     `retracted: true` with `entered-in-error` in `negations`. And any repeated property name
-     anywhere in the resource sets `safeToSummarize: false` with the locations in the new
+     repeated one, so a retraction one level down inside a `CodeableConcept` is caught too. The
+     reported document now reads
+     `retracted: true` with `entered-in-error` in `negations`. And any repeated property name on any
+     **object** element in the resource sets `safeToSummarize: false` with the locations in the new
      `shadowedProperties`, so a caller gets a refusal instead of an affirmative answer computed from
-     one arbitrary half of the document. `assertSafeToSummarize` throws on it.
+     one arbitrary half of the document. `assertSafeToSummarize` throws on it. Those reads can only
+     ever **add** a negation. The one place that cuts the other way is a `Coding` that repeated
+     **both** `system` and `code`, where no pairing is recoverable and `codingsOf` therefore
+     enumerates every combination: a check built on the _absence_ of a match (`con-3`, `con-4`,
+     `ait-1`) can be suppressed by a pair nobody wrote. That is accepted deliberately, because such a
+     document is already `valid: false` and `safeToSummarize: false`, and because catching a
+     retraction is worth more than an abatement-consistency warning on an invalid document.
 
 - **Four consequences of the above, named because each is a behaviour change in its own right.** A
   repeated name can no longer hide an unhandled `modifierExtension`, because the fail-closed walk now

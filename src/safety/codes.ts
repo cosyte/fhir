@@ -139,11 +139,18 @@ export function primitiveBoolean(node: FhirNode | undefined): boolean | undefine
  * repeating element (e.g. `Condition.category`) and tolerates a `CodeableConcept` with no `coding`.
  *
  * Read across **every** value a non-conformant document wrote: all `coding` members, and every
- * `system` x `code` combination inside one `Coding` that repeated either name. Both are the same
- * fail-safe rule the retraction read uses, and both can only ever **add** pairs, so a detection built
- * on this over-reports rather than misses. A conformant `Coding` has one `system` and one `code`, so
- * it yields exactly one pair and this is a no-op there. The first pair is still the first value
- * written, which is what {@link codeOf} surfaces.
+ * `system` x `code` combination inside one `Coding` that repeated either name. A conformant `Coding`
+ * has one `system` and one `code`, so it yields exactly one pair and this is a no-op there.
+ *
+ * Two consequences, both confined to a document that repeated a name, which is a document
+ * {@link ../validate/safety.js} already reports invalid and {@link ./status.js} already refuses to
+ * summarize. **(a)** This only ever *adds* pairs, so a check asking "is this code present" (a
+ * retraction, a refutation) over-reports rather than misses, which is the direction the safety layer
+ * wants. A check asking the opposite, "is the required code absent" (`con-3`, `con-4`, `ait-1`), can
+ * therefore be *suppressed* by an added pair. **(b)** When a `Coding` repeated **both** names the
+ * pairing is genuinely unrecoverable, so a combination the sender never wrote can appear, and
+ * {@link codeOf} with a preferred system may select it. Neither is a silent read: the caller already
+ * has the `DUPLICATE_PROPERTY` location.
  *
  * @param node - A `CodeableConcept` node, a list of them, or `undefined`.
  * @returns The `(system, code)` pairs, in document order.

@@ -79,10 +79,13 @@ issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", ex
 - **Lenient read, spec-clean write** (Postel's Law), `resourceType` resolvable in any position, and a
   `parseReference` classifier (relative / absolute / logical / fragment).
 - **A repeated property name is read, not resolved.** FHIR requires unique property names and JSON
-  leaves the winner undefined, so both values are kept (`getAllProperties` reads them, `getProperty`
-  still returns the first) and a `DUPLICATE_PROPERTY` issue says where. The element is genuinely
-  ambiguous, so nothing downstream pretends otherwise: it validates as an error, and the safety
-  readout declines to summarize it rather than answering from one arbitrary half of the document.
+  leaves the winner undefined, so the first value wins everywhere and a `DUPLICATE_PROPERTY` issue
+  says where. On an **object** element both values are kept (`getAllProperties` reads them,
+  `getProperty` still returns the first), the element is treated as genuinely ambiguous, and nothing
+  downstream pretends otherwise: it validates as an error, and the safety readout declines to
+  summarize it rather than answering from one arbitrary half of the document. Inside a **primitive's
+  `_element` metadata** (`id` and `extension`, which no safety verdict reads) the issue is raised but
+  the shadowed member is not kept, and validation and the safety readout are unaffected.
 
 And the first three validation layers (structure, cardinality, and primitive/enumerated-`code`
 value-domain) with a value-free `OperationOutcome`:

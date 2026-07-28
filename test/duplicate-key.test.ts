@@ -22,7 +22,7 @@ import {
 /**
  * A repeated JSON property name.
  *
- * FHIR JSON requires unique property names (json.html: "Property names SHALL be unique") and
+ * FHIR JSON requires unique property names (json.html §2.6.2: "Property names SHALL be unique") and
  * expresses a repeating element as an array, so a name written twice is a defect. RFC 8259 §4 leaves
  * the winner undefined ("the behavior of software that receives such an object is unpredictable"),
  * which means neither member is authoritative and no reader can rank them without inventing a rule.
@@ -262,6 +262,18 @@ describe("the `_`-sibling resolves a repeated name the same way the rest of the 
       expression: "Patient.birthDate._id",
     });
   });
+
+  it("stops at the read issue: the carve-out is real and is what the docs claim", () => {
+    // A primitive's `_`-sibling is an R4 Element (`id` and `extension`, never `modifierExtension`),
+    // so nothing in it can make a safety verdict wrong. The read issue is the whole of the report:
+    // no model slot, no validation error, no refusal. Pinned so the doc claim stays executable.
+    const { resource } = parseResource(META_DUP);
+    expect(readSafety(resource).shadowedProperties).toEqual([]);
+    expect(readSafety(resource).safeToSummarize).toBe(true);
+    expect(validateResource(resource).issues.map((i) => i.code)).not.toContain(
+      "DUPLICATE_PROPERTY",
+    );
+  });
 });
 
 describe("a location is reported once per element, however many members shadowed it", () => {
@@ -277,6 +289,22 @@ describe("a location is reported once per element, however many members shadowed
     expect(
       validateResource(resource).issues.filter((i) => i.code === "DUPLICATE_PROPERTY"),
     ).toHaveLength(1);
+  });
+
+  it("still reports two different objects separately, even when their paths read the same", () => {
+    // `code` is repeated, and each of the two `code` objects repeats `text`. That is two distinct
+    // defects on two distinct objects; FHIRPath cannot tell the objects apart, so the two locations
+    // read identically. Collapsing them would claim one defect where the document has two.
+    const { resource } = parseResource(
+      '{"resourceType":"Observation","code":{"text":"a","text":"b"},"code":{"text":"c","text":"d"}}',
+    );
+    // Walk order: the surviving `code` object's own duplicate, then the repeated `code` itself,
+    // then the shadowed `code` object's duplicate.
+    expect(readSafety(resource).shadowedProperties).toEqual([
+      "Observation.code.text",
+      "Observation.code",
+      "Observation.code.text",
+    ]);
   });
 });
 
