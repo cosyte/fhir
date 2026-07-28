@@ -96,6 +96,14 @@ export const VALIDATION_CODES = {
    */
   UNHANDLED_MODIFIER_EXTENSION: "UNHANDLED_MODIFIER_EXTENSION",
   /**
+   * Safety, the document wrote a property name more than once, so an element holds several values
+   * and nothing says which the sender meant. FHIR JSON requires unique property names (json.html §2.6.2:
+   * "Property names SHALL be unique") and expresses repetition with an array, so this is a violated
+   * `SHALL` and an `error`. The reader keeps every value (see {@link ../model/node.js} `duplicates`),
+   * so this reports an ambiguity, never a loss.
+   */
+  DUPLICATE_PROPERTY: "DUPLICATE_PROPERTY",
+  /**
    * Safety, the resource is marked `entered-in-error` and is therefore **retracted, not
    * data**. Surfaced as `information` (it is not itself a defect) so a consumer cannot miss it.
    */
@@ -269,6 +277,7 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   PRIMITIVE_INVALID: ISSUE_TYPES.VALUE,
   CODE_INVALID: ISSUE_TYPES.CODE_INVALID,
   UNHANDLED_MODIFIER_EXTENSION: ISSUE_TYPES.NOT_SUPPORTED,
+  DUPLICATE_PROPERTY: ISSUE_TYPES.STRUCTURE,
   RETRACTED_RESOURCE: ISSUE_TYPES.INFORMATIONAL,
   INVARIANT_VIOLATED: ISSUE_TYPES.INVARIANT,
   INVARIANT_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
@@ -308,6 +317,9 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   UNHANDLED_MODIFIER_EXTENSION:
     "Element carries a modifierExtension this processor does not understand; it cannot be safely " +
     "processed and is rejected (fail-closed).",
+  DUPLICATE_PROPERTY:
+    "Property name appears more than once on this object; FHIR requires unique property names and " +
+    "uses an array for a repeating element, so the element's value is ambiguous.",
   RETRACTED_RESOURCE:
     "Resource is marked entered-in-error; it is retracted and must not be treated as active data.",
   INVARIANT_VIOLATED: "A resource invariant (content-validation constraint) was violated.",

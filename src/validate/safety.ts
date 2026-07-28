@@ -2,7 +2,7 @@
  * The safety validation layer (the fail-closed status & negation spine).
  *
  * Layered on top of the structural validator, this layer enforces the parts of FHIR that,
- * read wrong, harm a patient. It produces value-free {@link ValidationIssue}s for three
+ * read wrong, harm a patient. It produces value-free {@link ValidationIssue}s for four
  * things:
  *
  * 1. **Unhandled `modifierExtension` → fail closed.** FHIR's modifier rule (`?!`): a
@@ -11,9 +11,14 @@
  *    ({@link ../safety/codes.js} `KNOWN_MODIFIER_EXTENSION_URLS` is empty), so **any** `modifierExtension`
  *    anywhere in the resource is an `error` (`UNHANDLED_MODIFIER_EXTENSION`). This check is universal,
  *    every resource type, not only the six safety types.
- * 2. **Retraction surfaced.** A resource marked `entered-in-error` is retracted, not data
+ * 2. **A repeated property name → fail closed.** FHIR JSON requires unique property names
+ *    (json.html §2.6.2: "Property names SHALL be unique") and expresses a repeating element as an array, so
+ *    a name written twice violates a `SHALL` and leaves the element holding two values that RFC 8259
+ *    §4 gives no rule for ranking. That is an `error` (`DUPLICATE_PROPERTY`), universal like the
+ *    modifier check: a `status` written twice must never validate clean.
+ * 3. **Retraction surfaced.** A resource marked `entered-in-error` is retracted, not data
  *    (`RETRACTED_RESOURCE`, `information`), surfaced so a consumer cannot silently treat it as active.
- * 3. **The named invariants**, `ait-1`/`ait-2` (AllergyIntolerance), `con-3`/`con-4`/`con-5`
+ * 4. **The named invariants**, `ait-1`/`ait-2` (AllergyIntolerance), `con-3`/`con-4`/`con-5`
  *    (Condition), `obs-6`/`obs-7` (Observation), hand-evaluated against the model from their exact
  *    R4 FHIRPath (`INVARIANT_VIOLATED`, with the constraint key on the issue). Each expression and
  *    severity is transcribed verbatim from the R4 StructureDefinition; see the per-check notes.
@@ -26,7 +31,7 @@
  * @packageDocumentation
  */
 
-import { getProperty, type FhirComplex } from "../model/index.js";
+import { getAllProperties, getProperty, type FhirComplex } from "../model/index.js";
 import {
   ALLERGY_VERIFICATION_SYSTEM,
   choicePresent,
@@ -40,12 +45,13 @@ import {
   primitiveString,
   SAFETY_RESOURCE_TYPES,
 } from "../safety/codes.js";
-import { unhandledModifierExtensions } from "../safety/status.js";
+import { shadowedProperties, unhandledModifierExtensions } from "../safety/status.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issues.js";
 
 /**
- * Collect every safety finding for a resource: fail-closed modifier extensions (universal), the
- * `entered-in-error` retraction note, and the named invariants (for the six safety types).
+ * Collect every safety finding for a resource: fail-closed modifier extensions and repeated property
+ * names (both universal), the `entered-in-error` retraction note, and the named invariants (for the
+ * six safety types).
  *
  * @param resource - The resource model.
  * @param rt - Its resolved `resourceType` (the caller has already established it is present).
@@ -65,14 +71,23 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
     issues.push(validationIssue("UNHANDLED_MODIFIER_EXTENSION", ISSUE_SEVERITIES.ERROR, location));
   }
 
+  // 2. A repeated property name violates FHIR's unique-name SHALL and leaves the element ambiguous.
+  // Universal, like the modifier check: it is what stops the validator returning `valid` for a
+  // document whose safety-bearing element carries two values.
+  for (const location of shadowedProperties(resource, rt)) {
+    issues.push(validationIssue("DUPLICATE_PROPERTY", ISSUE_SEVERITIES.ERROR, location));
+  }
+
   if (!SAFETY_RESOURCE_TYPES.has(rt)) return issues;
 
-  // 2. Surface a retracted (entered-in-error) resource, not a defect, but never to be missed.
+  // 3. Surface a retracted (entered-in-error) resource, not a defect, but never to be missed. The
+  // location read matches `isRetracted`'s own fail-safe read over every value written for `status`,
+  // so a retraction in a member a repeated name shadowed is still reported at `status`.
   if (isRetracted(resource)) {
-    const at =
-      primitiveString(getProperty(resource, "status")) === ENTERED_IN_ERROR
-        ? `${rt}.status`
-        : `${rt}.verificationStatus`;
+    const retractedStatus = getAllProperties(resource, "status").some(
+      (node) => primitiveString(node) === ENTERED_IN_ERROR,
+    );
+    const at = retractedStatus ? `${rt}.status` : `${rt}.verificationStatus`;
     issues.push(validationIssue("RETRACTED_RESOURCE", ISSUE_SEVERITIES.INFORMATION, at));
   }
 

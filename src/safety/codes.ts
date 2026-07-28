@@ -21,7 +21,7 @@
  */
 
 import {
-  getProperty,
+  getAllProperties,
   isComplex,
   isList,
   isPrimitive,
@@ -138,6 +138,20 @@ export function primitiveBoolean(node: FhirNode | undefined): boolean | undefine
  * Every `Coding` reachable from a node that is a `CodeableConcept` (or a list of them). Flattens a
  * repeating element (e.g. `Condition.category`) and tolerates a `CodeableConcept` with no `coding`.
  *
+ * Read across **every** value a non-conformant document wrote: all `coding` members, and every
+ * `system` x `code` combination inside one `Coding` that repeated either name. A conformant `Coding`
+ * has one `system` and one `code`, so it yields exactly one pair and this is a no-op there.
+ *
+ * Two consequences, both confined to a document that repeated a name, which is a document
+ * {@link ../validate/safety.js} already reports invalid and {@link ./status.js} already refuses to
+ * summarize. **(a)** This only ever *adds* pairs, so a check asking "is this code present" (a
+ * retraction, a refutation) over-reports rather than misses, which is the direction the safety layer
+ * wants. A check asking the opposite, "is the required code absent" (`con-3`, `con-4`, `ait-1`), can
+ * therefore be *suppressed* by an added pair. **(b)** When a `Coding` repeated **both** names the
+ * pairing is genuinely unrecoverable, so a combination the sender never wrote can appear, and
+ * {@link codeOf} with a preferred system may select it. Neither is a silent read: the caller already
+ * has the `DUPLICATE_PROPERTY` location.
+ *
  * @param node - A `CodeableConcept` node, a list of them, or `undefined`.
  * @returns The `(system, code)` pairs, in document order.
  * @example
@@ -153,15 +167,17 @@ export function codingsOf(node: FhirNode | undefined): Coded[] {
   if (node === undefined) return [];
   if (isList(node)) return node.items.flatMap((item) => codingsOf(item));
   if (!isComplex(node)) return [];
-  const coding = getProperty(node, "coding");
-  const codings = coding === undefined ? [] : isList(coding) ? coding.items : [coding];
+  const codings = getAllProperties(node, "coding").flatMap((coding) =>
+    isList(coding) ? [...coding.items] : [coding],
+  );
   const out: Coded[] = [];
   for (const item of codings) {
     if (!isComplex(item)) continue;
-    out.push({
-      system: primitiveString(getProperty(item, "system")),
-      code: primitiveString(getProperty(item, "code")),
-    });
+    const systems = getAllProperties(item, "system").map((n) => primitiveString(n));
+    const codes = getAllProperties(item, "code").map((n) => primitiveString(n));
+    for (const system of systems.length > 0 ? systems : [undefined]) {
+      for (const code of codes.length > 0 ? codes : [undefined]) out.push({ system, code });
+    }
   }
   return out;
 }
@@ -261,6 +277,12 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * `entered-in-error` under any system (AllergyIntolerance, Condition). Over-surfacing a retraction is
  * safe; missing one is not.
  *
+ * "Fail-safe" is read across **every** value the document wrote for those elements, not just the one
+ * a single-value lookup returns. A `CodeableConcept` legitimately carries several codings and the
+ * retraction may not be in the first; a non-conformant document may write `status` twice and put the
+ * retraction in the one that lost. Both are the same hazard: reading one of several written values
+ * and reporting the record as live.
+ *
  * @param resource - The resource model.
  * @returns `true` when the resource is marked entered-in-error.
  * @example
@@ -271,8 +293,13 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * ```
  */
 export function isRetracted(resource: FhirComplex): boolean {
-  if (primitiveString(getProperty(resource, "status")) === ENTERED_IN_ERROR) return true;
-  return hasCodeAnySystem(getProperty(resource, "verificationStatus"), ENTERED_IN_ERROR);
+  const retractedStatus = getAllProperties(resource, "status").some(
+    (node) => primitiveString(node) === ENTERED_IN_ERROR,
+  );
+  if (retractedStatus) return true;
+  return getAllProperties(resource, "verificationStatus").some((node) =>
+    hasCodeAnySystem(node, ENTERED_IN_ERROR),
+  );
 }
 
 /**

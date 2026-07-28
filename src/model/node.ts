@@ -64,10 +64,25 @@ export interface FhirProperty {
  * An object (complex) element: an ordered list of named properties. Order is preserved from the
  * wire so that a spec-clean document round-trips faithfully; on emit the serializer additionally
  * hoists `resourceType` to the front where present (the one canonical-ordering rule FHIR requires).
+ *
+ * `properties` holds at most one entry per name. FHIR JSON requires property names to be unique
+ * (json.html §2.6.2: "Property names SHALL be unique"), and a repeating element is an array, never a
+ * repeated name. A non-conformant document that repeats a name is still read (the reader is
+ * lenient), and the members the first-wins rule did not put in `properties` are kept in
+ * {@link duplicates} rather than discarded, so nothing the wire carried is lost and a safety read
+ * can see that the document was ambiguous. {@link duplicates} is absent on every conformant
+ * document.
  */
 export interface FhirComplex {
   readonly kind: "complex";
   readonly properties: readonly FhirProperty[];
+  /**
+   * The members a repeated property name shadowed, in document order, each still carrying the name
+   * it was written under. Present only on a non-conformant document. Read them with
+   * {@link getAllProperties}; a consumer that ignores this field is reading one arbitrary value out
+   * of several the sender wrote.
+   */
+  readonly duplicates?: readonly FhirProperty[];
 }
 
 /**
@@ -156,16 +171,24 @@ export function primitive(
 }
 
 /**
- * Construct a {@link FhirComplex} from ordered properties.
+ * Construct a {@link FhirComplex} from ordered properties, optionally carrying the members a
+ * repeated property name shadowed.
  *
+ * @param properties - The named properties, in wire order, at most one per name.
+ * @param duplicates - Members shadowed by a repeated name. Omitted (not set to `undefined`) when
+ *   empty, so a conformant node stays structurally equal to one built without the argument.
  * @example
  * ```ts
  * import { complex, primitive } from "@cosyte/fhir";
  * const patient = complex([{ name: "resourceType", value: primitive("Patient") }]);
  * ```
  */
-export function complex(properties: readonly FhirProperty[]): FhirComplex {
-  return { kind: "complex", properties };
+export function complex(
+  properties: readonly FhirProperty[],
+  duplicates: readonly FhirProperty[] = [],
+): FhirComplex {
+  if (duplicates.length === 0) return { kind: "complex", properties };
+  return { kind: "complex", properties, duplicates };
 }
 
 /**
@@ -182,9 +205,13 @@ export function list(items: readonly FhirNode[]): FhirList {
 }
 
 /**
- * Look up a top-level property on a complex node by name, returning the first match (FHIR forbids
- * duplicate keys; if malformed input carried one, the reader kept the first). Returns `undefined`
- * when absent.
+ * Look up a top-level property on a complex node by name, returning the first match. Returns
+ * `undefined` when absent.
+ *
+ * FHIR JSON requires property names to be unique, so on a conformant document there is exactly one
+ * match. On a document that repeats a name this returns the **first** one written and ignores the
+ * rest; use {@link getAllProperties} wherever reading only one of several written values would be
+ * unsafe.
  *
  * @example
  * ```ts
@@ -195,6 +222,30 @@ export function list(items: readonly FhirNode[]): FhirList {
  */
 export function getProperty(node: FhirComplex, name: string): FhirNode | undefined {
   return node.properties.find((property) => property.name === name)?.value;
+}
+
+/**
+ * Every top-level value written under `name`, in document order: the one in `properties` followed by
+ * any that a repeated name shadowed. Returns one element for a conformant document, none when the
+ * property is absent, and more than one only for a document that broke FHIR's unique-name rule.
+ *
+ * This is the fail-safe read. A check that must not miss a value the sender wrote (a retraction, a
+ * negation) runs over all of them; a convenience read that only needs one uses {@link getProperty}.
+ *
+ * @example
+ * ```ts
+ * import { getAllProperties, parseResource } from "@cosyte/fhir";
+ * const { resource } = parseResource('{"resourceType":"Observation","status":"final","status":"entered-in-error"}');
+ * getAllProperties(resource, "status").length; // 2, both values are readable
+ * ```
+ */
+export function getAllProperties(node: FhirComplex, name: string): readonly FhirNode[] {
+  const out: FhirNode[] = [];
+  for (const property of node.properties) if (property.name === name) out.push(property.value);
+  for (const property of node.duplicates ?? []) {
+    if (property.name === name) out.push(property.value);
+  }
+  return out;
 }
 
 /**

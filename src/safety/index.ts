@@ -13,6 +13,7 @@ export {
   assertSafeToSummarize,
   FhirSafetyError,
   readSafety,
+  shadowedProperties,
   unhandledModifierExtensions,
 } from "./status.js";
 export type { NegationKind, SafetyReadout } from "./status.js";
