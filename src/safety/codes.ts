@@ -58,6 +58,24 @@ export const SAFETY_SCALAR_ELEMENTS: ReadonlySet<string> = new Set([
   "code",
 ]);
 
+/**
+ * The subset of {@link SAFETY_SCALAR_ELEMENTS} that is `CodeableConcept`-valued, so a `Coding` sits
+ * one level inside it and the `0..1` cardinality of `Coding.system` / `Coding.code` (datatypes.html)
+ * is knowable there without a per-resource model.
+ *
+ * `status` is a `code` primitive and `doNotPerform` a `boolean`, so neither carries a `Coding`.
+ * `clinicalStatus` / `verificationStatus` are `CodeableConcept` on AllergyIntolerance and Condition,
+ * and `code` is `CodeableConcept` on all four types that define it here (AllergyIntolerance,
+ * Condition, Observation, DiagnosticReport). Unlike the element names themselves, this needs no
+ * further scoping to stay false-positive-free: `Coding` is a datatype, and its `system` and `code` are
+ * `0..1` in every resource that uses it.
+ */
+export const SAFETY_CODEABLE_ELEMENTS: ReadonlySet<string> = new Set([
+  "clinicalStatus",
+  "verificationStatus",
+  "code",
+]);
+
 /** The SNOMED CT `system` URI (`terminologies-systems.html`). */
 export const SNOMED_SCT = "http://snomed.info/sct";
 
@@ -216,6 +234,46 @@ export function primitiveBooleans(node: FhirNode | undefined): readonly boolean[
 }
 
 /**
+ * The one value a `Coding.system` / `Coding.code` member holds, **reading through a single-position
+ * array wrapper** and returning `undefined` for anything else.
+ *
+ * `Coding.system` and `Coding.code` are `0..1` (datatypes.html), so a generic XML-to-JSON converter
+ * array-wraps them exactly as it wraps the element above them, and a plain {@link primitiveString}
+ * read finds no string in the wrapper at all. That is how a refuted allergy, a recorded "no known
+ * allergy" and a retracted Condition all read as live.
+ *
+ * **This is deliberately not the recursive, every-value read {@link primitiveStrings} performs**, and
+ * the asymmetry is the whole point. These two values feed {@link codingsOf}'s `system` x `code`
+ * cross-product, so a rule yielding more than one value on either side would pair a `system` the
+ * sender wrote in one array position with a `code` it wrote in another and **manufacture a pair the
+ * sender never wrote**. One pair matched downstream is SNOMED `716186003` "no known allergy", a
+ * *positive* clinical assertion, so inventing it claims a patient has no known allergy over a record
+ * naming an allergen. Missing a retraction withholds information; asserting an absence of allergy does
+ * not, so the two directions are not equally safe.
+ *
+ * The rule that keeps both directions safe at once is **at most one value per written member**: the
+ * cross-product's arity stays exactly what it is for an unwrapped document (one value per member of
+ * each name), so unwrapping cannot add a pair, only fill in a value that was `undefined`. A pair this
+ * yields is a `system` and a `code` the sender wrote in **the same, only** position of the same
+ * `Coding`, which is the pair it wrote.
+ *
+ * "One value" therefore counts **array positions, not strings**. A FHIR JSON `null` inside a primitive
+ * array is a real position whose value is absent and whose `_`-sibling may still carry an extension
+ * (json.html §2.6.2.3), not padding to be ignored, so `["716186003", null]` is two positions and is
+ * refused here. Counting the strings instead would read it as single-valued and pair `716186003` with
+ * a system written in a different position, which is exactly the invented pair.
+ *
+ * A wrapper this refuses is not silently dropped: the element is reported to the caller at
+ * `SafetyReadout.arrayWrappedScalars` and as an `ARRAY_WRAPPED_SCALAR` error, so the resource is
+ * never affirmed as summarizable over a value this could not read.
+ */
+function codingScalar(node: FhirNode | undefined): string | undefined {
+  if (node === undefined) return undefined;
+  if (isList(node)) return node.items.length === 1 ? codingScalar(node.items[0]) : undefined;
+  return primitiveString(node);
+}
+
+/**
  * Every `Coding` reachable from a node that is a `CodeableConcept` (or a list of them). Flattens a
  * repeating element (e.g. `Condition.category`) and tolerates a `CodeableConcept` with no `coding`.
  *
@@ -223,20 +281,33 @@ export function primitiveBooleans(node: FhirNode | undefined): readonly boolean[
  * `system` x `code` combination inside one `Coding` that repeated either name. A conformant `Coding`
  * has one `system` and one `code`, so it yields exactly one pair and this is a no-op there.
  *
- * **Known gap:** a `system` or `code` wrapped in a JSON array is **not** read (they are `0..1`, so the
- * wrapper is non-conformant, and a negation inside one is missed). Unlike the element-level wrapper,
- * reading it feeds this cross-product and risks manufacturing a `(system, code)` pair the sender never
- * wrote. See the note on the reads themselves.
+ * Each `system` / `code` member contributes **at most one value** ({@link codingScalar}), read through
+ * a single-position array wrapper but never through a multi-position one. That bound is what makes the
+ * wrapper safe to read at all: it holds the cross-product to one pair per (`system` member, `code`
+ * member) combination, so this **never invents a `(system, code)` pair the sender did not write**. A
+ * multi-position wrapper is left unread on purpose, and reported instead.
+ *
+ * Precisely: **a single-position wrapper is transparent.** The pairs this yields for a document are
+ * exactly the pairs it yields for the same document with those wrappers removed. So unwrapping decides
+ * nothing on its own; it restores the reading the sender's pre-conversion document had.
  *
  * Two consequences, both confined to a document that repeated a name, which is a document
  * {@link ../validate/safety.js} already reports invalid and {@link ./status.js} already refuses to
- * summarize. **(a)** This only ever *adds* pairs, so a check asking "is this code present" (a
- * retraction, a refutation) over-reports rather than misses, which is the direction the safety layer
+ * summarize. **(a)** Repeating a name only ever *adds* pairs, so a check asking "is this code present"
+ * (a retraction, a refutation) over-reports rather than misses, which is the direction the safety layer
  * wants. A check asking the opposite, "is the required code absent" (`con-3`, `con-4`, `ait-1`), can
  * therefore be *suppressed* by an added pair. **(b)** When a `Coding` repeated **both** names the
  * pairing is genuinely unrecoverable, so a combination the sender never wrote can appear, and
  * {@link codeOf} with a preferred system may select it. Neither is a silent read: the caller already
- * has the `DUPLICATE_PROPERTY` location.
+ * has the `DUPLICATE_PROPERTY` location. Transparency means a wrapper adds no *new* case here: a
+ * wrapped repeated name reads as the unwrapped repeated name already did, and the invention is the
+ * repetition's, not the wrapper's.
+ *
+ * Reading a wrapper can also *remove* a finding, and that is the same effect from the other side: a
+ * `verificationStatus` of `entered-in-error` written inside a wrapper satisfies `ait-1` and it is the
+ * unread version that emitted the false error. It cannot turn a document valid, because the wrapper
+ * that made the value readable here is itself an `ARRAY_WRAPPED_SCALAR` error on the very same
+ * `Coding` ({@link ./status.js} `arrayWrappedScalars`).
  *
  * @param node - A `CodeableConcept` node, a list of them, or `undefined`.
  * @returns The `(system, code)` pairs, in document order.
@@ -250,29 +321,70 @@ export function primitiveBooleans(node: FhirNode | undefined): readonly boolean[
  * ```
  */
 export function codingsOf(node: FhirNode | undefined): Coded[] {
+  return collectCodings(node, false);
+}
+
+/**
+ * {@link codingsOf}, reading each `Coding.system` / `Coding.code` through a **single-position** array
+ * wrapper ({@link codingScalar}).
+ *
+ * **Module-internal on purpose, and it is not exported from the package.** The unwrap is only sound
+ * where the wrapper is also *reported*, and the reporting rule ({@link ./status.js}
+ * `arrayWrappedScalars`) covers exactly one window: `clinicalStatus` / `verificationStatus` / `code`
+ * ({@link SAFETY_CODEABLE_ELEMENTS}) on a {@link SAFETY_RESOURCE_TYPES} resource root. **Read scope
+ * must equal report scope.** A read that unwrapped outside that window would resolve a clinical code
+ * out of an encoding FHIR JSON does not define and hand it to a caller with no diagnostic anywhere,
+ * which is how an earlier revision of this change **retired a true `VITAL_SIGN_UNIT_NONCONFORMANT`
+ * error and flipped a document from `valid: false` to `valid: true`**: `requiredUnitsFor` reads
+ * `Observation.component[i].code`, which is a backbone element and outside the window, and the
+ * newly-readable first `Coding` won the "first LOINC coding with a units entry" race.
+ *
+ * So every caller of this must be reading one of the windowed elements off a resource root. Every
+ * other coding read in the library stays on {@link codingsOf} and behaves exactly as it did before
+ * this rule existed. That under-reads an out-of-window wrapper, which is the safe direction and the
+ * pre-existing behaviour; widening it means widening the reporting rule first, in its own change.
+ *
+ * @param node - A `CodeableConcept` node, a list of them, or `undefined`.
+ * @returns The `(system, code)` pairs, in document order.
+ * @example
+ * ```ts
+ * // internal to this package; `verificationStatus` is a windowed element
+ * safetyCodingsOf(getProperty(condition, "verificationStatus"));
+ * ```
+ */
+export function safetyCodingsOf(node: FhirNode | undefined): Coded[] {
+  return collectCodings(node, true);
+}
+
+/**
+ * The shared engine behind {@link codingsOf} and {@link safetyCodingsOf}. `unwrap` selects whether a
+ * `Coding.system` / `Coding.code` member is read through a single-position array wrapper or, as
+ * before this rule, only as a bare primitive.
+ */
+function collectCodings(node: FhirNode | undefined, unwrap: boolean): Coded[] {
   if (node === undefined) return [];
-  if (isList(node)) return node.items.flatMap((item) => codingsOf(item));
+  if (isList(node)) return node.items.flatMap((item) => collectCodings(item, unwrap));
   if (!isComplex(node)) return [];
+  const read = unwrap ? codingScalar : primitiveString;
   const codings = getAllProperties(node, "coding").flatMap((coding) =>
     isList(coding) ? [...coding.items] : [coding],
   );
   const out: Coded[] = [];
   for (const item of codings) {
     if (!isComplex(item)) continue;
-    // These stay SINGLE-VALUE reads, deliberately, and it is a known gap rather than an oversight.
-    // `Coding.system` and `Coding.code` are `0..1` (datatypes.html), so a generic converter wraps them
-    // in an array exactly as it wraps the element above them, and a single-value read misses a
-    // negation sitting inside that wrapper. Reading through it here is NOT the same change as reading
-    // through it on the element, because these two values feed the `system` x `code` CROSS-PRODUCT
-    // below: any rule that yields more than one value on either side manufactures a pair the sender
-    // never wrote, and one of the pairs this library matches on is a recorded "no known allergy", a
-    // POSITIVE clinical assertion. Two attempts at a safe predicate were refuted here (the second
-    // still unwrapped `["716186003", null]`, because a FHIR JSON `null` is a real position marker,
-    // not padding). The gap is real, its shape is understood, and it needs its own slice with its own
-    // grading rather than a third guess bolted onto this one. The bound is pinned in
-    // `test/array-wrapped-scalar.test.ts`.
-    const systems = getAllProperties(item, "system").map((n) => primitiveString(n));
-    const codes = getAllProperties(item, "code").map((n) => primitiveString(n));
+    // FHIR-CODING-SCALAR-WRAPPER. These read through an array wrapper, but ONLY a single-position
+    // one, and the restriction is the whole safety argument rather than caution. `Coding.system` and
+    // `Coding.code` feed the `system` x `code` CROSS-PRODUCT below, so a rule yielding more than one
+    // value on either side manufactures a pair the sender never wrote, and one pair matched
+    // downstream is a recorded "no known allergy", a POSITIVE clinical assertion. `codingScalar`
+    // returns AT MOST ONE value per written member, so these two arrays have exactly the lengths they
+    // had when a wrapper read as `undefined`: the cross-product cannot grow, and unwrapping can only
+    // fill in a value, never add a pair. Two earlier attempts were refuted for breaking exactly that
+    // bound; the second counted strings rather than array positions, and a FHIR JSON `null` is a real
+    // position marker, not padding, so `["716186003", null]` unwrapped wrongly. `codingScalar` counts
+    // positions. The property is pinned in `test/array-wrapped-scalar.test.ts`.
+    const systems = getAllProperties(item, "system").map((n) => read(n));
+    const codes = getAllProperties(item, "code").map((n) => read(n));
     for (const system of systems.length > 0 ? systems : [undefined]) {
       for (const code of codes.length > 0 ? codes : [undefined]) out.push({ system, code });
     }
@@ -336,12 +448,66 @@ export function hasCodeAnySystem(node: FhirNode | undefined, code: string): bool
  * ```
  */
 export function codeOf(node: FhirNode | undefined, preferredSystem?: string): string | undefined {
-  const codings = codingsOf(node);
+  return pickCode(codingsOf(node), preferredSystem);
+}
+
+/** Choose the surfaced code from a set of codings, preferring `preferredSystem` when one is given. */
+function pickCode(codings: readonly Coded[], preferredSystem?: string): string | undefined {
   if (preferredSystem !== undefined) {
     const preferred = codings.find((c) => c.system === preferredSystem && c.code !== undefined);
     if (preferred?.code !== undefined) return preferred.code;
   }
   return codings.find((c) => c.code !== undefined)?.code;
+}
+
+/**
+ * {@link hasCoding} over {@link safetyCodingsOf}. Module-internal; only for a windowed element (see
+ * {@link safetyCodingsOf} for why the window is not optional).
+ *
+ * @param node - A `CodeableConcept` node (or list), or `undefined`.
+ * @param system - The code system URI to match.
+ * @param code - The code to match.
+ * @returns `true` when a coding with that exact system and code is present.
+ * @example
+ * ```ts
+ * safetyHasCoding(getProperty(allergy, "code"), SNOMED_SCT, NO_KNOWN_ALLERGY);
+ * ```
+ */
+export function safetyHasCoding(node: FhirNode | undefined, system: string, code: string): boolean {
+  return safetyCodingsOf(node).some((c) => c.system === system && c.code === code);
+}
+
+/**
+ * {@link hasCodeAnySystem} over {@link safetyCodingsOf}. Module-internal, windowed elements only.
+ *
+ * @param node - A `CodeableConcept` node (or list), or `undefined`.
+ * @param code - The code to match, regardless of system.
+ * @returns `true` when any coding carries that code.
+ * @example
+ * ```ts
+ * safetyHasCodeAnySystem(getProperty(condition, "verificationStatus"), ENTERED_IN_ERROR);
+ * ```
+ */
+export function safetyHasCodeAnySystem(node: FhirNode | undefined, code: string): boolean {
+  return safetyCodingsOf(node).some((c) => c.code === code);
+}
+
+/**
+ * {@link codeOf} over {@link safetyCodingsOf}. Module-internal, windowed elements only.
+ *
+ * @param node - A `CodeableConcept` node (or list), or `undefined`.
+ * @param preferredSystem - A system to prefer a coding from, when several are present.
+ * @returns The chosen code, or `undefined` when there is none.
+ * @example
+ * ```ts
+ * safetyCodeOf(getProperty(condition, "clinicalStatus"), CONDITION_CLINICAL_SYSTEM);
+ * ```
+ */
+export function safetyCodeOf(
+  node: FhirNode | undefined,
+  preferredSystem?: string,
+): string | undefined {
+  return pickCode(safetyCodingsOf(node), preferredSystem);
 }
 
 /**
@@ -384,8 +550,11 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * string at all. Each ends the same way: reading one of several written values, or none, and
  * reporting the record as live.
  *
- * **The one wrapper this does not see through** is an array around a `Coding.system` / `Coding.code`
- * *inside* a `CodeableConcept`. A retraction written there is missed. See {@link codingsOf}.
+ * That includes an array around a `Coding.system` / `Coding.code` *inside* a `CodeableConcept`, which
+ * is the same converter shape one level down. It is read where the wrapper holds a single array
+ * position, which is the only shape in which the value the sender wrote is recoverable without
+ * inventing a `(system, code)` pair; a multi-position wrapper is reported rather than guessed at. See
+ * {@link codingsOf}.
  *
  * @param resource - The resource model.
  * @returns `true` when the resource is marked entered-in-error.
@@ -402,7 +571,7 @@ export function isRetracted(resource: FhirComplex): boolean {
   );
   if (retractedStatus) return true;
   return getAllProperties(resource, "verificationStatus").some((node) =>
-    hasCodeAnySystem(node, ENTERED_IN_ERROR),
+    safetyHasCodeAnySystem(node, ENTERED_IN_ERROR),
   );
 }
 

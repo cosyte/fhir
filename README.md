@@ -146,9 +146,9 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   runs over every coding on a `CodeableConcept` and every value written for the element it reads
   (`resourceType`, `status`, `verificationStatus`, `code`, `doNotPerform`), **including through an
   array wrapper around the element**, so a retraction or a refutation cannot hide in the one a
-  single-value lookup skipped. One wrapper is a known gap and is documented as one: an array around a
-  `Coding.system` / `Coding.code` _inside_ a `CodeableConcept` is not read through. Where a repeated property name leaves an element with two values, `safeToSummarize` is
-  `false` with the locations in `shadowedProperties` instead of an affirmative answer.
+  single-value lookup skipped. Where a repeated property name leaves an element with two values,
+  `safeToSummarize` is `false` with the locations in `shadowedProperties` instead of an affirmative
+  answer.
 - **A single-valued element wrapped in an array is read, and reported.** FHIR JSON writes a `0..1`
   element as a name/value pair and uses an array only for a repeating element, so
   `{"resourceType":"Observation","status":["entered-in-error"]}` is non-conformant, and a plain
@@ -159,6 +159,32 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   elements on a resource root; deciding cardinality elsewhere would need a per-resource model, and R4
   genuinely does define repeating elements under some of the same names (`Questionnaire.code`), so a
   name-only rule would report a conformant document as broken.
+- **That extends one level down, to a `Coding.system` / `Coding.code` inside a `CodeableConcept`**,
+  which are `0..1` too and which the same converter wraps the same way, so a refuted allergy, a
+  recorded "no known allergy" and a retracted Condition all hinge on it. Here the wrapper is read only
+  where it holds **exactly one array position**, and the restriction is the safety property, not
+  caution: those two values are paired with each other, so a rule yielding more than one value on
+  either side would pair a `system` written in one position with a `code` written in another and
+  **assert a coding the sender never wrote**, including a recorded absence of allergy, which is a
+  positive clinical claim about a patient. Positions, not values: a JSON `null` inside a primitive
+  array is a real position whose `_`-sibling may carry an extension, so `["716186003", null]` is two
+  positions and is not read. A wrapper that is not read is still reported, so a negation is never
+  quietly skipped: either way the `Coding` draws an `ARRAY_WRAPPED_SCALAR` error and
+  `safeToSummarize` is `false`.
+  **Scope:** this covers the codings of `clinicalStatus`, `verificationStatus` and `code`, which are
+  the elements a safety verdict is read out of. A `Coding` anywhere else (`category`,
+  `interpretation`, `referenceRange.type`, a `component`'s own `code`, and anything `codingsOf` is
+  pointed at directly) is read exactly as it was before, without the wrapper. Reading a wrapper the
+  library does not also report would resolve a clinical code out of an encoding FHIR JSON does not
+  define and hand it back with no diagnostic anywhere, so the read never runs ahead of the report on
+  anything that reaches a verdict.
+  **One asymmetry is deliberate and worth stating rather than glossing:** the `ARRAY_WRAPPED_SCALAR`
+  location is only emitted on a resource of one of the safety types, while the retraction and
+  refutation reads are not type-gated, so on some other resource type a wrapped
+  `verificationStatus.coding.code` is read without a location being reported. That is the fail-safe
+  direction on purpose: those reads can only ever **add** a retraction or a negation, never withhold
+  one, and no type-scoped verdict is reached for such a resource anyway. Narrowing the read to match
+  the report would make `isRetracted` miss retractions it currently catches.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their
