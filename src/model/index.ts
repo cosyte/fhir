@@ -17,6 +17,7 @@ export {
   getProperty,
   isComplex,
   isList,
+  isNestedArray,
   isPrimitive,
   list,
   primitive,

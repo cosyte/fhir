@@ -41,6 +41,7 @@ import { collectBundleIssues } from "./bundle.js";
 import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
 import { typesOf } from "../safety/codes.js";
+import { nestedArrays } from "../safety/status.js";
 import { collectTerminologyIssues } from "./terminology.js";
 import { collectProfileIssues, collectProfileVersionIssues } from "../profiles/validate-profile.js";
 import { collectInvariantIssues } from "../profiles/invariants.js";
@@ -212,6 +213,12 @@ export function validateResource(
     const named = typesOf(resource)[0];
     if (named !== undefined && named !== "") {
       for (const issue of collectSafetyIssues(resource, named)) ctx.issues.push(issue);
+    } else {
+      // No type is readable at all, which happens when the type gate itself sits inside an array
+      // inside an array. The rest of the safety layer keys off a type; the nested-array report does
+      // not, so run it on its own rather than let the one finding that explains why the type is
+      // unreadable go unreported. The prefix matches the readout's own no-type fallback.
+      for (const location of nestedArrays(resource, "$this")) emit(ctx, "NESTED_ARRAY", location);
     }
     return finalize(ctx);
   }

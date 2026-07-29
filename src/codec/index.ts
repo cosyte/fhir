@@ -25,6 +25,7 @@ export type {
 export {
   decimalPrecisionAtRisk,
   duplicateProperty,
+  nestedArray,
   unexpectedXmlContent,
   unknownProperty,
   FATAL_CODES,

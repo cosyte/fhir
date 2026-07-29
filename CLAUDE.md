@@ -269,14 +269,97 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   flip (0/380), no negation lost, no `safeToSummarize` weakened, all 26 fixtures byte-identical to
   base, and `codingsOf`/`codeOf`/`hasCoding`/`hasCodeAnySystem` **bit-identical to base** over 600
   generated documents.
+  **`FHIR-NESTED-ARRAY-REPORTING` (2026-07-29) closed the affirming half of (b) below.** The item it
+  came from, `FHIR-NESTED-ARRAY-DATA-LOSS`, was **split by founder call** after the conformance gate
+  REFUTED the combined change twice (PR #35, a green-but-unmerged draft, closed unmerged). **Only the
+  REPORTING half shipped. The preserving half is deferred as `FHIR-NESTED-ARRAY-PRESERVATION` and you
+  must not fold it back in.** The measurement that motivated it: a **refuted** `AllergyIntolerance`
+  and a **resolved** `Condition` whose coding sat one level down inside a `CodeableConcept` both read
+  `valid: true`, `safeToSummarize: true`, `negations: []`; an entire resource inside a `Bundle.entry`
+  vanished with the same clean verdict; and a nested array inside a primitive's `_`-sibling drew **no
+  diagnostic at all**. What shipped: `ISSUE_CODES.NESTED_ARRAY` (warning, read), a `NESTED_ARRAY`
+  validation **error**, `SafetyReadout.nestedArrays` + public `nestedArrays()`, `isNestedArray()` on
+  the model (`markNestedArray` is reader-internal, deliberately NOT exported), `safeToSummarize: false`,
+  and a marker-sensitive `nodesEquivalent`.
+  **The rule needs no cardinality table and no element list**, unlike both array rules before it: FHIR
+  JSON gives a list of lists no meaning at ANY position (json.html §2.6.2.2), so it cannot false-fire
+  on a conformant document, and it runs at **every position the model has a node for** (every depth,
+  primitive `extension` metadata, `contained`, Bundle entries, and members a repeated name shadowed).
+  It is collected by a **separate walk** from `walkSafety` on purpose: it visits strictly more of the
+  document, and keeping them apart is what guarantees the new report cannot perturb an existing
+  finding.
+  **The gate REFUTED pass one, on exactly one thing, and it is the lesson to carry: the rule is NOT
+  total, and the first draft said it was, in five shipped surfaces including a `dist`-rendered
+  fail-safe sentence.** A `_`-sibling the reader discards WHOLE (one on an object or a non-primitive
+  array, or a member of a `_`-sibling object that is neither an `id` **string** nor an `extension`
+  array) leaves no node to mark, so an array inside one draws `UNKNOWN_PROPERTY` and **no refusal**:
+  `{"name":{...},"_name":[[...]]}` still reads `safeToSummarize: true`. The underlying loss is
+  `PRE-EXISTING` and identical on `main`; the **overclaim** was `INTRODUCED`. **The remedy taken was
+  the refuter's own: correct the claim and pin the gap with a test, NOT grow the guard** -- marking
+  inside those discard paths means reading raw JSON the codec does not model, which is new ungraded
+  read-path behaviour and belongs to the preserving half. A PARTIAL close would be worse than either:
+  it would report on the read channel with no node for the safety channel to see, which is exactly the
+  read/report asymmetry that refuted `#34` pass one. Pass one also filed three minors, all fixed: the
+  two channels disagreed on the path form for a primitive's `extension` (reader `._extension[0]` vs
+  safety `.extension[0]`, now both FHIRPath for the extension ITEM, with the reader's older warnings
+  left on their pre-existing `_`-form so no existing diagnostic string moved; one level INSIDE an
+  extension they still differ, pinned as a residual, because the durable fix is one path convention
+  for the whole reader rather than a deeper override); `nestedArrays()` could emit the same location
+  twice and its `@returns` claimed document order; and `markNestedArray` was publicly exported while
+  documented as reader-internal.
+  **The line that must hold: reporting is additive to diagnostics, preserving is a change to the data
+  model, and only the second carries the risk.** The inner array is still unread and unmodeled; the
+  node is the same empty complex / value-absent primitive it always was, carrying only an inert
+  `nestedArray?: true` marker, so `codingsOf`, `fhirpath/evaluate.ts::wrap`, `profiles/navigate.ts::step`
+  and `validate/terminology.ts::locatedCodings` all behave EXACTLY as before. **That is precisely what
+  refuted the combined attempt twice**: 19 files touch `.items` and at least 9 flatten a list into its
+  items without distinguishing a nested one, so producing a nested list silently redefines what a list
+  MEANS for every consumer; attempt one erased a true `VITAL_SIGN_UNIT_NONCONFORMANT` and asserted
+  `noKnownAllergy: true` over a record naming an allergen, attempt two retired an `error`-severity
+  profile invariant. **If your change makes a nested array visible to any walker, you have crossed the
+  line.**
+  **Evidence that no existing diagnostic was suppressed** (the mirror-image risk of `#34`'s refuted
+  pass one, and the thing to reproduce if you touch this): the reader's `UNKNOWN_PROPERTY` warning is
+  KEPT at those positions and `NESTED_ARRAY` is raised **alongside** it, never instead. Differential
+  over **1,639** documents (every JSON fixture x one mutation per path per mutation kind, plus a
+  hand-built corpus covering the `CodeableConcept` **ELEMENT** and not only its members, which is the
+  gap the previous attempt's own differential had): 0 read diagnostics lost, 0 validation findings
+  lost, 0 `valid: false -> true`, 0 `safeToSummarize: false -> true`, 0 negations/retractions lost, 0
+  locations lost from the three existing location lists, every convenience field identical, all 1,639
+  serialized byte-for-byte identical. Bought: 819 documents now report, 626 previously `valid: true`,
+  694 previously `safeToSummarize: true`, 24 previously **totally silent**.
+  **Evidence that no existing diagnostic was suppressed** (the mirror-image risk of `#34`'s refuted
+  pass one, and the thing to reproduce if you touch this): the reader's `UNKNOWN_PROPERTY` warning is
+  KEPT at those positions and `NESTED_ARRAY` is raised **alongside** it, never instead. Differential
+  over **1,639** documents (every JSON fixture x one mutation per path per mutation kind, plus a
+  hand-built corpus covering the `CodeableConcept` **ELEMENT** and not only its members, which is the
+  gap the previous attempt's own differential had): 0 read diagnostics lost, 0 validation findings
+  lost, 0 `valid: false -> true`, 0 `safeToSummarize: false -> true`, 0 negations/retractions lost, 0
+  locations lost from the three existing location lists, every convenience field identical, all 1,639
+  serialized byte-for-byte identical. Bought: 819 documents now report, 626 previously `valid: true`,
+  694 previously `safeToSummarize: true`, 24 previously **totally silent**.
+  **Walker inertness was MEASURED, not asserted**: a harness imports `origin/main` sources and head
+  sources into one process and runs both over 603 documents, exercising every walker at EVERY node
+  (**220,137** individual observations): the stripped model, `codingsOf`/`codeOf`/`hasCoding`, the
+  FHIRPath engine (9 expressions x every complex node), the profile navigator (12 paths x every node),
+  `collectTerminologyIssues`, `isRetracted`, `resourceType`, `serializeResource`. **0 differences**,
+  except `readObservationValue` in 38 documents where the inert marker is echoed through its
+  pass-through `node` field: 0 differ once the marker alone is removed, and 0 differ in any value it
+  reads. A caller-supplied `TerminologyService` also receives an identical call sequence on both
+  sides, so no `Coding` from inside a nested array reaches caller code.
+  **Deferred with it, deliberately, and recorded rather than fixed:** the writer emits `[{}]` for a
+  marked empty element, **fabricating an element the sender never wrote**, so read -> write -> read
+  launders the finding. That is a preserving-half concern (the writer has nothing to write back
+  because the model holds nothing), and it is **pinned by a test** so a future writer change has to
+  face it rather than trip over it.
   **Left open, deliberately, each pinned by a test rather than a sentence:** (a) an array-wrapped
   `value[x]` draws **no** `ARRAY_WRAPPED_SCALAR` (outside the closed set; widening to every R4 `0..1`
   element _is_ the per-resource model), and `readObservationValue` still has no issue channel of its
   own, though it fails **safe** on this route (reports the present variant, `quantity: undefined`, so
-  no wrong number is handed out); (b) the JSON reader does **not model a nested array** -- `[["x"]]`
-  reads as a list holding an **empty complex** and the inner value is dropped with only an
-  `UNKNOWN_PROPERTY` warning, which is a real read-path data-loss gap in a package whose P1 claim is
-  "no data loss", worth its own item; the document is at least **refused**, never affirmed. (c) The
+  no wrong number is handed out); (b) the JSON reader **still does not model a nested array** --
+  `[["x"]]` reads as a list holding an **empty complex** and the inner value is dropped. That data
+  loss is unchanged and is the deferred `FHIR-NESTED-ARRAY-PRESERVATION`; what changed above is that
+  it is now **reported on every channel** instead of passing as an ordinary empty element. (c) The
   read -> write -> read **laundering** is duplicate-key-only: the array route round-trips faithfully
   (the writer emits the list back), so the re-read reproduces the finding rather than losing it. That
   is now pinned, so a future writer change cannot quietly introduce the laundering. (d) `PRE-EXISTING`,

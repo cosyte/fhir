@@ -1,7 +1,8 @@
 /**
  * The JSON read path: a {@link RawJson} tree → the immutable {@link FhirNode} model.
  *
- * This is where the three silent-data-loss hazards of a FHIR JSON codec are handled (json.html):
+ * This is where the four silent-data-loss hazards of a FHIR JSON codec are handled (json.html): the
+ * first three losslessly, the fourth by refusing to let the loss go unreported.
  *
  * 1. **Decimal precision.** Number tokens arrive from {@link readRawJson} as exact source text and
  *    become {@link FhirDecimal} values, never a JavaScript `number`. A token that a naive
@@ -21,6 +22,26 @@
  *    keep. Inside a **primitive's `_`-sibling** the shadowed member is not modeled and the read is
  *    flagged only, for the reason given on {@link readMeta}.
  *
+ * 4. **An array inside an array.** FHIR JSON uses an array for a repeating element and for nothing
+ *    else (json.html §2.6.2.2), so a list of lists has no meaning at any position. This is the one
+ *    shape the reader does **not** preserve: it does not model the inner array, so content the
+ *    sender wrote is genuinely unreadable at that position. What it will not do is let that pass as
+ *    an ordinary empty element. The position is marked on the node ({@link ../model/node.js}
+ *    `isNestedArray`) and reported as `NESTED_ARRAY`, the safety readout refuses to summarize such a
+ *    resource, and the validator raises an error, so the loss does not sit underneath an affirmative
+ *    verdict. Reading the inner array would mean changing what a repeating element contains for
+ *    every consumer that walks one, which is a far larger change than the report.
+ *
+ *    **The one channel this does not reach, stated rather than implied:** a `_`-sibling the reader
+ *    discards *whole* because it is misplaced or unrecognised (a `_`-sibling on an object or on a
+ *    non-primitive array, or a member of a `_`-sibling object that is neither an `id` **string**
+ *    nor an
+ *    `extension` array). Nothing there becomes a node, so there is nothing to mark, and an array
+ *    inside such a sibling draws the `UNKNOWN_PROPERTY` warning for the discarded sibling and no
+ *    refusal. Reaching it would mean reading raw JSON the codec deliberately does not model, which
+ *    is the preserving problem rather than the reporting one. Pinned by a test rather than left to
+ *    this sentence.
+ *
  * Reading is lenient elsewhere (Postel's Law): an unexpected shape is preserved and flagged, not
  * rejected. Only genuinely unrecoverable structure (malformed JSON, broken `_`-alignment) throws.
  *
@@ -31,6 +52,7 @@ import { decimal, wouldLosePrecisionAsDouble } from "../model/decimal.js";
 import {
   complex,
   list,
+  markNestedArray,
   primitive,
   type FhirComplex,
   type FhirNode,
@@ -40,6 +62,7 @@ import {
 import {
   decimalPrecisionAtRisk,
   duplicateProperty,
+  nestedArray,
   unknownProperty,
   FATAL_CODES,
   FhirCodecError,
@@ -159,7 +182,15 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
       result.id = member.value.value;
     } else if (member.key === "extension" && member.value.t === "arr") {
       result.extension = member.value.items.map((item, i) =>
-        readComplex(item, `${path}._${member.key}[${String(i)}]`, issues),
+        // Two path forms on purpose. The `_`-prefixed one is this call site's long-standing
+        // convention for the warnings it already raised. The nested-array report gets the plain
+        // FHIRPath form instead, because a primitive's extension is addressed as
+        // `birthDate.extension[0]` in FHIRPath (the `_` is a JSON encoding artifact), and because
+        // that is the string the safety readout emits for the same position: a consumer correlating
+        // the read channel with `nestedArrays` has to find the same location on both.
+        readComplex(item, `${path}._${member.key}[${String(i)}]`, issues, {
+          nestedPath: `${path}.${member.key}[${String(i)}]`,
+        }),
       );
     } else {
       issues.push(unknownProperty(`${path}._${member.key}`));
@@ -168,11 +199,30 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
   return result;
 }
 
-/** Coerce any raw node to a {@link FhirComplex} (objects pass through; anything else is empty). */
-function readComplex(node: RawJson, path: string, issues: FhirIssue[]): FhirComplex {
+/**
+ * Coerce any raw node to a {@link FhirComplex} (objects pass through; anything else is empty).
+ *
+ * An **array** here is the one case where the empty element is not the whole story: FHIR JSON uses an
+ * array only for a repeating element, so an array inside an array is a shape with no meaning, and
+ * whatever it held is content this reader cannot place. The element stays empty (modeling the inner
+ * array would change what a repeating element *contains*, for every consumer that walks one), and the
+ * position is marked and reported instead, so nothing downstream can affirm a verdict as though the
+ * position had been empty on the wire. The existing warning is kept alongside the new one.
+ *
+ * `nestedPath` overrides the location used for the nested-array report only, where this call site's
+ * warning path is not the FHIRPath one the safety readout will emit for the same position.
+ */
+function readComplex(
+  node: RawJson,
+  path: string,
+  issues: FhirIssue[],
+  options: { nestedPath?: string } = {},
+): FhirComplex {
   if (node.t === "obj") return buildComplex(node, path, issues);
   issues.push(unknownProperty(path));
-  return complex([]);
+  if (node.t !== "arr") return complex([]);
+  issues.push(nestedArray(options.nestedPath ?? path));
+  return markNestedArray(complex([]));
 }
 
 /**
@@ -222,9 +272,18 @@ function buildPrimitiveList(
     if (rawValue !== undefined && (rawValue.t === "obj" || rawValue.t === "arr")) {
       issues.push(unknownProperty(itemPath));
     }
+    // An array in either channel is an array inside an array, which FHIR JSON does not define. The
+    // value channel already drew the warning above; the `_`-sibling channel drew nothing at all,
+    // because `readMeta` reads metadata out of an object and silently has none to read from an
+    // array. Neither says content was lost, so both get the marker and the explicit report. The
+    // slot itself is unchanged: still one primitive, still holding whatever value the value channel
+    // carried, so the null-padded alignment between the two arrays is untouched.
+    const nested = rawValue?.t === "arr" || metaItems[i]?.t === "arr";
+    if (nested) issues.push(nestedArray(itemPath));
     const value_ = rawValue === undefined ? undefined : scalarValue(rawValue, itemPath, issues);
     const metaValue = readMeta(metaItems[i], itemPath, issues);
-    items.push(primitive(value_, metaValue));
+    const node = primitive(value_, metaValue);
+    items.push(nested ? markNestedArray(node) : node);
   }
   return list(items);
 }

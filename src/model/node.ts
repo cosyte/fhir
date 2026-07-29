@@ -52,6 +52,13 @@ export interface FhirPrimitive {
   readonly value: PrimitiveValue | undefined;
   readonly id?: string;
   readonly extension?: readonly FhirComplex[];
+  /**
+   * Set when the JSON document put an **array** at this position, where FHIR JSON gives an array no
+   * meaning (an array inside an array). The array's contents are **not** modeled: this is a marker
+   * that content was present and could not be read, not a representation of it. Absent on every
+   * conformant document. See {@link isNestedArray}.
+   */
+  readonly nestedArray?: true;
 }
 
 /** A single named property of a {@link FhirComplex}. */
@@ -83,6 +90,14 @@ export interface FhirComplex {
    * of several the sender wrote.
    */
   readonly duplicates?: readonly FhirProperty[];
+  /**
+   * Set when the JSON document put an **array** at this position, where FHIR JSON gives an array no
+   * meaning (an array inside an array). The array's contents are **not** modeled: this is a marker
+   * that content was present and could not be read, not a representation of it, and the node stays
+   * the empty element it has always been. Absent on every conformant document.
+   * See {@link isNestedArray}.
+   */
+  readonly nestedArray?: true;
 }
 
 /**
@@ -135,6 +150,50 @@ export function isComplex(node: FhirNode): node is FhirComplex {
  */
 export function isList(node: FhirNode): node is FhirList {
   return node.kind === "list";
+}
+
+/**
+ * Whether `node` sits where the JSON document wrote an **array inside an array**, a shape FHIR JSON
+ * gives no meaning at any position (json.html §2.6.2.2 uses an array for a repeating element and
+ * nothing else, so no element is ever a list of lists).
+ *
+ * The reader does not model what was inside that array, so the value is **not readable** and this
+ * node is the same empty element it would be without the marker. What the marker buys is that the
+ * loss is **reportable**: a document carrying one must never come back with an affirmative safety
+ * verdict computed as though nothing had been there. The safety readout collects these locations
+ * (`nestedArrays`), refuses to summarize, and the validator raises an error.
+ *
+ * Always `false` for a document read from XML, which has no way to express the shape, and for every
+ * conformant JSON document.
+ *
+ * @example
+ * ```ts
+ * import { isNestedArray, parseResource, getProperty, isList } from "@cosyte/fhir";
+ * const { resource } = parseResource('{"resourceType":"Patient","name":[[{"family":"Roe"}]]}');
+ * const name = getProperty(resource, "name");
+ * isList(name!) && isNestedArray(name.items[0]!); // true
+ * ```
+ */
+export function isNestedArray(node: FhirNode): boolean {
+  return (node.kind === "complex" || node.kind === "primitive") && node.nestedArray === true;
+}
+
+/**
+ * Mark a node as sitting at a position where the document wrote an array inside an array. The JSON
+ * reader's own helper, **not part of the package's public surface**: it is the write side of a
+ * diagnostic the reader owns, and a consumer marking a node of their own would inject a validation
+ * error and a summarization refusal into a document that never carried the shape. Read the marker
+ * with {@link isNestedArray}, which is public.
+ *
+ * It copies the node rather than mutating it, and changes nothing a consumer reads out of it.
+ *
+ * @param node - The empty element or value-absent primitive the reader produced at that position.
+ * @internal
+ */
+export function markNestedArray(node: FhirComplex): FhirComplex;
+export function markNestedArray(node: FhirPrimitive): FhirPrimitive;
+export function markNestedArray(node: FhirComplex | FhirPrimitive): FhirComplex | FhirPrimitive {
+  return { ...node, nestedArray: true };
 }
 
 /** Optional `id` / `extension` metadata for {@link primitive}. */

@@ -115,6 +115,20 @@ export const VALIDATION_CODES = {
    */
   ARRAY_WRAPPED_SCALAR: "ARRAY_WRAPPED_SCALAR",
   /**
+   * Safety, the document wrote a JSON array **inside another array**. FHIR JSON uses an array for a
+   * repeating element and for nothing else (json.html §2.6.2.2), so a list of lists has no meaning at
+   * any position and this is a non-conformant encoding wherever it appears, which is why it needs no
+   * cardinality rule and cannot fire on a conformant document. Reported at every position the model
+   * has a node for; a `_`-sibling the reader discards whole is the stated exception, and draws the
+   * unexpected-property warning instead. An `error`, and the one on this list
+   * where the reader could **not** keep what the sender wrote: the codec does not model an inner
+   * array, so this reports a loss rather than an ambiguity. Left unreported it is the worst of the
+   * set, because the model then looks exactly like an element that was legitimately absent, and a
+   * refuted allergy, a resolved condition, or an entire resource inside a Bundle entry reads back as
+   * a clean document. Value-free, the position the inner array occupied, never its contents.
+   */
+  NESTED_ARRAY: "NESTED_ARRAY",
+  /**
    * Safety, the resource is marked `entered-in-error` and is therefore **retracted, not
    * data**. Surfaced as `information` (it is not itself a defect) so a consumer cannot miss it.
    */
@@ -290,6 +304,7 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   UNHANDLED_MODIFIER_EXTENSION: ISSUE_TYPES.NOT_SUPPORTED,
   DUPLICATE_PROPERTY: ISSUE_TYPES.STRUCTURE,
   ARRAY_WRAPPED_SCALAR: ISSUE_TYPES.STRUCTURE,
+  NESTED_ARRAY: ISSUE_TYPES.STRUCTURE,
   RETRACTED_RESOURCE: ISSUE_TYPES.INFORMATIONAL,
   INVARIANT_VIOLATED: ISSUE_TYPES.INVARIANT,
   INVARIANT_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
@@ -335,6 +350,10 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   ARRAY_WRAPPED_SCALAR:
     "Single-valued element is wrapped in an array; FHIR JSON writes a 0..1 element as a name/value " +
     "pair and uses an array only for a repeating element, so the element's encoding is ambiguous.",
+  NESTED_ARRAY:
+    "A JSON array appears inside another array; FHIR JSON uses an array only for a repeating " +
+    "element, so this shape has no meaning and its contents were not read. Content the sender " +
+    "wrote is missing from the model at this position.",
   RETRACTED_RESOURCE:
     "Resource is marked entered-in-error; it is retracted and must not be treated as active data.",
   INVARIANT_VIOLATED: "A resource invariant (content-validation constraint) was violated.",

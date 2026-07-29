@@ -8,6 +8,69 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **An array inside an array was affirmed over, so a refuted allergy, a resolved condition and a
+  whole resource inside a `Bundle.entry` all read back clean (`FHIR-NESTED-ARRAY-REPORTING`).**
+  FHIR JSON uses an array for a repeating element and for nothing else (json.html §2.6.2.2), so a
+  list of lists has no meaning at any position. The reader does not model the inner array, so content
+  the sender wrote is genuinely missing from the model there, and **the model then looks exactly like
+  an element the sender legitimately left out**, which is what let an affirmative verdict be computed
+  over it. Measured on `main` at `8a5245a`: a **refuted** `AllergyIntolerance` and a **resolved**
+  `Condition` whose coding sat one level down inside a `CodeableConcept` both read `valid: true`,
+  `safeToSummarize: true`, `negations: []`; an entire resource inside a `Bundle.entry` disappeared
+  with the same clean verdict; and a nested array inside a primitive's `_`-sibling drew **no
+  diagnostic at all**. Pre-existing, declared as a gap by both preceding array slices.
+  **This is the reporting half of the item, split from the preserving half by founder decision**
+  after the conformance gate refuted the combined change twice. New `ISSUE_CODES.NESTED_ARRAY`
+  (warning, on the read), `VALIDATION_CODES.NESTED_ARRAY` (**error**, in `validateResource`),
+  `SafetyReadout.nestedArrays` + `nestedArrays()` (public, mirroring `shadowedProperties` /
+  `arrayWrappedScalars`), `isNestedArray()` on the model, and `safeToSummarize: false` with
+  `assertSafeToSummarize` throwing.
+  **The rule needs no cardinality table and no element list**, unlike the two array rules before it,
+  because the shape is meaningless at _every_ position rather than at some of them, so it cannot fire
+  on a conformant document and it runs at every position the model has a node for, at every depth: a
+  primitive's `extension` metadata, a `contained` resource, a Bundle entry, and a member a repeated
+  property name shadowed.
+  **It is bounded by what the reader modeled, and that bound is stated rather than implied**, because
+  the conformance gate refuted an earlier draft of this change for documenting the rule as total when
+  it is not. A `_`-sibling the reader discards _whole_ because it is misplaced or unrecognised (one
+  sitting on an object or a non-primitive array, or a member of a `_`-sibling object that is neither
+  an `id` _string_ nor an `extension` array) leaves no node to report against, so an array inside
+  one draws the
+  unexpected-property warning for the discarded sibling and no refusal. That behaviour is unchanged
+  from before this slice; what changed is that it is now stated on every public surface and pinned by
+  a test. Both report channels also name the same FHIRPath position where the nested array is the
+  element or is the extension item itself, including inside a primitive's `extension` metadata where
+  the reader's older warnings use a `_`-prefixed path that is not FHIRPath. One level _inside_ an
+  extension the older convention is back on the reader's path, so the two channels name that position
+  with two different strings; neither is silent and neither is wrong, and the residual is pinned by a
+  test rather than described, because the durable fix is one path convention for the whole reader.
+  **The inner array is still not read, and that boundary is the whole point of the split.** A list
+  holds exactly the items it held before, of the same kinds, with the same contents, so nothing that
+  walks a repeating element sees anything new: `codingsOf`, the FHIRPath engine, the profile path
+  navigator and the terminology walker behave exactly as they did. Modeling the inner array is what
+  refuted the combined attempt twice, because at least nine sites flatten a list into its items
+  without distinguishing a nested one, so producing a nested list silently redefines what a list means
+  for every consumer in the package. The preserving half is deferred as
+  `FHIR-NESTED-ARRAY-PRESERVATION` and **is not shipped here**.
+  **No existing finding is suppressed**, which is the direction that matters when a safety fix adds a
+  diagnostic: the `UNKNOWN_PROPERTY` warning the reader already raised at those positions is kept, and
+  the new code is raised **alongside** it, never instead of it. Differential over **1,639** documents
+  (every JSON fixture, one mutation per path per mutation kind, plus a hand-built element-level corpus
+  covering the `CodeableConcept` **element** and not only its members, which is what the previous
+  attempt's own corpus missed): **0** read diagnostics lost, **0** validation findings lost, **0**
+  `valid: false -> true`, **0** `safeToSummarize: false -> true`, **0** negations / retractions /
+  no-known-allergy reads lost, **0** locations lost from `unhandledModifierExtensions` /
+  `shadowedProperties` / `arrayWrappedScalars`, every convenience field identical, and all 1,639
+  documents serialized byte-for-byte identically. What it bought: **819** documents now report the
+  shape, of which **626** were previously `valid: true`, **694** were previously
+  `safeToSummarize: true`, and **24** previously read with zero diagnostics of any kind.
+  `nodesEquivalent` now compares the marker, so the cross-format oracle can no longer call a lost
+  element the same as one that really was empty; that can only ever return `false` where it returned
+  `true`, and only for a document carrying the shape.
+  **Known limitation, pinned by a test rather than described:** the writer emits the empty element the
+  model holds, so a write and a re-read produce a clean document. That laundering belongs to the
+  preserving half; the complaint is on the read, which is where a consumer of a document they did not
+  write sees it.
 - **An array around a `Coding.system` / `Coding.code` _inside_ a `CodeableConcept` was still read as
   absent, and it landed on the three sharpest reads in the library (`FHIR-CODING-SCALAR-WRAPPER`).**
   A **refuted** allergy read as active, a recorded **"no known allergy"** read as an allergy _to_

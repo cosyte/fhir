@@ -185,6 +185,32 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   direction on purpose: those reads can only ever **add** a retraction or a negation, never withhold
   one, and no type-scoped verdict is reached for such a resource anyway. Narrowing the read to match
   the report would make `isRetracted` miss retractions it currently catches.
+- **An array inside an array is reported, and its contents are not read.** FHIR JSON uses an array
+  for a repeating element and for nothing else, so a list of lists has no meaning at any position and
+  the reader cannot place what was inside one. That makes it the one shape here where content the
+  sender wrote is genuinely missing from the model, and the model then looks exactly like an element
+  the sender legitimately left out: whole resources have gone missing this way inside a
+  `Bundle.entry`, and a refuted allergy has read back as an ordinary active one. So the position is
+  named on every channel instead. `NESTED_ARRAY` on the read (warning) and in `validateResource`
+  (error), the locations in `nestedArrays`, `safeToSummarize` is `false`, and
+  `assertSafeToSummarize` throws. `isNestedArray` marks the node for a consumer walking the model
+  directly. Because the shape is meaningless everywhere, this needs no cardinality rule and cannot
+  fire on a conformant document, so unlike the two above it the check runs at every position the
+  model has a node for, at every depth, including a primitive's `extension` metadata.
+  **One gap, stated rather than implied:** the rule is bounded by what the reader modeled. A
+  `_`-sibling the reader discards whole because it is misplaced or unrecognised (one sitting on an
+  object or a non-primitive array, or a member of a `_`-sibling object that is neither an `id`
+  **string** nor an
+  `extension` array) leaves no node behind, so an array inside one draws the unexpected-property
+  warning for the discarded sibling and no refusal. Reaching it would mean reading raw JSON the codec
+  does not model, which is the same problem as making the value readable.
+  **What it deliberately does not do is make the value readable.** A list holds exactly the items it
+  held before, of the same kinds, with the same contents, so nothing that walks a repeating element
+  sees anything new. Reading the inner array would change what a repeating element _contains_ for
+  every consumer of this library; declining to affirm a verdict over it does not.
+  **One limitation, stated rather than hidden:** the writer emits the empty element the model holds,
+  so writing such a resource back out and reading it again produces a clean document. The complaint
+  is on the read, which is where a consumer of a document they did not write sees it.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their

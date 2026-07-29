@@ -25,6 +25,7 @@ export {
   getProperty,
   isComplex,
   isList,
+  isNestedArray,
   isPrimitive,
   list,
   primitive,
@@ -60,6 +61,7 @@ export type {
 export {
   decimalPrecisionAtRisk,
   duplicateProperty,
+  nestedArray,
   unexpectedXmlContent,
   unknownProperty,
   FATAL_CODES,
@@ -107,6 +109,7 @@ export {
   arrayWrappedScalars,
   assertSafeToSummarize,
   FhirSafetyError,
+  nestedArrays,
   readSafety,
   shadowedProperties,
   unhandledModifierExtensions,

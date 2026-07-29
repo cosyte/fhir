@@ -22,6 +22,14 @@
  *    no code at all. Same `error` posture (`ARRAY_WRAPPED_SCALAR`), and it matters because
  *    array-wrapping every element is ordinary generic XML-to-JSON converter output, the usual route a
  *    C-CDA or v2 feed takes to a FHIR surface.
+ * 2c. **An array inside an array => fail closed.** FHIR JSON uses an array for a repeating element and
+ *    for nothing else (json.html §2.6.2.2), so a list of lists has no meaning at any position. That
+ *    makes it the simplest rule of the three (no cardinality, no element list, no false positive
+ *    available on a conformant document) and the most serious: the codec cannot model the inner
+ *    array, so unlike the two above nothing was preserved, and the model is indistinguishable from an
+ *    element the sender legitimately left out. `NESTED_ARRAY`, `error`, at every position the model
+ *    has a node for and at every depth. Its one stated gap is a `_`-sibling the reader discards
+ *    whole, which leaves no node to report against; see {@link ../safety/status.js} `nestedArrays`.
  * 3. **Retraction surfaced.** A resource marked `entered-in-error` is retracted, not data
  *    (`RETRACTED_RESOURCE`, `information`), surfaced so a consumer cannot silently treat it as active.
  * 4. **The named invariants**, `ait-1`/`ait-2` (AllergyIntolerance), `con-3`/`con-4`/`con-5`
@@ -55,6 +63,7 @@ import {
 } from "../safety/codes.js";
 import {
   arrayWrappedScalars,
+  nestedArrays,
   shadowedProperties,
   unhandledModifierExtensions,
 } from "../safety/status.js";
@@ -96,6 +105,15 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
   // the validator returning `valid` for a document whose retraction is sitting inside a wrapper.
   for (const location of arrayWrappedScalars(resource, rt)) {
     issues.push(validationIssue("ARRAY_WRAPPED_SCALAR", ISSUE_SEVERITIES.ERROR, location));
+  }
+
+  // 2c. An array inside an array is the same posture again, and the only one of the three where the
+  // reader could not keep what the sender wrote. Unconditional: FHIR JSON gives the shape no meaning
+  // at any position, so it needs no cardinality rule and cannot false-error on a conformant
+  // document. It is what stops the validator returning `valid` for a document whose negation,
+  // retraction, or entire Bundle entry the codec was unable to read.
+  for (const location of nestedArrays(resource, rt)) {
+    issues.push(validationIssue("NESTED_ARRAY", ISSUE_SEVERITIES.ERROR, location));
   }
 
   if (!SAFETY_RESOURCE_TYPES.has(rt)) return issues;
