@@ -54,11 +54,23 @@ export interface FhirPrimitive {
   readonly extension?: readonly FhirComplex[];
   /**
    * Set when the JSON document put an **array** at this position, where FHIR JSON gives an array no
-   * meaning (an array inside an array). The array's contents are **not** modeled: this is a marker
-   * that content was present and could not be read, not a representation of it. Absent on every
-   * conformant document. See {@link isNestedArray}.
+   * meaning (an array inside an array). The array's contents are **not** modeled as FHIR: this is a
+   * marker that content was present and could not be placed, not a representation of it. Absent on
+   * every conformant document. See {@link isNestedArray}.
    */
   readonly nestedArray?: true;
+  /**
+   * The JSON text of the array the sender wrote at this position, when that array sat in the
+   * element's own value channel. Never interpreted as FHIR. See {@link NestedArrayContent} for what
+   * "the text" is exact about, and {@link nestedArrayContent} to read it.
+   */
+  readonly nestedArraySource?: string;
+  /**
+   * The JSON text of the array the sender wrote at this position in the primitive's `_`-sibling
+   * (metadata) channel. A primitive can carry a nested array in either channel or both, so the two
+   * are kept apart rather than merged. See {@link nestedArrayContent}.
+   */
+  readonly nestedArrayMetaSource?: string;
 }
 
 /** A single named property of a {@link FhirComplex}. */
@@ -70,7 +82,7 @@ export interface FhirProperty {
 /**
  * An object (complex) element: an ordered list of named properties. Order is preserved from the
  * wire so that a spec-clean document round-trips faithfully; on emit the serializer additionally
- * hoists `resourceType` to the front where present (the one canonical-ordering rule FHIR requires).
+ * hoists a string `resourceType` to the front (the one canonical-ordering rule FHIR requires).
  *
  * `properties` holds at most one entry per name. FHIR JSON requires property names to be unique
  * (json.html §2.6.2: "Property names SHALL be unique"), and a repeating element is an array, never a
@@ -92,12 +104,18 @@ export interface FhirComplex {
   readonly duplicates?: readonly FhirProperty[];
   /**
    * Set when the JSON document put an **array** at this position, where FHIR JSON gives an array no
-   * meaning (an array inside an array). The array's contents are **not** modeled: this is a marker
-   * that content was present and could not be read, not a representation of it, and the node stays
-   * the empty element it has always been. Absent on every conformant document.
+   * meaning (an array inside an array). The array's contents are **not** modeled as FHIR: this is a
+   * marker that content was present and could not be placed, not a representation of it, and the
+   * node stays the empty element it has always been. Absent on every conformant document.
    * See {@link isNestedArray}.
    */
   readonly nestedArray?: true;
+  /**
+   * The JSON text of the array the sender wrote at this position, never interpreted as FHIR. See
+   * {@link NestedArrayContent} for what "the text" is exact about, and {@link nestedArrayContent} to
+   * read it.
+   */
+  readonly nestedArraySource?: string;
 }
 
 /**
@@ -157,11 +175,16 @@ export function isList(node: FhirNode): node is FhirList {
  * gives no meaning at any position (json.html §2.6.2.2 uses an array for a repeating element and
  * nothing else, so no element is ever a list of lists).
  *
- * The reader does not model what was inside that array, so the value is **not readable** and this
- * node is the same empty element it would be without the marker. What the marker buys is that the
- * loss is **reportable**: a document carrying one must never come back with an affirmative safety
- * verdict computed as though nothing had been there. The safety readout collects these locations
- * (`nestedArrays`), refuses to summarize, and the validator raises an error.
+ * The reader does not model what was inside that array **as FHIR**, so this node is the same empty
+ * element it would be without the marker and no walker sees anything there. What the marker buys is
+ * that the loss is **reportable**: a document carrying one must never come back with an affirmative
+ * safety verdict computed as though nothing had been there. The safety readout collects these
+ * locations (`nestedArrays`), refuses to summarize, and the validator raises an error.
+ *
+ * The content itself is **kept** and is read with {@link nestedArrayContent}. It
+ * are deliberately not reachable through `properties`, `items` or `extension`: an array inside an
+ * array has no FHIR meaning at any position, so there is no element for it to be, and placing one in
+ * the tree would change what a repeating element contains for every consumer that walks one.
  *
  * Always `false` for a document read from XML, which has no way to express the shape, and for every
  * conformant JSON document.
@@ -178,22 +201,100 @@ export function isNestedArray(node: FhirNode): boolean {
   return (node.kind === "complex" || node.kind === "primitive") && node.nestedArray === true;
 }
 
+/** Which JSON channel a preserved array came from: the element's own value, or its `_`-sibling. */
+export type NestedArrayChannel = "value" | "metadata";
+
 /**
- * Mark a node as sitting at a position where the document wrote an array inside an array. The JSON
- * reader's own helper, **not part of the package's public surface**: it is the write side of a
- * diagnostic the reader owns, and a consumer marking a node of their own would inject a validation
- * error and a summarization refusal into a document that never carried the shape. Read the marker
- * with {@link isNestedArray}, which is public.
+ * One array the sender wrote where FHIR JSON gives an array no meaning, kept as JSON text.
  *
- * It copies the node rather than mutating it, and changes nothing a consumer reads out of it.
+ * The text is the array re-rendered compactly from what was read: member order and every member of a
+ * repeated key are preserved, and number tokens keep their verbatim source, so no value changes. It
+ * is not a byte-for-byte slice of the input, because insignificant whitespace is dropped and strings
+ * are re-escaped canonically, exactly as everywhere else this library emits JSON.
+ */
+export interface NestedArrayContent {
+  /** The JSON channel the array sat in. */
+  readonly channel: NestedArrayChannel;
+  /** The array's JSON text, uninterpreted. */
+  readonly json: string;
+}
+
+/** The source texts {@link markNestedArray} preserves, one per JSON channel. */
+interface NestedArraySources {
+  readonly value?: string;
+  readonly metadata?: string;
+}
+
+/**
+ * Mark a node as sitting at a position where the document wrote an array inside an array, keeping
+ * that array's JSON text. The JSON reader's own helper, **not part of the package's public
+ * surface**: it is the write side of a diagnostic the reader owns, and a consumer marking a node of
+ * their own would inject a validation error and a summarization refusal into a document that never
+ * carried the shape. Read the marker with {@link isNestedArray} and the text with
+ * {@link nestedArrayContent}, both of which are public.
+ *
+ * It copies the node rather than mutating it, and adds no element, property or item: the preserved
+ * text is a leaf of its own, reachable only by name.
  *
  * @param node - The empty element or value-absent primitive the reader produced at that position.
+ * @param sources - The JSON text per channel. A complex element has only a value channel.
  * @internal
  */
-export function markNestedArray(node: FhirComplex): FhirComplex;
-export function markNestedArray(node: FhirPrimitive): FhirPrimitive;
-export function markNestedArray(node: FhirComplex | FhirPrimitive): FhirComplex | FhirPrimitive {
-  return { ...node, nestedArray: true };
+export function markNestedArray(node: FhirComplex, sources: { value: string }): FhirComplex;
+export function markNestedArray(node: FhirPrimitive, sources: NestedArraySources): FhirPrimitive;
+export function markNestedArray(
+  node: FhirComplex | FhirPrimitive,
+  sources: NestedArraySources,
+): FhirComplex | FhirPrimitive {
+  // Built by literal rather than by assignment so the optional keys are omitted outright, not set to
+  // `undefined`: the model satisfies `exactOptionalPropertyTypes` and a node that preserved nothing
+  // stays structurally equal to one built without the argument.
+  if (node.kind === "complex") {
+    if (sources.value === undefined) return { ...node, nestedArray: true };
+    return { ...node, nestedArray: true, nestedArraySource: sources.value };
+  }
+  const withValue: FhirPrimitive =
+    sources.value === undefined
+      ? { ...node, nestedArray: true }
+      : { ...node, nestedArray: true, nestedArraySource: sources.value };
+  if (sources.metadata === undefined) return withValue;
+  return { ...withValue, nestedArrayMetaSource: sources.metadata };
+}
+
+/**
+ * The arrays the sender wrote at this position that FHIR JSON gives no meaning to, each as JSON
+ * text (see {@link NestedArrayContent} for what that text preserves). Empty for every conformant
+ * document, and for every node the reader did not mark.
+ *
+ * This is where the content of an array inside an array is preserved. It is **not** modeled as FHIR
+ * and never will be: json.html §2.6.2.2 uses an array for a repeating element and for nothing else,
+ * so an array inside one is not an element and has no place in the tree. Handing it back as the text
+ * the sender wrote keeps it readable without redefining what a repeating element contains. Parse it
+ * with `readRawJson` if you need its structure; the library will not decide what it meant.
+ *
+ * A primitive can carry one in each of the two JSON channels (its value array and its `_`-sibling
+ * array), so up to two entries come back, value channel first.
+ *
+ * @param node - Any model node.
+ * @returns The preserved arrays, `[]` when the node carries none.
+ * @example
+ * ```ts
+ * import { getProperty, isList, nestedArrayContent, parseResource } from "@cosyte/fhir";
+ * const { resource } = parseResource('{"resourceType":"Patient","name":[[{"family":"Roe"}]]}');
+ * const name = getProperty(resource, "name");
+ * isList(name!) && nestedArrayContent(name.items[0]!); // [{ channel: "value", json: '[{"family":"Roe"}]' }]
+ * ```
+ */
+export function nestedArrayContent(node: FhirNode): readonly NestedArrayContent[] {
+  if (node.kind === "list") return [];
+  const out: NestedArrayContent[] = [];
+  if (node.nestedArraySource !== undefined) {
+    out.push({ channel: "value", json: node.nestedArraySource });
+  }
+  if (node.kind === "primitive" && node.nestedArrayMetaSource !== undefined) {
+    out.push({ channel: "metadata", json: node.nestedArrayMetaSource });
+  }
+  return out;
 }
 
 /** Optional `id` / `extension` metadata for {@link primitive}. */

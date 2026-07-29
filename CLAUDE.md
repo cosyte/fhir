@@ -347,19 +347,62 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   pass-through `node` field: 0 differ once the marker alone is removed, and 0 differ in any value it
   reads. A caller-supplied `TerminologyService` also receives an identical call sequence on both
   sides, so no `Coding` from inside a nested array reaches caller code.
-  **Deferred with it, deliberately, and recorded rather than fixed:** the writer emits `[{}]` for a
-  marked empty element, **fabricating an element the sender never wrote**, so read -> write -> read
-  launders the finding. That is a preserving-half concern (the writer has nothing to write back
-  because the model holds nothing), and it is **pinned by a test** so a future writer change has to
-  face it rather than trip over it.
+  **`FHIR-NESTED-ARRAY-PRESERVATION` (2026-07-29) then closed the preserving half, on the third
+  grading of the underlying problem, and the shape of the fix is the whole lesson.** The two REFUTED
+  attempts both tried to model the inner array as an element, which made it **transparent to every
+  walker**. This one does not model it at all: the array's **exact JSON text** is kept on the node
+  (`FhirComplex.nestedArraySource`, `FhirPrimitive.nestedArraySource` /
+  `.nestedArrayMetaSource`, one per JSON channel because a repeating primitive can nest in either or
+  both at one position) and handed back by public `nestedArrayContent()`. **A string carries no edge
+  in the node graph**, so no walk can reach it, and the reader still never puts a `FhirList` inside a
+  `FhirList`. `serializeResource` writes the array back instead of emitting `[{}]`, so the finding
+  reproduces on a re-read rather than laundering; `nodesEquivalent` compares the text. The text is the
+  array re-rendered compactly, so it is **value**-exact, not byte-exact (whitespace goes, strings are
+  re-escaped), and such output is deliberately **not** spec-clean.
+  **Read `test/model-edges.test.ts` before you add a field to the model.** It derives the edge set
+  **mechanically** from the three interfaces of the closed `FhirNode` union rather than by grepping,
+  so it cannot miss a case: exactly four node-valued members (`FhirComplex.properties` /
+  `.duplicates`, `FhirList.items`, `FhirPrimitive.extension`), the preserved fields typed `string`,
+  and a census of the whole of `src/` pinning which files may touch them. **A node-valued field added
+  to the model now fails a test** instead of silently redefining what a repeating element contains.
+  **The audit was the deliverable, not the evidence** (founder call), measured at `b2c5ee7`: 57
+  `.items` sites across 21 files, 5 of them `RawArray` not `FhirList`; **3 flatten with no kind check at all**
+  (`profiles/validate-profile.ts::occurrencesOf`, `validate/validate.ts::occurrences`,
+  `quantity/dose.ts::asItems`, the first two counting a nested list as **one** occurrence for
+  `CARDINALITY_MIN`/`MAX`); **21 check the kind and then silently drop what is not it**, ten of those
+  toward a false `valid: true`; exactly **one** fails closed
+  (`safety/status.ts::checkModifierExtension`). All 57 are unaffected because nothing in `src/`
+  constructs a list of lists and this change does not start. The slice adds two sites under the same
+  count: one `RawArray` (`codec/raw-json.ts::rawJsonText`) and one inside a JSDoc `@example` on
+  `nestedArrayContent`, which flattens nothing. Those counts are a snapshot and the conclusion is
+  carried by the edge-set test, not by them.
+  **Two fixes in the same mechanism landed with it.** The writer **dropped a `resourceType` it could
+  not hoist** (anything but a string primitive), losing content at the loudest position in the
+  document (it now keeps its document position rather than being hoisted, which the `@returns` says);
+  and the reader now names a primitive's metadata in **FHIRPath form at every depth**
+  (`birthDate.id`, `birthDate.extension[0].url[0]`), which retires the `nestedPath` override in
+  favour of one convention for the whole reader. 25 distinct diagnostic expressions changed shape;
+  none was added or removed.
+  **Differential vs `b2c5ee7` over 2,622 documents**, both trees in one process, every walker at
+  every node: **0** read diagnostics lost, **0** validation findings lost, **0** `valid: false ->
+  true`, **0** `safeToSummarize: false -> true`, **0** negations/retractions lost, **0** locations
+  lost, **0** newly throwing. `readObservationValue` moved in 43 documents purely because its
+  pass-through `node` field echoes the inert marker (0 differ stripped, 0 in any value it reads).
+  Serialization changes are fully accounted for: 982 nested-array documents + 128 `resourceType`
+  ones, **0 from any other cause**, **0 outputs shorter**. All 982 laundered before, **0 do now**,
+  875 byte-identical to the input.
+  **Still open after it, each pinned by a test:** a **scalar written beside a nested array in the
+  same array** (`"given":[["Peter"],"James"]`) lands where an object was expected and is still
+  dropped (a different unplaceable shape, needing its own preserved form and public surface); and a
+  `_`-sibling the reader discards **whole** still leaves no node to carry either the marker or the
+  text, so the five shapes below are unchanged.
   **Left open, deliberately, each pinned by a test rather than a sentence:** (a) an array-wrapped
   `value[x]` draws **no** `ARRAY_WRAPPED_SCALAR` (outside the closed set; widening to every R4 `0..1`
   element _is_ the per-resource model), and `readObservationValue` still has no issue channel of its
   own, though it fails **safe** on this route (reports the present variant, `quantity: undefined`, so
-  no wrong number is handed out); (b) the JSON reader **still does not model a nested array** --
-  `[["x"]]` reads as a list holding an **empty complex** and the inner value is dropped. That data
-  loss is unchanged and is the deferred `FHIR-NESTED-ARRAY-PRESERVATION`; what changed above is that
-  it is now **reported on every channel** instead of passing as an ordinary empty element. (c) The
+  no wrong number is handed out); (b) the JSON reader still does not model a nested array **as an
+  element**, and deliberately never will, but `[["x"]]` no longer loses the inner value: it is kept
+  as text and read with `nestedArrayContent()` (`FHIR-NESTED-ARRAY-PRESERVATION`, above). (c) The
   read -> write -> read **laundering** is duplicate-key-only: the array route round-trips faithfully
   (the writer emits the list back), so the re-read reproduces the finding rather than losing it. That
   is now pinned, so a future writer change cannot quietly introduce the laundering. (d) `PRE-EXISTING`,
@@ -431,8 +474,11 @@ Recorded in `documentation/decisions/` at bootstrap because they shape everythin
 - JSDoc (with `@example`) on every public export: feeds IntelliSense.
 - Immutable by default. Mutation only via explicit methods.
 - No `console.*` in library code. Throw typed errors or return results.
-- Postel's Law: the reader is liberal (lenient default + warnings), the writer is conservative
-  (always emits spec-clean FHIR).
+- Postel's Law: the reader is liberal (lenient default + warnings), the writer is conservative: it
+  authors no value of its own, and emits spec-clean FHIR for every model FHIR can express. It is
+  **not** unconditionally spec-clean, and the exceptions are named on `serializeResource` (an array
+  inside an array, a non-string `resourceType`), because repairing either means inventing content or
+  dropping it.
 - **PHI discipline:** synthetic-only fixtures, redaction in logs. Never commit realistic PHI. A
   vendor quirk is encoded only when a real de-identified resource grounds it, never invented.
 

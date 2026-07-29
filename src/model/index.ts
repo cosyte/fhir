@@ -20,6 +20,7 @@ export {
   isNestedArray,
   isPrimitive,
   list,
+  nestedArrayContent,
   primitive,
   resourceType,
 } from "./node.js";
@@ -29,6 +30,8 @@ export type {
   FhirNode,
   FhirPrimitive,
   FhirProperty,
+  NestedArrayChannel,
+  NestedArrayContent,
   PrimitiveMeta,
   PrimitiveValue,
 } from "./node.js";

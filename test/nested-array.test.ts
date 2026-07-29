@@ -12,6 +12,7 @@ import {
   isPrimitive,
   ISSUE_CODES,
   nestedArray,
+  nestedArrayContent,
   nestedArrays,
   nodesEquivalent,
   parseResource,
@@ -23,6 +24,7 @@ import {
   resolvePath,
   serializeResource,
   validateResource,
+  type FhirComplex,
   type FhirNode,
 } from "../src/index.js";
 import { nth, req } from "./_util.js";
@@ -30,20 +32,32 @@ import { nth, req } from "./_util.js";
 /**
  * An array inside an array is a shape FHIR JSON gives no meaning at any position: json.html §2.6.2.2
  * uses an array for a repeating element and for nothing else, so no element is ever a list of lists.
- * The reader does not model the inner array, so content the sender wrote is genuinely unreadable at
- * that position, and this suite is about the consequence of that rather than a cure for it.
+ * The reader cannot model the inner array **as an element**, because there is no element for it to
+ * be, and this suite is about how the package keeps that from costing anything.
  *
- * Two halves, and the split is the whole point.
+ * Three halves, and the split is the whole point.
  *
  * 1. **Refuse to affirm.** A document carrying one must never come back `valid: true` /
- *    `safeToSummarize: true` / `negations: []`, because the model then looks exactly like an element
- *    the sender legitimately left out. Reporting is the entire remedy here.
- * 2. **Preserve nothing.** The inner array stays unread, unmodeled, and invisible to every walker. A
- *    list still holds one item per position it held before, of the same kinds, with the same
- *    contents. Making the value readable would redefine what a repeating element *contains* for
- *    every consumer in the package, which is a far larger and riskier change than declining to
- *    affirm, and the negative assertions in "the model is unchanged" below are what hold that line.
+ *    `safeToSummarize: true` / `negations: []`, because the model would otherwise look exactly like
+ *    an element the sender legitimately left out.
+ * 2. **Preserve the content.** The array's JSON text is kept on the node and handed back by
+ *    `nestedArrayContent`, and the writer emits it again, so no value the sender wrote is dropped and
+ *    the finding survives a round trip instead of laundering away. Value-exact, not byte-exact: the
+ *    text is the array re-rendered compactly, so whitespace goes and strings are re-escaped, and such
+ *    output is deliberately not spec-clean.
+ * 3. **Show no walker anything.** The preserved text is a string, not a node: it is not reachable
+ *    through `properties`, `items` or `extension`, so a list still holds one item per position it
+ *    held before, of the same kinds, with the same contents. Putting the array in the tree would
+ *    redefine what a repeating element *contains* for every consumer in the package, and the
+ *    negative assertions below are what hold that line.
  */
+
+/** The `index`-th item of the list property `name` on `node`, which the tests below read a lot. */
+function itemAt(node: FhirComplex, name: string, index: number): FhirNode {
+  const property = req(getProperty(node, name), name);
+  expect(isList(property), `${name} should be a list`).toBe(true);
+  return nth(isList(property) ? property.items : [], index);
+}
 
 /** Read a document and return its safety readout together with its validation verdict. */
 function verdict(json: string): {
@@ -255,12 +269,17 @@ describe("array positions are counted, not values", () => {
 function stripMarker(node: FhirNode): FhirNode {
   if (isList(node)) return { kind: "list", items: node.items.map(stripMarker) };
   if (isPrimitive(node)) {
-    const { nestedArray: _drop, ...rest } = node;
+    const {
+      nestedArray: _drop,
+      nestedArraySource: _dropValue,
+      nestedArrayMetaSource: _dropMeta,
+      ...rest
+    } = node;
     return rest.extension === undefined
       ? rest
       : { ...rest, extension: rest.extension.map((e) => stripMarker(e) as typeof e) };
   }
-  const { nestedArray: _drop, ...rest } = node;
+  const { nestedArray: _drop, nestedArraySource: _dropValue, ...rest } = node;
   return {
     ...rest,
     properties: rest.properties.map((prty) => ({
@@ -283,7 +302,7 @@ function prop(node: FhirNode, name: string): FhirNode | undefined {
   return isComplex(node) ? getProperty(node, name) : undefined;
 }
 
-describe("the model is unchanged: nothing is preserved and nothing new is readable", () => {
+describe("the content is preserved, and no walker can see it", () => {
   const NESTED = '{"resourceType":"Patient","name":[[{"family":"Roe"}]]}';
 
   it("leaves the list holding exactly one item per position, of the same kind", () => {
@@ -376,11 +395,49 @@ describe("the model is unchanged: nothing is preserved and nothing new is readab
     expect(resolvePath(nested, "Patient.name.family")).toEqual([]);
   });
 
-  it("round-trips the model to the same JSON it produced before the marker existed", () => {
-    // The writer is untouched: it emits the empty element the model holds. A consumer's bytes do not
-    // change because of this rule. (See the laundering note below for what that costs.)
+  it("writes the array back exactly as the sender wrote it, inventing no element", () => {
+    // The writer emits the preserved text. Before this it emitted `[{}]`, an object the sender never
+    // wrote, which is what let the finding launder away on a re-read.
     const { resource } = parseResource(NESTED);
-    expect(serializeResource(resource)).toBe('{"resourceType":"Patient","name":[{}]}');
+    expect(serializeResource(resource)).toBe(NESTED);
+    expect(serializeResource(resource)).not.toContain("[{}]");
+  });
+
+  it("hands the lost content back as the exact text, on both JSON channels", () => {
+    expect(nestedArrayContent(itemAt(parseResource(NESTED).resource, "name", 0))).toEqual([
+      { channel: "value", json: '[{"family":"Roe"}]' },
+    ]);
+
+    // The two JSON channels are preserved separately, because a repeating primitive can nest in
+    // either one alone or in both at the same position, and merging them would lose which was which.
+    const doc =
+      '{"resourceType":"Patient","name":[{"given":["A",["B"]],"_given":[null,[{"id":"x"}]]}]}';
+    const firstName = itemAt(parseResource(doc).resource, "name", 0);
+    expect(isComplex(firstName)).toBe(true);
+    const given = isComplex(firstName) ? itemAt(firstName, "given", 1) : undefined;
+    expect(nestedArrayContent(req(given))).toEqual([
+      { channel: "value", json: '["B"]' },
+      { channel: "metadata", json: '[{"id":"x"}]' },
+    ]);
+    // The position beside it is untouched, so the null-padded alignment still holds on the way out.
+    const beside = isComplex(firstName) ? itemAt(firstName, "given", 0) : undefined;
+    expect(nestedArrayContent(req(beside))).toEqual([]);
+    expect(serializeResource(parseResource(doc).resource)).toBe(doc);
+  });
+
+  it("preserves a decimal inside a nested array as its exact lexical text", () => {
+    // ADR 0001 does not stop applying because the position is unreadable: a dose that came in as
+    // `0.010` must not come back as `0.01`, even from a position the model cannot place.
+    const doc = '{"resourceType":"Observation","note":[[{"x":0.010}]]}';
+    const note = itemAt(parseResource(doc).resource, "note", 0);
+    expect(nth(nestedArrayContent(note), 0).json).toBe('[{"x":0.010}]');
+    expect(serializeResource(parseResource(doc).resource)).toBe(doc);
+  });
+
+  it("returns nothing for a node the reader did not mark", () => {
+    const { resource } = parseResource('{"resourceType":"Patient","name":[{"family":"Roe"}]}');
+    expect(nestedArrayContent(resource)).toEqual([]);
+    expect(nestedArrayContent(req(getProperty(resource, "name")))).toEqual([]);
   });
 });
 
@@ -487,10 +544,19 @@ describe("cross-format and construction", () => {
     // The tightening is confined to the shape: two documents that really do agree still do.
     const alsoEmpty = parseResource('{"resourceType":"Patient","name":[{}]}');
     expect(nodesEquivalent(plainEmpty.resource, alsoEmpty.resource)).toBe(true);
+    // Two documents that nested DIFFERENT content are not equivalent either, now that the content is
+    // preserved: the oracle compares what was written, not merely that something was.
     expect(
       nodesEquivalent(
         nested.resource,
         parseResource('{"resourceType":"Patient","name":[[{"family":"Doe"}]]}').resource,
+      ),
+    ).toBe(false);
+    // Two that nested the SAME content still agree, so the tightening stays confined to the shape.
+    expect(
+      nodesEquivalent(
+        nested.resource,
+        parseResource('{"resourceType":"Patient","name":[[{"family":"Roe"}]]}').resource,
       ),
     ).toBe(true);
   });
@@ -548,24 +614,30 @@ describe("the two report channels name the same position, for the cases below", 
     }
   });
 
-  it("still differs one level INSIDE an extension, which is a known residual", () => {
-    // The reader's FHIRPath override applies to the extension item itself. Deeper inside that item
-    // the older `_`-prefixed convention is back on the path, so the two channels name the same
-    // position with two different strings. Both are correct locations and neither is missing, so
-    // this is a correlation nuisance rather than a lost finding, and the durable fix is one path
-    // convention for the whole reader rather than a deeper override. Pinned so it is not mistaken
-    // for agreement.
+  it("agrees one level INSIDE an extension too, where the two used to differ", () => {
+    // The reader names a primitive's metadata in FHIRPath form at every depth, not only at the depth
+    // an override happened to cover, so correlating the read channel with the safety readout is
+    // string equality rather than a rewrite the consumer has to know about.
     const { resource, issues } = parseResource(
       '{"resourceType":"Patient","birthDate":"1980-01-01","_birthDate":{"extension":[{"url":[["u"]]}]}}',
     );
     const fromRead = issues
       .filter((i) => i.code === ISSUE_CODES.NESTED_ARRAY)
       .map((i) => i.expression);
-    expect(fromRead).toEqual(["Patient.birthDate._extension[0].url[0]"]);
+    expect(fromRead).toEqual(["Patient.birthDate.extension[0].url[0]"]);
     expect(nestedArrays(resource, "Patient")).toEqual(["Patient.birthDate.extension[0].url[0]"]);
-    // What matters is that neither channel is silent and the document is refused.
+    // What matters most is still that neither channel is silent and the document is refused.
     expect(readSafety(resource).safeToSummarize).toBe(false);
     expect(validateResource(resource).valid).toBe(false);
+  });
+
+  it("names a primitive's metadata in FHIRPath form on the reader's older warnings too", () => {
+    // The `_` is an artifact of how FHIR JSON splits a primitive's value from its metadata; FHIRPath
+    // addresses both as members of the element. One convention, everywhere the reader reports.
+    const { issues } = parseResource(
+      '{"resourceType":"Patient","birthDate":"1980-01-01","_birthDate":{"foo":"bar"}}',
+    );
+    expect(issues.map((i) => i.expression)).toEqual(["Patient.birthDate.foo"]);
   });
 });
 
@@ -599,22 +671,133 @@ describe("the one channel the rule does not reach, pinned rather than claimed aw
   });
 });
 
-describe("known limitation, pinned so a change to it is deliberate", () => {
-  it("launders the finding on a write and re-read, because the writer emits an empty element", () => {
-    // The reader cannot model the inner array, so the writer has nothing to write back and emits the
-    // empty element the model holds. Reading that emits a clean document: the complaint does not
-    // survive a round trip. Fixing this means changing what the model holds, which is the preserving
-    // half of the problem and a much larger change. Pinned rather than described, so that a future
-    // writer change has to face it.
-    const { resource } = parseResource('{"resourceType":"Patient","name":[[{"family":"Roe"}]]}');
-    expect(readSafety(resource).safeToSummarize).toBe(false);
-    const again = parseResource(serializeResource(resource));
-    expect(readSafety(again.resource).safeToSummarize).toBe(true);
-    expect(again.issues).toEqual([]);
+describe("the finding survives a write and a re-read, on every channel", () => {
+  const docs = [
+    '{"resourceType":"Patient","name":[[{"family":"Roe"}]]}',
+    '{"resourceType":"Patient","_birthDate":[[{"id":"x"}]]}',
+    '{"resourceType":"Patient","birthDate":"1980-01-01","_birthDate":{"extension":[[{"url":"http://example.org/x"}]]}}',
+    '{"resourceType":"Observation","status":[["final"]]}',
+    '{"resourceType":"Patient","name":[{"given":["A","B"],"_given":[null,[{"id":"x"}]]}]}',
+  ];
+
+  it("writes the sender's bytes back, so the re-read reproduces the refusal", () => {
+    // Before this the writer emitted an empty element and the complaint vanished on the round trip.
+    // A safety finding that a re-serialization launders away is worse than one that was never made,
+    // because a pipeline that stores what it wrote keeps neither the content nor the warning.
+    for (const doc of docs) {
+      const { resource } = parseResource(doc);
+      expect(readSafety(resource).safeToSummarize).toBe(false);
+      const written = serializeResource(resource);
+      expect(written).toBe(doc);
+      const again = parseResource(written);
+      expect(readSafety(again.resource).safeToSummarize).toBe(false);
+      expect(again.issues.map((i) => i.code)).toContain(ISSUE_CODES.NESTED_ARRAY);
+      expect(validateResource(again.resource).valid).toBe(false);
+      // and it is stable: writing the re-read model produces the same bytes again.
+      expect(serializeResource(again.resource)).toBe(written);
+    }
   });
 
   it("does not launder it on the read itself, which is where a consumer sees it", () => {
     const { issues } = parseResource('{"resourceType":"Patient","name":[[{"family":"Roe"}]]}');
     expect(issues.map((i) => i.code)).toContain(ISSUE_CODES.NESTED_ARRAY);
+  });
+
+  it("never emits the empty element the model holds at that position", () => {
+    for (const doc of docs) {
+      expect(serializeResource(parseResource(doc).resource)).not.toContain("[{}]");
+    }
+  });
+
+  it("writes back a resourceType it cannot hoist, rather than dropping the property", () => {
+    // Hoisting `resourceType` to the front is the one canonical-ordering rule the writer applies. It
+    // used to skip the property whenever it could not hoist it, which dropped whatever the sender
+    // had written there: the loudest possible position to lose content from, and the one shape whose
+    // finding still laundered away on a re-read after the rest of this was fixed.
+    const doc = '{"resourceType":[["Patient"]],"id":"x"}';
+    const { resource } = parseResource(doc);
+    expect(serializeResource(resource)).toBe(doc);
+    expect(parseResource(serializeResource(resource)).issues.map((i) => i.code)).toContain(
+      ISSUE_CODES.NESTED_ARRAY,
+    );
+    // An array-wrapped one is not a nested array at all, and was dropped by the same branch.
+    expect(serializeResource(parseResource('{"resourceType":["Patient"],"id":"x"}').resource)).toBe(
+      '{"resourceType":["Patient"],"id":"x"}',
+    );
+    // A conformant resourceType is still hoisted to the front, unchanged.
+    expect(serializeResource(parseResource('{"id":"x","resourceType":"Patient"}').resource)).toBe(
+      '{"resourceType":"Patient","id":"x"}',
+    );
+  });
+});
+
+describe("the writer's output is bounded, and the bound is pinned not prose", () => {
+  it("is deliberately not spec-clean for the two shapes FHIR cannot express", () => {
+    // The writer authors no value of its own, which is a different promise from always emitting
+    // conformant FHIR. For these two it hands back what arrived, because repairing either means
+    // inventing content or dropping it. Stated on `serializeResource` and in the README, and pinned
+    // here so the claim and the behaviour cannot drift apart.
+    expect(
+      serializeResource(parseResource('{"resourceType":"Patient","name":[[{}]]}').resource),
+    ).toBe('{"resourceType":"Patient","name":[[{}]]}');
+    expect(serializeResource(parseResource('{"id":"x","resourceType":["Patient"]}').resource)).toBe(
+      '{"id":"x","resourceType":["Patient"]}',
+    );
+  });
+
+  it("does not hoist a resourceType that is not a string, so it is not always first", () => {
+    // Hoisting is the one canonical-ordering rule, and it applies to the shape FHIR defines. A
+    // `resourceType` of any other shape goes through the ordinary path and keeps its position: the
+    // alternative was dropping it, which is what this replaced.
+    const out = serializeResource(parseResource('{"id":"x","resourceType":["Patient"]}').resource);
+    expect(out.startsWith('{"resourceType"')).toBe(false);
+    expect(out).toContain('"resourceType":["Patient"]');
+    // A string one is still hoisted, from wherever it sat.
+    expect(serializeResource(parseResource('{"id":"x","resourceType":"Patient"}').resource)).toBe(
+      '{"resourceType":"Patient","id":"x"}',
+    );
+  });
+
+  it("preserves the array's values exactly, not its bytes", () => {
+    // The text is the array re-rendered compactly: member order, repeated keys and every number's
+    // exact source survive, insignificant whitespace does not, and strings are re-escaped the way
+    // this library escapes every other string it emits. Value-exact, not byte-exact.
+    const spaced = '{"resourceType":"Patient","name":[ [ {"family":"Ro\\u0065"} ] ]}';
+    const content = nestedArrayContent(itemAt(parseResource(spaced).resource, "name", 0));
+    expect(nth(content, 0).json).toBe('[{"family":"Roe"}]');
+    // A decimal keeps its exact lexical source, which is the one thing that must never normalize.
+    const dec = '{"resourceType":"Observation","note":[[{"a":1.2300,"b":1e-3}]]}';
+    expect(nth(nestedArrayContent(itemAt(parseResource(dec).resource, "note", 0)), 0).json).toBe(
+      '[{"a":1.2300,"b":1e-3}]',
+    );
+  });
+});
+
+describe("what preservation does NOT reach, pinned rather than claimed away", () => {
+  it("still loses a scalar written beside a nested array in the same array", () => {
+    // `["Peter"]` makes the array read as a list of complex elements, so the `"James"` beside it
+    // lands where an object was expected and becomes an empty element with nothing kept. This is a
+    // different loss from the one above (a scalar where a complex belongs, not an array inside an
+    // array), it reproduces identically without this change, and closing it means preserving a
+    // second unplaceable shape with its own model surface. Recorded and pinned, not fixed here.
+    const doc = '{"resourceType":"Patient","name":[{"given":[["Peter"],"James"]}]}';
+    const { resource } = parseResource(doc);
+    const out = serializeResource(resource);
+    expect(out).toContain('[["Peter"],{}]');
+    expect(out).not.toContain("James");
+    // The document is still refused, so the loss is not sitting under an affirmative verdict.
+    expect(readSafety(resource).safeToSummarize).toBe(false);
+    expect(validateResource(resource).valid).toBe(false);
+  });
+
+  it("still discards a `_`-sibling it drops whole, so an array inside one draws no refusal", () => {
+    // Unchanged from before this: there is no node at those positions to carry either the marker or
+    // the text, and creating one is a separate read-path change. The five shapes are pinned below in
+    // "the one channel the rule does not reach".
+    const { resource } = parseResource(
+      '{"resourceType":"Patient","name":[{"family":"Roe"}],"_name":[[{"id":"x"}]]}',
+    );
+    expect(nestedArrays(resource, "Patient")).toEqual([]);
+    expect(readSafety(resource).safeToSummarize).toBe(true);
   });
 });

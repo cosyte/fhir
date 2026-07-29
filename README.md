@@ -76,8 +76,12 @@ issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", ex
   `.equalsValue` compares quantity only.
 - **Primitive extensions** (the `_element` sibling) are modeled first-class with **null-padded array
   alignment**; a misaligned value/`_`-array **fails closed** rather than mis-attaching an extension.
-- **Lenient read, spec-clean write** (Postel's Law), `resourceType` resolvable in any position, and a
-  `parseReference` classifier (relative / absolute / logical / fragment).
+- **Lenient read, conservative write** (Postel's Law), `resourceType` resolvable in any position, and
+  a `parseReference` classifier (relative / absolute / logical / fragment). The writer authors no
+  value of its own, and it emits spec-clean FHIR for every model FHIR can express; the two shapes it
+  cannot express (an array inside an array, a non-string `resourceType`) are handed back as written
+  rather than repaired, because repairing them means inventing or dropping content. See the
+  no-data-loss notes below.
 - **A repeated property name is read, not resolved.** FHIR requires unique property names and JSON
   leaves the winner undefined, so the first value wins everywhere and a `DUPLICATE_PROPERTY` issue
   says where. On an **object** element both values are kept (`getAllProperties` reads them,
@@ -185,18 +189,29 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   direction on purpose: those reads can only ever **add** a retraction or a negation, never withhold
   one, and no type-scoped verdict is reached for such a resource anyway. Narrowing the read to match
   the report would make `isRetracted` miss retractions it currently catches.
-- **An array inside an array is reported, and its contents are not read.** FHIR JSON uses an array
-  for a repeating element and for nothing else, so a list of lists has no meaning at any position and
-  the reader cannot place what was inside one. That makes it the one shape here where content the
-  sender wrote is genuinely missing from the model, and the model then looks exactly like an element
-  the sender legitimately left out: whole resources have gone missing this way inside a
-  `Bundle.entry`, and a refuted allergy has read back as an ordinary active one. So the position is
-  named on every channel instead. `NESTED_ARRAY` on the read (warning) and in `validateResource`
-  (error), the locations in `nestedArrays`, `safeToSummarize` is `false`, and
+- **An array inside an array is reported, and its contents are kept but never interpreted.** FHIR
+  JSON uses an array for a repeating element and for nothing else, so a list of lists has no meaning
+  at any position and there is no element for the reader to make of it. Left alone the model then
+  looks exactly like an element the sender legitimately left out: whole resources have gone missing
+  this way inside a `Bundle.entry`, and a refuted allergy has read back as an ordinary active one. So
+  the position is named on every channel. `NESTED_ARRAY` on the read (warning) and in
+  `validateResource` (error), the locations in `nestedArrays`, `safeToSummarize` is `false`, and
   `assertSafeToSummarize` throws. `isNestedArray` marks the node for a consumer walking the model
   directly. Because the shape is meaningless everywhere, this needs no cardinality rule and cannot
   fire on a conformant document, so unlike the two above it the check runs at every position the
   model has a node for, at every depth, including a primitive's `extension` metadata.
+  **The array itself is not lost.** Its exact JSON text is preserved on the node and handed back by
+  `nestedArrayContent`, so you can inspect or re-parse what the sender wrote (`readRawJson` will
+  parse it with the same precision guarantees as the rest of the codec). A repeating primitive can
+  nest in its value array, in its `_`-sibling array, or in both at one position, so the two channels
+  come back separately rather than merged. `serializeResource` writes the array back, which is the one
+  place the writer emits something it would not author: the alternatives are to emit the empty
+  element the model holds, which fabricates an object the sender never wrote, or to omit the
+  position, which drops content. Writing it back is also what makes the finding survive a round trip
+  rather than laundering away. The preserved text is the array re-rendered compactly, so member order,
+  every member of a repeated key and every number's exact source survive, but insignificant
+  whitespace does not and strings are re-escaped canonically, exactly as everywhere else this library
+  emits JSON. Such output is deliberately **not** spec-clean.
   **One gap, stated rather than implied:** the rule is bounded by what the reader modeled. A
   `_`-sibling the reader discards whole because it is misplaced or unrecognised (one sitting on an
   object or a non-primitive array, or a member of a `_`-sibling object that is neither an `id`
@@ -204,13 +219,18 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `extension` array) leaves no node behind, so an array inside one draws the unexpected-property
   warning for the discarded sibling and no refusal. Reaching it would mean reading raw JSON the codec
   does not model, which is the same problem as making the value readable.
-  **What it deliberately does not do is make the value readable.** A list holds exactly the items it
-  held before, of the same kinds, with the same contents, so nothing that walks a repeating element
-  sees anything new. Reading the inner array would change what a repeating element _contains_ for
-  every consumer of this library; declining to affirm a verdict over it does not.
-  **One limitation, stated rather than hidden:** the writer emits the empty element the model holds,
-  so writing such a resource back out and reading it again produces a clean document. The complaint
-  is on the read, which is where a consumer of a document they did not write sees it.
+  **What it deliberately does not do is put the array in the tree.** The preserved content is text,
+  not an element: it is not reachable through a node's properties, items or extensions, so a list
+  holds exactly the items it held before, of the same kinds, with the same contents, and nothing that
+  walks a repeating element sees anything new. That boundary is not a matter of taste. This library
+  has checks that flatten a repeating element into its items and then skip whatever is not the kind
+  they expect, so a list holding a list would reach them as an absent value: a profile invariant, a
+  vital-signs unit check or a negation would go unevaluated and the resource would read as valid.
+  Preserving the text costs none of that.
+  **One further limitation, stated rather than hidden:** a scalar written beside a nested array in
+  the same array (`"given":[["Peter"],"James"]`) lands where an object was expected, and that scalar
+  is still dropped. It is reported as an unexpected property and the resource is still refused, but
+  unlike the array itself its content is not kept.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their

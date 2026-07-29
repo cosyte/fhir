@@ -1,8 +1,12 @@
 /**
- * The JSON write path: the {@link FhirNode} model → spec-clean FHIR JSON text.
+ * The JSON write path: the {@link FhirNode} model → compact FHIR JSON text.
  *
- * The writer is the conservative half of Postel's Law, it always emits well-formed, canonical FHIR
- * JSON. Two details are load-bearing for the no-data-loss guarantee (json.html):
+ * The writer is the conservative half of Postel's Law: it emits well-formed, canonical FHIR JSON for
+ * every model that FHIR can express, and it never authors a value of its own. It is **not**
+ * unconditionally spec-clean, and the exception is stated at the foot of this comment: a document
+ * that wrote an array inside an array, or a `resourceType` that is not a string, is handed back as
+ * written rather than repaired, because repairing it means inventing or dropping content. Two details
+ * are load-bearing for the no-data-loss guarantee (json.html):
  *
  * - **Decimals are emitted from their exact lexical text** ({@link FhirDecimal.raw}), unquoted, so a
  *   value read in as `0.010` is written back as `0.010`. The value never becomes a JavaScript
@@ -10,8 +14,9 @@
  * - **Primitive metadata is split back out into the `_`-sibling**, and repeating primitives emit the
  *   value array and the `_`-array **index-aligned with `null` placeholders**, exactly as read.
  *
- * The one canonical-ordering rule applied on emit is hoisting `resourceType` to the front of a
- * resource object; every other property keeps the model's insertion order, so a spec-clean document
+ * The one canonical-ordering rule applied on emit is hoisting a **string** `resourceType` to the
+ * front of a resource object; a `resourceType` of any other shape keeps its position rather than
+ * being dropped, and every other property keeps the model's insertion order, so a spec-clean document
  * round-trips byte-for-byte. String values and object keys are escaped via `JSON.stringify` (correct
  * and canonical for strings, only numbers need the raw-text treatment).
  *
@@ -22,6 +27,14 @@
  * reader raised `DUPLICATE_PROPERTY` on the way in, the validator rejects such a resource, and the
  * safety readout refuses to summarize it. Emit is the wrong place to resolve the ambiguity, so the
  * writer does not try.
+ *
+ * **A position where the sender wrote an array inside an array is written back as that array**, from
+ * the text the reader preserved. That output is not spec-clean, and it is the one place the writer
+ * emits something it would never author, because both alternatives are worse: the model holds an
+ * empty element at that position, so emitting the element fabricates an object the sender never
+ * wrote, and omitting it drops content. Writing the array back is the only option under which
+ * re-reading the output reproduces the same `NESTED_ARRAY` finding instead of laundering it away.
+ * Conservatism here means refusing to author a value, not refusing to hand one back.
  *
  * @packageDocumentation
  */
@@ -44,13 +57,33 @@ function emitScalar(value: PrimitiveValue | undefined): string {
   return value.raw;
 }
 
-/** Whether a primitive carries `id`/`extension` metadata that must go to a `_`-sibling. */
-function hasMeta(node: FhirPrimitive): boolean {
-  return node.id !== undefined || (node.extension !== undefined && node.extension.length > 0);
+/**
+ * Emit a primitive's value slot: the array the sender wrote there if the reader preserved one,
+ * otherwise the scalar. A preserved array is emitted as the reader kept it, which is the only way
+ * this position can be written without either inventing an element the sender never wrote or
+ * dropping one.
+ */
+function emitPrimitiveValue(node: FhirPrimitive): string {
+  return node.nestedArraySource ?? emitScalar(node.value);
 }
 
-/** Emit a primitive's `_`-sibling object `{ id?, extension? }`. */
+/** Whether a primitive has anything to write in the value slot at all. */
+function hasValue(node: FhirPrimitive): boolean {
+  return node.value !== undefined || node.nestedArraySource !== undefined;
+}
+
+/** Whether a primitive carries `id`/`extension` metadata that must go to a `_`-sibling. */
+function hasMeta(node: FhirPrimitive): boolean {
+  return (
+    node.id !== undefined ||
+    (node.extension !== undefined && node.extension.length > 0) ||
+    node.nestedArrayMetaSource !== undefined
+  );
+}
+
+/** Emit a primitive's `_`-sibling object `{ id?, extension? }`, or the array preserved in its place. */
 function emitMeta(node: FhirPrimitive): string {
+  if (node.nestedArrayMetaSource !== undefined) return node.nestedArrayMetaSource;
   const parts: string[] = [];
   if (node.id !== undefined) parts.push(`"id":${JSON.stringify(node.id)}`);
   if (node.extension !== undefined && node.extension.length > 0) {
@@ -62,8 +95,8 @@ function emitMeta(node: FhirPrimitive): string {
 /** Emit the `key:value` entries for a single primitive property (0, 1, or 2 entries). */
 function emitPrimitiveProperty(name: string, node: FhirPrimitive): string[] {
   const entries: string[] = [];
-  if (node.value !== undefined) {
-    entries.push(`${JSON.stringify(name)}:${emitScalar(node.value)}`);
+  if (hasValue(node)) {
+    entries.push(`${JSON.stringify(name)}:${emitPrimitiveValue(node)}`);
   }
   if (hasMeta(node)) {
     entries.push(`${JSON.stringify(`_${name}`)}:${emitMeta(node)}`);
@@ -81,14 +114,14 @@ function emitListProperty(name: string, node: FhirList): string[] {
   }
 
   const primitives = node.items.filter(isPrimitive);
-  const anyValue = primitives.some((item) => item.value !== undefined);
+  const anyValue = primitives.some(hasValue);
   const anyMeta = primitives.some(hasMeta);
   const entries: string[] = [];
   // Emit the value array only when at least one item has a value. When every value is absent (an
   // extension-only repeating primitive) the value array would be all-`null`, non-canonical, so we
   // emit the `_`-sibling array alone, which round-trips to the same value-absent list.
   if (anyValue) {
-    const values = primitives.map((item) => emitScalar(item.value)).join(",");
+    const values = primitives.map(emitPrimitiveValue).join(",");
     entries.push(`${JSON.stringify(name)}:[${values}]`);
   }
   if (anyMeta) {
@@ -106,21 +139,27 @@ function emitNode(node: FhirNode): string {
     case "list":
       return `[${node.items.map(emitNode).join(",")}]`;
     case "primitive":
-      return emitScalar(node.value);
+      return emitPrimitiveValue(node);
   }
 }
 
-/** Emit a complex object, hoisting `resourceType` to the front where present. */
+/** Emit a complex object, hoisting a string `resourceType` to the front where present. */
 function emitComplex(node: FhirComplex): string {
+  // A position the sender wrote an array at is written back as that array. The node itself is the
+  // empty element the reader had to produce there, so emitting the element would put an object on
+  // the wire that no sender wrote.
+  if (node.nestedArraySource !== undefined) return node.nestedArraySource;
   const parts: string[] = [];
 
+  // Hoisting applies only to a `resourceType` that is actually a string, the shape FHIR defines. One
+  // that is anything else is emitted through the ordinary path below rather than skipped: skipping
+  // it dropped whatever the sender wrote there, which is the loss this writer exists to avoid.
   const rt = node.properties.find((p) => p.name === "resourceType");
-  if (rt !== undefined && isPrimitive(rt.value) && typeof rt.value.value === "string") {
-    parts.push(`"resourceType":${JSON.stringify(rt.value.value)}`);
-  }
+  const hoisted = rt !== undefined && isPrimitive(rt.value) && typeof rt.value.value === "string";
+  if (hoisted) parts.push(`"resourceType":${JSON.stringify(rt.value.value)}`);
 
   for (const property of node.properties) {
-    if (property.name === "resourceType" && rt !== undefined) continue;
+    if (property.name === "resourceType" && hoisted) continue;
     const value = property.value;
     switch (value.kind) {
       case "primitive":
@@ -139,11 +178,16 @@ function emitComplex(node: FhirComplex): string {
 }
 
 /**
- * Serialize a resource (or any {@link FhirComplex}) to spec-clean, compact FHIR JSON text.
+ * Serialize a resource (or any {@link FhirComplex}) to compact FHIR JSON text: spec-clean for any
+ * model FHIR can express, and faithful rather than spec-clean for the shapes it cannot (see the
+ * module comment).
  *
  * @param node - The resource model to serialize.
- * @returns Canonical JSON text, decimals byte-exact, primitive metadata split back into
- *   `_`-siblings with null-padded array alignment, `resourceType` first.
+ * @returns Compact JSON text, decimals byte-exact, primitive metadata split back into `_`-siblings
+ *   with null-padded array alignment, and `resourceType` hoisted to the front where it is a string.
+ *   A `resourceType` that is anything else keeps its position in the document rather than being
+ *   dropped, and an array the sender wrote where FHIR gives an array no meaning is written back as
+ *   it was read, so such output is deliberately not spec-clean.
  * @example
  * ```ts
  * import { parseResource, serializeResource } from "@cosyte/fhir";

@@ -259,7 +259,7 @@ describe("the `_`-sibling resolves a repeated name the same way the rest of the 
     expect(issues).toContainEqual({
       code: ISSUE_CODES.DUPLICATE_PROPERTY,
       severity: "warning",
-      expression: "Patient.birthDate._id",
+      expression: "Patient.birthDate.id",
     });
   });
 
