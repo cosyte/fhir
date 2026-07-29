@@ -218,15 +218,58 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   "single-valued" wrapper and **still** did, because it counted _strings_ rather than _array
   positions_, and a FHIR JSON `null` is a real position marker, not padding (`["716186003", null]` is
   two entries), so `[null, "...sct"]` x `["716186003", null]` still produced `(sct, 716186003)`.
-  **So `codingsOf` was reverted to its `main` behaviour and the inner wrapper is a DECLARED GAP, not a
-  claim.** That was the ADR 0016 termination call: the same sub-problem had failed to converge twice,
-  there is no fourth pass, and a pure revert ships no ungraded behaviour. Everything the slice does
-  ship is element-level and was graded green. **`FHIR-CODING-SCALAR-WRAPPER` is the follow-up item and
-  it is a real one** -- a refuted allergy and a "no known allergy" are still misread through an inner
-  wrapper on `main` today. Whoever takes it: the predicate must count **array positions**, not string
-  values, and the property to hold is "never invent a pair the sender did not write" (already pinned in
-  `test/array-wrapped-scalar.test.ts`).
-  **Left open, deliberately, each pinned by a test rather than a sentence:** **Left open, deliberately, each pinned by a test rather than a sentence:** (a) an array-wrapped
+  **So `codingsOf` was reverted to its `main` behaviour and the inner wrapper was left a DECLARED GAP,
+  not a claim.** That was the ADR 0016 termination call: the same sub-problem had failed to converge
+  twice, there is no fourth pass, and a pure revert ships no ungraded behaviour. Everything that slice
+  shipped is element-level and was graded green.
+  **`FHIR-CODING-SCALAR-WRAPPER` (2026-07-29) then closed it, on the third grading.** The predicate
+  that held is **at most one value per written member**: `codingScalar` (private, in `src/safety/codes.ts`)
+  reads a wrapper only where it holds **exactly one ARRAY POSITION**, so `systems` and `codes` have
+  precisely the lengths they had when a wrapper read as `undefined` and **the cross-product cannot
+  grow** -- unwrapping can only fill in a value, never add a pair. The clean statement of that, and
+  what the tests pin, is **transparency**: a single-position wrapper yields the same codings as the
+  same document with the wrapper removed, so unwrapping decides nothing on its own and any invention
+  that remains is the pre-existing duplicate-name cross-product's, not the wrapper's. Positions, not
+  strings, is what killed attempt two, and `codingScalar` counts `items.length`. The second half is
+  **the refusal to affirm**: `SAFETY_CODEABLE_ELEMENTS` (`clinicalStatus`/`verificationStatus`/`code`)
+  drives a `Coding`-level check in `checkArrayWrapping`, so **every** wrapper there (read or unread)
+  reports `<element>.coding[i].{system,code}` as `ARRAY_WRAPPED_SCALAR` and sets
+  `safeToSummarize: false`. That is what makes leaving the multi-position case unread safe rather than
+  silent. It needs no per-resource cardinality (`Coding` is a datatype, its `system`/`code` are `0..1`
+  everywhere), so unlike the element-level rule it cannot false-positive. **No public API changed.**
+  One direction to know: reading a wrapper can now retire an `ait-1`/`con-4` finding the unread version
+  emitted, and those were **false** findings; it can never turn a document `valid`, because the wrapper
+  is itself an error on the same `Coding`.
+  **The refuter REFUTED pass one of this slice too, and the finding is the one to remember: THE READ
+  WINDOW AND THE REPORT WINDOW MUST BE THE SAME WINDOW.** Pass one put `codingScalar` inside
+  `codingsOf` itself -- which every coding consumer calls -- while reporting only the windowed
+  elements. `requiredUnitsFor` reads `Observation.component[i].code` (a backbone element, outside the
+  window) and takes the FIRST LOINC coding with a vital-signs units entry, so making a wrapped
+  `8867-4` readable let it beat the `8480-6` beside it, a **true** `VITAL_SIGN_UNIT_NONCONFORMANT`
+  error disappeared, and the document went from `valid: false` to **`valid: true` with zero
+  diagnostics**. A false valid is the one direction the fail-safe contract forbids, and it was
+  `INTRODUCED`, not pre-existing. The fix was to CUT THE READ BACK, not to grow the guard: the unwrap
+  now lives in module-internal `safetyCodingsOf` / `safetyHasCoding` / `safetyHasCodeAnySystem` /
+  `safetyCodeOf` (none exported from the package), used only for `clinicalStatus` / `verificationStatus`
+  / `code` on a safety root. `codingsOf` is back to its exact `main` behaviour, and `category`,
+  `interpretation`, `referenceRange.type` and `component.code` are untouched. **If you ever widen the
+  unwrap, widen `checkCodingWrapping` first, in the same change.** Pinned in
+  `test/array-wrapped-scalar.test.ts` (now 45 tests), including the refuter's exact document.
+  **Pass two came back NOT REFUTED**, with two `INTRODUCED` **minors**, both documentation-accuracy and
+  both fixed by correcting prose rather than code (the refuter's own call: a code change here would
+  reduce fail-safety). (i) The read window is **not** exactly the report window: `checkArrayWrapping`
+  gates the coding-level report on `isSafetyType`, but `isRetracted`'s `verificationStatus` scan and
+  `readSafety`'s `clinicalStatus`/`verificationStatus` convenience + `REFUTED` reads are **not**
+  type-gated, so a `Patient` carrying a wrapped `verificationStatus.coding.code` reads the retraction
+  with **no** location. Measured 3/380 in its randomized differential, every one **adding** a negation,
+  and `collectSafetyIssues` returns before every type-scoped verdict for a non-safety type, so it can
+  never retire a finding or flip `valid`. **Do not "fix" this by type-gating `isRetracted`.** (ii) The
+  `checkCodingWrapping` JSDoc still claimed a wrapped element is not indexed, which the pass-one
+  finding-3 fix had already changed. Pass two measured, and could not break: no `valid: false -> true`
+  flip (0/380), no negation lost, no `safeToSummarize` weakened, all 26 fixtures byte-identical to
+  base, and `codingsOf`/`codeOf`/`hasCoding`/`hasCodeAnySystem` **bit-identical to base** over 600
+  generated documents.
+  **Left open, deliberately, each pinned by a test rather than a sentence:** (a) an array-wrapped
   `value[x]` draws **no** `ARRAY_WRAPPED_SCALAR` (outside the closed set; widening to every R4 `0..1`
   element _is_ the per-resource model), and `readObservationValue` still has no issue channel of its
   own, though it fails **safe** on this route (reports the present variant, `quantity: undefined`, so

@@ -8,6 +8,63 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **An array around a `Coding.system` / `Coding.code` _inside_ a `CodeableConcept` was still read as
+  absent, and it landed on the three sharpest reads in the library (`FHIR-CODING-SCALAR-WRAPPER`).**
+  A **refuted** allergy read as active, a recorded **"no known allergy"** read as an allergy _to_
+  SNOMED `716186003`, and a **retracted** Condition read as live. `Coding.system` and `Coding.code`
+  are `0..1` (datatypes.html), so a generic XML-to-JSON converter array-wraps them exactly as it
+  wraps the element above them, and `codingsOf` read them with the single-value `primitiveString`.
+  `FHIR-ARRAY-WRAPPED-SCALAR` closed the element-level wrapper and declared this one a gap after the
+  conformance gate refuted two attempts at it; this is the follow-up slice it named. Pre-existing,
+  reproduced on `main` at `14397bf`.
+  **The read now sees through the wrapper, but only where it holds exactly one array position.** That
+  restriction is the safety property, not caution. These two values feed `codingsOf`'s `system` x
+  `code` **cross-product**, so any rule yielding more than one value on either side pairs a `system`
+  the sender wrote in one position with a `code` it wrote in another and **asserts a coding the sender
+  never wrote**, and one coding matched there is the recorded "no known allergy", a **positive
+  clinical assertion**. Missing a retraction withholds information; asserting an absence of allergy
+  does not, so the two directions are not equally safe. **At most one value per written member**
+  satisfies both: the cross-product keeps exactly the arity it had when a wrapper read as `undefined`,
+  so unwrapping can only fill in a value and can never add a pair. Stated as the property the tests
+  pin, a single-position wrapper is **transparent**, yielding the same codings as the same document
+  with the wrapper removed.
+  **"One position" counts array positions, not string values** (this is what refuted attempt two): a
+  FHIR JSON `null` in a primitive array is a real position whose value is absent and whose `_`-sibling
+  may carry an extension, not padding, so `["716186003", null]` is two positions and is not read.
+  **A wrapper that is not read is reported instead, so nothing is affirmed over it.** Every array
+  wrapper on a `Coding.system` / `Coding.code` inside a `CodeableConcept`-valued safety element
+  (`clinicalStatus` / `verificationStatus` / `code` on a safety resource type) draws an
+  `ARRAY_WRAPPED_SCALAR` **error** with its location in `SafetyReadout.arrayWrappedScalars`, and
+  `safeToSummarize` is `false`.
+  **The read window and the report window are the SAME window, and that is the correctness argument,
+  not a scoping detail.** The first revision of this change unwrapped inside `codingsOf` itself, which
+  every coding consumer in the library calls, while reporting only the elements above. The
+  conformance gate refuted it with a synthetic vital-signs Observation: `requiredUnitsFor` reads
+  `Observation.component[i].code`, a backbone element nobody reports, and takes the **first** LOINC
+  coding carrying a units entry, so making a wrapped `8867-4` readable let it win over the `8480-6`
+  written beside it and a **true** `VITAL_SIGN_UNIT_NONCONFORMANT` error against a `/min` value
+  vanished, flipping the document from `valid: false` to **`valid: true` with no diagnostic at all**.
+  A false valid is the one direction the fail-safe contract forbids. The unwrap is therefore confined
+  to a module-internal read used only for the windowed elements; `codingsOf` and every out-of-window
+  coding (`category`, `interpretation`, `referenceRange.type`, `component.code`) keep their previous
+  behaviour exactly. Pinned by that document as a regression test.
+  **One asymmetry survives on purpose:** the `ARRAY_WRAPPED_SCALAR` location is emitted only on a
+  resource of a safety type, while `isRetracted` and the refutation read are not type-gated, so on
+  another resource type a wrapped `verificationStatus.coding.code` is read with no location reported.
+  Those reads can only **add** a retraction or a negation and no type-scoped verdict is reached there,
+  so narrowing the read to match the report would only make `isRetracted` miss retractions it catches
+  today. Recorded rather than smoothed over, after the gate measured it. That includes the single-position case that _is_ read, for the same
+  reason the element-level wrapper is reported when its value is read: FHIR JSON does not define the
+  shape. Without it, a multi-position wrapper would be a negation the library declined to read and
+  then affirmed over anyway. Unlike the element level this needs no per-resource cardinality model and
+  cannot false-positive, because `Coding` is a datatype whose `system` and `code` are `0..1` wherever
+  it appears.
+  **One direction worth knowing:** reading a wrapper can now _retire_ an invariant finding the unread
+  version emitted (`ait-1`, `con-4`), and in those cases the retired finding was **false**, the sender
+  did write the code the invariant asked for. It cannot turn a document `valid`, because the wrapper
+  that made the value readable is itself an error on the same `Coding`. **No public API is added or
+  changed**, and a conformant document reads exactly as before.
+
 - **An array-wrapped `0..1` element reached the same harm as the duplicate-key defect, with no
   duplicate key at all (`FHIR-ARRAY-WRAPPED-SCALAR`).**
   `{"resourceType":"Observation","status":["entered-in-error"]}` read back `retracted: false`,
@@ -67,6 +124,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
      second because it counted strings rather than array positions and a FHIR JSON `null` is a real
      position marker. That read is therefore **unchanged from before this release**, and the bound is
      pinned by test rather than described in prose.
+     **Superseded within this same unreleased block by `FHIR-CODING-SCALAR-WRAPPER` (the entry above),
+     which closed that wrapper.** This paragraph is kept as written because it records why two attempts
+     were refuted and what the third had to satisfy; read it as the statement of the problem, not as
+     the shipped behaviour.
      **Behaviour change worth reading before upgrading:** `SafetyReadout` gains a field, and
      `safeToSummarize` is now `false` where it was `true` for these documents. That is the point of the
      fix, but a caller that treats `safeToSummarize` as a gate will now refuse input it previously

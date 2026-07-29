@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   arrayWrappedScalars,
   assertSafeToSummarize,
+  codingsOf,
   complex,
   FhirSafetyError,
+  getProperty,
   isRetracted,
   list,
   parseResource,
   primitive,
+  readInterpretations,
   readObservationValue,
   readSafety,
   serializeResource,
@@ -193,8 +196,8 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
     });
   });
 
-  describe("a wrapper around Coding.system / Coding.code (both 0..1) is a KNOWN GAP", () => {
-    // The same mechanism one level down, deliberately NOT closed here, and this block is the pin.
+  describe("a wrapper around Coding.system / Coding.code (both 0..1)", () => {
+    // The same converter mechanism one level down, and the harder half of it.
     //
     // Reading through this wrapper is not the same change as reading through the element-level one:
     // `Coding.system` and `Coding.code` feed `codingsOf`'s system x code CROSS-PRODUCT, so any rule
@@ -202,42 +205,62 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
     // never wrote. One of the pairs matched there is SNOMED 716186003 "no known allergy", a POSITIVE
     // clinical assertion: inventing it claims a patient has no known allergy over a record that names
     // an allergen. Missing a retraction withholds information; asserting an absence of allergy does
-    // not, so the two directions are not equally safe and the obvious fix is not obviously right.
+    // not, so the two directions are not equally safe.
     //
-    // Two candidate predicates were tried and refuted during this slice. Reading every value
-    // manufactured the pair outright. Reading only a "single-valued" wrapper still did, because it
-    // counted strings rather than array positions and a FHIR JSON `null` is a real position marker
-    // (`["716186003", null]` is two entries), so `[null,"...sct"]` x `["716186003",null]` still
-    // produced (sct, 716186003). The gap is real and its shape is understood; it needs its own slice
-    // with its own grading rather than a third guess appended to this one.
+    // The rule that satisfies both at once is AT MOST ONE VALUE PER WRITTEN MEMBER: a wrapper is read
+    // only where it holds exactly one ARRAY POSITION. The cross-product then has precisely the arity
+    // it had when a wrapper read as `undefined`, so unwrapping can only fill in a value and can never
+    // add a pair, and the pair it yields is the system and code the sender wrote in the same and only
+    // position of that Coding. Positions, not strings: a FHIR JSON `null` is a real position marker
+    // (`["716186003", null]` is two entries), which is what refuted the second earlier attempt.
+    //
+    // A multi-position wrapper is therefore left unread, on purpose, and reported instead, so the
+    // library never affirms a resource over a value it declined to read.
     const CLINICAL_ACTIVE = '"clinicalStatus":{"coding":[{"code":"active"}]}';
 
-    it("does not read a refuted verificationStatus through the wrapper", () => {
+    it("reads a refuted verificationStatus through the wrapper", () => {
       const { resource } = parseResource(
         `{"resourceType":"AllergyIntolerance",${CLINICAL_ACTIVE},` +
           '"verificationStatus":{"coding":[{"code":["refuted"]}]}}',
       );
-      expect(readSafety(resource).negations).toEqual([]);
+      expect(readSafety(resource).negations).toEqual(["refuted"]);
+      expect(readSafety(resource).verificationStatus).toBe("refuted");
     });
 
-    it("does not read a recorded no-known-allergy through the wrapper", () => {
+    it("reads a recorded no-known-allergy through the wrapper", () => {
+      // The sharpest of the three: read wrong, this is an allergy *to* 716186003 rather than a
+      // recorded absence of allergy.
       const { resource } = parseResource(
         `{"resourceType":"AllergyIntolerance",${CLINICAL_ACTIVE},` +
           '"code":{"coding":[{"system":"http://snomed.info/sct","code":["716186003"]}]}}',
       );
-      expect(readSafety(resource).noKnownAllergy).toBe(false);
+      expect(readSafety(resource).noKnownAllergy).toBe(true);
+      expect(readSafety(resource).negations).toEqual(["no-known-allergy"]);
     });
 
-    it("does not read a retraction in verificationStatus through the wrapper", () => {
+    it("reads a retraction in verificationStatus through the wrapper", () => {
       const { resource } = parseResource(
         '{"resourceType":"Condition","verificationStatus":{"coding":[{"code":["entered-in-error"]}]}}',
       );
-      expect(isRetracted(resource)).toBe(false);
+      expect(isRetracted(resource)).toBe(true);
+      expect(readSafety(resource).retracted).toBe(true);
+      expect(validateResource(resource).issues.some((i) => i.code === "RETRACTED_RESOURCE")).toBe(
+        true,
+      );
+    });
+
+    it("reads it when both halves are wrapped, and when the element is wrapped too", () => {
+      const { resource } = parseResource(
+        '{"resourceType":"AllergyIntolerance","clinicalStatus":[{"coding":[{"code":["active"]}]}],' +
+          '"code":{"coding":[{"system":["http://snomed.info/sct"],"code":["716186003"]}]}}',
+      );
+      expect(readSafety(resource).noKnownAllergy).toBe(true);
+      expect(readSafety(resource).clinicalStatus).toBe("active");
     });
 
     it("never invents a (system, code) pair the sender did not write", () => {
-      // The property that must hold however this gap is eventually closed. Neither system is paired
-      // with `716186003` in any position the sender wrote, so `no-known-allergy` must not be claimed.
+      // The property that had to hold however this was closed. Neither system is paired with
+      // `716186003` in any position the sender wrote, so `no-known-allergy` must not be claimed.
       const { resource } = parseResource(
         `{"resourceType":"AllergyIntolerance",${CLINICAL_ACTIVE},` +
           '"code":{"coding":[{"system":["http://example.org/local","http://snomed.info/sct"],' +
@@ -260,13 +283,278 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
       expect(readSafety(resource).negations).toEqual([]);
     });
 
-    it("still reports nothing at the element level for it (no location either)", () => {
+    it("counts positions, not values, on either side of the cross-product", () => {
+      // A single written value does not make a two-position array single-valued, whichever side it
+      // sits on. Both of these would pair (sct, 716186003) under a string-counting rule.
+      const systemPadded = parseResource(
+        `{"resourceType":"AllergyIntolerance",${CLINICAL_ACTIVE},` +
+          '"code":{"coding":[{"system":[null,"http://snomed.info/sct"],"code":"716186003"}]}}',
+      ).resource;
+      expect(readSafety(systemPadded).noKnownAllergy).toBe(false);
+
+      const codePadded = parseResource(
+        `{"resourceType":"AllergyIntolerance",${CLINICAL_ACTIVE},` +
+          '"code":{"coding":[{"system":"http://snomed.info/sct","code":[null,"716186003"]}]}}',
+      ).resource;
+      expect(readSafety(codePadded).noKnownAllergy).toBe(false);
+    });
+
+    it("reports the Coding it declined to read, so nothing is affirmed over it", () => {
+      // The unread multi-position case must never come back `safeToSummarize: true`: a refutation
+      // could be sitting in it, and the location is the only thing that says so.
       const { resource } = parseResource(
         `{"resourceType":"AllergyIntolerance",${CLINICAL_ACTIVE},` +
-          '"verificationStatus":{"coding":[{"code":["refuted"]}]}}',
+          '"verificationStatus":{"coding":[{"code":["refuted","confirmed"]}]}}',
       );
+      const safety = readSafety(resource);
+
+      expect(safety.negations).toEqual([]);
+      expect(safety.safeToSummarize).toBe(false);
+      expect(safety.arrayWrappedScalars).toEqual([
+        "AllergyIntolerance.verificationStatus.coding[0].code",
+      ]);
+      expect(() => {
+        assertSafeToSummarize(resource);
+      }).toThrow(FhirSafetyError);
+    });
+
+    it("reports the wrapper it did read, too, and validates as an error", () => {
+      const { resource } = parseResource(
+        `{"resourceType":"AllergyIntolerance",${CLINICAL_ACTIVE},` +
+          '"code":{"coding":[{"system":["http://snomed.info/sct"],"code":["716186003"]}]}}',
+      );
+      const safety = readSafety(resource);
+
+      expect(safety.arrayWrappedScalars).toEqual([
+        "AllergyIntolerance.code.coding[0].system",
+        "AllergyIntolerance.code.coding[0].code",
+      ]);
+      expect(safety.safeToSummarize).toBe(false);
+
+      const result = validateResource(resource);
+      expect(result.valid).toBe(false);
+      const wrapped = result.issues.filter((i) => i.code === "ARRAY_WRAPPED_SCALAR");
+      expect(wrapped).toHaveLength(2);
+      expect(wrapped.every((i) => i.severity === "error")).toBe(true);
+    });
+
+    it("reports one location per Coding however many members repeated the name", () => {
+      const { resource } = parseResource(
+        '{"resourceType":"Condition","verificationStatus":{"coding":[{"code":["a","b"],' +
+          '"code":["c","d"]}]}}',
+      );
+      expect(readSafety(resource).arrayWrappedScalars).toEqual([
+        "Condition.verificationStatus.coding[0].code",
+      ]);
+    });
+
+    it("indexes each Coding of a CodeableConcept separately", () => {
+      const { resource } = parseResource(
+        '{"resourceType":"Condition","code":{"coding":[{"code":"synthetic-1"},' +
+          '{"system":["http://example.org/local"],"code":["synthetic-2"]}]}}',
+      );
+      expect(readSafety(resource).arrayWrappedScalars).toEqual([
+        "Condition.code.coding[1].system",
+        "Condition.code.coding[1].code",
+      ]);
+    });
+
+    it("is transparent: a wrapped Coding reads exactly as the unwrapped one does", () => {
+      // The property the whole rule rests on. Unwrapping decides nothing on its own, it restores the
+      // reading the sender's pre-conversion document had, so it can neither add a pair nor drop one.
+      const pairs = [
+        ['"system":"http://snomed.info/sct","code":"716186003"', "no-known-allergy"],
+        ['"system":"http://snomed.info/sct","code":"227493005"', "an allergen"],
+        ['"code":"refuted"', "a refutation"],
+        ['"system":"http://example.org/local"', "a system with no code"],
+      ] as const;
+
+      for (const [inner] of pairs) {
+        const bare =
+          `{"resourceType":"AllergyIntolerance",${CLINICAL_ACTIVE},` +
+          `"code":{"coding":[{${inner}}]},"verificationStatus":{"coding":[{${inner}}]}}`;
+        // Wrap every scalar in the two Codings, exactly as a generic converter would.
+        const wrapped = bare.replace(/"(system|code)":("[^"]*")/g, '"$1":[$2]');
+        expect(wrapped).not.toBe(bare);
+
+        const bareSafety = readSafety(parseResource(bare).resource);
+        const wrappedSafety = readSafety(parseResource(wrapped).resource);
+
+        expect(wrappedSafety.negations).toEqual(bareSafety.negations);
+        expect(wrappedSafety.noKnownAllergy).toBe(bareSafety.noKnownAllergy);
+        expect(wrappedSafety.retracted).toBe(bareSafety.retracted);
+        expect(wrappedSafety.verificationStatus).toBe(bareSafety.verificationStatus);
+      }
+    });
+
+    it("never turns an invalid document valid, even where it removes a finding", () => {
+      // Reading the wrapper can retire a finding the unread version emitted, and in both of these the
+      // retired finding was FALSE: the sender did write the code the invariant asked for. What must
+      // never follow is a clean bill of health, and it cannot, because the wrapper that made the value
+      // readable is itself an error on the same Coding.
+      const ait1 = parseResource(
+        '{"resourceType":"AllergyIntolerance","verificationStatus":{"coding":[{"system":' +
+          '"http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",' +
+          '"code":["entered-in-error"]}]}}',
+      ).resource;
+      const ait1Result = validateResource(ait1);
+      expect(ait1Result.issues.some((i) => i.constraint === "ait-1")).toBe(false);
+      expect(ait1Result.issues.some((i) => i.code === "ARRAY_WRAPPED_SCALAR")).toBe(true);
+      expect(ait1Result.valid).toBe(false);
+
+      const con4 = parseResource(
+        '{"resourceType":"Condition","abatementBoolean":true,"clinicalStatus":{"coding":' +
+          '[{"system":"http://terminology.hl7.org/CodeSystem/condition-clinical",' +
+          '"code":["resolved"]}]}}',
+      ).resource;
+      const con4Result = validateResource(con4);
+      expect(con4Result.issues.some((i) => i.constraint === "con-4")).toBe(false);
+      expect(con4Result.issues.some((i) => i.code === "ARRAY_WRAPPED_SCALAR")).toBe(true);
+      expect(con4Result.valid).toBe(false);
+    });
+
+    it("round-trips the wrapper rather than laundering it away", () => {
+      const source =
+        '{"resourceType":"Condition","verificationStatus":{"coding":[{"code":["entered-in-error"]}]}}';
+      const rewritten = serializeResource(parseResource(source).resource);
+      expect(rewritten).toBe(source);
+
+      const reread = readSafety(parseResource(rewritten).resource);
+      expect(reread.retracted).toBe(true);
+      expect(reread.safeToSummarize).toBe(false);
+    });
+
+    it("does not read a Coding it does not report, so it cannot retire a true finding", () => {
+      // THE REGRESSION THIS BLOCK EXISTS FOR. The read window and the report window must be the same
+      // window. An earlier revision unwrapped inside `codingsOf` itself, which every coding consumer
+      // in the library calls, while only reporting the elements below. `requiredUnitsFor` reads
+      // `Observation.component[i].code`, a backbone element nobody reports, and takes the FIRST LOINC
+      // coding that has a vital-signs units entry. Making the wrapped `8867-4` readable let it win
+      // over the `8480-6` (systolic BP, requires `mm[Hg]`) written beside it, so a TRUE
+      // VITAL_SIGN_UNIT_NONCONFORMANT error against a `/min` value disappeared and the document came
+      // back `valid: true` with no diagnostic at all. Base refused it; a false valid is the one
+      // direction the fail-safe contract forbids. All codes/values here are synthetic.
+      const { resource } = parseResource(
+        '{"resourceType":"Observation","status":"final",' +
+          '"category":[{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/observation-category",' +
+          '"code":"vital-signs"}]}],' +
+          '"code":{"coding":[{"system":"http://loinc.org","code":"85354-9"}]},' +
+          '"component":[{"code":{"coding":[{"system":"http://loinc.org","code":["8867-4"]},' +
+          '{"system":"http://loinc.org","code":"8480-6"}]},' +
+          '"valueQuantity":{"value":72,"system":"http://unitsofmeasure.org","code":"/min"}}]}',
+      );
+      const result = validateResource(resource);
+
+      expect(result.issues.some((i) => i.code === "VITAL_SIGN_UNIT_NONCONFORMANT")).toBe(true);
+      expect(result.valid).toBe(false);
+    });
+
+    it("leaves every out-of-window coding read exactly as it was", () => {
+      // The other half of the same rule, stated positively: `category`, `interpretation`,
+      // `referenceRange.type` and `component.code` are not reported, so they are not read through a
+      // wrapper either. Under-reading is the safe direction and it is the pre-existing behaviour;
+      // widening it means widening the reporting rule first, in its own change.
+      const { resource } = parseResource(
+        '{"resourceType":"Observation","status":"final","interpretation":[{"coding":' +
+          '[{"system":"http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",' +
+          '"code":["H"]}]}]}',
+      );
+      expect(readInterpretations(resource)).toEqual([
+        {
+          system: "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+          code: undefined,
+        },
+      ]);
       expect(readSafety(resource).arrayWrappedScalars).toEqual([]);
-      expect(readSafety(resource).safeToSummarize).toBe(true);
+    });
+
+    it("treats a wrapper on a repeated name exactly as the unwrapped repeated name", () => {
+      // Corollary of transparency, and the case worth stating outright because it is where a pair the
+      // sender never wrote genuinely can appear. It appears identically WITHOUT any wrapper, so the
+      // invention belongs to the repeated name (already an error, already `safeToSummarize: false`)
+      // and the wrapper adds no new case. Pinned so a future widening of the unwrap cannot hide here.
+      const inner = '"system":"http://example.org/local","system":"http://snomed.info/sct"';
+      const wrapped = parseResource(
+        `{"resourceType":"AllergyIntolerance","code":{"coding":[{${inner},` +
+          '"code":["716186003"],"code":"227493005"}]}}',
+      ).resource;
+      const bare = parseResource(
+        `{"resourceType":"AllergyIntolerance","code":{"coding":[{${inner},` +
+          '"code":"716186003","code":"227493005"}]}}',
+      ).resource;
+
+      // Compared through `readSafety`, which is the windowed read path. `codingsOf` is the public,
+      // unwindowed read and stays on its pre-existing behaviour by design (see the regression test
+      // above), so it is not the surface this property is stated on.
+      expect(readSafety(wrapped).noKnownAllergy).toBe(readSafety(bare).noKnownAllergy);
+      expect(readSafety(wrapped).negations).toEqual(readSafety(bare).negations);
+      expect(readSafety(wrapped).safeToSummarize).toBe(false);
+      expect(validateResource(wrapped).valid).toBe(false);
+    });
+
+    it("does not read an empty array or a nested one, and reports both", () => {
+      const empty = parseResource(
+        '{"resourceType":"AllergyIntolerance","code":{"coding":[{"system":' +
+          '"http://snomed.info/sct","code":[]}]}}',
+      ).resource;
+      expect(codingsOf(getProperty(empty, "code"))).toEqual([
+        { system: "http://snomed.info/sct", code: undefined },
+      ]);
+      expect(readSafety(empty).arrayWrappedScalars).toEqual([
+        "AllergyIntolerance.code.coding[0].code",
+      ]);
+
+      // The JSON reader does not model a nested array (PRE-EXISTING, outside this slice), so the
+      // value is not recoverable. What matters is the direction: refused, never affirmed.
+      const nested = parseResource(
+        '{"resourceType":"AllergyIntolerance","code":{"coding":[{"system":' +
+          '"http://snomed.info/sct","code":[["716186003"]]}]}}',
+      ).resource;
+      expect(readSafety(nested).noKnownAllergy).toBe(false);
+      expect(readSafety(nested).safeToSummarize).toBe(false);
+    });
+
+    it("addresses a bare Coding member and a contained resource correctly", () => {
+      // `CodeableConcept.coding` is 0..*, so a bare object there is its own converter quirk; the
+      // location has no index because there is no array to index into.
+      const bareCoding = parseResource(
+        '{"resourceType":"AllergyIntolerance","code":{"coding":{"system":' +
+          '"http://snomed.info/sct","code":["716186003"]}}}',
+      ).resource;
+      expect(readSafety(bareCoding).noKnownAllergy).toBe(true);
+      expect(readSafety(bareCoding).arrayWrappedScalars).toEqual([
+        "AllergyIntolerance.code.coding.code",
+      ]);
+
+      const contained = parseResource(
+        '{"resourceType":"Patient","contained":[{"resourceType":"Condition",' +
+          '"verificationStatus":{"coding":[{"code":["entered-in-error"]}]}}]}',
+      ).resource;
+      expect(readSafety(contained).arrayWrappedScalars).toEqual([
+        "Patient.contained[0].verificationStatus.coding[0].code",
+      ]);
+    });
+
+    it("says nothing about a conformant Coding, or one outside a safety element", () => {
+      const conformant = parseResource(
+        '{"resourceType":"AllergyIntolerance","code":{"coding":[{"system":' +
+          '"http://snomed.info/sct","code":"227493005"}]}}',
+      ).resource;
+      expect(readSafety(conformant).arrayWrappedScalars).toEqual([]);
+      expect(readSafety(conformant).safeToSummarize).toBe(true);
+
+      // `Observation.category` is 0..* and is not an element this layer reads a verdict out of, so
+      // its codings are none of this rule's business.
+      const elsewhere = parseResource(
+        '{"resourceType":"Observation","status":"final","category":[{"coding":[{"code":["x"]}]}]}',
+      ).resource;
+      expect(readSafety(elsewhere).arrayWrappedScalars).toEqual([]);
+
+      // …and `Questionnaire` is not a safety type at all, so its repeating `code` stays untouched.
+      const questionnaire = parseResource(
+        '{"resourceType":"Questionnaire","status":"active","code":[{"code":["synthetic-1"]}]}',
+      ).resource;
+      expect(readSafety(questionnaire).arrayWrappedScalars).toEqual([]);
     });
   });
 

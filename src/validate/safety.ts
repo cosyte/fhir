@@ -49,6 +49,8 @@ import {
   hasCoding,
   isRetracted,
   primitiveStrings,
+  safetyCodingsOf,
+  safetyHasCoding,
   SAFETY_RESOURCE_TYPES,
 } from "../safety/codes.js";
 import {
@@ -146,7 +148,7 @@ function invariant(
  *   verificationStatus is entered-in-error.
  */
 function checkAllergyIntolerance(resource: FhirComplex, issues: ValidationIssue[]): void {
-  const verEIE = hasCoding(
+  const verEIE = safetyHasCoding(
     getProperty(resource, "verificationStatus"),
     ALLERGY_VERIFICATION_SYSTEM,
     ENTERED_IN_ERROR,
@@ -180,7 +182,7 @@ function checkAllergyIntolerance(resource: FhirComplex, issues: ValidationIssue[
  *   when verificationStatus is entered-in-error.
  */
 function checkCondition(resource: FhirComplex, issues: ValidationIssue[]): void {
-  const verEIE = hasCoding(
+  const verEIE = safetyHasCoding(
     getProperty(resource, "verificationStatus"),
     CONDITION_VERIFICATION_SYSTEM,
     ENTERED_IN_ERROR,
@@ -200,7 +202,7 @@ function checkCondition(resource: FhirComplex, issues: ValidationIssue[]): void 
 
   // con-4 (error).
   if (choicePresent(resource, "abatement")) {
-    const abatedOk = codingsOf(clinicalStatus).some(
+    const abatedOk = safetyCodingsOf(clinicalStatus).some(
       (c) =>
         c.system === CONDITION_CLINICAL_SYSTEM &&
         (c.code === "resolved" || c.code === "remission" || c.code === "inactive"),
@@ -238,7 +240,10 @@ function checkObservation(resource: FhirComplex, issues: ValidationIssue[]): voi
 
   // obs-7 (error).
   if (valuePresent) {
-    const obsCodings = codingsOf(getProperty(resource, "code"));
+    // `Observation.code` is a windowed element (reported), so it reads through a wrapper.
+    // `component[i].code` is a backbone element, outside the reporting window, so it stays on the
+    // plain read: unwrapping it would resolve a code with no diagnostic anywhere.
+    const obsCodings = safetyCodingsOf(getProperty(resource, "code"));
     const component = getProperty(resource, "component");
     const components =
       component === undefined ? [] : component.kind === "list" ? component.items : [component];

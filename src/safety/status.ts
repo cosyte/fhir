@@ -50,12 +50,9 @@ import {
 import {
   ALLERGY_CLINICAL_SYSTEM,
   ALLERGY_VERIFICATION_SYSTEM,
-  codeOf,
   CONDITION_CLINICAL_SYSTEM,
   CONDITION_VERIFICATION_SYSTEM,
   ENTERED_IN_ERROR,
-  hasCodeAnySystem,
-  hasCoding,
   isRetracted,
   KNOWN_MODIFIER_EXTENSION_URLS,
   NO_KNOWN_ALLERGY,
@@ -65,6 +62,10 @@ import {
   primitiveString,
   primitiveStrings,
   REFUTED,
+  SAFETY_CODEABLE_ELEMENTS,
+  safetyCodeOf,
+  safetyHasCodeAnySystem,
+  safetyHasCoding,
   SAFETY_RESOURCE_TYPES,
   SAFETY_SCALAR_ELEMENTS,
   SNOMED_SCT,
@@ -130,10 +131,12 @@ export type NegationKind =
  * `doNotPerform`), including the ones a repeated property name shadowed and the ones inside an array
  * wrapper **around the element**, so a refutation or a retraction cannot hide in the value a
  * single-value lookup skipped, and the type gate cannot hide a type-scoped negation behind a type it
- * did not read. **One wrapper is not covered and is a known gap:** an array around a `Coding.system` /
- * `Coding.code` *inside* a `CodeableConcept` (see {@link arrayWrappedScalars}). Read a safety decision
- * off `negations` / `retracted`, not off the raw status string, and check `safeToSummarize` before
- * flattening anything.
+ * did not read. That extends **one level down**, to an array around a `Coding.system` / `Coding.code`
+ * inside a `CodeableConcept`, where the wrapper holds a single array position; a multi-position one is
+ * reported rather than read, because pairing a `system` from one position with a `code` from another
+ * would assert a coding the sender never wrote (see {@link arrayWrappedScalars}). Read a safety
+ * decision off `negations` / `retracted`, not off the raw status string, and check `safeToSummarize`
+ * before flattening anything.
  */
 export interface SafetyReadout {
   /**
@@ -248,21 +251,24 @@ export function shadowedProperties(resource: FhirComplex, path: string): string[
  * element the sender encoded in a shape FHIR does not define.
  *
  * **Scope: a resource root, and the closed element set this layer reads** (`SAFETY_SCALAR_ELEMENTS`,
- * on a {@link ../safety/codes.js} `SAFETY_RESOURCE_TYPES` root) plus `resourceType` on **any** root.
- * The scoping is not timidity: R4 defines repeating elements under these names elsewhere
- * (`Questionnaire.code`, `ElementDefinition.code`, both `0..*`), so a name-only rule would emit a
- * false error on a conformant document. Deciding cardinality anywhere else needs a per-resource model,
- * which this library does not have and this layer must not grow.
+ * on a {@link ../safety/codes.js} `SAFETY_RESOURCE_TYPES` root) plus `resourceType` on **any** root,
+ * **and one level down, `Coding.system` / `Coding.code` inside those of them that are
+ * `CodeableConcept`-valued** (`SAFETY_CODEABLE_ELEMENTS`). The element-level scoping is not timidity:
+ * R4 defines repeating elements under these names elsewhere (`Questionnaire.code`,
+ * `ElementDefinition.code`, both `0..*`), so a name-only rule would emit a false error on a conformant
+ * document. The `Coding` level needs no such care, because `Coding` is a datatype whose `system` and
+ * `code` are `0..1` wherever it appears. Deciding cardinality anywhere else needs a per-resource
+ * model, which this library does not have and this layer must not grow.
  *
- * **The wrapper this does NOT cover, stated plainly because it is the same defect one level down:**
- * an array around a `Coding.system` / `Coding.code` *inside* a `CodeableConcept`. Those are `0..1`
- * too, a negation written inside one is missed, and no location is reported for it. It is left open
- * on purpose rather than by oversight: unlike the element-level wrapper, those two values feed
- * {@link ../safety/codes.js} `codingsOf`'s `system` x `code` cross-product, so any rule that yields
- * more than one value on either side **manufactures a pair the sender never wrote**, and one of the
- * pairs matched there is a recorded "no known allergy", a *positive* clinical assertion. Missing a
- * retraction withholds information; asserting an absence of allergy does not. It needs its own slice,
- * and the bound is pinned by test rather than left to be rediscovered.
+ * **Why the `Coding` level is reported even though it is now read:** {@link ../safety/codes.js}
+ * `codingsOf` reads through such a wrapper only where it holds a *single array position*, since
+ * `system` and `code` feed its `system` x `code` cross-product and a rule yielding more than one value
+ * on either side would pair values from different positions and **assert a coding the sender never
+ * wrote**, one of which is a recorded "no known allergy", a *positive* clinical assertion. So a
+ * multi-position wrapper is deliberately unread, and its location is the only thing standing between
+ * that and a `safeToSummarize: true` over a value the library declined to read. The single-position
+ * case is reported for the same reason the element-level wrapper is when its value *is* read: FHIR
+ * JSON does not define the shape, so an affirmative verdict over it is not this library's to give.
  *
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
@@ -304,17 +310,77 @@ function checkArrayWrapping(node: FhirComplex, path: string, out: SafetyWalk): v
   const types = typesOf(node);
   const isSafetyType = types.some((type) => SAFETY_RESOURCE_TYPES.has(type));
   const reported = new Set<string>();
+  const report = (location: string): void => {
+    if (reported.has(location)) return;
+    reported.add(location);
+    out.arrayWrapped.push(location);
+  };
   for (const property of [...node.properties, ...(node.duplicates ?? [])]) {
     const clinical = SAFETY_SCALAR_ELEMENTS.has(property.name);
     // `resourceType` is a JSON string on every resource, not an element with a cardinality, so it is
     // checked whatever the type says, and it is checked first: an array-wrapped type gate is what
     // makes the clinical scoping below unreachable in the first place.
     if (property.name !== "resourceType" && !(clinical && isSafetyType)) continue;
-    if (!isList(property.value) || reported.has(property.name)) continue;
-    reported.add(property.name);
-    out.arrayWrapped.push(`${path}.${property.name}`);
+    const at = `${path}.${property.name}`;
+    if (isList(property.value)) report(at);
+    // The same converter shape one level down, on a `Coding` inside a CodeableConcept-valued element.
+    if (clinical && isSafetyType && SAFETY_CODEABLE_ELEMENTS.has(property.name)) {
+      checkCodingWrapping(property.value, at, report);
+    }
   }
 }
+
+/**
+ * Record every array wrapper around a `Coding.system` / `Coding.code` inside a CodeableConcept-valued
+ * safety element. `Coding` is a datatype and both are `0..1` on it (datatypes.html), so unlike the
+ * element names one level up this needs no per-resource cardinality and cannot false-positive.
+ *
+ * Reporting these is what keeps the read of them honest. {@link ../safety/codes.js} `codingsOf` reads
+ * through a **single-position** wrapper, because that is the only shape whose value is recoverable
+ * without pairing a `system` from one array position with a `code` from another and inventing a
+ * `(system, code)` pair the sender never wrote. A **multi-position** wrapper is therefore left unread,
+ * and a negation inside one is not surfaced: without this location the library would affirm
+ * `safeToSummarize` over a value it knowingly declined to read, which is the exact defect the
+ * element-level half of this rule exists to prevent. A single-position wrapper is reported too, for
+ * the same reason the element-level one is even when its value is read: the encoding is a shape FHIR
+ * JSON does not define, and a positive verdict over it is not this library's to give.
+ *
+ * The location names the `Coding`, not the individual member, exactly as the element-level rule names
+ * the element: FHIRPath cannot address "the second `code` member", so a `Coding` that repeated the
+ * name reports once. An element that is **itself** array-wrapped *is* indexed, though
+ * (`<element>[i].coding[j].code`), because it then holds several `CodeableConcept`s and without the
+ * index the second one's wrapper would have no address at all, the element-level location having
+ * already been emitted unindexed.
+ */
+function checkCodingWrapping(
+  value: FhirNode,
+  path: string,
+  report: (location: string) => void,
+): void {
+  const concepts = isList(value) ? value.items : [value];
+  concepts.forEach((concept, conceptIndex) => {
+    if (!isComplex(concept)) return;
+    // An element that is itself array-wrapped holds several CodeableConcepts, and each needs its own
+    // address or the second one's wrapper has no location at all. A bare element is not indexed,
+    // since there is no array there to index into.
+    const base = isList(value) ? `${path}[${String(conceptIndex)}]` : path;
+    for (const member of getAllProperties(concept, "coding")) {
+      const codings = isList(member) ? member.items : [member];
+      codings.forEach((coding, index) => {
+        if (!isComplex(coding)) return;
+        const at = isList(member) ? `${base}.coding[${String(index)}]` : `${base}.coding`;
+        for (const name of CODING_SCALAR_ELEMENTS) {
+          if (getAllProperties(coding, name).some((scalar) => isList(scalar))) {
+            report(`${at}.${name}`);
+          }
+        }
+      });
+    }
+  });
+}
+
+/** The `0..1` scalars on a `Coding` this layer reads a safety verdict out of (datatypes.html). */
+const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
 
 /**
  * Walk a complex node: check its `modifierExtension` property, then descend into every child.
@@ -401,8 +467,11 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   // The convenience fields surface one value: the first written, and for a CodeableConcept the
   // preferred-system coding. The negation reads below never go through them.
   const status = primitiveStrings(getProperty(resource, "status"))[0];
-  const clinicalStatus = codeOf(getProperty(resource, "clinicalStatus"), clinicalSystemFor(rt));
-  const verificationStatus = codeOf(
+  const clinicalStatus = safetyCodeOf(
+    getProperty(resource, "clinicalStatus"),
+    clinicalSystemFor(rt),
+  );
+  const verificationStatus = safetyCodeOf(
     getProperty(resource, "verificationStatus"),
     verificationSystemFor(rt),
   );
@@ -420,12 +489,12 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   const doNotPerform = isType("MedicationRequest") ? readDoNotPerform(resource) : undefined;
   const noKnownAllergy =
     isType("AllergyIntolerance") &&
-    anyValue("code", (node) => hasCoding(node, SNOMED_SCT, NO_KNOWN_ALLERGY));
+    anyValue("code", (node) => safetyHasCoding(node, SNOMED_SCT, NO_KNOWN_ALLERGY));
   const retracted = isRetracted(resource);
 
   const negations: NegationKind[] = [];
   if (retracted) negations.push(ENTERED_IN_ERROR);
-  if (anyValue("verificationStatus", (node) => hasCodeAnySystem(node, REFUTED))) {
+  if (anyValue("verificationStatus", (node) => safetyHasCodeAnySystem(node, REFUTED))) {
     negations.push(REFUTED);
   }
   if (noKnownAllergy) negations.push("no-known-allergy");
