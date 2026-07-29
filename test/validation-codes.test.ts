@@ -52,6 +52,7 @@ describe("validation code / severity / issue-type registries (stable public cont
       UNHANDLED_MODIFIER_EXTENSION: "UNHANDLED_MODIFIER_EXTENSION",
       DUPLICATE_PROPERTY: "DUPLICATE_PROPERTY",
       ARRAY_WRAPPED_SCALAR: "ARRAY_WRAPPED_SCALAR",
+      NESTED_ARRAY: "NESTED_ARRAY",
       RETRACTED_RESOURCE: "RETRACTED_RESOURCE",
       INVARIANT_VIOLATED: "INVARIANT_VIOLATED",
       INVARIANT_UNCHECKED: "INVARIANT_UNCHECKED",
@@ -112,6 +113,7 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(validationIssue("PROFILE_PATTERN_MISMATCH", "error", "X").type).toBe("value");
     expect(validationIssue("REFERENCE_UNRESOLVED", "warning", "X").type).toBe("not-found");
     expect(validationIssue("CONTAINED_CYCLE", "error", "X").type).toBe("structure");
+    expect(validationIssue("NESTED_ARRAY", "error", "X.y[0]").type).toBe("structure");
     expect(validationIssue("FULLURL_ID_MISMATCH", "error", "X").type).toBe("business-rule");
   });
 

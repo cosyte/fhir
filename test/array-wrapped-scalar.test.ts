@@ -180,14 +180,18 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
     });
 
     it("fails closed on a doubly-wrapped value the JSON reader cannot model", () => {
-      // PRE-EXISTING, and outside this slice: the JSON reader does not model a nested array. It reads
-      // `[["entered-in-error"]]` as a list holding an empty object and drops the inner value, warning
-      // UNKNOWN_PROPERTY. So the retraction is not recoverable from the model here. What matters is
-      // the direction: the document is **refused**, never affirmed.
+      // The JSON reader still does not model a nested array: it reads `[["entered-in-error"]]` as a
+      // list holding an empty object and the inner value is not recoverable from the model. What it
+      // no longer does is leave that unsaid. `NESTED_ARRAY` now names the position on both channels
+      // (see test/nested-array.test.ts); the older UNKNOWN_PROPERTY warning is still raised too. The
+      // direction is what matters here and it is unchanged: the document is **refused**, never
+      // affirmed.
       const { resource, issues } = parseResource(
         '{"resourceType":"Observation","status":[["entered-in-error"]]}',
       );
       expect(issues.map((i) => i.code)).toContain("UNKNOWN_PROPERTY");
+      expect(issues.map((i) => i.code)).toContain("NESTED_ARRAY");
+      expect(readSafety(resource).nestedArrays).toEqual(["Observation.status[0]"]);
 
       const safety = readSafety(resource);
       expect(safety.safeToSummarize).toBe(false);
@@ -504,14 +508,17 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
         "AllergyIntolerance.code.coding[0].code",
       ]);
 
-      // The JSON reader does not model a nested array (PRE-EXISTING, outside this slice), so the
-      // value is not recoverable. What matters is the direction: refused, never affirmed.
+      // The JSON reader still does not model a nested array, so the value is not recoverable. What
+      // matters is the direction: refused, never affirmed, and now with the position named.
       const nested = parseResource(
         '{"resourceType":"AllergyIntolerance","code":{"coding":[{"system":' +
           '"http://snomed.info/sct","code":[["716186003"]]}]}}',
       ).resource;
       expect(readSafety(nested).noKnownAllergy).toBe(false);
       expect(readSafety(nested).safeToSummarize).toBe(false);
+      expect(readSafety(nested).nestedArrays).toEqual([
+        "AllergyIntolerance.code.coding[0].code[0]",
+      ]);
     });
 
     it("addresses a bare Coding member and a contained resource correctly", () => {

@@ -81,6 +81,7 @@ function primitivesEquivalent(a: FhirPrimitive, b: FhirPrimitive): boolean {
   return (
     canonicalScalar(a.value) === canonicalScalar(b.value) &&
     a.id === b.id &&
+    a.nestedArray === b.nestedArray &&
     extensionsEquivalent(a.extension, b.extension)
   );
 }
@@ -109,9 +110,17 @@ function propertiesEquivalent(
  * `status` twice carries a value its XML counterpart does not, and calling those equivalent would
  * hide exactly the value the duplicate obscured. XML has no such construct, so this is only ever
  * reachable from a non-conformant JSON document.
+ *
+ * The array-inside-an-array marker is compared for the same reason, and it is the sharper case. Such
+ * a node is an **empty** element that the sender did not write empty, and the XML counterpart of a
+ * genuinely empty element is an identical empty element, so without this an oracle that says "the
+ * XML and the JSON say the same thing" would return `true` over content the JSON reader could not
+ * read. Comparing the marker can only ever return `false` where it used to return `true`, and only
+ * for a document that carried the shape.
  */
 function complexesEquivalent(a: FhirComplex, b: FhirComplex): boolean {
   return (
+    a.nestedArray === b.nestedArray &&
     propertiesEquivalent(a.properties, b.properties) &&
     propertiesEquivalent(a.duplicates, b.duplicates)
   );

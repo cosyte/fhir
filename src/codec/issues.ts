@@ -62,6 +62,17 @@ export const ISSUE_CODES = {
    * severity: the data survived, but any single-value read of that element is now arbitrary.
    */
   DUPLICATE_PROPERTY: "DUPLICATE_PROPERTY",
+  /**
+   * A JSON array appeared **inside another array**. FHIR JSON uses an array for one thing only, a
+   * repeating element (json.html §2.6.2.2), so no element is ever a list of lists and this shape has
+   * no meaning at any position. The reader does not model what was inside, so unlike every other
+   * warning here **content the sender wrote is not readable** at this location. That is why it has
+   * its own code: an unexpected-property warning says a shape was tolerated, this one says something
+   * was there and could not be read, which is what must stop a downstream safety verdict from being
+   * affirmed over it. Raised in addition to any other warning the position already drew, never
+   * instead of one.
+   */
+  NESTED_ARRAY: "NESTED_ARRAY",
 } as const;
 
 /** Discriminant union of every {@link ISSUE_CODES} value. */
@@ -136,6 +147,23 @@ export function unexpectedXmlContent(expression: string): FhirIssue {
  */
 export function duplicateProperty(expression: string): FhirIssue {
   return { code: ISSUE_CODES.DUPLICATE_PROPERTY, severity: "warning", expression };
+}
+
+/**
+ * Build a {@link ISSUE_CODES.NESTED_ARRAY} issue at `expression`.
+ *
+ * The location is the position the inner array occupied, so it indexes into the outer array
+ * (`Patient.name[0]`, `Patient.name[0].given[1]`), which is as close as FHIRPath can get to a shape
+ * FHIRPath cannot address.
+ *
+ * @example
+ * ```ts
+ * import { nestedArray } from "@cosyte/fhir";
+ * const issue = nestedArray("Patient.name[0]");
+ * ```
+ */
+export function nestedArray(expression: string): FhirIssue {
+  return { code: ISSUE_CODES.NESTED_ARRAY, severity: "warning", expression };
 }
 
 /**
