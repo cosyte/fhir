@@ -21,6 +21,14 @@
  *    keep. Inside a **primitive's `_`-sibling** the shadowed member is not modeled and the read is
  *    flagged only, for the reason given on {@link readMeta}.
  *
+ * 4. **A nested array.** An array's items are a repeating element's occurrences (json.html §2.6.2.2),
+ *    so an array of arrays describes no element. The reader keeps everything the inner array held,
+ *    as a nested {@link FhirList}, and raises `NESTED_ARRAY`. It used to read as an empty complex
+ *    and the inner value was simply gone, under a warning that said only "unknown property"; the
+ *    rewritten document was then clean, so a read → write → read cycle lost the finding as well.
+ *    Nothing reads a *value* out of a nested list, so this is preserve-and-refuse, not
+ *    preserve-and-interpret: the shape has no meaning to guess at.
+ *
  * Reading is lenient elsewhere (Postel's Law): an unexpected shape is preserved and flagged, not
  * rejected. Only genuinely unrecoverable structure (malformed JSON, broken `_`-alignment) throws.
  *
@@ -40,6 +48,7 @@ import {
 import {
   decimalPrecisionAtRisk,
   duplicateProperty,
+  nestedArray,
   unknownProperty,
   FATAL_CODES,
   FhirCodecError,
@@ -146,7 +155,19 @@ function scalarValue(node: RawJson, path: string, issues: FhirIssue[]): Primitiv
  * {@link ../safety/status.js} `shadowedProperties`, which walks object elements.
  */
 function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue[]): PrimitiveMeta {
-  if (metaNode === undefined || metaNode.t !== "obj") return {};
+  if (metaNode === undefined) return {};
+  if (metaNode.t !== "obj") {
+    // A `_`-sibling slot holds an object of `id`/`extension`, or JSON `null` for a position that
+    // carries no metadata (json.html §2.6.2.3). Anything else has no place on the model: a
+    // primitive's metadata is an R4 `Element`, so there is nowhere to put an array or a scalar. That
+    // was the one route in this reader that dropped a member with **no** diagnostic at all, which is
+    // the shape this codec exists to refuse. Flag it: the caller learns the location even though the
+    // content cannot be modeled.
+    if (metaNode.t !== "null") {
+      issues.push(metaNode.t === "arr" ? nestedArray(path) : unknownProperty(path));
+    }
+    return {};
+  }
   const result: { id?: string; extension?: readonly FhirComplex[] } = {};
   const seen = new Set<string>();
   for (const member of metaNode.members) {
@@ -171,8 +192,64 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
 /** Coerce any raw node to a {@link FhirComplex} (objects pass through; anything else is empty). */
 function readComplex(node: RawJson, path: string, issues: FhirIssue[]): FhirComplex {
   if (node.t === "obj") return buildComplex(node, path, issues);
-  issues.push(unknownProperty(path));
+  issues.push(node.t === "arr" ? nestedArray(path) : unknownProperty(path));
   return complex([]);
+}
+
+/**
+ * Read one item of a repeating element, preserving an item that is itself an array as a **nested
+ * list** rather than collapsing it.
+ *
+ * FHIR JSON uses an array for exactly one thing, a repeating element, and the array's items are that
+ * element's occurrences (json.html §2.6.2.2). An item that is itself an array therefore describes no
+ * element, and this reader used to read it as an empty {@link FhirComplex}: the inner value was
+ * **dropped**, in a package whose core claim is that a read loses nothing, and the only trace was an
+ * `UNKNOWN_PROPERTY` warning that does not say anything was lost. `{"name":[[{"family":"Doe"}]]}`
+ * read as one nameless `HumanName`, and rewriting the model emitted `{"name":[{}]}`, so a
+ * read → write → read cycle lost the warning too.
+ *
+ * Preserving it costs nothing structurally: {@link FhirList} items are {@link FhirNode}s, which
+ * already includes {@link FhirList}, and the writer and the validator already handle one. What
+ * matters is what does **not** change with it, and the line is drawn between two kinds of read.
+ *
+ * **No `Coding` is ever resolved out of a nested array.** `collectCodings` refuses a list item that
+ * is itself a list, and `codingScalar` refuses one a `Coding.system` / `Coding.code` member holds, so
+ * `codingsOf` / `codeOf` / `hasCoding` / `hasCodeAnySystem` return exactly what they returned before
+ * a nested array was modeled at all. That is not tidiness: `requiredUnitsFor` takes the **first**
+ * LOINC coding carrying a vital-signs units entry, so a `Coding` made readable here could beat the
+ * one written beside it and erase a true `VITAL_SIGN_UNIT_NONCONFORMANT` error, and one pair
+ * resolvable this way is SNOMED `716186003`, a recorded "no known allergy", which is a *positive*
+ * clinical assertion. A draft of this change let the recursion through and did both.
+ *
+ * **The recursive fail-safe scalar reads do see through it**, by design: `primitiveStrings` /
+ * `primitiveBooleans` walk lists at any depth, so `{"status":[["entered-in-error"]]}` reports its
+ * retraction rather than losing it. Every check they feed asks "is this code present", so they can
+ * only *add* a negation, never retire one. And a nested array is reported wherever it appears
+ * ({@link ../safety/status.js} `nestedArrays`, `NESTED_ARRAY`, on every resource type at any depth),
+ * so nothing is read in a place that is not also reported.
+ *
+ * @internal
+ */
+function readNestedArray(node: RawArray, path: string, issues: FhirIssue[]): FhirNode {
+  issues.push(nestedArray(path));
+  return list(node.items.map((item, i) => readNestedItem(item, `${path}[${String(i)}]`, issues)));
+}
+
+/**
+ * Read one item **inside** a nested array, verbatim.
+ *
+ * There is no element here to read the item *as*, so the reader preserves the shape it was given
+ * rather than coercing it: an object becomes a complex, a further array becomes a further nested
+ * list, and a scalar becomes a primitive (which is the whole point, `[["x"]]` losing `"x"` is the
+ * defect). No second `NESTED_ARRAY` is raised for the item itself unless it opens another array,
+ * because the outer one already names the location a caller can act on.
+ *
+ * @internal
+ */
+function readNestedItem(node: RawJson, path: string, issues: FhirIssue[]): FhirNode {
+  if (node.t === "arr") return readNestedArray(node, path, issues);
+  if (node.t === "obj") return buildComplex(node, path, issues);
+  return primitive(scalarValue(node, path, issues));
 }
 
 /**
@@ -217,11 +294,32 @@ function buildPrimitiveList(
   for (let i = 0; i < length; i++) {
     const itemPath = `${path}[${String(i)}]`;
     const rawValue = valueItems[i];
-    // A non-scalar where a primitive value belongs (malformed mixed array) has no primitive
-    // representation, flag it rather than drop it silently.
-    if (rawValue !== undefined && (rawValue.t === "obj" || rawValue.t === "arr")) {
-      issues.push(unknownProperty(itemPath));
+    // An item that is itself an array is a nested array: it holds values, so it is preserved as a
+    // nested list rather than read as a value-absent slot. It occupies one array position, so the
+    // `_`-sibling alignment either side of it is untouched.
+    if (rawValue?.t === "arr") {
+      // A `_`-sibling slot at this position has nowhere to attach: a nested list is not a primitive,
+      // so it carries no `id`/`extension`. Fail **closed** rather than keep one and drop the other.
+      // This is the same rule the length-disagreement case above applies, for the same reason: the
+      // reader will not silently discard an `Element` a sender wrote (it can carry
+      // `data-absent-reason`), and it will not guess a home for it either. An absent or `null` slot
+      // is the conformant no-metadata marker and is not a disagreement, so it passes through.
+      const metaItem = metaItems[i];
+      if (metaItem !== undefined && metaItem.t !== "null") {
+        throw new FhirCodecError(
+          FATAL_CODES.PRIMITIVE_EXTENSION_MISALIGNED,
+          "A primitive array position holds a nested array but its _-sibling holds metadata; a " +
+            "nested array is not a primitive and cannot carry id/extension, so the alignment " +
+            "cannot be recovered safely.",
+          { expression: itemPath },
+        );
+      }
+      items.push(readNestedArray(rawValue, itemPath, issues));
+      continue;
     }
+    // An object where a primitive value belongs (malformed mixed array) has no primitive
+    // representation, flag it rather than drop it silently.
+    if (rawValue !== undefined && rawValue.t === "obj") issues.push(unknownProperty(itemPath));
     const value_ = rawValue === undefined ? undefined : scalarValue(rawValue, itemPath, issues);
     const metaValue = readMeta(metaItems[i], itemPath, issues);
     items.push(primitive(value_, metaValue));
@@ -238,7 +336,16 @@ function buildComplexList(
 ): FhirNode {
   if (meta !== undefined)
     issues.push(unknownProperty(`${path}` + " (unexpected _-sibling on a non-primitive array)"));
-  return list(value.items.map((item, i) => readComplex(item, `${path}[${String(i)}]`, issues)));
+  return list(
+    value.items.map((item, i) => {
+      const itemPath = `${path}[${String(i)}]`;
+      // A nested array holds values and is preserved as a nested list; anything else keeps the
+      // pre-existing complex coercion.
+      return item.t === "arr"
+        ? readNestedArray(item, itemPath, issues)
+        : readComplex(item, itemPath, issues);
+    }),
+  );
 }
 
 /** Build the node for a single base property from its value and `_`-sibling. */

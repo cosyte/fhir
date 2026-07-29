@@ -269,7 +269,20 @@ export function primitiveBooleans(node: FhirNode | undefined): readonly boolean[
  */
 function codingScalar(node: FhirNode | undefined): string | undefined {
   if (node === undefined) return undefined;
-  if (isList(node)) return node.items.length === 1 ? codingScalar(node.items[0]) : undefined;
+  if (isList(node)) {
+    const only = node.items.length === 1 ? node.items[0] : undefined;
+    // A nested array is refused outright, however few positions it holds. The transparency argument
+    // above is an argument about a *wrapper*: a generic XML-to-JSON converter emits `["716186003"]`
+    // for a `0..1` member, so reading it restores the reading the sender's pre-conversion document
+    // had. Nothing emits `[["716186003"]]`, FHIR JSON gives an array of arrays no meaning at any
+    // position (json.html §2.6.2.2), and so there is no sender's reading to restore, only a guess.
+    // Guessing here is the one direction that is not safe: the pair it would resolve lands on SNOMED
+    // `716186003`, a recorded "no known allergy", which is a POSITIVE clinical assertion made over a
+    // record that may name an allergen. The nested array is preserved on the model and reported
+    // ({@link ../safety/status.js} `nestedArrays`, `NESTED_ARRAY`), so it is refused, not dropped.
+    if (only === undefined || isList(only)) return undefined;
+    return codingScalar(only);
+  }
   return primitiveString(node);
 }
 
@@ -363,7 +376,21 @@ export function safetyCodingsOf(node: FhirNode | undefined): Coded[] {
  */
 function collectCodings(node: FhirNode | undefined, unwrap: boolean): Coded[] {
   if (node === undefined) return [];
-  if (isList(node)) return node.items.flatMap((item) => collectCodings(item, unwrap));
+  // A repeating `CodeableConcept` (`Condition.category`) is a list and is flattened. An item that is
+  // itself a list is a NESTED ARRAY, and is refused, the same refusal `codingScalar` makes one level
+  // down and for the same reason: FHIR JSON gives an array of arrays no meaning (json.html §2.6.2.2),
+  // so resolving a `Coding` out of one is a guess, not a reading. Refusing here is not caution, it is
+  // the only thing that keeps this function's contract: `codingsOf` feeds `requiredUnitsFor`, which
+  // takes the FIRST LOINC coding with a vital-signs units entry, so a `Coding` resolved out of a
+  // nested array can beat the one written beside it and ERASE a true VITAL_SIGN_UNIT_NONCONFORMANT
+  // error. It can also resolve SNOMED `716186003` "no known allergy", a POSITIVE clinical assertion,
+  // over a record that names an allergen. Both were measured on a draft of FHIR-NESTED-ARRAY-DATA-LOSS
+  // that let the recursion through, and both are the shape FHIR-CODING-SCALAR-WRAPPER was refuted for.
+  // The nested array is preserved on the model and reported (`nestedArrays`, `NESTED_ARRAY`), so this
+  // is a refusal, not a drop.
+  if (isList(node)) {
+    return node.items.flatMap((item) => (isList(item) ? [] : collectCodings(item, unwrap)));
+  }
   if (!isComplex(node)) return [];
   const read = unwrap ? codingScalar : primitiveString;
   const codings = getAllProperties(node, "coding").flatMap((coding) =>

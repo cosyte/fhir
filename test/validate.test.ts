@@ -187,15 +187,24 @@ describe("validateResource: choice[x]", () => {
 });
 
 describe("validateResource: model edge cases and OperationOutcome", () => {
-  it("recurses into a nested list occurrence", () => {
-    // Hand-build a model whose element value is a list-of-lists (defensive path in the walk).
+  it("recurses into a nested list occurrence, and reports the nesting itself", () => {
+    // Hand-build a model whose element value is a list-of-lists. The inner value still validates
+    // against its datatype (the walk recurses), and the nesting is itself a NESTED_ARRAY error:
+    // FHIR JSON gives an array of arrays no meaning, so no element reads a value out of one.
     const resource = complex([
       { name: "resourceType", value: primitive("Vitals") },
       { name: "status", value: primitive("final") },
       { name: "note", value: list([list([primitive("nested ok")])]) },
     ]);
     const result = validateResource(resource, { schemas: [VITALS] });
-    expect(result.issues).toEqual([]);
+    expect(result.issues).toEqual([
+      {
+        code: "NESTED_ARRAY",
+        severity: "error",
+        type: "structure",
+        expression: "Vitals.note[0]",
+      },
+    ]);
   });
 
   it("renders findings as a value-free OperationOutcome resource model", () => {

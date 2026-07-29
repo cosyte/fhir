@@ -55,6 +55,7 @@ import {
 } from "../safety/codes.js";
 import {
   arrayWrappedScalars,
+  nestedArrays,
   shadowedProperties,
   unhandledModifierExtensions,
 } from "../safety/status.js";
@@ -96,6 +97,15 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
   // the validator returning `valid` for a document whose retraction is sitting inside a wrapper.
   for (const location of arrayWrappedScalars(resource, rt)) {
     issues.push(validationIssue("ARRAY_WRAPPED_SCALAR", ISSUE_SEVERITIES.ERROR, location));
+  }
+
+  // 2c. A nested array is the same family again and the widest of them: FHIR JSON gives an array of
+  // arrays no meaning at any position, so the reader holds what it carried and no element reads a
+  // value out of it. Universal like the three above, and needing neither a cardinality table nor a
+  // type gate to be certain, since no conformant document contains one. It is what stops the
+  // validator returning `valid` for a document whose refutation is sitting one array deep.
+  for (const location of nestedArrays(resource, rt)) {
+    issues.push(validationIssue("NESTED_ARRAY", ISSUE_SEVERITIES.ERROR, location));
   }
 
   if (!SAFETY_RESOURCE_TYPES.has(rt)) return issues;

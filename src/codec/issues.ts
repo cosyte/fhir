@@ -54,6 +54,16 @@ export const ISSUE_CODES = {
    */
   UNEXPECTED_XML_CONTENT: "UNEXPECTED_XML_CONTENT",
   /**
+   * A JSON array held another array as one of its items. FHIR JSON uses an array for exactly one
+   * thing, a repeating element, and an array's items are that element's occurrences (json.html
+   * §2.6.2.2), so an array of arrays describes no element and FHIR gives it no meaning. The reader is
+   * lenient: the inner array is preserved as a nested list rather than dropped, so nothing the wire
+   * carried is lost, but **no element of the model reads a value out of it** and every layer above
+   * declines to affirm a verdict over the document. Warning severity on the read channel, an
+   * `error` in `validateResource`.
+   */
+  NESTED_ARRAY: "NESTED_ARRAY",
+  /**
    * A JSON object repeated a property name. FHIR JSON requires unique property names (json.html §2.6.2:
    * "Property names SHALL be unique") and expresses repetition with an array, so a repeated name is
    * a document defect with no defined winner: RFC 8259 §4 says "the behavior of software that
@@ -107,6 +117,22 @@ export function decimalPrecisionAtRisk(expression: string): FhirIssue {
  */
 export function unknownProperty(expression: string): FhirIssue {
   return { code: ISSUE_CODES.UNKNOWN_PROPERTY, severity: "warning", expression };
+}
+
+/**
+ * Build a {@link ISSUE_CODES.NESTED_ARRAY} issue at `expression`.
+ *
+ * The location names the **inner** array's position (`Patient.name[0]`), which is the array position
+ * the sender wrote it in and the only part of it FHIRPath can address.
+ *
+ * @example
+ * ```ts
+ * import { nestedArray } from "@cosyte/fhir";
+ * const issue = nestedArray("Patient.name[0]");
+ * ```
+ */
+export function nestedArray(expression: string): FhirIssue {
+  return { code: ISSUE_CODES.NESTED_ARRAY, severity: "warning", expression };
 }
 
 /**

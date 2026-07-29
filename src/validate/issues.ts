@@ -115,6 +115,20 @@ export const VALIDATION_CODES = {
    */
   ARRAY_WRAPPED_SCALAR: "ARRAY_WRAPPED_SCALAR",
   /**
+   * Safety, a JSON array held another array as one of its items. FHIR JSON uses an array for exactly
+   * one thing, a repeating element, and the array's items are that element's occurrences
+   * (json.html §2.6.2.2), so an array of arrays describes no element and R4 gives it no meaning
+   * anywhere. An `error`, and universal: unlike {@link ARRAY_WRAPPED_SCALAR} this needs no cardinality
+   * and no element name to be sure, so it cannot false-positive on a conformant document.
+   *
+   * Nothing is lost, the reader preserves everything the inner array held as a nested list, and no
+   * `Coding` is resolved out of one. That is what makes this an error rather than a warning: a
+   * `verificationStatus` of `refuted`, or a `clinicalStatus` of `resolved`, written one array deep is
+   * content the library is holding and declines to interpret, and before this it produced a
+   * `valid: true` document with no negation and nothing to act on.
+   */
+  NESTED_ARRAY: "NESTED_ARRAY",
+  /**
    * Safety, the resource is marked `entered-in-error` and is therefore **retracted, not
    * data**. Surfaced as `information` (it is not itself a defect) so a consumer cannot miss it.
    */
@@ -290,6 +304,7 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   UNHANDLED_MODIFIER_EXTENSION: ISSUE_TYPES.NOT_SUPPORTED,
   DUPLICATE_PROPERTY: ISSUE_TYPES.STRUCTURE,
   ARRAY_WRAPPED_SCALAR: ISSUE_TYPES.STRUCTURE,
+  NESTED_ARRAY: ISSUE_TYPES.STRUCTURE,
   RETRACTED_RESOURCE: ISSUE_TYPES.INFORMATIONAL,
   INVARIANT_VIOLATED: ISSUE_TYPES.INVARIANT,
   INVARIANT_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
@@ -335,6 +350,10 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   ARRAY_WRAPPED_SCALAR:
     "Single-valued element is wrapped in an array; FHIR JSON writes a 0..1 element as a name/value " +
     "pair and uses an array only for a repeating element, so the element's encoding is ambiguous.",
+  NESTED_ARRAY:
+    "Array holds another array as one of its items; FHIR JSON uses an array only for a repeating " +
+    "element and an element's occurrences are never themselves arrays, so the content is preserved " +
+    "but no element reads a value out of it.",
   RETRACTED_RESOURCE:
     "Resource is marked entered-in-error; it is retracted and must not be treated as active data.",
   INVARIANT_VIOLATED: "A resource invariant (content-validation constraint) was violated.",

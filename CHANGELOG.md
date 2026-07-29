@@ -8,6 +8,47 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A nested array (`[["x"]]`) lost everything the inner array carried (`FHIR-NESTED-ARRAY-DATA-LOSS`).**
+  Real read-path data loss, in the layer whose whole claim is that a read loses nothing. The reader
+  coerced the inner array to an empty element, so `{"name":[[{"family":"Roe"}]]}` modeled one nameless
+  `HumanName`, and the only trace was an `UNKNOWN_PROPERTY` warning, which says a property was
+  unexpected and **not** that anything was dropped. Pre-existing, reproduced on `main` at `8a5245a`,
+  and declared a gap by the two preceding array slices.
+  **Measured before fixing, it was wider than recorded.** Every element kind was affected: a scalar
+  (`"birthDate":[["1980-01-01"]]`), a complex, a position beside a real value
+  (`"given":["A",["B"]]`), and an entire resource inside a `Bundle.entry`. The recorded claim that
+  such a document was "at least refused, never affirmed" held only for the closed set of scalar safety
+  elements: one level down inside a `CodeableConcept`, a `Condition` whose `clinicalStatus` coding was
+  written one array deep read `valid: true`, `safeToSummarize: true`, **no negation at all**, and a
+  refuted `AllergyIntolerance` did the same. The `_`-sibling route dropped its slot with **no
+  diagnostic whatever**.
+  **The remedy is preserve-and-refuse, not preserve-and-interpret.** The inner array is modeled as a
+  nested list, so nothing is lost and the document round-trips byte-for-byte; a new `NESTED_ARRAY`
+  warning on the read channel and **error** in `validateResource` say so, with the location in the new
+  `SafetyReadout.nestedArrays` and `nestedArrays()`, and `safeToSummarize` is `false`. FHIR JSON gives
+  an array of arrays no meaning at any position (json.html §2.6.2.2), so this needs neither a
+  cardinality table nor a resource-type gate and cannot report on a conformant document.
+  **No `Coding` is resolved out of a nested array, and that is the correctness argument rather than a
+  scoping choice.** `codingsOf` feeds `requiredUnitsFor`, which takes the **first** LOINC coding
+  carrying a vital-signs units entry, so a `Coding` made readable inside a nested array can beat the
+  one written beside it and **erase a true `VITAL_SIGN_UNIT_NONCONFORMANT` error**; and one pair
+  resolvable that way is SNOMED `716186003`, a recorded "no known allergy", which is a **positive**
+  clinical assertion and would be made over a record naming an allergen. A draft of this change let
+  the recursion through and did both, so the refusal now sits at both levels: `collectCodings` refuses
+  a repeating-element item that is itself a list, and `codingScalar` refuses one inside
+  `Coding.system` / `Coding.code`. `codingsOf` / `codeOf` / `hasCoding` / `hasCodeAnySystem` are
+  unchanged for every document. The recursive fail-safe scalar reads deliberately **do** see through a
+  nested array, so `{"status":[["entered-in-error"]]}` now reports its retraction; every check they
+  feed asks whether a code is present, so they can only add a negation, never retire one.
+  **Rewriting a model no longer fabricates or launders.** The writer emitted `[{}]` for a nested
+  array, which both lost the value and invented an empty element the sender never wrote, so a
+  read → write → read cycle produced a clean document and the finding vanished on the way through. The
+  nested array is now written back as it was read: deliberately not spec-clean, because the input was
+  not, and a lossy emit is the greater harm.
+  **Two shapes that cannot be modeled are now reported rather than silent**, both on a primitive's
+  `_`-sibling, which is an R4 `Element` with nowhere to put an array or a scalar. A position whose
+  value is a nested array **and** whose `_`-sibling carries metadata now fails **closed** with
+  `PRIMITIVE_EXTENSION_MISALIGNED`, rather than keeping one and discarding the other.
 - **An array around a `Coding.system` / `Coding.code` _inside_ a `CodeableConcept` was still read as
   absent, and it landed on the three sharpest reads in the library (`FHIR-CODING-SCALAR-WRAPPER`).**
   A **refuted** allergy read as active, a recorded **"no known allergy"** read as an allergy _to_

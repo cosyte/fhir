@@ -61,6 +61,7 @@ export {
   decimalPrecisionAtRisk,
   duplicateProperty,
   unexpectedXmlContent,
+  nestedArray,
   unknownProperty,
   FATAL_CODES,
   FhirCodecError,
@@ -105,6 +106,7 @@ export { collectSafetyIssues } from "./validate/safety.js";
 // Phase 3, the safety spine: never-droppable status/negation surfacing + fail-closed modifiers.
 export {
   arrayWrappedScalars,
+  nestedArrays,
   assertSafeToSummarize,
   FhirSafetyError,
   readSafety,

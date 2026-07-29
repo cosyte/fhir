@@ -273,10 +273,8 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   `value[x]` draws **no** `ARRAY_WRAPPED_SCALAR` (outside the closed set; widening to every R4 `0..1`
   element _is_ the per-resource model), and `readObservationValue` still has no issue channel of its
   own, though it fails **safe** on this route (reports the present variant, `quantity: undefined`, so
-  no wrong number is handed out); (b) the JSON reader does **not model a nested array** -- `[["x"]]`
-  reads as a list holding an **empty complex** and the inner value is dropped with only an
-  `UNKNOWN_PROPERTY` warning, which is a real read-path data-loss gap in a package whose P1 claim is
-  "no data loss", worth its own item; the document is at least **refused**, never affirmed. (c) The
+  no wrong number is handed out); (b) **STILL OPEN. `FHIR-NESTED-ARRAY-DATA-LOSS`
+  (2026-07-29) attempted it and the conformance gate REFUTED it twice; see below before trying again.** (c) The
   read -> write -> read **laundering** is duplicate-key-only: the array route round-trips faithfully
   (the writer emits the list back), so the re-read reproduces the finding rather than losing it. That
   is now pinned, so a future writer change cannot quietly introduce the laundering. (d) `PRE-EXISTING`,
@@ -291,7 +289,72 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   re-read `valid: true`, `safeToSummarize: true`). Clinical content survives (`retracted: true` on
   both sides) and XML genuinely cannot express a singleton wrapper, so this is a narrower laundering
   than the duplicate-key one, but it is a **cross-format** route by which the encoding complaint
-  disappears. P2:
+  disappears.
+  **`FHIR-NESTED-ARRAY-DATA-LOSS` (2026-07-29) ATTEMPTED (b), was REFUTED TWICE, and was stopped
+  under ADR 0016 rather than patched a third time. It is NOT merged. But it MEASURED (b), and (b) was
+  WIDER THAN (b) SAID.** Measured
+  before fixing: every element kind lost its content (a scalar, a complex, a position beside a real
+  value in `["A",["B"]]`, and an entire resource inside a `Bundle.entry`), and the claim that such a
+  document was "at least refused, never affirmed" **held only for `SAFETY_SCALAR_ELEMENTS`**. One level
+  down inside a `CodeableConcept` it was affirmed outright: a `Condition` whose `clinicalStatus` coding
+  was written one array deep read `valid: true`, `safeToSummarize: true`, `negations: []`, and a refuted
+  `AllergyIntolerance` the same. The `_`-sibling route dropped its slot with **no diagnostic at all**.
+  And the writer emitted `[{}]`, which _fabricated_ an empty element the sender never wrote, so
+  read -> write -> read was **clean** and the warning laundered away.
+  The remedy is **preserve-and-refuse, not preserve-and-interpret**: the inner array is modeled as a
+  nested `FhirList` (`FhirList.items` are `FhirNode`s, so the model, the writer and the validator
+  already handled one -- only the reader never produced one), and reported by `ISSUE_CODES.NESTED_ARRAY`
+  (warning) + `VALIDATION_CODES.NESTED_ARRAY` (**error**, `structure`) + `SafetyReadout.nestedArrays` +
+  `nestedArrays()`, with `safeToSummarize: false`. **This rule needs no cardinality table and no type
+  gate**, unlike `ARRAY_WRAPPED_SCALAR`: an array _is_ the conformant encoding of a repeating element,
+  so calling one wrong needs the element's cardinality, whereas json.html **§2.6.2.2** gives an array of
+  arrays no meaning at any position, so a name-free depth-free rule cannot false-positive.
+  **READ THIS BEFORE TOUCHING `collectCodings`. The refuter REFUTED pass one, and the finding is the
+  SAME lesson as #34 pass one at a level nobody checked.** Modeling the nested array made it
+  transparent to `collectCodings`, whose first line flattens a repeating element
+  (`if (isList(node)) return node.items.flatMap(...)`). The draft guarded the `coding`-_item_ level and
+  the `Coding.code` level and **never the CodeableConcept ELEMENT level**, so `"code":[[{...}]]` was
+  read: a nested LOINC `8867-4` beat the `8480-6` beside it in `requiredUnitsFor` and **erased a true
+  `VITAL_SIGN_UNIT_NONCONFORMANT` error**, and `"code":[[{...716186003}]]` asserted
+  **`noKnownAllergy: true` over a record naming peanut/anaphylaxis**. The author's own differential
+  missed it because the corpus wrapped the `coding` list and the inner `system`/`code` but **never the
+  element itself** -- if you measure this family, generate all three levels. The remedy was to **cut the
+  read back**: `collectCodings` refuses a list item that is itself a list, mirroring `codingScalar`.
+  `codingsOf`/`codeOf`/`hasCoding`/`hasCodeAnySystem` are now unchanged for every document.
+  **The two kinds of read are split on purpose and the split is the whole safety argument:** no
+  `Coding` is resolved out of a nested array (a resolved concept _wins_ races and can assert a positive
+  clinical claim), while the recursive fail-safe scalar reads (`primitiveStrings`/`primitiveBooleans`)
+  **do** see through one, so `{"status":[["entered-in-error"]]}` reports its retraction; every check
+  they feed asks "is this code present", so they only ever _add_ a negation.
+  **PASS TWO THEN REFUTED THE REMEDY, AND THAT IS THE RESULT THAT MATTERS: THE GUARD IS NOT A
+  FUNCTION, IT IS THE WHOLE PACKAGE.** The same transparency reappeared in three more recursive
+  list-walkers that no one had guarded: `fhirpath/evaluate.ts::wrap`, `profiles/navigate.ts::step` and
+  `validate/terminology.ts::locatedCodings`. Through the first, an **`error`-severity profile invariant
+  was RETIRED** (`clinicalStatus.coding.where(...).exists()` went from violated to satisfied on a
+  nested `resolved`), and `name.family.exists()` flipped `false -> true`, which is US Core
+  `us-core-1`-shaped. Through the third, a full `Coding` (SNOMED `716186003`, the very code the slice
+  set out to protect) was resolved and handed to a caller-supplied terminology service. **Counting the
+  sites afterwards: 19 files touch `.items` and at least 9 flatten a list into its items without
+  distinguishing a nested one.** So "the reader models a nested array as a nested `FhirList`" is not a
+  reader change at all: it silently redefines what a list _means_ for every consumer in the package,
+  and each consumer is an independent place a value can become readable and win something. Two
+  successive graded attempts, each of which believed it had found all the sites, were wrong. **If you
+  pick this up: either the model change lands together with an audit of every list-flattening site, or
+  the item splits in two, with the reporting half (which needs no model change beyond detecting the
+  shape) shipped separately from the preserving half.**
+  Pass one also filed an `INTRODUCED` **major**: the draft dropped a primitive's `_`-sibling `Element`
+  at a nested-array position (losing a `data-absent-reason`) to keep the value, trading one loss for
+  another in a data-loss slice. That position now **fails closed** with `PRIMITIVE_EXTENSION_MISALIGNED`,
+  consistent with the reader's existing misalignment discipline; a `null` slot is the conformant
+  no-metadata marker and still passes. Measured after the remedy, over 6,663 documents: **0** coding
+  reads gained a value/pair/coding, **0** `valid: false -> true`, **0** negations or retractions lost,
+  **0** `safeToSummarize` weakened, all **27** fixtures byte-identical, and the vital-signs error
+  preserved in every nesting shape.
+  **Left open, deliberately:** a nested array inside a primitive's `_`-sibling (`_x:[[...]]`) or inside
+  `extension:[[...]]` is **reported but not modeled** -- `PrimitiveMeta` is an R4 `Element` (`id` /
+  `extension` only) and `extension` is typed `readonly FhirComplex[]`, so holding it needs a public type
+  change; it was **silent** before and is now located. And `serializeResourceXml` flattens a nested list
+  (same class as (e), `PRE-EXISTING`, base was strictly worse since it had already lost the value). P2:
   the first three validation layers (`validateResource`: structure, cardinality, primitive /
   enumerated-`code` value-domain) with a value-free `OperationOutcome` and the PHI redaction
   chokepoint. P3: the safety-critical status & negation spine (`readSafety`, fail-closed on an

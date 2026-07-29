@@ -174,10 +174,17 @@ export interface SafetyReadout {
    */
   readonly arrayWrappedScalars: readonly string[];
   /**
+   * FHIRPath locations where a JSON array held another array as one of its items. Empty on every
+   * conformant document, since FHIR JSON uses an array only for a repeating element and an element's
+   * occurrences are never themselves arrays. The reader preserves everything such an array holds, and
+   * no `Coding` is resolved out of one, so no clinical concept is decided by it.
+   */
+  readonly nestedArrays: readonly string[];
+  /**
    * `false` when the resource must not be flattened: an unhandled `modifierExtension` is present, a
-   * repeated property name left an element with more than one value, or a `0..1` safety element
-   * arrived array-wrapped. Each is a case where a summary would have to assert something this library
-   * cannot establish, so it declines instead.
+   * repeated property name left an element with more than one value, a `0..1` safety element arrived
+   * array-wrapped, or a nested array left content in a shape no element reads. Each is a case where a
+   * summary would have to assert something this library cannot establish, so it declines instead.
    */
   readonly safeToSummarize: boolean;
 }
@@ -284,20 +291,63 @@ export function arrayWrappedScalars(resource: FhirComplex, path: string): string
   return walkSafety(resource, path).arrayWrapped;
 }
 
-/** The three fail-closed findings a single walk of the resource collects. */
+/**
+ * Collect the FHIRPath locations where a JSON array held another array as one of its items, a deep
+ * walk of the whole resource (so a nested array inside `contained` or a Bundle `entry` is covered).
+ *
+ * FHIR JSON uses an array for one thing only, a repeating element, and its items are that element's
+ * occurrences (json.html §2.6.2.2). An array of arrays therefore describes no element. Everything it
+ * holds is preserved on the model as a nested {@link ../model/node.js FhirList} rather than dropped,
+ * which is what makes reporting it the whole remedy rather than half of one.
+ *
+ * **No `Coding` is resolved out of one** ({@link ../safety/codes.js} `collectCodings` and
+ * `codingScalar` both refuse a nested list), so no clinical concept is decided by a shape the spec
+ * gives no meaning. The recursive fail-safe scalar reads (`primitiveStrings` / `primitiveBooleans`)
+ * deliberately do see through it, so a retraction written inside one is reported rather than lost;
+ * they only ever *add* a negation.
+ *
+ * **Scope: any array position, anywhere in the resource, on any resource type.** This needs neither
+ * the cardinality table that scopes `arrayWrappedScalars` nor its resource-type gate, and that is not
+ * a liberty: those exist because an array *is* the conformant encoding of a repeating element, so
+ * deciding one is wrong requires knowing the element's cardinality. A nested array is wrong on its
+ * face (R4 defines no element whose occurrences are arrays), so a name-free, depth-free rule cannot
+ * emit a false finding on a conformant document.
+ *
+ * A location here means the library declines to summarize: `readSafety` reports it at
+ * {@link SafetyReadout.nestedArrays}, `safeToSummarize` is `false`, and `validateResource` raises a
+ * `NESTED_ARRAY` **error**. That refusal is the point. Before it, a `verificationStatus` of `refuted`
+ * or a `clinicalStatus` of `resolved` written one array deep read as no negation at all, with
+ * `valid: true` and `safeToSummarize: true` over it.
+ *
+ * @param resource - The resource model.
+ * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
+ * @returns The locations of the nested arrays, in document order.
+ * @example
+ * ```ts
+ * import { nestedArrays, parseResource } from "@cosyte/fhir";
+ * const { resource } = parseResource('{"resourceType":"Patient","name":[[{"family":"Roe"}]]}');
+ * nestedArrays(resource, "Patient"); // ["Patient.name[0]"]
+ * ```
+ */
+export function nestedArrays(resource: FhirComplex, path: string): string[] {
+  return walkSafety(resource, path).nested;
+}
+
+/** The four fail-closed findings a single walk of the resource collects. */
 interface SafetyWalk {
   readonly modifiers: string[];
   readonly shadowed: string[];
   readonly arrayWrapped: string[];
+  readonly nested: string[];
 }
 
 /**
- * Walk the whole resource once, collecting unhandled modifiers, shadowed property names, and
- * array-wrapped `0..1` safety elements. The entry node is a resource root by construction, whether or
- * not it carries a readable `resourceType`.
+ * Walk the whole resource once, collecting unhandled modifiers, shadowed property names,
+ * array-wrapped `0..1` safety elements, and nested arrays. The entry node is a resource root by
+ * construction, whether or not it carries a readable `resourceType`.
  */
 function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
-  const out: SafetyWalk = { modifiers: [], shadowed: [], arrayWrapped: [] };
+  const out: SafetyWalk = { modifiers: [], shadowed: [], arrayWrapped: [], nested: [] };
   walkComplex(resource, path, out, true);
   return out;
 }
@@ -433,7 +483,15 @@ function checkModifierExtension(value: FhirNode, path: string, out: string[]): v
 function descend(node: FhirNode, path: string, out: SafetyWalk): void {
   if (isComplex(node)) walkComplex(node, path, out);
   else if (isList(node))
-    node.items.forEach((item, index) => descend(item, `${path}[${String(index)}]`, out));
+    node.items.forEach((item, index) => {
+      const at = `${path}[${String(index)}]`;
+      // A list item that is itself a list is the document's nested array, preserved by the reader.
+      // Unlike the wrapper checks above, this needs no cardinality and no type gate and so cannot
+      // false-positive: FHIR JSON gives an array of arrays no meaning at any position
+      // (json.html §2.6.2.2), so it is non-conformant wherever it appears.
+      if (isList(item)) out.nested.push(at);
+      descend(item, at, out);
+    });
 }
 
 /**
@@ -509,7 +567,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     negations.push(NOT_DONE);
   }
 
-  const { modifiers, shadowed, arrayWrapped } = walkSafety(resource, rt ?? "$this");
+  const { modifiers, shadowed, arrayWrapped, nested } = walkSafety(resource, rt ?? "$this");
 
   return {
     resourceType: rt,
@@ -523,7 +581,12 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     unhandledModifierExtensions: modifiers,
     shadowedProperties: shadowed,
     arrayWrappedScalars: arrayWrapped,
-    safeToSummarize: modifiers.length === 0 && shadowed.length === 0 && arrayWrapped.length === 0,
+    nestedArrays: nested,
+    safeToSummarize:
+      modifiers.length === 0 &&
+      shadowed.length === 0 &&
+      arrayWrapped.length === 0 &&
+      nested.length === 0,
   };
 }
 
@@ -556,8 +619,8 @@ export class FhirSafetyError extends Error {
   constructor(locations: readonly string[]) {
     super(
       "Resource cannot be safely summarized: an unhandled modifierExtension, a repeated property " +
-        "name, or an array-wrapped single-valued element leaves an element this library must not " +
-        `flatten (${String(locations.length)} location(s)).`,
+        "name, an array-wrapped single-valued element, or a nested array leaves an element this " +
+        `library must not flatten (${String(locations.length)} location(s)).`,
     );
     this.name = "FhirSafetyError";
     this.locations = locations;
@@ -585,6 +648,7 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     ...readout.unhandledModifierExtensions,
     ...readout.shadowedProperties,
     ...readout.arrayWrappedScalars,
+    ...readout.nestedArrays,
   ];
   if (locations.length > 0) throw new FhirSafetyError(locations);
 }

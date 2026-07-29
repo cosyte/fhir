@@ -11,6 +11,7 @@
 
 export {
   arrayWrappedScalars,
+  nestedArrays,
   assertSafeToSummarize,
   FhirSafetyError,
   readSafety,

@@ -179,19 +179,23 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
       expect(readSafety(observation).negations).toEqual(["entered-in-error"]);
     });
 
-    it("fails closed on a doubly-wrapped value the JSON reader cannot model", () => {
-      // PRE-EXISTING, and outside this slice: the JSON reader does not model a nested array. It reads
-      // `[["entered-in-error"]]` as a list holding an empty object and drops the inner value, warning
-      // UNKNOWN_PROPERTY. So the retraction is not recoverable from the model here. What matters is
-      // the direction: the document is **refused**, never affirmed.
+    it("fails closed on a doubly-wrapped value, and no longer drops it", () => {
+      // This used to be the declared gap: the reader modeled `[["entered-in-error"]]` as a list
+      // holding an empty object, dropped the inner value, and said only UNKNOWN_PROPERTY. The
+      // retraction was unrecoverable and the document was merely refused. FHIR-NESTED-ARRAY-DATA-LOSS
+      // closed it: the nested array is preserved, reported as NESTED_ARRAY, and the recursive
+      // fail-safe read (`primitiveStrings`) reaches the retraction, which is the add-only direction.
       const { resource, issues } = parseResource(
         '{"resourceType":"Observation","status":[["entered-in-error"]]}',
       );
-      expect(issues.map((i) => i.code)).toContain("UNKNOWN_PROPERTY");
+      expect(issues.map((i) => i.code)).toContain("NESTED_ARRAY");
 
       const safety = readSafety(resource);
+      expect(safety.retracted).toBe(true);
+      expect(safety.negations).toEqual(["entered-in-error"]);
       expect(safety.safeToSummarize).toBe(false);
       expect(safety.arrayWrappedScalars).toEqual(["Observation.status"]);
+      expect(safety.nestedArrays).toEqual(["Observation.status[0]"]);
       expect(validateResource(resource).valid).toBe(false);
     });
   });
@@ -504,14 +508,23 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
         "AllergyIntolerance.code.coding[0].code",
       ]);
 
-      // The JSON reader does not model a nested array (PRE-EXISTING, outside this slice), so the
-      // value is not recoverable. What matters is the direction: refused, never affirmed.
+      // A nested array is now MODELED (FHIR-NESTED-ARRAY-DATA-LOSS) rather than dropped, but
+      // `codingScalar` still refuses to read one, and that refusal is deliberate. Transparency is an
+      // argument about a *wrapper*: a converter emits `["716186003"]`, so reading it restores the
+      // sender's own pre-conversion reading. Nothing emits `[["716186003"]]`, so there is no reading
+      // to restore, and resolving one would assert SNOMED 716186003 "no known allergy" -- a POSITIVE
+      // clinical assertion -- out of a shape FHIR gives no meaning. Refused, never affirmed; and now
+      // the value is preserved and located rather than lost.
       const nested = parseResource(
         '{"resourceType":"AllergyIntolerance","code":{"coding":[{"system":' +
           '"http://snomed.info/sct","code":[["716186003"]]}]}}',
       ).resource;
       expect(readSafety(nested).noKnownAllergy).toBe(false);
       expect(readSafety(nested).safeToSummarize).toBe(false);
+      expect(readSafety(nested).nestedArrays).toEqual([
+        "AllergyIntolerance.code.coding[0].code[0]",
+      ]);
+      expect(validateResource(nested).valid).toBe(false);
     });
 
     it("addresses a bare Coding member and a contained resource correctly", () => {

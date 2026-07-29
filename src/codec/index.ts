@@ -26,6 +26,7 @@ export {
   decimalPrecisionAtRisk,
   duplicateProperty,
   unexpectedXmlContent,
+  nestedArray,
   unknownProperty,
   FATAL_CODES,
   FhirCodecError,

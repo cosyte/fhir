@@ -89,6 +89,13 @@ export interface FhirComplex {
  * A repeating element: an ordered list of item nodes. A primitive list preserves value-absent slots
  * as {@link FhirPrimitive} nodes with `value: undefined`, so the null-padding alignment between a
  * value array and its `_`-sibling array is captured structurally.
+ *
+ * An item may itself be a `FhirList`. That is never a conformant document, FHIR JSON uses an array
+ * only for a repeating element and its items are that element's occurrences (json.html §2.6.2.2), so
+ * a nested list is exactly a nested array the sender wrote. It is modeled rather than flattened or
+ * dropped so nothing the wire carried is lost, but **no element reads a value out of one**: it is
+ * reported instead (`NESTED_ARRAY`, {@link ../safety/status.js} `nestedArrays`), and a resource
+ * containing one is never `safeToSummarize`.
  */
 export interface FhirList {
   readonly kind: "list";

@@ -1,8 +1,9 @@
 /**
  * The JSON write path: the {@link FhirNode} model → spec-clean FHIR JSON text.
  *
- * The writer is the conservative half of Postel's Law, it always emits well-formed, canonical FHIR
- * JSON. Two details are load-bearing for the no-data-loss guarantee (json.html):
+ * The writer is the conservative half of Postel's Law: given a model that describes a conformant
+ * document it always emits well-formed, canonical FHIR JSON. Two details are load-bearing for the
+ * no-data-loss guarantee (json.html):
  *
  * - **Decimals are emitted from their exact lexical text** ({@link FhirDecimal.raw}), unquoted, so a
  *   value read in as `0.010` is written back as `0.010`. The value never becomes a JavaScript
@@ -15,18 +16,29 @@
  * round-trips byte-for-byte. String values and object keys are escaped via `JSON.stringify` (correct
  * and canonical for strings, only numbers need the raw-text treatment).
  *
- * The **one** input the writer cannot round-trip is a document that repeated a property name. FHIR
- * requires unique property names (json.html), so writing both members back would emit a document
- * that is invalid by the rule the writer exists to uphold; the node's `duplicates` are therefore not
- * emitted and one value per name is written. That narrowing is deliberate and it is never silent: the
- * reader raised `DUPLICATE_PROPERTY` on the way in, the validator rejects such a resource, and the
- * safety readout refuses to summarize it. Emit is the wrong place to resolve the ambiguity, so the
- * writer does not try.
+ * A model read from a **non-conformant** document is where "spec-clean" and "loses nothing" pull
+ * against each other, and the writer resolves that the same way twice: it never invents, and it never
+ * hides. Two such shapes exist, and they are resolved in opposite directions because the ambiguity is
+ * of two different kinds.
+ *
+ * - **A repeated property name is narrowed.** FHIR requires unique property names (json.html), so
+ *   writing both members back would emit a document invalid by the rule the writer exists to uphold.
+ *   The node's `duplicates` are therefore not emitted and one value per name is written. The document
+ *   held two values and only one can be expressed, so emit is the wrong place to choose between them.
+ * - **A nested array is written back as it was read.** Here there is nothing to choose: the content
+ *   is unambiguous, only its encoding is meaningless, and the alternative is worse. This writer used
+ *   to emit `[{}]` for it, which both lost the value and *fabricated* an empty element the sender
+ *   never wrote, and the re-read of that was clean. So the output for such a model is deliberately
+ *   **not** spec-clean, because the input was not, and a lossy emit is the greater harm.
+ *
+ * Neither narrowing is ever silent: the reader raised `DUPLICATE_PROPERTY` / `NESTED_ARRAY` on the way
+ * in, the validator rejects such a resource, and the safety readout refuses to summarize it.
  *
  * @packageDocumentation
  */
 
 import {
+  isList,
   isPrimitive,
   type FhirComplex,
   type FhirList,
@@ -71,28 +83,37 @@ function emitPrimitiveProperty(name: string, node: FhirPrimitive): string[] {
   return entries;
 }
 
-/** Emit the `key:value` entries for a list property. Empty lists are omitted (FHIR forbids `[]`). */
+/**
+ * Emit the `key:value` entries for a list property. Empty lists are omitted (FHIR forbids `[]`).
+ *
+ * A list whose items are primitives **or nested lists** takes the value/`_`-sibling split: each item
+ * occupies one array position, a nested list emits as a nested array and contributes `null` to the
+ * `_`-sibling array (it is not a primitive, so it has no `id`/`extension` of its own). Reading a
+ * nested array as a nested list and writing it back this way is what makes the defect **survive a
+ * round trip**: it used to read as an empty complex and rewrite as `[{}]`, so the second read of a
+ * document was clean and the `NESTED_ARRAY` finding vanished on the way through.
+ */
 function emitListProperty(name: string, node: FhirList): string[] {
   if (node.items.length === 0) return [];
 
-  const allPrimitive = node.items.every(isPrimitive);
-  if (!allPrimitive) {
+  const positional = node.items.every((item) => isPrimitive(item) || isList(item));
+  if (!positional) {
     return [`${JSON.stringify(name)}:[${node.items.map(emitNode).join(",")}]`];
   }
 
-  const primitives = node.items.filter(isPrimitive);
-  const anyValue = primitives.some((item) => item.value !== undefined);
-  const anyMeta = primitives.some(hasMeta);
+  const anyValue = node.items.some((item) => !isPrimitive(item) || item.value !== undefined);
+  const anyMeta = node.items.some((item) => isPrimitive(item) && hasMeta(item));
   const entries: string[] = [];
   // Emit the value array only when at least one item has a value. When every value is absent (an
   // extension-only repeating primitive) the value array would be all-`null`, non-canonical, so we
   // emit the `_`-sibling array alone, which round-trips to the same value-absent list.
   if (anyValue) {
-    const values = primitives.map((item) => emitScalar(item.value)).join(",");
-    entries.push(`${JSON.stringify(name)}:[${values}]`);
+    entries.push(`${JSON.stringify(name)}:[${node.items.map(emitNode).join(",")}]`);
   }
   if (anyMeta) {
-    const metas = primitives.map((item) => (hasMeta(item) ? emitMeta(item) : "null")).join(",");
+    const metas = node.items
+      .map((item) => (isPrimitive(item) && hasMeta(item) ? emitMeta(item) : "null"))
+      .join(",");
     entries.push(`${JSON.stringify(`_${name}`)}:[${metas}]`);
   }
   return entries;
