@@ -28,6 +28,7 @@ export {
   isNestedArray,
   isPrimitive,
   list,
+  nestedArrayContent,
   primitive,
   resourceType,
 } from "./model/node.js";
@@ -37,13 +38,15 @@ export type {
   FhirNode,
   FhirPrimitive,
   FhirProperty,
+  NestedArrayChannel,
+  NestedArrayContent,
   PrimitiveMeta,
   PrimitiveValue,
 } from "./model/node.js";
 export { parseReference } from "./model/reference.js";
 export type { ParsedReference, ReferenceKind } from "./model/reference.js";
 
-// Phase 1, the JSON codec: precision-preserving read, spec-clean write, value-free diagnostics.
+// Phase 1, the JSON codec: precision-preserving read, conservative write, value-free diagnostics.
 export { parseResource } from "./codec/read.js";
 export type { ReadResult } from "./codec/read.js";
 export { serializeResource } from "./codec/write.js";

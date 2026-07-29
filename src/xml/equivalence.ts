@@ -82,6 +82,8 @@ function primitivesEquivalent(a: FhirPrimitive, b: FhirPrimitive): boolean {
     canonicalScalar(a.value) === canonicalScalar(b.value) &&
     a.id === b.id &&
     a.nestedArray === b.nestedArray &&
+    a.nestedArraySource === b.nestedArraySource &&
+    a.nestedArrayMetaSource === b.nestedArrayMetaSource &&
     extensionsEquivalent(a.extension, b.extension)
   );
 }
@@ -115,12 +117,14 @@ function propertiesEquivalent(
  * a node is an **empty** element that the sender did not write empty, and the XML counterpart of a
  * genuinely empty element is an identical empty element, so without this an oracle that says "the
  * XML and the JSON say the same thing" would return `true` over content the JSON reader could not
- * read. Comparing the marker can only ever return `false` where it used to return `true`, and only
- * for a document that carried the shape.
+ * place. The preserved text is compared alongside the marker, so two documents that nested
+ * *different* content at the same position are not equivalent either. Comparing them can only ever
+ * return `false` where it used to return `true`, and only for a document that carried the shape.
  */
 function complexesEquivalent(a: FhirComplex, b: FhirComplex): boolean {
   return (
     a.nestedArray === b.nestedArray &&
+    a.nestedArraySource === b.nestedArraySource &&
     propertiesEquivalent(a.properties, b.properties) &&
     propertiesEquivalent(a.duplicates, b.duplicates)
   );

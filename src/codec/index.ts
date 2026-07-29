@@ -1,8 +1,9 @@
 /**
  * FHIR wire codec, read (parse) and write (serialize) between the wire format and the model.
  *
- * JSON-first. Postel's Law: the reader is liberal (lenient,
- * preserving, warning) and the writer is conservative (spec-clean canonical JSON). The two
+ * JSON-first. Postel's Law: the reader is liberal (lenient, preserving, warning) and the writer is
+ * conservative, authoring no value of its own and emitting canonical JSON for every model FHIR can
+ * express (see `serializeResource` for the two shapes it cannot). The two
  * silent-data-loss hazards, decimal precision and primitive-extension (`_`-sibling) alignment,
  * are handled here (json.html); a JSON number never routes through a JavaScript
  * `number`, and a broken `_`-alignment fails closed.

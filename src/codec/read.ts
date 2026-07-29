@@ -24,13 +24,23 @@
  *
  * 4. **An array inside an array.** FHIR JSON uses an array for a repeating element and for nothing
  *    else (json.html §2.6.2.2), so a list of lists has no meaning at any position. This is the one
- *    shape the reader does **not** preserve: it does not model the inner array, so content the
- *    sender wrote is genuinely unreadable at that position. What it will not do is let that pass as
- *    an ordinary empty element. The position is marked on the node ({@link ../model/node.js}
+ *    shape the reader cannot model **as FHIR**, because there is no element for it to be. It is
+ *    still kept: the array's JSON text is preserved on the node and read back with
+ *    {@link ../model/node.js} `nestedArrayContent`, and the writer emits it again, so the document
+ *    survives a round trip and no value the sender wrote is dropped. What the reader will
+ *    not do is place it in the tree. The position is marked ({@link ../model/node.js}
  *    `isNestedArray`) and reported as `NESTED_ARRAY`, the safety readout refuses to summarize such a
- *    resource, and the validator raises an error, so the loss does not sit underneath an affirmative
- *    verdict. Reading the inner array would mean changing what a repeating element contains for
- *    every consumer that walks one, which is a far larger change than the report.
+ *    resource, and the validator raises an error, so the content does not sit underneath an
+ *    affirmative verdict either.
+ *
+ *    **Kept out of the tree deliberately, and this is the load-bearing part.** Making the inner
+ *    array an element of the repeating element would change what a repeating element *contains* for
+ *    every consumer that walks one. The library has sites that flatten a list into its items and
+ *    then drop, or miscount, anything that is not the element kind they expect, so a list holding a
+ *    list reaches them as a silently absent value rather than as an error: a profile invariant, a
+ *    vital-signs unit check, or a negation can go unevaluated and the resource then reads as valid.
+ *    Preserving the text costs none of that, because a string is not a node and no walk can reach
+ *    it.
  *
  *    **The one channel this does not reach, stated rather than implied:** a `_`-sibling the reader
  *    discards *whole* because it is misplaced or unrecognised (a `_`-sibling on an object or on a
@@ -68,7 +78,13 @@ import {
   FhirCodecError,
   type FhirIssue,
 } from "./issues.js";
-import { readRawJson, type RawArray, type RawJson, type RawObject } from "./raw-json.js";
+import {
+  rawJsonText,
+  readRawJson,
+  type RawArray,
+  type RawJson,
+  type RawObject,
+} from "./raw-json.js";
 
 /** The result of reading a FHIR resource: the model plus any value-free issues gathered en route. */
 export interface ReadResult {
@@ -161,6 +177,13 @@ function scalarValue(node: RawJson, path: string, issues: FhirIssue[]): Primitiv
 /**
  * Read a primitive's `_`-sibling object into `{ id, extension }`.
  *
+ * Positions here are named in **FHIRPath form**, `birthDate.id` and `birthDate.extension[0]`, not in
+ * the JSON encoding's `_`-prefixed form. FHIRPath addresses a primitive's metadata as members of the
+ * element itself, the `_` is an artifact of how FHIR JSON splits them into two properties, and the
+ * safety readout already emits the FHIRPath form for the same positions. One convention for the
+ * whole reader is what lets a consumer correlate a read diagnostic with a safety location by string
+ * equality, at every depth rather than only at the depth an override happened to cover.
+ *
  * A repeated name here follows the **same** first-wins rule as every other object, and raises the
  * same `DUPLICATE_PROPERTY`, so the codec never resolves a duplicate two different ways. The
  * shadowed member is not carried on the model: a primitive's metadata is an R4 `Element` (`id` and
@@ -174,7 +197,7 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
   const seen = new Set<string>();
   for (const member of metaNode.members) {
     if (seen.has(member.key)) {
-      issues.push(duplicateProperty(`${path}._${member.key}`));
+      issues.push(duplicateProperty(`${path}.${member.key}`));
       continue;
     }
     seen.add(member.key);
@@ -182,18 +205,10 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
       result.id = member.value.value;
     } else if (member.key === "extension" && member.value.t === "arr") {
       result.extension = member.value.items.map((item, i) =>
-        // Two path forms on purpose. The `_`-prefixed one is this call site's long-standing
-        // convention for the warnings it already raised. The nested-array report gets the plain
-        // FHIRPath form instead, because a primitive's extension is addressed as
-        // `birthDate.extension[0]` in FHIRPath (the `_` is a JSON encoding artifact), and because
-        // that is the string the safety readout emits for the same position: a consumer correlating
-        // the read channel with `nestedArrays` has to find the same location on both.
-        readComplex(item, `${path}._${member.key}[${String(i)}]`, issues, {
-          nestedPath: `${path}.${member.key}[${String(i)}]`,
-        }),
+        readComplex(item, `${path}.${member.key}[${String(i)}]`, issues),
       );
     } else {
-      issues.push(unknownProperty(`${path}._${member.key}`));
+      issues.push(unknownProperty(`${path}.${member.key}`));
     }
   }
   return result;
@@ -204,25 +219,19 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
  *
  * An **array** here is the one case where the empty element is not the whole story: FHIR JSON uses an
  * array only for a repeating element, so an array inside an array is a shape with no meaning, and
- * whatever it held is content this reader cannot place. The element stays empty (modeling the inner
- * array would change what a repeating element *contains*, for every consumer that walks one), and the
- * position is marked and reported instead, so nothing downstream can affirm a verdict as though the
- * position had been empty on the wire. The existing warning is kept alongside the new one.
- *
- * `nestedPath` overrides the location used for the nested-array report only, where this call site's
- * warning path is not the FHIRPath one the safety readout will emit for the same position.
+ * whatever it held is content this reader cannot place *as an element*. The element therefore stays
+ * empty and the position is marked and reported, so nothing downstream can affirm a verdict as
+ * though the position had been empty on the wire; the existing warning is kept alongside the new one.
+ * The array's own text is kept verbatim on the node, where it is readable without being an element:
+ * putting it in the tree would change what a repeating element *contains* for every consumer that
+ * walks one, which is a redefinition of the model rather than a preservation of the document.
  */
-function readComplex(
-  node: RawJson,
-  path: string,
-  issues: FhirIssue[],
-  options: { nestedPath?: string } = {},
-): FhirComplex {
+function readComplex(node: RawJson, path: string, issues: FhirIssue[]): FhirComplex {
   if (node.t === "obj") return buildComplex(node, path, issues);
   issues.push(unknownProperty(path));
   if (node.t !== "arr") return complex([]);
-  issues.push(nestedArray(options.nestedPath ?? path));
-  return markNestedArray(complex([]));
+  issues.push(nestedArray(path));
+  return markNestedArray(complex([]), { value: rawJsonText(node) });
 }
 
 /**
@@ -275,15 +284,24 @@ function buildPrimitiveList(
     // An array in either channel is an array inside an array, which FHIR JSON does not define. The
     // value channel already drew the warning above; the `_`-sibling channel drew nothing at all,
     // because `readMeta` reads metadata out of an object and silently has none to read from an
-    // array. Neither says content was lost, so both get the marker and the explicit report. The
-    // slot itself is unchanged: still one primitive, still holding whatever value the value channel
-    // carried, so the null-padded alignment between the two arrays is untouched.
-    const nested = rawValue?.t === "arr" || metaItems[i]?.t === "arr";
+    // array. Neither says content was lost, so both get the marker, the explicit report, and their
+    // own text kept verbatim. The slot itself is unchanged: still one primitive, still holding
+    // whatever value the value channel carried, so the null-padded alignment between the two arrays
+    // is untouched, and the two channels stay distinguishable because either can nest alone.
+    const rawMeta = metaItems[i];
+    const nested = rawValue?.t === "arr" || rawMeta?.t === "arr";
     if (nested) issues.push(nestedArray(itemPath));
     const value_ = rawValue === undefined ? undefined : scalarValue(rawValue, itemPath, issues);
-    const metaValue = readMeta(metaItems[i], itemPath, issues);
+    const metaValue = readMeta(rawMeta, itemPath, issues);
     const node = primitive(value_, metaValue);
-    items.push(nested ? markNestedArray(node) : node);
+    if (!nested) {
+      items.push(node);
+      continue;
+    }
+    const sources: { value?: string; metadata?: string } = {};
+    if (rawValue?.t === "arr") sources.value = rawJsonText(rawValue);
+    if (rawMeta?.t === "arr") sources.metadata = rawJsonText(rawMeta);
+    items.push(markNestedArray(node, sources));
   }
   return list(items);
 }

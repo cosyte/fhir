@@ -61,6 +61,36 @@ export interface RawNull {
 export type RawJson = RawObject | RawArray | RawString | RawNumber | RawBool | RawNull;
 
 /**
+ * Render a raw JSON tree back to compact JSON text, exactly as it was read: member order preserved,
+ * every member of a repeated key kept, and number tokens emitted from their verbatim source text so
+ * a decimal never passes through a JavaScript `number`.
+ *
+ * Total over {@link RawJson} and bounded by the reader's own depth limit, so it terminates on
+ * anything the reader accepted. Strings are re-escaped canonically by `JSON.stringify`, which is the
+ * same normalization the FHIR writer applies to every other string it emits.
+ *
+ * @internal
+ */
+export function rawJsonText(node: RawJson): string {
+  switch (node.t) {
+    case "str":
+      return JSON.stringify(node.value);
+    case "num":
+      return node.raw;
+    case "bool":
+      return node.value ? "true" : "false";
+    case "null":
+      return "null";
+    case "arr":
+      return `[${node.items.map(rawJsonText).join(",")}]`;
+    case "obj":
+      return `{${node.members
+        .map((member) => `${JSON.stringify(member.key)}:${rawJsonText(member.value)}`)
+        .join(",")}}`;
+  }
+}
+
+/**
  * The maximum object/array nesting depth the reader will descend before refusing with
  * `MAX_DEPTH_EXCEEDED`. FHIR resources, even a Bundle of documents with contained resources, nest
  * far shallower than this; the bound exists only to turn a pathological adversarial document (a tower
