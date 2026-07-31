@@ -356,6 +356,21 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **The README opens with the Cosyte brand lockup, which follows the reader's light or dark colour
+  scheme.** A `<picture>` element sits above the `# @cosyte/fhir` heading: a `<source>` carrying the
+  on-dark cut behind `prefers-color-scheme: dark`, and an `<img>` carrying the on-light cut as the
+  fallback, so a renderer that drops `<source>` still shows the mark rather than a broken image. The
+  alt text describes the artwork (a plus mark set in two overlapping rounded squares, one solid and
+  one outlined, beside the Cosyte wordmark) rather than the package, because it is what a screen
+  reader announces and what stands in when the image does not load. The markup was copied
+  programmatically out of `hl7/README.md` and diffed byte-for-byte against it (341 bytes, identical),
+  since a mistyped URL here is a broken image on a public page; both tiles were re-checked with
+  `curl -I` immediately before push and returned `200 image/png`. **GitHub is the only surface this
+  renders on today**, because `@cosyte/fhir` has never reached npm and so has no package page
+  (`FHIR-NPM-NAME`, the `E403` name-similarity rejection); the markup is the same one the published
+  siblings carry, so it is already correct for the day the name clears. No factual claim on the page
+  moved: the heading, the "pre-alpha, unpublished" summary and every code sample are unchanged, and
+  no resource model, `IssueCode`, validation verdict, codec output or value-free diagnostic differs.
 - **Public surface for the duplicate-name work above:** `getAllProperties(node, name)` (every value
   written under a name, in document order, the fail-safe counterpart to `getProperty`),
   `shadowedProperties(resource, path)` (the FHIRPath locations of members a repeated name shadowed),
