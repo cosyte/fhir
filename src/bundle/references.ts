@@ -19,7 +19,7 @@
  * @packageDocumentation
  */
 
-import { getProperty, isComplex, isList, isPrimitive } from "../model/index.js";
+import { childPath, getProperty, isComplex, isList, isPrimitive } from "../model/index.js";
 import type { FhirComplex, FhirNode } from "../model/index.js";
 import { parseReference } from "../model/reference.js";
 
@@ -229,7 +229,7 @@ export function eachReference(
   const ref = stringOf(getProperty(node, "reference"));
   if (ref !== undefined) visit(`${path}.reference`, ref);
   for (const property of node.properties) {
-    eachReference(property.value, `${path}.${property.name}`, visit);
+    eachReference(property.value, childPath(path, property.name), visit);
   }
 }
 

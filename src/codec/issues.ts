@@ -87,6 +87,15 @@ export type IssueSeverity = "warning" | "information";
  * `expression` is a FHIRPath location into the document (e.g. `Bundle.entry[2].resource.ofType(Patient).name[0].given[1]`,
  * or a simpler `Patient.birthDate`), it says *where* without echoing *what*. It never contains a
  * resource value, so an issue is safe to log.
+ *
+ * **It is a location, and on non-conformant input it can be a location with a gap.** The segments
+ * are the document's own names, and a name is echoed only when it matches the published form of a
+ * FHIR name; anything else reads as the {@link ../model/path.js} `WITHHELD` marker, `"<withheld>"`.
+ * A marker is not a FHIRPath identifier, so such an expression will not resolve against the
+ * instance: R4 defines `OperationOutcome.issue.expression` as a FHIRPath subset that SHALL resolve
+ * to a single node, and a location with a withheld segment does not. Every segment around the
+ * marker is intact, so the nearest addressable ancestor is still there. Test for the marker before
+ * handing an expression to a FHIRPath engine.
  */
 export interface FhirIssue {
   readonly code: IssueCode;

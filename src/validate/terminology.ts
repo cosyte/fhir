@@ -31,7 +31,15 @@
  * @packageDocumentation
  */
 
-import { getProperty, isComplex, isList, type FhirComplex, type FhirNode } from "../model/index.js";
+import {
+  childPath,
+  getProperty,
+  isComplex,
+  isList,
+  rootPath,
+  type FhirComplex,
+  type FhirNode,
+} from "../model/index.js";
 import { primitiveString } from "../safety/codes.js";
 import {
   buildBindingRegistry,
@@ -93,11 +101,17 @@ export function collectTerminologyIssues(
   const service = options.terminology;
   const issues: ValidationIssue[] = [];
 
+  // The binding registry is keyed on the spec's own element paths, so the lookup uses the name the
+  // document wrote. `root` is the bounded form, and it is the only one that reaches an `expression`.
+  // Defensive rather than load-bearing: `root` is only observable once a binding matched, which
+  // requires `rt` to be a real FHIR type, so here the bound is provably the identity. It stays so a
+  // future binding that keys on something looser cannot reintroduce the echo.
+  const root = rootPath(rt);
   for (const property of resource.properties) {
     if (property.name === "resourceType") continue;
     const binding = registry(`${rt}.${property.name}`);
     if (binding === undefined) continue;
-    for (const coding of locatedCodings(property.value, `${rt}.${property.name}`)) {
+    for (const coding of locatedCodings(property.value, childPath(root, property.name))) {
       checkCoding(coding, binding, service, issues);
     }
   }

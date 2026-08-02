@@ -45,12 +45,14 @@
  */
 
 import {
+  childPath,
   getAllProperties,
   getProperty,
   isComplex,
   isList,
   isNestedArray,
   isPrimitive,
+  rootPath,
   type FhirComplex,
   type FhirNode,
   type FhirProperty,
@@ -148,9 +150,13 @@ export type NegationKind =
  */
 export interface SafetyReadout {
   /**
-   * The first `resourceType` the document names, read through a repeated name or an array wrapper, or
-   * `undefined` if the resource names none. Convenience only: the type-scoped negation reads consider
-   * **every** type named, not just this one.
+   * The first `resourceType` the document names, read through a repeated name or an array wrapper,
+   * **bounded** to the published form of a resource type name, or `undefined` if the resource names
+   * none. Every R4 type is returned exactly as written; anything that is not shaped like a type name
+   * reads as the {@link WITHHELD} marker, `"<withheld>"`, because this is the one identifier on this readout
+   * that a caller would interpolate to describe a location, and a location is not a place to echo
+   * whatever a sender wrote. Convenience only: the type-scoped negation reads consider **every**
+   * type named, not just this one, and they read it unbounded.
    */
   readonly resourceType: string | undefined;
   /** The `status` code (Observation / Immunization / DiagnosticReport / MedicationRequest·Statement). */
@@ -336,7 +342,10 @@ export function arrayWrappedScalars(resource: FhirComplex, path: string): string
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
  * @returns The locations of the nested arrays, in walk order (an element's own properties before any
  *   member a repeated name shadowed, which is not the document order that member had), each location
- *   once however many marked nodes sit at it.
+ *   once however many marked nodes sit at it. Two elements whose names are both withheld
+ *   ({@link ../model/path.js}) share a location and therefore collapse into one entry, on the same
+ *   reasoning as a repeated name: a location nobody can address twice says nothing twice. The
+ *   verdict does not move, `safeToSummarize` is `false` either way.
  * @example
  * ```ts
  * import { nestedArrays, parseResource } from "@cosyte/fhir";
@@ -375,11 +384,11 @@ function collectNested(node: FhirNode, path: string, out: string[]): void {
     return;
   }
   for (const property of node.properties)
-    collectNested(property.value, `${path}.${property.name}`, out);
+    collectNested(property.value, childPath(path, property.name), out);
   // Members a repeated property name shadowed are part of the document, so a nested array cannot be
   // made invisible by hiding it behind a duplicate key.
   for (const property of node.duplicates ?? []) {
-    collectNested(property.value, `${path}.${property.name}`, out);
+    collectNested(property.value, childPath(path, property.name), out);
   }
 }
 
@@ -420,7 +429,7 @@ function checkArrayWrapping(node: FhirComplex, path: string, out: SafetyWalk): v
     // checked whatever the type says, and it is checked first: an array-wrapped type gate is what
     // makes the clinical scoping below unreachable in the first place.
     if (property.name !== "resourceType" && !(clinical && isSafetyType)) continue;
-    const at = `${path}.${property.name}`;
+    const at = childPath(path, property.name);
     if (isList(property.value)) report(at);
     // The same converter shape one level down, on a `Coding` inside a CodeableConcept-valued element.
     if (clinical && isSafetyType && SAFETY_CODEABLE_ELEMENTS.has(property.name)) {
@@ -501,7 +510,7 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
     // individual members, so repeating the same path would be noise a caller cannot act on.
     if (!reported.has(property.name)) {
       reported.add(property.name);
-      out.shadowed.push(`${path}.${property.name}`);
+      out.shadowed.push(childPath(path, property.name));
     }
     visitProperty(property, path, out);
   }
@@ -512,7 +521,7 @@ function visitProperty(property: FhirProperty, path: string, out: SafetyWalk): v
   if (property.name === "modifierExtension") {
     checkModifierExtension(property.value, path, out.modifiers);
   }
-  descend(property.value, `${path}.${property.name}`, out);
+  descend(property.value, childPath(path, property.name), out);
 }
 
 /** Record every unhandled modifier in a `modifierExtension` element (a single Extension or a list). */
@@ -608,12 +617,12 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     negations.push(NOT_DONE);
   }
 
-  const prefix = rt ?? "$this";
+  const prefix = rt === undefined ? "$this" : rootPath(rt);
   const { modifiers, shadowed, arrayWrapped } = walkSafety(resource, prefix);
   const nested = nestedArrays(resource, prefix);
 
   return {
-    resourceType: rt,
+    resourceType: rt === undefined ? undefined : rootPath(rt),
     status,
     clinicalStatus,
     verificationStatus,

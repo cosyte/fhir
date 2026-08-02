@@ -29,9 +29,11 @@
  */
 
 import {
+  childPath,
   isComplex,
   isList,
   resourceType,
+  rootPath,
   type FhirComplex,
   type FhirNode,
 } from "../model/index.js";
@@ -223,10 +225,14 @@ export function validateResource(
     return finalize(ctx);
   }
 
+  // `rt` keys the schema registry and every type-scoped layer below, so it stays exactly as the
+  // document wrote it. `root` is the same name bounded for use as a diagnostic location, and it is
+  // the only one of the two that reaches an `expression`.
+  const root = rootPath(rt);
   const registry = buildRegistry(options.schemas ?? []);
   const modeled = registry(rt);
   const schema = modeled ?? baseSchema(rt);
-  if (modeled === undefined) emit(ctx, "RESOURCE_NOT_MODELED", rt);
+  if (modeled === undefined) emit(ctx, "RESOURCE_NOT_MODELED", root);
 
   // Layer 1 + 2 (max) + 3: a single ordered pass over the resource's own properties.
   const counts = new Map<string, number>();
@@ -234,7 +240,7 @@ export function validateResource(
 
   for (const property of resource.properties) {
     if (property.name === "resourceType") continue;
-    const path = `${rt}.${property.name}`;
+    const path = childPath(root, property.name);
     const match = resolveElement(schema.elements, property.name);
 
     if (match === undefined) {
@@ -263,14 +269,14 @@ export function validateResource(
 
   // A choice[x] with more than one variant present is ambiguous (structure).
   for (const [base, seen] of choiceVariants) {
-    if (seen.size > 1) emit(ctx, "CHOICE_AMBIGUOUS", `${rt}.${base}[x]`);
+    if (seen.size > 1) emit(ctx, "CHOICE_AMBIGUOUS", `${root}.${base}[x]`);
   }
 
   // Layer 2 (min): a required element that never appeared.
   for (const [name, element] of Object.entries(schema.elements)) {
     if (element.min >= 1 && (counts.get(name) ?? 0) < element.min) {
       const suffix = isChoice(element) ? `${name}[x]` : name;
-      emit(ctx, "CARDINALITY_MIN", `${rt}.${suffix}`);
+      emit(ctx, "CARDINALITY_MIN", `${root}.${suffix}`);
     }
   }
 

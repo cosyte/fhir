@@ -7,7 +7,11 @@
  *
  * - `severity`, the R4 severity (`fatal | error | warning | information`);
  * - `code`, the R4 `IssueType`;
- * - `expression`, the FHIRPath *location* (a repeating element); and
+ * - `expression`, the FHIRPath *location* (a repeating element), whose segments are the document's
+ *   own names bounded to the published form of a FHIR name. A name outside that form reads as the
+ *   {@link ../model/path.js} `WITHHELD` marker, and an expression carrying one is a location with a
+ *   gap rather than a path that resolves against the instance, so the outcome is spec-clean as a
+ *   resource while that one element is deliberately not resolvable; and
  * - `diagnostics`, a value-free line derived **only** from the validation code (the redaction
  *   chokepoint in {@link ./issues.js}). No instance value ever reaches this resource.
  *

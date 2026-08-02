@@ -8,6 +8,58 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A name the document supplied reached a diagnostic location unbounded (`PHI-WARNING-MESSAGE-LEAK`,
+  the `fhir` slice).** A finding carries a FHIRPath `expression` instead of a value, and that
+  expression is assembled out of the document's own `resourceType` and its own JSON property names.
+  On a conformant resource those are element names, which is why the value-free-diagnostics contract
+  reads as satisfied. On anything else they are whatever the sender wrote, at whatever length.
+  Measured on two documents, each named so the numbers are re-derivable. With a 1,000,000-byte
+  property name, `{"resourceType":"Patient","<1e6 b>":[["x"]]}`, the longest `expression` went from
+  **1,000,011 bytes to 21**. With a 1,000,000-byte type, `{"resourceType":"<1e6 b>","status":"final"}`,
+  the serialized `OperationOutcome` went from **1,000,222 bytes to 232** and
+  `SafetyReadout.resourceType` from **1,000,000 to 10**. The ecosystem audit
+  classified this package **prevented by construction** on the strength of `diagnosticFor(code)`
+  taking no value parameter, and that stays true: this is the one gap it named.
+  **The bound is a shape test, not a truncation**, because truncating still emits the first N bytes
+  of whatever was there. A name is echoed when it matches the published form it claims
+  (`elementdefinition.html` `eld-19`, a Rule, caps a path segment at 64 characters; `eld-20`, a
+  Warning, gives the two alphanumeric arms), and is replaced by a fixed marker otherwise. The
+  resource-type arm is tighter than `eld-20`'s and the tightening is **measured**: all 148 codes in
+  the R4 `resource-types` code system are letters only with an initial capital. The element arm is
+  measured too, against R4's own definitions: of the 1,423 distinct non-root segments in the 7,696
+  element paths of `profiles-resources.json` and `profiles-types.json`, the only 74 that fail it are
+  `choice[x]` _definition_ spellings, whose stems all pass and which are never JSON property names.
+  **Every conformant document reports exactly the locations it reported before**, which is why the
+  759 pre-existing tests were untouched by the change.
+  **Three things it does not do, each stated rather than glossed.** First, a shape test cannot tell
+  a real element name from a forgery shaped like one, so such a forgery is still echoed; the claim
+  to make is that the echo is bounded rather than that a location carries no document content, and
+  that residue is pinned by live tests. Second, **`FhirComplex.properties[].name` is deliberately left exactly as
+  written**, which is the one place the model-level lesson from `hl7`/`deid` does not transfer:
+  those names are document content the writer reproduces byte for byte, so bounding them would be
+  data loss rather than redaction, and a consumer that builds its own location out of the model
+  inherits that. The one derived identifier the model does surface, `SafetyReadout.resourceType`,
+  **is** bounded. Third, the four low-level location functions (`unhandledModifierExtensions`, `shadowedProperties`,
+  `arrayWrappedScalars`, `nestedArrays`) take their root prefix as a **parameter**, so a caller that
+  hands one an unbounded string gets it back in the locations. That is caller-supplied input, not
+  document-derived, and bounding it would break a caller legitimately rooting at a Bundle entry.
+  `readSafety` and `validateResource`, the two entry points that read the prefix off the document
+  themselves, bound it.
+  **One behaviour moves on a non-conformant document, and it is stated rather than found later.**
+  Two sibling elements whose names both withhold now share a location, so `nestedArrays()` collapses
+  them into one entry, exactly as it already collapses a repeated name. No verdict moves:
+  `safeToSummarize` stays `false` and the resource stays `valid: false`. Pinned by a test.
+  **Measured red on `origin/main` before the fix existed**, one slot at a time because the shared
+  runner aborts on the first violation: **13 of 13 declared slots and 7 of 7 name sentinels**. The
+  thirteen slots cover **twelve** distinct positions: two of them reach the expression root through
+  different document shapes. The bound is also applied at two sites where it is provably the
+  identity (the terminology layer's root, reachable only once a binding matched, and the dose root,
+  computed after the non-medication early return); they are kept as defensive calls and are named as
+  such in the source rather than counted as covered positions. The
+  audit's finding about this package's own PHI suite is why the slots exist at all: it swept only
+  leaf _values_, so no sentinel it planted could ever land in a name, and a green run said nothing
+  about the one string that reaches an `expression`.
+
 - **An array inside an array lost its contents, and the writer then invented an element there
   (`FHIR-NESTED-ARRAY-PRESERVATION`).** FHIR JSON uses an array for a repeating element and for
   nothing else (json.html §2.6.2.2), so a list of lists is not an element and the reader has nothing

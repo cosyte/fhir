@@ -405,13 +405,64 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   as text and read with `nestedArrayContent()` (`FHIR-NESTED-ARRAY-PRESERVATION`, above). (c) The
   read -> write -> read **laundering** is duplicate-key-only: the array route round-trips faithfully
   (the writer emits the list back), so the re-read reproduces the finding rather than losing it. That
-  is now pinned, so a future writer change cannot quietly introduce the laundering. (d) `PRE-EXISTING`,
-  filed by the same refuter pass: a **document-supplied `resourceType` reaches the diagnostic
-  `expression` prefix** (`ARRAY_WRAPPED_SCALAR@<whatever the document put there>.resourceType`, and on
-  into the `OperationOutcome`). Same class as `emit(ctx, "RESOURCE_NOT_MODELED", rt)` already on
-  `main`, so not introduced here, though this slice's new early-return branch creates another
-  instance. `resourceType` is a type discriminator so realistic PHI exposure is remote, but the
-  value-free-diagnostics contract is stated without that qualification. Worth its own item.
+  is now pinned, so a future writer change cannot quietly introduce the laundering. (d) **CLOSED by
+  `PHI-WARNING-MESSAGE-LEAK` (2026-08-02), and it was the wider half of the problem, not the narrow
+  one it was filed as.** It was filed as a `resourceType` reaching the `expression` prefix
+  (`ARRAY_WRAPPED_SCALAR@<whatever the document put there>.resourceType`, and on into the
+  `OperationOutcome`). Re-enumerating the sites found the **property name** is the same defect on a
+  far wider surface: 25 construction sites across the JSON reader, the XML reader, the validator, the
+  safety walk, terminology, dose, Bundle references and the profile layers, plus
+  `SafetyReadout.resourceType` on the model. Measured on named documents so the numbers can be
+  re-derived: `{"resourceType":"Patient","<1e6 b>":[["x"]]}` gave a **1,000,011-byte** `expression`
+  (21 on head), and `{"resourceType":"<1e6 b>","status":"final"}` gave a **1,000,222-byte**
+  serialized `OperationOutcome` (232 on head) and a 1,000,000-byte `SafetyReadout.resourceType`
+  (10 on head).
+  **The bound is a shape test, not a truncation**, and the mechanism is written down in
+  `src/model/path.ts` and nowhere else, so every other surface states only the consumer-facing
+  property. A name is echoed when it matches the published form it claims
+  (`elementdefinition.html` `eld-19`, a Rule, caps a path segment at 64 characters; `eld-20`, a
+  Warning, gives the two alphanumeric arms), and is replaced by a fixed marker otherwise. The
+  resource-type arm is tighter than `eld-20`'s and the tightening is **measured**, not assumed: all
+  148 codes in the R4 `resource-types` code system are letters only with an initial capital, 4 to 33
+  characters. The element arm is measured against R4's own definitions: of the 1,423 distinct
+  non-root segments across the 7,696 element paths in `profiles-resources.json` /
+  `profiles-types.json`, the only 74 failures are `choice[x]` _definition_ spellings, whose stems all
+  pass and which never appear as a JSON property name. Every conformant document reports exactly the locations it reported before, which is
+  what the 759 pre-existing tests passing unchanged demonstrates.
+  **Three things it does not do, none of them negotiable by wording.** A forgery genuinely shaped
+  like a FHIR name is still echoed, so the claim to make is that the echo is bounded, not that a
+  location carries no document content. `FhirComplex.properties[].name` stays exactly as the
+  document wrote it: the `hl7`/`deid` model-level lesson does **not** transfer, because those names
+  are content the writer reproduces byte for byte and bounding them would be data loss;
+  `SafetyReadout.resourceType`, the one derived identifier the model surfaces, **is** bounded. And
+  the four low-level location functions take their root prefix as a parameter, so a caller that
+  hands one an unbounded string gets it back, which is caller-supplied input rather than
+  document-derived. All three are pinned by tests in `test/derived-names.test.ts`, not by this
+  paragraph.
+  **Measured red on `origin/main` one slot at a time** (the shared `@cosyte/test-utils@0.0.2` runner
+  aborts on the first violation): 13 of 13 declared slots, 7 of 7 name sentinels, over **twelve**
+  distinct positions (two slots reach the expression root through different document shapes). Two
+  further `rootPath` calls, in the terminology layer and the dose locator, are provably the identity
+  wherever they are observable and are kept as defensive calls, named as such in the source; the
+  gate deliberately does not pretend to cover them. The reason the
+  package's own PHI tier never caught it: `phi-leak.test.ts` swept leaf **values** only, so no
+  sentinel it planted could land in a name.
+  **Provenance for every spec claim above, fetched 2026-08-02, not recalled:**
+  `hl7.org/fhir/R4/elementdefinition.html` (`eld-19`, `eld-20`),
+  `hl7.org/fhir/R4/codesystem-resource-types.json` (148 codes),
+  `hl7.org/fhir/R4/profiles-resources.json` + `profiles-types.json` (7,696 paths, 1,423 segments).
+  The conformance gate re-derived all four independently and found them exact.
+  **The refuter's pass-one measurements, worth keeping:** 2,912 official R4 JSON examples and 1,138
+  XML ones read byte-identically on base and head, with **zero** containing a withheld marker; a
+  4,000-document randomized differential moved no `valid`, `safeToSummarize`, `retracted` or
+  negation; the only tally that moved anywhere was the declared `nestedArrays` collapse (145 of
+  6,000). It also measured head **6 to 8% slower** on a loaded box, which matters only because the
+  two `fast-check` property tests sit near the 10,000 ms `testTimeout`.
+  **Two `PRE-EXISTING` residuals it filed, neither introduced here and neither blocking:** the JSON
+  reader still emits English prose inside an `expression`
+  (`" (unexpected _-sibling on an object)"`), which is never valid FHIRPath on any input; and the XML
+  reader does not support namespace **prefixes**, so `<f:Patient xmlns:f="...">` yields properties
+  literally named `f:active`. Both are identical on `main`.
   (e) `PRE-EXISTING`, and the one to pick up first: `serializeResourceXml` **normalizes a singleton
   wrapper away** (JSON `{"status":["entered-in-error"]}` -> `<status value="entered-in-error"/>` ->
   re-read `valid: true`, `safeToSummarize: true`). Clinical content survives (`retracted: true` on

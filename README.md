@@ -72,7 +72,8 @@ const { resource, issues } = parseResource(
 // The trailing zero survives: a naive JSON.parse would have made this 0.01.
 serializeResource(resource); // → {"resourceType":"Observation","valueQuantity":{"value":0.010,"unit":"mg"}}
 
-// Diagnostics are value-free (PHI-safe): a code + a FHIRPath location, never the value.
+// Diagnostics are value-free: a code + a FHIRPath location, never the value. The location is
+// built from the names the document supplies, and those are bounded to their published form.
 issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", expression: "Observation.valueQuantity.value" }]
 ```
 
@@ -364,7 +365,8 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
 - **Deferred:** the bundled multi-version US Core IG corpus and the `validator_cli.jar` differential
   (a JVM dev/CI job); the `type` / `profile` slicing discriminators and reslicing (still
   `PROFILE_SLICE_UNCHECKED`: a genuine fail-safe deferral, they need per-occurrence type carriage /
-  recursive profile resolution). Every finding is **value-free** (a code + a FHIRPath location).
+  recursive profile resolution). Every finding is **value-free** (a code + a FHIRPath location,
+  never the value).
 
 ```ts
 import { evaluateInvariant, parseResource } from "@cosyte/fhir";

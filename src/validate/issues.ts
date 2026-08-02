@@ -274,6 +274,15 @@ export type ValidationCode = (typeof VALIDATION_CODES)[keyof typeof VALIDATION_C
  * `expression` is a FHIRPath location into the document (e.g. `Patient.gender`,
  * `Observation.component[1].valueQuantity.value`), it says *where* without echoing *what*. An issue
  * never contains a resource value, so it is safe to log or return in an `OperationOutcome`.
+ *
+ * **It is a location, and on non-conformant input it can be a location with a gap.** The segments
+ * are the document's own names, and a name is echoed only when it matches the published form of a
+ * FHIR name; anything else reads as the {@link ../model/path.js} `WITHHELD` marker, `"<withheld>"`.
+ * A marker is not a FHIRPath identifier, so such an expression will not resolve against the
+ * instance: R4 defines `OperationOutcome.issue.expression` as a FHIRPath subset that SHALL resolve
+ * to a single node, and a location with a withheld segment does not. Every segment around the
+ * marker is intact, so the nearest addressable ancestor is still there. Test for the marker before
+ * handing an expression to a FHIRPath engine.
  */
 export interface ValidationIssue {
   readonly code: ValidationCode;

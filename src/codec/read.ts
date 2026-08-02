@@ -59,6 +59,7 @@
  */
 
 import { decimal, wouldLosePrecisionAsDouble } from "../model/decimal.js";
+import { childPath, rootPath } from "../model/path.js";
 import {
   complex,
   list,
@@ -196,8 +197,9 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
   const result: { id?: string; extension?: readonly FhirComplex[] } = {};
   const seen = new Set<string>();
   for (const member of metaNode.members) {
+    const at = childPath(path, member.key);
     if (seen.has(member.key)) {
-      issues.push(duplicateProperty(`${path}.${member.key}`));
+      issues.push(duplicateProperty(at));
       continue;
     }
     seen.add(member.key);
@@ -205,10 +207,10 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
       result.id = member.value.value;
     } else if (member.key === "extension" && member.value.t === "arr") {
       result.extension = member.value.items.map((item, i) =>
-        readComplex(item, `${path}.${member.key}[${String(i)}]`, issues),
+        readComplex(item, `${at}[${String(i)}]`, issues),
       );
     } else {
-      issues.push(unknownProperty(`${path}.${member.key}`));
+      issues.push(unknownProperty(at));
     }
   }
   return result;
@@ -369,33 +371,35 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
   let basePath = path;
   if (path === "") {
     const rt = grouped.value.get("resourceType");
-    if (rt?.t === "str") basePath = rt.value;
+    if (rt?.t === "str") basePath = rootPath(rt.value);
   }
-  const properties = grouped.order.map((name) => {
-    const childPath = basePath === "" ? name : `${basePath}.${name}`;
-    return {
-      name,
-      value: buildNode(grouped.value.get(name), grouped.meta.get(name), childPath, issues),
-    };
-  });
+  const properties = grouped.order.map((name) => ({
+    name,
+    value: buildNode(
+      grouped.value.get(name),
+      grouped.meta.get(name),
+      childPath(basePath, name),
+      issues,
+    ),
+  }));
   // Members a repeated property name shadowed: read them into the model too (a dropped value cannot
   // be reasoned about later) and flag each one, so a caller is never handed one arbitrary value out
   // of several with a clean result.
   const reported = new Set<string>();
   const duplicates = grouped.shadowed.map((member) => {
-    const childPath = basePath === "" ? member.base : `${basePath}.${member.base}`;
+    const at = childPath(basePath, member.base);
     // One issue per element on this object, however many members shadowed the name here (a name and
     // its `_`-sibling can each repeat): the FHIRPath location is the same, so a second issue would
     // say nothing new. Two different objects that each repeat a name still report separately.
     if (!reported.has(member.base)) {
       reported.add(member.base);
-      issues.push(duplicateProperty(childPath));
+      issues.push(duplicateProperty(at));
     }
     return {
       name: member.base,
       value: member.isMeta
-        ? buildNode(undefined, member.node, childPath, issues)
-        : buildNode(member.node, undefined, childPath, issues),
+        ? buildNode(undefined, member.node, at, issues)
+        : buildNode(member.node, undefined, at, issues),
     };
   });
   return complex(properties, duplicates);

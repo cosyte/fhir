@@ -29,6 +29,7 @@ import {
   isComplex,
   isList,
   resourceType,
+  rootPath,
   type FhirComplex,
   type FhirNode,
 } from "../model/index.js";
@@ -74,13 +75,13 @@ function complexOccurrences(nodes: readonly FhirNode[]): FhirComplex[] {
  * per present occurrence of that element (a primitive occurrence carries no invariants to anchor, so
  * only complex occurrences are used).
  */
-function fociFor(resource: FhirComplex, rt: string, elementPath: string): Focus[] {
-  if (elementPath === rt) return [{ node: resource, path: rt }];
+function fociFor(resource: FhirComplex, rt: string, root: string, elementPath: string): Focus[] {
+  if (elementPath === rt) return [{ node: resource, path: root }];
   const rel = elementPath.slice(rt.length + 1);
   const occ = complexOccurrences(resolvePath(resource, rel));
   return occ.map((node, i) => ({
     node,
-    path: occ.length > 1 ? `${rt}.${rel}[${String(i)}]` : `${rt}.${rel}`,
+    path: occ.length > 1 ? `${root}.${rel}[${String(i)}]` : `${root}.${rel}`,
   }));
 }
 
@@ -106,6 +107,8 @@ export function collectInvariantIssues(
 ): ValidationIssue[] {
   const rt = resourceType(resource);
   if (rt === undefined || rt !== profile.type) return [];
+  // The profile only applies when the two agree, so the location is bounded once, here.
+  const root = rootPath(rt);
 
   const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
   const issues: ValidationIssue[] = [];
@@ -114,7 +117,7 @@ export function collectInvariantIssues(
     if (el.constraint === undefined || el.constraint.length === 0) continue;
     if (el.sliceName !== undefined) continue; // slice-scoped constraints are handled with their slice (deferred).
 
-    const foci = fociFor(resource, rt, el.path);
+    const foci = fociFor(resource, rt, root, el.path);
     if (foci.length === 0) continue; // element absent → its invariants do not apply.
 
     for (const constraint of el.constraint) {
