@@ -73,6 +73,7 @@ import {
 import {
   decimalPrecisionAtRisk,
   duplicateProperty,
+  misplacedPrimitiveExtension,
   nestedArray,
   unknownProperty,
   FATAL_CODES,
@@ -315,8 +316,9 @@ function buildComplexList(
   path: string,
   issues: FhirIssue[],
 ): FhirNode {
-  if (meta !== undefined)
-    issues.push(unknownProperty(`${path}` + " (unexpected _-sibling on a non-primitive array)"));
+  // A `_`-sibling belongs to a primitive; a complex array's members carry their own id/extension
+  // inline. The sibling is not read, so this reports unreadable content, not a tolerated shape.
+  if (meta !== undefined) issues.push(misplacedPrimitiveExtension(path));
   return list(value.items.map((item, i) => readComplex(item, `${path}[${String(i)}]`, issues)));
 }
 
@@ -347,8 +349,7 @@ function buildNode(
 
   // A complex (object) element, its id/extension are inline, so any `_`-sibling is misplaced.
   if (value?.t === "obj") {
-    if (meta !== undefined)
-      issues.push(unknownProperty(`${path} (unexpected _-sibling on an object)`));
+    if (meta !== undefined) issues.push(misplacedPrimitiveExtension(path));
     return buildComplex(value, path, issues);
   }
 

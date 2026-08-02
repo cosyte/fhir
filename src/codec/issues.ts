@@ -73,6 +73,20 @@ export const ISSUE_CODES = {
    * instead of one.
    */
   NESTED_ARRAY: "NESTED_ARRAY",
+  /**
+   * A `_`-sibling appeared beside an element that is **not** a primitive. FHIR JSON defines the
+   * `_`-prefixed property as the carrier for a *primitive* element's `id` and `extension`
+   * (json.html §2.6.3); a complex element carries both inline, and a complex array's members carry
+   * their own, so there is no position for a `_`-sibling on either and no defined meaning for one.
+   *
+   * The reader does not model what was inside it, so (as with {@link ISSUE_CODES.NESTED_ARRAY})
+   * **content the sender wrote is not readable** at this location. That is why it is its own code
+   * rather than an {@link ISSUE_CODES.UNKNOWN_PROPERTY}, whose contract is that nothing was lost.
+   *
+   * The location names the **element**, not the `_`-prefixed member: FHIRPath addresses elements,
+   * and `_name` is not an element. It is raised once per misplaced sibling.
+   */
+  MISPLACED_PRIMITIVE_EXTENSION: "MISPLACED_PRIMITIVE_EXTENSION",
 } as const;
 
 /** Discriminant union of every {@link ISSUE_CODES} value. */
@@ -173,6 +187,22 @@ export function duplicateProperty(expression: string): FhirIssue {
  */
 export function nestedArray(expression: string): FhirIssue {
   return { code: ISSUE_CODES.NESTED_ARRAY, severity: "warning", expression };
+}
+
+/**
+ * Build a {@link ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION} issue at `expression`.
+ *
+ * The location is the element the `_`-sibling was written beside (`Patient.name`), because the
+ * `_`-prefixed member itself is not addressable in FHIRPath.
+ *
+ * @example
+ * ```ts
+ * import { misplacedPrimitiveExtension } from "@cosyte/fhir";
+ * const issue = misplacedPrimitiveExtension("Patient.name");
+ * ```
+ */
+export function misplacedPrimitiveExtension(expression: string): FhirIssue {
+  return { code: ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION, severity: "warning", expression };
 }
 
 /**

@@ -82,6 +82,16 @@ issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", ex
   `.equalsValue` compares quantity only.
 - **Primitive extensions** (the `_element` sibling) are modeled first-class with **null-padded array
   alignment**; a misaligned value/`_`-array **fails closed** rather than mis-attaching an extension.
+  A `_`-sibling written beside an element that is **not** a primitive has no defined meaning (a
+  complex element carries its `id`/`extension` inline), and the reader does not model what was in it,
+  so that position raises `MISPLACED_PRIMITIVE_EXTENSION`: its own code, because unlike an unexpected
+  property it says content is **not readable** there rather than merely tolerated.
+- **A diagnostic's `expression` is a location and nothing else.** R4 defines
+  `OperationOutcome.issue.expression` as a FHIRPath subset that resolves to a node, so an issue says
+  _where_ in the path and _why_ in the `code`, and never explains itself in prose inside the path.
+  Two forms are deliberately not resolvable and are the only two: a `<withheld>` segment, which is
+  what a name that fails the bounded-echo shape test prints as, and the XML reader's `.@name`, which
+  is an XML attribute FHIR gives no element to address.
 - **Lenient read, conservative write** (Postel's Law), `resourceType` resolvable in any position, and
   a `parseReference` classifier (relative / absolute / logical / fragment). The writer authors no
   value of its own, and it emits spec-clean FHIR for every model FHIR can express; the two shapes it
@@ -447,6 +457,14 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   elements unwrapped, narrative `Narrative.div` carried opaquely as its full XHTML string, the FHIR
   JSON representation, so it round-trips as conformant `<div>…</div>`, never dropped). Lenient: an
   unexpected namespace or stray text is preserved-and-flagged (`UNEXPECTED_XML_CONTENT`), never rejected.
+  **Names are namespace-resolved, so a prefix is a spelling and not part of the name.** FHIR XML is
+  defined in the `http://hl7.org/fhir` namespace, and a document may bind that namespace to a prefix
+  instead of making it the default, so `<f:Patient xmlns:f="http://hl7.org/fhir">` and
+  `<Patient xmlns="http://hl7.org/fhir">` are the same resource and read to the same model. The
+  in-scope declarations are tracked as the reader descends, including a prefix rebound partway down.
+  A prefix nothing in scope binds is not resolvable, so the tag is kept exactly as written and
+  flagged rather than guessed at. The narrative `<div>` is expected in the XHTML namespace and is not
+  flagged for being there.
 - **`serializeResourceXml`** emits compact, spec-clean FHIR XML that round-trips a spec-clean document
   **byte-for-byte** (decimals byte-exact, never through a `number`).
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible

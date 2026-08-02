@@ -458,11 +458,58 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   negation; the only tally that moved anywhere was the declared `nestedArrays` collapse (145 of
   6,000). It also measured head **6 to 8% slower** on a loaded box, which matters only because the
   two `fast-check` property tests sit near the 10,000 ms `testTimeout`.
-  **Two `PRE-EXISTING` residuals it filed, neither introduced here and neither blocking:** the JSON
-  reader still emits English prose inside an `expression`
-  (`" (unexpected _-sibling on an object)"`), which is never valid FHIRPath on any input; and the XML
-  reader does not support namespace **prefixes**, so `<f:Patient xmlns:f="...">` yields properties
-  literally named `f:active`. Both are identical on `main`.
+  **Two `PRE-EXISTING` residuals it filed, neither introduced there and neither blocking, BOTH NOW
+  CLOSED by `FHIR-READER-RESIDUALS` (2026-08-02).** They were: the JSON reader emitting English prose
+  inside an `expression` (`" (unexpected _-sibling on an object)"`), never valid FHIRPath on any
+  input; and the XML reader not supporting namespace **prefixes**, so `<f:Patient xmlns:f="...">`
+  yielded properties literally named `f:active`.
+  **The XML half was far the larger of the two, and the measurement is the thing to keep.** Each of
+  the seven XML fixtures re-spelled with a prefix, compared to its default-namespace original on the
+  whole read (issues, serialized JSON, re-emitted XML, `valid` + findings, safety readout):
+  **0 of 7 matched on `cf16767`, 7 of 7 match now.** Three consequences, all measured on `patient.xml`
+  re-spelled: a **primitive extension was silently dropped** (`<f:extension>` failed the reader's
+  `extension` test), 337 serialized bytes down to **216**; the re-emitted XML was **not well-formed**
+  (`<f:Patient xmlns="http://hl7.org/fhir">`, `f:` bound to nothing, because the writer wrote raw
+  names back under a default-namespace declaration); and the document read **`valid: true` with no
+  element recognized at all**, a false green that now reports what the identical unprefixed document
+  reports. **The clinical shape: a prefixed `Observation` with `status="entered-in-error"` read
+  `status: undefined`, `retracted: false`, `isRetracted: false`.** It reads the retraction now.
+  The mechanism is a scope map threaded down the descent (`extendScope` / `resolveName` /
+  `ScopedElement` in `src/xml/read.ts`), the implicit `xml` prefix pre-bound, and grouping keyed on
+  the **resolved** name so two prefixes for one namespace are one repeated element.
+  **A foreign namespace is flagged where the document LEAVES the FHIR one, not once per descendant** —
+  an element that merely inherits says nothing its ancestor did not. That is what keeps the existing
+  default-namespace behaviour byte-identical; do not "fix" it into a per-element flag.
+  **The `_`-sibling half is a REPORTING change, not a preserving one**, and the distinction is the
+  same one `FHIR-NESTED-ARRAY-REPORTING` turned on: new `ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION`
+  (warning) + `misplacedPrimitiveExtension`, raised at the bare element location. It replaces the
+  `UNKNOWN_PROPERTY` those two sites raised **on purpose**: `UNKNOWN_PROPERTY`'s documented contract
+  is that a shape was tolerated and **nothing was lost**, and these two sites discard the `_`-sibling
+  **whole**, so the old code was making a false promise as well as carrying prose. The sibling's
+  content is **still not modeled** and this slice does not start; the five discard shapes above are
+  unchanged.
+  **Differential vs `cf16767` over the fixture corpus + adversarial documents: 37 identical, 10 moved,
+  and all 10 are the two defects** (7 prefixed XML re-spellings, 3 `_`-sibling documents). **No
+  conformant document moved at all** — the 27 JSON and 7 XML fixtures are byte-identical on every
+  channel.
+  **`test/expression-grammar.test.ts` is the gate that keeps prose out**, sweeping every reader
+  diagnostic the JSON and XML corpora produce against a location grammar.
+  **THE CLAIM IS SCOPED AND MUST STAY SCOPED. It is that the JSON reader's `expression` no longer
+  carries prose, NOT that every `expression` is resolvable FHIRPath.** Two forms deliberately are not,
+  and the grammar **admits** them rather than hiding them: a `<withheld>` segment, and the XML
+  reader's `.@name` attribute form. **`.@name` is a live residual** — an unmodeled XML attribute has
+  no FHIRPath address at all, and choosing one for it (the element? nothing?) is a separate decision
+  from removing a sentence, so it was left alone rather than folded in.
+  **Three more residuals left open deliberately, each pinned by a test:** an **unbound** prefix
+  (`<f:active/>` with no `xmlns:f` in scope) is flagged and its tag kept **verbatim**, so it does
+  **not** read as a FHIR element and a retraction spelled that way is still not seen by the safety
+  spine — the fix covers **bound** prefixes, which is what "supports namespace prefixes" means and
+  no more; `serializeResourceXml` emits the default-namespace spelling only, so a prefixed input
+  round-trips **equivalently, not byte-for-byte** (the conservative writer, working as intended); and
+  the `_`-sibling content is still discarded, as above.
+  **And the limit `#43` was right not to paper over is INHERITED, not undone: a forgery genuinely
+  shaped like a FHIR name is still echoed, so no claim is made anywhere that a location never
+  carries document content. Do not add one.**
   (e) `PRE-EXISTING`, and the one to pick up first: `serializeResourceXml` **normalizes a singleton
   wrapper away** (JSON `{"status":["entered-in-error"]}` -> `<status value="entered-in-error"/>` ->
   re-read `valid: true`, `safeToSummarize: true`). Clinical content survives (`retracted: true` on

@@ -6,13 +6,18 @@ import {
   complex,
   FhirXmlError,
   ISSUE_CODES,
+  isList,
   isPrimitive,
+  isRetracted,
   list,
   nodesEquivalent,
   parseResource,
   parseResourceXml,
   primitive,
   readRawXml,
+  readSafety,
+  resourceType,
+  serializeResource,
   serializeResourceXml,
   XML_FATAL_CODES,
   type FhirComplex,
@@ -399,5 +404,134 @@ describe("XML reader: well-formedness fatals", () => {
     expect(() => parseResourceXml(`<Patient ${FHIR_NS}><!ELEMENT x></Patient>`)).toThrow(
       expect.objectContaining({ code: XML_FATAL_CODES.DTD_FORBIDDEN }),
     );
+  });
+});
+
+/**
+ * Namespace resolution. FHIR XML is defined in the `http://hl7.org/fhir` namespace, and XML lets a
+ * document bind that namespace to a prefix rather than making it the default. `<f:Patient
+ * xmlns:f="http://hl7.org/fhir">` and `<Patient xmlns="http://hl7.org/fhir">` are the same document,
+ * so they must read to the same model: a prefix is a spelling, not part of the name.
+ */
+describe("XML reader: namespace prefixes are resolved, not modeled as part of the name", () => {
+  const DEFAULT_NS = `<Observation ${FHIR_NS}><id value="o1"/><status value="entered-in-error"/><code><coding><system value="http://loinc.org"/><code value="718-7"/></coding></code></Observation>`;
+  const PREFIXED = `<f:Observation xmlns:f="http://hl7.org/fhir"><f:id value="o1"/><f:status value="entered-in-error"/><f:code><f:coding><f:system value="http://loinc.org"/><f:code value="718-7"/></f:coding></f:code></f:Observation>`;
+
+  it("reads a prefixed resource to the same model as the default-namespace spelling", () => {
+    const plain = parseResourceXml(DEFAULT_NS);
+    const prefixed = parseResourceXml(PREFIXED);
+    expect(prefixed.issues).toEqual([]);
+    expect(nodesEquivalent(prefixed.resource, plain.resource)).toBe(true);
+    // The model carries local names, so it serializes to the identical spec-clean JSON.
+    expect(serializeResource(prefixed.resource)).toBe(serializeResource(plain.resource));
+  });
+
+  it("resolves the synthetic resourceType from the local name, not the tag", () => {
+    const { resource } = parseResourceXml(PREFIXED);
+    const rt = req(resource.properties.find((p) => p.name === "resourceType")).value;
+    expect(isPrimitive(rt) && rt.value).toBe("Observation");
+    expect(resourceType(resource)).toBe("Observation");
+  });
+
+  it("READS THE RETRACTION a prefixed document used to hide: the safety-critical consequence", () => {
+    // Before namespace resolution every element was named `f:status`, so the status spine saw no
+    // `status` at all and a retracted result read as summarisable. This is the harm the defect had.
+    const { resource } = parseResourceXml(PREFIXED);
+    expect(readSafety(resource).retracted).toBe(true);
+    expect(isRetracted(resource)).toBe(true);
+    // The whole readout, not just the retraction: the two spellings are the same document, so the
+    // status spine must not be able to tell them apart.
+    expect(readSafety(resource)).toEqual(readSafety(parseResourceXml(DEFAULT_NS).resource));
+  });
+
+  it("groups repeats across different prefixes for the same namespace", () => {
+    const { resource, issues } = parseResourceXml(
+      `<Patient xmlns:a="http://hl7.org/fhir" xmlns:b="http://hl7.org/fhir" ${FHIR_NS}><a:name><family value="Roe"/></a:name><b:name><family value="Doe"/></b:name></Patient>`,
+    );
+    expect(issues).toEqual([]);
+    const names = req(resource.properties.find((p) => p.name === "name")).value;
+    expect(isList(names) && names.items.length).toBe(2);
+  });
+
+  it("unwraps a prefixed contained/resource-valued element", () => {
+    const { resource, issues } = parseResourceXml(
+      `<f:Bundle xmlns:f="http://hl7.org/fhir"><f:entry><f:resource><f:Patient><f:id value="p1"/></f:Patient></f:resource></f:entry></f:Bundle>`,
+    );
+    expect(issues).toEqual([]);
+    expect(serializeResource(resource)).toBe(
+      '{"resourceType":"Bundle","entry":{"resource":{"resourceType":"Patient","id":"p1"}}}',
+    );
+  });
+
+  it("honours an inner re-binding of a prefix, so scope is nested and not global", () => {
+    const { issues } = parseResourceXml(
+      `<f:Patient xmlns:f="http://hl7.org/fhir"><f:contact xmlns:f="http://example.org/other"><f:name/></f:contact></f:Patient>`,
+    );
+    // The re-bound child leaves the FHIR namespace, and it is flagged where it leaves it: once, at
+    // the boundary, not again on the descendant that merely inherits it.
+    expect(issues.filter((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toHaveLength(1);
+  });
+
+  it("flags a prefix bound to a namespace that is not FHIR", () => {
+    const { issues } = parseResourceXml(
+      `<f:Patient xmlns:f="http://example.org/not-fhir"><f:active value="true"/></f:Patient>`,
+    );
+    expect(issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toBe(true);
+  });
+
+  it("flags an unresolvable prefix and keeps the tag verbatim rather than guessing a binding", () => {
+    const { resource, issues } = parseResourceXml(
+      `<Patient ${FHIR_NS}><f:active value="true"/></Patient>`,
+    );
+    expect(issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toBe(true);
+    // Not read as `active`: an undeclared prefix binds to nothing, so inventing a binding for it
+    // would model an element under a name the document never gave it.
+    expect(resource.properties.some((p) => p.name === "active")).toBe(false);
+    expect(resource.properties.some((p) => p.name === "f:active")).toBe(true);
+  });
+
+  it("still flags a default namespace that is not FHIR, and an undeclaration of it", () => {
+    expect(
+      parseResourceXml(`<Patient xmlns="http://example.com/wrong"><active value="true"/></Patient>`)
+        .issues,
+    ).toContainEqual(expect.objectContaining({ code: ISSUE_CODES.UNEXPECTED_XML_CONTENT }));
+    expect(
+      parseResourceXml(`<Patient ${FHIR_NS}><active xmlns="" value="true"/></Patient>`).issues,
+    ).toContainEqual(expect.objectContaining({ code: ISSUE_CODES.UNEXPECTED_XML_CONTENT }));
+  });
+
+  it("no longer reports a redundant FHIR namespace declaration as an unknown attribute", () => {
+    // Re-declaring the namespace you are already in is legal XML and says nothing new. It used to
+    // read as a stray attribute on a primitive (`.@xmlns`), which was a false positive.
+    const { issues } = parseResourceXml(
+      `<Patient ${FHIR_NS}><active ${FHIR_NS} value="true"/></Patient>`,
+    );
+    expect(issues).toEqual([]);
+  });
+
+  it("keeps the narrative <div> unflagged: XHTML is the one namespace FHIR requires it in", () => {
+    const { issues } = parseResourceXml(
+      `<Patient ${FHIR_NS}><text><status value="generated"/><div xmlns="http://www.w3.org/1999/xhtml"><p>Hi</p></div></text></Patient>`,
+    );
+    expect(issues).toEqual([]);
+  });
+
+  it("leaves a document with no namespace at all exactly as it read before", () => {
+    const { resource, issues } = parseResourceXml(
+      `<Patient><active value="true"/><name><family value="Roe"/></name></Patient>`,
+    );
+    expect(issues).toEqual([]);
+    expect(serializeResource(resource)).toBe(
+      '{"resourceType":"Patient","active":"true","name":{"family":"Roe"}}',
+    );
+  });
+
+  it("resolves xml:lang without treating `xml` as an undeclared prefix", () => {
+    const { issues } = parseResourceXml(
+      `<Patient ${FHIR_NS}><name xml:lang="en"><family value="Roe"/></name></Patient>`,
+    );
+    // The attribute is still unmodeled (FHIR carries language in an element), but it is reported as
+    // an unknown attribute rather than as an unresolvable namespace.
+    expect(issues.map((i) => i.code)).toEqual([ISSUE_CODES.UNKNOWN_PROPERTY]);
   });
 });

@@ -8,6 +8,48 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **The XML reader did not resolve namespace prefixes, so a prefixed FHIR document was misread
+  whole (`FHIR-READER-RESIDUALS`).** FHIR XML is defined in the `http://hl7.org/fhir` namespace, and
+  XML lets a document bind that namespace to a prefix rather than making it the default, so
+  `<f:Patient xmlns:f="http://hl7.org/fhir">` and `<Patient xmlns="http://hl7.org/fhir">` are the
+  same resource. The reader modeled the raw tag, so the first read to properties literally named
+  `f:active` under a `resourceType` of `f:Patient`. The reader now tracks the in-scope declarations
+  as it descends (including a prefix rebound partway down and the implicit `xml` binding) and models
+  the **local** name.
+  **Measured over the package's seven XML fixtures, each re-spelled with a prefix and compared to the
+  default-namespace original** on the full read: issues, serialized JSON, re-emitted XML, validity
+  and findings, safety readout. **Before: 0 of 7 read identically. After: 7 of 7.**
+  Three consequences worth naming separately, all measured on `patient.xml` re-spelled with a prefix.
+  A **primitive extension was silently dropped**, because `<f:extension>` did not match the reader's
+  `extension` test, taking the serialized JSON from **337 bytes to 216**. The re-emitted XML was
+  **not well-formed**: the reader wrote the raw names back while declaring a default namespace,
+  producing `<f:Patient xmlns="http://hl7.org/fhir">` with `f:` bound to nothing. And the document
+  validated `valid: true` on a reading in which no element had been recognized at all, which is a
+  false green; it now reports the same findings as the identical unprefixed document.
+  **The safety consequence, stated plainly:** a prefixed `Observation` carrying
+  `status="entered-in-error"` read `status: undefined`, `retracted: false`, `isRetracted: false`.
+  It now reads the retraction. A prefix bound to a namespace that is not the FHIR one, and a prefix
+  no declaration in scope binds, are both flagged `UNEXPECTED_XML_CONTENT`; an unresolvable prefix
+  keeps the tag exactly as written rather than guessing a binding for it. A namespace declaration is
+  no longer reported as an unknown attribute, which retires a false positive on the legal
+  re-declaration of the namespace an element is already in. The narrative `<div>` is expected in the
+  XHTML namespace and is not flagged for being there.
+- **The JSON reader emitted English prose inside a FHIRPath `expression` (`FHIR-READER-RESIDUALS`).**
+  Two locations were built as `Patient.name (unexpected _-sibling on an object)` and
+  `Patient.contact (unexpected _-sibling on a non-primitive array)`. R4 defines
+  `OperationOutcome.issue.expression` as a FHIRPath subset that resolves to a node, so a sentence
+  there is a conformance defect and not a cosmetic one: a consumer evaluating it gets a parse error.
+  The reason a finding was raised is what the `code` field is for, so the reason moved there. New
+  public `ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION` (warning) with the factory
+  `misplacedPrimitiveExtension`, raised at the bare location of the element (`Patient.name`,
+  `Patient.contact`). It is a **new code rather than the previous `UNKNOWN_PROPERTY`** because the
+  two make different promises: `UNKNOWN_PROPERTY` says a shape was tolerated and nothing was lost,
+  and these two positions discard the `_`-sibling whole. A consumer matching on `UNKNOWN_PROPERTY`
+  at those two positions must match the new code instead. `test/expression-grammar.test.ts` is the
+  gate that keeps prose out, sweeping every reader diagnostic the JSON and XML corpora produce
+  against a location grammar; it admits, rather than papers over, the two forms that are deliberately
+  not resolvable FHIRPath: a `<withheld>` segment, and the XML reader's `.@name` attribute form.
+
 - **A name the document supplied reached a diagnostic location unbounded (`PHI-WARNING-MESSAGE-LEAK`,
   the `fhir` slice).** A finding carries a FHIRPath `expression` instead of a value, and that
   expression is assembled out of the document's own `resourceType` and its own JSON property names.

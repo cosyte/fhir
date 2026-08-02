@@ -24,6 +24,13 @@
  *   and **`Extension.url` is an attribute** that lands as a `url` property.
  * - **A resource-valued element** (`<contained><Patient>…</Patient></contained>`) is unwrapped to the
  *   inner resource, matching JSON where the value *is* the resource object.
+ * - **Names are namespace-resolved, so a prefix is a spelling and not part of the name.** FHIR XML
+ *   is defined in the `http://hl7.org/fhir` namespace, and XML lets a document bind that namespace
+ *   to a prefix instead of making it the default, so `<f:Patient xmlns:f="http://hl7.org/fhir">` and
+ *   `<Patient xmlns="http://hl7.org/fhir">` are the *same* document. The reader tracks the in-scope
+ *   declarations as it descends and models the **local** name, so both read to the same model. A
+ *   prefix no in-scope declaration binds is not resolvable, so the tag is kept exactly as written
+ *   and flagged rather than guessed at.
  *
  * The narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, the same
  * representation FHIR JSON uses for `Narrative.div`, so it round-trips as conformant `<div>…</div>`
@@ -54,15 +61,124 @@ export const FHIR_XML_NAMESPACE = "http://hl7.org/fhir";
 /** The XHTML namespace of a FHIR narrative `<div>` (preserved-and-flagged). */
 export const XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
+/**
+ * The namespace the `xml` prefix is bound to in every XML document, without being declared
+ * (Namespaces in XML §3). Pre-bound so `xml:lang` and friends resolve rather than reading as an
+ * undeclared prefix.
+ */
+const XML_PREFIX_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
+
+/**
+ * What "no namespace" is spelled as internally, so an element that is in no namespace can be
+ * compared against one that is without a `undefined` special case at every site.
+ */
+const NO_NAMESPACE = "";
+
+/** The namespace declarations in scope at a point in the tree: prefix (`""` = default) → URI. */
+type NamespaceScope = ReadonlyMap<string, string>;
+
+/** The scope a document starts in: the implicit `xml` binding and nothing else. */
+const ROOT_SCOPE: NamespaceScope = new Map([["xml", XML_PREFIX_NAMESPACE]]);
+
+/**
+ * Extend `parent` with the `xmlns` / `xmlns:*` declarations this element carries. Returns `parent`
+ * itself when the element declares nothing, which is the common case.
+ */
+function extendScope(element: XmlElement, parent: NamespaceScope): NamespaceScope {
+  let scope: Map<string, string> | undefined;
+  for (const attr of element.attributes) {
+    const prefix = namespaceDeclarationPrefix(attr.name);
+    if (prefix === undefined) continue;
+    scope ??= new Map(parent);
+    // An empty URI undeclares (Namespaces in XML §6.2): the prefix leaves scope rather than binding
+    // to the empty string.
+    if (attr.value === "") scope.delete(prefix);
+    else scope.set(prefix, attr.value);
+  }
+  return scope ?? parent;
+}
+
+/** The prefix an attribute declares (`""` for `xmlns`), or `undefined` if it declares nothing. */
+function namespaceDeclarationPrefix(attributeName: string): string | undefined {
+  if (attributeName === "xmlns") return "";
+  return attributeName.startsWith("xmlns:") ? attributeName.slice("xmlns:".length) : undefined;
+}
+
+/** An element's tag name, resolved against the declarations in scope where it was written. */
+interface ResolvedName {
+  /** The name to model: the local part when the prefix resolves, the tag verbatim when it does not. */
+  readonly name: string;
+  /** The namespace the element is in, {@link NO_NAMESPACE} when it is in none. */
+  readonly namespace: string;
+  /** Whether the tag carried a prefix that no declaration in scope binds. */
+  readonly unboundPrefix: boolean;
+}
+
+/**
+ * Resolve a tag name against `scope`. An unprefixed name takes the default namespace; a prefixed one
+ * takes its prefix's. A prefix nothing binds, or a malformed QName, resolves to nothing: the tag is
+ * returned exactly as written, because inventing a binding for it would model an element under a
+ * name the document never gave it.
+ */
+function resolveName(tag: string, scope: NamespaceScope): ResolvedName {
+  const colon = tag.indexOf(":");
+  if (colon === -1) {
+    return { name: tag, namespace: scope.get("") ?? NO_NAMESPACE, unboundPrefix: false };
+  }
+  const prefix = tag.slice(0, colon);
+  const local = tag.slice(colon + 1);
+  const bound = scope.get(prefix);
+  if (bound === undefined || prefix === "" || local === "" || local.includes(":")) {
+    return { name: tag, namespace: NO_NAMESPACE, unboundPrefix: true };
+  }
+  return { name: local, namespace: bound, unboundPrefix: false };
+}
+
+/** An element together with the namespace scope it was written in and its resolved name. */
+interface ScopedElement {
+  readonly element: XmlElement;
+  readonly scope: NamespaceScope;
+  readonly resolved: ResolvedName;
+}
+
+/** Pair an element with the scope in force inside it and its resolved name. */
+function scoped(element: XmlElement, parentScope: NamespaceScope): ScopedElement {
+  const scope = extendScope(element, parentScope);
+  return { element, scope, resolved: resolveName(element.name, scope) };
+}
+
+/**
+ * Flag an element whose namespace is not the FHIR one, at the position where the document leaves the
+ * FHIR namespace rather than once per descendant: an element that merely *inherits* a foreign
+ * namespace says nothing its ancestor did not already say. An unresolvable prefix is flagged
+ * wherever it appears, because each such tag is separately unreadable.
+ */
+function flagNamespace(
+  resolved: ResolvedName,
+  parentNamespace: string,
+  path: string,
+  issues: FhirIssue[],
+): void {
+  if (resolved.unboundPrefix) {
+    issues.push(unexpectedXmlContent(path));
+    return;
+  }
+  if (resolved.namespace !== FHIR_XML_NAMESPACE && resolved.namespace !== parentNamespace) {
+    issues.push(unexpectedXmlContent(path));
+  }
+}
+
 /** Whether an XML tag name is a FHIR resource type (UpperCamelCase) vs an element name (lowerCamelCase). */
 function isResourceName(name: string): boolean {
   const first = name.charAt(0);
   return first >= "A" && first <= "Z";
 }
 
-/** The element children of a node, in order. */
-function elementChildren(children: readonly XmlNode[]): XmlElement[] {
-  return children.filter((c): c is XmlElement => c.type === "element");
+/** The element children of a node, in order, each paired with the scope in force inside it. */
+function elementChildren(element: XmlElement, scope: NamespaceScope): ScopedElement[] {
+  return element.children
+    .filter((c): c is XmlElement => c.type === "element")
+    .map((c) => scoped(c, scope));
 }
 
 /** Read the `value` attribute of an element, if present. */
@@ -87,18 +203,23 @@ function serializeXml(node: XmlNode): string {
     : `<${node.name}${attrs}>${inner}</${node.name}>`;
 }
 
-/** Group an element's children by tag name, preserving first-seen order (mirrors the JSON grouping). */
-function groupChildren(children: XmlElement[]): {
+/**
+ * Group an element's children by **resolved** name, preserving first-seen order (mirrors the JSON
+ * grouping). Two children spelled with different prefixes but resolving to the same namespace and
+ * local name are the same element repeated, so they group together.
+ */
+function groupChildren(children: ScopedElement[]): {
   order: string[];
-  byName: Map<string, XmlElement[]>;
+  byName: Map<string, ScopedElement[]>;
 } {
   const order: string[] = [];
-  const byName = new Map<string, XmlElement[]>();
+  const byName = new Map<string, ScopedElement[]>();
   for (const child of children) {
-    const existing = byName.get(child.name);
+    const name = child.resolved.name;
+    const existing = byName.get(name);
     if (existing === undefined) {
-      order.push(child.name);
-      byName.set(child.name, [child]);
+      order.push(name);
+      byName.set(name, [child]);
     } else {
       existing.push(child);
     }
@@ -112,21 +233,20 @@ function groupChildren(children: XmlElement[]): {
  * grouped by name. When `isResource`, a synthetic `resourceType` property (the element name) leads.
  */
 function readComplex(
-  element: XmlElement,
+  self: ScopedElement,
   path: string,
   issues: FhirIssue[],
   opts: { isResource: boolean },
 ): FhirComplex {
+  const { element, resolved } = self;
   const properties: FhirProperty[] = [];
   if (opts.isResource) {
-    properties.push({ name: "resourceType", value: primitive(element.name) });
+    properties.push({ name: "resourceType", value: primitive(resolved.name) });
   }
   for (const attr of element.attributes) {
-    if (attr.name === "xmlns") {
-      if (attr.value !== FHIR_XML_NAMESPACE) issues.push(unexpectedXmlContent(path));
-      continue;
-    }
-    if (attr.name.startsWith("xmlns:")) continue;
+    // A namespace declaration is not an element: it is read by `extendScope`, and whether the
+    // namespace it names is the FHIR one is reported against the element, not the attribute.
+    if (namespaceDeclarationPrefix(attr.name) !== undefined) continue;
     if (attr.name === "id" || attr.name === "url") {
       properties.push({ name: attr.name, value: primitive(attr.value) });
       continue;
@@ -138,12 +258,15 @@ function readComplex(
     }
     issues.push(unknownProperty(`${path}.@${safeDerivedName(attr.name, "elementName")}`));
   }
-  const children = elementChildren(element.children);
+  const children = elementChildren(element, self.scope);
   flagStrayText(element.children, path, issues);
   const { order, byName } = groupChildren(children);
   for (const name of order) {
     const occurrences = byName.get(name) ?? [];
-    properties.push({ name, value: buildNode(occurrences, childPath(path, name), issues) });
+    properties.push({
+      name,
+      value: buildNode(occurrences, childPath(path, name), issues, resolved.namespace),
+    });
   }
   return complex(properties);
 }
@@ -159,28 +282,47 @@ function flagStrayText(children: readonly XmlNode[], path: string, issues: FhirI
 }
 
 /** Build the model node for a set of same-named occurrences: a list when repeated, else a single node. */
-function buildNode(occurrences: XmlElement[], path: string, issues: FhirIssue[]): FhirNode {
+function buildNode(
+  occurrences: ScopedElement[],
+  path: string,
+  issues: FhirIssue[],
+  parentNamespace: string,
+): FhirNode {
   if (occurrences.length > 1) {
-    return list(occurrences.map((occ, i) => buildSingle(occ, `${path}[${String(i)}]`, issues)));
+    return list(
+      occurrences.map((occ, i) =>
+        buildSingle(occ, `${path}[${String(i)}]`, issues, parentNamespace),
+      ),
+    );
   }
   const only = occurrences[0];
   if (only === undefined) return list([]); // unreachable: a grouped name always has ≥1 occurrence
-  return buildSingle(only, path, issues);
+  return buildSingle(only, path, issues, parentNamespace);
 }
 
 /** Build the model node for one element occurrence, resource-valued, primitive, or complex. */
-function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): FhirNode {
-  const children = elementChildren(element.children);
+function buildSingle(
+  self: ScopedElement,
+  path: string,
+  issues: FhirIssue[],
+  parentNamespace: string,
+): FhirNode {
+  const { element, resolved } = self;
+  // The narrative `<div>` is the one element FHIR *requires* in a foreign namespace (XHTML), so it
+  // is not unexpected content there. Any other namespace on it still is.
+  const narrativeDiv = resolved.name === "div" && resolved.namespace === XHTML_NAMESPACE;
+  if (!narrativeDiv) flagNamespace(resolved, parentNamespace, path, issues);
+  const children = elementChildren(element, self.scope);
   const hasValue = valueAttribute(element) !== undefined;
 
   // A resource-valued element wraps exactly one resource element (e.g. `contained`, `entry.resource`).
-  if (
-    !hasValue &&
-    children.length === 1 &&
-    children[0] !== undefined &&
-    isResourceName(children[0].name)
-  ) {
-    return readComplex(children[0], path, issues, { isResource: true });
+  const onlyChild = children[0];
+  if (!hasValue && children.length === 1 && onlyChild !== undefined) {
+    // An unresolvable prefix keeps the tag verbatim, so `f:Patient` does not read as a resource name.
+    if (isResourceName(onlyChild.resolved.name)) {
+      flagNamespace(onlyChild.resolved, resolved.namespace, path, issues);
+      return readComplex(onlyChild, path, issues, { isResource: true });
+    }
   }
 
   // A narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, exactly the
@@ -188,28 +330,37 @@ function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): Fh
   // element tree, but it never drops or garbles it: the writer re-emits this string verbatim, so a
   // narrative round-trips as conformant `<div>…</div>`, not an escaped attribute. (The XHTML structure
   // itself is not validated, the same fidelity as the JSON codec.)
-  if (element.name === "div") {
+  if (resolved.name === "div") {
     return primitive(serializeXml(element));
   }
 
-  const extensionChildren = children.filter((c) => c.name === "extension");
-  const otherChildren = children.filter((c) => c.name !== "extension");
+  const extensionChildren = children.filter((c) => c.resolved.name === "extension");
+  const otherChildren = children.filter((c) => c.resolved.name !== "extension");
 
   // Primitive: a `value` attribute, or no child elements beyond `extension` (incl. value-absent).
   if (hasValue || otherChildren.length === 0) {
-    for (const stray of otherChildren) issues.push(unknownProperty(childPath(path, stray.name)));
+    for (const stray of otherChildren) {
+      issues.push(unknownProperty(childPath(path, stray.resolved.name)));
+    }
     const meta: { id?: string; extension?: readonly FhirComplex[] } = {};
     const id = element.attributes.find((a) => a.name === "id")?.value;
     if (id !== undefined) meta.id = id;
     if (extensionChildren.length > 0) {
-      meta.extension = extensionChildren.map((ext, i) =>
-        readComplex(ext, `${path}.extension[${String(i)}]`, issues, { isResource: false }),
-      );
+      meta.extension = extensionChildren.map((ext, i) => {
+        flagNamespace(ext.resolved, resolved.namespace, `${path}.extension[${String(i)}]`, issues);
+        return readComplex(ext, `${path}.extension[${String(i)}]`, issues, { isResource: false });
+      });
     }
     // A primitive carries only `value`, `id`, and child `<extension>`s; flag any other attribute
-    // (a stray `url`, an xmlns on a nested primitive, …) as unknown, preserved, never rejected.
+    // (a stray `url`, …) as unknown, preserved, never rejected. A namespace declaration is not an
+    // attribute of the element in this sense: it is read as a declaration and reported, when it
+    // names something other than the FHIR namespace, against the element itself.
     for (const attr of element.attributes) {
-      if (attr.name !== "value" && attr.name !== "id") {
+      if (
+        attr.name !== "value" &&
+        attr.name !== "id" &&
+        namespaceDeclarationPrefix(attr.name) === undefined
+      ) {
         issues.push(unknownProperty(`${path}.@${safeDerivedName(attr.name, "elementName")}`));
       }
     }
@@ -217,7 +368,7 @@ function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): Fh
     return primitive(valueAttribute(element), meta);
   }
 
-  return readComplex(element, path, issues, { isResource: false });
+  return readComplex(self, path, issues, { isResource: false });
 }
 
 /**
@@ -239,6 +390,9 @@ function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): Fh
 export function parseResourceXml(input: string | XmlElement): ReadResult {
   const root = typeof input === "string" ? readRawXml(input) : input;
   const issues: FhirIssue[] = [];
-  const resource = readComplex(root, rootPath(root.name), issues, { isResource: true });
+  const self = scoped(root, ROOT_SCOPE);
+  const path = rootPath(self.resolved.name);
+  flagNamespace(self.resolved, NO_NAMESPACE, path, issues);
+  const resource = readComplex(self, path, issues, { isResource: true });
   return { resource, issues };
 }
