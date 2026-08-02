@@ -37,6 +37,7 @@
  */
 
 import { unexpectedXmlContent, unknownProperty, type FhirIssue } from "../codec/issues.js";
+import { childPath, rootPath, safeDerivedName } from "../model/path.js";
 import type { ReadResult } from "../codec/read.js";
 import {
   complex,
@@ -135,14 +136,14 @@ function readComplex(
       issues.push(unknownProperty(`${path}.@value`));
       continue;
     }
-    issues.push(unknownProperty(`${path}.@${attr.name}`));
+    issues.push(unknownProperty(`${path}.@${safeDerivedName(attr.name, "elementName")}`));
   }
   const children = elementChildren(element.children);
   flagStrayText(element.children, path, issues);
   const { order, byName } = groupChildren(children);
   for (const name of order) {
     const occurrences = byName.get(name) ?? [];
-    properties.push({ name, value: buildNode(occurrences, `${path}.${name}`, issues) });
+    properties.push({ name, value: buildNode(occurrences, childPath(path, name), issues) });
   }
   return complex(properties);
 }
@@ -196,7 +197,7 @@ function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): Fh
 
   // Primitive: a `value` attribute, or no child elements beyond `extension` (incl. value-absent).
   if (hasValue || otherChildren.length === 0) {
-    for (const stray of otherChildren) issues.push(unknownProperty(`${path}.${stray.name}`));
+    for (const stray of otherChildren) issues.push(unknownProperty(childPath(path, stray.name)));
     const meta: { id?: string; extension?: readonly FhirComplex[] } = {};
     const id = element.attributes.find((a) => a.name === "id")?.value;
     if (id !== undefined) meta.id = id;
@@ -209,7 +210,7 @@ function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): Fh
     // (a stray `url`, an xmlns on a nested primitive, …) as unknown, preserved, never rejected.
     for (const attr of element.attributes) {
       if (attr.name !== "value" && attr.name !== "id") {
-        issues.push(unknownProperty(`${path}.@${attr.name}`));
+        issues.push(unknownProperty(`${path}.@${safeDerivedName(attr.name, "elementName")}`));
       }
     }
     flagStrayText(element.children, path, issues);
@@ -238,6 +239,6 @@ function buildSingle(element: XmlElement, path: string, issues: FhirIssue[]): Fh
 export function parseResourceXml(input: string | XmlElement): ReadResult {
   const root = typeof input === "string" ? readRawXml(input) : input;
   const issues: FhirIssue[] = [];
-  const resource = readComplex(root, root.name, issues, { isResource: true });
+  const resource = readComplex(root, rootPath(root.name), issues, { isResource: true });
   return { resource, issues };
 }

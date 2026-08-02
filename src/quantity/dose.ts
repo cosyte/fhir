@@ -12,7 +12,7 @@
  * @packageDocumentation
  */
 
-import { getProperty, isList, type FhirComplex, type FhirNode } from "../model/index.js";
+import { getProperty, isList, rootPath, type FhirComplex, type FhirNode } from "../model/index.js";
 import { readQuantity, type Quantity } from "./ucum.js";
 
 /** The `Dosage`-list property for each medication resource type (`Dosage` is the shared datatype). */
@@ -57,6 +57,11 @@ function asItems(node: FhirNode | undefined): readonly FhirNode[] {
 export function locateDoseQuantities(resource: FhirComplex, rt: string): LocatedDoseQuantity[] {
   const property = dosageProperty(rt);
   if (property === undefined) return [];
+  // `rt` selects the dosage element above; `root` is the same name bounded for the location below.
+  // Defensive rather than load-bearing: this runs after the `dosageProperty(rt) === undefined`
+  // return, so `rt` is already one of the two medication types and the bound is provably the
+  // identity. It stays so a future dosage-bearing type cannot reintroduce the echo.
+  const root = rootPath(rt);
   const out: LocatedDoseQuantity[] = [];
   asItems(getProperty(resource, property)).forEach((dosage, di) => {
     if (dosage.kind !== "complex") return;
@@ -66,7 +71,7 @@ export function locateDoseQuantities(resource: FhirComplex, rt: string): Located
       if (dose !== undefined && dose.kind === "complex") {
         out.push({
           node: dose,
-          path: `${rt}.${property}[${String(di)}].doseAndRate[${String(ri)}].doseQuantity`,
+          path: `${root}.${property}[${String(di)}].doseAndRate[${String(ri)}].doseQuantity`,
         });
       }
     });

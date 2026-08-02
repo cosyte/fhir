@@ -43,6 +43,9 @@ export type {
   PrimitiveMeta,
   PrimitiveValue,
 } from "./model/node.js";
+// The marker a diagnostic location prints in place of a name it may not echo. Exported so a
+// consumer can test for a withheld segment before handing an `expression` to a FHIRPath engine.
+export { WITHHELD } from "./model/path.js";
 export { parseReference } from "./model/reference.js";
 export type { ParsedReference, ReferenceKind } from "./model/reference.js";
 

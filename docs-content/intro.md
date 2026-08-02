@@ -33,7 +33,9 @@ against **FHIR R4 (`4.0.1`)**:
   silent dose or identifier corruption). The XML reader is **XXE- and billion-laughs-proof by
   refusal**: it rejects any `<!DOCTYPE` or non-predefined entity rather than resolving it.
 - **Validate** a resource across structural, cardinality, and primitive/enumerated value-domain
-  layers, emitting a **value-free `OperationOutcome`** (no PHI in diagnostics).
+  layers, emitting a **value-free `OperationOutcome`**: a finding carries a coded reason and a
+  FHIRPath location, never the value it was raised over, and the location is bounded to the
+  published form of a FHIR name rather than echoing whatever the document put there.
 - Preserve the **safety-critical status & negation model**: it fails closed on an unknown
   `modifierExtension` and never drops a status, modifier, or negation.
 - Surface measured values by their **true `value[x]` type** with **UCUM `code`** unit fidelity

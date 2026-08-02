@@ -20,6 +20,14 @@
  *
  * This generalizes the hand-picked cases in `phi.test.ts` to the whole corpus and to injected
  * sentinels, so a future finding that starts echoing a value fails the build.
+ *
+ * **Both layers above sweep VALUES, and for a long time that was the whole file.** A leaf value is
+ * not the only thing a sender controls: a JSON property name and the `resourceType` string are
+ * document bytes too, and unlike a value they are what a FHIRPath `expression` is assembled out of,
+ * so they were the one route by which unbounded document content reached a finding. No sentinel a
+ * value sweep plants can ever land in one of those positions, which is exactly why a green run
+ * proved nothing about them. The third layer below plants sentinels in the NAMES, and
+ * `derived-names.test.ts` holds the bound itself plus the residue it does not cover.
  */
 
 import { readFileSync, readdirSync } from "node:fs";
@@ -240,6 +248,65 @@ describe("PHI-leak tier: sentinel battery, no sentinel value reaches any diagnos
       // A resource with a bad code / bad status / unknown modifier / precision risk must surface
       // *something*, otherwise there is no diagnostic to leak through and the test proves nothing.
       const { issues } = parseResource(text);
+      expect(result.issues.length + issues.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ── Name sentinels ───────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The two positions a sender controls that are not values: an element name and the type name. Both
+ * are assembled into a finding's `expression`, and neither can be reached by planting a sentinel in
+ * a value, which is why they need their own battery.
+ *
+ * Each sentinel is deliberately shaped like the content it stands in for rather than like an
+ * element name, because that is what a real leak looks like: a converter keying an object by a
+ * patient identity, or a feed whose type field carries a line of a record.
+ */
+const NAME_SENTINELS = {
+  familyNameKey: "Zzyxxsentinelfamily, Qqvar 1893-04-17",
+  overlongKey: `sentinel${"x".repeat(5000)}`,
+  typeName: "Zzyxxsentineltype 1893-04-17",
+} as const;
+
+/** Documents carrying a name sentinel at each position a name reaches a diagnostic from. */
+const NAME_SENTINEL_RESOURCES: readonly string[] = [
+  // An unknown element on the one resource type with a built-in schema.
+  `{"resourceType":"Patient",${JSON.stringify(NAME_SENTINELS.familyNameKey)}:"x"}`,
+  // A repeated property name, reported by the reader and again by the validator.
+  `{"resourceType":"Patient",${JSON.stringify(NAME_SENTINELS.familyNameKey)}:"x",` +
+    `${JSON.stringify(NAME_SENTINELS.familyNameKey)}:"y"}`,
+  // An array inside an array, the finding that says content could not be read at all.
+  `{"resourceType":"Patient",${JSON.stringify(NAME_SENTINELS.familyNameKey)}:[["x"]]}`,
+  // A member of a primitive's `_`-sibling that is neither `id` nor `extension`.
+  `{"resourceType":"Patient","gender":"male","_gender":` +
+    `{${JSON.stringify(NAME_SENTINELS.familyNameKey)}:"x"}}`,
+  // A key long enough that echoing it is a denial of service on a log as well as a disclosure.
+  `{"resourceType":"Patient",${JSON.stringify(NAME_SENTINELS.overlongKey)}:[["x"]]}`,
+  // The type name, which prefixes every finding the resource draws.
+  `{"resourceType":${JSON.stringify(NAME_SENTINELS.typeName)},"status":"final"}`,
+  // The same through a fail-closed safety finding, a different construction path for the location.
+  `{"resourceType":"Observation","status":"final",` +
+    `${JSON.stringify(NAME_SENTINELS.familyNameKey)}:` +
+    `{"modifierExtension":[{"url":"http://example.org/unknown"}]}}`,
+];
+
+describe("PHI-leak tier: name sentinels, no document-supplied NAME reaches any diagnostic", () => {
+  const sentinelValues = Object.values(NAME_SENTINELS);
+
+  for (const [index, text] of NAME_SENTINEL_RESOURCES.entries()) {
+    it(`name sentinel #${String(index)}: parse + validate diagnostics are sentinel-free`, () => {
+      const surface = diagnosticSurfaceForJson(text);
+      const leaked = sentinelValues.filter((v) => surface.includes(v));
+      expect(leaked, "a name sentinel leaked into a diagnostic").toEqual([]);
+    });
+  }
+
+  it("each name-sentinel document actually produces a finding (the battery is not vacuous)", () => {
+    for (const text of NAME_SENTINEL_RESOURCES) {
+      const { resource, issues } = parseResource(text);
+      const result = validateResource(resource);
       expect(result.issues.length + issues.length).toBeGreaterThan(0);
     }
   });

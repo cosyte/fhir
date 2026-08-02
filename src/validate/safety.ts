@@ -45,7 +45,7 @@
  * @packageDocumentation
  */
 
-import { getAllProperties, getProperty, type FhirComplex } from "../model/index.js";
+import { getAllProperties, getProperty, rootPath, type FhirComplex } from "../model/index.js";
 import {
   ALLERGY_VERIFICATION_SYSTEM,
   choicePresent,
@@ -86,16 +86,19 @@ import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issue
  */
 export function collectSafetyIssues(resource: FhirComplex, rt: string): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  // `rt` still selects the type-scoped invariants below; `root` is the same name bounded for use as
+  // a diagnostic location, and it is the only one of the two that reaches an `expression`.
+  const root = rootPath(rt);
 
   // 1. Fail closed on any modifierExtension we do not understand, every resource type.
-  for (const location of unhandledModifierExtensions(resource, rt)) {
+  for (const location of unhandledModifierExtensions(resource, root)) {
     issues.push(validationIssue("UNHANDLED_MODIFIER_EXTENSION", ISSUE_SEVERITIES.ERROR, location));
   }
 
   // 2. A repeated property name violates FHIR's unique-name SHALL and leaves the element ambiguous.
   // Universal, like the modifier check: it is what stops the validator returning `valid` for a
   // document whose safety-bearing element carries two values.
-  for (const location of shadowedProperties(resource, rt)) {
+  for (const location of shadowedProperties(resource, root)) {
     issues.push(validationIssue("DUPLICATE_PROPERTY", ISSUE_SEVERITIES.ERROR, location));
   }
 
@@ -103,7 +106,7 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
   // reserves the array for a repeating element, so the encoding is non-conformant and a single-value
   // read finds nothing in it. Universal like the two above, and for the same reason: it is what stops
   // the validator returning `valid` for a document whose retraction is sitting inside a wrapper.
-  for (const location of arrayWrappedScalars(resource, rt)) {
+  for (const location of arrayWrappedScalars(resource, root)) {
     issues.push(validationIssue("ARRAY_WRAPPED_SCALAR", ISSUE_SEVERITIES.ERROR, location));
   }
 
@@ -112,7 +115,7 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
   // at any position, so it needs no cardinality rule and cannot false-error on a conformant
   // document. It is what stops the validator returning `valid` for a document whose negation,
   // retraction, or entire Bundle entry the codec was unable to read.
-  for (const location of nestedArrays(resource, rt)) {
+  for (const location of nestedArrays(resource, root)) {
     issues.push(validationIssue("NESTED_ARRAY", ISSUE_SEVERITIES.ERROR, location));
   }
 
@@ -125,7 +128,7 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
     const retractedStatus = getAllProperties(resource, "status").some((node) =>
       primitiveStrings(node).includes(ENTERED_IN_ERROR),
     );
-    const at = retractedStatus ? `${rt}.status` : `${rt}.verificationStatus`;
+    const at = retractedStatus ? `${root}.status` : `${root}.verificationStatus`;
     issues.push(validationIssue("RETRACTED_RESOURCE", ISSUE_SEVERITIES.INFORMATION, at));
   }
 

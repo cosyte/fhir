@@ -35,5 +35,7 @@ export type {
   PrimitiveMeta,
   PrimitiveValue,
 } from "./node.js";
+export { WITHHELD, childPath, rootPath, safeDerivedName } from "./path.js";
+export type { DerivedNameKind } from "./path.js";
 export { parseReference } from "./reference.js";
 export type { ParsedReference, ReferenceKind } from "./reference.js";

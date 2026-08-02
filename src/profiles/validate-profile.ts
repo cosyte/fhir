@@ -30,6 +30,7 @@ import {
   isComplex,
   isList,
   resourceType,
+  rootPath,
   type FhirComplex,
   type FhirNode,
 } from "../model/index.js";
@@ -78,17 +79,22 @@ function leafOf(elementPath: string): string {
  * present parent occurrence, and **no groups at all when the parent is absent**, an absent optional
  * parent means its required children simply do not apply (no false cardinality error).
  */
-function parentGroups(resource: FhirComplex, rt: string, elementPath: string): ParentGroup[] {
+function parentGroups(
+  resource: FhirComplex,
+  rt: string,
+  root: string,
+  elementPath: string,
+): ParentGroup[] {
   const relPath = elementPath.slice(rt.length + 1);
   const dot = relPath.lastIndexOf(".");
   if (dot === -1) {
-    return [{ path: rt, children: occurrencesOf(resolvePath(resource, relPath)) }];
+    return [{ path: root, children: occurrencesOf(resolvePath(resource, relPath)) }];
   }
   const parentRel = relPath.slice(0, dot);
   const leaf = relPath.slice(dot + 1);
   const parents = occurrencesOf(resolvePath(resource, parentRel));
   return parents.map((parent, j) => ({
-    path: parents.length > 1 ? `${rt}.${parentRel}[${String(j)}]` : `${rt}.${parentRel}`,
+    path: parents.length > 1 ? `${root}.${parentRel}[${String(j)}]` : `${root}.${parentRel}`,
     children: occurrencesOf(resolvePath(parent, leaf)),
   }));
 }
@@ -115,6 +121,8 @@ export function collectProfileIssues(
 ): ValidationIssue[] {
   const rt = resourceType(resource);
   if (rt === undefined || rt !== profile.type) return [];
+  // The profile only applies when the two agree, so the location is bounded once, here.
+  const root = rootPath(rt);
 
   const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
   const issues: ValidationIssue[] = [];
@@ -123,7 +131,7 @@ export function collectProfileIssues(
     if (el.path === profile.type) continue; // the root element, nothing to check on the resource itself.
     if (el.sliceName !== undefined) continue; // slice elements are handled via their sliced parent below.
 
-    const groups = parentGroups(resource, rt, el.path);
+    const groups = parentGroups(resource, rt, root, el.path);
     if (groups.length === 0) continue; // parent absent → the element's constraints do not apply.
     const leaf = leafOf(el.path);
     const totalChildren = groups.reduce((n, g) => n + g.children.length, 0);
@@ -242,7 +250,7 @@ export function collectProfileVersionIssues(
   resource: FhirComplex,
   profiles: readonly StructureDefinition[],
 ): ValidationIssue[] {
-  const rt = resourceType(resource) ?? "";
+  const root = rootPath(resourceType(resource) ?? "");
   const meta = getProperty(resource, "meta");
   if (meta === undefined || !isComplex(meta)) return [];
   const profileNode = getProperty(meta, "profile");
@@ -271,7 +279,7 @@ export function collectProfileVersionIssues(
         validationIssue(
           "PROFILE_VERSION_MISMATCH",
           ISSUE_SEVERITIES.WARNING,
-          `${rt}.meta.profile[${String(i)}]`,
+          `${root}.meta.profile[${String(i)}]`,
         ),
       );
     }
