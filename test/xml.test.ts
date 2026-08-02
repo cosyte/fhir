@@ -661,14 +661,241 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       expect(valid).toBe(false);
     });
 
-    it("keeps a foreign narrative div out of Narrative.div rather than storing a broken fragment", () => {
+    it("still keeps a PREFIXED div in a vendor namespace out of Narrative.div", () => {
+      // Recognising the narrative by its expanded name did not widen this: `{urn:vendor}div` is not
+      // `{xhtml}div`, and the prefixed spelling keeps its tag, so it cannot reach `Narrative.div`.
+      // The UNPREFIXED spelling still can, and is pinned as the residual it is in the block below:
+      // this test's scope is the prefixed one, and no claim anywhere may be wider.
       const { resource, issues } = parseResourceXml(
-        `<Patient ${FHIR_NS} xmlns:h="http://www.w3.org/1999/xhtml"><text><status value="generated"/><h:div><h:p>Hi</h:p></h:div></text></Patient>`,
+        `<Patient ${FHIR_NS} xmlns:v="urn:vendor"><text><status value="generated"/><v:div><v:p>Hi</v:p></v:div></text></Patient>`,
       );
-      // `{xhtml}div` reached through a prefix is not the parent's vocabulary, so it is not modeled
-      // as `Narrative.div`; storing it there would put an undeclared `h:` prefix in the string.
       expect(serializeResource(resource)).not.toContain('"div"');
       expect(issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toBe(true);
+    });
+  });
+
+  /**
+   * The narrative `<div>` is the one element FHIR *requires* in a namespace other than its parent's,
+   * so it is the one element whose expanded name (`{http://www.w3.org/1999/xhtml}div`) is what the
+   * reader keys on rather than the tag the document happened to spell it with.
+   *
+   * **Before this, a prefixed narrative was DESTROYED under a passing verdict**: `<h:div>` kept its
+   * tag, failed the `div` test, was read as an empty complex (or vanished entirely when it held only
+   * text), and the resource still validated `valid: true`: silent loss of clinical prose. The two
+   * diagnostics it did draw were both at a `<withheld>` location, so they did not even name the
+   * position. Every document here is legal, namespace-well-formed XML.
+   */
+  describe("the narrative <div> is recognised by its namespace, not its spelling", () => {
+    const XHTML = "http://www.w3.org/1999/xhtml";
+    const narrative = (patientAttrs: string, div: string) =>
+      `<Patient ${FHIR_NS}${patientAttrs}><text><status value="generated"/>${div}</text></Patient>`;
+
+    /** The whole reading of a document, so two spellings can be compared on everything at once. */
+    const reading = (src: string) => {
+      const { resource, issues } = parseResourceXml(src);
+      const v = validateResource(resource);
+      const s = readSafety(resource);
+      return {
+        issues: issues.map((i) => `${i.code}@${i.expression ?? ""}`).sort(),
+        valid: v.valid,
+        findings: v.issues.map((i) => `${i.code}/${i.severity}`).sort(),
+        safeToSummarize: s.safeToSummarize,
+        retracted: s.retracted,
+        json: serializeResource(resource),
+        xml: serializeResourceXml(resource),
+      };
+    };
+
+    /** The narrative text a reading preserved, as a single searchable string. */
+    const carried = (src: string) => {
+      const r = reading(src);
+      return { json: r.json, xml: r.xml };
+    };
+
+    /** The `Narrative.div` string a document read to, or `undefined` when it carried none. */
+    const divOf = (json: string): unknown =>
+      (JSON.parse(json) as { text?: { div?: unknown } }).text?.div;
+
+    it("carries a prefixed narrative rather than destroying it", () => {
+      const { json, xml } = carried(
+        narrative(` xmlns:h="${XHTML}"`, "<h:div><h:p>Allergic to penicillin</h:p></h:div>"),
+      );
+      expect(json).toContain("Allergic to penicillin");
+      expect(xml).toContain("Allergic to penicillin");
+      // Modeled at `Narrative.div`, the property a consumer reads, not at a `h:div` it never looks at.
+      expect(JSON.parse(json)).toMatchObject({
+        text: {
+          div: `<h:div xmlns:h="${XHTML}"><h:p>Allergic to penicillin</h:p></h:div>`,
+        },
+      });
+    });
+
+    it("carries a prefixed narrative that holds only text", () => {
+      // The shape that vanished WITHOUT TRACE before: no element children, so the reader fell into
+      // the primitive branch and produced a value-absent primitive the writer then omitted.
+      const { json } = carried(
+        narrative(` xmlns:h="${XHTML}"`, "<h:div>Allergic to penicillin</h:div>"),
+      );
+      expect(json).toContain("Allergic to penicillin");
+    });
+
+    it("reads a prefixed narrative exactly as it reads the same document spelled with a default xmlns", () => {
+      // The headline: every observable of the read matches, modulo the narrative's own spelling,
+      // which is preserved rather than rewritten.
+      const prefixed = reading(narrative(` xmlns:h="${XHTML}"`, "<h:div><h:p>Hi</h:p></h:div>"));
+      const dflt = reading(narrative("", `<div xmlns="${XHTML}"><p>Hi</p></div>`));
+      expect(prefixed.issues).toEqual(dflt.issues);
+      expect(prefixed.issues).toEqual([]);
+      expect(prefixed.valid).toBe(dflt.valid);
+      expect(prefixed.findings).toEqual(dflt.findings);
+      expect(prefixed.safeToSummarize).toBe(dflt.safeToSummarize);
+      expect(prefixed.retracted).toBe(dflt.retracted);
+      // Same model shape, same property name; only the opaque string's spelling differs.
+      const respell = (json: string): unknown =>
+        JSON.parse(json.replace(/xmlns:h=/g, "xmlns=").replace(/h:/g, ""));
+      expect(respell(prefixed.json)).toEqual(respell(dflt.json));
+    });
+
+    it("emits a prefixed narrative with its prefix bound, so the output is well-formed XML", () => {
+      // Before, the writer re-emitted `h:` bound to nothing: the document did not re-parse.
+      const src = narrative(` xmlns:h="${XHTML}"`, "<h:div><h:p>Hi</h:p></h:div>");
+      const { xml } = carried(src);
+      expect(xml).toContain(`<h:div xmlns:h="${XHTML}">`);
+      // And it genuinely re-reads, to the same narrative.
+      const reread = parseResourceXml(xml);
+      expect(reread.issues).toEqual([]);
+      expect(serializeResource(reread.resource)).toBe(carried(src).json);
+    });
+
+    it("carries the declarations the narrative inherited, so the fragment stands on its own", () => {
+      // `Narrative.div` is a self-contained XHTML fragment; a binding written on an ancestor has to
+      // travel with it or the string is not namespace-well-formed. Nothing is invented: the URI is
+      // the one that was in scope where the document wrote the element.
+      const { json } = carried(
+        narrative(` xmlns:v="urn:vendor"`, `<div xmlns="${XHTML}"><v:x/></div>`),
+      );
+      expect(divOf(json)).toBe(`<div xmlns="${XHTML}" xmlns:v="urn:vendor"><v:x/></div>`);
+    });
+
+    it("leaves the implicit xml prefix alone, and leaves an unbound one exactly as written", () => {
+      const withXmlLang = carried(
+        narrative("", `<div xmlns="${XHTML}"><p xml:lang="en">x</p></div>`),
+      );
+      expect(divOf(withXmlLang.json)).toBe(`<div xmlns="${XHTML}"><p xml:lang="en">x</p></div>`);
+      // `<f:div/>` with no `xmlns:f` in scope resolves to nothing, so it is NOT the narrative: the
+      // unbound-prefix residual, unchanged.
+      const unbound = reading(narrative("", "<f:div>x</f:div>"));
+      expect(unbound.json).not.toContain('"div"');
+      expect(unbound.issues.some((i) => i.startsWith(ISSUE_CODES.UNEXPECTED_XML_CONTENT))).toBe(
+        true,
+      );
+    });
+
+    it("escapes a `<` in an inherited namespace URI, so the emitted document stays well-formed", () => {
+      // The raw reader refuses a literal `<` in an attribute but decodes `&lt;`, so a URI can carry
+      // one. The writer emits `Narrative.div` verbatim, so an unescaped `<` in the fixup would put a
+      // document out that is not well-formed XML and does not re-read: the exact defect this slice
+      // closes, through a new door. One escaper serves both the element's attributes and the fixup.
+      const src = narrative(` xmlns:v="urn:a&lt;b"`, `<div xmlns="${XHTML}"><v:x/>prose</div>`);
+      const { xml } = carried(src);
+      expect(divOf(carried(src).json)).toBe(
+        `<div xmlns="${XHTML}" xmlns:v="urn:a&lt;b"><v:x/>prose</div>`,
+      );
+      // The whole point: it re-reads, to the same narrative.
+      const reread = parseResourceXml(xml);
+      expect(divOf(serializeResource(reread.resource))).toBe(divOf(carried(src).json));
+    });
+
+    /**
+     * **What reading the narrative COSTS, pinned rather than glossed.**
+     *
+     * Carrying the element as a string necessarily stops modelling anything inside it as FHIR, so a
+     * `<modifierExtension>` written inside a prefixed narrative no longer raises
+     * `UNHANDLED_MODIFIER_EXTENSION`, and such a document goes from `valid: false` to `valid: true`.
+     *
+     * That is not a weakening, and the only yardstick that settles it is the **same document spelled
+     * with a default `xmlns`**, not the previous release: the finding existed only because a prefixed
+     * narrative was not recognised as one, and the unprefixed twin has read `valid: true` all along.
+     * Nothing inside `Narrative.div` is a FHIR modifier extension. What this test pins is the two
+     * spellings agreeing at head; the other half of the claim, that the default spelling read this
+     * way on the previous release too, is a cross-version comparison no in-repo test can make and is
+     * recorded in the changeset instead.
+     */
+    it("reads a prefixed narrative's insides as narrative, exactly as the default spelling does", () => {
+      const inner = '<p><modifierExtension url="urn:x"/>Take 5 mg</p>';
+      const prefixed = reading(
+        narrative(
+          ` xmlns:h="${XHTML}"`,
+          '<h:div><h:p><h:modifierExtension url="urn:x"/>Take 5 mg</h:p></h:div>',
+        ),
+      );
+      const dflt = reading(narrative("", `<div xmlns="${XHTML}">${inner}</div>`));
+      // Not "the same as the previous release": the same as the twin, which is the bar.
+      expect(prefixed.valid).toBe(dflt.valid);
+      expect(prefixed.findings).toEqual(dflt.findings);
+      expect(prefixed.safeToSummarize).toBe(dflt.safeToSummarize);
+      expect(prefixed.issues).toEqual(dflt.issues);
+      expect(prefixed.valid).toBe(true);
+      expect(prefixed.json).toContain("Take 5 mg");
+    });
+
+    /**
+     * `PRE-EXISTING`, identical for **every** spelling, and deliberately left open.
+     *
+     * A `<div>` holding exactly one capitalized child is taken by the resource-valued branch before
+     * the narrative branch, so its prose is destroyed and it re-emits stripped of the XHTML
+     * namespace, which then re-reads clean. Uppercase element names in a narrative are not exotic:
+     * HTML-4-era generators emit `<BR>`, `<TABLE>`, `<P>`. Reordering the two branches would recover
+     * it, and is a separate decision with its own blast radius, not one a change about how the
+     * narrative is SPELLED gets to make.
+     */
+    it("still loses a narrative holding one capitalized child, identically for both spellings", () => {
+      for (const src of [
+        narrative("", `<div xmlns="${XHTML}"><Table>dose 5 mg</Table></div>`),
+        narrative(` xmlns:h="${XHTML}"`, "<h:div><h:Table>dose 5 mg</h:Table></h:div>"),
+      ]) {
+        const { json } = carried(src);
+        expect(json).not.toContain("dose 5 mg");
+        expect(json).toContain('"resourceType":"Table"');
+      }
+      // The sharpest form, and the one to file: prose written BESIDE the capitalized child is
+      // destroyed with ZERO diagnostics under `valid: true`, because the div's own text nodes are
+      // never inspected once the child is read as a resource. Both spellings, and the prefixed one
+      // reads exactly as the default one does rather than better.
+      for (const src of [
+        narrative("", `<div xmlns="${XHTML}">Take 5 mg<BR/></div>`),
+        narrative(` xmlns:h="${XHTML}"`, "<h:div>Take 5 mg<h:BR/></h:div>"),
+      ]) {
+        const r = reading(src);
+        expect(r.json).not.toContain("Take 5 mg");
+        expect(r.issues).toEqual([]);
+        expect(r.valid).toBe(true);
+      }
+      // What the route does still report, kept pinned: content read as FHIR because it came through
+      // the resource-valued branch is still judged as FHIR, at a location that resolves.
+      const { resource } = parseResourceXml(
+        narrative(
+          ` xmlns:h="${XHTML}"`,
+          '<h:div><h:Table><h:modifierExtension url="urn:x"/></h:Table></h:div>',
+        ),
+      );
+      const v = validateResource(resource);
+      expect(v.valid).toBe(false);
+      expect(v.issues.map((i) => `${i.code}@${i.expression ?? ""}`)).toContain(
+        "UNHANDLED_MODIFIER_EXTENSION@Patient.text.div.modifierExtension",
+      );
+    });
+
+    it("reports two spellings of the narrative as the repeat they are, rather than dropping one", () => {
+      const { resource, issues } = parseResourceXml(
+        narrative(` xmlns:h="${XHTML}"`, `<div xmlns="${XHTML}">A</div><h:div>B</h:div>`),
+      );
+      // Both are `{xhtml}div`, so they are one element written twice: grouped, both kept, and the
+      // widened count reported exactly as it is for any other mixed spelling.
+      expect(issues.map((i) => i.code)).toContain(ISSUE_CODES.MIXED_XML_SPELLING);
+      const json = serializeResource(resource);
+      expect(json).toContain(">A<");
+      expect(json).toContain(">B<");
     });
   });
 

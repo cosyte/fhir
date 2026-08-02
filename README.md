@@ -455,7 +455,7 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   mapping the FHIR XML conventions (element name → `resourceType`, `value` attribute → primitive value
   kept as its lexical string, `id`/`extension` co-located, repeated elements → a list, resource-valued
   elements unwrapped, narrative `Narrative.div` carried opaquely as its full XHTML string, the FHIR
-  JSON representation, so it round-trips as conformant `<div>…</div>`, never dropped). Lenient: an
+  JSON representation, so it round-trips as `<div>…</div>`, never dropped). Lenient: an
   unexpected namespace or stray text is preserved-and-flagged (`UNEXPECTED_XML_CONTENT`), never rejected.
   **Names are namespace-resolved, so a prefix is a spelling and not part of the name.** FHIR XML is
   defined in the `http://hl7.org/fhir` namespace, and a document may bind that namespace to a prefix
@@ -463,8 +463,19 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   `<Patient xmlns="http://hl7.org/fhir">` are the same resource and read to the same model. The
   in-scope declarations are tracked as the reader descends, including a prefix rebound partway down.
   A prefix nothing in scope binds is not resolvable, so the tag is kept exactly as written and
-  flagged rather than guessed at. An **unprefixed** narrative `<div>` is expected in the XHTML
-  namespace and is not flagged for being there; a prefixed one is not read as `Narrative.div`.
+  flagged rather than guessed at. **The narrative `<div>` is the one element FHIR requires in a
+  namespace other than its parent's, so it is recognised by its expanded name
+  (`{http://www.w3.org/1999/xhtml}div`) under every spelling**, and is not flagged for being there.
+  It is carried as an opaque string together with the namespace declarations it inherited from its
+  ancestors **and uses**, so the fragment stands on its own; the document's own spelling is preserved
+  rather than rewritten, which makes a prefixed narrative namespace-equivalent to the default
+  spelling and not byte-identical to it. A `div` in another namespace is kept out of `Narrative.div`
+  only where its tag carries a **prefix**: an unprefixed `<div xmlns="urn:vendor">` is spelled exactly
+  like the FHIR one, so it reaches that slot and is reported, not separated. Reading the narrative
+  means its contents are no longer modeled as FHIR, so a prefixed narrative reads as the same document
+  written with a default `xmlns` reads, including where that is quieter. The one way it reads
+  differently is **louder**: a document holding the narrative under both spellings at once is one
+  element written twice, so it draws `MIXED_XML_SPELLING`, which the all-default twin does not.
   Every element the reader **models** is tested once for being in a namespace other than its parent's,
   and reported when it is. A **prefixed** one additionally keeps its tag, and since no FHIR element
   is spelled `v:code`, that is what keeps it out of the FHIR element beside it. Content reached by a
