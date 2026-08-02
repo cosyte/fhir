@@ -30,7 +30,9 @@
  *   `<Patient xmlns="http://hl7.org/fhir">` are the *same* document. The reader tracks the in-scope
  *   declarations as it descends and models the **local** name, so both read to the same model. A
  *   prefix no in-scope declaration binds is not resolvable, so the tag is kept exactly as written
- *   and flagged rather than guessed at.
+ *   and flagged rather than guessed at. An element in a namespace other than its parent's is
+ *   flagged wherever it appears; a **prefixed** one additionally keeps its tag, which is what stops
+ *   it from being read as the FHIR element beside it.
  *
  * The narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, the same
  * representation FHIR JSON uses for `Narrative.div`, so it round-trips as conformant `<div>…</div>`
@@ -43,7 +45,12 @@
  * @packageDocumentation
  */
 
-import { unexpectedXmlContent, unknownProperty, type FhirIssue } from "../codec/issues.js";
+import {
+  mixedXmlSpelling,
+  unexpectedXmlContent,
+  unknownProperty,
+  type FhirIssue,
+} from "../codec/issues.js";
 import { childPath, rootPath, safeDerivedName } from "../model/path.js";
 import type { ReadResult } from "../codec/read.js";
 import {
@@ -152,9 +159,14 @@ interface ScopedElement {
  *
  * **This one predicate governs both naming and flagging, and that is the point.** An expanded name is
  * a namespace *and* a local name (Namespaces in XML 1.0 §6.1), so `{urn:vendor}code` and
- * `{http://hl7.org/fhir}code` are different names and must never share an element's occurrences.
- * Dropping the prefix from foreign content would merge it into the FHIR element beside it, which
- * would let a document assert FHIR content it never wrote in FHIR.
+ * `{http://hl7.org/fhir}code` are different names. Resolving a prefix away without comparing the
+ * namespace it came from would merge foreign content into the FHIR element beside it, which would
+ * let a document assert FHIR content it never wrote in FHIR.
+ *
+ * **Every element this returns `true` for is flagged {@link unexpectedXmlContent}, and that flag is
+ * the only guarantee that covers all of them.** Keeping the tag verbatim additionally *separates*
+ * foreign content from FHIR content, but only where the tag carries a prefix; see
+ * {@link modelNameOf}.
  */
 function isForeign(resolved: ResolvedName, parentNamespace: string): boolean {
   return resolved.unboundPrefix || resolved.namespace !== parentNamespace;
@@ -162,7 +174,17 @@ function isForeign(resolved: ResolvedName, parentNamespace: string): boolean {
 
 /**
  * The name to model an element under: its local name when it shares its parent's namespace, and
- * otherwise its tag exactly as the document wrote it, so foreign content stays visibly foreign.
+ * otherwise its tag exactly as the document wrote it.
+ *
+ * **What that separates, and what it does not.** A *prefixed* foreign element keeps a tag no FHIR
+ * element can be spelled with (`v:code`), so it cannot group with a FHIR sibling, cannot satisfy the
+ * `extension` test, cannot be read as a resource name, and cannot be read as the narrative `div`.
+ * A foreign element reached by a **default** declaration (`<extension xmlns="urn:vendor">`) has no
+ * prefix to keep, so its tag *is* the FHIR spelling and it does all four. That is why the flag, not
+ * the name, is what the reader relies on: an unprefixed foreign element is modeled as the FHIR
+ * element it is spelled as, and reported as content from another vocabulary. Reading it is
+ * unchanged from before namespaces were resolved at all, so it is a residual rather than a
+ * regression, but it is not covered by the separation and no claim may say it is.
  */
 function modelNameOf(element: XmlElement, resolved: ResolvedName, parentNamespace: string): string {
   return isForeign(resolved, parentNamespace) ? element.name : resolved.name;
@@ -191,6 +213,27 @@ function flagForeign(
   issues: FhirIssue[],
 ): void {
   if (isForeign(resolved, parentNamespace)) issues.push(unexpectedXmlContent(path));
+}
+
+/**
+ * Read a child element the model reaches **without** going through {@link buildSingle}: the resource
+ * inside a resource-valued element, and a primitive's child `<extension>`s.
+ *
+ * Both branches take a child and model it directly, so both would otherwise skip the one place a
+ * foreign namespace is reported. They route through here instead, so **every element the reader
+ * models is tested by {@link isForeign} exactly once**, at the position it occupies. Without this a
+ * `<extension xmlns="urn:vendor">` or a `<Patient xmlns="urn:vendor">` inside `<contained>` is
+ * modeled as FHIR and reported nowhere, which is a diagnostic lost in the unsafe direction.
+ */
+function readNested(
+  child: ScopedElement,
+  path: string,
+  issues: FhirIssue[],
+  parentNamespace: string,
+  opts: { isResource: boolean },
+): FhirComplex {
+  flagForeign(child.resolved, parentNamespace, path, issues);
+  return readComplex(child, path, issues, opts);
 }
 
 /** Whether an XML tag name is a FHIR resource type (UpperCamelCase) vs an element name (lowerCamelCase). */
@@ -238,8 +281,8 @@ function serializeXml(node: XmlNode): string {
 /**
  * Group an element's children by **model** name, preserving first-seen order (mirrors the JSON
  * grouping). Two children spelled with different prefixes that both resolve to their parent's
- * namespace are the same element repeated, so they group together; a child in any other namespace
- * keeps its tag verbatim and therefore cannot join them.
+ * namespace are the same element repeated, so they group together; a child carrying a prefix bound
+ * to any other namespace keeps its tag verbatim and therefore cannot join them.
  */
 function groupChildren(children: ScopedElement[]): {
   order: string[];
@@ -258,6 +301,36 @@ function groupChildren(children: ScopedElement[]): {
     }
   }
   return { order, byName };
+}
+
+/**
+ * Report each grouped element whose occurrences did not all arrive under the same tag.
+ *
+ * **This is the cost of resolving prefixes, made visible rather than left to be found.** Two
+ * prefixes bound to one namespace are two spellings of one name, so grouping them is the correct
+ * reading, and it is the reading the same document spelled one way already gets. What changes is
+ * the **count**: an element that a raw-tag read saw once now has two occurrences, and a consumer
+ * that reads a `0..1` element as a single value gets nothing from a repeat, so a check can skip an
+ * element it would otherwise have inspected. Raising {@link mixedXmlSpelling} here is what keeps
+ * that from happening silently.
+ *
+ * Only a group in the parent's own namespace can hold more than one tag: any other element is
+ * modeled under its verbatim tag, so a differently-spelled one lands in a different group.
+ */
+function reportMixedSpelling(
+  order: readonly string[],
+  byName: ReadonlyMap<string, ScopedElement[]>,
+  path: string,
+  issues: FhirIssue[],
+): void {
+  for (const name of order) {
+    const occurrences = byName.get(name);
+    if (occurrences === undefined || occurrences.length < 2) continue;
+    const first = occurrences[0]?.element.name;
+    if (occurrences.some((o) => o.element.name !== first)) {
+      issues.push(mixedXmlSpelling(childPath(path, name)));
+    }
+  }
 }
 
 /**
@@ -294,6 +367,7 @@ function readComplex(
   const children = elementChildren(element, self.scope, resolved.namespace);
   flagStrayText(element.children, path, issues);
   const { order, byName } = groupChildren(children);
+  reportMixedSpelling(order, byName, path, issues);
   for (const name of order) {
     const occurrences = byName.get(name) ?? [];
     properties.push({
@@ -354,7 +428,7 @@ function buildSingle(
     // Foreign content and an unresolvable prefix both keep the tag verbatim, so neither `v:Patient`
     // nor `f:Patient` reads as a resource name; only a resource in this element's own namespace does.
     if (isResourceName(onlyChild.modelName)) {
-      return readComplex(onlyChild, path, issues, { isResource: true });
+      return readNested(onlyChild, path, issues, resolved.namespace, { isResource: true });
     }
   }
 
@@ -367,8 +441,10 @@ function buildSingle(
     return primitive(serializeXml(element));
   }
 
-  // `extension` in this element's own namespace only: a `<v:extension>` from another vocabulary is
-  // not a FHIR extension, and promoting it into the model would author FHIR the sender never wrote.
+  // `extension` in this element's own namespace only, as far as the NAME can carry that: a prefixed
+  // `<v:extension>` keeps its tag and fails this test, so it is not promoted. An unprefixed
+  // `<extension xmlns="urn:vendor">` is spelled exactly like the FHIR one and does pass it; that is
+  // the residual named on `modelNameOf`, and `readNested` is what makes sure it is still reported.
   const extensionChildren = children.filter((c) => c.modelName === "extension");
   const otherChildren = children.filter((c) => c.modelName !== "extension");
 
@@ -382,7 +458,9 @@ function buildSingle(
     if (id !== undefined) meta.id = id;
     if (extensionChildren.length > 0) {
       meta.extension = extensionChildren.map((ext, i) =>
-        readComplex(ext, `${path}.extension[${String(i)}]`, issues, { isResource: false }),
+        readNested(ext, `${path}.extension[${String(i)}]`, issues, resolved.namespace, {
+          isResource: false,
+        }),
       );
     }
     // A primitive carries only `value`, `id`, and child `<extension>`s; flag any other attribute

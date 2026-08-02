@@ -492,6 +492,24 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   element. That single predicate also fixes the `extension` test, the `div` test and the
   resource-unwrap. **If you ever make a resolved local name reachable without comparing the namespace
   it came from, you have reopened this.**
+  **🔴 PASS TWO THEN REFUTED THE PASS-ONE REMEDY, AND THE REASON IS THE ONE TO CARRY: "FOREIGN
+  CONTENT KEEPS ITS TAG VERBATIM" ONLY SEPARATES ANYTHING WHEN THE TAG CARRIES A PREFIX.** Reached by
+  a **default** `xmlns`, `<extension xmlns="urn:vendor">` and `<Patient xmlns="urn:vendor">` inside
+  `<contained>` have no prefix to keep, so the verbatim tag **is** the FHIR spelling: they group with
+  a FHIR sibling, satisfy the `extension` test, read as a resource name and read as the narrative
+  `div`, exactly as they did before namespaces were resolved at all. Worse, the pass-one code
+  **lost the diagnostic** on two of those routes: `readComplex` was called directly from the
+  extension branch and the resource-unwrap branch, both of which **bypass `buildSingle`, the only
+  place `flagForeign` ran**, so base emitted `UNEXPECTED_XML_CONTENT` and head emitted **nothing**
+  while still modelling the content as FHIR. Reproduced before designing the fix, not taken on
+  trust. **The remedy is two things and neither is a bigger guard.** (1) Both branches route through
+  `readNested`, which flags and then reads, so **every element the reader models is tested by
+  `isForeign` exactly once**; parity with base is restored on both routes. (2) **Every "never" claim
+  is scoped to PREFIXED foreign content** in the source, the tests, the changeset, `CHANGELOG.md` and
+  the README, because the claim was false for the unprefixed half on all four counts. The separation
+  covers prefixed content; **the FLAG is what covers all of it**, and that is the sentence to write.
+  **The unprefixed case is a residual, not a regression** (identical on base), pinned by its own
+  `describe` block in `test/xml.test.ts`.
   **The root is the one element with its own rule**, because it has no parent to take a vocabulary
   from: it is always modeled by its local name, and it is flagged only when it _declares_ a namespace
   that is not FHIR's. A document declaring **no namespace at all** is still read as FHIR and still
@@ -499,22 +517,27 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   **A foreign namespace is flagged where the document LEAVES its parent's, not once per descendant**,
   an element that merely inherits says nothing its ancestor did not. That is what keeps the existing
   default-namespace behaviour byte-identical; do not "fix" it into a per-element flag.
-  **What reading the document correctly COSTS, measured rather than left to be found.** Two prefixes
-  both bound to the FHIR namespace are two spellings of one name, so an element written twice that
-  way is the repeat it genuinely is, and a `0..1` check that reads a single value then skips a list
-  silently drops it. **That skip is PRE-EXISTING and the slice adds no behaviour of its own**: the
-  same document spelled one way behaves identically on both trees, which `test/xml.test.ts` pins by
-  asserting the two spellings produce the same model, verdict and readout. Sweep over 105 documents
-  (every XML fixture plus a foreign-prefixed and a FHIR-prefixed duplicate injected at every valued
-  element): **0 `valid: false -> true`, 0 retractions lost, 0 negations lost**, 9 `valid: true ->
-  false`, 8 losing a finding, 17 gaining one. At safety-scoped elements the repeat is **reported**
-  (`ARRAY_WRAPPED_SCALAR`, error), so a retraction written through a second spelling is now caught
-  where the raw-tag read missed it entirely. **The one loss worth naming**, outside that corpus: a
-  duplicate reaching the vital-signs unit check through `category.coding` loses its error, because
-  `category` is outside the closed set that reports repeats. **That sink is the refuter's `F6`, is
-  reachable today by writing the element twice with ONE spelling, and must not be answered by
-  widening the cardinality table**. CLAUDE.md already records why (`Questionnaire.code` and
-  `ElementDefinition.code` are `0..*`, so a name-only rule false-errors on a conformant document).
+  **What reading the document correctly COSTS, and the gate's third demand: REPORT THE WIDENED READ
+  WINDOW OR DROP THE GROUPING.** Two prefixes both bound to the FHIR namespace are two spellings of
+  one name, so an element written twice that way is the repeat it genuinely is, and the MODEL and
+  every verdict over it match the same document spelled one way (`test/xml.test.ts` pins that). What
+  changes is the **count**, and a `0..1` check that reads a single value gets nothing from a list.
+  **Measured, and this is the case that decided it:** a `Reference.reference` written under two
+  spellings loses the `REFERENCE_UNRESOLVED` its one-spelling twin raises, with **no** compensating
+  diagnostic anywhere. **Reporting was taken, not dropping**, because dropping means two properties
+  of the same model name in one `FhirComplex`, and the XML reader has **no `duplicates` mechanism**
+  (that lives in the JSON reader), so it would be a silent first-wins loss: strictly worse. New
+  `ISSUE_CODES.MIXED_XML_SPELLING` (warning) + `mixedXmlSpelling`, raised in `reportMixedSpelling`
+  once per element whose group holds more than one literal tag. **Only a group in the parent's own
+  namespace can**, because anything else is modeled under its verbatim tag and lands in its own
+  group, so this cannot fire on foreign content and cannot fire on a single-spelling repeat.
+  At safety-scoped elements the repeat is **additionally** reported (`ARRAY_WRAPPED_SCALAR`, error),
+  so a retraction written through a second spelling is caught where the raw-tag read missed it.
+  **A sink that must NOT be answered by widening the cardinality table**: a duplicate reaching the
+  vital-signs unit check through `category.coding`. It is reachable today by writing the element
+  twice with ONE spelling, and CLAUDE.md already records why the table stays closed
+  (`Questionnaire.code` and `ElementDefinition.code` are `0..*`, so a name-only rule false-errors on
+  a conformant document).
   **The `_`-sibling half is a REPORTING change, not a preserving one**, and the distinction is the
   same one `FHIR-NESTED-ARRAY-REPORTING` turned on: new `ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION`
   (warning) + `misplacedPrimitiveExtension`, raised at the bare element location. It replaces the
@@ -523,10 +546,15 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   **whole**, so the old code was making a false promise as well as carrying prose. The sibling's
   content is **still not modeled** and this slice does not start; the five discard shapes above are
   unchanged.
-  **Differential vs `cf16767` over the fixture corpus + adversarial documents: 37 identical, 10 moved,
-  and all 10 are the two defects** (7 prefixed XML re-spellings, 3 `_`-sibling documents). **No
-  conformant document moved at all**: the 27 JSON and 7 XML fixtures are byte-identical on every
-  channel.
+  **Differential vs `cf16767` over 564 documents** (every XML fixture x six mutations at every
+  element position: a FHIR-prefixed, a foreign-prefixed and a foreign-DEFAULT-namespace duplicate
+  sibling, plus the element itself re-spelled into each of those three). 468 moved, and of those:
+  **0 `valid: false -> true`, 0 `safeToSummarize: false -> true`, 0 retractions lost, 0 negations
+  lost, 0 newly throwing.** 32 diagnostics disappear and **all 32 are at a `<withheld>` location** --
+  base complaining about a name like `f:active` it could not resolve and head reads correctly --
+  with **0** disappearing at a location that resolves. **The 7 XML fixtures unmutated: 0 moved.**
+  The foreign-default-namespace mutation is the one the previous differential did not have, and it
+  is what pass two used to refute; it is in the harness now precisely so it cannot be missed again.
   **`test/expression-grammar.test.ts` is the gate that keeps prose out**, sweeping every reader
   diagnostic the JSON and XML corpora produce against a location grammar.
   **THE CLAIM IS SCOPED AND MUST STAY SCOPED. It is that the JSON reader's `expression` no longer

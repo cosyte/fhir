@@ -87,6 +87,23 @@ export const ISSUE_CODES = {
    * and `_name` is not an element. It is raised once per misplaced sibling.
    */
   MISPLACED_PRIMITIVE_EXTENSION: "MISPLACED_PRIMITIVE_EXTENSION",
+  /**
+   * One XML element arrived under **more than one spelling of the same name**: two of its
+   * occurrences carried different namespace prefixes that resolve to the same namespace, so
+   * `<f:status/>` and `<status/>` are the same element written two ways (Namespaces in XML 1.0
+   * §6.1, an expanded name is a namespace and a local name).
+   *
+   * Nothing is lost, and the reading is the correct one: the occurrences are modeled as repeats of
+   * a single element, exactly as the same document spelled one way would be. This is raised because
+   * the *count* is what changes. An element a consumer expects at most once now presents as a
+   * repeat, and a single-value read of a repeated element yields nothing rather than a value, so a
+   * check written against `0..1` can skip an element it would otherwise have inspected. Warning
+   * severity: it tells a consumer that the number of occurrences here came from the spelling, not
+   * just from the content.
+   *
+   * The location names the element, once per element, not once per occurrence.
+   */
+  MIXED_XML_SPELLING: "MIXED_XML_SPELLING",
 } as const;
 
 /** Discriminant union of every {@link ISSUE_CODES} value. */
@@ -203,6 +220,22 @@ export function nestedArray(expression: string): FhirIssue {
  */
 export function misplacedPrimitiveExtension(expression: string): FhirIssue {
   return { code: ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION, severity: "warning", expression };
+}
+
+/**
+ * Build a {@link ISSUE_CODES.MIXED_XML_SPELLING} issue at `expression` (XML reader only).
+ *
+ * The location names the element whose occurrences were spelled more than one way, raised once for
+ * that element rather than once per occurrence.
+ *
+ * @example
+ * ```ts
+ * import { mixedXmlSpelling } from "@cosyte/fhir";
+ * const issue = mixedXmlSpelling("Observation.status");
+ * ```
+ */
+export function mixedXmlSpelling(expression: string): FhirIssue {
+  return { code: ISSUE_CODES.MIXED_XML_SPELLING, severity: "warning", expression };
 }
 
 /**

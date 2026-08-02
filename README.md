@@ -465,6 +465,16 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   A prefix nothing in scope binds is not resolvable, so the tag is kept exactly as written and
   flagged rather than guessed at. The narrative `<div>` is expected in the XHTML namespace and is not
   flagged for being there.
+  An element in a namespace other than its parent's is reported wherever it appears, and that report
+  is what covers all of them. A **prefixed** one additionally keeps its tag, and since no FHIR element
+  is spelled `v:code`, that is what keeps it out of the FHIR element beside it. Content reached by a
+  **default** declaration (`<extension xmlns="urn:vendor">`) is spelled exactly like the FHIR element,
+  so it is modeled as one and reported rather than separated.
+  Two prefixes bound to the same namespace are two spellings of one name, so an element written twice
+  that way reads as the repeat it is. The model matches the same document spelled one way; only the
+  number of occurrences differs, so that element carries `MIXED_XML_SPELLING`. Nothing is lost, but a
+  check that reads a `0..1` element as a single value gets nothing from a repeat, and that should
+  never be silent.
 - **`serializeResourceXml`** emits compact, spec-clean FHIR XML that round-trips a spec-clean document
   **byte-for-byte** (decimals byte-exact, never through a `number`).
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible

@@ -68,6 +68,7 @@ export {
   decimalPrecisionAtRisk,
   duplicateProperty,
   misplacedPrimitiveExtension,
+  mixedXmlSpelling,
   nestedArray,
   unexpectedXmlContent,
   unknownProperty,

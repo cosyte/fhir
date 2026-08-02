@@ -18,12 +18,17 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   the **local** name.
   **A prefix is dropped only for an element in its parent's namespace.** An expanded name is a
   namespace _and_ a local name (Namespaces in XML 1.0 §6.1), so `{urn:vendor}code` and
-  `{http://hl7.org/fhir}code` are different names; an element from another vocabulary keeps its tag
-  exactly as written and is flagged, so it can never join a FHIR element's occurrences, be promoted
-  into a primitive's `extension`, be unwrapped as a contained resource, or be stored as
-  `Narrative.div`. Two prefixes both bound to the FHIR namespace are two spellings of one name, so an
-  element written twice that way is read as the repeat it genuinely is: identical, verified, to the
-  same document spelled one way.
+  `{http://hl7.org/fhir}code` are different names.
+  **Every element in a namespace other than its parent's is reported `UNEXPECTED_XML_CONTENT`, and
+  that report, not the name, is the guarantee that covers all of them.** A **prefixed** one
+  additionally keeps its tag exactly as written, and since no FHIR element can be spelled `v:code`,
+  that is what stops it joining a FHIR element's occurrences, being promoted into a primitive's
+  `extension`, being unwrapped as a contained resource, or being stored as `Narrative.div`.
+  **Foreign content reached by a _default_ declaration has no prefix to keep, so it does all four.**
+  `<extension xmlns="urn:vendor">` is spelled exactly like the FHIR `extension` and is modeled as
+  one; it is reported, not separated. That is unchanged from before prefixes were resolved at all, so
+  it is a residual of the lenient read and not a regression, and the scope of the separation is
+  stated here rather than claimed wider than it is.
   **Measured over the package's seven XML fixtures, each re-spelled with a prefix and compared to the
   default-namespace original** on the full read: issues, serialized JSON, re-emitted XML, validity
   and findings, safety readout. **Before: 0 of 7 read identically. After: 7 of 7.**
@@ -42,18 +47,26 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   no longer reported as an unknown attribute, which retires a false positive on the legal
   re-declaration of the namespace an element is already in. The narrative `<div>` is expected in the
   XHTML namespace and is not flagged for being there.
-  **What reading a document correctly costs, stated rather than left to be found.** A `0..1` element
-  written twice through two spellings of one namespace is now the repeat it always was, and a check
-  that reads a single value then skips a list silently drops it. That skip is pre-existing: the same
-  document spelled one way behaves identically on both sides. Over a 105-document sweep (every XML
-  fixture plus a foreign-prefixed and a FHIR-prefixed duplicate injected at every valued element):
-  **0** documents go `valid: true`, **0** retractions lost, **0** negations lost, 9 go
-  `valid: false`, 8 lose a finding and 17 gain one. At the safety-scoped elements the repeat is
-  reported (`ARRAY_WRAPPED_SCALAR`, error) rather than resolved, so a retraction written through a
-  second spelling is now **caught** where a raw-tag read missed it entirely. Outside that corpus a
-  duplicate reaching the vital-signs unit check through `category.coding` does lose an error, because
-  `category` sits outside the closed set that reports repeats; that sink is pre-existing, reachable
-  today by writing the element twice with one spelling, and is filed rather than widened here.
+  **What reading a document correctly costs, stated rather than left to be found, and now reported.**
+  Two prefixes bound to one namespace are two spellings of one name, so an element written twice that
+  way is the repeat it genuinely is; the model and every verdict over it match the same document
+  spelled one way. What changes is the **count**, and a check that reads a `0..1` element as a single
+  value gets nothing from a repeat. Measured: a `Reference.reference` written under two spellings
+  loses the `REFERENCE_UNRESOLVED` its one-spelling twin raises. So that element now carries new
+  `ISSUE_CODES.MIXED_XML_SPELLING` (warning) with a `mixedXmlSpelling` factory, raised once per
+  element, never per occurrence, and only where a group actually holds more than one spelling.
+  Nothing is lost and the reading is the correct one; the code exists so that a widened count is
+  never silent. At safety-scoped elements the repeat is additionally reported
+  (`ARRAY_WRAPPED_SCALAR`, error), so a retraction written through a second spelling is **caught**
+  where a raw-tag read missed it entirely.
+  **Differential against the previous release over 564 documents** (every XML fixture, six mutations
+  at every element position: a FHIR-prefixed and a foreign-prefixed and a foreign-default-namespace
+  duplicate sibling, and the element itself re-spelled into each of those three): 468 read
+  differently, and of those **0** go `valid: false` to `true`, **0** go `safeToSummarize: false` to
+  `true`, **0** lose a retraction, **0** lose a negation, and **0** newly throw. 32 diagnostics
+  disappear and **all 32** are at a `<withheld>` location, which is the previous release complaining
+  about a name like `f:active` that it could not resolve and this one reads correctly; **0** disappear
+  at a location that resolves. The seven fixtures unmutated read **identically** on both.
 - **The JSON reader emitted English prose inside a FHIRPath `expression` (`FHIR-READER-RESIDUALS`).**
   Two locations were built as `Patient.name (unexpected _-sibling on an object)` and
   `Patient.contact (unexpected _-sibling on a non-primitive array)`. R4 defines

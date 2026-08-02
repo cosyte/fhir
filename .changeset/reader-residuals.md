@@ -10,16 +10,29 @@ and `<Patient xmlns="http://hl7.org/fhir">` are the same resource. The XML reade
 name, so the first read to properties literally named `f:active` under a `resourceType` of
 `f:Patient`. It now tracks the in-scope declarations as it descends and models the local name. Over
 the package's seven XML fixtures, each re-spelled with a prefix and compared to the default-namespace
-original on the whole read, 0 of 7 matched before and 7 of 7 match now. A prefix is dropped only for
-an element in its parent's namespace: an expanded name is a namespace and a local name, so content
-from another vocabulary keeps its tag exactly as written and can never join a FHIR element's
-occurrences, be promoted into a primitive's extensions, be unwrapped as a contained resource, or be
-stored as the narrative. The defect silently dropped
+original on the whole read, 0 of 7 matched before and 7 of 7 match now. The defect silently dropped
 primitive extensions, re-emitted XML that was not well-formed, and let a document validate `valid:
 true` on a reading in which no element had been recognized; a prefixed `Observation` carrying
 `status="entered-in-error"` read `retracted: false`, and now reads the retraction. An unresolvable
 prefix is flagged and its tag kept exactly as written rather than guessed at, and a namespace
 declaration is no longer reported as an unknown attribute.
+
+An element in a namespace other than its parent's is reported `UNEXPECTED_XML_CONTENT` wherever it
+appears, and that report is the guarantee that covers all of them. A **prefixed** one additionally
+keeps its tag exactly as written, and because no FHIR element can be spelled `v:code`, that is what
+stops it from joining a FHIR element's occurrences, being promoted into a primitive's extensions,
+being unwrapped as a contained resource, or being stored as the narrative. Foreign content reached by
+a **default** declaration (`<extension xmlns="urn:vendor">`) has no prefix to keep, so it is spelled
+exactly like the FHIR element and is modeled as one; it is reported rather than separated, and that
+is unchanged from before prefixes were resolved at all.
+
+Two prefixes bound to the same namespace are two spellings of one name, so an element written twice
+that way is read as the repeat it genuinely is, and the model and every verdict over it match the
+same document spelled one way. What changes is the number of occurrences, and a check that reads a
+`0..1` element as a single value gets nothing from a repeat, so that element now carries new
+`ISSUE_CODES.MIXED_XML_SPELLING` (warning) with a `mixedXmlSpelling` factory, raised once per
+element. Nothing is lost and the reading is the correct one; the code exists so a widened count is
+never silent.
 
 R4 defines `OperationOutcome.issue.expression` as a FHIRPath subset that resolves to a node, and the
 JSON reader built two of them as sentences: `Patient.name (unexpected _-sibling on an object)`. The

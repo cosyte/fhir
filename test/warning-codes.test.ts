@@ -22,6 +22,7 @@ describe("issue & fatal code registries (stable public contract)", () => {
       DUPLICATE_PROPERTY: "DUPLICATE_PROPERTY",
       NESTED_ARRAY: "NESTED_ARRAY",
       MISPLACED_PRIMITIVE_EXTENSION: "MISPLACED_PRIMITIVE_EXTENSION",
+      MIXED_XML_SPELLING: "MIXED_XML_SPELLING",
     });
   });
 
