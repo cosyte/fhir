@@ -8,6 +8,87 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **The XML reader did not resolve namespace prefixes, so a prefixed FHIR document was misread
+  whole (`FHIR-READER-RESIDUALS`).** FHIR XML is defined in the `http://hl7.org/fhir` namespace, and
+  XML lets a document bind that namespace to a prefix rather than making it the default, so
+  `<f:Patient xmlns:f="http://hl7.org/fhir">` and `<Patient xmlns="http://hl7.org/fhir">` are the
+  same resource. The reader modeled the raw tag, so the first read to properties literally named
+  `f:active` under a `resourceType` of `f:Patient`. The reader now tracks the in-scope declarations
+  as it descends (including a prefix rebound partway down and the implicit `xml` binding) and models
+  the **local** name.
+  **A prefix is dropped only for an element in its parent's namespace.** An expanded name is a
+  namespace _and_ a local name (Namespaces in XML 1.0 §6.1), so `{urn:vendor}code` and
+  `{http://hl7.org/fhir}code` are different names.
+  **Every element the reader MODELS is tested once for being in a namespace other than its parent's,
+  and reported `UNEXPECTED_XML_CONTENT` when it is; that report, not the name, is what covers the
+  unprefixed case.** A **prefixed** one
+  additionally keeps its tag exactly as written, and since no FHIR element can be spelled `v:code`,
+  that is what stops it joining a FHIR element's occurrences, being promoted into a primitive's
+  `extension`, being unwrapped as a contained resource, or being stored as `Narrative.div`.
+  **Foreign content reached by a _default_ declaration has no prefix to keep, so it does all four.**
+  `<extension xmlns="urn:vendor">` is spelled exactly like the FHIR `extension` and is modeled as
+  one; it is reported, not separated. That is unchanged from before prefixes were resolved at all, so
+  it is a residual of the lenient read and not a regression, and the scope of the separation is
+  stated here rather than claimed wider than it is.
+  **Two limits of "every element the reader models", both unchanged from the previous release.** A
+  child element written beside a `value` attribute is not modeled at all: it is discarded whole and
+  reported `UNKNOWN_PROPERTY`, so a foreign one there draws no namespace report. And a narrative
+  `<div>` written with a prefix is not read as `Narrative.div` at all, so the narrative text is not
+  carried; only the unprefixed spelling is.
+  **Measured over the package's seven XML fixtures, each re-spelled with a prefix and compared to the
+  default-namespace original** on the full read: issues, serialized JSON, re-emitted XML, validity
+  and findings, safety readout. **Before: 0 of 7 read identically. After: 7 of 7.**
+  Three consequences worth naming separately, all measured on `patient.xml` re-spelled with a prefix.
+  A **primitive extension was silently dropped**, because `<f:extension>` did not match the reader's
+  `extension` test, taking the serialized JSON from **337 bytes to 216**. The re-emitted XML was
+  **not well-formed**: the reader wrote the raw names back while declaring a default namespace,
+  producing `<f:Patient xmlns="http://hl7.org/fhir">` with `f:` bound to nothing. And the document
+  validated `valid: true` on a reading in which no element had been recognized at all, which is a
+  false green; it now reports the same findings as the identical unprefixed document.
+  **The safety consequence, stated plainly:** a prefixed `Observation` carrying
+  `status="entered-in-error"` read `status: undefined`, `retracted: false`, `isRetracted: false`.
+  It now reads the retraction. A prefix bound to a namespace that is not the FHIR one, and a prefix
+  no declaration in scope binds, are both flagged `UNEXPECTED_XML_CONTENT`; an unresolvable prefix
+  keeps the tag exactly as written rather than guessing a binding for it. A namespace declaration is
+  no longer reported as an unknown attribute, which retires a false positive on the legal
+  re-declaration of the namespace an element is already in. An **unprefixed** narrative `<div>` is
+  expected in the XHTML namespace and is not flagged for being there.
+  **What reading a document correctly costs, stated rather than left to be found, and now reported.**
+  Two prefixes bound to one namespace are two spellings of one name, so an element written twice that
+  way is the repeat it genuinely is; the model and every verdict over it match the same document
+  spelled one way. What changes is the **count**, and a check that reads a `0..1` element as a single
+  value gets nothing from a repeat. Measured: a `Reference.reference` written under two spellings
+  loses the `REFERENCE_UNRESOLVED` its one-spelling twin raises. So that element now carries new
+  `ISSUE_CODES.MIXED_XML_SPELLING` (warning) with a `mixedXmlSpelling` factory, raised once per
+  element, never per occurrence, and only where a group actually holds more than one spelling.
+  Nothing is lost and the reading is the correct one; the code exists so that a widened count is
+  never silent. At safety-scoped elements the repeat is additionally reported
+  (`ARRAY_WRAPPED_SCALAR`, error), so a retraction written through a second spelling is **caught**
+  where a raw-tag read missed it entirely.
+  **Differential against the previous release over 564 documents** (every XML fixture, six mutations
+  at every element position: a FHIR-prefixed and a foreign-prefixed and a foreign-default-namespace
+  duplicate sibling, and the element itself re-spelled into each of those three): 468 read
+  differently, and of those **0** go `valid: false` to `true`, **0** go `safeToSummarize: false` to
+  `true`, **0** lose a retraction, **0** lose a negation, and **0** newly throw. 32 diagnostics
+  disappear and **all 32** are at a `<withheld>` location, which is the previous release complaining
+  about a name like `f:active` that it could not resolve and this one reads correctly; **0** disappear
+  at a location that resolves. The seven fixtures unmutated read **identically** on both.
+- **The JSON reader emitted English prose inside a FHIRPath `expression` (`FHIR-READER-RESIDUALS`).**
+  Two locations were built as `Patient.name (unexpected _-sibling on an object)` and
+  `Patient.contact (unexpected _-sibling on a non-primitive array)`. R4 defines
+  `OperationOutcome.issue.expression` as a FHIRPath subset that resolves to a node, so a sentence
+  there is a conformance defect and not a cosmetic one: a consumer evaluating it gets a parse error.
+  The reason a finding was raised is what the `code` field is for, so the reason moved there. New
+  public `ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION` (warning) with the factory
+  `misplacedPrimitiveExtension`, raised at the bare location of the element (`Patient.name`,
+  `Patient.contact`). It is a **new code rather than the previous `UNKNOWN_PROPERTY`** because the
+  two make different promises: `UNKNOWN_PROPERTY` says a shape was tolerated and nothing was lost,
+  and these two positions discard the `_`-sibling whole. A consumer matching on `UNKNOWN_PROPERTY`
+  at those two positions must match the new code instead. `test/expression-grammar.test.ts` is the
+  gate that keeps prose out, sweeping every reader diagnostic the JSON and XML corpora produce
+  against a location grammar; it admits, rather than papers over, the two forms that are deliberately
+  not resolvable FHIRPath: a `<withheld>` segment, and the XML reader's `.@name` attribute form.
+
 - **A name the document supplied reached a diagnostic location unbounded (`PHI-WARNING-MESSAGE-LEAK`,
   the `fhir` slice).** A finding carries a FHIRPath `expression` instead of a value, and that
   expression is assembled out of the document's own `resourceType` and its own JSON property names.

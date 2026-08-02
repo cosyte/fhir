@@ -648,25 +648,43 @@ describe("the one channel the rule does not reach, pinned rather than claimed aw
   // model, which is the preserving problem, not the reporting one. This behaviour is unchanged from
   // before the rule existed; it is pinned so that the claim on the public surface stays true and so
   // that closing it later is a deliberate act.
+  // Each entry pins WHICH code reports the discard, because the two discard routes are different
+  // defects: a sibling written where FHIR defines no sibling at all, and an unrecognised member
+  // inside a well-placed one.
   const uncovered = [
     // a `_`-sibling on an object element
-    '{"resourceType":"Patient","name":{"family":"Roe"},"_name":[[{"id":"x"}]]}',
+    {
+      doc: '{"resourceType":"Patient","name":{"family":"Roe"},"_name":[[{"id":"x"}]]}',
+      code: ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION,
+    },
     // a `_`-sibling on a non-primitive array
-    '{"resourceType":"Patient","name":[{"family":"Roe"}],"_name":[[{"id":"x"}]]}',
+    {
+      doc: '{"resourceType":"Patient","name":[{"family":"Roe"}],"_name":[[{"id":"x"}]]}',
+      code: ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION,
+    },
     // a member of a `_`-sibling object that is neither an `id` STRING nor an `extension` array
     // (an `id` whose value is not a string is discarded the same way)
-    '{"resourceType":"Patient","birthDate":"1980-01-01","_birthDate":{"foo":[["x"]]}}',
-    '{"resourceType":"Patient","birthDate":"1980-01-01","_birthDate":{"id":[["x"]]}}',
-    '{"resourceType":"Patient","birthDate":"1980-01-01","_birthDate":{"extension":{"0":[["x"]]}}}',
+    {
+      doc: '{"resourceType":"Patient","birthDate":"1980-01-01","_birthDate":{"foo":[["x"]]}}',
+      code: ISSUE_CODES.UNKNOWN_PROPERTY,
+    },
+    {
+      doc: '{"resourceType":"Patient","birthDate":"1980-01-01","_birthDate":{"id":[["x"]]}}',
+      code: ISSUE_CODES.UNKNOWN_PROPERTY,
+    },
+    {
+      doc: '{"resourceType":"Patient","birthDate":"1980-01-01","_birthDate":{"extension":{"0":[["x"]]}}}',
+      code: ISSUE_CODES.UNKNOWN_PROPERTY,
+    },
   ];
 
   it("flags the discarded sibling but does not refuse the document", () => {
-    for (const doc of uncovered) {
+    for (const { doc, code } of uncovered) {
       const { resource, issues } = parseResource(doc);
       expect(nestedArrays(resource, "Patient")).toEqual([]);
       expect(readSafety(resource).safeToSummarize).toBe(true);
       // Not silent: the discarded `_`-sibling itself is reported, as it was before this rule.
-      expect(issues.map((i) => i.code)).toContain(ISSUE_CODES.UNKNOWN_PROPERTY);
+      expect(issues.map((i) => i.code)).toContain(code);
     }
   });
 });

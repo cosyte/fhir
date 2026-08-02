@@ -105,7 +105,9 @@ describe("parseResource: the read path", () => {
     expect(serializeResource(resource)).toBe(
       '{"resourceType":"Patient","contact":[{"name":{"text":"X"}}]}',
     );
-    expect(issues.some((i) => i.code === ISSUE_CODES.UNKNOWN_PROPERTY)).toBe(true);
+    const misplaced = issues.filter((i) => i.code === ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION);
+    expect(misplaced).toHaveLength(1);
+    expect(misplaced[0]?.expression).toBe("Patient.contact");
   });
 
   it("flags a non-scalar item embedded in a primitive array instead of dropping it silently", () => {
@@ -140,11 +142,15 @@ describe("parseResource: the read path", () => {
       expect(issues).toHaveLength(0);
     });
 
-    it("raises UNKNOWN_PROPERTY for a misplaced _sibling on an object", () => {
+    it("raises MISPLACED_PRIMITIVE_EXTENSION for a misplaced _sibling on an object", () => {
       const { issues } = parseResource(
         '{"resourceType":"Patient","name":{"x":1},"_name":{"id":"z"}}',
       );
-      expect(issues.some((i) => i.code === ISSUE_CODES.UNKNOWN_PROPERTY)).toBe(true);
+      const misplaced = issues.filter((i) => i.code === ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION);
+      expect(misplaced).toHaveLength(1);
+      // The location is the element, and it is a location and nothing else: an `expression` is a
+      // FHIRPath subset, so a sentence explaining the finding belongs in the code, never in here.
+      expect(misplaced[0]?.expression).toBe("Patient.name");
     });
 
     it("flags unexpected keys inside a _sibling object", () => {

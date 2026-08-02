@@ -73,6 +73,41 @@ export const ISSUE_CODES = {
    * instead of one.
    */
   NESTED_ARRAY: "NESTED_ARRAY",
+  /**
+   * A `_`-sibling appeared beside an element that is **not** a primitive. FHIR JSON defines the
+   * `_`-prefixed property as the carrier for a *primitive* element's `id` and `extension`
+   * (json.html §2.6.2.3); a complex element carries both inline, and a complex array's members carry
+   * their own, so there is no position for a `_`-sibling on either and no defined meaning for one.
+   *
+   * The reader does not model what was inside it, so (as with {@link ISSUE_CODES.NESTED_ARRAY})
+   * **content the sender wrote is not readable** at this location. That is why it is its own code
+   * rather than an {@link ISSUE_CODES.UNKNOWN_PROPERTY}, whose contract is that nothing was lost.
+   *
+   * The location names the **element**, not the `_`-prefixed member: FHIRPath addresses elements,
+   * and `_name` is not an element. It is raised once per misplaced sibling.
+   */
+  MISPLACED_PRIMITIVE_EXTENSION: "MISPLACED_PRIMITIVE_EXTENSION",
+  /**
+   * One XML element arrived under **more than one spelling of the same name**: its occurrences did
+   * not all carry the same tag, so `<f:status/>` and `<status/>` are one element written two ways
+   * (Namespaces in XML 1.0 §6.1, an expanded name is a namespace and a local name).
+   *
+   * Usually those spellings resolve to the same namespace, and then nothing is lost and the reading
+   * is the correct one: the occurrences are modeled as repeats of a single element, exactly as the
+   * same document spelled one way would be. It also fires where a prefixed FHIR element groups with
+   * an unprefixed one carrying a **foreign** default declaration, because that one is spelled
+   * exactly like the FHIR element; there the group additionally carries
+   * {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT} at the foreign occurrence, and this code is not the
+   * one to read for that. This is raised because
+   * the *count* is what changes. An element a consumer expects at most once now presents as a
+   * repeat, and a single-value read of a repeated element yields nothing rather than a value, so a
+   * check written against `0..1` can skip an element it would otherwise have inspected. Warning
+   * severity: it tells a consumer that the number of occurrences here came from the spelling, not
+   * just from the content.
+   *
+   * The location names the element, once per element, not once per occurrence.
+   */
+  MIXED_XML_SPELLING: "MIXED_XML_SPELLING",
 } as const;
 
 /** Discriminant union of every {@link ISSUE_CODES} value. */
@@ -173,6 +208,38 @@ export function duplicateProperty(expression: string): FhirIssue {
  */
 export function nestedArray(expression: string): FhirIssue {
   return { code: ISSUE_CODES.NESTED_ARRAY, severity: "warning", expression };
+}
+
+/**
+ * Build a {@link ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION} issue at `expression`.
+ *
+ * The location is the element the `_`-sibling was written beside (`Patient.name`), because the
+ * `_`-prefixed member itself is not addressable in FHIRPath.
+ *
+ * @example
+ * ```ts
+ * import { misplacedPrimitiveExtension } from "@cosyte/fhir";
+ * const issue = misplacedPrimitiveExtension("Patient.name");
+ * ```
+ */
+export function misplacedPrimitiveExtension(expression: string): FhirIssue {
+  return { code: ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION, severity: "warning", expression };
+}
+
+/**
+ * Build a {@link ISSUE_CODES.MIXED_XML_SPELLING} issue at `expression` (XML reader only).
+ *
+ * The location names the element whose occurrences were spelled more than one way, raised once for
+ * that element rather than once per occurrence.
+ *
+ * @example
+ * ```ts
+ * import { mixedXmlSpelling } from "@cosyte/fhir";
+ * const issue = mixedXmlSpelling("Observation.status");
+ * ```
+ */
+export function mixedXmlSpelling(expression: string): FhirIssue {
+  return { code: ISSUE_CODES.MIXED_XML_SPELLING, severity: "warning", expression };
 }
 
 /**
