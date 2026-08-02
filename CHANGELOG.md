@@ -8,6 +8,58 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A narrative written with a namespace prefix was DESTROYED, and the resource still read
+  `valid: true` (`FHIR-UNPLACEABLE-SHAPES`).** `Narrative.div` is the patient-facing prose of a
+  resource: the human-readable account a clinician reads when nothing else in the document is
+  understood. XML lets the XHTML namespace be bound to a prefix as legitimately as it lets it
+  be the default. The reader recognized the narrative by the literal spelling `div`, a test a
+  prefixed tag can never satisfy, so `<h:div xmlns:h="http://www.w3.org/1999/xhtml">` was treated as
+  content from a foreign vocabulary: read as an empty element, or, when it held only text,
+  **dropped from the model entirely**. Nothing in the resulting reading said so: the two warnings
+  it drew were both at a `<withheld>` location that did not even name the position, and
+  `validateResource` returned `valid: true` with zero findings. The re-emitted XML carried `h:`
+  bound to nothing, so the output was not well-formed XML at all.
+  **The narrative is now recognised by its expanded name**, `{http://www.w3.org/1999/xhtml}div`
+  (Namespaces in XML 1.0 §6.1), under every spelling, so a prefixed narrative reads to the same
+  model, the same issues, the same findings and the same safety readout as the identical document
+  written with a default `xmlns`. It is the one element FHIR _requires_ in a namespace other than
+  its parent's, and it is the only place a resolved local name is taken from a foreign namespace:
+  the namespace is compared against a single fixed URI, and what the reader does with the result is
+  carry an **opaque string**, never model FHIR structure from it. A `div` in any other namespace is
+  still not the narrative, so a vendor cannot supply a patient's prose.
+  **The string a narrative is carried as now includes the namespace declarations it inherited.**
+  `Narrative.div` is a self-contained XHTML fragment, and lifting an element out of the document
+  that declared its namespaces leaves a fragment whose prefixes bind to nothing. Only bindings the
+  fragment actually uses and does not itself declare are added, and only with the URI that was in
+  scope where the document wrote the element, so nothing is invented; a prefix nothing binds is left
+  exactly as written. The document's own spelling is preserved rather than rewritten to the default
+  form, so a prefixed narrative is namespace-**equivalent** to the default spelling and not
+  byte-identical to it. This also repairs the same broken-fragment defect for an _unprefixed_
+  narrative that used a prefix declared on an ancestor.
+  **A second route to the same loss is closed with it:** a narrative holding a single capitalized
+  child (`<div xmlns="…xhtml"><Table>5 mg</Table></div>`) was read as a contained `Table` **resource**,
+  destroying its prose and re-emitting it stripped of the XHTML namespace so the re-read came back
+  clean. The narrative is now taken before the resource-valued branch. That is safe because `div`
+  names exactly one element in R4 (`Narrative.div` is the only one of the **7,696** element paths in
+  `profiles-types.json` + `profiles-resources.json` whose name is `div`), so taking it first shadows
+  nothing.
+  **Differential against the previous release over 545 documents**, both trees in one process, every
+  walker at every node (every XML fixture × twelve mutations at every element position, plus ten
+  adversarial documents covering the safety spine): 268 readings moved, and of those **0** go
+  `valid: false` to `true`, **0** go `safeToSummarize: false` to `true`, **0** lose a retraction,
+  **0** lose a negation, **0** newly throw, and **0** outputs are shorter. 376 read diagnostics
+  disappear: **336 at a `<withheld>` location**, and the other **40** are all `UNEXPECTED_XML_CONTENT`
+  raised on a narrative whose prose the previous release **dropped** and this one keeps: the warning
+  goes because the loss it reported does. **0** disappear at a resolvable location for any other
+  reason. Four validation findings disappear, all one shape: two spellings of the narrative at a
+  resource root drew one `UNKNOWN_ELEMENT` per property and now draw one per element, because they
+  are one element written twice, and that document additionally gains `MIXED_XML_SPELLING`, so the
+  widened count is not silent. **344 read locations and 16 validation locations improve from
+  `<withheld>` to a resolvable expression; none worsens.** What it buys: of the 256 documents
+  carrying a narrative, the previous release preserved it in **88** and this one preserves it in
+  **248**. The remaining 8 are the unchanged residual below: a child of a valued primitive, discarded
+  whole. The 27 JSON fixtures read **identically**: no JSON-reader behaviour is touched, and no field
+  is added to the model.
 - **The XML reader did not resolve namespace prefixes, so a prefixed FHIR document was misread
   whole (`FHIR-READER-RESIDUALS`).** FHIR XML is defined in the `http://hl7.org/fhir` namespace, and
   XML lets a document bind that namespace to a prefix rather than making it the default, so
@@ -34,7 +86,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   child element written beside a `value` attribute is not modeled at all: it is discarded whole and
   reported `UNKNOWN_PROPERTY`, so a foreign one there draws no namespace report. And a narrative
   `<div>` written with a prefix is not read as `Narrative.div` at all, so the narrative text is not
-  carried; only the unprefixed spelling is.
+  carried; only the unprefixed spelling is. **That second limit is closed by the narrative entry
+  above; the first is not.**
   **Measured over the package's seven XML fixtures, each re-spelled with a prefix and compared to the
   default-namespace original** on the full read: issues, serialized JSON, re-emitted XML, validity
   and findings, safety readout. **Before: 0 of 7 read identically. After: 7 of 7.**

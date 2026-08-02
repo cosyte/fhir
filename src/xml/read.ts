@@ -35,9 +35,13 @@
  *   it from being read as the FHIR element beside it.
  *
  * The narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, the same
- * representation FHIR JSON uses for `Narrative.div`, so it round-trips as conformant `<div>…</div>`
- * and is never dropped or escaped into an attribute; its XHTML structure is not modeled or validated
- * (matching the JSON codec's fidelity). Reading is otherwise lenient (Postel's Law): an unexpected
+ * representation FHIR JSON uses for `Narrative.div`, so it round-trips as `<div>…</div>` and is
+ * never dropped or escaped into an attribute; its XHTML structure is not modeled or validated
+ * (matching the JSON codec's fidelity). It is recognised by its **expanded name**
+ * (`{http://www.w3.org/1999/xhtml}div`), so a document that spells the XHTML namespace with a prefix
+ * carries the same narrative as one that makes it the default, and the string it is carried as
+ * includes the namespace declarations the element inherited, so the fragment stands on its own.
+ * Reading is otherwise lenient (Postel's Law): an unexpected
  * namespace or stray character data is preserved-and-flagged, never rejected. Only genuinely
  * unrecoverable input (a malformed document, a refused DTD/entity) throws, see {@link ./raw-xml.js}
  * / {@link ./issues.js}.
@@ -180,8 +184,29 @@ function isForeign(resolved: ResolvedName, parentNamespace: string): boolean {
 }
 
 /**
+ * Whether a resolved name is the FHIR narrative `<div>`, by its **expanded name**
+ * `{http://www.w3.org/1999/xhtml}div` (Namespaces in XML 1.0 §6.1) rather than by the spelling the
+ * document happened to use.
+ *
+ * This is the one element FHIR *requires* in a namespace other than its parent's, so it is the one
+ * place where {@link isForeign} being `true` says nothing about the content being foreign, and the
+ * one place a resolved local name is used without the namespace matching the parent's. That is safe
+ * here precisely because the namespace is compared (against a single fixed URI) and because what
+ * the reader does with the result is carry the element as an **opaque string** rather than model any
+ * FHIR structure from it. A `div` in any *other* namespace is not this element.
+ *
+ * An unresolvable prefix leaves {@link ResolvedName.namespace} empty, so `<f:div/>` with no `xmlns:f`
+ * in scope is not the narrative either: it is the unbound-prefix residual, unchanged.
+ */
+function isNarrativeDiv(resolved: ResolvedName): boolean {
+  return resolved.name === "div" && resolved.namespace === XHTML_NAMESPACE;
+}
+
+/**
  * The name to model an element under: its local name when it shares its parent's namespace, and
- * otherwise its tag exactly as the document wrote it.
+ * otherwise its tag exactly as the document wrote it. The narrative `<div>` is the single exception
+ * ({@link isNarrativeDiv}): it is modeled as `div` under every spelling, because XHTML is the
+ * vocabulary FHIR mandates for it.
  *
  * **What that separates, and what it does not.** A *prefixed* foreign element keeps a tag no FHIR
  * element can be spelled with (`v:code`), so it cannot group with a FHIR sibling, cannot satisfy the
@@ -194,6 +219,7 @@ function isForeign(resolved: ResolvedName, parentNamespace: string): boolean {
  * regression, but it is not covered by the separation and no claim may say it is.
  */
 function modelNameOf(element: XmlElement, resolved: ResolvedName, parentNamespace: string): string {
+  if (isNarrativeDiv(resolved)) return resolved.name;
   return isForeign(resolved, parentNamespace) ? element.name : resolved.name;
 }
 
@@ -268,21 +294,92 @@ function valueAttribute(element: XmlElement): string | undefined {
   return element.attributes.find((a) => a.name === "value")?.value;
 }
 
-/** Serialize an XML node back to a canonical string, used to carry a narrative `<div>` opaquely. */
-function serializeXml(node: XmlNode): string {
+/**
+ * Serialize an XML node back to a canonical string, used to carry a narrative `<div>` opaquely.
+ * `extraAttributes` is emitted on this element only (never on a descendant) and carries the
+ * namespace fixup computed by {@link narrativeSource}.
+ */
+function serializeXml(node: XmlNode, extraAttributes = ""): string {
   if (node.type === "text") {
     return node.value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
-  const attrs = node.attributes
-    .map(
-      (a) =>
-        ` ${a.name}="${a.value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;")}"`,
-    )
-    .join("");
-  const inner = node.children.map(serializeXml).join("");
+  const attrs =
+    node.attributes
+      .map(
+        (a) =>
+          ` ${a.name}="${a.value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;")}"`,
+      )
+      .join("") + extraAttributes;
+  const inner = node.children.map((child) => serializeXml(child)).join("");
   return node.children.length === 0
     ? `<${node.name}${attrs}/>`
     : `<${node.name}${attrs}>${inner}</${node.name}>`;
+}
+
+/** The prefix an element or attribute name carries, `""` when it carries none. */
+function namePrefix(name: string): string {
+  const colon = name.indexOf(":");
+  return colon === -1 ? "" : name.slice(0, colon);
+}
+
+/**
+ * Collect the prefixes a subtree uses but does not itself declare, i.e. the bindings it inherits
+ * from outside and would lose if it were lifted out of its document.
+ *
+ * An element name always uses a prefix (`""` being the default namespace); an **attribute** name
+ * uses one only when it carries one, because an unprefixed attribute is in no namespace at all
+ * (Namespaces in XML 1.0 §6.2). A namespace declaration is a binding, not a use.
+ */
+function collectInheritedPrefixes(
+  node: XmlNode,
+  declared: ReadonlySet<string>,
+  needed: Set<string>,
+): void {
+  if (node.type !== "element") return;
+  let scope = declared;
+  for (const attr of node.attributes) {
+    const prefix = namespaceDeclarationPrefix(attr.name);
+    if (prefix === undefined) continue;
+    if (scope === declared) scope = new Set(declared);
+    (scope as Set<string>).add(prefix);
+  }
+  if (!scope.has(namePrefix(node.name))) needed.add(namePrefix(node.name));
+  for (const attr of node.attributes) {
+    if (namespaceDeclarationPrefix(attr.name) !== undefined) continue;
+    const prefix = namePrefix(attr.name);
+    if (prefix !== "" && !scope.has(prefix)) needed.add(prefix);
+  }
+  for (const child of node.children) collectInheritedPrefixes(child, scope, needed);
+}
+
+/**
+ * The opaque string a narrative `<div>` is carried as: the element serialized **exactly as the
+ * document wrote it**, plus the namespace declarations it inherited from its ancestors and uses.
+ *
+ * `Narrative.div` is a self-contained XHTML fragment (the FHIR JSON representation), and this
+ * element is being lifted out of the document that declared its namespaces. Without the fixup a
+ * `<h:div>` whose `xmlns:h` sits on the resource element becomes a fragment with `h:` bound to
+ * nothing: not namespace-well-formed, and re-emitted by the writer in that state. The declarations
+ * added are the ones that were **in scope where the document wrote them**, so nothing is invented
+ * and the fragment's infoset is the one the document gave it. A prefix nothing in scope binds is
+ * left exactly as written rather than guessed at, matching {@link resolveName}.
+ *
+ * The document's own spelling is preserved rather than rewritten to the default-namespace form:
+ * this is a preserving read, not a normalizing one, so a prefixed narrative is namespace-equivalent
+ * to the default spelling and **not** byte-identical to it.
+ */
+function narrativeSource(element: XmlElement, scope: NamespaceScope): string {
+  const needed = new Set<string>();
+  collectInheritedPrefixes(element, new Set(), needed);
+  const fixup = [...needed]
+    .filter((prefix) => prefix !== "xml" && scope.has(prefix))
+    .sort()
+    .map((prefix) => {
+      const uri = (scope.get(prefix) ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+      return prefix === "" ? ` xmlns="${uri}"` : ` xmlns:${prefix}="${uri}"`;
+    })
+    .join("");
+  return serializeXml(element, fixup);
 }
 
 /**
@@ -423,11 +520,28 @@ function buildSingle(
 ): FhirNode {
   const { element, resolved, modelName } = self;
   // The narrative `<div>` is the one element FHIR *requires* in a namespace other than its parent's
-  // (XHTML), so it is not foreign content there. A `div` in any other namespace still is.
-  const narrativeDiv = modelName === "div" && resolved.namespace === XHTML_NAMESPACE;
-  if (!narrativeDiv) flagForeign(resolved, parentNamespace, path, issues);
+  // (XHTML), so it is not foreign content there, under any spelling of that namespace. A `div` in
+  // any other namespace still is.
+  if (!isNarrativeDiv(resolved)) flagForeign(resolved, parentNamespace, path, issues);
   const children = elementChildren(element, self.scope, resolved.namespace);
   const hasValue = valueAttribute(element) !== undefined;
+
+  // A narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, exactly the
+  // representation FHIR JSON uses for `Narrative.div` (a string). The reader does not model the XHTML
+  // element tree, but it never drops or garbles it: the writer re-emits this string verbatim, so a
+  // narrative round-trips as `<div>…</div>`, not an escaped attribute. (The XHTML structure itself is
+  // not validated, the same fidelity as the JSON codec.) `narrativeSource` is what makes the
+  // lifted-out fragment carry its own namespace declarations.
+  //
+  // This is tested BEFORE the resource-valued branch below, because that branch would otherwise win
+  // for a narrative holding one capitalized child (`<div xmlns="…xhtml"><Table>5 mg</Table></div>`)
+  // and read the narrative as a contained `Table` resource, destroying its prose and re-emitting it
+  // without the XHTML namespace. `div` is the name of exactly one element in R4 -- `Narrative.div`,
+  // the only one of the 7,696 element paths in `profiles-types.json` + `profiles-resources.json`
+  // whose name is `div` -- so nothing else can be shadowed by taking it first.
+  if (modelName === "div") {
+    return primitive(narrativeSource(element, self.scope));
+  }
 
   // A resource-valued element wraps exactly one resource element (e.g. `contained`, `entry.resource`).
   const onlyChild = children[0];
@@ -437,15 +551,6 @@ function buildSingle(
     if (isResourceName(onlyChild.modelName)) {
       return readNested(onlyChild, path, issues, resolved.namespace, { isResource: true });
     }
-  }
-
-  // A narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, exactly the
-  // representation FHIR JSON uses for `Narrative.div` (a string). The reader does not model the XHTML
-  // element tree, but it never drops or garbles it: the writer re-emits this string verbatim, so a
-  // narrative round-trips as conformant `<div>…</div>`, not an escaped attribute. (The XHTML structure
-  // itself is not validated, the same fidelity as the JSON codec.)
-  if (modelName === "div") {
-    return primitive(serializeXml(element));
   }
 
   // `extension` in this element's own namespace only, as far as the NAME can carry that: a prefixed
