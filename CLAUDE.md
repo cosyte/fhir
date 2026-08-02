@@ -475,11 +475,46 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   reports. **The clinical shape: a prefixed `Observation` with `status="entered-in-error"` read
   `status: undefined`, `retracted: false`, `isRetracted: false`.** It reads the retraction now.
   The mechanism is a scope map threaded down the descent (`extendScope` / `resolveName` /
-  `ScopedElement` in `src/xml/read.ts`), the implicit `xml` prefix pre-bound, and grouping keyed on
-  the **resolved** name so two prefixes for one namespace are one repeated element.
-  **A foreign namespace is flagged where the document LEAVES the FHIR one, not once per descendant** —
+  `ScopedElement` in `src/xml/read.ts`), with the implicit `xml` prefix pre-bound.
+  **🔴 THE GATE REFUTED PASS ONE ON EXACTLY THIS, AND IT IS THE THING TO REMEMBER: AN EXPANDED NAME IS
+  A NAMESPACE _AND_ A LOCAL NAME (Namespaces in XML 1.0 §6.1), SO GROUPING ON THE LOCAL NAME ALONE
+  MERGES FOREIGN CONTENT INTO THE FHIR ELEMENT BESIDE IT.** Pass one dropped the prefix from every
+  element it could resolve, so `<v:code xmlns:v="urn:vendor">` joined `code`'s occurrences. Measured
+  by the refuter, none reproducing on base: a **true `VITAL_SIGN_UNIT_NONCONFORMANT` error erased and
+  `valid` flipped `false -> true`**; **`noKnownAllergy` asserted `true` over a record naming an
+  allergen** (the one negation that is a positive clinical assertion, and the third time this repo has
+  reached that exact shape); a **retraction lost**; a foreign `<v:extension>` promoted into
+  `_birthDate.extension`; and `serializeResourceXml` **laundering** the whole thing, re-emitting the
+  vendor element as conformant FHIR so a re-read came back clean. **The remedy was the refuter's own
+  and it is a NARROWING, not a bigger guard:** one predicate, `isForeign`, governs **both naming and
+  flagging**: an element in its parent's namespace gets its local name and no flag, anything else
+  keeps its **tag verbatim** and is flagged, which is exactly what base did for every prefixed
+  element. That single predicate also fixes the `extension` test, the `div` test and the
+  resource-unwrap. **If you ever make a resolved local name reachable without comparing the namespace
+  it came from, you have reopened this.**
+  **The root is the one element with its own rule**, because it has no parent to take a vocabulary
+  from: it is always modeled by its local name, and it is flagged only when it _declares_ a namespace
+  that is not FHIR's. A document declaring **no namespace at all** is still read as FHIR and still
+  unflagged, exactly as before; do not "tighten" that into a refusal.
+  **A foreign namespace is flagged where the document LEAVES its parent's, not once per descendant**,
   an element that merely inherits says nothing its ancestor did not. That is what keeps the existing
   default-namespace behaviour byte-identical; do not "fix" it into a per-element flag.
+  **What reading the document correctly COSTS, measured rather than left to be found.** Two prefixes
+  both bound to the FHIR namespace are two spellings of one name, so an element written twice that
+  way is the repeat it genuinely is, and a `0..1` check that reads a single value then skips a list
+  silently drops it. **That skip is PRE-EXISTING and the slice adds no behaviour of its own**: the
+  same document spelled one way behaves identically on both trees, which `test/xml.test.ts` pins by
+  asserting the two spellings produce the same model, verdict and readout. Sweep over 105 documents
+  (every XML fixture plus a foreign-prefixed and a FHIR-prefixed duplicate injected at every valued
+  element): **0 `valid: false -> true`, 0 retractions lost, 0 negations lost**, 9 `valid: true ->
+  false`, 8 losing a finding, 17 gaining one. At safety-scoped elements the repeat is **reported**
+  (`ARRAY_WRAPPED_SCALAR`, error), so a retraction written through a second spelling is now caught
+  where the raw-tag read missed it entirely. **The one loss worth naming**, outside that corpus: a
+  duplicate reaching the vital-signs unit check through `category.coding` loses its error, because
+  `category` is outside the closed set that reports repeats. **That sink is the refuter's `F6`, is
+  reachable today by writing the element twice with ONE spelling, and must not be answered by
+  widening the cardinality table**. CLAUDE.md already records why (`Questionnaire.code` and
+  `ElementDefinition.code` are `0..*`, so a name-only rule false-errors on a conformant document).
   **The `_`-sibling half is a REPORTING change, not a preserving one**, and the distinction is the
   same one `FHIR-NESTED-ARRAY-REPORTING` turned on: new `ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION`
   (warning) + `misplacedPrimitiveExtension`, raised at the bare element location. It replaces the
@@ -490,20 +525,20 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   unchanged.
   **Differential vs `cf16767` over the fixture corpus + adversarial documents: 37 identical, 10 moved,
   and all 10 are the two defects** (7 prefixed XML re-spellings, 3 `_`-sibling documents). **No
-  conformant document moved at all** — the 27 JSON and 7 XML fixtures are byte-identical on every
+  conformant document moved at all**: the 27 JSON and 7 XML fixtures are byte-identical on every
   channel.
   **`test/expression-grammar.test.ts` is the gate that keeps prose out**, sweeping every reader
   diagnostic the JSON and XML corpora produce against a location grammar.
   **THE CLAIM IS SCOPED AND MUST STAY SCOPED. It is that the JSON reader's `expression` no longer
   carries prose, NOT that every `expression` is resolvable FHIRPath.** Two forms deliberately are not,
   and the grammar **admits** them rather than hiding them: a `<withheld>` segment, and the XML
-  reader's `.@name` attribute form. **`.@name` is a live residual** — an unmodeled XML attribute has
+  reader's `.@name` attribute form. **`.@name` is a live residual**: an unmodeled XML attribute has
   no FHIRPath address at all, and choosing one for it (the element? nothing?) is a separate decision
   from removing a sentence, so it was left alone rather than folded in.
   **Three more residuals left open deliberately, each pinned by a test:** an **unbound** prefix
   (`<f:active/>` with no `xmlns:f` in scope) is flagged and its tag kept **verbatim**, so it does
   **not** read as a FHIR element and a retraction spelled that way is still not seen by the safety
-  spine — the fix covers **bound** prefixes, which is what "supports namespace prefixes" means and
+  spine. The fix covers **bound** prefixes, which is what "supports namespace prefixes" means and
   no more; `serializeResourceXml` emits the default-namespace spelling only, so a prefixed input
   round-trips **equivalently, not byte-for-byte** (the conservative writer, working as intended); and
   the `_`-sibling content is still discarded, as above.

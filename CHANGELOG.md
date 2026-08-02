@@ -16,6 +16,14 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `f:active` under a `resourceType` of `f:Patient`. The reader now tracks the in-scope declarations
   as it descends (including a prefix rebound partway down and the implicit `xml` binding) and models
   the **local** name.
+  **A prefix is dropped only for an element in its parent's namespace.** An expanded name is a
+  namespace _and_ a local name (Namespaces in XML 1.0 §6.1), so `{urn:vendor}code` and
+  `{http://hl7.org/fhir}code` are different names; an element from another vocabulary keeps its tag
+  exactly as written and is flagged, so it can never join a FHIR element's occurrences, be promoted
+  into a primitive's `extension`, be unwrapped as a contained resource, or be stored as
+  `Narrative.div`. Two prefixes both bound to the FHIR namespace are two spellings of one name, so an
+  element written twice that way is read as the repeat it genuinely is: identical, verified, to the
+  same document spelled one way.
   **Measured over the package's seven XML fixtures, each re-spelled with a prefix and compared to the
   default-namespace original** on the full read: issues, serialized JSON, re-emitted XML, validity
   and findings, safety readout. **Before: 0 of 7 read identically. After: 7 of 7.**
@@ -34,6 +42,18 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   no longer reported as an unknown attribute, which retires a false positive on the legal
   re-declaration of the namespace an element is already in. The narrative `<div>` is expected in the
   XHTML namespace and is not flagged for being there.
+  **What reading a document correctly costs, stated rather than left to be found.** A `0..1` element
+  written twice through two spellings of one namespace is now the repeat it always was, and a check
+  that reads a single value then skips a list silently drops it. That skip is pre-existing: the same
+  document spelled one way behaves identically on both sides. Over a 105-document sweep (every XML
+  fixture plus a foreign-prefixed and a FHIR-prefixed duplicate injected at every valued element):
+  **0** documents go `valid: true`, **0** retractions lost, **0** negations lost, 9 go
+  `valid: false`, 8 lose a finding and 17 gain one. At the safety-scoped elements the repeat is
+  reported (`ARRAY_WRAPPED_SCALAR`, error) rather than resolved, so a retraction written through a
+  second spelling is now **caught** where a raw-tag read missed it entirely. Outside that corpus a
+  duplicate reaching the vital-signs unit check through `category.coding` does lose an error, because
+  `category` sits outside the closed set that reports repeats; that sink is pre-existing, reachable
+  today by writing the element twice with one spelling, and is filed rather than widened here.
 - **The JSON reader emitted English prose inside a FHIRPath `expression` (`FHIR-READER-RESIDUALS`).**
   Two locations were built as `Patient.name (unexpected _-sibling on an object)` and
   `Patient.contact (unexpected _-sibling on a non-primitive array)`. R4 defines

@@ -11,6 +11,7 @@ import {
   isRetracted,
   list,
   nodesEquivalent,
+  validateResource,
   parseResource,
   parseResourceXml,
   primitive,
@@ -524,6 +525,139 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
     expect(serializeResource(resource)).toBe(
       '{"resourceType":"Patient","active":"true","name":{"family":"Roe"}}',
     );
+  });
+
+  /**
+   * An expanded name is a namespace AND a local name (Namespaces in XML 1.0 §6.1), so
+   * `{urn:vendor}code` and `{http://hl7.org/fhir}code` are different names. Dropping the prefix from
+   * foreign content would merge it into the FHIR element beside it, letting a document assert FHIR
+   * content it never wrote in FHIR. These pin the three directions that costs, each measured.
+   */
+  describe("foreign-namespace content never joins a FHIR element's occurrences", () => {
+    const VENDOR = 'xmlns:v="urn:vendor"';
+
+    it("does not retire a true vital-signs unit error with a foreign sibling in category.coding", () => {
+      const src = (extra: string) =>
+        `<Observation ${FHIR_NS} ${VENDOR}><id value="w"/><status value="final"/>` +
+        `<category><coding><system value="http://terminology.hl7.org/CodeSystem/observation-category"/>` +
+        `<code value="vital-signs"/>${extra}</coding></category>` +
+        `<code><coding><system value="http://loinc.org"/><code value="29463-7"/></coding></code>` +
+        `<valueQuantity><value value="70"/><unit value="pounds"/><system value="http://unitsofmeasure.org"/><code value="lb"/></valueQuantity>` +
+        `</Observation>`;
+      const clean = validateResource(parseResourceXml(src("")).resource);
+      expect(clean.valid).toBe(false);
+      const withForeign = validateResource(
+        parseResourceXml(src('<v:code value="vital-signs"/>')).resource,
+      );
+      // A weight in `lb` where R4 vital signs requires kg/g stays an error: the vendor element is
+      // not a second FHIR `code`.
+      expect(withForeign.valid).toBe(false);
+      expect(withForeign.issues.map((i) => i.code)).toEqual(clean.issues.map((i) => i.code));
+    });
+
+    it("does not manufacture a no-known-allergy assertion from a foreign coding", () => {
+      const src =
+        `<AllergyIntolerance ${FHIR_NS} ${VENDOR}><id value="a"/>` +
+        `<code><coding><system value="http://snomed.info/sct"/><code value="227493005"/></coding>` +
+        `<v:code value="716186003"/></code></AllergyIntolerance>`;
+      const safety = readSafety(parseResourceXml(src).resource);
+      // 716186003 is "No known allergy". Asserting it over a record that names an allergen is a
+      // positive clinical claim the sender never made in FHIR.
+      expect(safety.noKnownAllergy).toBe(false);
+      expect(safety.negations).toEqual([]);
+    });
+
+    it("does not lose a retraction to a foreign sibling in verificationStatus.coding", () => {
+      const src =
+        `<AllergyIntolerance ${FHIR_NS} ${VENDOR}><id value="a"/>` +
+        `<verificationStatus><coding>` +
+        `<system value="http://terminology.hl7.org/CodeSystem/allergyintolerance-verification"/>` +
+        `<code value="entered-in-error"/><v:code value="confirmed"/>` +
+        `</coding></verificationStatus></AllergyIntolerance>`;
+      const { resource } = parseResourceXml(src);
+      expect(readSafety(resource).retracted).toBe(true);
+      expect(isRetracted(resource)).toBe(true);
+    });
+
+    it("does not promote a foreign extension into a primitive's FHIR extensions", () => {
+      const { resource, issues } = parseResourceXml(
+        `<Patient ${FHIR_NS} ${VENDOR}><birthDate value="1980-01-01"><v:extension url="urn:x"><v:valueBoolean value="true"/></v:extension></birthDate></Patient>`,
+      );
+      // Not re-emitted as a conformant FHIR extension the sender never wrote.
+      expect(serializeResource(resource)).not.toContain("extension");
+      expect(issues.some((i) => i.code === ISSUE_CODES.UNKNOWN_PROPERTY)).toBe(true);
+    });
+
+    it("does not unwrap a foreign resource-shaped element as a contained resource", () => {
+      const { resource } = parseResourceXml(
+        `<Bundle ${FHIR_NS} ${VENDOR}><entry><resource><v:Patient><v:id value="p"/></v:Patient></resource></entry></Bundle>`,
+      );
+      expect(serializeResource(resource)).not.toContain('"resourceType":"Patient"');
+    });
+
+    it("flags the foreign element rather than reading it silently", () => {
+      const { issues } = parseResourceXml(
+        `<Patient ${FHIR_NS} ${VENDOR}><name><v:family value="Roe"/></name></Patient>`,
+      );
+      expect(issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toBe(true);
+    });
+
+    /**
+     * The other half of the same rule, and the one that costs something. Two prefixes both bound to
+     * the FHIR namespace are two spellings of ONE name, so an element written twice that way is a
+     * genuinely repeated element and is read as one. That is the correct reading, and it is the
+     * reading the same document gets when it is spelled one way, which is what this pins: the
+     * resolution introduces no behaviour of its own, it only stops misreading the second spelling as
+     * a separate junk property. What happens to a repeat afterwards, including a `0..1` element
+     * whose check reads a single value and silently skips a list, is the same pre-existing behaviour
+     * either spelling reaches.
+     */
+    it("reads two spellings of one namespace exactly as it reads one spelling", () => {
+      const doc = (second: string) =>
+        `<Observation ${FHIR_NS} xmlns:z="http://hl7.org/fhir"><id value="w"/><status value="final"/>` +
+        `<category><coding><system value="http://terminology.hl7.org/CodeSystem/observation-category"/>` +
+        `<code value="vital-signs"/>${second}</coding></category>` +
+        `<code><coding><system value="http://loinc.org"/><code value="29463-7"/></coding></code>` +
+        `<valueQuantity><value value="70"/><unit value="pounds"/><system value="http://unitsofmeasure.org"/><code value="lb"/></valueQuantity>` +
+        `</Observation>`;
+      const twoSpellings = parseResourceXml(doc('<z:code value="vital-signs"/>')).resource;
+      const oneSpelling = parseResourceXml(doc('<code value="vital-signs"/>')).resource;
+      const verdict = (r: FhirComplex) => {
+        const v = validateResource(r);
+        const s = readSafety(r);
+        return {
+          valid: v.valid,
+          issues: v.issues.map((i) => `${i.code}/${i.severity}@${i.expression}`).sort(),
+          retracted: s.retracted,
+          safeToSummarize: s.safeToSummarize,
+          negations: [...s.negations].sort(),
+        };
+      };
+      expect(serializeResource(twoSpellings)).toBe(serializeResource(oneSpelling));
+      expect(verdict(twoSpellings)).toEqual(verdict(oneSpelling));
+    });
+
+    it("catches a retraction written through a second spelling, which a raw-tag read missed", () => {
+      const { resource } = parseResourceXml(
+        `<Observation ${FHIR_NS} xmlns:z="http://hl7.org/fhir"><id value="o"/><status value="final"/><z:status value="entered-in-error"/></Observation>`,
+      );
+      // Two `{http://hl7.org/fhir}status` elements: the safety spine reads every value written, so
+      // the retraction is seen, and the `0..1` breach is reported rather than resolved.
+      expect(readSafety(resource).retracted).toBe(true);
+      const { valid, issues } = validateResource(resource);
+      expect(issues.map((i) => i.code)).toContain("ARRAY_WRAPPED_SCALAR");
+      expect(valid).toBe(false);
+    });
+
+    it("keeps a foreign narrative div out of Narrative.div rather than storing a broken fragment", () => {
+      const { resource, issues } = parseResourceXml(
+        `<Patient ${FHIR_NS} xmlns:h="http://www.w3.org/1999/xhtml"><text><status value="generated"/><h:div><h:p>Hi</h:p></h:div></text></Patient>`,
+      );
+      // `{xhtml}div` reached through a prefix is not the parent's vocabulary, so it is not modeled
+      // as `Narrative.div`; storing it there would put an undeclared `h:` prefix in the string.
+      expect(serializeResource(resource)).not.toContain('"div"');
+      expect(issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toBe(true);
+    });
   });
 
   it("resolves xml:lang without treating `xml` as an undeclared prefix", () => {

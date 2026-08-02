@@ -76,7 +76,7 @@ function expressionsOf(
     try {
       issues = read(doc).issues;
     } catch {
-      continue; // a fatal carries no issue list; the fatal's own expression is checked below
+      continue; // a fatal carries no issue list, and this suite grades the warning channel
     }
     for (const issue of issues) out.push(issue.expression);
   }

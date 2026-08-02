@@ -10,7 +10,11 @@ and `<Patient xmlns="http://hl7.org/fhir">` are the same resource. The XML reade
 name, so the first read to properties literally named `f:active` under a `resourceType` of
 `f:Patient`. It now tracks the in-scope declarations as it descends and models the local name. Over
 the package's seven XML fixtures, each re-spelled with a prefix and compared to the default-namespace
-original on the whole read, 0 of 7 matched before and 7 of 7 match now. The defect silently dropped
+original on the whole read, 0 of 7 matched before and 7 of 7 match now. A prefix is dropped only for
+an element in its parent's namespace: an expanded name is a namespace and a local name, so content
+from another vocabulary keeps its tag exactly as written and can never join a FHIR element's
+occurrences, be promoted into a primitive's extensions, be unwrapped as a contained resource, or be
+stored as the narrative. The defect silently dropped
 primitive extensions, re-emitted XML that was not well-formed, and let a document validate `valid:
 true` on a reading in which no element had been recognized; a prefixed `Observation` carrying
 `status="entered-in-error"` read `retracted: false`, and now reads the retraction. An unresolvable

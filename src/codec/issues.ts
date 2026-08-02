@@ -76,7 +76,7 @@ export const ISSUE_CODES = {
   /**
    * A `_`-sibling appeared beside an element that is **not** a primitive. FHIR JSON defines the
    * `_`-prefixed property as the carrier for a *primitive* element's `id` and `extension`
-   * (json.html §2.6.3); a complex element carries both inline, and a complex array's members carry
+   * (json.html §2.6.2.3); a complex element carries both inline, and a complex array's members carry
    * their own, so there is no position for a `_`-sibling on either and no defined meaning for one.
    *
    * The reader does not model what was inside it, so (as with {@link ISSUE_CODES.NESTED_ARRAY})
