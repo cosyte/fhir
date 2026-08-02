@@ -23,8 +23,9 @@
  * A reader change is allowed to read MORE and report MORE. It is not allowed to quietly read less.
  * So the report is organized around what could have been lost:
  *
- *   - a leaf value base read that head does not (containment-checked: a value that moved INSIDE an
- *     opaque narrative string is still present, and is counted as present only by finding it there);
+ *   - a leaf value base read that head does not, counted as a MULTISET so a dropped repeat is
+ *     visible, and containment-checked: a value that moved INSIDE an opaque narrative string is
+ *     still present, and is counted as present only by finding it there;
  *   - a read diagnostic or validation finding that disappeared, split by whether its location
  *     RESOLVES -- a diagnostic base could only report at `<withheld>` is a weaker loss than one it
  *     could name;
@@ -288,6 +289,14 @@ const SHAPES: readonly Shape[] = [
     xml: '<contained>@<Observation>inner<status value="final"/></Observation></contained>',
     narrative: false,
   },
+  {
+    id: "contained-foreign-default-stray-text",
+    xml: '<contained xmlns="urn:vendor">@<AllergyIntolerance><id value="a"/></AllergyIntolerance></contained>',
+    narrative: false,
+  },
+  // A primitive whose value is written as element text rather than `value=`. The value has no slot
+  // on the model and is dropped on BOTH trees; it is in the corpus so that stays measured.
+  { id: "primitive-text-not-value", xml: "<status>@</status>", narrative: false },
   {
     id: "uppercase-div-wrapper",
     xml: `<DIV xmlns="${XHTML}">@<BR/></DIV>`,
@@ -600,10 +609,20 @@ function fold(tally: Tally, doc: Document, base: Reading, head: Reading): void {
   // A leaf value is "still read" if head reads it as a leaf OR carries it inside a string it read
   // (which is what an opaque narrative does to everything under it). Containment is CHECKED, never
   // assumed: a value that is simply gone is counted as gone.
-  const headLeaves = new Set(head.leaves);
+  //
+  // COUNTED AS A MULTISET, NOT A SET. A set comparison cannot see a value base read three times and
+  // head reads once, so it would call a real loss of two occurrences zero. Each base occurrence
+  // consumes one head occurrence; when they run out, the leaf falls through to the containment
+  // check and then to the loss tally.
+  const headRemaining = new Map<string, number>();
+  for (const leaf of head.leaves) headRemaining.set(leaf, (headRemaining.get(leaf) ?? 0) + 1);
   tally.leavesBaseRead += base.leaves.length;
   for (const leaf of base.leaves) {
-    if (headLeaves.has(leaf)) continue;
+    const remaining = headRemaining.get(leaf) ?? 0;
+    if (remaining > 0) {
+      headRemaining.set(leaf, remaining - 1);
+      continue;
+    }
     // Containment is only accepted from a leaf that is itself a CARRIED XML FRAGMENT, so an
     // unrelated leaf that happens to contain the same substring cannot launder a real loss.
     if (head.leaves.some((h) => h.startsWith("<") && h.endsWith(">") && h.includes(leaf))) {

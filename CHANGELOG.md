@@ -41,15 +41,20 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **0** is it weaker.
   **The same silent destruction reached through the elements that genuinely do wrap a resource is now
   reported.** `<contained>Take 5 mg<Observation>…</Observation></contained>` discarded the character
-  data beside the child with no diagnostic; it draws `UNEXPECTED_XML_CONTENT` at that element now. The
-  text is still **not** preserved there: there is no slot on the model for it, and minting one is a
-  separate decision.
-  **Differential against the previous release over 1,107 documents**, both trees in one process
-  (every XML fixture × 25 narrative and resource-wrapper shapes at every element position): 600
+  data beside the child with no diagnostic; it draws `UNEXPECTED_XML_CONTENT` at that element now,
+  and only where that position was otherwise silent, because that code is raised once per location.
+  The text is still **not** preserved there: there is no slot on the model for it, and minting one is
+  a separate decision. **`UNEXPECTED_XML_CONTENT`'s own documentation is corrected to match**: it
+  reports two different observations, and only the vocabulary one preserves anything. Character data
+  written directly on a FHIR element is **dropped at every position it can appear**, because a FHIR
+  element carries its value in the `value` attribute, and the guarantee on offer is that the drop is
+  not silent. The previous text said the content survived, which was never true of that half.
+  **Differential against the previous release over 1,195 documents**, both trees in one process
+  (every XML fixture × 27 narrative and resource-wrapper shapes at every element position): 560
   readings moved. **0** go `valid: true` to `false`, **0** lose a retraction, **0** lose a negation,
   **0** newly throw, **0** emit XML that no longer re-reads, and **0** outputs are shorter in either
-  format. Of the **14,874** leaf values the
-  previous release read, **0** are missing here; 460 are no longer separate leaves because they now
+  format. Of the **16,036** leaf values the
+  previous release read, **0** are missing here; 520 are no longer separate leaves because they now
   sit inside the opaque narrative string that carries the subtree they came from, verified by
   containment rather than assumed. 32 documents go `valid: false` to `true` and 36 go
   `safeToSummarize: false` to `true`; **all** are the modifier-extension shape above. 280 read

@@ -47,17 +47,27 @@ export const ISSUE_CODES = {
    */
   UNKNOWN_PROPERTY: "UNKNOWN_PROPERTY",
   /**
-   * The XML reader met content it did not expect at this position and could not map to the model,
-   * non-whitespace character data on a FHIR element (FHIR elements carry values in the `value`
-   * attribute, not as text, except the narrative `<div>`), or a default namespace other than the
-   * FHIR one. Warning severity: the document is not rejected.
+   * The XML reader met content at this position that does not belong to the vocabulary it expected,
+   * or that it cannot map to the model. Warning severity: the document is not rejected.
    *
-   * **It does NOT promise the content survived, and one of its sites is lossy.** Where the reader
-   * unwraps a resource-valued element (`<contained><Patient>…</Patient></contained>`) it models the
-   * one resource child and nothing else, so character data written beside that child is **dropped**.
-   * This is raised there so the drop is not silent, which is the only guarantee on offer: there is
-   * no slot on the model to keep that text in. Everywhere else this code fires, the content it names
-   * is kept. Do not write a claim that reads wider than that.
+   * **It reports two different observations, and only one of them preserves anything.**
+   *
+   * - **An element from another vocabulary** (a namespace other than its parent's, or a root
+   *   declaring a namespace other than FHIR's). The element **is** modeled; this says the document
+   *   left the vocabulary here.
+   * - **Non-whitespace character data directly on an element.** A FHIR element carries its value in
+   *   the `value` attribute (xml.html), not as text, so there is no slot on the model for it and
+   *   the text is **dropped**. That is true at every site this fires for text: on a complex element,
+   *   on a primitive (`<status>entered-in-error</status>` loses the status), and beside the one
+   *   resource child of a resource-valued element (`<contained>…<Patient/></contained>`). The
+   *   guarantee on offer is that the drop is not silent, and nothing more.
+   *
+   * The narrative `<div>` is the one element whose text is expected, and it is carried whole rather
+   * than reported here. **Do not write a claim that this code means the content survived.**
+   *
+   * Raised **once per location**: more than one of the observations above can be true at one
+   * position, and a repeated `code` + `expression` reads as one report to a consumer keying on the
+   * pair.
    */
   UNEXPECTED_XML_CONTENT: "UNEXPECTED_XML_CONTENT",
   /**

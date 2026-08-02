@@ -55,6 +55,7 @@
  */
 
 import {
+  ISSUE_CODES,
   mixedXmlSpelling,
   unexpectedXmlContent,
   unknownProperty,
@@ -511,10 +512,20 @@ function hasStrayText(children: readonly XmlNode[]): boolean {
 }
 
 /**
- * Flag non-whitespace character data directly under an element (FHIR uses `value=`, not text).
+ * Whether `path` already carries an {@link unexpectedXmlContent} report.
  *
- * **Once per element, not once per text node**, which is why the caller that has two node lists
- * landing at one location has to choose rather than call this twice.
+ * The code covers two different observations (content from another vocabulary, and character data
+ * that cannot be modeled), and more than one of them can be true at one location. It is raised once
+ * per location, so a caller that would be the second has to ask.
+ */
+function unexpectedXmlContentAt(issues: readonly FhirIssue[], path: string): boolean {
+  return issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT && i.expression === path);
+}
+
+/**
+ * Flag non-whitespace character data directly under an element, **which is dropped**: a FHIR element
+ * carries its value in the `value` attribute (xml.html), so there is no slot on the model for text
+ * written there and the reader has nowhere to put it. Once per element, not once per text node.
  */
 function flagStrayText(children: readonly XmlNode[], path: string, issues: FhirIssue[]): void {
   if (hasStrayText(children)) issues.push(unexpectedXmlContent(path));
@@ -598,15 +609,17 @@ function buildSingle(
       // text is still not preserved: there is no slot on the model for it, and minting one is a
       // separate decision.
       //
-      // The child is modeled AT THIS PATH, so `readComplex` reports the child's own stray text here
-      // too. Both losses are at one location and this code is raised once per location, so the
-      // wrapper's text is only reported when the child's has not already claimed it. Calling
-      // unconditionally emits the same `code@expression` twice, which reads as one loss to any
-      // consumer that keys on the pair.
-      if (!hasStrayText(onlyChild.element.children)) {
-        flagStrayText(element.children, path, issues);
+      // REPORTED AFTER THE CHILD, AND ONLY WHERE THE LOCATION IS OTHERWISE SILENT. The child is
+      // modeled AT THIS PATH, so two other things already report `UNEXPECTED_XML_CONTENT` here: the
+      // foreign-namespace flag at the top of this function, and the child's own stray text inside
+      // `readComplex`. Raising unconditionally emits the same `code@expression` twice, which reads
+      // as one report to any consumer keying on the pair. Running last is what lets one check cover
+      // both, because by then `issues` holds everything either of them raised.
+      const nested = readNested(onlyChild, path, issues, resolved.namespace, { isResource: true });
+      if (hasStrayText(element.children) && !unexpectedXmlContentAt(issues, path)) {
+        issues.push(unexpectedXmlContent(path));
       }
-      return readNested(onlyChild, path, issues, resolved.namespace, { isResource: true });
+      return nested;
     }
   }
 

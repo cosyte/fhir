@@ -28,8 +28,17 @@ unaffected) and no walker gains an edge.
 The resource-valued unwrap is otherwise untouched: `contained` and `entry.resource` still unwrap, so
 a retraction inside a contained resource is still read. What changed there is that character data
 written beside the child (discarded by the unwrap with no diagnostic) now draws
-`UNEXPECTED_XML_CONTENT`. The text is still **not** preserved at that position: there is no slot on
+`UNEXPECTED_XML_CONTENT`, and only where that position was otherwise silent, because that code is
+raised once per location. The text is still **not** preserved at that position: there is no slot on
 the model for it, and minting one is a separate decision.
+
+**`UNEXPECTED_XML_CONTENT`'s own documentation is corrected to the width of the code.** It reports
+two different observations, and only one of them preserves anything: an element from another
+vocabulary **is** modeled, but non-whitespace character data written directly on a FHIR element is
+**dropped at every position it can appear** (on a complex element, on a primitive, and beside the one
+resource child of a resource-valued element), because a FHIR element carries its value in the `value`
+attribute. The guarantee on offer is that the drop is not silent, and nothing more. The previous text
+said the content survived, which was never true of that half.
 
 **The yardstick is the same document spelled the other way, not the previous release.** Reading a
 narrative as a narrative necessarily stops modelling its insides as FHIR, so a `<modifierExtension>`
@@ -43,11 +52,11 @@ in **394**, in **2** it raises one _additional_ warning (`MIXED_XML_SPELLING`, t
 carrying a narrative, so the document then holds two spellings of one element), and in **0** is it
 weaker.
 
-Differential vs `09b2805` over **1,107 documents**, both trees in one process (every XML fixture ×
-25 narrative and resource-wrapper shapes at every element position): 600 readings moved; **0**
+Differential vs `09b2805` over **1,195 documents**, both trees in one process (every XML fixture ×
+27 narrative and resource-wrapper shapes at every element position): 560 readings moved; **0**
 `valid: true -> false`, **0** retractions lost, **0** negations lost, **0** newly throwing, **0**
 emitting XML that no longer re-reads, **0**
-outputs shorter in either format. Of the 14,874 leaf values base read, **0** are missing at head; 460
+outputs shorter in either format. Of the 16,036 leaf values base read, **0** are missing at head; 520
 are no longer separate leaves because they sit inside the opaque narrative string that carries the
 subtree they came from, verified by containment. 32 documents go `valid: false` to `true` and 36 go
 `safeToSummarize: false` to `true`, **all** the modifier-extension shape above. 280 read diagnostics
@@ -77,7 +86,17 @@ namespace is spelled exactly like the FHIR one, so it reaches `Narrative.div` an
 `UNEXPECTED_XML_CONTENT` rather than separated (it now carries its prose there instead of losing it,
 but it is still not separated); the narrative is carried with whatever namespace was in scope, so a
 document that wrote `<div>` under a FHIR or absent default declaration gets a `Narrative.div` that is
-not in the XHTML namespace the datatype names; and 25 of the 1,107 corpus documents emit XML whose
+not in the XHTML namespace the datatype names; and 27 of the 1,195 corpus documents emit XML whose
 re-read moves, all of them a `<contained>` holding two element children, where `Resource.id` written
 as a child element re-reads as the `Element.id` attribute the writer emitted. Identical on the
 previous release, and surfaced by the new harness check rather than by argument.
+
+One more `PRE-EXISTING` finding, byte-identical on the previous release and left for its own change
+because it is wider than this one: **a FHIR primitive whose value is written as element text rather
+than in the `value` attribute is dropped, and the safety readout affirms over the loss.**
+`<Observation …><status>entered-in-error</status></Observation>` reads `retracted: false`,
+`safeToSummarize: true`, `negations: []` and `valid: true`; an `AllergyIntolerance` whose
+`verificationStatus.coding.code` is written that way loses the `refuted`; and
+`<doseQuantity><value>5</value><unit value="mg"/></doseQuantity>` loses the dose number while the
+unit and the UCUM code survive. It is reported (`UNEXPECTED_XML_CONTENT`), so it is not silent, and
+it is in this release's differential corpus so it stays measured.

@@ -951,8 +951,8 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         ),
       ).toBe(1);
       // The child is modeled AT the wrapper's path, so its own stray text reports at the same
-      // location. Two losses, one location, and this code is raised once per location: a second
-      // identical `code@expression` reads as one loss to any consumer keying on the pair.
+      // location. Two observations, one location, and this code is raised once per location: a
+      // second identical `code@expression` reads as one report to any consumer keying on the pair.
       expect(
         at(
           `<Patient ${FHIR_NS}><contained>outer<Observation>inner<status value="final"/></Observation></contained></Patient>`,
@@ -961,6 +961,15 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       expect(
         at(
           `<Patient ${FHIR_NS}><contained><Observation>inner<status value="final"/></Observation></contained></Patient>`,
+        ),
+      ).toBe(1);
+      // The OTHER report that lands at this location is the foreign-namespace flag, and an
+      // unprefixed foreign wrapper is the shape that has broken a claim in this reader before: its
+      // tag IS the FHIR spelling, so it is modeled as `contained` and flagged, and the stray-text
+      // report would be the second at the same position.
+      expect(
+        at(
+          `<Patient ${FHIR_NS}><contained xmlns="urn:vendor">outer<AllergyIntolerance><id value="a"/></AllergyIntolerance></contained></Patient>`,
         ),
       ).toBe(1);
     });
@@ -975,12 +984,13 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * same argument for `<DIV>`. Recovering it means matching a FHIR element name case-insensitively,
      * which is a decision about the whole reader rather than about the narrative.
      */
-    it("still loses prose under an uppercase <DIV>, and says so", () => {
+    it("still loses prose under an uppercase <DIV>, and says so exactly once", () => {
       const { resource, issues } = parseResourceXml(
         narrative("", `<DIV xmlns="${XHTML}">Take 5 mg<BR/></DIV>`),
       );
       expect(serializeResource(resource)).not.toContain("Take 5 mg");
-      expect(issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toBe(true);
+      // Foreign vocabulary AND discarded text at one position: one report, not two.
+      expect(issues.filter((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toHaveLength(1);
     });
 
     it("reports two spellings of the narrative as the repeat they are, rather than dropping one", () => {

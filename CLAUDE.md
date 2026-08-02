@@ -605,11 +605,19 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   slices before it were not; it self-checks its tallies and refuses to report if the base tree it
   loaded does not behave like base. The **resource-valued unwrap** is otherwise unchanged, except
   that character data it discards beside the child now draws `UNEXPECTED_XML_CONTENT` instead of
-  vanishing in silence (reported, **not** preserved: there is no slot for it) -- which makes that the
-  **one lossy site of `UNEXPECTED_XML_CONTENT`**, so its shipped JSDoc no longer promises the content
-  survived. Raised **once per location**: the unwrapped child is modeled AT the wrapper's path, so
-  `readComplex` already reports the child's own stray text there and a second identical
-  `code@expression` reads as one loss to any consumer keying on the pair.
+  vanishing in silence (reported, **not** preserved: there is no slot for it).
+  **`UNEXPECTED_XML_CONTENT` REPORTS TWO DIFFERENT OBSERVATIONS AND ONLY ONE OF THEM PRESERVES
+  ANYTHING**, which its shipped JSDoc now says. A foreign-vocabulary element **is** modeled;
+  character data written directly on a FHIR element is **dropped at every one of the three
+  `flagStrayText` sites**, because a FHIR element carries its value in `value=` (xml.html). The
+  first draft of that correction said only the unwrap site was lossy, which was a **new, precise,
+  checkable, false universal** shipped in `.d.ts`, and the gate broke it in one query. **In this
+  reader, count the call sites before you write "one" or "everywhere else".**
+  Raised **once per location** (`unexpectedXmlContentAt`), because the foreign flag, the child's own
+  stray text and the wrapper's all land at one path, and a repeated `code@expression` reads as one
+  report to a consumer keying on the pair. The first draft de-duplicated against only one of the
+  three, so the **unprefixed foreign wrapper** still doubled: that is the same default-`xmlns` shape
+  that refuted `#44` pass two, and it is now in the corpus and pinned by a test.
   **Five `PRE-EXISTING` residuals the gate filed on this slice, none blocking, every one reproduced
   on `09b2805`:** an uppercase **`<DIV>` wrapper** is a different expanded name from `{xhtml}div`, so
   it is not the narrative and still loses its prose (reported, not silent) -- the realism argument for
@@ -625,7 +633,20 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   That last one is worth keeping for a different reason: **the harness found it, and only because the
   harness re-reads what each tree EMITS rather than only what it was given.** A differential that
   parses its input alone cannot see output that is not well-formed, which is exactly the defect
-  `#46`'s pass one caught by hand;
+  `#46`'s pass one caught by hand.
+  **🔴 AND ONE `PRE-EXISTING` MAJOR THE GATE FILED, A CANDIDATE STOP-THE-LINE WITH ITS OWN ITEM, NOT
+  A BLOCKER HERE: A FHIR PRIMITIVE WHOSE VALUE IS WRITTEN AS ELEMENT TEXT RATHER THAN `value=` IS
+  DROPPED, AND THE SAFETY SPINE AFFIRMS OVER THE LOSS.** Byte-identical on `09b2805` and head, and in
+  the differential corpus (`primitive-text-not-value`, 0 of 44 moved) so it stays measured.
+  `<Observation …><status>entered-in-error</status></Observation>` reads `retracted: false`,
+  `safeToSummarize: true`, `negations: []`, `valid: true`, and `assertSafeToSummarize` does **not**
+  throw; an `AllergyIntolerance` whose `verificationStatus.coding.code` is written as text loses the
+  `refuted`; `<doseQuantity><value>5</value><unit value="mg"/></doseQuantity>` loses the **dose
+  number** while the unit and UCUM code survive. It is `UNEXPECTED_XML_CONTENT`-reported, so it is not
+  silent, but this is the `FHIR-ARRAY-WRAPPED-SCALAR` / `FHIR-CODING-SCALAR-WRAPPER` harm shape
+  reached through the XML door. Realism is **argued** (naive generators, generic JSON-to-XML
+  converters), not grounded in a public artifact: **grounding it per ADR 0018 belongs to filing the
+  item**, not to inventing a fixture;
   (ii) a **foreign child of a valued primitive** is discarded whole under `UNKNOWN_PROPERTY`, whose
   documented contract is that nothing was lost, so that code is making a false promise at that site
   exactly as it was at the two `_`-sibling sites this slice moved to
