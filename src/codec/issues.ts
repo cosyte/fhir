@@ -47,10 +47,31 @@ export const ISSUE_CODES = {
    */
   UNKNOWN_PROPERTY: "UNKNOWN_PROPERTY",
   /**
-   * The XML reader met content it did not expect at this position and could not map to the model,
-   * non-whitespace character data on a FHIR element (FHIR elements carry values in the `value`
-   * attribute, not as text, except the deferred narrative `<div>`), or a default namespace other
-   * than the FHIR one. Warning severity: preserved-and-flagged, nothing rejected.
+   * The XML reader met content at this position that does not belong to the vocabulary it expected,
+   * or that it cannot map to the model. Warning severity: the document is not rejected.
+   *
+   * **It reports two different observations, and only one of them preserves anything.**
+   *
+   * - **An element from another vocabulary** (a namespace other than its parent's, or a root
+   *   declaring a namespace other than FHIR's). The element **is** modeled; this says the document
+   *   left the vocabulary here.
+   * - **Non-whitespace character data directly on an element.** A FHIR element carries its value in
+   *   the `value` attribute (xml.html), not as text, so there is no slot on the model for it and
+   *   the text is **dropped**. That is true at every site this fires for text: on a complex element,
+   *   on a primitive (`<status>entered-in-error</status>` loses the status), and beside the one
+   *   resource child of a resource-valued element (`<contained>…<Patient/></contained>`). The
+   *   guarantee on offer is that the drop is not silent, and nothing more.
+   *
+   * The narrative `<div>` is the one element whose text is expected, and it is carried whole rather
+   * than reported here. **Do not write a claim that this code means the content survived.**
+   *
+   * **More than one of the observations above can be true at one position, and this code does NOT
+   * promise one report per location.** Exactly one site takes care not to be the second: the text
+   * report beside the one resource child of a resource-valued element, which is the site added last
+   * and the only one that checks. Everywhere else, an element that is both in another vocabulary and
+   * carrying character data draws the code twice at one expression. That is the behaviour on every
+   * release that has had this code, and a consumer keying on `code` + `expression` should treat it
+   * as a set.
    */
   UNEXPECTED_XML_CONTENT: "UNEXPECTED_XML_CONTENT",
   /**

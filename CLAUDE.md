@@ -583,7 +583,77 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   **Four `PRE-EXISTING` findings pass three filed, to pick up rather than fix here, none blocking and
   every one identical on `cf16767`:** (i) a **prefixed narrative `<div>`** loses the narrative text
   and still reads `valid: true` with zero findings, re-emitting `h:` unbound (finding 2 above, the
-  one worth queuing first, since it destroys clinical prose on a document that is legal XML);
+  one worth queuing first, since it destroys clinical prose on a document that is legal XML)
+  -- **CLOSED, in two halves.** The spelling half went first: the narrative is recognised by its
+  **expanded name** `{http://www.w3.org/1999/xhtml}div`, so every spelling of the XHTML namespace
+  reaches `Narrative.div`. The **ordering** half followed, and it is the one to read before touching
+  `buildSingle`: `isResourceName` is a FHIR-vocabulary heuristic (UpperCamelCase names a resource
+  type) and the content of `Narrative.div` is XHTML, where it means nothing, so applied there it read
+  `<div xmlns="…xhtml">Take 5 mg<BR/></div>` as a contained `BR` resource and **destroyed the prose
+  with ZERO diagnostics under `valid: true`**, re-emitting the div stripped of its namespace so the
+  loss laundered on a re-read. HTML-4-era generators emit `<BR>`, `<TABLE>`, `<P>`. The narrative is
+  taken **before** the resource-valued unwrap now; `div` names exactly one of R4's 7,696 element
+  paths, so the order shadows nothing, and **no field was added to the model** either time.
+  **The cost, and the yardstick that settles it: reading a narrative as a narrative stops modelling
+  its insides as FHIR**, so `UNHANDLED_MODIFIER_EXTENSION` raised from inside one goes and such a
+  document flips `valid: false -> true` (32 of 1,019 in the differential). Measured against the
+  previous release that looks like suppression; measured against **the same document spelled the
+  other way** (a lowercase child, a default `xmlns`) nothing is lost: 394 of 396 twin pairs read
+  identically, 2 louder, **0 weaker**. **Re-run that comparison if you touch this branch; "did a
+  finding disappear" is the wrong question here.** The differential harness is
+  **committed** (`scripts/read-differential.ts`, `pnpm differential:read`), which the three reader
+  slices before it were not; it self-checks its tallies and refuses to report if the base tree it
+  loaded does not behave like base. The **resource-valued unwrap** is otherwise unchanged, except
+  that character data it discards beside the child now draws `UNEXPECTED_XML_CONTENT` instead of
+  vanishing in silence (reported, **not** preserved: there is no slot for it).
+  **`UNEXPECTED_XML_CONTENT` REPORTS TWO DIFFERENT OBSERVATIONS AND ONLY ONE OF THEM PRESERVES
+  ANYTHING**, which its shipped JSDoc now says. A foreign-vocabulary element **is** modeled;
+  character data written directly on a FHIR element is **dropped at every one of the three
+  `flagStrayText` sites**, because a FHIR element carries its value in `value=` (xml.html). The
+  first draft of that correction said only the unwrap site was lossy, which was a **new, precise,
+  checkable, false universal** shipped in `.d.ts`, and the gate broke it in one query. **In this
+  reader, count the call sites before you write "one" or "everywhere else".**
+  The new report is raised **only where its own location is otherwise silent**
+  (`unexpectedXmlContentAt`), because the foreign flag, the child's own stray text and the wrapper's
+  all land at one path and base emitted one there. **THAT SCOPE IS ONE CALL SITE, AND SAYING IT WAS
+  THE READER'S RULE IS WHAT REFUTED PASS THREE.** Elsewhere the code does land twice at one
+  expression when an element is both foreign and carrying text, unchanged from base and from every
+  release that has had this code. **This slice was refuted TWICE for the same thing: writing a new,
+  precise, checkable universal about this one code that the call sites do not support.** The first
+  said only one site was lossy (three are); the second said the code is once-per-location (one site
+  of four checks). **Count the call sites, then write the sentence, then check the sentence against
+  the count again.** The de-dup itself was first written against only one of the three, so the
+  **unprefixed foreign wrapper** still doubled: that is the same default-`xmlns` shape that refuted
+  `#44` pass two, and it is now in the corpus and pinned by a test.
+  **Five `PRE-EXISTING` residuals the gate filed on this slice, none blocking, every one reproduced
+  on `09b2805`:** an uppercase **`<DIV>` wrapper** is a different expanded name from `{xhtml}div`, so
+  it is not the narrative and still loses its prose (reported, not silent) -- the realism argument for
+  `<BR>` is the same argument for `<DIV>`, and recovering it means matching an element name
+  case-insensitively, a decision about the whole reader; the narrative is carried with whatever
+  namespace was in scope, so a `<div>` written under a FHIR or **absent** default declaration yields
+  a `Narrative.div` that is not in the XHTML namespace the datatype names, and
+  `serializeResourceXml`'s "conformant `<div xmlns=…>`" claim is wider than that; an **empty**
+  self-closing narrative round-trips as `<div xmlns="…"/>`, which has no characters between the
+  first `>` and the last `<`; and **25 of 1,107** corpus documents emit XML whose re-read moves, all
+  of them a `<contained>` holding **two** element children (so the unwrap does not apply), where
+  `Resource.id` written as a child element re-reads as the `Element.id` attribute the writer emitted.
+  That last one is worth keeping for a different reason: **the harness found it, and only because the
+  harness re-reads what each tree EMITS rather than only what it was given.** A differential that
+  parses its input alone cannot see output that is not well-formed, which is exactly the defect
+  `#46`'s pass one caught by hand.
+  **🔴 AND ONE `PRE-EXISTING` MAJOR THE GATE FILED, A CANDIDATE STOP-THE-LINE WITH ITS OWN ITEM, NOT
+  A BLOCKER HERE: A FHIR PRIMITIVE WHOSE VALUE IS WRITTEN AS ELEMENT TEXT RATHER THAN `value=` IS
+  DROPPED, AND THE SAFETY SPINE AFFIRMS OVER THE LOSS.** Byte-identical on `09b2805` and head, and in
+  the differential corpus (`primitive-text-not-value`, 0 of 44 moved) so it stays measured.
+  `<Observation …><status>entered-in-error</status></Observation>` reads `retracted: false`,
+  `safeToSummarize: true`, `negations: []`, `valid: true`, and `assertSafeToSummarize` does **not**
+  throw; an `AllergyIntolerance` whose `verificationStatus.coding.code` is written as text loses the
+  `refuted`; `<doseQuantity><value>5</value><unit value="mg"/></doseQuantity>` loses the **dose
+  number** while the unit and UCUM code survive. It is `UNEXPECTED_XML_CONTENT`-reported, so it is not
+  silent, but this is the `FHIR-ARRAY-WRAPPED-SCALAR` / `FHIR-CODING-SCALAR-WRAPPER` harm shape
+  reached through the XML door. Realism is **argued** (naive generators, generic JSON-to-XML
+  converters), not grounded in a public artifact: **grounding it per ADR 0018 belongs to filing the
+  item**, not to inventing a fixture;
   (ii) a **foreign child of a valued primitive** is discarded whole under `UNKNOWN_PROPERTY`, whose
   documented contract is that nothing was lost, so that code is making a false promise at that site
   exactly as it was at the two `_`-sibling sites this slice moved to

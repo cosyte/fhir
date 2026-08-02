@@ -41,17 +41,23 @@
  * (`{http://www.w3.org/1999/xhtml}div`), so a document that spells the XHTML namespace with a prefix
  * carries the same narrative as one that makes it the default, and the string it is carried as
  * includes the namespace declarations the element inherited **and uses**, so the fragment stands on
- * its own. A `div` in another namespace is separated from the narrative only where its tag carries a
- * prefix; the unprefixed spelling still reaches `Narrative.div` and is reported rather than
- * separated, exactly as before. Reading is otherwise lenient (Postel's Law): an unexpected
- * namespace or stray character data is preserved-and-flagged, never rejected. Only genuinely
- * unrecoverable input (a malformed document, a refused DTD/entity) throws, see {@link ./raw-xml.js}
- * / {@link ./issues.js}.
+ * its own. It is recognised **before** the resource-valued unwrap, because the content of a
+ * narrative is XHTML and the unwrap's UpperCamelCase test is a FHIR-vocabulary heuristic: applied
+ * inside a narrative it read `<div>Take 5 mg<BR/></div>` as a contained `BR` resource and destroyed
+ * the prose. A `div` in another namespace is separated from the narrative only where its tag carries
+ * a prefix; the unprefixed spelling still reaches `Narrative.div` and is reported rather than
+ * separated, exactly as before. Reading is otherwise lenient (Postel's Law): nothing here is
+ * rejected. **Lenient does not mean lossless, and the two halves differ.** An element in an
+ * unexpected namespace is modeled and flagged; non-whitespace character data written directly on a
+ * FHIR element is **dropped** and flagged, because a FHIR element carries its value in `value=` and
+ * there is no slot on the model for text. Only genuinely unrecoverable input (a malformed document,
+ * a refused DTD/entity) throws, see {@link ./raw-xml.js} / {@link ./issues.js}.
  *
  * @packageDocumentation
  */
 
 import {
+  ISSUE_CODES,
   mixedXmlSpelling,
   unexpectedXmlContent,
   unknownProperty,
@@ -71,7 +77,7 @@ import { readRawXml, type XmlElement, type XmlNode } from "./raw-xml.js";
 
 /** The FHIR XML namespace; the default namespace of every FHIR resource element. */
 export const FHIR_XML_NAMESPACE = "http://hl7.org/fhir";
-/** The XHTML namespace of a FHIR narrative `<div>` (preserved-and-flagged). */
+/** The XHTML namespace of a FHIR narrative `<div>`, which is carried whole rather than flagged. */
 export const XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /**
@@ -201,10 +207,9 @@ function isForeign(resolved: ResolvedName, parentNamespace: string): boolean {
  * separates a spelling that carries a prefix.** A `<v:div xmlns:v="urn:vendor">` fails it, keeps its
  * tag, and is not read as `Narrative.div`. An unprefixed `<div xmlns="urn:vendor">` fails it too, but
  * its tag *is* the FHIR spelling, so it reaches the narrative slot exactly as it did before
- * namespaces were resolved at all (carried there and flagged {@link unexpectedXmlContent}, or taken
- * by the resource-valued branch if it holds one capitalized child), unchanged by this predicate.
- * That is the residual named on {@link modelNameOf}, and no claim here or anywhere else may say a
- * `div` in another namespace can never reach the narrative.
+ * namespaces were resolved at all: carried there and flagged {@link unexpectedXmlContent}, unchanged
+ * by this predicate. That is the residual named on {@link modelNameOf}, and no claim here or anywhere
+ * else may say a `div` in another namespace can never reach the narrative.
  *
  * An unresolvable prefix leaves {@link ResolvedName.namespace} empty, so `<f:div/>` with no `xmlns:f`
  * in scope is not the narrative either: it is the unbound-prefix residual, unchanged.
@@ -503,14 +508,32 @@ function readComplex(
   return complex(properties);
 }
 
-/** Flag any non-whitespace character data directly under an element (FHIR uses `value=`, not text). */
+/** Whether any node directly under an element is non-whitespace character data. */
+function hasStrayText(children: readonly XmlNode[]): boolean {
+  return children.some((node) => node.type === "text" && node.value.trim() !== "");
+}
+
+/**
+ * Whether `path` already carries an {@link unexpectedXmlContent} report.
+ *
+ * The code covers two different observations (content from another vocabulary, and character data
+ * that cannot be modeled), and more than one of them can be true at one location. **This does NOT
+ * make the code once-per-location across the reader:** it has one caller, the resource-valued
+ * unwrap, which is the only site that asks. The other two text sites and the foreign flag can and
+ * do land twice at one expression, on this release and every release before it. Widening that is a
+ * change to what the reader reports at positions this slice never touched, so it is not made here.
+ */
+function unexpectedXmlContentAt(issues: readonly FhirIssue[], path: string): boolean {
+  return issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT && i.expression === path);
+}
+
+/**
+ * Flag non-whitespace character data directly under an element, **which is dropped**: a FHIR element
+ * carries its value in the `value` attribute (xml.html), so there is no slot on the model for text
+ * written there and the reader has nowhere to put it. Once per element, not once per text node.
+ */
 function flagStrayText(children: readonly XmlNode[], path: string, issues: FhirIssue[]): void {
-  for (const node of children) {
-    if (node.type === "text" && node.value.trim() !== "") {
-      issues.push(unexpectedXmlContent(path));
-      return;
-    }
-  }
+  if (hasStrayText(children)) issues.push(unexpectedXmlContent(path));
 }
 
 /** Build the model node for a set of same-named occurrences: a list when repeated, else a single node. */
@@ -548,16 +571,6 @@ function buildSingle(
   const children = elementChildren(element, self.scope, resolved.namespace);
   const hasValue = valueAttribute(element) !== undefined;
 
-  // A resource-valued element wraps exactly one resource element (e.g. `contained`, `entry.resource`).
-  const onlyChild = children[0];
-  if (!hasValue && children.length === 1 && onlyChild !== undefined) {
-    // Foreign content and an unresolvable prefix both keep the tag verbatim, so neither `v:Patient`
-    // nor `f:Patient` reads as a resource name; only a resource in this element's own namespace does.
-    if (isResourceName(onlyChild.modelName)) {
-      return readNested(onlyChild, path, issues, resolved.namespace, { isResource: true });
-    }
-  }
-
   // A narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, exactly the
   // representation FHIR JSON uses for `Narrative.div` (a string). The reader does not model the XHTML
   // element tree, but it never drops or garbles it: the writer re-emits this string verbatim, so a
@@ -565,24 +578,56 @@ function buildSingle(
   // not validated, the same fidelity as the JSON codec.) `narrativeSource` is what makes the
   // lifted-out fragment carry its own namespace declarations.
   //
+  // THIS SITS BEFORE THE RESOURCE-VALUED BRANCH, AND THAT ORDER IS THE WHOLE POINT OF THE BRANCH.
+  // `isResourceName` is a FHIR-vocabulary heuristic -- UpperCamelCase names a resource type -- and
+  // the content of `Narrative.div` is XHTML, a vocabulary where it means nothing. Applied there it
+  // read `<div>Take 5 mg<BR/></div>` as a contained `BR` resource: the prose was destroyed with no
+  // diagnostic at all, the document read `valid: true`, and the writer re-emitted the `<div>`
+  // stripped of the XHTML namespace so the re-read came back clean. HTML-4-era generators do emit
+  // `<BR>`, `<TABLE>`, `<P>`, so that is realistic clinical narrative. Nothing is shadowed by taking
+  // the narrative first: `div` names exactly one element in R4, the only one of the 7,696 element
+  // paths in profiles-types.json + profiles-resources.json whose name is `div`.
+  //
   // WHAT READING THE NARRATIVE COSTS, AND THE ONLY YARDSTICK THAT SETTLES IT. Carrying the element
   // as a string necessarily stops modelling anything inside it as FHIR, so every finding the reader
   // used to raise from in there goes -- including an `UNHANDLED_MODIFIER_EXTENSION` **error**, which
   // takes such a document from `valid: false` to `valid: true`. That is not a weakening, and the
-  // measurement that shows it is a comparison against the SAME DOCUMENT SPELLED WITH A DEFAULT
-  // `xmlns`, not against the previous release: those findings only ever existed because a prefixed
-  // narrative was not recognised as one, and the unprefixed twin has been `valid: true` all along.
-  // Nothing inside `Narrative.div` is a FHIR modifier extension. **If you change this branch, re-run
-  // that comparison; "no finding disappeared" is the wrong question here and will mislead you.**
-  //
-  // This deliberately sits AFTER the resource-valued branch, which therefore still wins for a
-  // narrative holding exactly one capitalized child (`<div xmlns="…xhtml"><Table>5 mg</Table></div>`
-  // reads as a contained `Table` resource and loses its prose). PRE-EXISTING, identical for every
-  // spelling of the XHTML namespace, outside the residual this change closes, and pinned by a test
-  // rather than fixed here. Reordering the two branches is a separate decision with its own blast
-  // radius, and it is not made by a change about how the narrative is SPELLED.
+  // measurement that shows it is a comparison against THE SAME DOCUMENT SPELLED THE OTHER WAY -- a
+  // default `xmlns` rather than a prefix, a lowercase child rather than an uppercase one -- not
+  // against the previous release: those findings only ever existed because a narrative was not
+  // recognised as one, and the twin has been `valid: true` all along. Nothing inside `Narrative.div`
+  // is a FHIR modifier extension. **If you change this branch, re-run that comparison; "no finding
+  // disappeared" is the wrong question here and will mislead you.**
   if (modelName === "div") {
     return primitive(narrativeSource(element, self.scope));
+  }
+
+  // A resource-valued element wraps exactly one resource element (e.g. `contained`, `entry.resource`).
+  const onlyChild = children[0];
+  if (!hasValue && children.length === 1 && onlyChild !== undefined) {
+    // Foreign content and an unresolvable prefix both keep the tag verbatim, so neither `v:Patient`
+    // nor `f:Patient` reads as a resource name; only a resource in this element's own namespace does.
+    if (isResourceName(onlyChild.modelName)) {
+      // The unwrap models the child and nothing else, so character data written beside it is
+      // discarded. That is the same silent destruction the narrative branch above exists to stop,
+      // reached through the elements that genuinely do wrap a resource, so it is reported here. The
+      // text is still not preserved: there is no slot on the model for it, and minting one is a
+      // separate decision.
+      //
+      // REPORTED AFTER THE CHILD, AND ONLY WHERE THIS LOCATION IS OTHERWISE SILENT. The child is
+      // modeled AT THIS PATH, so two other things can already have reported
+      // `UNEXPECTED_XML_CONTENT` here: the foreign-namespace flag at the top of this function, and
+      // the child's own stray text inside `readComplex`. Raising unconditionally would emit the same
+      // `code@expression` twice at a position where base emitted it once, and running last is what
+      // lets one check cover both, because by then `issues` holds whatever either of them raised.
+      // **The scope of that is exactly this site**: elsewhere in the reader the code does land twice
+      // at one expression, unchanged from base, and no claim anywhere may read wider.
+      const nested = readNested(onlyChild, path, issues, resolved.namespace, { isResource: true });
+      if (hasStrayText(element.children) && !unexpectedXmlContentAt(issues, path)) {
+        issues.push(unexpectedXmlContent(path));
+      }
+      return nested;
+    }
   }
 
   // `extension` in this element's own namespace only, as far as the NAME can carry that: a prefixed
