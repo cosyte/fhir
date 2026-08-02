@@ -456,7 +456,10 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   kept as its lexical string, `id`/`extension` co-located, repeated elements → a list, resource-valued
   elements unwrapped, narrative `Narrative.div` carried opaquely as its full XHTML string, the FHIR
   JSON representation, so it round-trips as `<div>…</div>`, never dropped). Lenient: an
-  unexpected namespace or stray text is preserved-and-flagged (`UNEXPECTED_XML_CONTENT`), never rejected.
+  unexpected namespace or stray text draws `UNEXPECTED_XML_CONTENT` and the document is never rejected.
+  **Lenient is not lossless there:** an element in another namespace is modeled and flagged, but
+  character data written directly on a FHIR element is dropped and flagged, because a FHIR element
+  carries its value in the `value` attribute and the model has no slot for text.
   **Names are namespace-resolved, so a prefix is a spelling and not part of the name.** FHIR XML is
   defined in the `http://hl7.org/fhir` namespace, and a document may bind that namespace to a prefix
   instead of making it the default, so `<f:Patient xmlns:f="http://hl7.org/fhir">` and

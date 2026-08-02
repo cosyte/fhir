@@ -42,7 +42,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **The same silent destruction reached through the elements that genuinely do wrap a resource is now
   reported.** `<contained>Take 5 mg<Observation>…</Observation></contained>` discarded the character
   data beside the child with no diagnostic; it draws `UNEXPECTED_XML_CONTENT` at that element now,
-  and only where that position was otherwise silent, because that code is raised once per location.
+  and only where that position was otherwise silent, so it never doubles a report the previous
+  release already made there. That is a property of this one site, not of the code: an element that
+  is both in another vocabulary and carrying character data still draws the code twice at one
+  expression elsewhere, exactly as it did before.
   The text is still **not** preserved there: there is no slot on the model for it, and minting one is
   a separate decision. **`UNEXPECTED_XML_CONTENT`'s own documentation is corrected to match**: it
   reports two different observations, and only the vocabulary one preserves anything. Character data

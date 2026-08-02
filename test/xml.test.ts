@@ -938,7 +938,7 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * preserved -- there is no slot on the model for it, and minting one is a separate decision,
      * which is why `UNEXPECTED_XML_CONTENT` documents this as its one lossy site.
      */
-    it("reports character data the resource-valued unwrap discards, once per location", () => {
+    it("reports character data the resource-valued unwrap discards, without doubling a report", () => {
       const at = (src: string) =>
         parseResourceXml(src).issues.filter(
           (i) =>
@@ -951,8 +951,9 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         ),
       ).toBe(1);
       // The child is modeled AT the wrapper's path, so its own stray text reports at the same
-      // location. Two observations, one location, and this code is raised once per location: a
-      // second identical `code@expression` reads as one report to any consumer keying on the pair.
+      // location, and base already reported there. This site does not double it: a second identical
+      // `code@expression` reads as one report to any consumer keying on the pair. The scope is this
+      // site, not the code, which does double at other positions and did on base too.
       expect(
         at(
           `<Patient ${FHIR_NS}><contained>outer<Observation>inner<status value="final"/></Observation></contained></Patient>`,
@@ -989,7 +990,8 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         narrative("", `<DIV xmlns="${XHTML}">Take 5 mg<BR/></DIV>`),
       );
       expect(serializeResource(resource)).not.toContain("Take 5 mg");
-      // Foreign vocabulary AND discarded text at one position: one report, not two.
+      // Foreign vocabulary AND discarded text at one position, reached through the unwrap, which is
+      // the one site that checks: one report, not two. Elsewhere the code does double, unchanged.
       expect(issues.filter((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toHaveLength(1);
     });
 

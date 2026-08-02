@@ -613,11 +613,18 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   first draft of that correction said only the unwrap site was lossy, which was a **new, precise,
   checkable, false universal** shipped in `.d.ts`, and the gate broke it in one query. **In this
   reader, count the call sites before you write "one" or "everywhere else".**
-  Raised **once per location** (`unexpectedXmlContentAt`), because the foreign flag, the child's own
-  stray text and the wrapper's all land at one path, and a repeated `code@expression` reads as one
-  report to a consumer keying on the pair. The first draft de-duplicated against only one of the
-  three, so the **unprefixed foreign wrapper** still doubled: that is the same default-`xmlns` shape
-  that refuted `#44` pass two, and it is now in the corpus and pinned by a test.
+  The new report is raised **only where its own location is otherwise silent**
+  (`unexpectedXmlContentAt`), because the foreign flag, the child's own stray text and the wrapper's
+  all land at one path and base emitted one there. **THAT SCOPE IS ONE CALL SITE, AND SAYING IT WAS
+  THE READER'S RULE IS WHAT REFUTED PASS THREE.** Elsewhere the code does land twice at one
+  expression when an element is both foreign and carrying text, unchanged from base and from every
+  release that has had this code. **This slice was refuted TWICE for the same thing: writing a new,
+  precise, checkable universal about this one code that the call sites do not support.** The first
+  said only one site was lossy (three are); the second said the code is once-per-location (one site
+  of four checks). **Count the call sites, then write the sentence, then check the sentence against
+  the count again.** The de-dup itself was first written against only one of the three, so the
+  **unprefixed foreign wrapper** still doubled: that is the same default-`xmlns` shape that refuted
+  `#44` pass two, and it is now in the corpus and pinned by a test.
   **Five `PRE-EXISTING` residuals the gate filed on this slice, none blocking, every one reproduced
   on `09b2805`:** an uppercase **`<DIV>` wrapper** is a different expanded name from `{xhtml}div`, so
   it is not the narrative and still loses its prose (reported, not silent) -- the realism argument for

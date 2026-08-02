@@ -46,10 +46,12 @@
  * inside a narrative it read `<div>Take 5 mg<BR/></div>` as a contained `BR` resource and destroyed
  * the prose. A `div` in another namespace is separated from the narrative only where its tag carries
  * a prefix; the unprefixed spelling still reaches `Narrative.div` and is reported rather than
- * separated, exactly as before. Reading is otherwise lenient (Postel's Law): an unexpected
- * namespace or stray character data is preserved-and-flagged, never rejected. Only genuinely
- * unrecoverable input (a malformed document, a refused DTD/entity) throws, see {@link ./raw-xml.js}
- * / {@link ./issues.js}.
+ * separated, exactly as before. Reading is otherwise lenient (Postel's Law): nothing here is
+ * rejected. **Lenient does not mean lossless, and the two halves differ.** An element in an
+ * unexpected namespace is modeled and flagged; non-whitespace character data written directly on a
+ * FHIR element is **dropped** and flagged, because a FHIR element carries its value in `value=` and
+ * there is no slot on the model for text. Only genuinely unrecoverable input (a malformed document,
+ * a refused DTD/entity) throws, see {@link ./raw-xml.js} / {@link ./issues.js}.
  *
  * @packageDocumentation
  */
@@ -75,7 +77,7 @@ import { readRawXml, type XmlElement, type XmlNode } from "./raw-xml.js";
 
 /** The FHIR XML namespace; the default namespace of every FHIR resource element. */
 export const FHIR_XML_NAMESPACE = "http://hl7.org/fhir";
-/** The XHTML namespace of a FHIR narrative `<div>` (preserved-and-flagged). */
+/** The XHTML namespace of a FHIR narrative `<div>`, which is carried whole rather than flagged. */
 export const XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /**
@@ -515,8 +517,11 @@ function hasStrayText(children: readonly XmlNode[]): boolean {
  * Whether `path` already carries an {@link unexpectedXmlContent} report.
  *
  * The code covers two different observations (content from another vocabulary, and character data
- * that cannot be modeled), and more than one of them can be true at one location. It is raised once
- * per location, so a caller that would be the second has to ask.
+ * that cannot be modeled), and more than one of them can be true at one location. **This does NOT
+ * make the code once-per-location across the reader:** it has one caller, the resource-valued
+ * unwrap, which is the only site that asks. The other two text sites and the foreign flag can and
+ * do land twice at one expression, on this release and every release before it. Widening that is a
+ * change to what the reader reports at positions this slice never touched, so it is not made here.
  */
 function unexpectedXmlContentAt(issues: readonly FhirIssue[], path: string): boolean {
   return issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT && i.expression === path);
@@ -609,12 +614,14 @@ function buildSingle(
       // text is still not preserved: there is no slot on the model for it, and minting one is a
       // separate decision.
       //
-      // REPORTED AFTER THE CHILD, AND ONLY WHERE THE LOCATION IS OTHERWISE SILENT. The child is
-      // modeled AT THIS PATH, so two other things already report `UNEXPECTED_XML_CONTENT` here: the
-      // foreign-namespace flag at the top of this function, and the child's own stray text inside
-      // `readComplex`. Raising unconditionally emits the same `code@expression` twice, which reads
-      // as one report to any consumer keying on the pair. Running last is what lets one check cover
-      // both, because by then `issues` holds everything either of them raised.
+      // REPORTED AFTER THE CHILD, AND ONLY WHERE THIS LOCATION IS OTHERWISE SILENT. The child is
+      // modeled AT THIS PATH, so two other things can already have reported
+      // `UNEXPECTED_XML_CONTENT` here: the foreign-namespace flag at the top of this function, and
+      // the child's own stray text inside `readComplex`. Raising unconditionally would emit the same
+      // `code@expression` twice at a position where base emitted it once, and running last is what
+      // lets one check cover both, because by then `issues` holds whatever either of them raised.
+      // **The scope of that is exactly this site**: elsewhere in the reader the code does land twice
+      // at one expression, unchanged from base, and no claim anywhere may read wider.
       const nested = readNested(onlyChild, path, issues, resolved.namespace, { isResource: true });
       if (hasStrayText(element.children) && !unexpectedXmlContentAt(issues, path)) {
         issues.push(unexpectedXmlContent(path));

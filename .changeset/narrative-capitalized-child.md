@@ -28,9 +28,11 @@ unaffected) and no walker gains an edge.
 The resource-valued unwrap is otherwise untouched: `contained` and `entry.resource` still unwrap, so
 a retraction inside a contained resource is still read. What changed there is that character data
 written beside the child (discarded by the unwrap with no diagnostic) now draws
-`UNEXPECTED_XML_CONTENT`, and only where that position was otherwise silent, because that code is
-raised once per location. The text is still **not** preserved at that position: there is no slot on
-the model for it, and minting one is a separate decision.
+`UNEXPECTED_XML_CONTENT`, and only where that position was otherwise silent, so it never doubles a
+report the previous release already made there. That is a property of this one site and not of the
+code: an element that is both in another vocabulary and carrying character data still draws the code
+twice at one expression elsewhere, exactly as it did before. The text is still **not** preserved at
+that position: there is no slot on the model for it, and minting one is a separate decision.
 
 **`UNEXPECTED_XML_CONTENT`'s own documentation is corrected to the width of the code.** It reports
 two different observations, and only one of them preserves anything: an element from another

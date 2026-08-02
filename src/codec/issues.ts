@@ -65,9 +65,13 @@ export const ISSUE_CODES = {
    * The narrative `<div>` is the one element whose text is expected, and it is carried whole rather
    * than reported here. **Do not write a claim that this code means the content survived.**
    *
-   * Raised **once per location**: more than one of the observations above can be true at one
-   * position, and a repeated `code` + `expression` reads as one report to a consumer keying on the
-   * pair.
+   * **More than one of the observations above can be true at one position, and this code does NOT
+   * promise one report per location.** Exactly one site takes care not to be the second: the text
+   * report beside the one resource child of a resource-valued element, which is the site added last
+   * and the only one that checks. Everywhere else, an element that is both in another vocabulary and
+   * carrying character data draws the code twice at one expression. That is the behaviour on every
+   * release that has had this code, and a consumer keying on `code` + `expression` should treat it
+   * as a set.
    */
   UNEXPECTED_XML_CONTENT: "UNEXPECTED_XML_CONTENT",
   /**
