@@ -104,6 +104,16 @@ interface Reading {
   readonly json: string;
   readonly xml: string;
   readonly leaves: readonly string[];
+  /**
+   * What happens when the tree is asked to read back what it just emitted.
+   *
+   * `"stable"` (re-reads, and a second round trip is a fixed point), `"unstable"` (re-reads to
+   * something else), or `"unreadable"` (throws). **This is not decoration.** The last real defect
+   * found in this reader by a gate was a namespace fixup that emitted output which was not
+   * well-formed and threw on re-read, reopening the very defect its slice claimed to close, and a
+   * differential that only ever parses its INPUT cannot see that.
+   */
+  readonly reread: "stable" | "unstable" | "unreadable";
 }
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -274,6 +284,16 @@ const SHAPES: readonly Shape[] = [
     narrative: false,
   },
   {
+    id: "contained-stray-text-both-sides",
+    xml: '<contained>@<Observation>inner<status value="final"/></Observation></contained>',
+    narrative: false,
+  },
+  {
+    id: "uppercase-div-wrapper",
+    xml: `<DIV xmlns="${XHTML}">@<BR/></DIV>`,
+    narrative: true,
+  },
+  {
     id: "entry-resource-stray-text",
     xml: '<entry><resource>@<Patient><id value="p"/></Patient></resource></entry>',
     narrative: false,
@@ -388,7 +408,23 @@ const EMPTY_READING: Omit<Reading, "thrown"> = {
   json: "",
   xml: "",
   leaves: [],
+  reread: "stable",
 };
+
+/**
+ * Read back what a tree emitted. A conservative writer's output must re-read to the same model, and
+ * a second round trip must change nothing; anything else means the emitted document is not the
+ * document the reader just described.
+ */
+function rereadOf(codec: Codec, emitted: string, json: string): Reading["reread"] {
+  try {
+    const again = codec.parseResourceXml(emitted);
+    if (codec.serializeResource(again.resource as never) !== json) return "unstable";
+    return codec.serializeResourceXml(again.resource as never) === emitted ? "stable" : "unstable";
+  } catch {
+    return "unreadable";
+  }
+}
 
 function read(codec: Codec, xml: string): Reading {
   try {
@@ -396,6 +432,7 @@ function read(codec: Codec, xml: string): Reading {
     const v = codec.validateResource(resource as never);
     const s = codec.readSafety(resource as never);
     const json = codec.serializeResource(resource as never);
+    const emitted = codec.serializeResourceXml(resource as never);
     return {
       thrown: undefined,
       issues: issues.map((i) => `${i.code}@${i.expression ?? ""}`).sort(),
@@ -405,8 +442,9 @@ function read(codec: Codec, xml: string): Reading {
       safeToSummarize: s.safeToSummarize,
       negations: [...s.negations].sort(),
       json,
-      xml: codec.serializeResourceXml(resource as never),
+      xml: emitted,
       leaves: leavesOf(json),
+      reread: rereadOf(codec, emitted, json),
     };
   } catch (error) {
     return { ...EMPTY_READING, thrown: error instanceof Error ? error.name : "unknown" };
@@ -430,6 +468,9 @@ interface Tally {
   unmoved: number;
   newlyThrowing: number;
   noLongerThrowing: number;
+  emittedUnreadable: number;
+  emittedUnstable: number;
+  emittedNewlyUnreadable: number;
   validFalseToTrue: number;
   validTrueToFalse: number;
   safeFalseToTrue: number;
@@ -461,6 +502,9 @@ function emptyTally(): Tally {
     unmoved: 0,
     newlyThrowing: 0,
     noLongerThrowing: 0,
+    emittedUnreadable: 0,
+    emittedUnstable: 0,
+    emittedNewlyUnreadable: 0,
     validFalseToTrue: 0,
     validTrueToFalse: 0,
     safeFalseToTrue: 0,
@@ -503,6 +547,18 @@ function fold(tally: Tally, doc: Document, base: Reading, head: Reading): void {
     tally.examples.push(`NEWLY THROWING ${doc.name}: ${head.thrown}`);
   }
   if (base.thrown !== undefined && head.thrown === undefined) tally.noLongerThrowing += 1;
+
+  if (head.reread === "unreadable") tally.emittedUnreadable += 1;
+  if (head.reread === "unstable") {
+    tally.emittedUnstable += 1;
+    tally.examples.push(
+      `EMITTED XML RE-READS TO SOMETHING ELSE ${doc.name} (base: ${base.reread})`,
+    );
+  }
+  if (base.reread === "stable" && head.reread !== "stable") {
+    tally.emittedNewlyUnreadable += 1;
+    tally.examples.push(`EMITTED XML NO LONGER RE-READS ${doc.name}: ${head.reread}`);
+  }
 
   if (!base.valid && head.valid) tally.validFalseToTrue += 1;
   if (base.valid && !head.valid) tally.validTrueToFalse += 1;
@@ -548,12 +604,18 @@ function fold(tally: Tally, doc: Document, base: Reading, head: Reading): void {
   tally.leavesBaseRead += base.leaves.length;
   for (const leaf of base.leaves) {
     if (headLeaves.has(leaf)) continue;
-    if (head.leaves.some((h) => h.includes(leaf))) {
+    // Containment is only accepted from a leaf that is itself a CARRIED XML FRAGMENT, so an
+    // unrelated leaf that happens to contain the same substring cannot launder a real loss.
+    if (head.leaves.some((h) => h.startsWith("<") && h.endsWith(">") && h.includes(leaf))) {
       tally.leavesRecoveredInsideNarrative += 1;
       continue;
     }
     tally.leavesMissingAtHead += 1;
-    tally.examples.push(`LEAF VALUE MISSING ${doc.name}: ${leaf.slice(0, 60)}`);
+    // The document, the length and the shape, never the value: every other line this harness prints
+    // is a bounded expression, and a loss report is not the place to start printing content.
+    tally.examples.push(
+      `LEAF VALUE MISSING ${doc.name}: ${String(leaf.length)} chars, ${leaf.startsWith("<") ? "fragment" : "scalar"}`,
+    );
   }
 
   if (head.json.length < base.json.length) tally.jsonShorter += 1;
@@ -764,6 +826,9 @@ async function main(): Promise<void> {
       line("retractions lost", tally.retractionsLost);
       line("negations lost", tally.negationsLost);
       line("newly throwing", tally.newlyThrowing);
+      line("emitted XML that does not re-read at head", tally.emittedUnreadable);
+      line("emitted XML that re-reads to something else at head", tally.emittedUnstable);
+      line("  of those, stable on base (a regression)", tally.emittedNewlyUnreadable);
       line("leaf values base read", tally.leavesBaseRead);
       line("  missing at head", tally.leavesMissingAtHead);
       line(

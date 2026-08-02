@@ -605,7 +605,27 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   slices before it were not; it self-checks its tallies and refuses to report if the base tree it
   loaded does not behave like base. The **resource-valued unwrap** is otherwise unchanged, except
   that character data it discards beside the child now draws `UNEXPECTED_XML_CONTENT` instead of
-  vanishing in silence (reported, **not** preserved: there is no slot for it);
+  vanishing in silence (reported, **not** preserved: there is no slot for it) -- which makes that the
+  **one lossy site of `UNEXPECTED_XML_CONTENT`**, so its shipped JSDoc no longer promises the content
+  survived. Raised **once per location**: the unwrapped child is modeled AT the wrapper's path, so
+  `readComplex` already reports the child's own stray text there and a second identical
+  `code@expression` reads as one loss to any consumer keying on the pair.
+  **Five `PRE-EXISTING` residuals the gate filed on this slice, none blocking, every one reproduced
+  on `09b2805`:** an uppercase **`<DIV>` wrapper** is a different expanded name from `{xhtml}div`, so
+  it is not the narrative and still loses its prose (reported, not silent) -- the realism argument for
+  `<BR>` is the same argument for `<DIV>`, and recovering it means matching an element name
+  case-insensitively, a decision about the whole reader; the narrative is carried with whatever
+  namespace was in scope, so a `<div>` written under a FHIR or **absent** default declaration yields
+  a `Narrative.div` that is not in the XHTML namespace the datatype names, and
+  `serializeResourceXml`'s "conformant `<div xmlns=…>`" claim is wider than that; an **empty**
+  self-closing narrative round-trips as `<div xmlns="…"/>`, which has no characters between the
+  first `>` and the last `<`; and **25 of 1,107** corpus documents emit XML whose re-read moves, all
+  of them a `<contained>` holding **two** element children (so the unwrap does not apply), where
+  `Resource.id` written as a child element re-reads as the `Element.id` attribute the writer emitted.
+  That last one is worth keeping for a different reason: **the harness found it, and only because the
+  harness re-reads what each tree EMITS rather than only what it was given.** A differential that
+  parses its input alone cannot see output that is not well-formed, which is exactly the defect
+  `#46`'s pass one caught by hand;
   (ii) a **foreign child of a valued primitive** is discarded whole under `UNKNOWN_PROPERTY`, whose
   documented contract is that nothing was lost, so that code is making a false promise at that site
   exactly as it was at the two `_`-sibling sites this slice moved to

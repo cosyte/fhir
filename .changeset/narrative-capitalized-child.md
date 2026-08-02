@@ -27,7 +27,7 @@ unaffected) and no walker gains an edge.
 
 The resource-valued unwrap is otherwise untouched: `contained` and `entry.resource` still unwrap, so
 a retraction inside a contained resource is still read. What changed there is that character data
-written beside the child — discarded by the unwrap with no diagnostic — now draws
+written beside the child (discarded by the unwrap with no diagnostic) now draws
 `UNEXPECTED_XML_CONTENT`. The text is still **not** preserved at that position: there is no slot on
 the model for it, and minting one is a separate decision.
 
@@ -43,29 +43,41 @@ in **394**, in **2** it raises one _additional_ warning (`MIXED_XML_SPELLING`, t
 carrying a narrative, so the document then holds two spellings of one element), and in **0** is it
 weaker.
 
-Differential vs `09b2805` over **1,019 documents**, both trees in one process (every XML fixture ×
-23 narrative and resource-wrapper shapes at every element position): 560 readings moved; **0**
+Differential vs `09b2805` over **1,107 documents**, both trees in one process (every XML fixture ×
+25 narrative and resource-wrapper shapes at every element position): 600 readings moved; **0**
 `valid: true -> false`, **0** retractions lost, **0** negations lost, **0** newly throwing, **0**
-outputs shorter in either format. Of the 13,672 leaf values base read, **0** are missing at head; 460
+emitting XML that no longer re-reads, **0**
+outputs shorter in either format. Of the 14,874 leaf values base read, **0** are missing at head; 460
 are no longer separate leaves because they sit inside the opaque narrative string that carries the
 subtree they came from, verified by containment. 32 documents go `valid: false` to `true` and 36 go
 `safeToSummarize: false` to `true`, **all** the modifier-extension shape above. 280 read diagnostics
 disappear (240 `UNEXPECTED_XML_CONTENT`, 40 `UNKNOWN_PROPERTY`), every one base complaining about
 content it was mis-modelling inside a narrative it then destroyed; 120 are gained. 36 validation
-findings disappear, all the same shape. Of 792 documents carrying a narrative, base preserved it in
-**316** and head preserves it in **756**; the remaining 36 are the pre-existing case of a `<div>`
-written beside a `value` attribute, which the reader discards whole under `UNKNOWN_PROPERTY` and
-which behaves identically for a plain narrative. The 27 JSON fixtures read identically.
+findings disappear, all the same shape. Of 836 documents carrying a narrative, base preserved it in
+**318** and head preserves it in **758**; the remaining 78 are two shapes neither release recovers,
+both unchanged here (see the residuals below). The 27 JSON fixtures read identically.
 
 **The differential harness is committed** (`scripts/read-differential.ts`, `pnpm differential:read`).
 The three reader slices before this one measured themselves with an uncommitted harness, so their
 headline numbers were not reviewer-reproducible; this one is. It materializes `src/` at any ref into
-a temp directory via `git archive`, imports it alongside the working tree in one process, and refuses
-to report if its own tallies do not reconcile against independently derived totals, if the corpus was
-not built from this package's fixtures, or if the base tree it loaded does not behave like base.
+a temp directory via `git archive`, imports it alongside the working tree in one process, **re-reads
+what each tree emits rather than only what it was given** (the last real defect a gate found in this
+reader was output that was not well-formed and threw on re-read, which a differential that only
+parses its input cannot see), and refuses to report if its own tallies do not reconcile against
+independently derived totals, if the corpus was not built from this package's fixtures, or if the
+base tree it loaded does not behave like base.
 
-Still open, `PRE-EXISTING` and unchanged: a foreign child of a valued primitive (including a `<div>`)
-is discarded whole under `UNKNOWN_PROPERTY`; and an **unprefixed** `<div>` in a vendor namespace is
-spelled exactly like the FHIR one, so it reaches `Narrative.div` and is reported
-`UNEXPECTED_XML_CONTENT` rather than separated — it now carries its prose there instead of losing it,
-but it is still not separated.
+`PRE-EXISTING` and unchanged, each pinned by a test or by the harness rather than by this sentence:
+a foreign child of a valued primitive (including a `<div>`) is discarded whole under
+`UNKNOWN_PROPERTY`; an uppercase `<DIV>` wrapper is a different expanded name from `{xhtml}div`, so
+it is not the narrative and still loses its prose (reported, not silent). The realism argument for
+`<BR>` is the same argument for `<DIV>`, and recovering it means matching an element name
+case-insensitively, which is a decision about the whole reader; an **unprefixed** `<div>` in a vendor
+namespace is spelled exactly like the FHIR one, so it reaches `Narrative.div` and is reported
+`UNEXPECTED_XML_CONTENT` rather than separated (it now carries its prose there instead of losing it,
+but it is still not separated); the narrative is carried with whatever namespace was in scope, so a
+document that wrote `<div>` under a FHIR or absent default declaration gets a `Narrative.div` that is
+not in the XHTML namespace the datatype names; and 25 of the 1,107 corpus documents emit XML whose
+re-read moves, all of them a `<contained>` holding two element children, where `Resource.id` written
+as a child element re-reads as the `Element.id` attribute the writer emitted. Identical on the
+previous release, and surfaced by the new harness check rather than by argument.

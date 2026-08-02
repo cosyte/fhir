@@ -935,15 +935,52 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * The other half of the same harm, reached through the elements that genuinely wrap a resource:
      * the unwrap models the child and nothing else, so character data written beside it is
      * discarded. It is reported now rather than dropped in silence. The text is still **not**
-     * preserved -- there is no slot on the model for it, and minting one is a separate decision.
+     * preserved -- there is no slot on the model for it, and minting one is a separate decision,
+     * which is why `UNEXPECTED_XML_CONTENT` documents this as its one lossy site.
      */
-    it("reports character data the resource-valued unwrap discards", () => {
-      const { issues } = parseResourceXml(
-        `<Patient ${FHIR_NS}><contained>Take 5 mg<Observation><status value="final"/></Observation></contained></Patient>`,
+    it("reports character data the resource-valued unwrap discards, once per location", () => {
+      const at = (src: string) =>
+        parseResourceXml(src).issues.filter(
+          (i) =>
+            i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT && i.expression === "Patient.contained",
+        ).length;
+      // Text beside the child: base dropped it in silence, this reports it.
+      expect(
+        at(
+          `<Patient ${FHIR_NS}><contained>Take 5 mg<Observation><status value="final"/></Observation></contained></Patient>`,
+        ),
+      ).toBe(1);
+      // The child is modeled AT the wrapper's path, so its own stray text reports at the same
+      // location. Two losses, one location, and this code is raised once per location: a second
+      // identical `code@expression` reads as one loss to any consumer keying on the pair.
+      expect(
+        at(
+          `<Patient ${FHIR_NS}><contained>outer<Observation>inner<status value="final"/></Observation></contained></Patient>`,
+        ),
+      ).toBe(1);
+      expect(
+        at(
+          `<Patient ${FHIR_NS}><contained><Observation>inner<status value="final"/></Observation></contained></Patient>`,
+        ),
+      ).toBe(1);
+    });
+
+    /**
+     * `PRE-EXISTING`, identical on the previous release, and pinned rather than argued.
+     *
+     * The narrative is recognised by its expanded name, and an expanded name is case-sensitive:
+     * `{xhtml}DIV` is not `{xhtml}div`. So an HTML-4-era generator that uppercases the wrapper as
+     * well as its children still loses the prose. It is not silent (the element is reported as
+     * content from another vocabulary), but it is lost, and the realism argument for `<BR>` is the
+     * same argument for `<DIV>`. Recovering it means matching a FHIR element name case-insensitively,
+     * which is a decision about the whole reader rather than about the narrative.
+     */
+    it("still loses prose under an uppercase <DIV>, and says so", () => {
+      const { resource, issues } = parseResourceXml(
+        narrative("", `<DIV xmlns="${XHTML}">Take 5 mg<BR/></DIV>`),
       );
-      expect(issues.map((i) => `${i.code}@${i.expression ?? ""}`)).toContain(
-        `${ISSUE_CODES.UNEXPECTED_XML_CONTENT}@Patient.contained`,
-      );
+      expect(serializeResource(resource)).not.toContain("Take 5 mg");
+      expect(issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toBe(true);
     });
 
     it("reports two spellings of the narrative as the repeat they are, rather than dropping one", () => {

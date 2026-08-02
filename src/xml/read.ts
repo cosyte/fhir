@@ -505,14 +505,19 @@ function readComplex(
   return complex(properties);
 }
 
-/** Flag any non-whitespace character data directly under an element (FHIR uses `value=`, not text). */
+/** Whether any node directly under an element is non-whitespace character data. */
+function hasStrayText(children: readonly XmlNode[]): boolean {
+  return children.some((node) => node.type === "text" && node.value.trim() !== "");
+}
+
+/**
+ * Flag non-whitespace character data directly under an element (FHIR uses `value=`, not text).
+ *
+ * **Once per element, not once per text node**, which is why the caller that has two node lists
+ * landing at one location has to choose rather than call this twice.
+ */
 function flagStrayText(children: readonly XmlNode[], path: string, issues: FhirIssue[]): void {
-  for (const node of children) {
-    if (node.type === "text" && node.value.trim() !== "") {
-      issues.push(unexpectedXmlContent(path));
-      return;
-    }
-  }
+  if (hasStrayText(children)) issues.push(unexpectedXmlContent(path));
 }
 
 /** Build the model node for a set of same-named occurrences: a list when repeated, else a single node. */
@@ -592,7 +597,15 @@ function buildSingle(
       // reached through the elements that genuinely do wrap a resource, so it is reported here. The
       // text is still not preserved: there is no slot on the model for it, and minting one is a
       // separate decision.
-      flagStrayText(element.children, path, issues);
+      //
+      // The child is modeled AT THIS PATH, so `readComplex` reports the child's own stray text here
+      // too. Both losses are at one location and this code is raised once per location, so the
+      // wrapper's text is only reported when the child's has not already claimed it. Calling
+      // unconditionally emits the same `code@expression` twice, which reads as one loss to any
+      // consumer that keys on the pair.
+      if (!hasStrayText(onlyChild.element.children)) {
+        flagStrayText(element.children, path, issues);
+      }
       return readNested(onlyChild, path, issues, resolved.namespace, { isResource: true });
     }
   }

@@ -49,8 +49,15 @@ export const ISSUE_CODES = {
   /**
    * The XML reader met content it did not expect at this position and could not map to the model,
    * non-whitespace character data on a FHIR element (FHIR elements carry values in the `value`
-   * attribute, not as text, except the deferred narrative `<div>`), or a default namespace other
-   * than the FHIR one. Warning severity: preserved-and-flagged, nothing rejected.
+   * attribute, not as text, except the narrative `<div>`), or a default namespace other than the
+   * FHIR one. Warning severity: the document is not rejected.
+   *
+   * **It does NOT promise the content survived, and one of its sites is lossy.** Where the reader
+   * unwraps a resource-valued element (`<contained><Patient>…</Patient></contained>`) it models the
+   * one resource child and nothing else, so character data written beside that child is **dropped**.
+   * This is raised there so the drop is not silent, which is the only guarantee on offer: there is
+   * no slot on the model to keep that text in. Everywhere else this code fires, the content it names
+   * is kept. Do not write a claim that reads wider than that.
    */
   UNEXPECTED_XML_CONTENT: "UNEXPECTED_XML_CONTENT",
   /**

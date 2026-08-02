@@ -44,10 +44,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   data beside the child with no diagnostic; it draws `UNEXPECTED_XML_CONTENT` at that element now. The
   text is still **not** preserved there: there is no slot on the model for it, and minting one is a
   separate decision.
-  **Differential against the previous release over 1,019 documents**, both trees in one process
-  (every XML fixture × 23 narrative and resource-wrapper shapes at every element position): 560
+  **Differential against the previous release over 1,107 documents**, both trees in one process
+  (every XML fixture × 25 narrative and resource-wrapper shapes at every element position): 600
   readings moved. **0** go `valid: true` to `false`, **0** lose a retraction, **0** lose a negation,
-  **0** newly throw, and **0** outputs are shorter in either format. Of the **13,672** leaf values the
+  **0** newly throw, **0** emit XML that no longer re-reads, and **0** outputs are shorter in either
+  format. Of the **14,874** leaf values the
   previous release read, **0** are missing here; 460 are no longer separate leaves because they now
   sit inside the opaque narrative string that carries the subtree they came from, verified by
   containment rather than assumed. 32 documents go `valid: false` to `true` and 36 go
@@ -55,14 +56,16 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   diagnostics disappear (240 `UNEXPECTED_XML_CONTENT`, 40 `UNKNOWN_PROPERTY`) and every one is the
   previous release complaining about content it was mis-modelling inside a narrative it then
   destroyed; 120 are gained. 36 validation findings disappear, all the same shape. What it buys: of
-  the 792 documents carrying a narrative, the previous release preserved it in **316** and this one
-  preserves it in **756**; the remaining 36 are the pre-existing case of a `<div>` written beside a
-  `value` attribute, which the reader discards whole under `UNKNOWN_PROPERTY` and which behaves
-  identically for a plain narrative. The 27 JSON fixtures read **identically**.
+  the 836 documents carrying a narrative, the previous release preserved it in **318** and this one
+  preserves it in **758**; the remaining 78 are two shapes neither release recovers, both unchanged
+  here: a `<div>` written beside a `value` attribute, which the reader discards whole under
+  `UNKNOWN_PROPERTY`, and an uppercase `<DIV>` wrapper, which is a different expanded name.
+  The 27 JSON fixtures read **identically**.
   **The harness is committed this time** (`pnpm differential:read`), so every number above can be
   re-derived rather than taken. It materializes `src/` at any ref into a temp directory, imports it
-  alongside the working tree in one process, and refuses to report if its own tallies do not
-  reconcile or if the base tree it loaded does not behave like base.
+  alongside the working tree in one process, re-reads what each tree emits rather than only what it
+  was given, and refuses to report if its own tallies do not reconcile, if the corpus was not built
+  from this package's fixtures, or if the base tree it loaded does not behave like base.
 - **A narrative written with a namespace prefix was DESTROYED, and the resource still read
   `valid: true` (`FHIR-UNPLACEABLE-SHAPES`).** `Narrative.div` is the patient-facing prose of a
   resource: the human-readable account a clinician reads when nothing else in the document is
