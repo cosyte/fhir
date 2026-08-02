@@ -17,14 +17,21 @@ true` on a reading in which no element had been recognized; a prefixed `Observat
 prefix is flagged and its tag kept exactly as written rather than guessed at, and a namespace
 declaration is no longer reported as an unknown attribute.
 
-An element in a namespace other than its parent's is reported `UNEXPECTED_XML_CONTENT` wherever it
-appears, and that report is the guarantee that covers all of them. A **prefixed** one additionally
-keeps its tag exactly as written, and because no FHIR element can be spelled `v:code`, that is what
-stops it from joining a FHIR element's occurrences, being promoted into a primitive's extensions,
-being unwrapped as a contained resource, or being stored as the narrative. Foreign content reached by
-a **default** declaration (`<extension xmlns="urn:vendor">`) has no prefix to keep, so it is spelled
+Every element the reader **models** is now tested once for being in a namespace other than its
+parent's, and reported `UNEXPECTED_XML_CONTENT` when it is. A **prefixed** one additionally keeps its
+tag exactly as written, and because no FHIR element can be spelled `v:code`, that is what stops it
+from joining a FHIR element's occurrences, being promoted into a primitive's extensions, being
+unwrapped as a contained resource, or being stored as the narrative. Foreign content reached by a
+**default** declaration (`<extension xmlns="urn:vendor">`) has no prefix to keep, so it is spelled
 exactly like the FHIR element and is modeled as one; it is reported rather than separated, and that
 is unchanged from before prefixes were resolved at all.
+
+Two limits of that sentence, both unchanged from the previous release and both worth knowing. A
+child element written beside a `value` attribute is not modeled at all: it is discarded and reported
+`UNKNOWN_PROPERTY`, so a foreign one there draws no namespace report. And a narrative `<div>` written
+with a prefix (`<h:div xmlns:h="http://www.w3.org/1999/xhtml">`) is not read as `Narrative.div`, so
+the narrative text is not carried; only the unprefixed spelling is expected in the XHTML namespace
+and left unflagged for being there.
 
 Two prefixes bound to the same namespace are two spellings of one name, so an element written twice
 that way is read as the repeat it genuinely is, and the model and every verdict over it match the

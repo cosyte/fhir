@@ -163,10 +163,17 @@ interface ScopedElement {
  * namespace it came from would merge foreign content into the FHIR element beside it, which would
  * let a document assert FHIR content it never wrote in FHIR.
  *
- * **Every element this returns `true` for is flagged {@link unexpectedXmlContent}, and that flag is
- * the only guarantee that covers all of them.** Keeping the tag verbatim additionally *separates*
- * foreign content from FHIR content, but only where the tag carries a prefix; see
- * {@link modelNameOf}.
+ * **Every element the reader MODELS is tested by this predicate exactly once, and a `true` is
+ * flagged {@link unexpectedXmlContent}.** That flag, not the name, is what covers foreign content
+ * reached by a default declaration: keeping the tag verbatim additionally *separates* it from FHIR
+ * content, but only where the tag carries a prefix; see {@link modelNameOf}.
+ *
+ * **"Every element the reader models" is the scope, and it is narrower than "every element".** A
+ * child element beside a `value` attribute is not modeled at all: the primitive branch of
+ * {@link buildSingle} discards it whole and reports {@link unknownProperty}, so a foreign child
+ * there never reaches this predicate and never draws an `UNEXPECTED_XML_CONTENT`. That is the
+ * reader's behaviour with or without namespace resolution, and it is a residual of the lenient read
+ * rather than anything this predicate governs. Do not write a claim that says otherwise.
  */
 function isForeign(resolved: ResolvedName, parentNamespace: string): boolean {
   return resolved.unboundPrefix || resolved.namespace !== parentNamespace;

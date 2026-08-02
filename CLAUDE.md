@@ -507,9 +507,26 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   `isForeign` exactly once**; parity with base is restored on both routes. (2) **Every "never" claim
   is scoped to PREFIXED foreign content** in the source, the tests, the changeset, `CHANGELOG.md` and
   the README, because the claim was false for the unprefixed half on all four counts. The separation
-  covers prefixed content; **the FLAG is what covers all of it**, and that is the sentence to write.
+  covers prefixed content; the FLAG is what covers the unprefixed half.
   **The unprefixed case is a residual, not a regression** (identical on base), pinned by its own
   `describe` block in `test/xml.test.ts`.
+  **🔴 PASS THREE REFUTED THE REPLACEMENT SENTENCE, AND THIS IS THE THIRD TIME IN ONE SLICE THAT A
+  UNIVERSAL WAS WRITTEN WIDER THAN THE CODE. It refuted the CLAIMS, not the code: it could not break
+  the behaviour** (its own independent 283-document differential plus 34 adversarial documents found
+  0 `valid: false -> true`, 0 `safeToSummarize: false -> true`, 0 retractions or negations lost, 0
+  new throws, and it reproduced the 0/7 -> 7/7 headline and the 337 -> 216 byte drop with its own
+  re-speller). **The remedy it prescribed, and the one taken, is a TEXT correction in five files, not
+  another code round.** Two counterexamples, both reproduced here before editing, both **identical on
+  `cf16767`**: (1) **"every element in a namespace other than its parent's is reported"** is false,
+  because a child element beside a `value` attribute is **never modeled** at all: the primitive
+  branch of `buildSingle` discards it whole under `UNKNOWN_PROPERTY`, so a foreign child there never
+  reaches `isForeign`. The scope that IS true is **"every element the reader MODELS"**, and that is
+  now the wording everywhere. (2) **"the narrative `<div>` is not flagged for being there"** is false
+  for the **prefixed** spelling: `narrativeDiv` keys on `modelName === "div"`, a spelling test that a
+  prefixed tag can never satisfy, so `<h:div xmlns:h="...xhtml">` is flagged, is not read as
+  `Narrative.div`, and re-emits with `h:` unbound. Scoped to the unprefixed spelling.
+  **The lesson to carry out of all three passes is one lesson: in this reader, "every element" is
+  never the right subject of a sentence. Name the set the code actually walks.**
   **The root is the one element with its own rule**, because it has no parent to take a vocabulary
   from: it is always modeled by its local name, and it is flagged only when it _declares_ a namespace
   that is not FHIR's. A document declaring **no namespace at all** is still read as FHIR and still
@@ -563,6 +580,19 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   reader's `.@name` attribute form. **`.@name` is a live residual**: an unmodeled XML attribute has
   no FHIRPath address at all, and choosing one for it (the element? nothing?) is a separate decision
   from removing a sentence, so it was left alone rather than folded in.
+  **Four `PRE-EXISTING` findings pass three filed, to pick up rather than fix here, none blocking and
+  every one identical on `cf16767`:** (i) a **prefixed narrative `<div>`** loses the narrative text
+  and still reads `valid: true` with zero findings, re-emitting `h:` unbound (finding 2 above, the
+  one worth queuing first, since it destroys clinical prose on a document that is legal XML);
+  (ii) a **foreign child of a valued primitive** is discarded whole under `UNKNOWN_PROPERTY`, whose
+  documented contract is that nothing was lost, so that code is making a false promise at that site
+  exactly as it was at the two `_`-sibling sites this slice moved to
+  `MISPLACED_PRIMITIVE_EXTENSION`; (iii) a **foreign root launders** into conformant FHIR across one
+  round trip (`<v:Observation xmlns:v="urn:vendor">` re-emits as a FHIR `Observation` that re-parses
+  clean), pre-existing for the default spelling and extended to the prefixed one here; (iv) two
+  **distinct expanded names merge** when one prefix is rebound between siblings
+  (`<p:x xmlns:p="urn:a"/><p:x xmlns:p="urn:b"/>` -> one property), both flagged foreign, which the
+  `isForeign` / `groupChildren` expanded-name argument does not cover.
   **Three more residuals left open deliberately, each pinned by a test:** an **unbound** prefix
   (`<f:active/>` with no `xmlns:f` in scope) is flagged and its tag kept **verbatim**, so it does
   **not** read as a FHIR element and a retraction spelled that way is still not seen by the safety

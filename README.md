@@ -463,13 +463,15 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   `<Patient xmlns="http://hl7.org/fhir">` are the same resource and read to the same model. The
   in-scope declarations are tracked as the reader descends, including a prefix rebound partway down.
   A prefix nothing in scope binds is not resolvable, so the tag is kept exactly as written and
-  flagged rather than guessed at. The narrative `<div>` is expected in the XHTML namespace and is not
-  flagged for being there.
-  An element in a namespace other than its parent's is reported wherever it appears, and that report
-  is what covers all of them. A **prefixed** one additionally keeps its tag, and since no FHIR element
+  flagged rather than guessed at. An **unprefixed** narrative `<div>` is expected in the XHTML
+  namespace and is not flagged for being there; a prefixed one is not read as `Narrative.div`.
+  Every element the reader **models** is tested once for being in a namespace other than its parent's,
+  and reported when it is. A **prefixed** one additionally keeps its tag, and since no FHIR element
   is spelled `v:code`, that is what keeps it out of the FHIR element beside it. Content reached by a
   **default** declaration (`<extension xmlns="urn:vendor">`) is spelled exactly like the FHIR element,
-  so it is modeled as one and reported rather than separated.
+  so it is modeled as one and reported rather than separated. A child element written beside a
+  `value` attribute is not modeled at all: it is discarded and reported `UNKNOWN_PROPERTY`, so a
+  foreign one there draws no namespace report.
   Two prefixes bound to the same namespace are two spellings of one name, so an element written twice
   that way reads as the repeat it is. The model matches the same document spelled one way; only the
   number of occurrences differs, so that element carries `MIXED_XML_SPELLING`. Nothing is lost, but a

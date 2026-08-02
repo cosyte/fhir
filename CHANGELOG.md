@@ -19,8 +19,9 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **A prefix is dropped only for an element in its parent's namespace.** An expanded name is a
   namespace _and_ a local name (Namespaces in XML 1.0 §6.1), so `{urn:vendor}code` and
   `{http://hl7.org/fhir}code` are different names.
-  **Every element in a namespace other than its parent's is reported `UNEXPECTED_XML_CONTENT`, and
-  that report, not the name, is the guarantee that covers all of them.** A **prefixed** one
+  **Every element the reader MODELS is tested once for being in a namespace other than its parent's,
+  and reported `UNEXPECTED_XML_CONTENT` when it is; that report, not the name, is what covers the
+  unprefixed case.** A **prefixed** one
   additionally keeps its tag exactly as written, and since no FHIR element can be spelled `v:code`,
   that is what stops it joining a FHIR element's occurrences, being promoted into a primitive's
   `extension`, being unwrapped as a contained resource, or being stored as `Narrative.div`.
@@ -29,6 +30,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   one; it is reported, not separated. That is unchanged from before prefixes were resolved at all, so
   it is a residual of the lenient read and not a regression, and the scope of the separation is
   stated here rather than claimed wider than it is.
+  **Two limits of "every element the reader models", both unchanged from the previous release.** A
+  child element written beside a `value` attribute is not modeled at all: it is discarded whole and
+  reported `UNKNOWN_PROPERTY`, so a foreign one there draws no namespace report. And a narrative
+  `<div>` written with a prefix is not read as `Narrative.div` at all, so the narrative text is not
+  carried; only the unprefixed spelling is.
   **Measured over the package's seven XML fixtures, each re-spelled with a prefix and compared to the
   default-namespace original** on the full read: issues, serialized JSON, re-emitted XML, validity
   and findings, safety readout. **Before: 0 of 7 read identically. After: 7 of 7.**
@@ -45,8 +51,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   no declaration in scope binds, are both flagged `UNEXPECTED_XML_CONTENT`; an unresolvable prefix
   keeps the tag exactly as written rather than guessing a binding for it. A namespace declaration is
   no longer reported as an unknown attribute, which retires a false positive on the legal
-  re-declaration of the namespace an element is already in. The narrative `<div>` is expected in the
-  XHTML namespace and is not flagged for being there.
+  re-declaration of the namespace an element is already in. An **unprefixed** narrative `<div>` is
+  expected in the XHTML namespace and is not flagged for being there.
   **What reading a document correctly costs, stated rather than left to be found, and now reported.**
   Two prefixes bound to one namespace are two spellings of one name, so an element written twice that
   way is the repeat it genuinely is; the model and every verdict over it match the same document

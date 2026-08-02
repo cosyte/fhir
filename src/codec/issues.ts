@@ -88,13 +88,17 @@ export const ISSUE_CODES = {
    */
   MISPLACED_PRIMITIVE_EXTENSION: "MISPLACED_PRIMITIVE_EXTENSION",
   /**
-   * One XML element arrived under **more than one spelling of the same name**: two of its
-   * occurrences carried different namespace prefixes that resolve to the same namespace, so
-   * `<f:status/>` and `<status/>` are the same element written two ways (Namespaces in XML 1.0
-   * §6.1, an expanded name is a namespace and a local name).
+   * One XML element arrived under **more than one spelling of the same name**: its occurrences did
+   * not all carry the same tag, so `<f:status/>` and `<status/>` are one element written two ways
+   * (Namespaces in XML 1.0 §6.1, an expanded name is a namespace and a local name).
    *
-   * Nothing is lost, and the reading is the correct one: the occurrences are modeled as repeats of
-   * a single element, exactly as the same document spelled one way would be. This is raised because
+   * Usually those spellings resolve to the same namespace, and then nothing is lost and the reading
+   * is the correct one: the occurrences are modeled as repeats of a single element, exactly as the
+   * same document spelled one way would be. It also fires where a prefixed FHIR element groups with
+   * an unprefixed one carrying a **foreign** default declaration, because that one is spelled
+   * exactly like the FHIR element; there the group additionally carries
+   * {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT} at the foreign occurrence, and this code is not the
+   * one to read for that. This is raised because
    * the *count* is what changes. An element a consumer expects at most once now presents as a
    * repeat, and a single-value read of a repeated element yields nothing rather than a value, so a
    * check written against `0..1` can skip an element it would otherwise have inspected. Warning
