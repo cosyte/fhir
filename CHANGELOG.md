@@ -21,12 +21,18 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   bound to nothing, so the output was not well-formed XML at all.
   **The narrative is now recognised by its expanded name**, `{http://www.w3.org/1999/xhtml}div`
   (Namespaces in XML 1.0 §6.1), under every spelling, so a prefixed narrative reads to the same
-  model, the same issues, the same findings and the same safety readout as the identical document
-  written with a default `xmlns`. It is the one element FHIR _requires_ in a namespace other than
-  its parent's, and it is the only place a resolved local name is taken from a foreign namespace:
-  the namespace is compared against a single fixed URI, and what the reader does with the result is
-  carry an **opaque string**, never model FHIR structure from it. A `div` in any other namespace is
-  still not the narrative, so a vendor cannot supply a patient's prose.
+  issues, the same findings and the same safety readout as the identical document written with a
+  default `xmlns`, and to a model that differs only in the narrative string's own spelling. It is the
+  one element FHIR _requires_ in a namespace other than its parent's, and it is the only place a
+  resolved local name is taken from a namespace other than the parent's: the namespace is compared
+  against a single fixed URI, and what the reader does with the result is carry an **opaque string**,
+  never model FHIR structure from it.
+  **What that separates, stated at the width of the code and no wider.** Like every other name rule
+  in this reader, it separates only a spelling that carries a **prefix**: a `<v:div xmlns:v="urn:vendor">`
+  keeps its tag and cannot reach `Narrative.div`. An **unprefixed** `<div xmlns="urn:vendor">` is
+  spelled exactly like the FHIR one, so it is stored in `Narrative.div` and reported
+  `UNEXPECTED_XML_CONTENT` rather than separated, exactly as it was before namespaces were resolved
+  at all. That is unchanged here and is not a claim this release makes go away.
   **The string a narrative is carried as now includes the namespace declarations it inherited.**
   `Narrative.div` is a self-contained XHTML fragment, and lifting an element out of the document
   that declared its namespaces leaves a fragment whose prefixes bind to nothing. Only bindings the
@@ -35,31 +41,39 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   exactly as written. The document's own spelling is preserved rather than rewritten to the default
   form, so a prefixed narrative is namespace-**equivalent** to the default spelling and not
   byte-identical to it. This also repairs the same broken-fragment defect for an _unprefixed_
-  narrative that used a prefix declared on an ancestor.
-  **A second route to the same loss is closed with it:** a narrative holding a single capitalized
-  child (`<div xmlns="…xhtml"><Table>5 mg</Table></div>`) was read as a contained `Table` **resource**,
-  destroying its prose and re-emitting it stripped of the XHTML namespace so the re-read came back
-  clean. The narrative is now taken before the resource-valued branch. That is safe because `div`
-  names exactly one element in R4 (`Narrative.div` is the only one of the **7,696** element paths in
-  `profiles-types.json` + `profiles-resources.json` whose name is `div`), so taking it first shadows
-  nothing.
-  **Differential against the previous release over 545 documents**, both trees in one process, every
-  walker at every node (every XML fixture × twelve mutations at every element position, plus ten
-  adversarial documents covering the safety spine): 268 readings moved, and of those **0** go
-  `valid: false` to `true`, **0** go `safeToSummarize: false` to `true`, **0** lose a retraction,
-  **0** lose a negation, **0** newly throw, and **0** outputs are shorter. 376 read diagnostics
-  disappear: **336 at a `<withheld>` location**, and the other **40** are all `UNEXPECTED_XML_CONTENT`
-  raised on a narrative whose prose the previous release **dropped** and this one keeps: the warning
-  goes because the loss it reported does. **0** disappear at a resolvable location for any other
-  reason. Four validation findings disappear, all one shape: two spellings of the narrative at a
+  narrative that used a prefix declared on an ancestor. One escaper serves the element's own
+  attributes and the added declarations, because a namespace URI can carry a `<` (the raw reader
+  refuses a literal one but decodes `&lt;`), and the writer emits this string verbatim.
+  **Differential against the previous release over 765 documents**, both trees in one process, every
+  walker at every node (every XML fixture × seventeen mutations at every element position, plus ten
+  adversarial documents covering the safety spine): 358 readings moved, and of those **0** go
+  `valid: false` to `true`, **0** go `safeToSummarize: false` to `true`, **0** lose a retraction, and
+  **0** lose a negation, **0** newly throw. Of the **4,559** leaf values the previous release read,
+  **0** are missing here; 2 are no longer separate leaves because they now sit inside the opaque
+  narrative string that carries the subtree they came from, verified by containment rather than
+  assumed. 80 outputs are shorter, and **78 are byte-verified as nothing but a prefixed property name
+  resolving to its local name** (`"h:div"` to `"div"`); the other 2 are that plus two spellings of one
+  element grouping into a single property, both values kept in order and `MIXED_XML_SPELLING` raised.
+  496 read diagnostics disappear and **all 496 are at a `<withheld>` location**, which is the previous
+  release complaining about a narrative it could not name; **0** disappear at a location that
+  resolves. Four validation findings disappear, all one shape: two spellings of the narrative at a
   resource root drew one `UNKNOWN_ELEMENT` per property and now draw one per element, because they
   are one element written twice, and that document additionally gains `MIXED_XML_SPELLING`, so the
-  widened count is not silent. **344 read locations and 16 validation locations improve from
-  `<withheld>` to a resolvable expression; none worsens.** What it buys: of the 256 documents
-  carrying a narrative, the previous release preserved it in **88** and this one preserves it in
-  **248**. The remaining 8 are the unchanged residual below: a child of a valued primitive, discarded
-  whole. The 27 JSON fixtures read **identically**: no JSON-reader behaviour is touched, and no field
-  is added to the model.
+  widened count is not silent. **588 read locations and 60 validation locations improve from
+  `<withheld>` to a resolvable expression; none worsens.** What it buys: of the 346 documents
+  carrying a narrative, the previous release preserved it in **134** and this one preserves it in
+  **294**. The 27 JSON fixtures read **identically**: no JSON-reader behaviour is touched, and no
+  field is added to the model.
+  **Two narratives this deliberately does NOT recover, both `PRE-EXISTING`, both pinned by a test.**
+  A `<div>` holding exactly one capitalized child (`<div xmlns="…xhtml"><Table>5 mg</Table></div>`)
+  is still read as a contained `Table` **resource** and loses its prose, identically for every
+  spelling. Taking the narrative first would recover it and would also remove the whole subtree from
+  the model, retiring every finding the reader raised from inside it, including an
+  `UNHANDLED_MODIFIER_EXTENSION` **error** that takes a document from `valid: false` to `valid: true`
+  with nothing in its place. Those findings are false, but a `valid` flip in that direction is the one
+  thing this package's contract does not allow, so it is a separate decision. And a foreign child of a
+  valued primitive is still discarded whole under `UNKNOWN_PROPERTY`, so a narrative written there is
+  still lost.
 - **The XML reader did not resolve namespace prefixes, so a prefixed FHIR document was misread
   whole (`FHIR-READER-RESIDUALS`).** FHIR XML is defined in the `http://hl7.org/fhir` namespace, and
   XML lets a document bind that namespace to a prefix rather than making it the default, so

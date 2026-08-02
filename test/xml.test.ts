@@ -661,9 +661,11 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       expect(valid).toBe(false);
     });
 
-    it("still keeps a div in a vendor namespace out of Narrative.div", () => {
-      // The separation is about the NAMESPACE, not the prefix: `{urn:vendor}div` is not the
-      // narrative under any spelling, so a vendor cannot supply a patient's narrative.
+    it("still keeps a PREFIXED div in a vendor namespace out of Narrative.div", () => {
+      // Recognising the narrative by its expanded name did not widen this: `{urn:vendor}div` is not
+      // `{xhtml}div`, and the prefixed spelling keeps its tag, so it cannot reach `Narrative.div`.
+      // The UNPREFIXED spelling still can, and is pinned as the residual it is in the block below:
+      // this test's scope is the prefixed one, and no claim anywhere may be wider.
       const { resource, issues } = parseResourceXml(
         `<Patient ${FHIR_NS} xmlns:v="urn:vendor"><text><status value="generated"/><v:div><v:p>Hi</v:p></v:div></text></Patient>`,
       );
@@ -789,19 +791,55 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       );
     });
 
-    it("keeps a narrative holding one capitalized child as a narrative, not a contained resource", () => {
-      // The resource-valued branch used to win here and read the narrative as a `Table` RESOURCE,
-      // destroying its prose and re-emitting it stripped of the XHTML namespace, which re-read clean.
-      // `div` names exactly one element in R4 (`Narrative.div`), so taking it first shadows nothing.
+    it("escapes a `<` in an inherited namespace URI, so the emitted document stays well-formed", () => {
+      // The raw reader refuses a literal `<` in an attribute but decodes `&lt;`, so a URI can carry
+      // one. The writer emits `Narrative.div` verbatim, so an unescaped `<` in the fixup would put a
+      // document out that is not well-formed XML and does not re-read: the exact defect this slice
+      // closes, through a new door. One escaper serves both the element's attributes and the fixup.
+      const src = narrative(` xmlns:v="urn:a&lt;b"`, `<div xmlns="${XHTML}"><v:x/>prose</div>`);
+      const { xml } = carried(src);
+      expect(divOf(carried(src).json)).toBe(
+        `<div xmlns="${XHTML}" xmlns:v="urn:a&lt;b"><v:x/>prose</div>`,
+      );
+      // The whole point: it re-reads, to the same narrative.
+      const reread = parseResourceXml(xml);
+      expect(divOf(serializeResource(reread.resource))).toBe(divOf(carried(src).json));
+    });
+
+    /**
+     * `PRE-EXISTING`, identical on base for **every** spelling, and deliberately left open.
+     *
+     * A `<div>` holding exactly one capitalized child is taken by the resource-valued branch before
+     * the narrative branch, so its prose is destroyed and it re-emits stripped of the XHTML
+     * namespace. Taking the narrative first would fix it, and would also remove the whole subtree
+     * from the model, retiring every finding the reader raised from inside it, including an
+     * `UNHANDLED_MODIFIER_EXTENSION` **error** that takes a document from `valid: false` to
+     * `valid: true` with nothing left in its place. Those findings are false (nothing inside
+     * `Narrative.div` is a FHIR modifier extension), but a `valid` flip in that direction is the one
+     * thing this package's contract does not allow, so the residual is pinned rather than closed.
+     */
+    it("still loses a narrative holding one capitalized child, identically for both spellings", () => {
       for (const src of [
         narrative("", `<div xmlns="${XHTML}"><Table>dose 5 mg</Table></div>`),
         narrative(` xmlns:h="${XHTML}"`, "<h:div><h:Table>dose 5 mg</h:Table></h:div>"),
       ]) {
-        const { json, xml } = carried(src);
-        expect(json).toContain("dose 5 mg");
-        expect(json).not.toContain('"resourceType":"Table"');
-        expect(xml).toContain(XHTML);
+        const { json } = carried(src);
+        expect(json).not.toContain("dose 5 mg");
+        expect(json).toContain('"resourceType":"Table"');
       }
+      // And the error that keeps it from being a silent flip is still raised, at a location that
+      // now resolves rather than being withheld.
+      const { resource } = parseResourceXml(
+        narrative(
+          ` xmlns:h="${XHTML}"`,
+          '<h:div><h:Table><h:modifierExtension url="urn:x"/></h:Table></h:div>',
+        ),
+      );
+      const v = validateResource(resource);
+      expect(v.valid).toBe(false);
+      expect(v.issues.map((i) => `${i.code}@${i.expression ?? ""}`)).toContain(
+        "UNHANDLED_MODIFIER_EXTENSION@Patient.text.div.modifierExtension",
+      );
     });
 
     it("reports two spellings of the narrative as the repeat they are, rather than dropping one", () => {

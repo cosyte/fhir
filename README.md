@@ -466,10 +466,12 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   flagged rather than guessed at. **The narrative `<div>` is the one element FHIR requires in a
   namespace other than its parent's, so it is recognised by its expanded name
   (`{http://www.w3.org/1999/xhtml}div`) under every spelling**, and is not flagged for being there.
-  It is carried as an opaque string with the namespace declarations it inherited from its ancestors,
-  so the fragment stands on its own; the document's own spelling is preserved rather than rewritten,
-  which makes a prefixed narrative namespace-equivalent to the default spelling and not byte-identical
-  to it. A `div` in any other namespace is not the narrative.
+  It is carried as an opaque string together with the namespace declarations it inherited from its
+  ancestors **and uses**, so the fragment stands on its own; the document's own spelling is preserved
+  rather than rewritten, which makes a prefixed narrative namespace-equivalent to the default
+  spelling and not byte-identical to it. A `div` in another namespace is kept out of `Narrative.div`
+  only where its tag carries a **prefix**: an unprefixed `<div xmlns="urn:vendor">` is spelled exactly
+  like the FHIR one, so it is stored there and reported, not separated.
   Every element the reader **models** is tested once for being in a namespace other than its parent's,
   and reported when it is. A **prefixed** one additionally keeps its tag, and since no FHIR element
   is spelled `v:code`, that is what keeps it out of the FHIR element beside it. Content reached by a
