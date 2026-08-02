@@ -45,8 +45,9 @@ That finding existed only because a prefixed narrative was not recognised as one
 has read `valid: true` all along, and nothing inside `Narrative.div` is a FHIR modifier extension.
 Measured: over 176 documents carrying a prefixed narrative, head's reading of the prefixed spelling
 equals base's reading of the default-`xmlns` twin in 172, and in the other 4 head raises one
-_additional_ warning (`MIXED_XML_SPELLING`, that fixture already carrying a narrative). In none of
-the 176 is head's reading weaker.
+_additional_ warning (`MIXED_XML_SPELLING`, that fixture already carrying a narrative, so the
+document then holds the narrative under both spellings). In none of the 176 is head's reading weaker:
+the only way it reads differently at all is louder.
 
 Differential vs `3747f62` over 941 documents, both trees in one process, every walker at every node:
 446 readings moved; **0** retractions or negations lost, **0** newly throwing. Of the 5,699 leaf
@@ -60,8 +61,8 @@ read diagnostics disappear and **all 656 are at a `<withheld>` location**, **0**
 resolves; 480 of those are on documents where the narrative is now kept and 176 on documents where it
 is not, those being the capitalized-child residual below. 40 validation findings disappear: 36 the
 modifier-extension shape above, 4 the two-spellings shape compensated by `MIXED_XML_SPELLING`. 752
-read and 104 validation locations improve from `<withheld>` to resolvable; none worsens. Of 434
-documents carrying a narrative, base preserved it in 138 and head preserves it in 338. The 27 JSON
+read and 104 validation locations improve from `<withheld>` to resolvable; none worsens. Of 836
+documents carrying a narrative, base preserved it in 278 and head preserves it in 478. The 27 JSON
 fixtures read identically.
 
 Deliberately not recovered, both `PRE-EXISTING` and both pinned by a test: a `<div>` holding exactly

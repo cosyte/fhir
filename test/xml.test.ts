@@ -816,8 +816,10 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * That is not a weakening, and the only yardstick that settles it is the **same document spelled
      * with a default `xmlns`**, not the previous release: the finding existed only because a prefixed
      * narrative was not recognised as one, and the unprefixed twin has read `valid: true` all along.
-     * Nothing inside `Narrative.div` is a FHIR modifier extension. The twin is asserted here so the
-     * claim cannot drift away from the code.
+     * Nothing inside `Narrative.div` is a FHIR modifier extension. What this test pins is the two
+     * spellings agreeing at head; the other half of the claim, that the default spelling read this
+     * way on the previous release too, is a cross-version comparison no in-repo test can make and is
+     * recorded in the changeset instead.
      */
     it("reads a prefixed narrative's insides as narrative, exactly as the default spelling does", () => {
       const inner = '<p><modifierExtension url="urn:x"/>Take 5 mg</p>';
@@ -869,6 +871,19 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         expect(r.issues).toEqual([]);
         expect(r.valid).toBe(true);
       }
+      // What the route does still report, kept pinned: content read as FHIR because it came through
+      // the resource-valued branch is still judged as FHIR, at a location that resolves.
+      const { resource } = parseResourceXml(
+        narrative(
+          ` xmlns:h="${XHTML}"`,
+          '<h:div><h:Table><h:modifierExtension url="urn:x"/></h:Table></h:div>',
+        ),
+      );
+      const v = validateResource(resource);
+      expect(v.valid).toBe(false);
+      expect(v.issues.map((i) => `${i.code}@${i.expression ?? ""}`)).toContain(
+        "UNHANDLED_MODIFIER_EXTENSION@Patient.text.div.modifierExtension",
+      );
     });
 
     it("reports two spellings of the narrative as the repeat they are, rather than dropping one", () => {

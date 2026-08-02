@@ -20,9 +20,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `validateResource` returned `valid: true` with zero findings. The re-emitted XML carried `h:`
   bound to nothing, so the output was not well-formed XML at all.
   **The narrative is now recognised by its expanded name**, `{http://www.w3.org/1999/xhtml}div`
-  (Namespaces in XML 1.0 §6.1), under every spelling, so a prefixed narrative reads to the same
-  issues, the same findings and the same safety readout as the identical document written with a
-  default `xmlns`, and to a model that differs only in the narrative string's own spelling. It is the
+  (Namespaces in XML 1.0 §6.1), under every spelling, so a prefixed narrative reads as the identical
+  document written with a default `xmlns` reads, to a model differing only in the narrative string's
+  own spelling. The one documented exception is **louder, never quieter**: a document holding the
+  narrative under both spellings at once is one element written twice, so it draws
+  `MIXED_XML_SPELLING` where the all-default twin draws nothing. It is the
   one element FHIR _requires_ in a namespace other than its parent's, and it is the only place a
   resolved local name is taken from a namespace other than the parent's: the namespace is compared
   against a single fixed URI, and what the reader does with the result is carry an **opaque string**,
@@ -77,8 +79,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   root drew one `UNKNOWN_ELEMENT` per property and now draw one per element, because they are one element
   written twice, with `MIXED_XML_SPELLING` raised so the widened count is not silent. **752 read
   locations and 104 validation locations improve from `<withheld>` to a resolvable expression; none
-  worsens.** What it buys: of the 434 documents carrying a narrative, the previous release preserved it
-  in **138** and this one preserves it in **338**. The 27 JSON fixtures read **identically**: no
+  worsens.** What it buys: of the 836 documents carrying a narrative, the previous release preserved it
+  in **278** and this one preserves it in **478**. The 27 JSON fixtures read **identically**: no
   JSON-reader behaviour is touched, and no field is added to the model.
   **Two narratives this deliberately does NOT recover, both `PRE-EXISTING`, both pinned by a test.**
   A `<div>` holding exactly one capitalized child (`<div xmlns="…xhtml"><Table>5 mg</Table></div>`) is

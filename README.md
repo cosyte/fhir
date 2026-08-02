@@ -473,7 +473,9 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   only where its tag carries a **prefix**: an unprefixed `<div xmlns="urn:vendor">` is spelled exactly
   like the FHIR one, so it reaches that slot and is reported, not separated. Reading the narrative
   means its contents are no longer modeled as FHIR, so a prefixed narrative reads as the same document
-  written with a default `xmlns` reads, including where that is quieter.
+  written with a default `xmlns` reads, including where that is quieter. The one way it reads
+  differently is **louder**: a document holding the narrative under both spellings at once is one
+  element written twice, so it draws `MIXED_XML_SPELLING`, which the all-default twin does not.
   Every element the reader **models** is tested once for being in a namespace other than its parent's,
   and reported when it is. A **prefixed** one additionally keeps its tag, and since no FHIR element
   is spelled `v:code`, that is what keeps it out of the FHIR element beside it. Content reached by a
