@@ -25,8 +25,8 @@ rather than modeled as FHIR structure. No field is added to the model and no wal
 spelling that carries a **prefix**: `<v:div xmlns:v="urn:vendor">` keeps its tag and cannot reach
 `Narrative.div`. An **unprefixed** `<div xmlns="urn:vendor">` is spelled exactly like the FHIR one,
 so it reaches the narrative slot rather than being separated, exactly as before namespaces were
-resolved at all (carried there and reported `UNEXPECTED_XML_CONTENT`, or taken by the resource-valued
-branch if it holds one capitalized child). Unchanged here, and no claim says otherwise.
+resolved at all: carried there and reported `UNEXPECTED_XML_CONTENT`. Unchanged here, and no claim
+says otherwise.
 
 The opaque string now carries the namespace declarations the element inherited (only those the
 fragment uses and does not itself declare, only with the URI in scope where the document wrote it),
@@ -59,17 +59,16 @@ shorter, 156 byte-verified as nothing but a prefixed property name resolving to 
 other 4 that plus two spellings of one element grouping into one property with both values kept. 656
 read diagnostics disappear and **all 656 are at a `<withheld>` location**, **0** at a location that
 resolves; 480 of those are on documents where the narrative is now kept and 176 on documents where it
-is not, those being the capitalized-child residual below. 40 validation findings disappear: 36 the
+is not, those being the capitalized-child shape the companion changeset recovers. 40 validation
+findings disappear: 36 the
 modifier-extension shape above, 4 the two-spellings shape compensated by `MIXED_XML_SPELLING`. 752
 read and 104 validation locations improve from `<withheld>` to resolvable; none worsens. Of 836
 documents carrying a narrative, base preserved it in 278 and head preserves it in 478. The 27 JSON
 fixtures read identically.
 
-Deliberately not recovered, both `PRE-EXISTING` and both pinned by a test: a `<div>` holding exactly
-one capitalized child is still read as a contained resource and loses its prose, identically for every
-spelling, re-emitted stripped of the XHTML namespace. Its sharpest form, worth filing because
-HTML-4-era generators do emit uppercase tags: prose written _beside_ such a child
-(`<div xmlns="…xhtml">Take 5 mg<BR/></div>`) is destroyed with zero diagnostics under `valid: true`,
-the div's own text never being inspected once the child is read as a resource. Reordering the two
-branches is a separate decision with its own blast radius. And a foreign child of a valued primitive
-is still discarded whole under `UNKNOWN_PROPERTY`.
+Not recovered here, and what happened to it: a `<div>` holding exactly one capitalized child was
+still read as a contained resource and lost its prose, and prose written _beside_ such a child
+(`<div xmlns="…xhtml">Take 5 mg<BR/></div>`) was destroyed with zero diagnostics under `valid: true`.
+Reordering the two branches is a separate decision with its own blast radius, so it was made and
+measured on its own terms in the companion changeset rather than folded in here. A foreign child of a
+valued primitive is still discarded whole under `UNKNOWN_PROPERTY` (`PRE-EXISTING`, pinned by a test).

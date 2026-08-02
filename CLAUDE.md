@@ -583,7 +583,29 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   **Four `PRE-EXISTING` findings pass three filed, to pick up rather than fix here, none blocking and
   every one identical on `cf16767`:** (i) a **prefixed narrative `<div>`** loses the narrative text
   and still reads `valid: true` with zero findings, re-emitting `h:` unbound (finding 2 above, the
-  one worth queuing first, since it destroys clinical prose on a document that is legal XML);
+  one worth queuing first, since it destroys clinical prose on a document that is legal XML)
+  -- **CLOSED, in two halves.** The spelling half went first: the narrative is recognised by its
+  **expanded name** `{http://www.w3.org/1999/xhtml}div`, so every spelling of the XHTML namespace
+  reaches `Narrative.div`. The **ordering** half followed, and it is the one to read before touching
+  `buildSingle`: `isResourceName` is a FHIR-vocabulary heuristic (UpperCamelCase names a resource
+  type) and the content of `Narrative.div` is XHTML, where it means nothing, so applied there it read
+  `<div xmlns="…xhtml">Take 5 mg<BR/></div>` as a contained `BR` resource and **destroyed the prose
+  with ZERO diagnostics under `valid: true`**, re-emitting the div stripped of its namespace so the
+  loss laundered on a re-read. HTML-4-era generators emit `<BR>`, `<TABLE>`, `<P>`. The narrative is
+  taken **before** the resource-valued unwrap now; `div` names exactly one of R4's 7,696 element
+  paths, so the order shadows nothing, and **no field was added to the model** either time.
+  **The cost, and the yardstick that settles it: reading a narrative as a narrative stops modelling
+  its insides as FHIR**, so `UNHANDLED_MODIFIER_EXTENSION` raised from inside one goes and such a
+  document flips `valid: false -> true` (32 of 1,019 in the differential). Measured against the
+  previous release that looks like suppression; measured against **the same document spelled the
+  other way** (a lowercase child, a default `xmlns`) nothing is lost: 394 of 396 twin pairs read
+  identically, 2 louder, **0 weaker**. **Re-run that comparison if you touch this branch; "did a
+  finding disappear" is the wrong question here.** The differential harness is
+  **committed** (`scripts/read-differential.ts`, `pnpm differential:read`), which the three reader
+  slices before it were not; it self-checks its tallies and refuses to report if the base tree it
+  loaded does not behave like base. The **resource-valued unwrap** is otherwise unchanged, except
+  that character data it discards beside the child now draws `UNEXPECTED_XML_CONTENT` instead of
+  vanishing in silence (reported, **not** preserved: there is no slot for it);
   (ii) a **foreign child of a valued primitive** is discarded whole under `UNKNOWN_PROPERTY`, whose
   documented contract is that nothing was lost, so that code is making a false promise at that site
   exactly as it was at the two `_`-sibling sites this slice moved to

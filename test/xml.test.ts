@@ -840,49 +840,109 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
     });
 
     /**
-     * `PRE-EXISTING`, identical for **every** spelling, and deliberately left open.
+     * **The sharpest form of the loss, and the one this block closes: prose written BESIDE a
+     * capitalized child.**
      *
-     * A `<div>` holding exactly one capitalized child is taken by the resource-valued branch before
-     * the narrative branch, so its prose is destroyed and it re-emits stripped of the XHTML
-     * namespace, which then re-reads clean. Uppercase element names in a narrative are not exotic:
-     * HTML-4-era generators emit `<BR>`, `<TABLE>`, `<P>`. Reordering the two branches would recover
-     * it, and is a separate decision with its own blast radius, not one a change about how the
-     * narrative is SPELLED gets to make.
+     * `isResourceName` is a FHIR-vocabulary heuristic (UpperCamelCase names a resource type). The
+     * content of `Narrative.div` is XHTML, where it means nothing, and HTML-4-era generators emit
+     * `<BR>`, `<TABLE>`, `<P>`. Applied there, `<div>Take 5 mg<BR/></div>` read as a contained `BR`
+     * resource: the div's own text nodes are never inspected once the child is taken, so the prose
+     * was destroyed with ZERO diagnostics under `valid: true`, and the writer re-emitted the `<div>`
+     * stripped of the XHTML namespace so the re-read came back clean.
+     *
+     * The narrative is taken before the resource-valued branch now. Every spelling is covered,
+     * including the one that declares no XHTML namespace at all, which is the spelling a generator
+     * that forgot `xmlns` produces.
      */
-    it("still loses a narrative holding one capitalized child, identically for both spellings", () => {
+    it("keeps prose written beside a capitalized child, under every spelling", () => {
+      for (const src of [
+        narrative("", `<div xmlns="${XHTML}">Take 5 mg<BR/></div>`),
+        narrative(` xmlns:h="${XHTML}"`, "<h:div>Take 5 mg<h:BR/></h:div>"),
+        narrative("", "<div>Take 5 mg<BR/></div>"),
+      ]) {
+        const r = reading(src);
+        expect(r.json).toContain("Take 5 mg");
+        expect(r.xml).toContain("Take 5 mg");
+        expect(r.valid).toBe(true);
+        // And the re-emitted document re-reads to the same narrative rather than laundering the
+        // loss: the XHTML namespace the writer used to strip is carried on the fragment itself.
+        expect(divOf(serializeResource(parseResourceXml(r.xml).resource))).toBe(divOf(r.json));
+      }
+    });
+
+    it("keeps prose held INSIDE a capitalized child too, under both spellings", () => {
       for (const src of [
         narrative("", `<div xmlns="${XHTML}"><Table>dose 5 mg</Table></div>`),
         narrative(` xmlns:h="${XHTML}"`, "<h:div><h:Table>dose 5 mg</h:Table></h:div>"),
       ]) {
         const { json } = carried(src);
-        expect(json).not.toContain("dose 5 mg");
-        expect(json).toContain('"resourceType":"Table"');
+        expect(json).toContain("dose 5 mg");
+        expect(json).not.toContain('"resourceType":"Table"');
       }
-      // The sharpest form, and the one to file: prose written BESIDE the capitalized child is
-      // destroyed with ZERO diagnostics under `valid: true`, because the div's own text nodes are
-      // never inspected once the child is read as a resource. Both spellings, and the prefixed one
-      // reads exactly as the default one does rather than better.
-      for (const src of [
-        narrative("", `<div xmlns="${XHTML}">Take 5 mg<BR/></div>`),
-        narrative(` xmlns:h="${XHTML}"`, "<h:div>Take 5 mg<h:BR/></h:div>"),
-      ]) {
-        const r = reading(src);
-        expect(r.json).not.toContain("Take 5 mg");
-        expect(r.issues).toEqual([]);
-        expect(r.valid).toBe(true);
-      }
-      // What the route does still report, kept pinned: content read as FHIR because it came through
-      // the resource-valued branch is still judged as FHIR, at a location that resolves.
-      const { resource } = parseResourceXml(
+    });
+
+    /**
+     * **WHAT TAKING THE NARRATIVE FIRST COSTS, AND THE YARDSTICK THAT SETTLES IT.**
+     *
+     * A `<modifierExtension>` written inside a narrative that the reader used to model as FHIR no
+     * longer raises `UNHANDLED_MODIFIER_EXTENSION`, so such a document goes from `valid: false` to
+     * `valid: true`. The only yardstick that settles that is **the same document spelled the other
+     * way** -- here, a lowercase child rather than an uppercase one -- not the previous release: an
+     * uppercase tag and a lowercase one are the same XHTML element, the finding existed only because
+     * the reader read `<Table>` as a FHIR resource type, and the lowercase twin has read
+     * `valid: true` all along. Nothing inside `Narrative.div` is a FHIR modifier extension.
+     *
+     * What this test pins is the two spellings agreeing AT HEAD. The other half, that the lowercase
+     * twin read this way on the previous release too, is a cross-version comparison no in-repo test
+     * can make; it is measured by `scripts/read-differential.ts` and recorded in the changeset.
+     */
+    it("reads a capitalized child's insides as narrative, exactly as the lowercase spelling does", () => {
+      const upper = reading(
         narrative(
-          ` xmlns:h="${XHTML}"`,
-          '<h:div><h:Table><h:modifierExtension url="urn:x"/></h:Table></h:div>',
+          "",
+          `<div xmlns="${XHTML}"><Table><modifierExtension url="urn:x"/></Table></div>`,
         ),
       );
-      const v = validateResource(resource);
-      expect(v.valid).toBe(false);
-      expect(v.issues.map((i) => `${i.code}@${i.expression ?? ""}`)).toContain(
-        "UNHANDLED_MODIFIER_EXTENSION@Patient.text.div.modifierExtension",
+      const lower = reading(
+        narrative(
+          "",
+          `<div xmlns="${XHTML}"><table><modifierExtension url="urn:x"/></table></div>`,
+        ),
+      );
+      expect(upper.valid).toBe(lower.valid);
+      expect(upper.findings).toEqual(lower.findings);
+      expect(upper.issues).toEqual(lower.issues);
+      expect(upper.safeToSummarize).toBe(lower.safeToSummarize);
+      expect(upper.valid).toBe(true);
+      // The two differ only in the byte the document wrote, which is preserved on both sides.
+      expect(upper.json).toContain("<Table>");
+      expect(lower.json).toContain("<table>");
+    });
+
+    /**
+     * The narrative branch is scoped to `div`, so the resource-valued unwrap is untouched everywhere
+     * else -- including for the `contained` and `entry.resource` elements that genuinely do wrap a
+     * resource, whose safety-relevant contents must still be read as FHIR.
+     */
+    it("still unwraps a genuine resource-valued element", () => {
+      const { resource } = parseResourceXml(
+        `<Patient ${FHIR_NS}><contained><Observation><status value="entered-in-error"/></Observation></contained></Patient>`,
+      );
+      expect(serializeResource(resource)).toContain('"resourceType":"Observation"');
+    });
+
+    /**
+     * The other half of the same harm, reached through the elements that genuinely wrap a resource:
+     * the unwrap models the child and nothing else, so character data written beside it is
+     * discarded. It is reported now rather than dropped in silence. The text is still **not**
+     * preserved -- there is no slot on the model for it, and minting one is a separate decision.
+     */
+    it("reports character data the resource-valued unwrap discards", () => {
+      const { issues } = parseResourceXml(
+        `<Patient ${FHIR_NS}><contained>Take 5 mg<Observation><status value="final"/></Observation></contained></Patient>`,
+      );
+      expect(issues.map((i) => `${i.code}@${i.expression ?? ""}`)).toContain(
+        `${ISSUE_CODES.UNEXPECTED_XML_CONTENT}@Patient.contained`,
       );
     });
 

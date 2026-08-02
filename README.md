@@ -471,9 +471,15 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   rather than rewritten, which makes a prefixed narrative namespace-equivalent to the default
   spelling and not byte-identical to it. A `div` in another namespace is kept out of `Narrative.div`
   only where its tag carries a **prefix**: an unprefixed `<div xmlns="urn:vendor">` is spelled exactly
-  like the FHIR one, so it reaches that slot and is reported, not separated. Reading the narrative
-  means its contents are no longer modeled as FHIR, so a prefixed narrative reads as the same document
-  written with a default `xmlns` reads, including where that is quieter. The one way it reads
+  like the FHIR one, so it reaches that slot and is reported, not separated. **The narrative is
+  recognised before a resource-valued element is unwrapped**, because the content of `Narrative.div`
+  is XHTML and the unwrap's UpperCamelCase test is a way of spelling a FHIR resource type: applied
+  inside a narrative it read `<div xmlns="…xhtml">Take 5 mg<BR/></div>` as a contained `BR` resource
+  and destroyed the prose, and HTML-4-era generators do emit `<BR>`, `<TABLE>`, `<P>`. Nothing is
+  shadowed by that order: `div` names exactly one element in R4. Reading the narrative
+  means its contents are no longer modeled as FHIR, so a narrative spelled with a prefix, or holding
+  a capitalized child, reads as the same document written the other way reads, including where that
+  is quieter. The one way it reads
   differently is **louder**: a document holding the narrative under both spellings at once is one
   element written twice, so it draws `MIXED_XML_SPELLING`, which the all-default twin does not.
   Every element the reader **models** is tested once for being in a namespace other than its parent's,

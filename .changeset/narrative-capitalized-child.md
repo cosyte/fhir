@@ -1,0 +1,71 @@
+---
+"@cosyte/fhir": patch
+---
+
+Read a narrative `<div>` as XHTML rather than as a wrapper around a resource, so prose written beside
+a capitalized child is no longer destroyed under a `valid: true` verdict (`FHIR-UNPLACEABLE-SHAPES`,
+the residual `#46` filed and pinned, queued ahead of the item's own headline because silent data
+destruction under a passing verdict outranks an unplaceable shape).
+
+`<div xmlns="http://www.w3.org/1999/xhtml">Take 5 mg<BR/></div>` read as a contained `BR` **resource**.
+The div's own text nodes are never inspected once the child is taken, so "Take 5 mg" was gone, the
+reading raised **no issue at all**, `validateResource` returned `valid: true` with zero findings, and
+`serializeResourceXml` re-emitted the `<div>` stripped of the XHTML namespace, so the re-read came
+back clean and the loss laundered. Identical for every spelling of the XHTML namespace and for a
+document that declares none. HTML-4-era generators emit `<BR>`, `<TABLE>`, `<P>`, and a medication
+narrative is exactly where a dose is written.
+
+**The cause was a FHIR-vocabulary heuristic applied to XHTML.** The reader unwraps a resource-valued
+element (`<contained><Patient>…</Patient></contained>`) by testing whether its one child's name is
+UpperCamelCase, which is how a FHIR resource type is spelled. Inside `Narrative.div` the vocabulary
+is XHTML, where that test means nothing: `<BR/>` and `<br/>` are the same element and neither is a
+resource. The narrative is now recognised **before** the resource-valued unwrap. Nothing is shadowed
+by the order: `div` names exactly one element in R4, the only one of the 7,696 element paths in
+`profiles-types.json` + `profiles-resources.json` whose name is `div`. **No field is added to the
+model** (the narrative was already an opaque string, so `test/model-edges.test.ts` is untouched and
+unaffected) and no walker gains an edge.
+
+The resource-valued unwrap is otherwise untouched: `contained` and `entry.resource` still unwrap, so
+a retraction inside a contained resource is still read. What changed there is that character data
+written beside the child — discarded by the unwrap with no diagnostic — now draws
+`UNEXPECTED_XML_CONTENT`. The text is still **not** preserved at that position: there is no slot on
+the model for it, and minting one is a separate decision.
+
+**The yardstick is the same document spelled the other way, not the previous release.** Reading a
+narrative as a narrative necessarily stops modelling its insides as FHIR, so a `<modifierExtension>`
+written inside one the reader used to model as FHIR no longer draws `UNHANDLED_MODIFIER_EXTENSION`,
+and such a document reads `valid: true` where it read `valid: false`. That finding existed only
+because `<Table>` was read as a FHIR resource type; the lowercase twin has read `valid: true` all
+along, and nothing inside `Narrative.div` is a FHIR modifier extension. Measured over **396 twin
+pairs** (every shape with a spelling the reader already recognised, at every element position of
+every XML fixture): head's reading of the newly-recognised spelling equals base's reading of the twin
+in **394**, in **2** it raises one _additional_ warning (`MIXED_XML_SPELLING`, that fixture already
+carrying a narrative, so the document then holds two spellings of one element), and in **0** is it
+weaker.
+
+Differential vs `09b2805` over **1,019 documents**, both trees in one process (every XML fixture ×
+23 narrative and resource-wrapper shapes at every element position): 560 readings moved; **0**
+`valid: true -> false`, **0** retractions lost, **0** negations lost, **0** newly throwing, **0**
+outputs shorter in either format. Of the 13,672 leaf values base read, **0** are missing at head; 460
+are no longer separate leaves because they sit inside the opaque narrative string that carries the
+subtree they came from, verified by containment. 32 documents go `valid: false` to `true` and 36 go
+`safeToSummarize: false` to `true`, **all** the modifier-extension shape above. 280 read diagnostics
+disappear (240 `UNEXPECTED_XML_CONTENT`, 40 `UNKNOWN_PROPERTY`), every one base complaining about
+content it was mis-modelling inside a narrative it then destroyed; 120 are gained. 36 validation
+findings disappear, all the same shape. Of 792 documents carrying a narrative, base preserved it in
+**316** and head preserves it in **756**; the remaining 36 are the pre-existing case of a `<div>`
+written beside a `value` attribute, which the reader discards whole under `UNKNOWN_PROPERTY` and
+which behaves identically for a plain narrative. The 27 JSON fixtures read identically.
+
+**The differential harness is committed** (`scripts/read-differential.ts`, `pnpm differential:read`).
+The three reader slices before this one measured themselves with an uncommitted harness, so their
+headline numbers were not reviewer-reproducible; this one is. It materializes `src/` at any ref into
+a temp directory via `git archive`, imports it alongside the working tree in one process, and refuses
+to report if its own tallies do not reconcile against independently derived totals, if the corpus was
+not built from this package's fixtures, or if the base tree it loaded does not behave like base.
+
+Still open, `PRE-EXISTING` and unchanged: a foreign child of a valued primitive (including a `<div>`)
+is discarded whole under `UNKNOWN_PROPERTY`; and an **unprefixed** `<div>` in a vendor namespace is
+spelled exactly like the FHIR one, so it reaches `Narrative.div` and is reported
+`UNEXPECTED_XML_CONTENT` rather than separated — it now carries its prose there instead of losing it,
+but it is still not separated.
