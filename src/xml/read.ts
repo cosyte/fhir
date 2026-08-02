@@ -200,10 +200,11 @@ function isForeign(resolved: ResolvedName, parentNamespace: string): boolean {
  * **What this predicate governs is the NAME, so like every other name rule in this reader it only
  * separates a spelling that carries a prefix.** A `<v:div xmlns:v="urn:vendor">` fails it, keeps its
  * tag, and is not read as `Narrative.div`. An unprefixed `<div xmlns="urn:vendor">` fails it too, but
- * its tag *is* the FHIR spelling, so it lands in `Narrative.div` exactly as it did before namespaces
- * were resolved at all: preserved, flagged {@link unexpectedXmlContent}, and unchanged by this
- * predicate. That is the residual named on {@link modelNameOf}, and no claim here or anywhere else
- * may say a `div` in another namespace can never reach the narrative.
+ * its tag *is* the FHIR spelling, so it reaches the narrative slot exactly as it did before
+ * namespaces were resolved at all (carried there and flagged {@link unexpectedXmlContent}, or taken
+ * by the resource-valued branch if it holds one capitalized child), unchanged by this predicate.
+ * That is the residual named on {@link modelNameOf}, and no claim here or anywhere else may say a
+ * `div` in another namespace can never reach the narrative.
  *
  * An unresolvable prefix leaves {@link ResolvedName.namespace} empty, so `<f:div/>` with no `xmlns:f`
  * in scope is not the narrative either: it is the unbound-prefix residual, unchanged.
@@ -564,16 +565,22 @@ function buildSingle(
   // not validated, the same fidelity as the JSON codec.) `narrativeSource` is what makes the
   // lifted-out fragment carry its own namespace declarations.
   //
+  // WHAT READING THE NARRATIVE COSTS, AND THE ONLY YARDSTICK THAT SETTLES IT. Carrying the element
+  // as a string necessarily stops modelling anything inside it as FHIR, so every finding the reader
+  // used to raise from in there goes -- including an `UNHANDLED_MODIFIER_EXTENSION` **error**, which
+  // takes such a document from `valid: false` to `valid: true`. That is not a weakening, and the
+  // measurement that shows it is a comparison against the SAME DOCUMENT SPELLED WITH A DEFAULT
+  // `xmlns`, not against the previous release: those findings only ever existed because a prefixed
+  // narrative was not recognised as one, and the unprefixed twin has been `valid: true` all along.
+  // Nothing inside `Narrative.div` is a FHIR modifier extension. **If you change this branch, re-run
+  // that comparison; "no finding disappeared" is the wrong question here and will mislead you.**
+  //
   // This deliberately sits AFTER the resource-valued branch, which therefore still wins for a
   // narrative holding exactly one capitalized child (`<div xmlns="…xhtml"><Table>5 mg</Table></div>`
-  // reads as a contained `Table` resource and loses its prose). That is a PRE-EXISTING residual,
-  // identical for every spelling of the XHTML namespace, and pinned by a test rather than fixed here:
-  // taking the div first would remove the whole subtree from the model, which retires every finding
-  // the reader raised from inside it -- including an `UNHANDLED_MODIFIER_EXTENSION` **error**, taking
-  // a document from `valid: false` to `valid: true` with no compensating diagnostic. Those findings
-  // are false (nothing inside `Narrative.div` is a FHIR modifier extension), but a `valid` flip in
-  // that direction is the one thing this package's contract does not allow, and closing this residual
-  // is a separate decision from reading a prefixed narrative.
+  // reads as a contained `Table` resource and loses its prose). PRE-EXISTING, identical for every
+  // spelling of the XHTML namespace, outside the residual this change closes, and pinned by a test
+  // rather than fixed here. Reordering the two branches is a separate decision with its own blast
+  // radius, and it is not made by a change about how the narrative is SPELLED.
   if (modelName === "div") {
     return primitive(narrativeSource(element, self.scope));
   }

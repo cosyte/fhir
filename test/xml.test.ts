@@ -807,16 +807,45 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
     });
 
     /**
-     * `PRE-EXISTING`, identical on base for **every** spelling, and deliberately left open.
+     * **What reading the narrative COSTS, pinned rather than glossed.**
+     *
+     * Carrying the element as a string necessarily stops modelling anything inside it as FHIR, so a
+     * `<modifierExtension>` written inside a prefixed narrative no longer raises
+     * `UNHANDLED_MODIFIER_EXTENSION`, and such a document goes from `valid: false` to `valid: true`.
+     *
+     * That is not a weakening, and the only yardstick that settles it is the **same document spelled
+     * with a default `xmlns`**, not the previous release: the finding existed only because a prefixed
+     * narrative was not recognised as one, and the unprefixed twin has read `valid: true` all along.
+     * Nothing inside `Narrative.div` is a FHIR modifier extension. The twin is asserted here so the
+     * claim cannot drift away from the code.
+     */
+    it("reads a prefixed narrative's insides as narrative, exactly as the default spelling does", () => {
+      const inner = '<p><modifierExtension url="urn:x"/>Take 5 mg</p>';
+      const prefixed = reading(
+        narrative(
+          ` xmlns:h="${XHTML}"`,
+          '<h:div><h:p><h:modifierExtension url="urn:x"/>Take 5 mg</h:p></h:div>',
+        ),
+      );
+      const dflt = reading(narrative("", `<div xmlns="${XHTML}">${inner}</div>`));
+      // Not "the same as the previous release": the same as the twin, which is the bar.
+      expect(prefixed.valid).toBe(dflt.valid);
+      expect(prefixed.findings).toEqual(dflt.findings);
+      expect(prefixed.safeToSummarize).toBe(dflt.safeToSummarize);
+      expect(prefixed.issues).toEqual(dflt.issues);
+      expect(prefixed.valid).toBe(true);
+      expect(prefixed.json).toContain("Take 5 mg");
+    });
+
+    /**
+     * `PRE-EXISTING`, identical for **every** spelling, and deliberately left open.
      *
      * A `<div>` holding exactly one capitalized child is taken by the resource-valued branch before
      * the narrative branch, so its prose is destroyed and it re-emits stripped of the XHTML
-     * namespace. Taking the narrative first would fix it, and would also remove the whole subtree
-     * from the model, retiring every finding the reader raised from inside it, including an
-     * `UNHANDLED_MODIFIER_EXTENSION` **error** that takes a document from `valid: false` to
-     * `valid: true` with nothing left in its place. Those findings are false (nothing inside
-     * `Narrative.div` is a FHIR modifier extension), but a `valid` flip in that direction is the one
-     * thing this package's contract does not allow, so the residual is pinned rather than closed.
+     * namespace, which then re-reads clean. Uppercase element names in a narrative are not exotic:
+     * HTML-4-era generators emit `<BR>`, `<TABLE>`, `<P>`. Reordering the two branches would recover
+     * it, and is a separate decision with its own blast radius, not one a change about how the
+     * narrative is SPELLED gets to make.
      */
     it("still loses a narrative holding one capitalized child, identically for both spellings", () => {
       for (const src of [
@@ -827,19 +856,19 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         expect(json).not.toContain("dose 5 mg");
         expect(json).toContain('"resourceType":"Table"');
       }
-      // And the error that keeps it from being a silent flip is still raised, at a location that
-      // now resolves rather than being withheld.
-      const { resource } = parseResourceXml(
-        narrative(
-          ` xmlns:h="${XHTML}"`,
-          '<h:div><h:Table><h:modifierExtension url="urn:x"/></h:Table></h:div>',
-        ),
-      );
-      const v = validateResource(resource);
-      expect(v.valid).toBe(false);
-      expect(v.issues.map((i) => `${i.code}@${i.expression ?? ""}`)).toContain(
-        "UNHANDLED_MODIFIER_EXTENSION@Patient.text.div.modifierExtension",
-      );
+      // The sharpest form, and the one to file: prose written BESIDE the capitalized child is
+      // destroyed with ZERO diagnostics under `valid: true`, because the div's own text nodes are
+      // never inspected once the child is read as a resource. Both spellings, and the prefixed one
+      // reads exactly as the default one does rather than better.
+      for (const src of [
+        narrative("", `<div xmlns="${XHTML}">Take 5 mg<BR/></div>`),
+        narrative(` xmlns:h="${XHTML}"`, "<h:div>Take 5 mg<h:BR/></h:div>"),
+      ]) {
+        const r = reading(src);
+        expect(r.json).not.toContain("Take 5 mg");
+        expect(r.issues).toEqual([]);
+        expect(r.valid).toBe(true);
+      }
     });
 
     it("reports two spellings of the narrative as the repeat they are, rather than dropping one", () => {

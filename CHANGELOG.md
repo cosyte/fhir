@@ -30,9 +30,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **What that separates, stated at the width of the code and no wider.** Like every other name rule
   in this reader, it separates only a spelling that carries a **prefix**: a `<v:div xmlns:v="urn:vendor">`
   keeps its tag and cannot reach `Narrative.div`. An **unprefixed** `<div xmlns="urn:vendor">` is
-  spelled exactly like the FHIR one, so it is stored in `Narrative.div` and reported
-  `UNEXPECTED_XML_CONTENT` rather than separated, exactly as it was before namespaces were resolved
-  at all. That is unchanged here and is not a claim this release makes go away.
+  spelled exactly like the FHIR one, so it reaches the narrative slot rather than being separated,
+  exactly as it did before namespaces were resolved at all: carried there and reported
+  `UNEXPECTED_XML_CONTENT`, or taken by the resource-valued branch if it holds one capitalized child.
+  That is unchanged here and is not a claim this release makes go away.
   **The string a narrative is carried as now includes the namespace declarations it inherited.**
   `Narrative.div` is a self-contained XHTML fragment, and lifting an element out of the document
   that declared its namespaces leaves a fragment whose prefixes bind to nothing. Only bindings the
@@ -44,36 +45,52 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   narrative that used a prefix declared on an ancestor. One escaper serves the element's own
   attributes and the added declarations, because a namespace URI can carry a `<` (the raw reader
   refuses a literal one but decodes `&lt;`), and the writer emits this string verbatim.
-  **Differential against the previous release over 765 documents**, both trees in one process, every
-  walker at every node (every XML fixture × seventeen mutations at every element position, plus ten
-  adversarial documents covering the safety spine): 358 readings moved, and of those **0** go
-  `valid: false` to `true`, **0** go `safeToSummarize: false` to `true`, **0** lose a retraction, and
-  **0** lose a negation, **0** newly throw. Of the **4,559** leaf values the previous release read,
-  **0** are missing here; 2 are no longer separate leaves because they now sit inside the opaque
-  narrative string that carries the subtree they came from, verified by containment rather than
-  assumed. 80 outputs are shorter, and **78 are byte-verified as nothing but a prefixed property name
-  resolving to its local name** (`"h:div"` to `"div"`); the other 2 are that plus two spellings of one
-  element grouping into a single property, both values kept in order and `MIXED_XML_SPELLING` raised.
-  496 read diagnostics disappear and **all 496 are at a `<withheld>` location**, which is the previous
-  release complaining about a narrative it could not name; **0** disappear at a location that
-  resolves. Four validation findings disappear, all one shape: two spellings of the narrative at a
-  resource root drew one `UNKNOWN_ELEMENT` per property and now draw one per element, because they
-  are one element written twice, and that document additionally gains `MIXED_XML_SPELLING`, so the
-  widened count is not silent. **588 read locations and 60 validation locations improve from
-  `<withheld>` to a resolvable expression; none worsens.** What it buys: of the 346 documents
-  carrying a narrative, the previous release preserved it in **134** and this one preserves it in
-  **294**. The 27 JSON fixtures read **identically**: no JSON-reader behaviour is touched, and no
-  field is added to the model.
+  **The yardstick is the same document spelled with a default `xmlns`, not the previous release, and
+  that distinction decides the whole change.** Carrying the element as a string necessarily stops
+  modelling anything inside it as FHIR, so findings the reader used to raise from in there go: a
+  `<modifierExtension>` written inside a prefixed narrative no longer draws
+  `UNHANDLED_MODIFIER_EXTENSION`, and such a document reads `valid: true` where it read `valid: false`.
+  Those findings existed only because a prefixed narrative was not recognised as one; the unprefixed
+  twin has read `valid: true` all along, and nothing inside `Narrative.div` is a FHIR modifier
+  extension. **Measured, not argued: over 176 documents carrying a prefixed narrative (every XML
+  fixture, four narrative shapes at every element position), this release's reading of the prefixed
+  spelling equals the previous release's reading of the default-`xmlns` twin in 172, and in the other
+  4 it raises one _additional_ warning (`MIXED_XML_SPELLING`, because that fixture already carries a
+  narrative, so the document then holds two spellings of one element). In none of the 176 is the
+  reading weaker.**
+  **Differential against the previous release over 941 documents**, both trees in one process, every
+  walker at every node (every XML fixture × twenty-one mutations at every element position, plus ten
+  adversarial documents covering the safety spine): 446 readings moved. **0** lose a retraction, **0**
+  lose a negation, **0** newly throw. Of the **5,699** leaf values the previous release read, **0** are
+  missing here; 2 are no longer separate leaves because they now sit inside the opaque narrative string
+  that carries the subtree they came from, verified by containment rather than assumed. 32 documents go
+  `valid: false` to `true` and 36 go `safeToSummarize: false` to `true`; **all** are the shape above, and
+  in **all 32** the previous release already read the default-`xmlns` twin as `valid: true`. 160 outputs
+  are shorter, and **156 are byte-verified as nothing but a prefixed property name resolving to its local
+  name** (`"h:div"` to `"div"`); the other 4 are that plus two spellings of one element grouping into a
+  single property, both values kept in order and `MIXED_XML_SPELLING` raised. 656 read diagnostics
+  disappear and **all 656 are at a `<withheld>` location**, never at one that resolves; **480** of those
+  are on documents where the narrative is now kept, and the other **176** are on documents where it is
+  not, because they are the capitalized-child residual below and the warning that goes was about the
+  element's vocabulary rather than its prose. 40 validation findings disappear: 36 the
+  `UNHANDLED_MODIFIER_EXTENSION` shape above, and 4 where two spellings of the narrative at a resource
+  root drew one `UNKNOWN_ELEMENT` per property and now draw one per element, because they are one element
+  written twice, with `MIXED_XML_SPELLING` raised so the widened count is not silent. **752 read
+  locations and 104 validation locations improve from `<withheld>` to a resolvable expression; none
+  worsens.** What it buys: of the 434 documents carrying a narrative, the previous release preserved it
+  in **138** and this one preserves it in **338**. The 27 JSON fixtures read **identically**: no
+  JSON-reader behaviour is touched, and no field is added to the model.
   **Two narratives this deliberately does NOT recover, both `PRE-EXISTING`, both pinned by a test.**
-  A `<div>` holding exactly one capitalized child (`<div xmlns="…xhtml"><Table>5 mg</Table></div>`)
-  is still read as a contained `Table` **resource** and loses its prose, identically for every
-  spelling. Taking the narrative first would recover it and would also remove the whole subtree from
-  the model, retiring every finding the reader raised from inside it, including an
-  `UNHANDLED_MODIFIER_EXTENSION` **error** that takes a document from `valid: false` to `valid: true`
-  with nothing in its place. Those findings are false, but a `valid` flip in that direction is the one
-  thing this package's contract does not allow, so it is a separate decision. And a foreign child of a
-  valued primitive is still discarded whole under `UNKNOWN_PROPERTY`, so a narrative written there is
-  still lost.
+  A `<div>` holding exactly one capitalized child (`<div xmlns="…xhtml"><Table>5 mg</Table></div>`) is
+  still read as a contained `Table` **resource** and loses its prose, identically for every spelling,
+  re-emitted stripped of the XHTML namespace so it re-reads clean. Its sharpest form is worth naming
+  because uppercase element names in a narrative are not exotic (HTML-4-era generators emit `<BR>`,
+  `<TABLE>`, `<P>`): prose written _beside_ such a child, `<div xmlns="…xhtml">Take 5 mg<BR/></div>`,
+  is destroyed with **zero** diagnostics under `valid: true`, because the div's own text is never
+  inspected once the child is read as a resource. Reordering the two branches would recover it and is a
+  separate decision with its own blast radius, not one a change about how the narrative is _spelled_
+  gets to make. And a foreign child of a valued primitive is still discarded whole under
+  `UNKNOWN_PROPERTY`, so a narrative written there is still lost.
 - **The XML reader did not resolve namespace prefixes, so a prefixed FHIR document was misread
   whole (`FHIR-READER-RESIDUALS`).** FHIR XML is defined in the `http://hl7.org/fhir` namespace, and
   XML lets a document bind that namespace to a prefix rather than making it the default, so
