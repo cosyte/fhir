@@ -12,6 +12,8 @@
 export { parseResource } from "./read.js";
 export type { ReadResult } from "./read.js";
 export { serializeResource } from "./write.js";
+export { FhirSerializeError, SERIALIZE_ERROR_CODES } from "./serialize-guard.js";
+export type { SerializeErrorCode } from "./serialize-guard.js";
 export { readRawJson } from "./raw-json.js";
 export type {
   RawArray,

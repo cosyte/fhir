@@ -8,6 +8,44 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A dropped-character-data finding disappeared across a write-and-re-read; both writers now refuse
+  the model instead (`FHIR-ELEMENT-TEXT-RECOVERY`).** The reporting half of
+  `FHIR-PRIMITIVE-AS-ELEMENT-TEXT` made `<status>entered-in-error</status>` report rather than
+  affirm, but left the finding laundering: `serializeResourceXml` emitted `<status/>` and a re-read of
+  that output came back `valid: true`, `safeToSummarize: true`, with `droppedText` empty. Measured on
+  `6c5bb02`, the JSON writer was **worse and was not previously recorded**: `serializeResource`
+  emitted `{"resourceType":"Observation"}`, dropping the member outright, so a retracted `Observation`
+  re-read as one that had never named a status at all. Both routes are closed.
+  `serializeResource` and `serializeResourceXml` now throw the new `FhirSerializeError`
+  (`SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT`) when asked to emit a model the reader marked, rather
+  than emit an element the sender appears never to have filled in. The error is value-free and carries
+  the bounded FHIRPath `locations` it refused over, never the text it could not encode; it is swept by
+  the derived-name gate like the read-path fatal beside it.
+  **This is a REFUSAL, not the recovery half.** The text is still not read back as the element's
+  value: that remains a _tolerance_ for a non-conformant encoding, which is encoded only when a real
+  publicly-cited document shows the shape (meta-repo ADR 0018). A fresh search found none, so the
+  recovery half stays unbuilt and deliberately so. Nothing new is recognised and no value is invented.
+  `<status/>` was never a neutral fallback: xml.html §2.6.1 says _"FHIR elements are never empty. If
+  an element is present in the resource, it SHALL have either a value attribute, child elements as
+  defined for its type, or 1 or more extensions"_, so emitting it violated that SHALL.
+  **Scoped to a model the reader MARKED and nothing else.** A document read from JSON has no
+  character-data channel and is untouched; a conformant XML document still round-trips byte-for-byte.
+  The wider §2.6.1 residual is explicitly **not** addressed: a value-absent primitive carrying no
+  extension still emits `<status/>`, and the `id`-only case (`<given id="b"/>`) is still a violation,
+  left as the separate decision it is and pinned by a test.
+  **Differential vs `6c5bb02` over 1,195 documents**, both trees in one process: 0 `valid false ->
+true`, 0 `valid true -> false`, 0 `safeToSummarize false -> true`, 0 retractions lost, 0 negations
+  lost, 0 read diagnostics lost or gained, 0 validation findings lost or gained, 0 newly throwing, 0
+  outputs shorter, 0 of 10,797 compared leaf values missing, narrative preservation unmoved at 758 of
+  836, and the twin comparand 394 identical / 2 louder / **0 weaker**. Bought: **360 serializations
+  refused** that previously emitted a document which re-read clean.
+  The committed differential harness (`pnpm differential:read`) was fixed in the same change: it
+  wrapped serialization in the same `try` as the reading, so a refusal collapsed the whole reading and
+  reported every value base read as lost (5,159 phantom losses on the first run). Serialization is now
+  measured separately, a refusal is its own `reread` state and its own tally line, and the tallies that
+  would misread it as a loss -- "output shorter", "no longer re-reads", the leaf comparison -- exclude
+  it explicitly.
+
 - **A FHIR primitive whose value was written as XML element text was dropped, and the safety spine
   affirmed over the loss (`FHIR-PRIMITIVE-AS-ELEMENT-TEXT`).** FHIR XML carries a primitive's value in
   the `value` attribute (xml.html §2.6.1), so `<status>entered-in-error</status>` writes a code where

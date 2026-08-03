@@ -20,7 +20,10 @@ import { describe, expect, it } from "vitest";
 import {
   assertSafeToSummarize,
   FhirSafetyError,
+  FhirSerializeError,
+  SERIALIZE_ERROR_CODES,
   droppedText,
+  serializeResource,
   getProperty,
   isDroppedText,
   isList,
@@ -358,20 +361,55 @@ describe("what this half deliberately does NOT do, pinned so it cannot be mistak
     expect(getProperty(resource, "status")).toMatchObject({ kind: "primitive" });
   });
 
-  it("LAUNDERS on a write-and-re-read, because the writer has no slot to emit the marker", () => {
-    // The measured cost of shipping the reporting half alone: `serializeResourceXml` emits
-    // `<status/>` for a value-absent primitive, so the re-read is clean and the refusal is gone.
-    // Closing this belongs to the preserving half, which would have to keep the text.
+  it("no longer LAUNDERS on a write-and-re-read: BOTH writers refuse the marked model", () => {
+    // This used to be the measured cost of shipping the reporting half alone, and it is closed by a
+    // REFUSAL, not by recovering the text. The text is still not read; what changed is that neither
+    // writer will emit a document in which the loss is invisible.
     const { resource } = parseResourceXml(
       `<Observation ${NS}><status>entered-in-error</status></Observation>`,
     );
     expect(readSafety(resource).safeToSummarize).toBe(false);
 
-    const emitted = serializeResourceXml(resource);
-    expect(emitted).toContain("<status/>");
-    const reread = parseResourceXml(emitted);
-    expect(reread.issues).toEqual([]);
-    expect(readSafety(reread.resource).safeToSummarize).toBe(true);
-    expect(readSafety(reread.resource).droppedText).toEqual([]);
+    // XML: emitting `<status/>` re-read clean, AND `<status/>` is itself a violation of xml.html
+    // §2.6.1 ("FHIR elements are never empty ... SHALL have either a value attribute, child elements
+    // as defined for its type, or 1 or more extensions").
+    expect(() => serializeResourceXml(resource)).toThrow(FhirSerializeError);
+    // JSON: worse, not better. It has no character-data channel, so the member vanished entirely and
+    // the retracted Observation re-read as one that never named a status at all.
+    expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
+
+    // The refusal is typed, value-free, and names the location, never the text it could not encode.
+    const err = (() => {
+      try {
+        serializeResourceXml(resource);
+      } catch (e) {
+        return e;
+      }
+      return undefined;
+    })();
+    expect(err).toBeInstanceOf(FhirSerializeError);
+    const typed = err as FhirSerializeError;
+    expect(typed.code).toBe(SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT);
+    expect(typed.locations).toEqual(["Observation.status"]);
+    expect(typed.message).not.toContain("entered-in-error");
+    expect(JSON.stringify(typed.locations)).not.toContain("entered-in-error");
+  });
+
+  it("refuses only the marked model: the conformant twin still round-trips byte-for-byte", () => {
+    // The negative half of the rule, and the one that says the refusal is not a blanket. The same
+    // document spelled with `value=` is untouched, as is every document read from JSON, which has no
+    // character-data channel at all.
+    const twin = `<Observation ${NS}><status value="entered-in-error"/></Observation>`;
+    const { resource } = parseResourceXml(twin);
+    expect(serializeResourceXml(resource)).toBe(twin);
+    expect(serializeResource(resource)).toBe(
+      '{"resourceType":"Observation","status":"entered-in-error"}',
+    );
+    expect(isRetracted(resource)).toBe(true);
+
+    // A value-absent primitive with NO marker is NOT refused: the writer's §2.6.1 residual for an
+    // `id`-only element is untouched by this slice, and is left as the separate decision it is.
+    const idOnly = parseResource('{"resourceType":"Patient","_active":{"id":"a"}}');
+    expect(serializeResourceXml(idOnly.resource)).toContain('<active id="a"/>');
   });
 });

@@ -28,6 +28,7 @@ import {
   type FhirPrimitive,
   type PrimitiveValue,
 } from "../model/node.js";
+import { assertSerializable } from "../codec/serialize-guard.js";
 import { FHIR_XML_NAMESPACE } from "./read.js";
 
 /** Serialize a scalar primitive value to its lexical text (decimal from exact `raw`, never a `number`). */
@@ -151,6 +152,10 @@ function writeElement(
  *
  * @param node - The resource model to serialize (must carry a `resourceType` to name the root element).
  * @returns Canonical FHIR XML text.
+ * @throws {FhirSerializeError} If the model carries character data the reader dropped. There is no
+ *   conformant XML for it (§2.6.1: an element present in the resource SHALL have a value attribute,
+ *   child elements, or extensions), and emitting the element as unfilled would lose the
+ *   `DROPPED_ELEMENT_TEXT` finding across a round trip.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -160,6 +165,7 @@ function writeElement(
  * ```
  */
 export function serializeResourceXml(node: FhirComplex): string {
+  assertSerializable(node);
   const rt = resourceTypeOf(node);
   const tagName = rt ?? "Resource";
   return writeElement(tagName, node, true, false);

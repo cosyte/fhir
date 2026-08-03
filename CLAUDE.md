@@ -699,10 +699,36 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   with the rule written on it), **and compares the WHOLE reading, not just `json`** -- this slice moves
   what the safety layer and validator SAY without moving any value, so a `json`-only control would
   have passed on base and reported a comfortable zero. **If it fires, suspect it first.**
-  **STILL OPEN, deliberately, each pinned by a test:** the finding **LAUNDERS on a write-and-re-read**
-  (`serializeResourceXml` has no conformant way to emit character data on a FHIR element, so it emits
-  `<status/>` and the re-read is clean, `safeToSummarize: true`) -- closing that is the preserving
-  half, which needs the grounding the recovery half needs; and text beside a value that DID arrive
+  **THE LAUNDERING IS CLOSED BY `FHIR-ELEMENT-TEXT-RECOVERY` (2026-08-03), AND THE SHAPE OF THE FIX
+  IS THE LESSON: IT IS A WRITER REFUSAL, NOT THE RECOVERY HALF.** The note here used to say closing
+  it "needs the grounding the recovery half needs". **That was wrong, and the precedent three lines
+  above says why: do not cite ADR 0018 to block a refusal, cite it to block a tolerance.** Only
+  _emitting the text back_ needs grounding; _declining to emit at all_ invents nothing. Both writers
+  now throw `FhirSerializeError` / `SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT` on a marked model
+  (`src/codec/serialize-guard.ts`, shared by the JSON and XML writers).
+  **AND THE JSON WRITER WAS THE WORSE OF THE TWO AND WAS NOT RECORDED ANYWHERE.** This note named
+  only `serializeResourceXml` emitting `<status/>`; `serializeResource` emitted
+  `{"resourceType":"Observation"}`, dropping the member entirely, so a retracted `Observation`
+  re-read as one that never named a status. **Count the writers before you write the sentence** --
+  the same lesson this file already records for the reader's call sites, now paid on the write path.
+  **A fresh ADR 0018 grounding search was run and FAILED AGAIN, and the negative result is worth
+  keeping so it is not re-run blind.** GitHub code search for FHIR-namespaced XML carrying
+  element-text primitives returns: pre-2013 draft-era documents (`<LabReport>`, `<Document>`, Atom
+  feeds -- resource types R4 does not have, from when element text WAS the format); non-FHIR
+  namespaces; `data-absent-reason` extension children, which are CONFORMANT under §2.6.1's third arm
+  and are false positives; and one hand-authored library test fixture. `<Patient>` + `<gender>male</gender>`
+  returns **zero**. **None of that grounds a tolerance in an R4 reader**, so the recovery half stays
+  unbuilt.
+  **The wider §2.6.1 residual is NOT closed and must not be folded in**: a value-absent primitive
+  carrying no extension still emits `<status/>`, and the `id`-only case (`<given id="b"/>`, the only
+  such element in the fixture corpus) is still a violation. Refusing those would break a round trip
+  that works today, and is a separate decision; it is pinned by a test, not by this sentence.
+  **The differential harness had to be fixed to measure this at all**: it wrapped serialization in
+  the same `try` as the reading, so a refusal collapsed the whole reading and reported **5,159
+  phantom leaf losses** on the first run. A refusal is now its own `reread` state with its own tally,
+  excluded from "output shorter", "no longer re-reads" and the leaf comparison. **If you add a
+  writer refusal, check what the harness does with it before you trust a zero.**
+  **Still open, deliberately, pinned by a test:** text beside a value that DID arrive
   (`<status value="final">entered-in-error</status>`) draws the same refusal, which is deliberate
   rather than an oversight. **Do NOT justify that arm with "content the sender wrote is still
   missing": the gate broke that sentence in one query** with `<status value="final">final</status>`,

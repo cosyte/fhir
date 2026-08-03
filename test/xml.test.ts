@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   complex,
+  droppedText,
+  FhirSerializeError,
   FhirXmlError,
+  getProperty,
   ISSUE_CODES,
   isList,
   isPrimitive,
@@ -669,7 +672,11 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       const { resource, issues } = parseResourceXml(
         `<Patient ${FHIR_NS} xmlns:v="urn:vendor"><text><status value="generated"/><v:div><v:p>Hi</v:p></v:div></text></Patient>`,
       );
-      expect(serializeResource(resource)).not.toContain('"div"');
+      expect(getProperty(resource, "text")).toBeDefined();
+      expect(droppedText(resource, "Patient")).not.toHaveLength(0);
+      // The prose is not in the model, and the writer will not re-emit the document as though it
+      // never carried any: the loss no longer disappears across a round trip.
+      expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
       expect(issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toBe(true);
     });
   });
@@ -690,6 +697,23 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
     const narrative = (patientAttrs: string, div: string) =>
       `<Patient ${FHIR_NS}${patientAttrs}><text><status value="generated"/>${div}</text></Patient>`;
 
+    /**
+     * A serialization, or the marker for a refusal.
+     *
+     * A model carrying character data the reader dropped has no conformant encoding in either wire
+     * format, so both writers refuse it rather than emit an element the sender appears never to have
+     * filled in. That is a distinct, comparable outcome, so it is recorded as one: a twin comparison
+     * that puts a refusal beside a real document is showing a genuine difference, not an error.
+     */
+    const serialized = (write: () => string) => {
+      try {
+        return write();
+      } catch (err) {
+        if (err instanceof FhirSerializeError) return `<refused:${err.code}>`;
+        throw err;
+      }
+    };
+
     /** The whole reading of a document, so two spellings can be compared on everything at once. */
     const reading = (src: string) => {
       const { resource, issues } = parseResourceXml(src);
@@ -701,8 +725,8 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         findings: v.issues.map((i) => `${i.code}/${i.severity}`).sort(),
         safeToSummarize: s.safeToSummarize,
         retracted: s.retracted,
-        json: serializeResource(resource),
-        xml: serializeResourceXml(resource),
+        json: serialized(() => serializeResource(resource)),
+        xml: serialized(() => serializeResourceXml(resource)),
       };
     };
 
@@ -785,7 +809,9 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       // `<f:div/>` with no `xmlns:f` in scope resolves to nothing, so it is NOT the narrative: the
       // unbound-prefix residual, unchanged.
       const unbound = reading(narrative("", "<f:div>x</f:div>"));
-      expect(unbound.json).not.toContain('"div"');
+      // Not the narrative, so the prose is dropped, so neither writer will re-emit the document.
+      expect(unbound.json).toBe("<refused:DROPPED_ELEMENT_TEXT>");
+      expect(unbound.xml).toBe("<refused:DROPPED_ELEMENT_TEXT>");
       expect(unbound.issues.some((i) => i.startsWith(ISSUE_CODES.UNEXPECTED_XML_CONTENT))).toBe(
         true,
       );
@@ -989,7 +1015,10 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       const { resource, issues } = parseResourceXml(
         narrative("", `<DIV xmlns="${XHTML}">Take 5 mg<BR/></DIV>`),
       );
-      expect(serializeResource(resource)).not.toContain("Take 5 mg");
+      // The prose is gone from the model, and the writer refuses rather than re-emit a document that
+      // reads clean: the loss is still a loss, but it no longer launders.
+      expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
+      expect(droppedText(resource, "Patient")).not.toHaveLength(0);
       // Foreign vocabulary AND discarded text at one position, reached through the unwrap, which is
       // the one site that checks: one report, not two. Elsewhere the code does double, unchanged.
       expect(issues.filter((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toHaveLength(1);
