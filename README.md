@@ -273,8 +273,11 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `<status value="final">final</status>` refuses as well, even though nothing is missing there. That
   is deliberate. Deciding the document meant no harm would mean reading the text, which is the
   tolerance this half does not take.
-- **Neither writer will re-emit a document whose text was dropped** (`FhirSerializeError`, code
-  `DROPPED_ELEMENT_TEXT`). This is the other half of the refusal, and it exists because the finding
+- **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
+  `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
+  `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding
+  only whitespace still emits `<status/>` and still re-reads clean. That gap is real, unchanged here,
+  and noted below. This is the other half of the refusal, and it exists because the finding
   used to disappear across a round trip. `serializeResourceXml` emitted `<status/>` and a re-read of
   that output came back clean; `serializeResource` was worse, dropping the member outright, so a
   retracted `Observation` re-read as one that had never named a status. The error is value-free and
@@ -543,8 +546,9 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   never be silent.
 - **`serializeResourceXml`** emits compact, spec-clean FHIR XML that round-trips a spec-clean document
   **byte-for-byte** (decimals byte-exact, never through a `number`). It throws `FhirSerializeError`
-  rather than emit a document whose character data the reader dropped, so that finding cannot vanish
-  across a round trip; `serializeResource` refuses the same models for the same reason.
+  rather than emit a model the reader marked as having lost character data, so that finding cannot
+  vanish across a round trip; `serializeResource` refuses the same models for the same reason. Text
+  the reader drops **without** marking (whitespace only) is not covered, because there is no marker.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).

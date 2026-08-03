@@ -727,7 +727,12 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   the same `try` as the reading, so a refusal collapsed the whole reading and reported **5,159
   phantom leaf losses** on the first run. A refusal is now its own `reread` state with its own tally,
   excluded from "output shorter", "no longer re-reads" and the leaf comparison. **If you add a
-  writer refusal, check what the harness does with it before you trust a zero.**
+  writer refusal, check what the harness does with it before you trust a zero** -- and know the two
+  bar lines it narrows: **"newly throwing" no longer counts a refusal** (read it together with the
+  refusals line beneath it), and **the leaf comparison SKIPS a refused document** (5,159 of 15,956
+  leaves here). That exclusion is provably empty only because this slice touches no reader file. **A
+  slice that changes the READER and adds a refusal has a real blind spot there**; measure the reader
+  change separately, against a base with no refusals in it.
   **Still open, deliberately, pinned by a test:** text beside a value that DID arrive
   (`<status value="final">entered-in-error</status>`) draws the same refusal, which is deliberate
   rather than an oversight. **Do NOT justify that arm with "content the sender wrote is still

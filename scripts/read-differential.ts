@@ -437,6 +437,23 @@ const EMPTY_READING: Omit<Reading, "thrown"> = {
  * value neither tree's real output can collide with), while the tallies that would misread it as a
  * loss -- "output shorter", "no longer re-reads" -- exclude it explicitly.
  */
+/**
+ * READ THIS BEFORE TRUSTING A ZERO ON A SLICE THAT ADDS A REFUSAL.
+ *
+ * Recording a refusal as a value rather than a throw NARROWS two bar lines in the same run that
+ * introduces the refusals, and neither narrowing is visible from the line itself:
+ *
+ * - **"newly throwing" stops counting a refusal.** It means "the READING threw" from here on, not
+ *   "anything threw". The refusals are printed on their own line immediately beneath it, so the two
+ *   must be read together; a run reporting `newly throwing 0` alongside `REFUSED 360` has not had a
+ *   quiet 360 swept out of it, but the first number alone would say so.
+ * - **the leaf comparison SKIPS a refused document entirely**, because a document that was not
+ *   emitted has no leaves to find. That exclusion is only provably harmless while the slice under
+ *   measurement does not touch the READER: head's model still holds every value base's did. **A
+ *   slice that changes the reader AND adds a refusal has a real blind spot here** -- a value the
+ *   reader genuinely stopped modelling would be excluded rather than counted -- and the honest move
+ *   is to measure the reader change on its own, against a base with no refusals in it.
+ */
 const REFUSED = "<refused>";
 
 /**
@@ -468,8 +485,11 @@ function read(codec: Codec, xml: string): Reading {
     const { resource, issues } = codec.parseResourceXml(xml);
     const v = codec.validateResource(resource as never);
     const s = codec.readSafety(resource as never);
-    // Serialization is OUTSIDE the reading it describes: a writer that refuses must not take the
-    // issues, findings and safety readout down with it, or every refusal reads as a total loss.
+    // A REFUSAL specifically is caught here, so a writer that declines to emit does not take the
+    // issues, findings and safety readout down with it and read as a total loss. Note the narrow
+    // scope: these calls are still inside the `try` below, so any OTHER writer throw still collapses
+    // the whole reading to `EMPTY_READING`, exactly as it did before. Only `FhirSerializeError` is
+    // separated out.
     const json = emit(() => codec.serializeResource(resource as never));
     const emitted = emit(() => codec.serializeResourceXml(resource as never));
     return {
@@ -761,9 +781,12 @@ const CONTROL = {
  * that already carries the change. So: assert the two disagree on a document whose reading this
  * slice is known to move, and assert they AGREE on one it does not.
  *
- * The reading compared is the whole reading, not just the serialized JSON: this slice changes what
- * the safety layer and the validator SAY about a document without changing the model's values, and a
- * control that only compared `json` would have passed on base and reported a comfortable zero.
+ * The reading compared is the whole reading, not just the serialized JSON. Keep it that way even
+ * when the current slice does not need it: a slice that moves only what the safety layer and the
+ * validator SAY, without moving any value, would pass a `json`-only control on base and report a
+ * comfortable zero. **The slice this control is currently written for moves `json` and `xml` alone**
+ * (the writers refuse a marked model), so today the wider comparison is redundant rather than
+ * load-bearing. Do not narrow it on that basis; the next reader slice needs it again.
  */
 function negativeControl(base: Codec, head: Codec): string[] {
   const problems: string[] = [];

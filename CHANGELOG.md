@@ -30,6 +30,9 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   defined for its type, or 1 or more extensions"_, so emitting it violated that SHALL.
   **Scoped to a model the reader MARKED and nothing else.** A document read from JSON has no
   character-data channel and is untouched; a conformant XML document still round-trips byte-for-byte.
+  Say "marked", not "whose text was dropped": character data that is `String.trim()`-empty is dropped
+  with no flag, no marker and no finding, so a `<status>` holding only whitespace still emits
+  `<status/>` and still re-reads clean. That gap is pre-existing and unchanged here.
   The wider §2.6.1 residual is explicitly **not** addressed: a value-absent primitive carrying no
   extension still emits `<status/>`, and the `id`-only case (`<given id="b"/>`) is still a violation,
   left as the separate decision it is and pinned by a test.
