@@ -8,6 +8,64 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A FHIR primitive whose value was written as XML element text was dropped, and the safety spine
+  affirmed over the loss (`FHIR-PRIMITIVE-AS-ELEMENT-TEXT`).** FHIR XML carries a primitive's value in
+  the `value` attribute (xml.html §2.6.1), so `<status>entered-in-error</status>` writes a code where
+  the model has no slot for one. The reader drops the character data, and the element left behind is
+  indistinguishable from one the sender never filled in, which is what let an affirmative verdict be
+  computed over it.
+  Measured on `6689239`, byte-identical on `09b2805` where the gate filed it:
+  `<Observation><status>entered-in-error</status></Observation>` read `retracted: false`,
+  `safeToSummarize: true`, `negations: []`, `valid: true`, and `assertSafeToSummarize` did **not**
+  throw; an `AllergyIntolerance` whose `verificationStatus.coding.code` was written as text lost the
+  `refuted`; and a `doseQuantity` lost the **dose number** while its `mg` unit and UCUM code survived,
+  so the resource read complete. It was `UNEXPECTED_XML_CONTENT`-reported throughout, so never silent,
+  but a retraction that reads as an affirmation is the sharpest form of this harm.
+  **This is the REPORTING half**, split on the same line `FHIR-NESTED-ARRAY-REPORTING` was split on.
+  The text is **not** read back as the element's value: recovering it would be a _tolerance_ for a
+  non-conformant encoding, and a tolerance is encoded only when a real document grounds the shape
+  (meta-repo ADR 0018). No public artifact has been shown emitting it, so the preserving half is
+  deliberately not shipped.
+  Adds `VALIDATION_CODES.DROPPED_ELEMENT_TEXT` (error, `structure`), `SafetyReadout.droppedText` plus
+  public `droppedText()`, public `isDroppedText()`, `safeToSummarize: false`, and a marker-sensitive
+  `nodesEquivalent`. `markDroppedText` is reader-internal and not exported. The marker is an inert
+  `droppedText?: true` carrying **no content**, so the model's edge set is still exactly four
+  node-valued members and every walker (`codingsOf`, the FHIRPath engine, the profile navigator, the
+  terminology walker) is unchanged.
+  **No existing diagnostic is suppressed and no new read-time code is added.** `DROPPED_ELEMENT_TEXT`
+  is raised **in addition to** the existing `UNEXPECTED_XML_CONTENT` warning, never instead of it. The
+  marker is applied at all **three** sites where the reader observes and discards character data
+  (`readComplex`, the resource-valued unwrap, the primitive branch of `buildSingle`), counted in the
+  source rather than asserted.
+  **Differential vs `6689239` over 1,195 documents**, both trees in one process
+  (`pnpm differential:read`): **0** `valid: false -> true`, **0** `safeToSummarize: false -> true`,
+  **0** retractions lost, **0** negations lost, **0** read diagnostics lost, **0** validation findings
+  lost, **0** newly throwing, **0** outputs shorter, **0 of 15,956** leaf values missing, narrative
+  preservation unmoved at 758 of 836. Bought: 360 documents now report, 312 previously `valid: true`.
+  The 27 documents whose emitted XML re-reads differently are `PRE-EXISTING`, **0** stable on base.
+  **The differential harness's own negative control is fixed in the same change.** It was hard-coded
+  to the _previous_ slice's change; that slice merged, `origin/main` began carrying it, and the
+  control fired on every run afterwards, a permanent false red on the harness's only alarm. It now
+  names the change under measurement, compares the whole reading rather than only the serialized JSON
+  (this change moves what the safety layer _says_ without moving any value), and tells the next reader
+  to suspect it first.
+  **Three limits, pinned by tests rather than prose, each a scope the conformance gate broke a first
+  draft of.** (i) The finding **launders on a write-and-re-read**, and `<status/>` is not a neutral
+  fallback but itself a violation of xml.html §2.6.1's "FHIR elements are never empty" SHALL,
+  `PRE-EXISTING`, and scoped precisely: it holds for a value-absent primitive carrying **no
+  extension**, since §2.6.1's third arm ("or 1 or more extensions") is satisfied by
+  `<status><extension url="..."/></status>`, the shape a `data-absent-reason` emits; an `id`-only
+  primitive (`<status id="s1"/>`) still violates it. Tracked separately. (ii) Text beside a value
+  that _did_ arrive (`<status value="final">entered-in-error</status>`) draws the same refusal, and
+  the reason is **not** "content is still missing" (`<status value="final">final</status>` refuses
+  too, and nothing is missing there): the rule keys on the reader _dropping_ character data and never
+  compares the text to the value, because comparing them would mean reading it. (iii) The scope of
+  both the flag and the marker is `hasStrayText`, which tests JS `String.trim()` and so treats
+  a set wider than XML's S production and spanning several Unicode categories (U+00A0 and Zs, U+2028,
+  U+2029, U+FEFF, VT, FF) as whitespace, so character data made only of those is dropped with
+  neither a flag nor a marker, `PRE-EXISTING` and identical on base. No sentence here says "wherever
+  text is dropped".
+
 - **A symbolic link under a PHI scan root read clean on BOTH enumerating routes
   (`PHI-SCAN-SYMLINK-BLIND-ON-BOTH-ROUTES`).** Reproduced on `810eec9` with a synthetic,
   name-bearing payload held outside the walk roots and linked from `src/leak.ts`: the all-mode sweep

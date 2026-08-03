@@ -71,6 +71,15 @@ export interface FhirPrimitive {
    * are kept apart rather than merged. See {@link nestedArrayContent}.
    */
   readonly nestedArrayMetaSource?: string;
+  /**
+   * Set when the XML document wrote **character data directly on this element**, which a FHIR
+   * element has no slot for: a primitive's value travels in the `value` attribute (xml.html §2.6.1),
+   * so the text is dropped and this node's `value` is whatever the attribute held, which for
+   * `<status>entered-in-error</status>` is nothing at all. A marker that content was present and
+   * could not be placed, not a representation of it. Absent on every conformant document and on
+   * every document read from JSON. See {@link isDroppedText}.
+   */
+  readonly droppedText?: true;
 }
 
 /** A single named property of a {@link FhirComplex}. */
@@ -116,6 +125,15 @@ export interface FhirComplex {
    * read it.
    */
   readonly nestedArraySource?: string;
+  /**
+   * Set when the XML document wrote **character data directly on this element**, which a FHIR
+   * element has no slot for (xml.html §2.6.1: a value travels in the `value` attribute, and an
+   * element's other content is child elements). The text is dropped, so this node holds only what
+   * the attributes and child elements carried. A marker that content was present and could not be
+   * placed, not a representation of it. Absent on every conformant document and on every document
+   * read from JSON. See {@link isDroppedText}.
+   */
+  readonly droppedText?: true;
 }
 
 /**
@@ -295,6 +313,56 @@ export function nestedArrayContent(node: FhirNode): readonly NestedArrayContent[
     out.push({ channel: "metadata", json: node.nestedArrayMetaSource });
   }
   return out;
+}
+
+/**
+ * Whether the XML document wrote **character data directly on this element**, content a FHIR element
+ * has no slot for and the reader therefore drops.
+ *
+ * A primitive's value travels in the `value` attribute (xml.html §2.6.1: "values of primitive types
+ * in a `value` attribute"), so `<status>entered-in-error</status>` is not a `status` this library can
+ * read: the attribute is absent, the model's `value` is `undefined`, and the node is then
+ * indistinguishable from an element the sender legitimately wrote without one. That is the harm this
+ * marker exists to make reportable. The safety readout collects these locations
+ * (`droppedText`), refuses to summarize, and the validator raises an error.
+ *
+ * The text is **not** kept and **not** interpreted. Reading it as the element's value would be a
+ * tolerance for a non-conformant encoding, a separate decision from declining to affirm over it.
+ *
+ * Always `false` for a document read from JSON, which has no character-data channel, and for every
+ * conformant XML document.
+ *
+ * @param node - Any model node.
+ * @returns `true` when the reader dropped character data at this node's position.
+ * @example
+ * ```ts
+ * import { getProperty, isDroppedText, parseResourceXml } from "@cosyte/fhir";
+ * const { resource } = parseResourceXml(
+ *   '<Observation xmlns="http://hl7.org/fhir"><status>entered-in-error</status></Observation>',
+ * );
+ * isDroppedText(getProperty(resource, "status")!); // true
+ * ```
+ */
+export function isDroppedText(node: FhirNode): boolean {
+  return (node.kind === "complex" || node.kind === "primitive") && node.droppedText === true;
+}
+
+/**
+ * Mark a node as sitting where the reader dropped character data. The XML reader's own helper,
+ * **not part of the package's public surface**, for the same reason {@link markNestedArray} is not:
+ * a consumer marking a node of their own would inject a validation error and a summarization refusal
+ * into a document that never carried the shape. Read the marker with {@link isDroppedText}, which is
+ * public.
+ *
+ * It copies the node rather than mutating it, and adds no element, property or item.
+ *
+ * @param node - The node the reader produced at that position.
+ * @internal
+ */
+export function markDroppedText(node: FhirComplex): FhirComplex;
+export function markDroppedText(node: FhirPrimitive): FhirPrimitive;
+export function markDroppedText(node: FhirComplex | FhirPrimitive): FhirComplex | FhirPrimitive {
+  return { ...node, droppedText: true };
 }
 
 /** Optional `id` / `extension` metadata for {@link primitive}. */

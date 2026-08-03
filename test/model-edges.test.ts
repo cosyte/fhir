@@ -75,6 +75,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
       for (const [member, type] of membersOf(kind)) declared.set(`${kind}.${member}`, type);
     }
     expect([...declared.keys()].sort()).toEqual([
+      "FhirComplex.droppedText",
       "FhirComplex.duplicates",
       "FhirComplex.kind",
       "FhirComplex.nestedArray",
@@ -82,6 +83,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
       "FhirComplex.properties",
       "FhirList.items",
       "FhirList.kind",
+      "FhirPrimitive.droppedText",
       "FhirPrimitive.extension",
       "FhirPrimitive.id",
       "FhirPrimitive.kind",
@@ -118,6 +120,25 @@ describe("the model's edge set is derived from the type, not from a search", () 
     expect(membersOf("FhirComplex").get("nestedArraySource")).toBe("string");
     expect(membersOf("FhirPrimitive").get("nestedArraySource")).toBe("string");
     expect(membersOf("FhirPrimitive").get("nestedArrayMetaSource")).toBe("string");
+  });
+
+  it("types the dropped-element-text marker as `true`, which carries no edge and no content", () => {
+    // The marker records that the reader dropped character data at this position. It is a literal
+    // `true`, not a string: unlike the nested-array text nothing is preserved, so there is no
+    // content here for a walker to reach and none for a diagnostic to leak.
+    expect(membersOf("FhirComplex").get("droppedText")).toBe("true");
+    expect(membersOf("FhirPrimitive").get("droppedText")).toBe("true");
+  });
+
+  it("can only set the dropped-element-text marker through the XML reader's own helper", () => {
+    // Same closure as `markNestedArray`: nothing else in the package marks a node, so the marker can
+    // only ever mean that a document carried character data at that position.
+    expect(
+      sourceFiles(SRC)
+        .filter((file) => /markDroppedText/.test(readFileSync(file, "utf8")))
+        .map((file) => file.slice(SRC.length))
+        .sort(),
+    ).toEqual(["model/node.ts", "xml/read.ts"]);
   });
 });
 

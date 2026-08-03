@@ -24,6 +24,7 @@ export {
   getAllProperties,
   getProperty,
   isComplex,
+  isDroppedText,
   isList,
   isNestedArray,
   isPrimitive,
@@ -116,6 +117,7 @@ export { collectSafetyIssues } from "./validate/safety.js";
 export {
   arrayWrappedScalars,
   assertSafeToSummarize,
+  droppedText,
   FhirSafetyError,
   nestedArrays,
   readSafety,

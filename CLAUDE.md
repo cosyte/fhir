@@ -653,7 +653,62 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   silent, but this is the `FHIR-ARRAY-WRAPPED-SCALAR` / `FHIR-CODING-SCALAR-WRAPPER` harm shape
   reached through the XML door. Realism is **argued** (naive generators, generic JSON-to-XML
   converters), not grounded in a public artifact: **grounding it per ADR 0018 belongs to filing the
-  item**, not to inventing a fixture;
+  item**, not to inventing a fixture
+  -- **CLOSED IN ITS REPORTING HALF ONLY (`FHIR-PRIMITIVE-AS-ELEMENT-TEXT`, 2026-08-03), AND THE
+  SPLIT IS THE WHOLE POINT: THE ADR 0018 GROUNDING GATE HALTED THE OTHER HALF.**
+  **▶ READ THIS BEFORE YOU TRY TO "FINISH" IT.** There are two separable changes here and only one of
+  them is a quirk. **Recovering the value** (reading the element text back as the primitive's value)
+  is a **TOLERANCE for a non-conformant encoding**, and ADR 0018 forbids encoding one without a real
+  publicly-cited document showing the shape. A search found the spec text (xml.html §2.6.1, "values of
+  primitive types in a `value` attribute") and one library-side serializer bug, **no real document**.
+  So the recovery half was NOT built, and **"not grounded, halted" was the correct outcome for it.**
+  **Refusing to affirm** is not a quirk at all: nothing new is recognised, no tolerance is added, no
+  value is invented, and the reader's report is byte-identical. It needs no vendor grounding, exactly
+  as `FHIR-NESTED-ARRAY-REPORTING`'s synthetic list-of-lists corpus needed none. **Do not cite ADR
+  0018 to block a refusal; cite it to block a tolerance.**
+  What shipped: `VALIDATION_CODES.DROPPED_ELEMENT_TEXT` (error, `structure`),
+  `SafetyReadout.droppedText` + public `droppedText()`, public `isDroppedText()` on the model,
+  `safeToSummarize: false`, `assertSafeToSummarize` throws, and a marker-sensitive `nodesEquivalent`.
+  `markDroppedText` is reader-internal and deliberately NOT exported, like `markNestedArray`.
+  **The marker is an inert `droppedText?: true` that carries NO CONTENT AT ALL**, which is a stronger
+  position than `nestedArraySource`: there is no preserved text here for a walker to reach or a
+  diagnostic to leak. `test/model-edges.test.ts` still derives exactly four node-valued members.
+  **THE MARKER LANDS AT ALL THREE SITES WHERE THE READER DROPS CHARACTER DATA**, counted in the source
+  (`readComplex`, the resource-valued unwrap, the primitive branch of `buildSingle`) and pinned by a
+  test each, because this reader has been refuted TWICE for writing a universal the call sites did not
+  support. **No new read-time issue code was added**: `UNEXPECTED_XML_CONTENT` already reported at
+  every one of them, which is exactly why this defect was loud and still harmful, and
+  `DROPPED_ELEMENT_TEXT` is raised ALONGSIDE it.
+  **The comparand was chosen deliberately and the twin section of the harness was NOT used.** That
+  section scores head against BASE's reading of the twin, and its "louder" branch requires `valid` and
+  `safeToSummarize` to MATCH the twin; a refusal moves both, so a declared twin would have scored this
+  slice **WEAKER** for doing exactly the right thing. The right bar for a refusal is base-vs-head
+  (head must report strictly more, never less), plus the conformant twin being unmoved base-to-head,
+  and both are in the main tally. **Do not declare a twin for a shape the reader still does not read.**
+  **Differential vs `6689239`, 1,195 documents:** 0 `valid: false -> true`, 0
+  `safeToSummarize: false -> true`, 0 retractions or negations lost, 0 read diagnostics lost, 0
+  validation findings lost, 0 newly throwing, 0 outputs shorter, **0 of 15,956 leaf values missing**,
+  narrative preservation unmoved at 758 of 836. Bought: **360 documents now report, 312 previously
+  `valid: true`.** The 27 re-read movers are `PRE-EXISTING`, 0 stable on base.
+  **🔴 AND THE HARNESS'S OWN NEGATIVE CONTROL WAS A PERMANENT FALSE RED, FOUND BY RUNNING IT.**
+  `negativeControl()` was hard-coded to `#47`'s capitalized-child narrative. `#47` then merged, so
+  `origin/main` carries it, base reads it exactly as head does, and the control fired on EVERY run
+  afterwards: "every zero below is meaningless" printed under a report whose zeros were fine. A false
+  alarm on the only alarm is worse than no alarm, because the next reader learns to scroll past it.
+  **The control now names the change under measurement** (a `CONTROL` constant a reader-slice updates,
+  with the rule written on it), **and compares the WHOLE reading, not just `json`** -- this slice moves
+  what the safety layer and validator SAY without moving any value, so a `json`-only control would
+  have passed on base and reported a comfortable zero. **If it fires, suspect it first.**
+  **STILL OPEN, deliberately, each pinned by a test:** the finding **LAUNDERS on a write-and-re-read**
+  (`serializeResourceXml` has no conformant way to emit character data on a FHIR element, so it emits
+  `<status/>` and the re-read is clean, `safeToSummarize: true`) -- closing that is the preserving
+  half, which needs the grounding the recovery half needs; and text beside a value that DID arrive
+  (`<status value="final">entered-in-error</status>`) draws the same refusal, which is deliberate
+  rather than an oversight. **Do NOT justify that arm with "content the sender wrote is still
+  missing": the gate broke that sentence in one query** with `<status value="final">final</status>`,
+  where nothing is missing and it refuses anyway. The honest reason is that the rule keys on the
+  reader DROPPING character data and never compares the text to the value, and deciding the
+  duplicate case is harmless would mean READING the text, which is the tolerance this half declines;
   (ii) a **foreign child of a valued primitive** is discarded whole under `UNKNOWN_PROPERTY`, whose
   documented contract is that nothing was lost, so that code is making a false promise at that site
   exactly as it was at the two `_`-sibling sites this slice moved to

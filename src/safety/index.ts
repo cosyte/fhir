@@ -13,6 +13,7 @@ export {
   arrayWrappedScalars,
   assertSafeToSummarize,
   FhirSafetyError,
+  droppedText,
   nestedArrays,
   readSafety,
   shadowedProperties,

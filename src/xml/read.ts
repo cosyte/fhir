@@ -49,9 +49,18 @@
  * separated, exactly as before. Reading is otherwise lenient (Postel's Law): nothing here is
  * rejected. **Lenient does not mean lossless, and the two halves differ.** An element in an
  * unexpected namespace is modeled and flagged; non-whitespace character data written directly on a
- * FHIR element is **dropped** and flagged, because a FHIR element carries its value in `value=` and
- * there is no slot on the model for text. Only genuinely unrecoverable input (a malformed document,
- * a refused DTD/entity) throws, see {@link ./raw-xml.js} / {@link ./issues.js}.
+ * FHIR element is **dropped** and flagged, because a FHIR element carries its value in `value=`
+ * (§2.6.1) and there is no slot on the model for text. Wherever `hasStrayText` observes such text
+ * the node is also **marked** ({@link ../model/node.js} `isDroppedText`), which is what the safety
+ * layer reads: the flag says the position was odd, the marker says content is missing from it, and
+ * only the second can stop an affirmative verdict being computed over an element the document did
+ * fill in. **`hasStrayText` is the scope of both, and it is narrower than "any character data":** it
+ * tests JS `String.trim()`, whose whitespace set is wider than XML's S production and is not one
+ * Unicode category: it spans U+00A0 and the Zs block, U+2028 (Zl) and U+2029 (Zp), U+FEFF (Cf), and
+ * VT/FF. Character data made only of those is dropped with neither a flag nor a marker. That gap is
+ * unchanged from every release that has had this code; do not read either sentence as covering it.
+ * Only genuinely unrecoverable input (a malformed document, a refused DTD/entity) throws, see
+ * {@link ./raw-xml.js} / {@link ./issues.js}.
  *
  * @packageDocumentation
  */
@@ -68,6 +77,7 @@ import type { ReadResult } from "../codec/read.js";
 import {
   complex,
   list,
+  markDroppedText,
   primitive,
   type FhirComplex,
   type FhirNode,
@@ -495,7 +505,7 @@ function readComplex(
     issues.push(unknownProperty(`${path}.@${safeDerivedName(attr.name, "elementName")}`));
   }
   const children = elementChildren(element, self.scope, resolved.namespace);
-  flagStrayText(element.children, path, issues);
+  const dropped = flagStrayText(element.children, path, issues);
   const { order, byName } = groupChildren(children);
   reportMixedSpelling(order, byName, path, issues);
   for (const name of order) {
@@ -505,7 +515,8 @@ function readComplex(
       value: buildNode(occurrences, childPath(path, name), issues, resolved.namespace),
     });
   }
-  return complex(properties);
+  const node = complex(properties);
+  return dropped ? markDroppedText(node) : node;
 }
 
 /** Whether any node directly under an element is non-whitespace character data. */
@@ -529,11 +540,23 @@ function unexpectedXmlContentAt(issues: readonly FhirIssue[], path: string): boo
 
 /**
  * Flag non-whitespace character data directly under an element, **which is dropped**: a FHIR element
- * carries its value in the `value` attribute (xml.html), so there is no slot on the model for text
- * written there and the reader has nowhere to put it. Once per element, not once per text node.
+ * carries its value in the `value` attribute (xml.html §2.6.1), so there is no slot on the model for
+ * text written there and the reader has nowhere to put it. Once per element, not once per text node.
+ *
+ * "Non-whitespace" is whatever JS `String.trim()` leaves, which is **wider than XML's S production**:
+ * a text node of U+00A0 or U+FEFF trims to empty, so it is dropped here silently, with neither a flag
+ * nor a marker. Pre-existing and deliberately not widened by the marker work: widening it changes
+ * what the reader reports on documents nothing else in this change touches.
+ *
+ * @returns Whether any was found, so the caller can mark the node it builds. The report says a
+ *   position was odd; the marker is what lets the safety layer see that content is **missing** there,
+ *   and the two are separate because `UNEXPECTED_XML_CONTENT` also covers foreign content, which is
+ *   modeled and loses nothing.
  */
-function flagStrayText(children: readonly XmlNode[], path: string, issues: FhirIssue[]): void {
-  if (hasStrayText(children)) issues.push(unexpectedXmlContent(path));
+function flagStrayText(children: readonly XmlNode[], path: string, issues: FhirIssue[]): boolean {
+  if (!hasStrayText(children)) return false;
+  issues.push(unexpectedXmlContent(path));
+  return true;
 }
 
 /** Build the model node for a set of same-named occurrences: a list when repeated, else a single node. */
@@ -623,10 +646,12 @@ function buildSingle(
       // **The scope of that is exactly this site**: elsewhere in the reader the code does land twice
       // at one expression, unchanged from base, and no claim anywhere may read wider.
       const nested = readNested(onlyChild, path, issues, resolved.namespace, { isResource: true });
-      if (hasStrayText(element.children) && !unexpectedXmlContentAt(issues, path)) {
-        issues.push(unexpectedXmlContent(path));
-      }
-      return nested;
+      // The REPORT is de-duplicated here (see above); the MARKER is not, because the loss happened
+      // whether or not this location already carried a report for another reason. `markDroppedText`
+      // is idempotent, so a wrapper and its unwrapped child both carrying text mark once.
+      if (!hasStrayText(element.children)) return nested;
+      if (!unexpectedXmlContentAt(issues, path)) issues.push(unexpectedXmlContent(path));
+      return markDroppedText(nested);
     }
   }
 
@@ -665,8 +690,13 @@ function buildSingle(
         issues.push(unknownProperty(`${path}.@${safeDerivedName(attr.name, "elementName")}`));
       }
     }
-    flagStrayText(element.children, path, issues);
-    return primitive(valueAttribute(element), meta);
+    // The headline case: `<status>entered-in-error</status>` has no `value` attribute, so the
+    // primitive built here holds `undefined` while the document plainly wrote a code at it. Without
+    // the marker that node is indistinguishable from a `status` the sender left out, which is what
+    // let an affirmative safety verdict be computed over a retraction.
+    const dropped = flagStrayText(element.children, path, issues);
+    const node = primitive(valueAttribute(element), meta);
+    return dropped ? markDroppedText(node) : node;
   }
 
   return readComplex(self, path, issues, { isResource: false });
