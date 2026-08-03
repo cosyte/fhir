@@ -49,11 +49,18 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   names the change under measurement, compares the whole reading rather than only the serialized JSON
   (this change moves what the safety layer _says_ without moving any value), and tells the next reader
   to suspect it first.
-  **Two limits, pinned by tests rather than prose:** the finding **launders on a write-and-re-read**
-  (`serializeResourceXml` has no conformant way to emit character data on a FHIR element, so it emits
-  `<status/>` and the re-read is clean); and text beside a value that _did_ arrive
-  (`<status value="final">entered-in-error</status>`) draws the same refusal, because content the
-  sender wrote is still missing from the model.
+  **Three limits, pinned by tests rather than prose, each a scope the conformance gate broke a first
+  draft of.** (i) The finding **launders on a write-and-re-read**, and `<status/>` is not a neutral
+  fallback but itself a violation of xml.html §2.6.1's "FHIR elements are never empty" SHALL,
+  `PRE-EXISTING` for every value-absent primitive and tracked separately. (ii) Text beside a value
+  that _did_ arrive (`<status value="final">entered-in-error</status>`) draws the same refusal, and
+  the reason is **not** "content is still missing" (`<status value="final">final</status>` refuses
+  too, and nothing is missing there): the rule keys on the reader _dropping_ character data and never
+  compares the text to the value, because comparing them would mean reading it. (iii) The scope of
+  both the flag and the marker is `hasStrayText`, which tests JS `String.trim()` and so treats
+  U+00A0 / U+FEFF / the Zs block as whitespace, so character data made only of those is dropped with
+  neither a flag nor a marker, `PRE-EXISTING` and identical on base. No sentence here says "wherever
+  text is dropped".
 
 - **A symbolic link under a PHI scan root read clean on BOTH enumerating routes
   (`PHI-SCAN-SYMLINK-BLIND-ON-BOTH-ROUTES`).** Reproduced on `810eec9` with a synthetic,

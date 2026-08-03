@@ -50,12 +50,16 @@
  * rejected. **Lenient does not mean lossless, and the two halves differ.** An element in an
  * unexpected namespace is modeled and flagged; non-whitespace character data written directly on a
  * FHIR element is **dropped** and flagged, because a FHIR element carries its value in `value=`
- * (§2.6.1) and there is no slot on the model for text. Where text is dropped the node is also
- * **marked** ({@link ../model/node.js} `isDroppedText`), which is what the safety layer reads: the
- * flag says the position was odd, the marker says content is missing from it, and only the second
- * can stop an affirmative verdict being computed over an element the document did fill in. Only
- * genuinely unrecoverable input (a malformed document,
- * a refused DTD/entity) throws, see {@link ./raw-xml.js} / {@link ./issues.js}.
+ * (§2.6.1) and there is no slot on the model for text. Wherever `hasStrayText` observes such text
+ * the node is also **marked** ({@link ../model/node.js} `isDroppedText`), which is what the safety
+ * layer reads: the flag says the position was odd, the marker says content is missing from it, and
+ * only the second can stop an affirmative verdict being computed over an element the document did
+ * fill in. **`hasStrayText` is the scope of both, and it is narrower than "any character data":** it
+ * tests JS `String.trim()`, which treats U+00A0, U+FEFF and the rest of the Zs block as whitespace,
+ * so character data made only of those is dropped with neither a flag nor a marker. That gap is
+ * unchanged from every release that has had this code; do not read either sentence as covering it.
+ * Only genuinely unrecoverable input (a malformed document, a refused DTD/entity) throws, see
+ * {@link ./raw-xml.js} / {@link ./issues.js}.
  *
  * @packageDocumentation
  */
@@ -537,6 +541,11 @@ function unexpectedXmlContentAt(issues: readonly FhirIssue[], path: string): boo
  * Flag non-whitespace character data directly under an element, **which is dropped**: a FHIR element
  * carries its value in the `value` attribute (xml.html §2.6.1), so there is no slot on the model for
  * text written there and the reader has nowhere to put it. Once per element, not once per text node.
+ *
+ * "Non-whitespace" is whatever JS `String.trim()` leaves, which is **wider than XML's S production**:
+ * a text node of U+00A0 or U+FEFF trims to empty, so it is dropped here silently, with neither a flag
+ * nor a marker. Pre-existing and deliberately not widened by the marker work: widening it changes
+ * what the reader reports on documents nothing else in this change touches.
  *
  * @returns Whether any was found, so the caller can mark the node it builds. The report says a
  *   position was odd; the marker is what lets the safety layer see that content is **missing** there,

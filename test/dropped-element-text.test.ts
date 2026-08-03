@@ -7,7 +7,7 @@
  * was then indistinguishable from a `status` the sender never wrote: the safety spine affirmed
  * `retracted: false`, `safeToSummarize: true`, `valid: true` over a retracted record.
  *
- * **This is the REPORTING half.** The text is not read back as the element's value — that would be a
+ * **This is the REPORTING half.** The text is not read back as the element's value: that would be a
  * tolerance for a non-conformant encoding, a decision about what this reader accepts, and it is not
  * taken here. What is asserted is that the loss can no longer sit underneath an affirmative verdict.
  *
@@ -68,8 +68,8 @@ describe("the three shapes the defect was filed with, each against its conforman
     expect(twin.issues).toEqual([]);
     expect(codes(twin.resource)).toEqual(["RESOURCE_NOT_MODELED", "RETRACTED_RESOURCE"]);
 
-    // The non-conformant spelling still cannot READ the retraction — the value is not in the model
-    // and this half does not put it there — but it no longer claims the record is fine.
+    // The non-conformant spelling still cannot READ the retraction (the value is not in the model,
+    // and this half does not put it there), but it no longer claims the record is fine.
     const safety = readSafety(text.resource);
     expect(safety.retracted).toBe(false);
     expect(safety.negations).toEqual([]);
@@ -174,6 +174,36 @@ describe("the marker lands at every site the reader drops character data, and on
     const status = child(resource, "status");
     expect(status).toMatchObject({ kind: "primitive", value: "final" });
     expect(isDroppedText(status)).toBe(true);
+    expect(readSafety(resource).safeToSummarize).toBe(false);
+  });
+
+  it("does NOT mark character data that `String.trim()` calls whitespace, a PRE-EXISTING gap", () => {
+    // The scope of both the flag and the marker is `hasStrayText`, which tests JS `String.trim()`.
+    // That is WIDER than XML's whitespace production: U+00A0 and U+FEFF trim to empty, so a text
+    // node made only of those is dropped with neither a flag nor a marker. Identical on base, and
+    // pinned here rather than widened, because widening changes what the reader reports on documents
+    // this change does not otherwise touch. It is why no sentence in this slice may say "wherever
+    // text is dropped".
+    for (const invisible of ["&#160;", "&#xFEFF;"]) {
+      const { resource, issues } = parseResourceXml(
+        `<Observation ${NS}><status>${invisible}</status></Observation>`,
+      );
+      expect(issues).toEqual([]);
+      expect(isDroppedText(child(resource, "status"))).toBe(false);
+      expect(readSafety(resource).droppedText).toEqual([]);
+    }
+  });
+
+  it("refuses even when the dropped text MATCHES the value, because the reader never compares them", () => {
+    // The honest scope of the value-plus-text arm. Justifying it with "content the sender wrote is
+    // missing" is false here: nothing is missing. The rule keys on the reader DROPPING character
+    // data, and deciding this case is harmless would mean READING the text, which is exactly the
+    // tolerance this half declines to take.
+    const { resource } = parseResourceXml(
+      `<Observation ${NS}><status value="final">final</status></Observation>`,
+    );
+    expect(child(resource, "status")).toMatchObject({ kind: "primitive", value: "final" });
+    expect(isDroppedText(child(resource, "status"))).toBe(true);
     expect(readSafety(resource).safeToSummarize).toBe(false);
   });
 

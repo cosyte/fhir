@@ -56,8 +56,14 @@ control now names the change under measurement, compares the whole reading rathe
 serialized JSON (this change moves what the safety layer _says_ without moving any value), and says
 in its own text to suspect itself first when it fires.
 
-Known and pinned by tests rather than prose: the finding **launders on a write-and-re-read**, because
-`serializeResourceXml` has no conformant way to emit character data on a FHIR element and emits
-`<status/>`; and text written beside a value that _did_ arrive
-(`<status value="final">entered-in-error</status>`) draws the same refusal, since content the sender
-wrote is still missing from the model.
+Known and pinned by tests rather than prose, each one a scope the conformance gate broke a first
+draft of: the finding **launders on a write-and-re-read**, and `<status/>` is not a neutral fallback
+but itself a violation of xml.html §2.6.1's "FHIR elements are never empty" SHALL, `PRE-EXISTING` for
+every value-absent primitive and tracked separately. Text written beside a value that _did_ arrive
+(`<status value="final">entered-in-error</status>`) draws the same refusal, and the reason is **not**
+"content is still missing" (`<status value="final">final</status>` refuses too, and nothing is missing
+there): the rule keys on the reader _dropping_ character data and never compares the text to the
+value, because comparing them would mean reading the text. And the scope of both the flag and the
+marker is `hasStrayText`, which tests JS `String.trim()` and so treats U+00A0 / U+FEFF / the Zs block
+as whitespace: character data made only of those is dropped with neither a flag nor a marker,
+`PRE-EXISTING` and identical on base. No sentence here says "wherever text is dropped".

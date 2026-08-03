@@ -268,10 +268,19 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   **Two limitations, stated rather than implied.** Whitespace between elements is not character data
   in this sense and is untouched, so ordinary indented XML is unaffected; but text written beside a
   value that _did_ arrive (`<status value="final">entered-in-error</status>`) is dropped too and
-  draws the same refusal, because content the sender wrote is still missing from the model. And the
-  marker does not survive `serializeResourceXml`: the writer has no conformant way to emit character
-  data on a FHIR element, so it emits `<status/>` and a re-read of that output comes back clean.
-  Keep the original document if you need the finding to survive a round trip.
+  draws the same refusal. The rule is keyed on the reader **dropping** character data, not on the
+  text differing from the value: the reader never compares the two, so
+  `<status value="final">final</status>` refuses as well, even though nothing is missing there. That
+  is deliberate. Deciding the document meant no harm would mean reading the text, which is the
+  tolerance this half does not take. And the
+  marker does not survive `serializeResourceXml`: it emits `<status/>` and a re-read of that output
+  comes back clean, so the finding **launders**. Be precise about why, because the obvious phrasing
+  understates it. `<status/>` is not a neutral fallback: xml.html §2.6.1 says _"FHIR elements are
+  never empty. If an element is present in the resource, it SHALL have either a value attribute,
+  child elements as defined for its type, or 1 or more extensions"_, so emitting it violates that
+  SHALL. That is a **pre-existing** property of writing any value-absent primitive, not something
+  this change introduces, and it is tracked separately. Keep the original document if you need the
+  finding to survive a round trip.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their

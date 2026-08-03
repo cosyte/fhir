@@ -704,7 +704,11 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   `<status/>` and the re-read is clean, `safeToSummarize: true`) -- closing that is the preserving
   half, which needs the grounding the recovery half needs; and text beside a value that DID arrive
   (`<status value="final">entered-in-error</status>`) draws the same refusal, which is deliberate
-  (content the sender wrote is still missing) rather than an oversight;
+  rather than an oversight. **Do NOT justify that arm with "content the sender wrote is still
+  missing": the gate broke that sentence in one query** with `<status value="final">final</status>`,
+  where nothing is missing and it refuses anyway. The honest reason is that the rule keys on the
+  reader DROPPING character data and never compares the text to the value, and deciding the
+  duplicate case is harmless would mean READING the text, which is the tolerance this half declines;
   (ii) a **foreign child of a valued primitive** is discarded whole under `UNKNOWN_PROPERTY`, whose
   documented contract is that nothing was lost, so that code is making a false promise at that site
   exactly as it was at the two `_`-sibling sites this slice moved to
