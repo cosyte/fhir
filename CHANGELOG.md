@@ -30,15 +30,19 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `module`, `types`, `typings`, and every string leaf of `exports`) to exist and be non-empty before
   `attw` runs, and names the missing file; a **post-check** promotes an untyped report to a failure,
   which is what catches declarations that are present on disk but excluded from the tarball by
-  `files` or `.npmignore`. The post-check reads a printed string, so the routes that hide that
-  string are refused wholesale by option name: `--quiet`, `--format`, `--config-path`, and an
-  `.attw.json` setting `quiet` or `format`. All four were measured to restore the exact false green
-  here. Everything else, including `--profile` and `--ignore-rules`, is forwarded unchanged.
+  `files` or `.npmignore`. The preflight reads the four top-level keys in either legal spelling,
+  with or without a leading `./`. The post-check reads a printed string, so the routes that hide
+  that string are refused wholesale by option name: `--quiet`, `--format`, `--config-path`, and an
+  `.attw.json` setting `quiet` or `format`. That takes two arms rather than a name match, because
+  commander also accepts a short option's value attached to it and short booleans bundled ahead of
+  that, so `-fjson` and `-Pfjson` mean `--format json` and carry no `=` to split on. All six
+  spellings were measured to restore the exact false green here. Everything else, including
+  `--profile` and `--ignore-rules`, is forwarded unchanged.
   **`test/scripts/attw-gate.test.ts` pins both nets against the real binary, and pins the upstream
   exit 0 itself**, so an `attw` upgrade that fixes the exit code or rewords the sentence reds the
   suite rather than letting the net go slack. It also holds a negative control (the wrapper is
   transparent on a well-formed package) and asserts that a genuine `attw` failure still fails with
-  `attw`'s own status. Reverting the script to the bare invocation reds **12 of its 17 cases**.
+  `attw`'s own status. Reverting the script to the bare invocation reds **15 of its 24 cases**.
   **No library code changed**, and no public API moved. This is a packaging gate only.
 
 - **Prose written beside a capitalized child of a narrative `<div>` was DESTROYED with zero

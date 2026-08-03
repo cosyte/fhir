@@ -77,6 +77,12 @@
  * nobody passes to a repo's own publish gate costs less than leaving a route back to a false
  * green.
  *
+ * AND IT COVERS BOTH SPELLINGS, WHICH A NAME MATCH ALONE DOES NOT. commander accepts a short
+ * option's value attached to it and accepts short booleans bundled ahead of that, so `-fjson` and
+ * `-Pfjson` both mean `--format json`, carry no `=`, and are invisible to a name match. Measured
+ * on this package with both `.d.ts` files deleted: each printed a JSON body with `"types": false`
+ * and exited 0. Both are refused now, by the short-cluster arm below.
+ *
  * Every other argument is forwarded, so `--profile node16`, `--ignore-rules`, and
  * `--no-definitely-typed` still work.
  */
@@ -96,8 +102,17 @@ const die = (msg) => {
 };
 
 // ---- Refuse what would blind the post-check --------------------------------
+// Two spellings, because commander accepts both. The long and separated forms are an exact name
+// match on everything left of an `=`. The short forms are not: commander lets a short option carry
+// its value attached (`-fjson`) and lets short booleans bundle ahead of it (`-Pfjson`), and neither
+// contains an `=`, so a name match cannot see them. `-f` is the only short option here that takes a
+// value, so anything after a `q` or an `f` in a single-dash cluster is that option's value and the
+// cluster is refused the moment either letter appears in it.
 const BLINDING = new Set(["-q", "--quiet", "-f", "--format", "--config-path"]);
-const blinding = args.filter((a) => BLINDING.has(a.split("=")[0]));
+const SHORT_CLUSTER = /^-[^-]/;
+const isBlinding = (a) =>
+  BLINDING.has(a.split("=")[0]) || (SHORT_CLUSTER.test(a) && /[qf]/.test(a.slice(1)));
+const blinding = args.filter(isBlinding);
 if (blinding.length > 0) {
   die(
     `${blinding.join(", ")} is refused wholesale, by option name and not by value.\n` +
@@ -122,14 +137,20 @@ try {
 /** Every relative path `package.json` promises to ship, deduped. */
 function declaredArtifacts(pkg) {
   const found = new Set();
-  const add = (v) => {
+  // `bare` is for the four top-level keys, which are plain file paths and may legally be written
+  // without a `./` prefix ("dist/index.cjs"). A string leaf of `exports` may not: Node requires the
+  // prefix there, so anything else is not a path and is left alone. Normalizing the bare spelling
+  // rather than skipping it matters because a preflight that quietly ignores a promise it does not
+  // recognise is the exact failure mode this script exists to close.
+  const add = (v, bare = false) => {
     if (typeof v !== "string") return;
     // Skip wildcard subpath patterns (they name a set, not a file) and the manifest itself,
     // which is in the tarball by definition.
-    if (!v.startsWith(".") || v.includes("*") || v === "./package.json") return;
-    found.add(v);
+    if (v.includes("*") || v === "./package.json") return;
+    if (v.startsWith(".")) found.add(v);
+    else if (bare && !v.startsWith("/") && !v.includes(":")) found.add(`./${v}`);
   };
-  for (const key of ["main", "module", "types", "typings"]) add(pkg[key]);
+  for (const key of ["main", "module", "types", "typings"]) add(pkg[key], true);
   const walk = (node) => {
     if (typeof node === "string") add(node);
     else if (node && typeof node === "object") for (const v of Object.values(node)) walk(v);

@@ -610,8 +610,8 @@ packages, not by copying files:
 - **Dual ESM + CJS + `.d.ts`** build via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate,
   run through `scripts/attw.mjs`. The wrapper is there because the `attw` CLI prints "This package
   does not contain types." and then exits **0**, so a tarball that lost its declarations passed the
-  gate. It checks that every artifact `package.json` promises exists before the run, and treats an
-  untyped report afterwards as a failure.
+  gate. It checks that every artifact path `package.json` promises exists before the run, and
+  treats an untyped report afterwards as a failure.
 - **Node >= 22**; package manager **pnpm 10**.
 - **ESLint 10** (`@cosyte/eslint-config`) + **Prettier** (`@cosyte/prettier-config`), lint at
   `--max-warnings=0`.

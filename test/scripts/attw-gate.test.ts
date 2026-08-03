@@ -253,6 +253,32 @@ describe("scripts/attw.mjs", () => {
   );
 
   it(
+    "reads the four top-level keys written without a ./ prefix",
+    () => {
+      // `main`, `module`, `types` and `typings` are plain file paths and are legal written bare.
+      // A preflight that skipped that spelling would go silent on the very promise it exists to
+      // check, which is this script's own failure mode.
+      const bareSpelling = join(root, "bare-spelling");
+      writePkg(
+        bareSpelling,
+        {
+          name: "attw-gate-fixture-barespelling",
+          version: "1.0.0",
+          main: "dist/index.cjs",
+          types: "dist/index.d.ts",
+          files: ["dist"],
+        },
+        { "dist/index.cjs": JS_CJS },
+      );
+      const r = runWrapper(bareSpelling);
+      expect(r.code).not.toBe(0);
+      expect(r.out).toContain("dist/index.d.ts");
+      expect(r.out).toContain("missing");
+    },
+    SPAWN_TIMEOUT,
+  );
+
+  it(
     "fails on a declared artifact that exists but is empty",
     () => {
       const truncated = join(root, "truncated");
@@ -320,24 +346,42 @@ describe("the refusals that keep the post-check readable", () => {
     ["-f json", ["-f", "json"]],
     ["--format=json", ["--format=json"]],
     ["--config-path", ["--config-path", "other.json"]],
+    // commander lets a short option carry its value attached, and lets short booleans bundle
+    // ahead of it, so neither of these two carries an `=` for a name match to split on.
+    ["-fjson, the attached-value short form", ["-fjson"]],
+    ["-Pfjson, bundled behind another short option", ["-Pfjson"]],
   ])("refuses %s", (_name, extra) => {
     const r = runWrapper(typesNotPacked, [...OFFLINE, ...extra]);
     expect(r.code).not.toBe(0);
     expect(r.out).toContain("attw gate");
   });
 
-  it(
-    "each refused argument really does blind bare attw over an untyped pack",
-    () => {
-      // The refusals are only justified if these routes hide the sentence. Both measured here
-      // against the fixture whose tarball carries no declarations.
-      const quiet = runAttw(typesNotPacked, ["--quiet"]);
-      expect(quiet.out).not.toContain(UNTYPED);
-      expect(quiet.code).toBe(0);
+  it.each([
+    ["--quiet", ["--quiet"]],
+    ["--format json", ["--format", "json"]],
+    ["-fjson", ["-fjson"]],
+    ["-Pfjson", ["-Pfjson"]],
+  ])(
+    "bare attw really is blinded by %s over an untyped pack",
+    (_name, extra) => {
+      // The refusals above are only justified if these routes hide the sentence while attw keeps
+      // handing back a 0. Measured here against the fixture whose tarball carries no declarations,
+      // so a future attw that stops accepting one of these spellings reds instead of leaving the
+      // corresponding refusal unexplained.
+      const r = runAttw(typesNotPacked, extra);
+      expect(r.out).not.toContain(UNTYPED);
+      expect(r.code).toBe(0);
+    },
+    SPAWN_TIMEOUT,
+  );
 
-      const json = runAttw(typesNotPacked, ["--format", "json"]);
-      expect(json.out).not.toContain(UNTYPED);
-      expect(json.code).toBe(0);
+  it(
+    "forwards the short options that blind nothing",
+    () => {
+      // The short-cluster arm keys on `q` and `f`, so it must not swallow `-P` (`--pack`, which
+      // the wrapper supplies itself and a caller may repeat) or leave a legitimate run unrunnable.
+      const r = runWrapper(wellFormed, [...OFFLINE, "-P"]);
+      expect(r.code).toBe(0);
     },
     SPAWN_TIMEOUT,
   );

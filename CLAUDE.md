@@ -728,18 +728,28 @@ summary.
   present on disk but excluded from the tarball by `files`/`.npmignore`. No instance of that second
   case is on record in this repo.
   **The post-check reads a string, so the routes that hide the string are refused, not tolerated.
-  Four were MEASURED here** against a `dist/` with both `.d.ts` files deleted, each exiting 0 with
-  the sentence unreadable: `--quiet`, `--format json`, `./.attw.json` setting `quiet` (`readConfig()`
-  applies it after argv), and `--config-path` pointing at that same config elsewhere. The refusal is
-  **by option name, wholesale, not by value**: `--format table-flipped` blinds nothing and is
-  refused anyway, which is the deliberate trade against value-parsing them.
+  Six were MEASURED here** against a `dist/` with both `.d.ts` files deleted, each exiting 0 with
+  the sentence unreadable: `--quiet`, `--format json`, `-fjson`, `-Pfjson`, `./.attw.json` setting
+  `quiet` (`readConfig()` applies it after argv), and `--config-path` pointing at that same config
+  elsewhere. The refusal is **by option name, wholesale, not by value**: `--format table-flipped`
+  blinds nothing and is refused anyway, which is the deliberate trade against value-parsing them.
+  **▶ IT TAKES TWO ARMS, AND A NAME MATCH ALONE IS NOT ENOUGH.** commander lets a short option carry
+  its value attached and lets short booleans bundle ahead of it, so `-fjson` and `-Pfjson` both mean
+  `--format json` and carry no `=` for a name match to split on. The refuter found exactly that hole
+  in pass one. The short-cluster arm refuses any single-dash cluster containing `q` or `f`, which is
+  sound because `-f` is the only short option here that takes a value, so everything after either
+  letter is that value. **Do not simplify it back to the name set.**
   `test/scripts/attw-gate.test.ts` pins both nets against the real binary, **including the upstream
   exit-0 itself**, so an `attw` upgrade that fixes the exit code or rewords the sentence reds the
   suite instead of letting the net go slack. It also pins a negative control on a well-formed
   package and that a real `attw` failure still fails: a gate that only ever fails is not a gate, and
   one that swallows the status is not one either. **Mutation-checked**: reverting `scripts/attw.mjs`
-  to the bare `attw --pack .` reds **12 of its 17 cases**, and the 5 that stay green are exactly the
-  ones asserting upstream behaviour and the negative controls.
+  to the bare `attw --pack .` reds **15 of its 24 cases**, and the 9 that stay green are exactly the
+  ones asserting upstream `attw` behaviour and the transparency controls.
+  **The preflight normalizes a bare `main`/`module`/`types`/`typings` path** (`dist/index.cjs`, no
+  `./`), which those four keys may legally be written as. A string leaf of `exports` may not, so
+  that arm still requires the prefix. Skipping the bare spelling would have been this script's own
+  failure mode, a promise the preflight quietly does not check.
   **`scripts/verify.sh` in the meta-repo needs no change and must not be touched**; it already fails
   on any non-zero step, and it lists `attw` as a REQUIRED script, so the script name stays `attw`.
 - **Node:** **>= 22**.
