@@ -113,8 +113,12 @@ interface Reading {
    * found in this reader by a gate was a namespace fixup that emitted output which was not
    * well-formed and threw on re-read, reopening the very defect its slice claimed to close, and a
    * differential that only ever parses its INPUT cannot see that.
+   *
+   * `"refused"` is the fourth state and a deliberate non-event: the writer declined to emit the
+   * document at all, so there is nothing to read back. It is NOT a regression and must never be
+   * counted as one, which is why it is its own value rather than folded into `"unreadable"`.
    */
-  readonly reread: "stable" | "unstable" | "unreadable";
+  readonly reread: "stable" | "unstable" | "unreadable" | "refused";
 }
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -425,7 +429,49 @@ const EMPTY_READING: Omit<Reading, "thrown"> = {
  * a second round trip must change nothing; anything else means the emitted document is not the
  * document the reader just described.
  */
+/**
+ * The marker a refused serialization is recorded as.
+ *
+ * A writer that refuses a model has produced a real, comparable outcome, not an error the harness
+ * should swallow. Recording it as a string keeps it inside every existing comparison (it is simply a
+ * value neither tree's real output can collide with), while the tallies that would misread it as a
+ * loss -- "output shorter", "no longer re-reads" -- exclude it explicitly.
+ */
+/**
+ * READ THIS BEFORE TRUSTING A ZERO ON A SLICE THAT ADDS A REFUSAL.
+ *
+ * Recording a refusal as a value rather than a throw NARROWS two bar lines in the same run that
+ * introduces the refusals, and neither narrowing is visible from the line itself:
+ *
+ * - **"newly throwing" stops counting a refusal.** It means "anything EXCEPT a refusal threw" from
+ *   here on: a non-`FhirSerializeError` writer throw still lands in `read()`'s catch and still
+ *   counts. The refusals have their own line in the same block (three lines below it, not directly
+ *   beneath), so the two must be read together; a run reporting `newly throwing 0` alongside
+ *   `REFUSED 360` has not had a quiet 360 swept out of it, but the first number alone would say so.
+ * - **the leaf comparison SKIPS a refused document entirely**, because a document that was not
+ *   emitted has no leaves to find. That exclusion is only provably harmless while the slice under
+ *   measurement does not touch the READER: head's model still holds every value base's did. **A
+ *   slice that changes the reader AND adds a refusal has a real blind spot here** -- a value the
+ *   reader genuinely stopped modelling would be excluded rather than counted -- and the honest move
+ *   is to measure the reader change on its own, against a base with no refusals in it.
+ */
+const REFUSED = "<refused>";
+
+/**
+ * Serialize, or record the refusal. Matched on the error NAME, not `instanceof`: base and head are
+ * two separate module instances, so no constructor identity is shared between them.
+ */
+function emit(write: () => string): string {
+  try {
+    return write();
+  } catch (error) {
+    if (error instanceof Error && error.name === "FhirSerializeError") return REFUSED;
+    throw error;
+  }
+}
+
 function rereadOf(codec: Codec, emitted: string, json: string): Reading["reread"] {
+  if (emitted === REFUSED || json === REFUSED) return "refused";
   try {
     const again = codec.parseResourceXml(emitted);
     if (codec.serializeResource(again.resource as never) !== json) return "unstable";
@@ -440,8 +486,13 @@ function read(codec: Codec, xml: string): Reading {
     const { resource, issues } = codec.parseResourceXml(xml);
     const v = codec.validateResource(resource as never);
     const s = codec.readSafety(resource as never);
-    const json = codec.serializeResource(resource as never);
-    const emitted = codec.serializeResourceXml(resource as never);
+    // A REFUSAL specifically is caught here, so a writer that declines to emit does not take the
+    // issues, findings and safety readout down with it and read as a total loss. Note the narrow
+    // scope: these calls are still inside the `try` that opens above, so any OTHER writer throw
+    // still collapses the whole reading to `EMPTY_READING`, exactly as it did before. Only
+    // `FhirSerializeError` is separated out.
+    const json = emit(() => codec.serializeResource(resource as never));
+    const emitted = emit(() => codec.serializeResourceXml(resource as never));
     return {
       thrown: undefined,
       issues: issues.map((i) => `${i.code}@${i.expression ?? ""}`).sort(),
@@ -480,6 +531,7 @@ interface Tally {
   emittedUnreadable: number;
   emittedUnstable: number;
   emittedNewlyUnreadable: number;
+  serializationRefused: number;
   validFalseToTrue: number;
   validTrueToFalse: number;
   safeFalseToTrue: number;
@@ -494,6 +546,7 @@ interface Tally {
   leavesBaseRead: number;
   leavesMissingAtHead: number;
   leavesRecoveredInsideNarrative: number;
+  leavesNotComparedRefused: number;
   jsonShorter: number;
   xmlShorter: number;
   narrativeBearing: number;
@@ -514,6 +567,7 @@ function emptyTally(): Tally {
     emittedUnreadable: 0,
     emittedUnstable: 0,
     emittedNewlyUnreadable: 0,
+    serializationRefused: 0,
     validFalseToTrue: 0,
     validTrueToFalse: 0,
     safeFalseToTrue: 0,
@@ -528,6 +582,7 @@ function emptyTally(): Tally {
     leavesBaseRead: 0,
     leavesMissingAtHead: 0,
     leavesRecoveredInsideNarrative: 0,
+    leavesNotComparedRefused: 0,
     jsonShorter: 0,
     xmlShorter: 0,
     narrativeBearing: 0,
@@ -564,7 +619,10 @@ function fold(tally: Tally, doc: Document, base: Reading, head: Reading): void {
       `EMITTED XML RE-READS TO SOMETHING ELSE ${doc.name} (base: ${base.reread})`,
     );
   }
-  if (base.reread === "stable" && head.reread !== "stable") {
+  // A refusal is not a regression: the writer declined to emit, which is the change under
+  // measurement, so it is tallied on its own line rather than as output that stopped re-reading.
+  if (head.reread === "refused") tally.serializationRefused += 1;
+  if (base.reread === "stable" && head.reread !== "stable" && head.reread !== "refused") {
     tally.emittedNewlyUnreadable += 1;
     tally.examples.push(`EMITTED XML NO LONGER RE-READS ${doc.name}: ${head.reread}`);
   }
@@ -614,31 +672,43 @@ function fold(tally: Tally, doc: Document, base: Reading, head: Reading): void {
   // head reads once, so it would call a real loss of two occurrences zero. Each base occurrence
   // consumes one head occurrence; when they run out, the leaf falls through to the containment
   // check and then to the loss tally.
-  const headRemaining = new Map<string, number>();
-  for (const leaf of head.leaves) headRemaining.set(leaf, (headRemaining.get(leaf) ?? 0) + 1);
-  tally.leavesBaseRead += base.leaves.length;
-  for (const leaf of base.leaves) {
-    const remaining = headRemaining.get(leaf) ?? 0;
-    if (remaining > 0) {
-      headRemaining.set(leaf, remaining - 1);
-      continue;
+  //
+  // A REFUSED serialization is excluded, and this is a correctness fix, not a convenience. The leaf
+  // comparison reads values out of the emitted JSON, so a document head declined to emit has no
+  // leaves to find and every value base read would be counted lost. Head's MODEL still holds all of
+  // them -- the refusal is about emitting, not about reading -- so scoring those documents here
+  // would report the exact opposite of what happened. They are counted on their own line instead.
+  if (head.reread === "refused") {
+    tally.leavesNotComparedRefused += base.leaves.length;
+  } else {
+    const headRemaining = new Map<string, number>();
+    for (const leaf of head.leaves) headRemaining.set(leaf, (headRemaining.get(leaf) ?? 0) + 1);
+    tally.leavesBaseRead += base.leaves.length;
+    for (const leaf of base.leaves) {
+      const remaining = headRemaining.get(leaf) ?? 0;
+      if (remaining > 0) {
+        headRemaining.set(leaf, remaining - 1);
+        continue;
+      }
+      // Containment is only accepted from a leaf that is itself a CARRIED XML FRAGMENT, so an
+      // unrelated leaf that happens to contain the same substring cannot launder a real loss.
+      if (head.leaves.some((h) => h.startsWith("<") && h.endsWith(">") && h.includes(leaf))) {
+        tally.leavesRecoveredInsideNarrative += 1;
+        continue;
+      }
+      tally.leavesMissingAtHead += 1;
+      // The document, the length and the shape, never the value: every other line this harness
+      // prints is a bounded expression, and a loss report is not the place to print content.
+      tally.examples.push(
+        `LEAF VALUE MISSING ${doc.name}: ${String(leaf.length)} chars, ${leaf.startsWith("<") ? "fragment" : "scalar"}`,
+      );
     }
-    // Containment is only accepted from a leaf that is itself a CARRIED XML FRAGMENT, so an
-    // unrelated leaf that happens to contain the same substring cannot launder a real loss.
-    if (head.leaves.some((h) => h.startsWith("<") && h.endsWith(">") && h.includes(leaf))) {
-      tally.leavesRecoveredInsideNarrative += 1;
-      continue;
-    }
-    tally.leavesMissingAtHead += 1;
-    // The document, the length and the shape, never the value: every other line this harness prints
-    // is a bounded expression, and a loss report is not the place to start printing content.
-    tally.examples.push(
-      `LEAF VALUE MISSING ${doc.name}: ${String(leaf.length)} chars, ${leaf.startsWith("<") ? "fragment" : "scalar"}`,
-    );
   }
 
-  if (head.json.length < base.json.length) tally.jsonShorter += 1;
-  if (head.xml.length < base.xml.length) tally.xmlShorter += 1;
+  // A refused output is not a shorter output. Comparing the marker's length to a real document's
+  // would report every refusal as lost content, which is precisely backwards.
+  if (head.json !== REFUSED && head.json.length < base.json.length) tally.jsonShorter += 1;
+  if (head.xml !== REFUSED && head.xml.length < base.xml.length) tally.xmlShorter += 1;
 
   if (doc.carriesNarrativeShape && doc.sentinel !== undefined) {
     tally.narrativeBearing += 1;
@@ -696,7 +766,11 @@ function reconcile(tally: Tally, corpus: readonly Document[]): string[] {
  * touch. Neither may be a document the corpus is scored on, so the control cannot flatter the tally.
  */
 const CONTROL = {
-  /** A primitive whose value is written as element text: dropped on base, refused at head. */
+  /**
+   * A primitive whose value is written as element text. Base reports the loss and then SERIALIZES
+   * the document anyway (`<status/>` in XML, the member gone entirely in JSON); head refuses to
+   * serialize it at all. That difference is this slice, so it is what the control keys on.
+   */
   moved: `<Observation xmlns="http://hl7.org/fhir"><status>CONTROL</status></Observation>`,
   /** The same document spelled conformantly, which this change must leave exactly as it was. */
   unmoved: `<Observation xmlns="http://hl7.org/fhir"><status value="CONTROL"/></Observation>`,
@@ -708,9 +782,18 @@ const CONTROL = {
  * that already carries the change. So: assert the two disagree on a document whose reading this
  * slice is known to move, and assert they AGREE on one it does not.
  *
- * The reading compared is the whole reading, not just the serialized JSON: this slice changes what
- * the safety layer and the validator SAY about a document without changing the model's values, and a
- * control that only compared `json` would have passed on base and reported a comfortable zero.
+ * The reading compared is the whole reading, not just the serialized JSON. Keep it that way even
+ * when the current slice does not need it: a slice that moves only what the safety layer and the
+ * validator SAY, without moving any value, would pass a `json`-only control on base and report a
+ * comfortable zero. **The slice this control is currently written for moves only what a REFUSAL
+ * moves** (`json`, `xml`, `leaves` and `reread`; the writers refuse a marked model), so today the
+ * wider comparison is redundant rather than load-bearing. Do not narrow it on that basis; the next
+ * reader slice needs it again.
+ *
+ * **What `whole()` compares is narrower than "the whole reading", and the gap matters.** It reads
+ * `json`, `valid`, `findings`, `issues`, `safeToSummarize`, `retracted` and `negations` -- NOT `xml`,
+ * `leaves`, `reread` or `thrown`. So this control would NOT catch a base/head divergence confined to
+ * the XML writer. If you write an XML-writer-only slice, widen `whole()` before you trust it.
  */
 function negativeControl(base: Codec, head: Codec): string[] {
   const problems: string[] = [];
@@ -880,7 +963,9 @@ async function main(): Promise<void> {
       line("emitted XML that does not re-read at head", tally.emittedUnreadable);
       line("emitted XML that re-reads to something else at head", tally.emittedUnstable);
       line("  of those, stable on base (a regression)", tally.emittedNewlyUnreadable);
+      line("serializations REFUSED at head (bought, not lost)", tally.serializationRefused);
       line("leaf values base read", tally.leavesBaseRead);
+      line("  not compared (head refused to serialize)", tally.leavesNotComparedRefused);
       line("  missing at head", tally.leavesMissingAtHead);
       line(
         "  now inside an opaque narrative (containment-checked)",

@@ -272,19 +272,28 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   text differing from the value: the reader never compares the two, so
   `<status value="final">final</status>` refuses as well, even though nothing is missing there. That
   is deliberate. Deciding the document meant no harm would mean reading the text, which is the
-  tolerance this half does not take. And the
-  marker does not survive `serializeResourceXml`: it emits `<status/>` and a re-read of that output
-  comes back clean, so the finding **launders**. Be precise about why, because the obvious phrasing
-  understates it. `<status/>` is not a neutral fallback: xml.html §2.6.1 says _"FHIR elements are
+  tolerance this half does not take.
+- **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
+  `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
+  `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding
+  only whitespace still emits `<status/>` and still re-reads clean. That gap is real, unchanged here,
+  and noted below. This is the other half of the refusal, and it exists because the finding
+  used to disappear across a round trip. `serializeResourceXml` emitted `<status/>` and a re-read of
+  that output came back clean; `serializeResource` was worse, dropping the member outright, so a
+  retracted `Observation` re-read as one that had never named a status. The error is value-free and
+  carries the bounded FHIRPath `locations` it refused over, never the text it could not encode.
+  Be precise about why `<status/>` is not a neutral fallback: xml.html §2.6.1 says _"FHIR elements are
   never empty. If an element is present in the resource, it SHALL have either a value attribute,
   child elements as defined for its type, or 1 or more extensions"_, so emitting it violates that
-  SHALL. Scope it precisely: it is a **pre-existing** property of writing a value-absent primitive
-  that carries **no extension**, because §2.6.1's third arm ("or 1 or more extensions") is satisfied
-  by `<status><extension url="..."/></status>`, which is what a `data-absent-reason` on a primitive
-  emits. An `id`-only primitive is still a violation (`<status id="s1"/>` has none of the three
-  permitted contents). Either way it is not something this change introduces, and it is tracked
-  separately. Keep the original document if you need the
-  finding to survive a round trip.
+  SHALL.
+  **The refusal is scoped to a model the reader MARKED, and to nothing else.** A document read from
+  JSON has no character-data channel and is never affected; a conformant XML document round-trips
+  byte-for-byte exactly as before. In particular, writing a value-absent primitive that carries **no
+  extension** is still permitted and still emits `<status/>`: §2.6.1's third arm ("or 1 or more
+  extensions") is satisfied by `<status><extension url="..."/></status>`, which is what a
+  `data-absent-reason` emits, but an `id`-only primitive (`<status id="s1"/>`) has none of the three
+  permitted contents and remains a **pre-existing** violation this change does not address. Keep the
+  original document if you need the text itself; the library will not invent it for you.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their
@@ -536,7 +545,10 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   check that reads a `0..1` element as a single value gets nothing from a repeat, and that should
   never be silent.
 - **`serializeResourceXml`** emits compact, spec-clean FHIR XML that round-trips a spec-clean document
-  **byte-for-byte** (decimals byte-exact, never through a `number`).
+  **byte-for-byte** (decimals byte-exact, never through a `number`). It throws `FhirSerializeError`
+  rather than emit a model the reader marked as having lost character data, so that finding cannot
+  vanish across a round trip; `serializeResource` refuses the same models for the same reason. Text
+  the reader drops **without** marking (whitespace only) is not covered, because there is no marker.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).

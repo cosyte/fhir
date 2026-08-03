@@ -21,10 +21,12 @@ import { describe, expect, it } from "vitest";
 import { WITHHELD, childPath, rootPath, safeDerivedName } from "../src/model/path.js";
 import {
   FhirCodecError,
+  FhirSerializeError,
   parseResource,
   parseResourceXml,
   readSafety,
   serializeResource,
+  serializeResourceXml,
   validateResource,
 } from "../src/index.js";
 
@@ -256,6 +258,33 @@ describe("no surface that builds a location out of a document name echoes a forg
     expect(err.expression).not.toContain(FORGED);
     expect(err.message).not.toContain(FORGED);
     expect(err.stack ?? "").not.toContain(FORGED);
+  });
+
+  it("a refused serialization, the other location channel a parse sweep cannot reach", () => {
+    // The writers refuse a model carrying character data the reader dropped, and the refusal names
+    // the locations. That is a NEW location surface, reached by throwing rather than by returning,
+    // so it is swept here directly like the fatal above.
+    // The forged name has to be a legal XML name to reach the reader at all, so the overlong one is
+    // the forgery this channel can actually carry; the dropped TEXT is the forgery beside it.
+    const { resource } = parseResourceXml(
+      `<Observation xmlns="http://hl7.org/fhir"><${OVERLONG}>${FORGED}</${OVERLONG}></Observation>`,
+    );
+    let thrown: unknown;
+    try {
+      serializeResourceXml(resource);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown, "a model with dropped text must not serialize").toBeInstanceOf(
+      FhirSerializeError,
+    );
+    const err = thrown as FhirSerializeError;
+    // Neither the dropped CONTENT nor the overlong NAME may reach the refusal.
+    expect(err.message).not.toContain(FORGED);
+    expect(err.message).not.toContain(OVERLONG);
+    expect(err.locations).toEqual([`Observation.${WITHHELD}`]);
+    expect(err.stack ?? "").not.toContain(FORGED);
+    expect(err.stack ?? "").not.toContain(OVERLONG);
   });
 
   it("the one derived identifier the model surfaces", () => {

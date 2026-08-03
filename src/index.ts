@@ -78,6 +78,8 @@ export {
   ISSUE_CODES,
 } from "./codec/issues.js";
 export type { FatalCode, FhirIssue, IssueCode, IssueSeverity } from "./codec/issues.js";
+export { FhirSerializeError, SERIALIZE_ERROR_CODES } from "./codec/serialize-guard.js";
+export type { SerializeErrorCode } from "./codec/serialize-guard.js";
 
 // Phase 2, structural / cardinality / value-domain validation + value-free OperationOutcome.
 export { validateResource } from "./validate/validate.js";
