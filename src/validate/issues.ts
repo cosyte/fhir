@@ -120,14 +120,30 @@ export const VALIDATION_CODES = {
    * any position and this is a non-conformant encoding wherever it appears, which is why it needs no
    * cardinality rule and cannot fire on a conformant document. Reported at every position the model
    * has a node for; a `_`-sibling the reader discards whole is the stated exception, and draws the
-   * unexpected-property warning instead. An `error`, and the one on this list
-   * where the reader could **not** keep what the sender wrote: the codec does not model an inner
-   * array, so this reports a loss rather than an ambiguity. Left unreported it is the worst of the
+   * unexpected-property warning instead. An `error`, and one of the two on this list
+   * where the reader could **not model** what the sender wrote (the other is
+   * {@link VALIDATION_CODES.DROPPED_ELEMENT_TEXT}): the codec does not model an inner array, so this
+   * reports a loss of *structure* rather than an ambiguity, though the array's JSON text is kept and
+   * readable (see {@link ../model/node.js} `nestedArrayContent`). Left unreported it is among the worst of the
    * set, because the model then looks exactly like an element that was legitimately absent, and a
    * refuted allergy, a resolved condition, or an entire resource inside a Bundle entry reads back as
    * a clean document. Value-free, the position the inner array occupied, never its contents.
    */
   NESTED_ARRAY: "NESTED_ARRAY",
+  /**
+   * Safety, an XML document wrote **character data directly on a FHIR element**. FHIR XML carries a
+   * primitive's value in the `value` attribute (xml.html §2.6.1), so text written as element content
+   * has no slot on the model and the reader drops it: `<status>entered-in-error</status>` yields a
+   * `status` with no value. An `error`, and the only code on this list where the content is neither
+   * modeled **nor kept**: unlike {@link VALIDATION_CODES.NESTED_ARRAY}, which preserves the array's
+   * JSON text, the character data is discarded outright, because reading it back would be a
+   * tolerance for a non-conformant encoding rather than a report of one. Left unreported it reaches the same harm as
+   * {@link VALIDATION_CODES.NESTED_ARRAY} by the other wire format, because the model is again
+   * indistinguishable from an element that was legitimately absent: a retraction, a `refuted`
+   * verification status, or a dose *number* beside a surviving unit and UCUM code all read back as a
+   * clean document. Value-free, the position the text occupied, never its contents.
+   */
+  DROPPED_ELEMENT_TEXT: "DROPPED_ELEMENT_TEXT",
   /**
    * Safety, the resource is marked `entered-in-error` and is therefore **retracted, not
    * data**. Surfaced as `information` (it is not itself a defect) so a consumer cannot miss it.
@@ -314,6 +330,7 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   DUPLICATE_PROPERTY: ISSUE_TYPES.STRUCTURE,
   ARRAY_WRAPPED_SCALAR: ISSUE_TYPES.STRUCTURE,
   NESTED_ARRAY: ISSUE_TYPES.STRUCTURE,
+  DROPPED_ELEMENT_TEXT: ISSUE_TYPES.STRUCTURE,
   RETRACTED_RESOURCE: ISSUE_TYPES.INFORMATIONAL,
   INVARIANT_VIOLATED: ISSUE_TYPES.INVARIANT,
   INVARIANT_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
@@ -363,6 +380,10 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
     "A JSON array appears inside another array; FHIR JSON uses an array only for a repeating " +
     "element, so this shape has no meaning and its contents were not read. Content the sender " +
     "wrote is missing from the model at this position.",
+  DROPPED_ELEMENT_TEXT:
+    "Character data was written directly on this element; FHIR XML carries a primitive's value in " +
+    "the value attribute, so an element has no slot for text and it was not read. Content the " +
+    "sender wrote is missing from the model at this position.",
   RETRACTED_RESOURCE:
     "Resource is marked entered-in-error; it is retracted and must not be treated as active data.",
   INVARIANT_VIOLATED: "A resource invariant (content-validation constraint) was violated.",

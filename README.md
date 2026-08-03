@@ -247,6 +247,31 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   the same array (`"given":[["Peter"],"James"]`) lands where an object was expected, and that scalar
   is still dropped. It is reported as an unexpected property and the resource is still refused, but
   unlike the array itself its content is not kept.
+- **A primitive whose value is written as XML element text is reported, not silently read as an
+  absent value.** FHIR XML carries a primitive's value in the `value` attribute, so
+  `<status>entered-in-error</status>` puts a code where the model has no slot for one: the character
+  data is dropped and the element is left holding nothing. That is the same harm as an array inside
+  an array, reached through the other wire format, and it is the sharper one, because the shape a
+  retraction takes is an **affirmation**. Measured: a `<status>entered-in-error</status>` read back
+  as a live record, an `AllergyIntolerance` that lost its `refuted`, and a `doseQuantity` that lost
+  the dose **number** while its `mg` unit and UCUM code survived, all under `valid: true`. So the
+  position is named: `DROPPED_ELEMENT_TEXT` in `validateResource` (error), the locations in
+  `droppedText`, `safeToSummarize` is `false`, and `assertSafeToSummarize` throws. `isDroppedText`
+  marks the node for a consumer walking the model directly, and the reader's existing
+  `UNEXPECTED_XML_CONTENT` warning is kept alongside it rather than replaced. Like the rule above it
+  needs no cardinality table and cannot fire on a conformant document, so it runs at every position
+  the model has a node for, at every depth, and never on a document read from JSON.
+  **The text is not read back as the value, deliberately.** Recovering it would be a _tolerance_ for
+  a non-conformant encoding rather than a report of one, and this library encodes a tolerance only
+  when a real document shows the shape in the wild. So the value stays unread and the verdict is a
+  refusal rather than a repair.
+  **Two limitations, stated rather than implied.** Whitespace between elements is not character data
+  in this sense and is untouched, so ordinary indented XML is unaffected; but text written beside a
+  value that _did_ arrive (`<status value="final">entered-in-error</status>`) is dropped too and
+  draws the same refusal, because content the sender wrote is still missing from the model. And the
+  marker does not survive `serializeResourceXml`: the writer has no conformant way to emit character
+  data on a FHIR element, so it emits `<status/>` and a re-read of that output comes back clean.
+  Keep the original document if you need the finding to survive a round trip.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).
 - **Invariants** `ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`, `obs-6`/`obs-7`, hand-evaluated from their

@@ -2,7 +2,7 @@
  * The safety validation layer (the fail-closed status & negation spine).
  *
  * Layered on top of the structural validator, this layer enforces the parts of FHIR that,
- * read wrong, harm a patient. It produces value-free {@link ValidationIssue}s for four
+ * read wrong, harm a patient. It produces value-free {@link ValidationIssue}s for five
  * things:
  *
  * 1. **Unhandled `modifierExtension` → fail closed.** FHIR's modifier rule (`?!`): a
@@ -24,12 +24,20 @@
  *    C-CDA or v2 feed takes to a FHIR surface.
  * 2c. **An array inside an array => fail closed.** FHIR JSON uses an array for a repeating element and
  *    for nothing else (json.html §2.6.2.2), so a list of lists has no meaning at any position. That
- *    makes it the simplest rule of the three (no cardinality, no element list, no false positive
- *    available on a conformant document) and the most serious: the codec cannot model the inner
- *    array, so unlike the two above nothing was preserved, and the model is indistinguishable from an
- *    element the sender legitimately left out. `NESTED_ARRAY`, `error`, at every position the model
+ *    makes it one of the two simplest rules here (no cardinality, no element list, no false positive
+ *    available on a conformant document, the other being 2d) and one of the two most serious: the
+ *    codec cannot model the inner array, so unlike 2 and 2b the *structure* is gone and the model is
+ *    indistinguishable from an element the sender legitimately left out. The array's JSON text is
+ *    kept and readable ({@link ../model/node.js} `nestedArrayContent`), which is what still separates
+ *    it from 2d. `NESTED_ARRAY`, `error`, at every position the model
  *    has a node for and at every depth. Its one stated gap is a `_`-sibling the reader discards
  *    whole, which leaves no node to report against; see {@link ../safety/status.js} `nestedArrays`.
+ * 2d. **Character data on a FHIR element => fail closed.** FHIR XML carries a primitive's value in
+ *    the `value` attribute (xml.html §2.6.1), so text written as an element's content has no slot on
+ *    the model and the reader drops it. `<status>entered-in-error</status>` therefore yields a
+ *    `status` with no value, indistinguishable from one the sender left out: 2c's harm reached
+ *    through the other wire format. `DROPPED_ELEMENT_TEXT`, `error`, unconditional at every position
+ *    the model has a node for, and it cannot fire on a document read from JSON.
  * 3. **Retraction surfaced.** A resource marked `entered-in-error` is retracted, not data
  *    (`RETRACTED_RESOURCE`, `information`), surfaced so a consumer cannot silently treat it as active.
  * 4. **The named invariants**, `ait-1`/`ait-2` (AllergyIntolerance), `con-3`/`con-4`/`con-5`
@@ -63,6 +71,7 @@ import {
 } from "../safety/codes.js";
 import {
   arrayWrappedScalars,
+  droppedText,
   nestedArrays,
   shadowedProperties,
   unhandledModifierExtensions,
@@ -110,13 +119,23 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
     issues.push(validationIssue("ARRAY_WRAPPED_SCALAR", ISSUE_SEVERITIES.ERROR, location));
   }
 
-  // 2c. An array inside an array is the same posture again, and the only one of the three where the
-  // reader could not keep what the sender wrote. Unconditional: FHIR JSON gives the shape no meaning
+  // 2c. An array inside an array is the same posture again, and one of the two where the reader
+  // could not model what the sender wrote. Unconditional: FHIR JSON gives the shape no meaning
   // at any position, so it needs no cardinality rule and cannot false-error on a conformant
   // document. It is what stops the validator returning `valid` for a document whose negation,
   // retraction, or entire Bundle entry the codec was unable to read.
   for (const location of nestedArrays(resource, root)) {
     issues.push(validationIssue("NESTED_ARRAY", ISSUE_SEVERITIES.ERROR, location));
+  }
+
+  // 2d. The same posture once more, reached through the XML wire instead of the JSON one. FHIR XML
+  // carries a primitive's value in the `value` attribute, so character data written on an element is
+  // dropped and the model shows an element the sender appears not to have filled in. Unconditional
+  // for the same reason as 2c: the shape is non-conformant at every position, so it needs no
+  // cardinality rule and cannot false-error on a conformant document. It is what stops the validator
+  // returning `valid` for `<status>entered-in-error</status>`.
+  for (const location of droppedText(resource, root)) {
+    issues.push(validationIssue("DROPPED_ELEMENT_TEXT", ISSUE_SEVERITIES.ERROR, location));
   }
 
   if (!SAFETY_RESOURCE_TYPES.has(rt)) return issues;

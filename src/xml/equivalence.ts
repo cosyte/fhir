@@ -84,6 +84,7 @@ function primitivesEquivalent(a: FhirPrimitive, b: FhirPrimitive): boolean {
     a.nestedArray === b.nestedArray &&
     a.nestedArraySource === b.nestedArraySource &&
     a.nestedArrayMetaSource === b.nestedArrayMetaSource &&
+    a.droppedText === b.droppedText &&
     extensionsEquivalent(a.extension, b.extension)
   );
 }
@@ -120,11 +121,18 @@ function propertiesEquivalent(
  * place. The preserved text is compared alongside the marker, so two documents that nested
  * *different* content at the same position are not equivalent either. Comparing them can only ever
  * return `false` where it used to return `true`, and only for a document that carried the shape.
+ *
+ * The dropped-element-text marker is compared on the same reasoning, mirrored across the wire: an
+ * XML element whose character data the reader dropped is a value-absent node the sender did not write
+ * value-absent, and the JSON counterpart of a genuinely absent value is an identical value-absent
+ * node. Only the XML reader ever sets it, so this arm decides only the direction the other two
+ * cannot.
  */
 function complexesEquivalent(a: FhirComplex, b: FhirComplex): boolean {
   return (
     a.nestedArray === b.nestedArray &&
     a.nestedArraySource === b.nestedArraySource &&
+    a.droppedText === b.droppedText &&
     propertiesEquivalent(a.properties, b.properties) &&
     propertiesEquivalent(a.duplicates, b.duplicates)
   );

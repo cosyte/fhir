@@ -16,8 +16,9 @@
  * is "right", never converts, never infers clinical meaning (known limitations).
  *
  * That last sentence is load-bearing wherever a document encodes an element in a shape FHIR does not
- * define, because then the element's value is not something this layer may pick. Three such shapes
- * are handled, and they reach the **same** harm by different routes:
+ * define, because then the element's value is not something this layer may pick. Four such shapes
+ * are handled, three on the JSON wire and one on the XML wire, and they reach the **same** harm by
+ * different routes:
  *
  * - **A repeated property name.** FHIR JSON forbids it (json.html §2.6.2) and RFC 8259 §4 leaves the
  *   winner undefined, so the element genuinely holds two values.
@@ -30,16 +31,21 @@
  * - **An array inside an array.** FHIR JSON uses an array for a repeating element and for nothing
  *   else, so a list of lists has no meaning anywhere and the codec does not model the inner one. This
  *   is the shape where the element's value is not merely ambiguous but **absent from the model**, and
- *   the model then looks exactly like an element the sender left out, which makes it the only one of
- *   the three that this layer can do nothing about except decline to affirm.
+ *   the model then looks exactly like an element the sender left out.
+ * - **A primitive's value written as XML element text.** FHIR XML puts a primitive's value in the
+ *   `value` attribute (xml.html §2.6.1), so `<status>entered-in-error</status>` carries no value
+ *   this library may read: the reader drops the character data and the model holds a `status` with
+ *   no value. This is the array-inside-an-array harm reached through the XML door, and the same two
+ *   shapes are the ones this layer can do nothing about except decline to affirm.
  *
- * Two rules follow, and they apply to all three shapes. Each negation read runs over **every** value
+ * Two rules follow, and they apply to all four shapes. Each negation read runs over **every** value
  * written for the element it reads, **including through an array wrapper** and including the type gate
  * itself, because a retraction the sender wrote must not go unreported. (Nothing can read through the
- * third shape; there is no value there to read.) And the readout stops claiming the resource is
+ * last two shapes; there is no value there to read.) And the readout stops claiming the resource is
  * summarizable: `safeToSummarize` is `false` with the locations in `shadowedProperties` /
- * `arrayWrappedScalars` / `nestedArrays`, so a caller gets a refusal rather than an affirmative
- * verdict computed over one arbitrary reading of the document, or over content it never saw.
+ * `arrayWrappedScalars` / `nestedArrays` / `droppedText`, so a caller gets a refusal rather than an
+ * affirmative verdict computed over one arbitrary reading of the document, or over content it never
+ * saw.
  *
  * @packageDocumentation
  */
@@ -50,6 +56,7 @@ import {
   getProperty,
   isComplex,
   isList,
+  isDroppedText,
   isNestedArray,
   isPrimitive,
   rootPath,
@@ -196,11 +203,20 @@ export interface SafetyReadout {
    */
   readonly nestedArrays: readonly string[];
   /**
+   * FHIRPath locations where an XML document wrote **character data directly on a FHIR element**,
+   * which has no slot for it: a primitive's value travels in the `value` attribute (xml.html
+   * §2.6.1), so the reader drops the text. Like `nestedArrays` the content at these locations is
+   * **not readable**, and the element then looks exactly like one the sender left out, which is how
+   * `<status>entered-in-error</status>` came to read as a live record. Empty on every conformant
+   * document and on every document read from JSON.
+   */
+  readonly droppedText: readonly string[];
+  /**
    * `false` when the resource must not be flattened: an unhandled `modifierExtension` is present, a
    * repeated property name left an element with more than one value, a `0..1` safety element
-   * arrived array-wrapped, or an array inside an array left content the codec could not read. Each
-   * is a case where a summary would have to assert something this library cannot establish, so it
-   * declines instead.
+   * arrived array-wrapped, an array inside an array left content the codec could not read, or XML
+   * character data on an element was dropped. Each is a case where a summary would have to assert
+   * something this library cannot establish, so it declines instead.
    */
   readonly safeToSummarize: boolean;
 }
@@ -354,41 +370,98 @@ export function arrayWrappedScalars(resource: FhirComplex, path: string): string
  * ```
  */
 export function nestedArrays(resource: FhirComplex, path: string): string[] {
+  return collectMarked(resource, path, isNestedArray);
+}
+
+/**
+ * The locations where an XML document wrote **character data directly on a FHIR element**, which the
+ * reader drops: a primitive's value travels in the `value` attribute (xml.html §2.6.1), so text
+ * written as element content has no slot on the model. A deep walk of the whole resource, so text on
+ * an element inside a backbone element or a contained resource is caught too.
+ *
+ * **This layer reports these; it does not read them.** The dropped text is not kept anywhere, and
+ * this location is the only thing that distinguishes such a position from an element the sender
+ * genuinely wrote without a value. Without it `<status>entered-in-error</status>` reads back as an
+ * ordinary absent `status` and the readout affirms over a retracted record. Reporting is deliberately
+ * the entire remedy: reading the text as the element's value would be a **tolerance for a
+ * non-conformant encoding**, a decision about what this reader accepts, which is a much larger change
+ * than declining to affirm.
+ *
+ * Empty for every conformant document, and for every document read from JSON, which has no
+ * character-data channel.
+ *
+ * @param resource - The resource model.
+ * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
+ * @returns The locations of the dropped text, in walk order, each location once however many marked
+ *   nodes sit at it, on the same reasoning as {@link nestedArrays}.
+ * @example
+ * ```ts
+ * import { droppedText, parseResourceXml } from "@cosyte/fhir";
+ * const { resource } = parseResourceXml(
+ *   '<Observation xmlns="http://hl7.org/fhir"><status>entered-in-error</status></Observation>',
+ * );
+ * droppedText(resource, "Observation"); // ["Observation.status"]
+ * ```
+ */
+export function droppedText(resource: FhirComplex, path: string): string[] {
+  return collectMarked(resource, path, isDroppedText);
+}
+
+/**
+ * The locations of every node the reader marked with `marked`, de-duplicated.
+ *
+ * A repeated property name can put two marked nodes at the same FHIRPath location, and FHIRPath
+ * cannot address the individual members, so a second identical location would say nothing new. The
+ * shadowed-name and array-wrapper reports already collapse theirs for the same reason.
+ */
+function collectMarked(
+  resource: FhirComplex,
+  path: string,
+  marked: (node: FhirNode) => boolean,
+): string[] {
   const out: string[] = [];
-  collectNested(resource, path, out);
-  // A repeated property name can put two marked nodes at the same FHIRPath location, and FHIRPath
-  // cannot address the individual members, so a second identical location would say nothing new.
-  // The shadowed-name and array-wrapper reports already collapse theirs for the same reason.
+  collectNested(resource, path, out, marked);
   return [...new Set(out)];
 }
 
 /**
- * Walk every node in the tree, recording each one the reader marked. Deliberately a **separate**
+ * Walk every node in the tree, recording each one `marked` selects. Deliberately a **separate**
  * walk from {@link walkSafety} rather than another finding folded into it: this one visits strictly
  * more of the document (primitives and their `extension` metadata, which the other walk has a stated
  * reason to skip), and keeping them apart is what guarantees the new report cannot change, reorder,
  * or suppress any finding the existing walk already made.
+ *
+ * One walk serves both markers: the traversal is the same question ("where in this document is a
+ * node the reader could not fill in"), and sharing it is what keeps the two location lists from
+ * drifting apart over which parts of a document they visit.
  */
-function collectNested(node: FhirNode, path: string, out: string[]): void {
-  if (isNestedArray(node)) out.push(path);
+function collectNested(
+  node: FhirNode,
+  path: string,
+  out: string[],
+  marked: (node: FhirNode) => boolean,
+): void {
+  if (marked(node)) out.push(path);
   if (isList(node)) {
-    node.items.forEach((item, index) => collectNested(item, `${path}[${String(index)}]`, out));
+    node.items.forEach((item, index) =>
+      collectNested(item, `${path}[${String(index)}]`, out, marked),
+    );
     return;
   }
   if (isPrimitive(node)) {
     // A primitive's `id`/`extension` metadata is part of the document too, and an extension can
-    // carry clinical content, so a nested array in there is a loss like any other.
+    // carry clinical content, so a loss in there is a loss like any other.
     (node.extension ?? []).forEach((ext, index) =>
-      collectNested(ext, `${path}.extension[${String(index)}]`, out),
+      collectNested(ext, `${path}.extension[${String(index)}]`, out, marked),
     );
     return;
   }
   for (const property of node.properties)
-    collectNested(property.value, childPath(path, property.name), out);
-  // Members a repeated property name shadowed are part of the document, so a nested array cannot be
-  // made invisible by hiding it behind a duplicate key.
+    collectNested(property.value, childPath(path, property.name), out, marked);
+  // Members a repeated property name shadowed are part of the document, so a loss cannot be made
+  // invisible by hiding it behind a duplicate key.
   for (const property of node.duplicates ?? []) {
-    collectNested(property.value, childPath(path, property.name), out);
+    collectNested(property.value, childPath(path, property.name), out, marked);
   }
 }
 
@@ -620,6 +693,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   const prefix = rt === undefined ? "$this" : rootPath(rt);
   const { modifiers, shadowed, arrayWrapped } = walkSafety(resource, prefix);
   const nested = nestedArrays(resource, prefix);
+  const dropped = droppedText(resource, prefix);
 
   return {
     resourceType: rt === undefined ? undefined : rootPath(rt),
@@ -634,11 +708,13 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     shadowedProperties: shadowed,
     arrayWrappedScalars: arrayWrapped,
     nestedArrays: nested,
+    droppedText: dropped,
     safeToSummarize:
       modifiers.length === 0 &&
       shadowed.length === 0 &&
       arrayWrapped.length === 0 &&
-      nested.length === 0,
+      nested.length === 0 &&
+      dropped.length === 0,
   };
 }
 
@@ -646,9 +722,9 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
  * A refusal raised when a caller tries to flatten or summarize a resource this library cannot
  * summarize honestly: it carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
  * ignoring one), a repeated property name left an element holding several values with no rule for
- * choosing between them, a `0..1` safety element arrived wrapped in a JSON array, or an array inside
- * an array left content the codec could not read at all. Every way the safe move is to **refuse**,
- * value-free, carrying only the locations.
+ * choosing between them, a `0..1` safety element arrived wrapped in a JSON array, an array inside
+ * an array left content the codec could not read at all, or XML character data written on an element
+ * was dropped. Every way the safe move is to **refuse**, value-free, carrying only the locations.
  *
  * @example
  * ```ts
@@ -672,7 +748,8 @@ export class FhirSafetyError extends Error {
   constructor(locations: readonly string[]) {
     super(
       "Resource cannot be safely summarized: an unhandled modifierExtension, a repeated property " +
-        "name, an array-wrapped single-valued element, or an array inside an array leaves an " +
+        "name, an array-wrapped single-valued element, an array inside an array, or dropped XML " +
+        "element text leaves an " +
         `element this library must not flatten (${String(locations.length)} location(s)).`,
     );
     this.name = "FhirSafetyError";
@@ -682,13 +759,14 @@ export class FhirSafetyError extends Error {
 
 /**
  * Assert a resource is safe to flatten/summarize, throwing {@link FhirSafetyError} when it carries an
- * unhandled `modifierExtension`, a repeated property name, an array-wrapped single-valued element, or
- * an array inside an array. This is the executable form of "carries status **or refuses**": a summary
- * helper calls it first, and never silently drops a modifier it cannot honor, nor summarizes an
- * element whose value the document left ambiguous or whose content the codec could not read.
+ * unhandled `modifierExtension`, a repeated property name, an array-wrapped single-valued element, an
+ * array inside an array, or dropped XML element text. This is the executable form of "carries status
+ * **or refuses**": a summary helper calls it first, and never silently drops a modifier it cannot
+ * honor, nor summarizes an element whose value the document left ambiguous or whose content the codec
+ * could not read.
  *
  * @param resource - The resource (or a readout already computed for it).
- * @throws FhirSafetyError when any of those four shapes is present.
+ * @throws FhirSafetyError when any of those five shapes is present.
  * @example
  * ```ts
  * import { assertSafeToSummarize, parseResource } from "@cosyte/fhir";
@@ -703,6 +781,7 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     ...readout.shadowedProperties,
     ...readout.arrayWrappedScalars,
     ...readout.nestedArrays,
+    ...readout.droppedText,
   ];
   if (locations.length > 0) throw new FhirSafetyError(locations);
 }

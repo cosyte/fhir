@@ -683,23 +683,55 @@ function reconcile(tally: Tally, corpus: readonly Document[]): string[] {
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
+ * The document whose reading THE SLICE BEING MEASURED moves, and one it does not.
+ *
+ * **This pair belongs to the change in the working tree, not to the harness, so a slice that changes
+ * the reader updates it.** The first version of this control named the capitalized-child narrative of
+ * the slice that committed this file. That slice then merged, `origin/main` began carrying it, and
+ * the control fired on every subsequent run: a permanent false red on the harness's own alarm, which
+ * is worse than no alarm, because the next reader learns to scroll past it. If you are reading this
+ * because the control fired, check that first: it may be describing the previous slice, not yours.
+ *
+ * `moved` must be a document THIS change reads differently from base, and `unmoved` one it does not
+ * touch. Neither may be a document the corpus is scored on, so the control cannot flatter the tally.
+ */
+const CONTROL = {
+  /** A primitive whose value is written as element text: dropped on base, refused at head. */
+  moved: `<Observation xmlns="http://hl7.org/fhir"><status>CONTROL</status></Observation>`,
+  /** The same document spelled conformantly, which this change must leave exactly as it was. */
+  unmoved: `<Observation xmlns="http://hl7.org/fhir"><status value="CONTROL"/></Observation>`,
+} as const;
+
+/**
  * The negative control. A differential is only worth reading if the two trees really are two trees,
  * and the cheapest way for this to silently report all-zero is for `--base` to resolve to something
  * that already carries the change. So: assert the two disagree on a document whose reading this
  * slice is known to move, and assert they AGREE on one it does not.
+ *
+ * The reading compared is the whole reading, not just the serialized JSON: this slice changes what
+ * the safety layer and the validator SAY about a document without changing the model's values, and a
+ * control that only compared `json` would have passed on base and reported a comfortable zero.
  */
 function negativeControl(base: Codec, head: Codec): string[] {
   const problems: string[] = [];
-  const moved = `<Patient xmlns="http://hl7.org/fhir"><text><status value="generated"/><div xmlns="${XHTML}">CONTROL<BR/></div></text></Patient>`;
-  const unmoved = `<Patient xmlns="http://hl7.org/fhir"><text><status value="generated"/><div xmlns="${XHTML}">CONTROL<br/></div></text></Patient>`;
-  if (read(base, moved).json === read(head, moved).json) {
+  const whole = (r: Reading): string =>
+    JSON.stringify({
+      json: r.json,
+      valid: r.valid,
+      findings: r.findings,
+      issues: r.issues,
+      safeToSummarize: r.safeToSummarize,
+      retracted: r.retracted,
+      negations: r.negations,
+    });
+  if (whole(read(base, CONTROL.moved)) === whole(read(head, CONTROL.moved))) {
     problems.push(
-      "the base tree reads the capitalized-child narrative exactly as head does: --base does not name a tree from before this change, so every zero below is meaningless",
+      "the base tree reads the control document exactly as head does: either --base does not name a tree from before this change, or CONTROL.moved still describes an earlier slice, so every zero below is meaningless",
     );
   }
-  if (read(base, unmoved).json !== read(head, unmoved).json) {
+  if (whole(read(base, CONTROL.unmoved)) !== whole(read(head, CONTROL.unmoved))) {
     problems.push(
-      "the two trees disagree on a lowercase narrative, which this change does not touch",
+      "the two trees disagree on the conformant spelling, which this change must not touch",
     );
   }
   return problems;
