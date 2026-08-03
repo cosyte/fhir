@@ -750,6 +750,16 @@ summary.
   `./`), which those four keys may legally be written as. A string leaf of `exports` may not, so
   that arm still requires the prefix. Skipping the bare spelling would have been this script's own
   failure mode, a promise the preflight quietly does not check.
+  **Two residuals the gate filed and neither is fixed here, both failing in the SAFE direction.**
+  An **extension-less `"main": "lib/index"`**, legal for CJS resolution, reds as missing; that is
+  pre-existing for the `./`-prefixed spelling and cannot fire on this manifest, where every artifact
+  carries its extension. And a tarball carrying the **declarations but not the JS entry points**
+  passes both nets with "No problems found", identical on base: the preflight only reads disk and
+  the post-check is scoped to declarations. **The short-cluster arm is keyed to `0.18.4`'s option
+  set**, so a future `attw` adding a short alias for `--config-path`, or a second value-taking short
+  option, reopens the route with no test going red. `@arethetypeswrong/cli` is pinned exactly, and
+  the four "bare attw really is blinded by X" cases are what would notice an upgrade; re-read this
+  paragraph when you bump it.
   **`scripts/verify.sh` in the meta-repo needs no change and must not be touched**; it already fails
   on any non-zero step, and it lists `attw` as a REQUIRED script, so the script name stays `attw`.
 - **Node:** **>= 22**.

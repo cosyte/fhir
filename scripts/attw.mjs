@@ -106,8 +106,11 @@ const die = (msg) => {
 // match on everything left of an `=`. The short forms are not: commander lets a short option carry
 // its value attached (`-fjson`) and lets short booleans bundle ahead of it (`-Pfjson`), and neither
 // contains an `=`, so a name match cannot see them. `-f` is the only short option here that takes a
-// value, so anything after a `q` or an `f` in a single-dash cluster is that option's value and the
-// cluster is refused the moment either letter appears in it.
+// value, so anything trailing an `f` in a single-dash cluster is that option's value, and a cluster
+// is refused the moment either letter appears in it. `q` is a boolean and needs no such argument,
+// it is in the set because it is the option being refused. This over-refuses in the safe direction:
+// the only short options `0.18.4` defines are `-P`, `-p`, `-f` and `-q`, and `@arethetypeswrong/cli`
+// is pinned exactly, so no cluster a caller has reason to pass is caught by accident.
 const BLINDING = new Set(["-q", "--quiet", "-f", "--format", "--config-path"]);
 const SHORT_CLUSTER = /^-[^-]/;
 const isBlinding = (a) =>
@@ -115,7 +118,8 @@ const isBlinding = (a) =>
 const blinding = args.filter(isBlinding);
 if (blinding.length > 0) {
   die(
-    `${blinding.join(", ")} is refused wholesale, by option name and not by value.\n` +
+    `${blinding.join(", ")} is refused wholesale: a long option by name, a short\n` +
+      `  cluster by the presence of q or f in it, and neither by value.\n` +
       `  This gate reads attw's printed output, attw exits 0 on an untyped package,\n` +
       `  and some values of these options hide that output. Run it without them.`,
   );
