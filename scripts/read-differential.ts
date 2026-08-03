@@ -443,10 +443,11 @@ const EMPTY_READING: Omit<Reading, "thrown"> = {
  * Recording a refusal as a value rather than a throw NARROWS two bar lines in the same run that
  * introduces the refusals, and neither narrowing is visible from the line itself:
  *
- * - **"newly throwing" stops counting a refusal.** It means "the READING threw" from here on, not
- *   "anything threw". The refusals are printed on their own line immediately beneath it, so the two
- *   must be read together; a run reporting `newly throwing 0` alongside `REFUSED 360` has not had a
- *   quiet 360 swept out of it, but the first number alone would say so.
+ * - **"newly throwing" stops counting a refusal.** It means "anything EXCEPT a refusal threw" from
+ *   here on: a non-`FhirSerializeError` writer throw still lands in `read()`'s catch and still
+ *   counts. The refusals have their own line in the same block (three lines below it, not directly
+ *   beneath), so the two must be read together; a run reporting `newly throwing 0` alongside
+ *   `REFUSED 360` has not had a quiet 360 swept out of it, but the first number alone would say so.
  * - **the leaf comparison SKIPS a refused document entirely**, because a document that was not
  *   emitted has no leaves to find. That exclusion is only provably harmless while the slice under
  *   measurement does not touch the READER: head's model still holds every value base's did. **A
@@ -487,9 +488,9 @@ function read(codec: Codec, xml: string): Reading {
     const s = codec.readSafety(resource as never);
     // A REFUSAL specifically is caught here, so a writer that declines to emit does not take the
     // issues, findings and safety readout down with it and read as a total loss. Note the narrow
-    // scope: these calls are still inside the `try` below, so any OTHER writer throw still collapses
-    // the whole reading to `EMPTY_READING`, exactly as it did before. Only `FhirSerializeError` is
-    // separated out.
+    // scope: these calls are still inside the `try` that opens above, so any OTHER writer throw
+    // still collapses the whole reading to `EMPTY_READING`, exactly as it did before. Only
+    // `FhirSerializeError` is separated out.
     const json = emit(() => codec.serializeResource(resource as never));
     const emitted = emit(() => codec.serializeResourceXml(resource as never));
     return {
@@ -784,9 +785,15 @@ const CONTROL = {
  * The reading compared is the whole reading, not just the serialized JSON. Keep it that way even
  * when the current slice does not need it: a slice that moves only what the safety layer and the
  * validator SAY, without moving any value, would pass a `json`-only control on base and report a
- * comfortable zero. **The slice this control is currently written for moves `json` and `xml` alone**
- * (the writers refuse a marked model), so today the wider comparison is redundant rather than
- * load-bearing. Do not narrow it on that basis; the next reader slice needs it again.
+ * comfortable zero. **The slice this control is currently written for moves only what a REFUSAL
+ * moves** (`json`, `xml`, `leaves` and `reread`; the writers refuse a marked model), so today the
+ * wider comparison is redundant rather than load-bearing. Do not narrow it on that basis; the next
+ * reader slice needs it again.
+ *
+ * **What `whole()` compares is narrower than "the whole reading", and the gap matters.** It reads
+ * `json`, `valid`, `findings`, `issues`, `safeToSummarize`, `retracted` and `negations` -- NOT `xml`,
+ * `leaves`, `reread` or `thrown`. So this control would NOT catch a base/head divergence confined to
+ * the XML writer. If you write an XML-writer-only slice, widen `whole()` before you trust it.
  */
 function negativeControl(base: Codec, head: Codec): string[] {
   const problems: string[] = [];

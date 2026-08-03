@@ -152,10 +152,11 @@ function writeElement(
  *
  * @param node - The resource model to serialize (must carry a `resourceType` to name the root element).
  * @returns Canonical FHIR XML text.
- * @throws {FhirSerializeError} If the model carries character data the reader dropped. There is no
- *   conformant XML for it (§2.6.1: an element present in the resource SHALL have a value attribute,
- *   child elements, or extensions), and emitting the element as unfilled would lose the
- *   `DROPPED_ELEMENT_TEXT` finding across a round trip.
+ * @throws {FhirSerializeError} If the model carries a node the reader MARKED as having lost character
+ *   data. There is no conformant XML for it (§2.6.1: an element present in the resource SHALL have a
+ *   value attribute, child elements, or extensions), and emitting the element as unfilled would lose
+ *   the `DROPPED_ELEMENT_TEXT` finding across a round trip. Text the reader drops WITHOUT marking
+ *   (character data that is `String.trim()`-empty) is not covered, because there is no marker.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";

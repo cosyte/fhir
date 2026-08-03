@@ -44,8 +44,9 @@ true`, 0 `valid true -> false`, 0 `safeToSummarize false -> true`, 0 retractions
   refused** that previously emitted a document which re-read clean.
   The committed differential harness (`pnpm differential:read`) was fixed in the same change: it
   wrapped serialization in the same `try` as the reading, so a refusal collapsed the whole reading and
-  reported every value base read as lost (5,159 phantom losses on the first run). Serialization is now
-  measured separately, a refusal is its own `reread` state and its own tally line, and the tallies that
+  reported every value base read as lost (5,159 phantom losses on the first run). A refusal specifically
+  is now caught before that `try`'s `catch` sees it (any OTHER writer throw still collapses the whole
+  reading, exactly as before), a refusal is its own `reread` state and its own tally line, and the tallies that
   would misread it as a loss -- "output shorter", "no longer re-reads", the leaf comparison -- exclude
   it explicitly.
 

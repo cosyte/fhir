@@ -730,7 +730,7 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   writer refusal, check what the harness does with it before you trust a zero** -- and know the two
   bar lines it narrows: **"newly throwing" no longer counts a refusal** (read it together with the
   refusals line beneath it), and **the leaf comparison SKIPS a refused document** (5,159 of 15,956
-  leaves here). That exclusion is provably empty only because this slice touches no reader file. **A
+  leaves here). That exclusion is provably harmless only because this slice touches no reader file. **A
   slice that changes the READER and adds a refusal has a real blind spot there**; measure the reader
   change separately, against a base with no refusals in it.
   **Still open, deliberately, pinned by a test:** text beside a value that DID arrive

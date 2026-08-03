@@ -189,9 +189,10 @@ function emitComplex(node: FhirComplex): string {
  *   A `resourceType` that is anything else keeps its position in the document rather than being
  *   dropped, and an array the sender wrote where FHIR gives an array no meaning is written back as
  *   it was read, so such output is deliberately not spec-clean.
- * @throws {FhirSerializeError} If the model carries character data the XML reader dropped. JSON has
- *   no character-data channel, so the member would simply be absent and the `DROPPED_ELEMENT_TEXT`
- *   finding would be lost across a round trip.
+ * @throws {FhirSerializeError} If the model carries a node the XML reader MARKED as having lost
+ *   character data. JSON has no character-data channel, so the member would simply be absent and the
+ *   `DROPPED_ELEMENT_TEXT` finding would be lost across a round trip. Text the reader drops WITHOUT
+ *   marking (character data that is `String.trim()`-empty) is not covered, because there is no marker.
  * @example
  * ```ts
  * import { parseResource, serializeResource } from "@cosyte/fhir";

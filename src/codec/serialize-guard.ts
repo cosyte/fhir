@@ -84,7 +84,8 @@ export class FhirSerializeError extends Error {
  * @param node - The model about to be serialized.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT} if any node
  *   is marked. Never throws for a model read from JSON, which has no character-data channel, nor for
- *   any conformant XML document.
+ *   any conformant XML document. Text the reader drops WITHOUT marking (character data that is
+ *   `String.trim()`-empty) leaves no marker, so it is not covered here either.
  * @internal
  */
 export function assertSerializable(node: FhirComplex): void {
