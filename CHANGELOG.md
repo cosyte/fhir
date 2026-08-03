@@ -8,6 +8,54 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A symbolic link under a PHI scan root read clean on BOTH enumerating routes
+  (`PHI-SCAN-SYMLINK-BLIND-ON-BOTH-ROUTES`).** Reproduced on `810eec9` with a synthetic,
+  name-bearing payload held outside the walk roots and linked from `src/leak.ts`: the all-mode sweep
+  printed `OK, no hits` and exited **0**, `--staged` after `git add` did the same, and naming the
+  target explicitly exited **1** with both hits. The payload was always detectable; the two sweeping
+  routes never looked at it.
+  Two mechanisms. `walk()` enumerates `Dirent.isFile()`, an lstat answer, so a link is neither a file
+  nor a directory and fell out of the loop in silence, and `isDirectory()` is an lstat answer too, so
+  a linked **directory** took a whole subtree with it (measured, exit 0). `--staged` reads content
+  with `git show :<path>`, and git stores a link as its **target path** under mode `120000`, so that
+  route was handed path text rather than the target's bytes. That route is this package's pre-commit
+  hook, and it is where the FHIR-aware structured scan runs: a link staged at
+  `test/__fixtures__/patient.json` was handed path text, failed `JSON.parse`, and fell through to the
+  conservative pass over the path.
+  **Neither route follows the link.** Following would read bytes the enumeration does not control
+  (outside the repo, a loop, a device, a FIFO that blocks the gate forever), and git does not carry
+  those bytes anyway, so a hit on them would be a claim about something no commit contains. The
+  enumeration is narrowed instead: an **enumerated** in-scope entry that is not a regular file
+  **refuses the scan** (exit 2), naming **every** offender. "Enumerated" is load-bearing: this
+  narrows what each route admits from what that route already lists, and an entry a route never
+  lists is not reached by the refusal either. `--staged` reads `git diff --cached --raw -z` so the
+  destination mode is visible, and refuses `120000` and `160000` before any read. A refusal names the
+  entry's own repo-relative path and an engine-owned kind token, and **never the link target**, which
+  is working-tree text that can itself carry PHI.
+  **`T` is in the filter, and leaving it out was a one-letter hole.** `--diff-filter=AM` drops
+  typechange, so replacing a **tracked** file with a link (`:100644 120000 <sha> <sha> T`) deleted
+  the record before any mode was read and the hook passed the link green. Admitting `T` also closes
+  the reverse typechange, a tracked link replaced by a real file carrying PHI, which the same letter
+  dropped.
+  **The scopes are unchanged.** The walk still excludes a gitignored entry, by the same rule that
+  already excluded a gitignored file; `--staged` still looks only at `test/__fixtures__/**` and
+  `src/**.ts`. This narrows what those scopes admit rather than widening them. A path named
+  explicitly on the command line is still followed, deliberately: that is the caller's own request.
+  A staged **gitlink** already refused on base, but by way of an uncontrolled `git show` failure
+  (`fatal: bad object`) naming no kind; the mode is read first now, so the refusal is the scanner's
+  own.
+  `test/scripts/phi-scan.test.ts` is new: 30 cases, **14 red on `810eec9`**, each against a throwaway
+  git repository. **Disclosed rather than fixed:** a staged **rename** is not enumerated by
+  `--staged` at all (`R`/`C` are the only two-path statuses and both are excluded, identical to the
+  `--name-only --diff-filter=AM` this replaces), and the cost is not only unscanned content: an
+  already-tracked link `git mv`d from outside the scope to inside it is raised `R100` at mode
+  `120000` and so never reaches the mode check on that route (measured, identical before this
+  change; a _new_ link cannot arrive that way, and the all-mode walk refuses the resulting tree).
+  And this package has never carried a sibling's rule refusing an all-mode sweep that observed no
+  files. Both are pinned by tests. The
+  enumerate-then-read window is left alone on purpose: here a vanished file makes the scan refuse,
+  which is the safe direction.
+
 - **The `attw` publish gate exited 0 on a tarball that carried no type declarations
   (`ATTW-FALSE-GREEN-PORT`).** `package.json` ran `attw --pack .`, and
   `@arethetypeswrong/cli@0.18.4`'s `dist/getExitCode.js` opens with `if (!analysis.types) return 0`,
