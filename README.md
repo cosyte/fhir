@@ -278,8 +278,12 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   understates it. `<status/>` is not a neutral fallback: xml.html §2.6.1 says _"FHIR elements are
   never empty. If an element is present in the resource, it SHALL have either a value attribute,
   child elements as defined for its type, or 1 or more extensions"_, so emitting it violates that
-  SHALL. That is a **pre-existing** property of writing any value-absent primitive, not something
-  this change introduces, and it is tracked separately. Keep the original document if you need the
+  SHALL. Scope it precisely: it is a **pre-existing** property of writing a value-absent primitive
+  that carries **no extension**, because §2.6.1's third arm ("or 1 or more extensions") is satisfied
+  by `<status><extension url="..."/></status>`, which is what a `data-absent-reason` on a primitive
+  emits. An `id`-only primitive is still a violation (`<status id="s1"/>` has none of the three
+  permitted contents). Either way it is not something this change introduces, and it is tracked
+  separately. Keep the original document if you need the
   finding to survive a round trip.
 - **Fail-closed on an unknown `modifierExtension`** (`UNHANDLED_MODIFIER_EXTENSION`, error): FHIR's
   `?!` rule; and **`entered-in-error` surfaced** as `RETRACTED_RESOURCE` (retracted, not data).

@@ -136,7 +136,7 @@ describe("the three shapes the defect was filed with, each against its conforman
   });
 });
 
-describe("the marker lands at every site the reader drops character data, and only there", () => {
+describe("the marker lands at every site `hasStrayText` observes text, and only there", () => {
   // The reader observes and discards character data at exactly three sites (`readComplex`, the
   // resource-valued unwrap, and the primitive branch of `buildSingle`). Counting them is the check;
   // the previous slice was refuted twice for writing a universal the call sites did not support.

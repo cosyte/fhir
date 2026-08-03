@@ -55,8 +55,9 @@
  * layer reads: the flag says the position was odd, the marker says content is missing from it, and
  * only the second can stop an affirmative verdict being computed over an element the document did
  * fill in. **`hasStrayText` is the scope of both, and it is narrower than "any character data":** it
- * tests JS `String.trim()`, which treats U+00A0, U+FEFF and the rest of the Zs block as whitespace,
- * so character data made only of those is dropped with neither a flag nor a marker. That gap is
+ * tests JS `String.trim()`, whose whitespace set is wider than XML's S production and is not one
+ * Unicode category: it spans U+00A0 and the Zs block, U+2028 (Zl) and U+2029 (Zp), U+FEFF (Cf), and
+ * VT/FF. Character data made only of those is dropped with neither a flag nor a marker. That gap is
  * unchanged from every release that has had this code; do not read either sentence as covering it.
  * Only genuinely unrecoverable input (a malformed document, a refused DTD/entity) throws, see
  * {@link ./raw-xml.js} / {@link ./issues.js}.

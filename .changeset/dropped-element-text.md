@@ -59,11 +59,15 @@ in its own text to suspect itself first when it fires.
 Known and pinned by tests rather than prose, each one a scope the conformance gate broke a first
 draft of: the finding **launders on a write-and-re-read**, and `<status/>` is not a neutral fallback
 but itself a violation of xml.html §2.6.1's "FHIR elements are never empty" SHALL, `PRE-EXISTING` for
-every value-absent primitive and tracked separately. Text written beside a value that _did_ arrive
+a value-absent primitive carrying **no extension**, since §2.6.1's third arm ("or 1 or more
+extensions") is satisfied by `<status><extension url="..."/></status>`, the shape a
+`data-absent-reason` emits; an `id`-only primitive (`<status id="s1"/>`) still violates it. Tracked
+separately. Text written beside a value that _did_ arrive
 (`<status value="final">entered-in-error</status>`) draws the same refusal, and the reason is **not**
 "content is still missing" (`<status value="final">final</status>` refuses too, and nothing is missing
 there): the rule keys on the reader _dropping_ character data and never compares the text to the
 value, because comparing them would mean reading the text. And the scope of both the flag and the
-marker is `hasStrayText`, which tests JS `String.trim()` and so treats U+00A0 / U+FEFF / the Zs block
+marker is `hasStrayText`, which tests JS `String.trim()` and so treats a set wider than XML's S
+production, spanning several Unicode categories (U+00A0 and Zs, U+2028, U+2029, U+FEFF, VT, FF),
 as whitespace: character data made only of those is dropped with neither a flag nor a marker,
 `PRE-EXISTING` and identical on base. No sentence here says "wherever text is dropped".
