@@ -706,6 +706,62 @@ summary.
 - **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
   `@cosyte/tsconfig`. **Target ES2023**, `NodeNext`.
 - **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate.
+  **The `attw` script is `node scripts/attw.mjs`, NOT the bare CLI, and it must stay that way
+  (`ATTW-FALSE-GREEN-PORT`, ported from `terminology`).** `@arethetypeswrong/cli@0.18.4`
+  `dist/getExitCode.js` opens with `if (!analysis.types) return 0`, so it prints "This package does
+  not contain types." and exits **0**, before the problem list is read. An untyped npm package is
+  legal, so that is a description for `attw`; for a package that ships declarations it means the
+  tarball did not carry them, which is a broken publish reported as a pass. No `--profile`,
+  `--ignore-rules` or config setting reaches that early return.
+  **Reproduced here with zero concurrency, at `edb75df`:** `rm -rf dist && pnpm attw` and
+  `rm -f dist/index.d.ts dist/index.d.cts && pnpm attw` both print the sentence and exit 0.
+  Concurrency only supplies the condition; **`tsup` is what creates it**, emitting the JS bundles
+  before the declarations. Measured over four clean builds of this package (mtime of
+  `dist/index.d.ts` minus `dist/index.mjs`): **1.86 s, 2.03 s, 2.29 s, 2.46 s**, an interval in
+  every build where `dist/` holds `.mjs`/`.cjs` and no `.d.ts`. **So the answer is not a lock, a
+  lease or a build queue** (ADR 0015): the gate has to be able to say its inputs were missing,
+  whatever removed them.
+  The wrapper carries **two nets that catch different things**: a structural preflight that every
+  relative path `package.json` promises (`main`, `module`, `types`, `typings`, every string leaf of
+  `exports`) exists and is non-empty, which catches the build window and **names the missing file**;
+  and a post-check on the untyped sentence, which catches what the preflight cannot, declarations
+  present on disk but excluded from the tarball by `files`/`.npmignore`. No instance of that second
+  case is on record in this repo.
+  **The post-check reads a string, so the routes that hide the string are refused, not tolerated.
+  Six were MEASURED here** against a `dist/` with both `.d.ts` files deleted, each exiting 0 with
+  the sentence unreadable: `--quiet`, `--format json`, `-fjson`, `-Pfjson`, `./.attw.json` setting
+  `quiet` (`readConfig()` applies it after argv), and `--config-path` pointing at that same config
+  elsewhere. The refusal is **by option name, wholesale, not by value**: `--format table-flipped`
+  blinds nothing and is refused anyway, which is the deliberate trade against value-parsing them.
+  **▶ IT TAKES TWO ARMS, AND A NAME MATCH ALONE IS NOT ENOUGH.** commander lets a short option carry
+  its value attached and lets short booleans bundle ahead of it, so `-fjson` and `-Pfjson` both mean
+  `--format json` and carry no `=` for a name match to split on. The refuter found exactly that hole
+  in pass one. The short-cluster arm refuses any single-dash cluster containing `q` or `f`, which is
+  sound because `-f` is the only short option here that takes a value, so everything after either
+  letter is that value. **Do not simplify it back to the name set.**
+  `test/scripts/attw-gate.test.ts` pins both nets against the real binary, **including the upstream
+  exit-0 itself**, so an `attw` upgrade that fixes the exit code or rewords the sentence reds the
+  suite instead of letting the net go slack. It also pins a negative control on a well-formed
+  package and that a real `attw` failure still fails: a gate that only ever fails is not a gate, and
+  one that swallows the status is not one either. **Mutation-checked**: reverting `scripts/attw.mjs`
+  to the bare `attw --pack .` reds **15 of its 24 cases**, and the 9 that stay green are exactly the
+  ones asserting upstream `attw` behaviour and the transparency controls.
+  **The preflight normalizes a bare `main`/`module`/`types`/`typings` path** (`dist/index.cjs`, no
+  `./`), which those four keys may legally be written as. A string leaf of `exports` may not, so
+  that arm still requires the prefix. Skipping the bare spelling would have been this script's own
+  failure mode, a promise the preflight quietly does not check.
+  **Two residuals the gate filed and neither is fixed here, both failing in the SAFE direction.**
+  An **extension-less `"main": "lib/index"`**, legal for CJS resolution, reds as missing; that is
+  pre-existing for the `./`-prefixed spelling and cannot fire on this manifest, where every artifact
+  carries its extension. And a tarball carrying the **declarations but not the JS entry points**
+  passes both nets with "No problems found", identical on base: the preflight only reads disk and
+  the post-check is scoped to declarations. **The short-cluster arm is keyed to `0.18.4`'s option
+  set**, so a future `attw` adding a short alias for `--config-path`, or a second value-taking short
+  option, reopens the route with no test going red. `@arethetypeswrong/cli` is pinned exactly, and
+  the four "bare attw really is blinded by X" cases are what would notice an upgrade; re-read this
+  paragraph when you bump it.
+  **`scripts/verify.sh` in the meta-repo needs no change and must not be touched**; it already fails
+  on any non-zero step, and it lists `attw` as a REQUIRED script, so the script name stays `attw`.
 - **Node:** **>= 22**.
 - **Package manager:** `pnpm@10`.
 - **Lint/format:** **ESLint 10** (`@cosyte/eslint-config`) + Prettier (`@cosyte/prettier-config`).

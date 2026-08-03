@@ -8,6 +8,43 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **The `attw` publish gate exited 0 on a tarball that carried no type declarations
+  (`ATTW-FALSE-GREEN-PORT`).** `package.json` ran `attw --pack .`, and
+  `@arethetypeswrong/cli@0.18.4`'s `dist/getExitCode.js` opens with `if (!analysis.types) return 0`,
+  returning before the problem list is read. So the CLI printed "This package does not contain
+  types." and handed its caller a **0**. An untyped npm package is legal, so that is a description
+  as far as `attw` is concerned; for a package that ships `.d.ts` files it means the declarations
+  were not in the tarball, which is a broken publish reported as a pass. A false red costs an hour;
+  **a false green merges.** No `--profile`, `--ignore-rules` or config setting reaches that early
+  return, so the fix could not be a different invocation.
+  **Reproduced on this package with zero concurrency**, at `edb75df`: `rm -rf dist && pnpm attw`
+  and `rm -f dist/index.d.ts dist/index.d.cts && pnpm attw` both printed the sentence and exited 0.
+  The second is the state a real build passes through. `tsup` emits the JS bundles in one pass and
+  the declarations in a later one, so every build here has an interval where `dist/` holds
+  `index.mjs`/`index.cjs` and no `.d.ts`: measured at **1.86 s, 2.03 s, 2.29 s and 2.46 s** over
+  four clean builds (mtime of `dist/index.d.ts` minus `dist/index.mjs`). Concurrency only supplies
+  the condition, so this is **not** answered with a lock, a lease or a build queue. The gate has to
+  be able to report that its own inputs were missing, whatever removed them.
+  **`attw` is now `node scripts/attw.mjs`**, a wrapper ported from `@cosyte/terminology` with two
+  nets. A **preflight** requires every relative artifact path `package.json` promises (`main`,
+  `module`, `types`, `typings`, and every string leaf of `exports`) to exist and be non-empty before
+  `attw` runs, and names the missing file; a **post-check** promotes an untyped report to a failure,
+  which is what catches declarations that are present on disk but excluded from the tarball by
+  `files` or `.npmignore`. The preflight reads the four top-level keys in either legal spelling,
+  with or without a leading `./`. The post-check reads a printed string, so the routes that hide
+  that string are refused wholesale by option name: `--quiet`, `--format`, `--config-path`, and an
+  `.attw.json` setting `quiet` or `format`. That takes two arms rather than a name match, because
+  commander also accepts a short option's value attached to it and short booleans bundled ahead of
+  that, so `-fjson` and `-Pfjson` mean `--format json` and carry no `=` to split on. All six
+  spellings were measured to restore the exact false green here. Everything else, including
+  `--profile` and `--ignore-rules`, is forwarded unchanged.
+  **`test/scripts/attw-gate.test.ts` pins both nets against the real binary, and pins the upstream
+  exit 0 itself**, so an `attw` upgrade that fixes the exit code or rewords the sentence reds the
+  suite rather than letting the net go slack. It also holds a negative control (the wrapper is
+  transparent on a well-formed package) and asserts that a genuine `attw` failure still fails with
+  `attw`'s own status. Reverting the script to the bare invocation reds **15 of its 24 cases**.
+  **No library code changed**, and no public API moved. This is a packaging gate only.
+
 - **Prose written beside a capitalized child of a narrative `<div>` was DESTROYED with zero
   diagnostics under `valid: true` (`FHIR-UNPLACEABLE-SHAPES`).** `<div xmlns="…xhtml">Take 5 mg<BR/></div>`
   read as a contained `BR` **resource**: the div's own text was never inspected once the child was
