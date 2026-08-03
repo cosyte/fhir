@@ -706,6 +706,42 @@ summary.
 - **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
   `@cosyte/tsconfig`. **Target ES2023**, `NodeNext`.
 - **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate.
+  **The `attw` script is `node scripts/attw.mjs`, NOT the bare CLI, and it must stay that way
+  (`ATTW-FALSE-GREEN-PORT`, ported from `terminology`).** `@arethetypeswrong/cli@0.18.4`
+  `dist/getExitCode.js` opens with `if (!analysis.types) return 0`, so it prints "This package does
+  not contain types." and exits **0**, before the problem list is read. An untyped npm package is
+  legal, so that is a description for `attw`; for a package that ships declarations it means the
+  tarball did not carry them, which is a broken publish reported as a pass. No `--profile`,
+  `--ignore-rules` or config setting reaches that early return.
+  **Reproduced here with zero concurrency, at `edb75df`:** `rm -rf dist && pnpm attw` and
+  `rm -f dist/index.d.ts dist/index.d.cts && pnpm attw` both print the sentence and exit 0.
+  Concurrency only supplies the condition; **`tsup` is what creates it**, emitting the JS bundles
+  before the declarations. Measured over four clean builds of this package (mtime of
+  `dist/index.d.ts` minus `dist/index.mjs`): **1.86 s, 2.03 s, 2.29 s, 2.46 s**, an interval in
+  every build where `dist/` holds `.mjs`/`.cjs` and no `.d.ts`. **So the answer is not a lock, a
+  lease or a build queue** (ADR 0015): the gate has to be able to say its inputs were missing,
+  whatever removed them.
+  The wrapper carries **two nets that catch different things**: a structural preflight that every
+  relative path `package.json` promises (`main`, `module`, `types`, `typings`, every string leaf of
+  `exports`) exists and is non-empty, which catches the build window and **names the missing file**;
+  and a post-check on the untyped sentence, which catches what the preflight cannot, declarations
+  present on disk but excluded from the tarball by `files`/`.npmignore`. No instance of that second
+  case is on record in this repo.
+  **The post-check reads a string, so the routes that hide the string are refused, not tolerated.
+  Four were MEASURED here** against a `dist/` with both `.d.ts` files deleted, each exiting 0 with
+  the sentence unreadable: `--quiet`, `--format json`, `./.attw.json` setting `quiet` (`readConfig()`
+  applies it after argv), and `--config-path` pointing at that same config elsewhere. The refusal is
+  **by option name, wholesale, not by value**: `--format table-flipped` blinds nothing and is
+  refused anyway, which is the deliberate trade against value-parsing them.
+  `test/scripts/attw-gate.test.ts` pins both nets against the real binary, **including the upstream
+  exit-0 itself**, so an `attw` upgrade that fixes the exit code or rewords the sentence reds the
+  suite instead of letting the net go slack. It also pins a negative control on a well-formed
+  package and that a real `attw` failure still fails: a gate that only ever fails is not a gate, and
+  one that swallows the status is not one either. **Mutation-checked**: reverting `scripts/attw.mjs`
+  to the bare `attw --pack .` reds **12 of its 17 cases**, and the 5 that stay green are exactly the
+  ones asserting upstream behaviour and the negative controls.
+  **`scripts/verify.sh` in the meta-repo needs no change and must not be touched**; it already fails
+  on any non-zero step, and it lists `attw` as a REQUIRED script, so the script name stays `attw`.
 - **Node:** **>= 22**.
 - **Package manager:** `pnpm@10`.
 - **Lint/format:** **ESLint 10** (`@cosyte/eslint-config`) + Prettier (`@cosyte/prettier-config`).
