@@ -32,8 +32,8 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
     hand before ever linking one.
 - **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.** The package reads,
-  round-trips and structurally validates R4 JSON **and** XML into one schema-free model with no data
-  loss; preserves decimal/`integer64` lexical precision; never drops a modifier, status or negation;
+  round-trips and structurally validates R4 JSON **and** XML into one schema-free model;
+  preserves decimal/`integer64` lexical precision; never drops a modifier, status or negation;
   surfaces measured values by their true `value[x]` type with UCUM-`code` fidelity; validates code
   systems and binding strength content-free; validates against caller-supplied
   `StructureDefinition`s (snapshot, slicing, fixed/pattern, must-support-as-obligation); evaluates
@@ -43,6 +43,12 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   a bundled US Core IG corpus, the `validator_cli.jar` differential (authored, **CI-only**, never
   observed green in this container), value-set membership without a supplied terminology service,
   typed per-resource models, and transaction **execution** (a stated non-goal).
+  **This is not a no-data-loss claim over the whole package**: read-path losses remain open,
+  declared and pinned by tests (a dose number written as XML element text, a scalar beside a
+  nested array, a `_`-sibling discarded whole, a foreign child of a valued primitive, character
+  data at the three `flagStrayText` sites, an unbound prefix, a `<DIV>` wrapper). See
+  [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
+  and [`#xml-reader-residuals-left-open`](documentation/agent-notes.md#xml-reader-residuals-left-open).
   Per-phase detail: [`#shipped-phase-history-p11-back-to-p1`](documentation/agent-notes.md#shipped-phase-history-p11-back-to-p1).
   Today's envelope, stated precisely: [`#p2-p3-and-what-the-package-does-today`](documentation/agent-notes.md#p2-p3-and-what-the-package-does-today).
 - Roadmap: the meta-repo's `operations/roadmaps/fhir.md` (P0…P11).
@@ -74,13 +80,18 @@ Every line here cost a defect or a refuted gate pass. The pointer is to
 - **Never let any rule yield more than one value on either side of `codingsOf`'s `system`×`code`
   cross-product**: it manufactures a pair the sender never wrote, and `NO_KNOWN_ALLERGY` is the one
   negation that is a _positive clinical assertion_. Count array **positions**, not strings: a FHIR
-  JSON `null` is a real position. Two attempts were refuted for exactly this. Same section.
+  JSON `null` is a real position. Two attempts were refuted for exactly this.
+  [`#fhir-array-wrapped-scalar-2026-07-28`](documentation/agent-notes.md#fhir-array-wrapped-scalar-2026-07-28) ·
+  [`#fhir-coding-scalar-wrapper-2026-07-29`](documentation/agent-notes.md#fhir-coding-scalar-wrapper-2026-07-29)
 - **Do not "fix" the un-type-gated `isRetracted`/`readSafety` reads by type-gating them**: they can
-  only _add_ a negation, never retire a finding or flip `valid`. Same section.
+  only _add_ a negation, never retire a finding or flip `valid`.
+  [`#fhir-coding-scalar-wrapper-2026-07-29`](documentation/agent-notes.md#fhir-coding-scalar-wrapper-2026-07-29)
 - **Reporting is additive to diagnostics; preserving is a change to the data model, and only the
   second carries the risk. If your change makes a nested array visible to any walker, you have
-  crossed the line.** 57 `.items` sites across 21 files, at least 9 flattening without a kind check;
-  the combined attempt was refuted twice (it erased a true error and asserted `noKnownAllergy`). The
+  crossed the line.** Measured at `b2c5ee7`: 57 `.items` sites across 21 files, 3 flattening with no
+  kind check at all and 21 checking the kind then silently dropping what is not it; exactly one fails
+  closed. The combined attempt was refuted twice (it erased a true error and asserted
+  `noKnownAllergy`). The
   inner array is kept as inert **text** (`nestedArraySource`), never modeled as an element.
   [`#fhir-nested-array-reporting-2026-07-29`](documentation/agent-notes.md#fhir-nested-array-reporting-2026-07-29) ·
   [`#fhir-nested-array-preservation-2026-07-29`](documentation/agent-notes.md#fhir-nested-array-preservation-2026-07-29)
@@ -144,10 +155,16 @@ Unless noted, all of these are
   reported 5,159 phantom leaf losses, and the leaf comparison now **skips** a refused document. **A
   slice that changes the reader _and_ adds a refusal has a real blind spot there**; measure the
   reader change separately.
+- **Two prefixes bound to the FHIR namespace are two spellings of one name, and reading them as one
+  element WIDENS the read window: report it or drop the grouping.** Reporting was taken
+  (`MIXED_XML_SPELLING`, plus `ARRAY_WRAPPED_SCALAR` at a safety-scoped element), because dropping
+  means two properties of one model name in one `FhirComplex` and **the XML reader has no
+  `duplicates` mechanism**, so it would be a silent first-wins loss: strictly worse.
 - The `_`-sibling discarded whole, the **unbound** prefix, the foreign-root laundering, the
-  `<DIV>` wrapper, `.@name`, and the cross-format singleton-wrapper laundering are **declared open
-  residuals, each pinned by a test**. Do not fold one into an unrelated slice, and do not restate a
-  gap as a claim.
+  `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, a scalar beside a nested array, a prefix
+  rebound between siblings, the §2.6.1 value-absent primitive and the cross-format singleton-wrapper
+  laundering are **declared open residuals, each pinned by a test**, among others recorded in the
+  notes. Do not fold one into an unrelated slice, and do not restate a gap as a claim.
   [`#xml-reader-residuals-left-open`](documentation/agent-notes.md#xml-reader-residuals-left-open) ·
   [`#singleton-wrapper-laundering`](documentation/agent-notes.md#singleton-wrapper-laundering) ·
   [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
@@ -157,10 +174,15 @@ Unless noted, all of these are
 
 ### Terminology, profiles, invariants
 
+The layer-by-layer detail behind all of these, including the full binding-strength severity table
+and the 11-way `Observation.value[x]` choice, is in
+[`#shipped-phase-history-p11-back-to-p1`](documentation/agent-notes.md#shipped-phase-history-p11-back-to-p1).
+
 - **No terminology content is vendored.** `KNOWN_SYSTEMS` holds the verified `system` URIs as
   _identities_ only (ICD-10-PCS/HCPCS deliberately omitted). With no `TerminologyService` supplied,
   checks degrade to the content-free system level and **never false-error**.
-- **Binding strength drives severity; `example` is information and never an error.**
+- **Binding strength drives severity**: `required` error, `extensible` error-unless, `preferred`
+  warning, **`example` information and never an error.**
 - **`MUST_SUPPORT_ABSENT` is information, never error**: must-support is a system obligation, not
   instance presence.
 - **The `position` discriminator is R5-only and excluded.** An unsupported or insufficient
@@ -236,8 +258,9 @@ Recorded in `documentation/decisions/` at bootstrap because they shape everythin
   **not** unconditionally spec-clean, and the exceptions are named on `serializeResource` (an array
   inside an array, a non-string `resourceType`), because repairing either means inventing content or
   dropping it.
-- Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression, never
-  document content.
+- Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
+  not a claim that a location carries no document content** (a name is echoed when it matches the
+  bounded published form). See the derived-name trap above, and do not widen it into one.
 - **PHI discipline:** synthetic-only fixtures, redaction in logs. Never commit realistic PHI. A
   vendor quirk is encoded only when a real de-identified resource grounds it, never invented.
 
