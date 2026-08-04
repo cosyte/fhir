@@ -13,9 +13,9 @@ semantics, and validate it against US Core, without reading the FHIR spec.
 
 - **Pre-alpha, unpublished on npm.** No version of `@cosyte/fhir` has ever reached the registry, and
   the repo carries no git tag and no GitHub release, because the release job never gets past the
-  publish. Every attempt is refused by npm with a bare `E403` on `PUT
-  https://registry.npmjs.org/@cosyte%2ffhir` (FHIR-NPM-NAME; support request filed 2026-07-23, still
-  open). `package.json` therefore runs ahead of the registry rather than behind it, so read the
+  publish. Every attempt is refused by npm with a bare `E403` on
+  `PUT https://registry.npmjs.org/@cosyte%2ffhir` (FHIR-NPM-NAME; support request filed 2026-07-23,
+  still open). `package.json` runs ahead of the registry rather than behind it, so read the
   version there and never infer it from npm.
   - **The "name-similarity" reading is RETRACTED. Do not rename or rescope the package on it.** npm
     has never named similarity or the unscoped `fhir` package in anything it returned; the only body
