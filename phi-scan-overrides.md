@@ -43,7 +43,7 @@ or a Bundle entry is still reached.
 An **enumerated** in-scope entry that is **not a regular file refuses the scan**
 (exit 2). "Enumerated" is load-bearing: this narrows what each route _admits_
 from what that route already _lists_, so an entry a route never lists is not
-reached by the refusal either (see the rename limitation below). Within that, it
+reached by the refusal either. Within that, it
 is never silently skipped, because both enumerating routes were blind to one in a
 way that read as clean:
 
@@ -67,43 +67,112 @@ a closed set the scanner owns. **It never reports the link target**, which is
 working-tree text that can itself carry PHI. Every offender is named, not just
 the first.
 
-`--staged` reads `git diff --cached --raw -z --diff-filter=AMT` so the
-destination mode is visible before any read, and refuses `120000` (symbolic link)
-and `160000` (gitlink). **`T` is in that filter on purpose:** replacing a
+`--staged` reads `git diff --cached --raw -z --no-renames --diff-filter=AMTU` so
+the destination mode is visible before any read, and refuses `120000` (symbolic
+link) and `160000` (gitlink). **`T` is in that filter on purpose:** replacing a
 _tracked_ regular file with a link is neither an add nor a modify, so
 `--diff-filter=AM` deleted the record before any mode could be read. It also
 covers the reverse typechange, a tracked link replaced by a real file carrying
 PHI.
 
-**"In scope" is each route's own existing boundary, not a new one.** The walk
-still excludes a gitignored entry, the same rule that already excluded a
-gitignored file, so links get no second and stricter boundary of their own;
-`--staged` still looks only at `test/__fixtures__/**` and `src/**.ts`. A path
-named explicitly on the command line is still **followed**: that is the caller's
-own request to read whatever is there, and it errs toward scanning more.
+**`--no-renames` is there for the same reason, and the filter alone was not
+enough.** `R` and `C` are returned by neither `AM` nor `AMT`, and git's rename
+detection is **on by default**, so `git mv <link> test/__fixtures__/<name>`
+staged as `:120000 120000 <sha> <sha> R100` with two paths and the filter deleted
+the record outright: an ordinary `git mv` put a mode-`120000` entry under a scan
+root and this route printed `OK, no hits`. A rename that also **substitutes a
+real name** into the moved file passed identically, because a record this route
+never lists is never scanned either. **The copy half is real too:** under
+`diff.renames=copies` a PHI-bearing file copied from outside the scope into a
+scan root stages as a genuine `C100`, also two-path, and was dropped exactly as a
+rename was. With detection off the destination arrives as an ordinary single-path
+`A` and the source as a `D` the filter drops, so it needs no two-path record
+shape.
+
+**The enumeration is EQUAL or LARGER, not a strict superset.** The two
+enumerations are **equal** whenever nothing is renamed or copied, which is the
+ordinary commit, and larger only when something is; "strict superset" claims it
+always grows, and that is false for almost every commit this gate sees. The
+property relied on is the one-directional half: nothing that **was** enumerated
+stops being enumerated. It also makes the two-field stride **structural**: no `R` or `C`
+record can be produced whatever the caller's `diff.renames` or `diff.renameLimit`
+say (verified under `true`, `copies`, `false`, `1`, and `renameLimit=1`).
+
+**`U` is in the filter so the scan can refuse over it.** An unmerged path is
+recorded at stages 1/2/3 and at no stage 0, so there is no single staged blob to
+read; it was returned by neither `AM` nor `AMT`, so a conflicted in-scope path was
+simply absent from the list and the route reported `OK, no hits` over an index it
+had not read. Git itself will not commit while a path is unmerged, so this was
+never a route to a committed leak; what it was is a gate attesting clean over a
+state it never observed, and `pnpm phi-scan --staged` is run by hand and from
+scripts as well as from the hook. It is **refused**, not scanned.
+
+**"In scope" is each route's own existing boundary.** The walk still excludes a
+gitignored entry, the same rule that already excluded a gitignored file, so links
+get no second and stricter boundary of their own; `--staged` still looks only at
+`test/__fixtures__/**` and `src/**.ts`. A path named explicitly on the command
+line is still **followed**: that is the caller's own request to read whatever is
+there, and it errs toward scanning more.
+
+**Two places that boundary moved**, called out rather than folded into
+"narrowing", because both admit _more_ than before: rename detection is off, so a
+rename destination now arrives as an ordinary add; and **each scan root's own
+path** is in scope as well as its contents. A `--raw` **record** at exactly
+`test/__fixtures__` or `src` is never a directory, because this invocation emits
+no record for one, so it is a scan root replaced by a blob, a link or a gitlink,
+and the prefix test alone let that through (measured: exit 0 over a staged
+mode-`120000` `test/__fixtures__`, and the same for `src`). **The claim is scoped
+to the record, not to the index:** a sparse index does hold a directory entry
+(`040000 <sha> 0 src/`), which carries a trailing slash, matches neither `===`,
+and produces no record here. What admitting the path buys is the **mode check**,
+which is the whole of the link and gitlink case; a regular blob there is a
+disclosed gap, below.
+
+**A scan that failed anywhere inside `main()` exits 2, not 1.** Node exits 1 on
+an uncaught throw and 1 is this gate's code for **hits found**, so a failure that
+was not an `InvocationError` was reported to CI and to the developer as a
+finding. Two were measured exiting 1: a missing or unreadable allow-list
+(`loadAllowList()` sat outside every handler), and `readdirSync` refusing a walk
+root (`ENOTDIR` on a root that is not a directory, `EACCES` on one it cannot
+list). Both now refuse with 2, and a process-level net catches the rest.
+**That net wraps the call to `main()`, so it covers everything inside it and
+nothing before it:** a throw at module load, or a failure in the `tsx` / `node`
+runner itself, still exits 1, and no wrapper placed there could change it.
 
 Pinned in `test/scripts/phi-scan.test.ts`, which runs every case against a
 throwaway git repository rather than this one.
 
 ## Documented limitations
 
-- **A staged rename is not enumerated** by the `--staged` route. `R` and `C` are
-  the only statuses carrying a second path in a `--raw` record and both are
-  excluded, so a rename that also appends PHI passes that route. Reachability
-  depends on git's own rename detection, which is on by default for `git diff`: a
-  rename staying above the similarity threshold is reported `R` and vanishes,
-  while one below it is reported as a delete plus an add and the **add is scanned
-  normally**. Admitting `R`/`C` needs the two-path record shape handled.
-  **The cost is not only unscanned content.** A record this route never lists
-  cannot reach the mode check either, so an **already-tracked symbolic link moved
-  from outside the scope to inside it** (`git mv`, raised `R100` with mode
-  `120000` on both sides) lands in scope and is **not refused** on this route.
-  Measured, and identical before this change. It is bounded in the direction that
-  matters: git does not pair a deleted regular file with an **added** link even at
-  an identical blob oid (that stays `A`, and is refused), so a _new_ link cannot
-  arrive this way, and the all-mode walk refuses the resulting working tree
-  (measured, exit 2). The all-mode sweep reads the resulting working-tree entry
-  either way.
+- **A regular blob staged at a scan root's OWN path gets the conservative shape
+  pass only, never the FHIR-aware scan.** `scanTarget` computes `isFixture` from
+  `startsWith("test/__fixtures__/")`, with a trailing slash, so the root's own
+  path cannot reach the structured branch: a resource written at exactly
+  `test/__fixtures__` has its `name`, `birthDate`, `address` and `telecom` read
+  by nothing, and the scan exits 0. Measured. It is **not** a regression, since
+  the path was not admitted at all before, and it is **not** the safe direction,
+  so it is recorded here rather than described as one. The fix belongs to
+  `scanTarget`'s dispatch rather than to the `--staged` scope filter. What
+  admitting the path does buy is the mode check, which covers the link and
+  gitlink cases entirely.
+- **A scan root's PARENT staged as a link defeats both routes.** `test` staged as
+  a mode-`120000` symlink is out of scope for `--staged` (neither `===` matches
+  and neither prefix does), and the all-mode walk returns silently because
+  `existsSync(test/__fixtures__)` is false, so the whole fixture corpus can leave
+  the index with both routes reporting `OK`. Measured, exit 0 on both routes, and
+  identical before this change. It is the same shape as the root's own path, one
+  directory up.
+- **The all-mode walk FOLLOWS a symlinked scan root.** `existsSync` and
+  `readdirSync` both follow, so with `test/__fixtures__` pointing at an external
+  directory the sweep reads and **reports the content** of files outside the
+  repository. Fail-safe in exit code (it is a hit, exit 1), but the diagnostic
+  echoes off-repo bytes, which is the surface the refusal wording is otherwise
+  careful about. Identical before this change.
+- **A staged deletion is not enumerated**, and that is deliberate: `D` has no
+  staged blob to scan. Beyond it, the only statuses git documents are `B` (a
+  broken pairing, which needs `-B` and is not passed) and `X` (git's own "this is
+  a bug" marker), so `A`/`M`/`T`/`U` plus `D` accounts for every record this
+  invocation can produce.
 - **An all-mode sweep that observed no files still reports `OK`.** A sibling
   scanner refuses that case; this one has never carried the rule.
 - **The enumerate-then-read window is not closed.** A file that vanishes between
