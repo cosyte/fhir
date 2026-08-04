@@ -481,18 +481,22 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 // Residuals, pinned as behaviour rather than asserted in prose
 // ---------------------------------------------------------------------------
 
-describe("phi-scan: disclosed residuals on the --staged route", () => {
-  it("PRE-EXISTING: a staged RENAME is not enumerated, so its content is unscanned", () => {
-    // `R`/`C` are the only statuses carrying a second path, and both are
-    // excluded, so this route does not see a rename at all. Identical on base,
-    // which used `--name-only --diff-filter=AM`. Admitting them needs the
-    // two-path record shape handled, which is a scope decision, not this one.
-    //
-    // Reachability depends on git's own rename detection, which is on by default
-    // for `git diff`: a rename whose similarity stays above the threshold is
-    // reported `R` and vanishes from the filter, while one below it is reported
-    // as a delete plus an add and the ADD is scanned normally. Both halves are
-    // asserted so the residual cannot drift into a claim.
+// ---------------------------------------------------------------------------
+// A staged rename is enumerated (PHI-SCAN-RENAME-BLIND-AT-PRECOMMIT)
+// ---------------------------------------------------------------------------
+//
+// `R`/`C` are returned by neither `AM` nor `AMT`, and git's rename detection is
+// on by default, so a staged rename used to vanish from this route entirely:
+// its CONTENT went unscanned and, worse, its MODE was never checked, so an
+// ordinary `git mv` of a tracked symbolic link into a scan root reported clean.
+// `--no-renames` closes both by making the destination arrive as an ordinary
+// single-path add. The enumeration is a strict superset of the previous one.
+
+describe("phi-scan: a staged rename is enumerated", () => {
+  it("scans the CONTENT of a renamed file, so a substituted name is a hit (exit 1)", () => {
+    // The high-similarity case: git pairs it as `R`, which is exactly the record
+    // the old filter deleted. The rename also substitutes a real-looking name,
+    // which is the harm this route existed to catch.
     const root = makeRepo();
     const body = Array.from({ length: 40 }, (_, i) => `export const v${String(i)} = ${String(i)};`)
       .join("\n")
@@ -505,15 +509,129 @@ describe("phi-scan: disclosed residuals on the --staged route", () => {
     writeFileSync(join(root, "src", "renamed.ts"), `${body}// ssn 123-45-6789\n`);
     git(root, ["add", "src/renamed.ts"]);
 
-    // The premise: git reports this as a rename, and the filter drops it.
+    // The premise, unchanged: git itself still reports this as a rename, and the
+    // old `AMT` filter still deletes it. It is `--no-renames`, not the filter,
+    // that closes this.
     expect(gitOut(root, ["diff", "--cached", "--raw"])).toMatch(/\sR\d*\s/);
     expect(gitOut(root, ["diff", "--cached", "--raw", "--diff-filter=AMT"]).trim()).toBe("");
 
     const r = runIn(root, ["--staged"]);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("src/renamed.ts");
   });
 
-  it("but a low-similarity rename is a delete plus an add, and the ADD is scanned (exit 1)", () => {
+  it("refuses a tracked LINK `git mv`d into a scan root: R100 at mode 120000 (exit 2)", () => {
+    // The headline. The record is `:120000 120000 <sha> <sha> R100`, so on base
+    // the filter deleted it before any mode could be read and this route printed
+    // "OK, no hits" over a mode-120000 entry sitting under a scan root.
+    const root = makeRepo();
+    symlinkSync(TARGET_NAME, join(root, "notes-link.txt"));
+    git(root, ["add", "notes-link.txt", "src/ordinary.ts"]);
+    commit(root, "base");
+
+    git(root, ["mv", "notes-link.txt", "src/leak.ts"]);
+
+    // The premise: both sides mode 120000, and git reports it as a rename.
+    expect(gitOut(root, ["diff", "--cached", "--raw"])).toMatch(/^:120000 120000 \S+ \S+ R\d+\s/);
+    expect(gitOut(root, ["ls-files", "--stage", "src/leak.ts"])).toMatch(/^120000 /);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("src/leak.ts");
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+
+  // The refusal must not depend on the caller's diff configuration. `--no-renames`
+  // is passed on the command line, which overrides every one of these.
+  for (const renames of ["true", "false", "copies", "1"]) {
+    it(`refuses that same link with diff.renames=${renames} (exit 2)`, () => {
+      const root = makeRepo();
+      symlinkSync(TARGET_NAME, join(root, "notes-link.txt"));
+      git(root, ["add", "notes-link.txt", "src/ordinary.ts"]);
+      commit(root, "base");
+      git(root, ["config", "diff.renames", renames]);
+      git(root, ["mv", "notes-link.txt", "src/leak.ts"]);
+
+      const r = runIn(root, ["--staged"]);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+      expect(r.stderr).toContain("src/leak.ts");
+      expectNoPhi(r.stderr);
+    });
+  }
+
+  it("refuses that same link with diff.renameLimit=1 (exit 2)", () => {
+    const root = makeRepo();
+    symlinkSync(TARGET_NAME, join(root, "notes-link.txt"));
+    git(root, ["add", "notes-link.txt", "src/ordinary.ts"]);
+    commit(root, "base");
+    git(root, ["config", "diff.renameLimit", "1"]);
+    git(root, ["mv", "notes-link.txt", "src/leak.ts"]);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("src/leak.ts");
+    expectNoPhi(r.stderr);
+  });
+
+  it("emits no R or C record at all, so the two-field stride is structural", () => {
+    // What makes the stride safe is not the filter's leave but that git cannot
+    // produce a second-path record under `--no-renames`. Asserted directly.
+    const root = makeRepo();
+    symlinkSync(TARGET_NAME, join(root, "notes-link.txt"));
+    git(root, ["add", "notes-link.txt", "src/ordinary.ts"]);
+    commit(root, "base");
+    git(root, ["config", "diff.renames", "copies"]);
+    git(root, ["mv", "notes-link.txt", "src/leak.ts"]);
+
+    const raw = gitOut(root, ["diff", "--cached", "--raw", "--no-renames", "--diff-filter=AMTU"]);
+    expect(raw).not.toMatch(/\s[RC]\d*\s/);
+    expect(raw).toMatch(/^:000000 120000 \S+ \S+ A\s+src\/leak\.ts/m);
+  });
+
+  it("scans a genuine COPY (`C`) destination, which was dropped exactly like a rename (exit 1)", () => {
+    // The `C` half is real, not a theoretical arm of the sentence. With
+    // `diff.renames=copies`, copying a PHI-bearing file from outside the scope
+    // INTO a scan root stages as a genuine two-path `C` record, which `AMT`
+    // dropped exactly as it dropped `R`. Copy detection only pairs when the
+    // SOURCE is also touched in the same diff, so the source is modified here.
+    const root = makeRepo();
+    writeFileSync(join(root, "outside.txt"), SYNTHETIC_PHI);
+    git(root, ["add", "outside.txt", "src/ordinary.ts"]);
+    commit(root, "base");
+
+    git(root, ["config", "diff.renames", "copies"]);
+    writeFileSync(join(root, "outside.txt"), `${SYNTHETIC_PHI}// touched\n`);
+    writeFileSync(join(root, "src", "copied.ts"), SYNTHETIC_PHI);
+    git(root, ["add", "outside.txt", "src/copied.ts"]);
+
+    // The premise: a real `C` record, which the old filter deleted outright.
+    const raw = gitOut(root, ["diff", "--cached", "--raw", "--find-copies-harder"]);
+    expect(raw, `raw: ${raw}`).toMatch(/\sC\d*\s/);
+    expect(
+      gitOut(root, ["diff", "--cached", "--raw", "--find-copies-harder", "--diff-filter=AMT"]),
+    ).not.toMatch(/src\/copied\.ts/);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("src/copied.ts");
+  });
+
+  it("a CLEAN renamed fixture still passes: enumerating it is not refusing it (exit 0)", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "src", "ordinary.ts"), "export const answer = 42;\n");
+    git(root, ["add", "src/ordinary.ts"]);
+    commit(root, "base");
+
+    git(root, ["mv", "src/ordinary.ts", "src/renamed.ts"]);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+describe("phi-scan: disclosed residuals on the --staged route", () => {
+  it("a low-similarity rename is a delete plus an add, and the ADD is scanned (exit 1)", () => {
     const root = makeRepo();
     writeFileSync(join(root, "src", "ordinary.ts"), "export const answer = 42;\n");
     git(root, ["add", "src/ordinary.ts"]);
@@ -530,31 +648,7 @@ describe("phi-scan: disclosed residuals on the --staged route", () => {
     expect(r.stderr).toContain("src/renamed.ts");
   });
 
-  it("PRE-EXISTING: and the rename residual costs more than content, it costs the MODE check", () => {
-    // A record this route never lists cannot reach the mode check either. An
-    // ALREADY-TRACKED link moved from outside the scope to inside it is raised
-    // `R100` with mode 120000 on both sides, so it lands in scope unrefused.
-    const root = makeRepo();
-    symlinkSync(TARGET_NAME, join(root, "notes-link.txt"));
-    git(root, ["add", "-A"]);
-    commit(root, "base");
-
-    git(root, ["mv", "notes-link.txt", "src/leak.ts"]);
-
-    // The premise, both sides of the record are mode 120000 and it is a rename.
-    expect(gitOut(root, ["diff", "--cached", "--raw"])).toMatch(/^:120000 120000 \S+ \S+ R\d+\s/);
-    expect(gitOut(root, ["ls-files", "--stage", "src/leak.ts"])).toMatch(/^120000 /);
-
-    expect(runIn(root, ["--staged"]).code).toBe(0);
-
-    // Bounded: the all-mode walk refuses the working tree this leaves behind.
-    const sweep = runIn(root, []);
-    expect(sweep.code, `stderr: ${sweep.stderr}`).toBe(2);
-    expect(sweep.stderr).toContain("src/leak.ts");
-    expectNoPhi(sweep.stderr);
-  });
-
-  it("and a NEW link cannot arrive that way: git keeps it an add, which IS refused", () => {
+  it("a NEW link cannot arrive as a rename: git keeps it an add, which IS refused", () => {
     // The other bound. Even when a deleted regular file carries byte-identical
     // content to the link's target string (so the blob oids match), git does not
     // pair them across a mode change: the record stays `A` and the mode check
@@ -590,6 +684,205 @@ describe("phi-scan: disclosed residuals on the --staged route", () => {
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
     expect(r.stdout).toMatch(/OK, no hits/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// An unmerged path, and each scan root's own path
+// ---------------------------------------------------------------------------
+
+describe("phi-scan: the --staged route refuses an unmerged in-scope path", () => {
+  /** Leave `path` conflicted between two branches. Returns the repo root. */
+  function makeConflict(path: string, ours: string, theirs: string): string {
+    const root = makeRepo();
+    writeFileSync(join(root, path), "export const base = 0;\n");
+    git(root, ["add", path]);
+    commit(root, "base");
+    const branch = gitOut(root, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+
+    git(root, ["checkout", "-q", "-b", "other"]);
+    writeFileSync(join(root, path), theirs);
+    git(root, ["add", path]);
+    commit(root, "theirs");
+
+    git(root, ["checkout", "-q", branch]);
+    writeFileSync(join(root, path), ours);
+    git(root, ["add", path]);
+    commit(root, "ours");
+
+    // The merge is EXPECTED to fail with a CONFLICT (that is the point), so it
+    // does not go through `git()`, which throws on a non-zero status.
+    //
+    // IT STILL NEEDS AN INLINE IDENTITY, and this cost a CI-only red. These
+    // repos configure no `user.email`, so git falls back to auto-detecting one
+    // from the username and hostname. That succeeds on a developer box and
+    // FAILS ON A RUNNER, whose hostname has no domain, so git refuses the merge
+    // outright before touching the index: the conflict never happens, the index
+    // stays clean, `git diff --cached --raw` returns EMPTY, and both cases below
+    // go green locally and red in CI. Passing the identity the way `commit()`
+    // already does removes the fallback entirely.
+    const merge = spawnSync(
+      "git",
+      ["-c", "user.email=t@example.com", "-c", "user.name=t", "merge", "other"],
+      { cwd: root, encoding: "utf8", shell: false },
+    );
+
+    // Assert the SETUP, not the behaviour under test. A merge that was refused
+    // rather than conflicting leaves an index these cases would read as clean,
+    // so it must fail here, loudly, and not further down as a puzzling regex
+    // mismatch against an empty string.
+    expect(
+      merge.status,
+      `git merge should have CONFLICTED (exit 1), not been refused. stderr: ${merge.stderr ?? ""}`,
+    ).toBe(1);
+    return root;
+  }
+
+  it("refuses (exit 2) rather than reporting clean over an index it cannot read", () => {
+    // `U` was returned by neither `AM` nor `AMT`, so a conflicted in-scope path
+    // was simply absent from the list and this route printed "OK, no hits".
+    const root = makeConflict("src/ordinary.ts", "export const ours = 1;\n", SYNTHETIC_PHI);
+
+    // The premise: a `U` record, and no stage-0 entry to read.
+    expect(gitOut(root, ["diff", "--cached", "--raw"])).toMatch(/\sU\s+src\/ordinary\.ts/);
+    expect(gitOut(root, ["ls-files", "--stage", "src/ordinary.ts"])).not.toMatch(/^\S+ \S+ 0\t/m);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("src/ordinary.ts");
+    expect(r.stderr).toContain("unmerged");
+    // The refusal is about the index, not about the conflicting content.
+    expectNoPhi(r.stderr);
+  });
+
+  it("an unmerged path OUTSIDE the scope is left alone (the scope is unchanged)", () => {
+    const root = makeConflict("outside.md", "ours\n", "theirs\n");
+    expect(gitOut(root, ["diff", "--cached", "--raw"])).toMatch(/\sU\s+outside\.md/);
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+describe("phi-scan: a scan root's OWN path is in scope, not just its contents", () => {
+  // An index entry at exactly `test/__fixtures__` or `src` is never a directory,
+  // git records no entry for one, so it is a scan root replaced by a blob, a link
+  // or a gitlink. The prefix test alone let that through.
+  for (const scanRoot of ["test/__fixtures__", "src"]) {
+    it(`refuses the ${scanRoot} root itself staged as a link (exit 2)`, () => {
+      const root = makeRepo();
+      writeFileSync(join(root, "src", "ordinary.ts"), "export const answer = 42;\n");
+      git(root, ["add", "src/ordinary.ts"]);
+      commit(root, "base");
+
+      git(root, ["rm", "-rq", "--ignore-unmatch", scanRoot]);
+      // `git rm` leaves an empty (or untracked-only) directory behind.
+      rmSync(join(root, scanRoot), { recursive: true, force: true });
+      mkdirSync(join(root, scanRoot, ".."), { recursive: true });
+      symlinkSync(TARGET_NAME, join(root, scanRoot));
+      git(root, ["add", scanRoot]);
+
+      // The premise: a mode-120000 entry at exactly the root's own path.
+      expect(gitOut(root, ["ls-files", "--stage", scanRoot])).toMatch(/^120000 /);
+
+      const r = runIn(root, ["--staged"]);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+      expect(r.stderr).toContain(scanRoot);
+      expect(r.stderr).toContain("a symbolic link");
+      expectNoPhi(r.stderr);
+    });
+  }
+
+  it("DISCLOSED GAP: a regular BLOB at the fixture root gets the shape pass, not the FHIR scan", () => {
+    // What admitting the path buys is the MODE check, above. It does not buy the
+    // structured scan: `scanTarget` computes `isFixture` from
+    // `startsWith("test/__fixtures__/")`, with a trailing slash, so the root's
+    // own path can never reach the FHIR-aware branch. Recorded in
+    // `phi-scan-overrides.md` and pinned here so it stays a measured fact rather
+    // than a sentence. NOT a regression: base did not admit the path at all.
+    const root = makeRepo();
+    rmSync(join(root, "test", "__fixtures__"), { recursive: true, force: true });
+    writeFileSync(
+      join(root, "test", "__fixtures__"),
+      JSON.stringify({
+        resourceType: "Patient",
+        name: [{ family: "Okonkwo", given: ["Chidinma"] }],
+        birthDate: "1961-11-02",
+      }),
+    );
+    git(root, ["add", "test/__fixtures__"]);
+    expect(gitOut(root, ["ls-files", "--stage", "test/__fixtures__"])).toMatch(/^100644 /);
+
+    // The gap: a name absent from the allow-list is not read at this path.
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+
+    // And the control that makes that meaningful: the SAME resource one level
+    // inside the root IS caught, so the payload is genuinely detectable and it is
+    // the trailing slash that decides.
+    const inner = makeRepo();
+    writeFileSync(
+      join(inner, "test", "__fixtures__", "patient.json"),
+      JSON.stringify({
+        resourceType: "Patient",
+        name: [{ family: "Okonkwo", given: ["Chidinma"] }],
+        birthDate: "1961-11-02",
+      }),
+    );
+    git(inner, ["add", "test/__fixtures__/patient.json"]);
+    const r2 = runIn(inner, ["--staged"]);
+    expect(r2.code, `stderr: ${r2.stderr}`).toBe(1);
+    expect(r2.stderr).toContain("Okonkwo");
+  });
+
+  it("DISCLOSED GAP: a scan root's PARENT staged as a link defeats both routes", () => {
+    // The same shape one directory up, and unchanged by this slice: `test` is
+    // matched by neither `===` nor either prefix, and the all-mode walk returns
+    // silently because `existsSync(test/__fixtures__)` is false. Pinned so the
+    // gap is a measured fact rather than a sentence.
+    const root = makeRepo();
+    writeFileSync(join(root, "src", "ordinary.ts"), "export const answer = 42;\n");
+    git(root, ["add", "src/ordinary.ts"]);
+    commit(root, "base");
+
+    rmSync(join(root, "test"), { recursive: true, force: true });
+    symlinkSync(TARGET_NAME, join(root, "test"));
+    git(root, ["add", "test"]);
+    expect(gitOut(root, ["ls-files", "--stage", "test"])).toMatch(/^120000 /);
+
+    expect(runIn(root, ["--staged"]).code).toBe(0);
+    expect(runIn(root, []).code).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A scan that could not RUN exits 2, never 1
+// ---------------------------------------------------------------------------
+//
+// Node exits 1 on an uncaught throw, and 1 is this gate's code for HITS FOUND,
+// so a failure that was not an `InvocationError` was reported to CI and to the
+// developer as a finding. Both routes below were measured exiting 1.
+
+describe("phi-scan: a scan that could not run exits 2, not 1", () => {
+  it("a missing allow-list is an invocation error, not a finding", () => {
+    const root = makeRepo();
+    rmSync(join(root, "scripts", "phi-allow-list.txt"), { force: true });
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("allow-list not found");
+  });
+
+  it("a walk root that is not a directory refuses instead of impersonating a hit", () => {
+    // `readdirSync` raises `ENOTDIR`, a plain system error rather than an
+    // `InvocationError`, straight out of the walk.
+    const root = makeRepo();
+    rmSync(join(root, "src"), { recursive: true, force: true });
+    writeFileSync(join(root, "src"), "not a directory\n");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("could not enumerate");
+    expect(r.stderr).not.toMatch(/HIT:/);
   });
 });
 

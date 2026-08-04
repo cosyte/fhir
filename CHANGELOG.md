@@ -6,6 +6,58 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The PHI scanner's `--staged` route no longer reports clean over a staged rename, and an ordinary
+  `git mv` of a tracked symbolic link into a scan root is refused (`PHI-SCAN-RENAME-BLIND-AT-PRECOMMIT`).**
+  `R` and `C` are returned by neither `--diff-filter=AM` nor `AMT`, and git's rename detection is
+  **on by default**, so `git mv <link> test/__fixtures__/<name>` staged as
+  `:120000 120000 <sha> <sha> R100` with two paths and the filter deleted the record outright: the
+  route printed `OK, no hits` (exit 0) over a mode-`120000` entry sitting under a scan root. **The
+  cost was not only the mode check.** A record the route never lists is never scanned either, so a
+  rename that also **substituted a real-looking name** into the moved file passed the same way. The
+  remedy is `--no-renames`, not handling a two-path record: the destination then arrives as an
+  ordinary single-path `A` and the source as a `D` the filter already drops, the two-field stride
+  becomes **structural** rather than conditional, and no `R`/`C` record can be produced whatever the
+  caller's config says. Verified under `diff.renames=true|copies|false|1` and `diff.renameLimit=1`.
+  **The copy half is real, not a theoretical arm:** under `diff.renames=copies` a PHI-bearing file
+  copied from outside the scope into a scan root stages as a genuine `C100`, also two-path, and was
+  dropped exactly as a rename was (measured: exit 0 before, exit 1 after). **The enumeration is equal
+  or larger, NOT a strict superset:** the two enumerations are **equal** whenever nothing is renamed
+  or copied, which is the ordinary commit, and larger only when something is. The property relied on
+  is the one-directional half, that nothing which **was** enumerated stops being enumerated. This is
+  a change to the commit gate only: **no package surface, runtime behavior, build output or
+  dependency changes.**
+- **An unmerged in-scope path is refused instead of passing unobserved.** `U` was returned by
+  neither `AM` nor `AMT`, so a conflicted path under a scan root was simply absent from the list and
+  the route reported `OK, no hits` over an index it had not read. An unmerged path is recorded at
+  stages 1/2/3 and at no stage 0, so `git show :<path>` fails outright and there is no one staged
+  blob to scan; it now refuses (exit 2) naming the path. Git itself will not commit while a path is
+  unmerged, so this was never a route to a committed leak; what it was is a gate attesting clean
+  over a state it never observed, and `pnpm phi-scan --staged` is run by hand and from scripts as
+  well as from the hook.
+- **Each scan root's own path is in scope as well as its contents.** A `--raw` record at exactly
+  `test/__fixtures__` or `src` is never a directory, because this invocation emits no record for one,
+  so it is a scan root replaced by a blob, a link or a gitlink, and the prefix test alone let that
+  through (measured: exit 0 over a staged mode-`120000` `test/__fixtures__`, and the same for `src`).
+  The claim is scoped to the **record**, not to the index: a sparse index does hold a directory entry
+  (`040000 <sha> 0 src/`), which carries a trailing slash, matches neither test, and produces no
+  record here. What admitting the path buys is the **mode check**, which covers the link and gitlink
+  cases entirely. A regular **blob** at either path reaches only the conservative shape pass and not
+  the FHIR-aware scan, because `isFixture` tests a trailing slash, so a resource written there has
+  its `name`, `birthDate`, `address` and `telecom` read by nothing. That is a **disclosed gap**
+  recorded in `phi-scan-overrides.md` and pinned by a test, **not** a safe direction, and it is not a
+  regression: the path was not admitted at all before.
+- **A scan that failed anywhere inside `main()` now exits 2, not 1.** Node exits 1 on an uncaught throw and 1 is
+  this gate's code for **hits found**, so a failure that was not an `InvocationError` was reported
+  to CI and to the developer as a finding. Two were measured exiting 1: a missing or unreadable
+  allow-list (`loadAllowList()` sat outside every handler) and `readdirSync` refusing a walk root
+  (`ENOTDIR` on a root that is not a directory, `EACCES` on one it cannot list). Both refuse with 2
+  now, and a process-level net reports the rest as the invocation error they are rather than
+  impersonating a finding. **The net wraps the call to `main()`**, so it covers everything inside it
+  and nothing before it: a throw at module load, or a failure in the `tsx` / `node` runner itself,
+  still exits 1 and no wrapper placed there could change that.
+
 ### Changed
 
 - **Corrected the recorded cause of the `E403` that keeps this package off npm (`FHIR-NPM-NAME`).**
