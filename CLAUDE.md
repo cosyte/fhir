@@ -43,12 +43,15 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   a bundled US Core IG corpus, the `validator_cli.jar` differential (authored, **CI-only**, never
   observed green in this container), value-set membership without a supplied terminology service,
   typed per-resource models, and transaction **execution** (a stated non-goal).
-  **This is not a no-data-loss claim over the whole package**: read-path losses remain open,
-  declared and pinned by tests (a dose number written as XML element text, a scalar beside a
-  nested array, a `_`-sibling discarded whole, a foreign child of a valued primitive, character
-  data at the three `flagStrayText` sites, an unbound prefix, a `<DIV>` wrapper). See
+  **This is not a no-data-loss claim over the whole package, and the sentence above is base's own
+  wording, not a fresh one**: read-path losses remain open and declared. A **status** or a dose
+  number written as XML element text is dropped (reported, and the writer refuses, but the safety
+  spine reads `negations: []`), which is the one that qualifies "never drops a modifier, status or
+  negation"; so are a scalar beside a nested array, a `_`-sibling discarded whole, a foreign child
+  of a valued primitive, character data at the three `flagStrayText` sites, an unbound prefix, and a
+  `<DIV>` wrapper. See
   [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
-  and [`#xml-reader-residuals-left-open`](documentation/agent-notes.md#xml-reader-residuals-left-open).
+  and [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open).
   Per-phase detail: [`#shipped-phase-history-p11-back-to-p1`](documentation/agent-notes.md#shipped-phase-history-p11-back-to-p1).
   Today's envelope, stated precisely: [`#p2-p3-and-what-the-package-does-today`](documentation/agent-notes.md#p2-p3-and-what-the-package-does-today).
 - Roadmap: the meta-repo's `operations/roadmaps/fhir.md` (P0…P11).
@@ -91,12 +94,13 @@ Every line here cost a defect or a refuted gate pass. The pointer is to
   crossed the line.** Measured at `b2c5ee7`: 57 `.items` sites across 21 files, 3 flattening with no
   kind check at all and 21 checking the kind then silently dropping what is not it; exactly one fails
   closed. The combined attempt was refuted twice (it erased a true error and asserted
-  `noKnownAllergy`). The
-  inner array is kept as inert **text** (`nestedArraySource`), never modeled as an element.
+  `noKnownAllergy`). The inner array is kept as inert **text** (`nestedArraySource`), never modeled
+  as an element.
   [`#fhir-nested-array-reporting-2026-07-29`](documentation/agent-notes.md#fhir-nested-array-reporting-2026-07-29) ·
   [`#fhir-nested-array-preservation-2026-07-29`](documentation/agent-notes.md#fhir-nested-array-preservation-2026-07-29)
 - **Read `test/model-edges.test.ts` before you add a field to the model.** It derives the node-valued
-  edge set mechanically from the `FhirNode` union (exactly four members), so a new node-valued field
+  edge set mechanically from the three interfaces of the `FhirNode` union (exactly four node-valued
+  members), so a new node-valued field
   reds a test instead of silently redefining what a repeating element contains.
 - **Bounding a derived name is a shape test, not a truncation**, and the mechanism lives in
   `src/model/path.ts` and nowhere else. `FhirComplex.properties[].name` stays exactly as the document
@@ -105,7 +109,8 @@ Every line here cost a defect or a refuted gate pass. The pointer is to
   add one.** A forgery shaped like a FHIR name is still echoed.
   [`#phi-warning-message-leak-2026-08-02`](documentation/agent-notes.md#phi-warning-message-leak-2026-08-02)
 - **A PHI sweep over leaf values is not a PHI sweep.** `phi-leak.test.ts` swept values only, which is
-  why a 1,000,011-byte property name in an `expression` survived it. Sentinels must cover names.
+  why a 1,000,000-byte property name, which produced a 1,000,011-byte `expression`, survived it.
+  Sentinels must cover names.
 
 ### The XML reader
 
@@ -160,12 +165,14 @@ Unless noted, all of these are
   (`MIXED_XML_SPELLING`, plus `ARRAY_WRAPPED_SCALAR` at a safety-scoped element), because dropping
   means two properties of one model name in one `FhirComplex` and **the XML reader has no
   `duplicates` mechanism**, so it would be a silent first-wins loss: strictly worse.
-- The `_`-sibling discarded whole, the **unbound** prefix, the foreign-root laundering, the
-  `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, a scalar beside a nested array, a prefix
-  rebound between siblings, the §2.6.1 value-absent primitive and the cross-format singleton-wrapper
-  laundering are **declared open residuals, each pinned by a test**, among others recorded in the
-  notes. Do not fold one into an unrelated slice, and do not restate a gap as a claim.
-  [`#xml-reader-residuals-left-open`](documentation/agent-notes.md#xml-reader-residuals-left-open) ·
+- **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
+  slice, and do not restate a gap as a claim. **Pinned by a test:** the `_`-sibling discarded whole,
+  the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, a scalar
+  beside a nested array, the §2.6.1 value-absent primitive. **Filed and reproduced but NOT known to
+  be pinned, so check before you rely on one:** a prefix rebound between siblings (`groupChildren`
+  has no test for it), the foreign-root laundering (only the flag is pinned), and the cross-format
+  singleton-wrapper laundering (the notes call it pinned; the test was not found on audit).
+  [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open) ·
   [`#singleton-wrapper-laundering`](documentation/agent-notes.md#singleton-wrapper-laundering) ·
   [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
 - The raw XML reader is **XXE- and billion-laughs-proof by refusal**: any `<!DOCTYPE` is
@@ -260,7 +267,22 @@ Recorded in `documentation/decisions/` at bootstrap because they shape everythin
   dropping it.
 - Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
   not a claim that a location carries no document content** (a name is echoed when it matches the
-  bounded published form). See the derived-name trap above, and do not widen it into one.
+  bounded published form). See the derived-name trap above, and do not widen it into one. **The
+  other half of that claim is scoped too and must stay scoped**: the JSON reader's `expression` no
+  longer carries English prose, NOT that every `expression` is resolvable FHIRPath. A `<withheld>`
+  segment and the XML reader's `.@name` attribute form are deliberately **admitted** by
+  `test/expression-grammar.test.ts` rather than hidden.
+- **Deliberate omissions, each of which reads as an oversight and is not.** `markNestedArray` and
+  `markDroppedText` are reader-internal and **deliberately not exported**. `typeOf` stays the strict
+  single-value read, because a structural verdict should **reject** an unreadable type, not guess
+  one (only `readSafety` considers every type the document names). The writer emits **one member per
+  name**, deliberately, because both would be invalid FHIR. The element-text refusal fires even when
+  text sits beside a value that arrived, and **do not justify that arm with "content the sender
+  wrote is still missing"** (the gate broke that sentence in one query with
+  `<status value="final">final</status>`); the honest reason is that the rule keys on the reader
+  dropping character data and never compares text to value. The two defensive `rootPath` calls in
+  the terminology layer and the dose locator are provably the identity where observable, and the
+  gate **deliberately does not pretend to cover them**.
 - **PHI discipline:** synthetic-only fixtures, redaction in logs. Never commit realistic PHI. A
   vendor quirk is encoded only when a real de-identified resource grounds it, never invented.
 

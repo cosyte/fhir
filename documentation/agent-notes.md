@@ -202,10 +202,11 @@ writer still emits one member per name, deliberately: both would be invalid FHIR
 one of two written `valueQuantity` values with no signal on its own surface (no issue channel), and
 read -> write -> read **launders** the defect (the writer emits the conformant survivor, so the
 re-read is `valid: true`, `safeToSummarize: true`); `serializeResource`/`serializeResourceXml` return a
+bare string with no channel to say so.
 
 ## `FHIR-ARRAY-WRAPPED-SCALAR` (2026-07-28)
 
-  bare string with no channel to say so. **Pass two (NOT REFUTED) filed two more `PRE-EXISTING` ones,
+**Pass two (NOT REFUTED) filed two more `PRE-EXISTING` ones,
   the first worth queuing ahead of the next slice** -- and **`FHIR-ARRAY-WRAPPED-SCALAR`
   (2026-07-28) closed BOTH of them.** They were: an **array-wrapped `0..1` element** reaching that
   item's exact harm shape with no duplicate key at all (`{"resourceType":"Observation","status":
@@ -802,7 +803,7 @@ where nothing is missing and it refuses anyway. The honest reason is that the ru
 reader DROPPING character data and never compares the text to the value, and deciding the
 duplicate case is harmless would mean READING the text, which is the tolerance this half declines;
 
-### XML reader residuals left open
+### Residuals ii to iv, and three more left open
 
 (ii) a **foreign child of a valued primitive** is discarded whole under `UNKNOWN_PROPERTY`, whose
 documented contract is that nothing was lost, so that code is making a false promise at that site
