@@ -6,6 +6,27 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Corrected the recorded cause of the `E403` that keeps this package off npm (`FHIR-NPM-NAME`).**
+  No change to the package surface, runtime behavior, build output or dependencies; this is a
+  documentation correction only. `CLAUDE.md` stated as fact that npm rejects the scoped name via a
+  **name-similarity filter, on account of the unscoped `fhir` package**. That reading is
+  **RETRACTED**: npm has never named similarity or the unscoped package in anything it returned, and
+  the reading is harmful because it implies renaming or rescoping where the evidence implies a
+  support ticket. Replaced with what is measured, re-derived on the `0.0.8` attempt of 2026-08-04
+  (run `30915771713`, `PUT` refused `2026-08-04T13:52:56Z`): the provenance statement is signed and
+  reaches the sigstore transparency log **before** the registry answers (logIndex `2340587080`,
+  verified present in rekor and decoding to `pkg:npm/%40cosyte/fhir@0.0.8`), so the refusal is
+  registry-side name or permission policy and not a signing failure; the `PUT` is refused in ~45ms
+  with no response body, independent of publish path and account session; and new `@cosyte` packages
+  were created successfully on 2026-07-29 and 2026-07-30, after the first `fhir` `E403`, so
+  scope-level package creation works and only this one name is refused. Also records the traced
+  sigstore logIndexes so a refused version is not re-fired, and notes that the failing run now
+  uploads the redacted npm debug log npm support asked for. The `0.0.7` and `0.0.8` artifacts were
+  inspected by hand and contain **no credential material**: npm 10.9.8 logs config file paths only,
+  never their contents, and no `Authorization` header.
+
 ### Fixed
 
 - **A dropped-character-data finding disappeared across a write-and-re-read; both writers now refuse

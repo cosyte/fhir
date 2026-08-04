@@ -11,11 +11,38 @@ semantics, and validate it against US Core, without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha, unpublished on npm.** No version of `@cosyte/fhir` has ever reached the registry:
-  every publish attempt is rejected with `E403` by npm's name-similarity filter, on account of the
-  unscoped `fhir` package (FHIR-NPM-NAME; support request filed 2026-07-23). `package.json`
-  therefore runs ahead of the registry rather than behind it, so read the version there and never
-  infer it from npm. **Phases 1–9 landed; P10 landed (halves a + b); P11 buildable
+- **Pre-alpha, unpublished on npm.** No version of `@cosyte/fhir` has ever reached the registry, and
+  the repo carries no git tag and no GitHub release, because the release job never gets past the
+  publish. Every attempt is refused by npm with a bare `E403` on
+  `PUT https://registry.npmjs.org/@cosyte%2ffhir` (FHIR-NPM-NAME; support request filed 2026-07-23,
+  still open). `package.json` runs ahead of the registry rather than behind it, so read the
+  version there and never infer it from npm.
+  - **The "name-similarity" reading is RETRACTED. Do not rename or rescope the package on it.** npm
+    has never named similarity or the unscoped `fhir` package in anything it returned; the only body
+    it sends is its generic "forbidden by your security policy, or on a server you do not have
+    access to" boilerplate. npm confirmed an unrelated incident and it was **not** the cause: retried
+    after the fix, still `E403`.
+  - **What is actually measured**, most recently on the `0.0.8` attempt of 2026-08-04 (run
+    [30915771713](https://github.com/cosyte/fhir/actions/runs/30915771713), `PUT` refused
+    `2026-08-04T13:52:56Z`):
+    - The provenance statement is signed and **reaches the sigstore transparency log before the
+      registry answers** (`0.0.8` = logIndex `2340587080`, `0.0.7` = `2335029918`, both verified
+      present in rekor and decoding to `pkg:npm/%40cosyte/fhir@<version>`). So the refusal is
+      registry-side name or permission policy, **not** a signing or provenance failure.
+    - The `PUT` is refused in ~45ms with no response body, matching the ~72ms refusal of a local
+      publish from a logged-in session. Same failure independent of publish path (OIDC vs classic
+      token) and of account session.
+    - Brand-new `@cosyte` packages were created on the registry successfully on **2026-07-29**
+      (`transform`, `synth`, `cli`) and **2026-07-30** (`deid`), which is after the first `fhir`
+      `E403`. Scope-level package creation therefore works, and only this one name is refused.
+  - **Do not re-fire a version npm has already traced:** `0.0.2` (logIndex `2228360533`), `0.0.3`
+    (`2259690084`), `0.0.7` (`2335029918`), `0.0.8` (`2340587080`).
+  - The failing run uploads the npm debug log as an artifact (`npm-debug-log-cosyte-fhir-*`), which
+    is what npm support asked for. It is redacted and gated in `cosyte/.github`, and the `0.0.7` and
+    `0.0.8` artifacts were both checked by hand: npm 10.9.8 records config file **paths** only, never
+    their contents, and no `Authorization` header, so no credential material is present. **This repo
+    is public and the artifact is downloadable, so re-check that before ever linking one.**
+- **Phases 1–9 landed; P10 landed (halves a + b); P11 buildable
   tiers landed.** P11 (buildable portion; roadmap §6): conformance hardening as gating tests: a
   **JSON+XML+NDJSON fuzz tier** (`test/fuzz.test.ts`, `FUZZ_RUNS`-tunable, a dedicated `fuzz` CI job)
   proving adversarial input never crashes/hangs/OOMs: only a **typed** `FhirCodecError`/`FhirXmlError`
