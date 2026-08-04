@@ -26,8 +26,16 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   - **The "name-similarity" reading is RETRACTED. DO NOT RENAME OR RESCOPE THE PACKAGE ON IT.** npm
     has never named similarity or the unscoped `fhir` package in anything it returned. Provenance is
     signed and in rekor before the refusal, so it is not a signing failure; scope-level creation
-    works (four other `@cosyte` packages were created _after_ the first refusal); and the refusal is
-    identical across publish paths and account sessions.
+    works (`transform`, `synth` and `cli` were created 2026-07-29 and `deid` 2026-07-30, all _after_
+    the first refusal); and the refusal is identical across publish paths and account sessions.
+  - **It is a HUMAN GATE, not work you can pick up.** The debug trace npm asked for is captured and
+    hand-checked free of credential material; the only remaining step is the founder sending it.
+  - **Do not generalise the error code across the three affected packages.** `E403` is `fhir`'s
+    **publish** refusal, at policy, after CI is green and after provenance reaches the transparency
+    log. `transform`'s is an **install** failure (`E404`); `synth`'s is an **install** failure
+    (`ERESOLVE`), and it fails **despite** the peer being declared optional, so never re-derive from
+    `peerDependenciesMeta` that it cannot. `deid` and `cli` are not blocked. **Publish state and
+    installability are independent.**
   - **Never re-fire a version npm has already traced:** `0.0.2`, `0.0.3`, `0.0.7`, `0.0.8`.
   - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
     hand before ever linking one.
@@ -276,7 +284,10 @@ Recorded in `documentation/decisions/` at bootstrap because they shape everythin
   `markDroppedText` are reader-internal and **deliberately not exported**. `typeOf` stays the strict
   single-value read, because a structural verdict should **reject** an unreadable type, not guess
   one (only `readSafety` considers every type the document names). The writer emits **one member per
-  name**, deliberately, because both would be invalid FHIR. The element-text refusal fires even when
+  repeated name**, deliberately, because emitting both members a duplicated name wrote would be
+  invalid FHIR
+  ([`#fhir-duplicate-key-retraction-2026-07-28`](documentation/agent-notes.md#fhir-duplicate-key-retraction-2026-07-28)).
+  The element-text refusal fires even when
   text sits beside a value that arrived, and **do not justify that arm with "content the sender
   wrote is still missing"** (the gate broke that sentence in one query with
   `<status value="final">final</status>`); the honest reason is that the rule keys on the reader
