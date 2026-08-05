@@ -127,10 +127,11 @@ export const ISSUE_CODES = {
    *   narrative into a repeat over an otherwise conformant document. A **foreign** element reached by
    *   a **default** `xmlns` re-declaration also keeps its tag verbatim as its model name, so it groups
    *   with its FHIR namesake the same way; there the group additionally carries
-   *   {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT}, which is the code to read for it. **A
-   *   FHIR-namespace element does not carry that flag**, because it is not foreign to its parent, and
-   *   that is exactly the narrative case: `<div xmlns="http://hl7.org/fhir"/>` beside the real XHTML
-   *   narrative draws this code and **nothing else**, so this is the only report there is to read.
+   *   {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT}, which is the code to read for it. Whether a group
+   *   carries that flag as well is decided by whether each occurrence is foreign **to its own
+   *   parent**, so an element in the parent's namespace does not draw it: inside a FHIR-namespace
+   *   `<text>`, a `<div xmlns="http://hl7.org/fhir"/>` beside the real XHTML narrative draws this
+   *   code and no other, which makes this the only report there is to read for it.
    *
    * It also fires where a prefixed FHIR element groups with an unprefixed one carrying a **foreign**
    * default declaration, because that one is spelled exactly like the FHIR element; there the group

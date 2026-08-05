@@ -179,9 +179,11 @@ Unless noted, all of these are
 - **That report compares the EXPANDED NAME, not the tag alone** (2026-08-05). **Do not write down how
   many shapes reach it**: that docblock said "two routes" while its own corpus exercised four. The
   rule is the comparison. Two read as conformant: a prefix rebound between siblings, and a `<div/>`
-  in the FHIR namespace joining `Narrative.div`; the second read back with **zero** diagnostics and
-  `valid: true` over a `0..1` slot, and draws this report and no other. **Do not narrow it back to
-  `element.name`.** Closed for the READ only: `serializeResourceXml` drops the bindings.
+  in the FHIR namespace joining `Narrative.div`. The second used to read back with **zero**
+  diagnostics and `valid: true` over a `0..1` slot; it now draws this report, and no other. **Do not
+  narrow it back to `element.name`**, and **state the predicate, not which documents come out of
+  it**: three gate passes running refuted a summary of that set, which depends on the parent's
+  namespace. Closed for the READ only: `serializeResourceXml` drops the bindings.
   [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
 - **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
   slice, and do not restate a gap as a claim. **Pinned by a test:** the `_`-sibling discarded whole,

@@ -468,11 +468,15 @@ function groupChildren(children: ScopedElement[]): {
  * the narrative as `div` under every spelling of the XHTML namespace, so `{http://hl7.org/fhir}div`
  * groups with it). Comparing tags is silent about both, and the second is the one that costs the
  * most: `Narrative.div` is `0..1`, so the merge turns the narrative into a repeat that a single-value
- * read yields nothing from, over a document that is otherwise conformant. A **foreign** element
- * reached by a **default** `xmlns` re-declaration groups with its FHIR namesake the same way, and
- * there the group already carries {@link unexpectedXmlContent} as well. **A FHIR-namespace one does
- * not**, because {@link isForeign} is false for it, which is why the narrative case draws this report
- * and nothing else.
+ * read yields nothing from, over a document that is otherwise conformant. An element reached by a
+ * **default** `xmlns` re-declaration groups with its FHIR namesake the same way, and whether that
+ * group also carries {@link unexpectedXmlContent} is decided by {@link isForeign}, which compares the
+ * element against **its parent's** namespace and not against the FHIR one.
+ *
+ * **State the predicate, not its consequence.** Three consecutive gate passes refuted a sentence
+ * here that summarised which documents come out of that predicate, each narrower than the last and
+ * each still wrong, because the set depends on the parent. Name the predicate and let the reader
+ * evaluate it.
  *
  * The comparison can only ever add a report, never retire one: two occurrences that differ in tag
  * differ in the pair regardless of namespace. A conformant document reaches it only with occurrences
