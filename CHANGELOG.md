@@ -50,6 +50,43 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   corpus: 4 readings moved, all 4 read diagnostics **gained** and 0 lost, 0 validation findings
   moved in either direction, 0 `valid` or `safeToSummarize` flips, 0 retractions or negations lost,
   0 leaf values missing, and of 396 twin pairs 393 identical, 3 louder, **0 weaker**.
+- **The PHI scanner reads the tracked files under `test/` that its markdown and sentinel rules do
+  not exempt, reads the FHIR identifiers written as source literals, and refuses to report clean over a corpus it never opened
+  (`PHI-SCAN-WALK-ROOT-SCOPE`, `PHI-SCAN-OBSERVED-NOTHING-IS-GLOBAL`).** The all-mode walk was
+  rooted at `test/__fixtures__` and `src` and `--staged` was scoped to the same two prefixes, so a
+  tracked file directly under `test/` was reached by **neither** route: 101 tracked files were
+  scanned by neither, **55 of them under `test/`**. Counted with the scanner's own key regex over
+  those 55 files: **87** object-literal `family` / `given` sites and **21** `birthDate` sites, plus
+  **33** more `family` / `given` and **3** `birthDate` spelled as XML `value` attributes, none of
+  them read. The roots are `test` and `src` now, on both routes;
+  the sentinel-bearing files the old exclusion was justified by are **two**, and they are declared by
+  exact path, announced when skipped, and still scanned when named on the command line.
+  **Widening the scope alone would have bought the dashed-SSN and email floor and nothing else**: the
+  structured scanner assumes the file **is** the document and runs only over a fixture with a FHIR
+  wire-format extension, so a real surname typed as `family: "…"` in a `.ts` test measured exit 0
+  both before the widening (never enumerated) and after it with no recogniser (enumerated, unread).
+  `family`, `given`, `birthDate`, `deceasedDateTime` and `line` are now read in source and sent to
+  the same detectors, **in addition to** the shape pass, in **both wire formats** this package's
+  tests write, with escapes decoded to a bounded fixed point because a resource is routinely written
+  as a JSON document inside a TypeScript string. Within XML that is the **double-quoted attribute**
+  only: a single-quoted attribute and XML element text are unread and declared, and the element-text
+  case has a live site. `text`, `identifier.value` and `telecom.value` are deliberately **not** read
+  there: bare `value` is FHIR's most overloaded name and source has no block boundary to scope it
+  with.
+  **And an emptied or deleted walk root printed `OK, no hits` and exited 0 over a corpus still wholly
+  present in the index** (measured, both cases). A scanned-file **count** does not detect that, since
+  it counts the roots that did exist; the sweep now reconciles against the index, names every
+  in-scope path it did not open, and refuses outright when it opened no file at all.
+  The one false positive the widening surfaced is this package's own `IssueCode@FHIRPath` diagnostic
+  form, which is one `@` between two dotted tokens and which no email recogniser separates from an
+  address by shape. **The first remedy for it was a widening that was "instead of" rather than "in
+  addition to", and it made the gate detect LESS than the one it replaced**: a shape exclusion
+  scoped in intent to source files in fact reached any fixture whose extension is not `.json` /
+  `.xml` / `.ndjson`, because those route down the same branch, and a fixture carrying
+  `JOHN_SMITH@Mercy.org` went from exit 1 to exit 0. It is reverted. A single declared
+  `EMAILDOMAIN` covers the one live occurrence with a blast radius of one domain, and both halves
+  are pinned. Three characterization tests over declared gaps went red and were rewritten, which is
+  that mechanism working. No published behaviour changes.
 - **The PHI scanner's `--staged` route no longer reports clean over a staged rename, and an ordinary
   `git mv` of a tracked symbolic link into a scan root is refused (`PHI-SCAN-RENAME-BLIND-AT-PRECOMMIT`).**
   `R` and `C` are returned by neither `--diff-filter=AM` nor `AMT`, and git's rename detection is

@@ -34,11 +34,21 @@ NAME PUBLIC
 NAME SYNTHFAMILY
 NAME SYNTHGIVEN
 NAME SYNTHMIDDLE
+# The two canonical anonymous-party placeholder surnames. Neither identifies
+# anyone: "Roe" and "Doe" are what a legal filing uses for a party whose name is
+# withheld, and this suite uses them for the same reason.
+NAME ROE
+NAME DOE
 
 # --- Synthetic dates of birth (birthDate) ---
 DOB 1974-12-25
 DOB 1970-01-01
 DOB 1980-01-01
+# Year-only precision, the deceased[x] choice-type case. `deceasedDateTime` is
+# gated by the same rule as `birthDate` (both are dates that identify), and FHIR
+# `dateTime` permits a bare year, so this is the shape a year-precision death
+# date arrives as.
+DOB 2020
 
 # --- Synthetic identifiers (identifier.value / telecom.value) ---
 ID SYN-0001
@@ -48,3 +58,10 @@ EMAILDOMAIN example.com
 EMAILDOMAIN example.org
 EMAILDOMAIN example.net
 EMAILDOMAIN hospital.example.org
+# NOT a mail domain. This package spells a diagnostic `IssueCode@FHIRPath`, and
+# `UNKNOWN_PROPERTY@Patient.name` is one `@` between two dotted tokens, which no
+# email recogniser can tell from an address by shape (`.name` is a real TLD). The
+# tests assert on those strings. Declared here, one domain at a time, rather than
+# by a shape rule in the scanner: a rule keyed on the shape covered every
+# capitalised domain in every source file and lost a hit the scanner already had.
+EMAILDOMAIN patient.name

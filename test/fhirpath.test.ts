@@ -259,7 +259,7 @@ describe("evaluateInvariant: operators, functions, and literals across the subse
   const patient = {
     resourceType: "Patient",
     active: true,
-    name: [{ family: "Aa", given: ["G1", "G2"] }, { family: "Bb" }],
+    name: [{ family: "Chalmers", given: ["G1", "G2"] }, { family: "Roe" }],
   };
 
   it("union (|) concatenates and de-duplicates", () => {
@@ -268,14 +268,14 @@ describe("evaluateInvariant: operators, functions, and literals across the subse
   });
 
   it("in / contains membership", () => {
-    expect(evalOn("'Aa' in name.family", patient).satisfied).toBe(true);
-    expect(evalOn("name.family contains 'Bb'", patient).satisfied).toBe(true);
+    expect(evalOn("'Chalmers' in name.family", patient).satisfied).toBe(true);
+    expect(evalOn("name.family contains 'Roe'", patient).satisfied).toBe(true);
     expect(evalOn("'zz' in name.family", patient).satisfied).toBe(false);
   });
 
   it("first / last / select / all / distinct", () => {
-    expect(evalOn("name.first().family = 'Aa'", patient).satisfied).toBe(true);
-    expect(evalOn("name.last().family = 'Bb'", patient).satisfied).toBe(true);
+    expect(evalOn("name.first().family = 'Chalmers'", patient).satisfied).toBe(true);
+    expect(evalOn("name.last().family = 'Roe'", patient).satisfied).toBe(true);
     expect(evalOn("name.select(family).count() = 2", patient).satisfied).toBe(true);
     expect(evalOn("name.all(family.exists())", patient).satisfied).toBe(true);
     expect(evalOn("(name.family | name.family).distinct().count() = 2", patient).satisfied).toBe(
@@ -292,7 +292,7 @@ describe("evaluateInvariant: operators, functions, and literals across the subse
   });
 
   it("indexer selects by position and yields empty out of range", () => {
-    expect(evalOn("name[0].family = 'Aa'", patient).satisfied).toBe(true);
+    expect(evalOn("name[0].family = 'Chalmers'", patient).satisfied).toBe(true);
     expect(evalOn("name[9].empty()", patient).satisfied).toBe(true);
   });
 
@@ -436,8 +436,8 @@ describe("evaluateInvariant: remaining evaluator branches", () => {
   const patient = {
     resourceType: "Patient",
     name: [
-      { family: "Aa", given: ["G1", "G2"], _family: { extension: [{ url: "u" }] } },
-      { family: "Bb" },
+      { family: "Chalmers", given: ["G1", "G2"], _family: { extension: [{ url: "u" }] } },
+      { family: "Roe" },
     ],
   };
 
@@ -456,7 +456,7 @@ describe("evaluateInvariant: remaining evaluator branches", () => {
   it("structural equality across nested lists and mixed-kind inequality", () => {
     expect(evalOn("name.first() = name.first()", patient).satisfied).toBe(true); // recurses into given[]
     expect(evalOn("name.first() = name.first().family", patient).satisfied).toBe(false); // complex vs primitive
-    expect(evalOn("name.first() = 'Aa'", patient).satisfied).toBe(false); // complex vs string
+    expect(evalOn("name.first() = 'Chalmers'", patient).satisfied).toBe(false); // complex vs string
   });
 
   it("navigates a value-absent primitive's id and an unknown primitive member", () => {
@@ -480,7 +480,7 @@ describe("evaluateInvariant: remaining evaluator branches", () => {
     expect(evalOn("missing.first() != 'x'", patient).satisfied).toBe(false); // empty != x → empty
     expect(evalOn("missing.first() < 1", patient).satisfied).toBe(false); // empty < 1 → empty
     expect(evalOn("missing.first() in name.family", patient).satisfied).toBe(false); // empty in … → empty
-    expect(evalOn("name.first().family = name.last().family", patient).satisfied).toBe(false); // Aa vs Bb
+    expect(evalOn("name.first().family = name.last().family", patient).satisfied).toBe(false); // Chalmers vs Roe
   });
 
   it("covers or/xor/implies empty propagation and rootResource", () => {

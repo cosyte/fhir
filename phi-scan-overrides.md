@@ -13,12 +13,32 @@ declaration) over a whole-file bypass.
 inspects only the elements that actually carry each PHI category, keyed by the
 FHIR element name, not a blind text regex, which would trip on coded values and
 resource labels. It runs the structured scan on files under `test/__fixtures__/`
-by wire-format extension (`.json`, `.xml`, `.ndjson`); `src/` gets a conservative
-dashed-SSN + email pass only, so a JSDoc `@example` embedding a
-`{"resourceType":"Patient",…}` snippet with synthetic names is never parsed as a
-resource. `test/*.ts` is not walked at all: the PHI-leak suite ships a sentinel
-battery of deliberately PHI-shaped strings, and scanning it would flag the very
-sentinels that exist to be flagged.
+by wire-format extension (`.json`, `.xml`, `.ndjson`). Everything else in scope
+gets the **source pass**: the conservative dashed-SSN + email shape check, plus
+the FHIR-keyed literal recogniser described below. A JSDoc `@example` embedding a
+`{"resourceType":"Patient",…}` snippet is still never _parsed_ as a resource.
+
+**The walk roots are `test/` and `src/`, not `test/__fixtures__/` and `src/`.**
+Measured before that changed: 55 tracked files sat directly under `test/` and
+were reached by **neither** route. Counted with this scanner's own key regex over
+those 55 files: **87** object-literal `family` / `given` sites and **21**
+`birthDate` sites, plus **33** more `family` / `given` and **3** `birthDate`
+spelled as XML `value` attributes. The old
+justification was the PHI-leak suite's sentinel battery, which is **two files**,
+not the directory. Those two are now declared by exact path in the scanner's
+`SENTINEL_FILES` and listed under **Bypass entries** below; every other file
+under `test/` is in scope by default, and a new one is in scope the moment it is
+written.
+
+**Enumerating a source file buys the SSN / email floor and nothing else, so the
+recogniser was widened in the same change.** The structured scanner assumes the
+file **is** the document, and a test builds its resources as TypeScript object
+literals, so a real surname typed as `family: "…"` inside a `.ts` file was read
+by nothing: a dashed SSN and an email are neither a name, a date of birth nor a
+street address. Measured on `.ts` carrying
+`{ resourceType: "Patient", name: [{ family: "…", given: ["…"] }] }`: exit 0,
+`OK, no hits`, both before the scope widening (never enumerated) and after it
+with the recogniser absent (enumerated, unread).
 
 A key distinction keeps the name detector honest: FHIR `name` is a **HumanName**
 (object / array) only on Patient / Practitioner / RelatedPerson / Person and the
@@ -29,14 +49,28 @@ object/array: a string `name` is skipped, so `Organization.name`
 `entry.resource`, and every `value[x]`, so a name nested in a contained resource
 or a Bundle entry is still reached.
 
-| Category         | Where it looks                                                                         | Rule                                                                                                                                                                                                                                                   |
-| ---------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Person names     | HumanName `family` / `given` / `text` (JSON); `<family>` / `<given>` value attrs (XML) | each significant name token must be in the `NAME` allow-list (case-insensitive). Single Latin initials are skipped; single CJK ideographs are kept; honorific / degree codes (MD, JR, …) are ignored. A string `name` (resource label) is not scanned. |
-| Date of birth    | `birthDate`, `deceasedDateTime`                                                        | the normalized `YYYYMMDD` / `YYYYMM` / `YYYY` must be in the `DOB` allow-list. A DOB is indistinguishable from a real one by shape, so the allow-list is the only sound gate.                                                                          |
-| SSN / identifier | `identifier.value`; `telecom.value`; dashed `\d{3}-\d{2}-\d{4}` anywhere               | a 9-digit (SSN-shaped) value must be in the `ID` allow-list; a dashed SSN anywhere is always a hit. Prefixed synthetic ids (`SYN-0001`) and resource references (`Patient/1`) are not 9-digit and pass.                                                |
-| Phone            | `telecom.value` (ContactPoint)                                                         | a ≥10-digit number lacking the `555` fake-exchange convention is a hit.                                                                                                                                                                                |
-| Address          | `Address.line` / `Address.text` (JSON); `<line>` value attrs (XML)                     | a `<number> <word>` street line must be in the `ADDR` allow-list. `city` / `postalCode` are quasi-identifiers and not gated here.                                                                                                                      |
-| Email            | anywhere (`telecom.value` + free text)                                                 | an email whose domain is not an `EMAILDOMAIN` (reserved / test) domain is a hit.                                                                                                                                                                       |
+| Category         | Where it looks                                                                                                                             | Rule                                                                                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Person names     | HumanName `family` / `given` / `text` (JSON); `<family>` / `<given>` value attrs (XML)                                                     | each significant name token must be in the `NAME` allow-list (case-insensitive). Single Latin initials are skipped; single CJK ideographs are kept; honorific / degree codes (MD, JR, …) are ignored. A string `name` (resource label) is not scanned.     |
+| Date of birth    | `birthDate`, `deceasedDateTime`                                                                                                            | the normalized `YYYYMMDD` / `YYYYMM` / `YYYY` must be in the `DOB` allow-list. A DOB is indistinguishable from a real one by shape, so the allow-list is the only sound gate.                                                                              |
+| SSN / identifier | `identifier.value`; `telecom.value`; dashed `\d{3}-\d{2}-\d{4}` anywhere                                                                   | a 9-digit (SSN-shaped) value must be in the `ID` allow-list; a dashed SSN anywhere is always a hit. Prefixed synthetic ids (`SYN-0001`) and resource references (`Patient/1`) are not 9-digit and pass.                                                    |
+| Phone            | `telecom.value` (ContactPoint)                                                                                                             | a ≥10-digit number lacking the `555` fake-exchange convention is a hit.                                                                                                                                                                                    |
+| Address          | `Address.line` / `Address.text` (JSON); `<line>` value attrs (XML)                                                                         | a `<number> <word>` street line must be in the `ADDR` allow-list. `city` / `postalCode` are quasi-identifiers and not gated here.                                                                                                                          |
+| Email            | anywhere (`telecom.value` + free text)                                                                                                     | an email whose domain is not an `EMAILDOMAIN` (reserved / test) domain is a hit.                                                                                                                                                                           |
+| Source literals  | `family` / `given` / `birthDate` / `deceasedDateTime` / `line` as a key in a source file, followed by a string literal or an array of them | the value goes to the same detector the structured scanner uses. Escapes are decoded to a bounded fixed point (three rounds), because a resource is routinely written as a JSON document inside a TypeScript string and one decode leaves the wrong token. |
+
+**Two omissions from that last row are deliberate.** `text` is not keyed:
+`HumanName.text` and `Address.text` are PHI, but a flat text pass cannot tell
+them from `CodeableConcept.text`, `Narrative.text` or an assertion message, all
+ordinary in this suite, and a gate that false-errors on conformant test code is a
+gate someone switches off. `identifier.value` and `telecom.value` are not keyed
+for the same reason and more sharply: bare `value` is the most overloaded key in
+FHIR (`Quantity.value`, `Extension.value[x]`, every primitive), and the XML
+scanner only dares read it inside a `<telecom>` / `<identifier>` block, a
+boundary that does not exist in TypeScript source. So the source pass covers
+**names, dates of birth and street addresses**, and a 9-digit identifier written
+inline still reaches only the dashed-SSN arm. Put a resource that needs full
+coverage in `test/__fixtures__/`.
 
 ## What the enumeration admits, and what refuses the scan
 
@@ -109,9 +143,13 @@ scripts as well as from the hook. It is **refused**, not scanned.
 
 **"In scope" is each route's own existing boundary.** The walk still excludes a
 gitignored entry, the same rule that already excluded a gitignored file, so links
-get no second and stricter boundary of their own; `--staged` still looks only at
-`test/__fixtures__/**` and `src/**.ts`. A path named explicitly on the command
-line is still **followed**: that is the caller's own request to read whatever is
+get no second and stricter boundary of their own; `--staged` looks at `test/**`
+and `src/**.ts`, **minus `.md`, which is the walk's own exemption applied to both
+routes**. Leaving that exemption on one route made them disagree in both
+directions: a tracked `test/notes.md` carrying a dashed SSN was never opened by
+the sweep while the hook reported it as a hit (measured, exit 1 against exit 0).
+**Keeping the two routes on different scopes is what let the original hole sit
+unnoticed**, so they moved together. A path named explicitly on the command line is still **followed**: that is the caller's own request to read whatever is
 there, and it errs toward scanning more.
 
 **Two places that boundary moved**, called out rather than folded into
@@ -144,24 +182,24 @@ throwaway git repository rather than this one.
 
 ## Documented limitations
 
-- **A regular blob staged at a scan root's OWN path gets the conservative shape
-  pass only, never the FHIR-aware scan.** `scanTarget` computes `isFixture` from
+- **A regular blob staged at a scan root's OWN path still misses the
+  STRUCTURED-ONLY detectors.** `scanTarget` computes `isFixture` from
   `startsWith("test/__fixtures__/")`, with a trailing slash, so the root's own
-  path cannot reach the structured branch: a resource written at exactly
-  `test/__fixtures__` has its `name`, `birthDate`, `address` and `telecom` read
-  by nothing, and the scan exits 0. Measured. It is **not** a regression, since
-  the path was not admitted at all before, and it is **not** the safe direction,
-  so it is recorded here rather than described as one. The fix belongs to
-  `scanTarget`'s dispatch rather than to the `--staged` scope filter. What
-  admitting the path does buy is the mode check, which covers the link and
-  gitlink cases entirely.
-- **A scan root's PARENT staged as a link defeats both routes.** `test` staged as
-  a mode-`120000` symlink is out of scope for `--staged` (neither `===` matches
-  and neither prefix does), and the all-mode walk returns silently because
-  `existsSync(test/__fixtures__)` is false, so the whole fixture corpus can leave
-  the index with both routes reporting `OK`. Measured, exit 0 on both routes, and
-  identical before this change. It is the same shape as the root's own path, one
-  directory up.
+  path cannot reach the FHIR-aware branch, and it still cannot. **Three quarters
+  of this gap is gone**: the non-fixture branch now runs the source recogniser,
+  so a `name`, `birthDate` or `address.line` written at exactly
+  `test/__fixtures__` IS read (measured, exit 1). What is still unread there is
+  what only the structured scanner reads, `identifier.value` and `telecom.value`
+  (measured, exit 0). The remaining fix belongs to `scanTarget`'s dispatch rather
+  than to the `--staged` scope filter. Both halves are pinned.
+- **CLOSED: a scan root's PARENT staged as a link.** `test` staged as a
+  mode-`120000` symlink used to be out of scope for `--staged` (neither `===`
+  matched and neither prefix did) while the all-mode walk returned silently
+  because `existsSync(test/__fixtures__)` was false, so the whole fixture corpus
+  could leave the index with both routes reporting `OK` (measured, exit 0 on
+  both). `test` is the scan root now: `--staged` refuses it on its mode (exit 2),
+  and the all-mode walk refuses too, by a different mechanism, because
+  `readdirSync` follows the link to a non-directory and raises `ENOTDIR`.
 - **The all-mode walk FOLLOWS a symlinked scan root.** `existsSync` and
   `readdirSync` both follow, so with `test/__fixtures__` pointing at an external
   directory the sweep reads and **reports the content** of files outside the
@@ -173,14 +211,84 @@ throwaway git repository rather than this one.
   broken pairing, which needs `-B` and is not passed) and `X` (git's own "this is
   a bug" marker), so `A`/`M`/`T`/`U` plus `D` accounts for every record this
   invocation can produce.
-- **An all-mode sweep that observed no files still reports `OK`.** A sibling
-  scanner refuses that case; this one has never carried the rule.
+- **CLOSED: an all-mode sweep that observed nothing.** It used to print
+  `OK, no hits` and exit 0 having opened no file at all. Two arms close it, and
+  they are not redundant. The sharp one **reconciles against the index**: every
+  path `git ls-files -- test src` names, minus markdown, must have been opened by
+  the sweep, or the scan refuses (exit 2) and names every offender. That is what
+  catches the case this rule is really about, an **emptied or deleted walk root
+  whose corpus is still tracked**, which reported clean over a corpus fully
+  present in the index (measured, exit 0, both emptied and removed). **A scanned
+  file COUNT does not detect that**: the count counts the roots that DID exist,
+  and the surviving root supplies a healthy-looking number. The blunt one is the
+  floor underneath it: **a sweep that opened zero files refuses whatever the
+  index said**, which covers a copy of this tree with no repository of its own.
+  **State what that arm covers, which is the ZERO-FILES case and not the general
+  one**: with no usable index and only SOME roots emptied, the surviving root
+  still yields targets, the arm does not fire, and that state is reported clean.
+  It is a declared residual, not a covered case.
+  `git rev-parse --is-inside-work-tree` is no help there, because it **answers
+  for the enclosing repository** and returns `true` for a nested copy whose files
+  git has never heard of; the pathspec is scoped to the scan roots for the same
+  reason, so a nested copy gets `null` and the walk rather than a list belonging
+  to the wrong tree.
+- **The XML arm reads ONE of the three ways this suite spells an XML value, and
+  "reads both spellings" is a claim about FORMATS, not about spellings within the
+  XML format.** It covers the DOUBLE-QUOTED ATTRIBUTE, `<family value="…"/>`,
+  because `xmlValues` matches `value="([^"]*)"`. Two spellings are unread and
+  both are measured at exit 0:
+  - a SINGLE-QUOTED attribute, `<family value='…'/>`, which XML 1.0 admits
+    equally and which is the natural spelling inside a double-quoted TypeScript
+    string. No live site today.
+  - XML ELEMENT TEXT, `<given>…</given>`. **One live site**, and it is in the
+    suite whose whole purpose is element text: on the pre-rename line in
+    `test/dropped-element-text.test.ts` the `value=`-attribute half reported and
+    the element-text half did not, so **the scanner forced only half of that
+    rename**. The other half was renamed by hand.
+- **Entity blanking deletes any letter run between an `&` and a `;`, anywhere in
+  a source file.** `XML_ENTITY_REF` blanks `&<alnum>;` spans before tokenizing,
+  which is what stops entity NAMES (`amp`, `xxe`, `secret`) being reported as
+  person names. Blanking to a space can only split a token apart and never join
+  two, but **splitting is not the failure here, deletion is**: measured,
+  `<family value="Smith&Rodriguez;Jones"/>` reports `Smith` and `Jones` and loses
+  `Rodriguez`, where the same value spelled with spaces reports all three. The
+  residual is that run, not merely "a name spelled entirely as character
+  references".
+- **Two source shapes the recogniser reads nothing in**, both measured at exit 0
+  and neither with a live site: a NESTED-BRACE template substitution
+  (`` `${ ({a:1}).a }` ``), which `\$\{[^{}]*\}` does not blank, and a COMPUTED
+  KEY (`{ ["family"]: "…" }`), which the key regex does not match.
+- **The value reader's 200k character budget fails TOWARD reporting**, which is
+  the inverse of the fixed 4 KB window it replaced. Measured on a 390 KB file
+  with a 30,000-member array: 15,385 values returned including the planted name,
+  where the window returned none. The largest scanned source file here is 75 KB.
+- **A tracked file deleted from the working tree refuses the sweep.** The
+  reconciliation cannot tell "you deleted this" from "the root vanished", and
+  refusing is the safe direction of the two. The message names the paths and the
+  remedy (restore it, or remove it from the index). It is an availability
+  nuisance, not a PHI-safety one.
+- **The `IssueCode@FHIRPath` false positive is handled by a DECLARED DOMAIN, not
+  by a shape rule, and the shape rule that was tried is why.** This package's
+  diagnostics are an issue code joined to a FHIRPath expression by `@`, and the
+  email recogniser cannot tell `UNKNOWN_PROPERTY@Patient.name` from an address by
+  shape: both are one `@` between two dotted tokens, and `.name` is a real
+  top-level domain, so no TLD test separates them. A shape exclusion keyed on an
+  all-caps local part plus a capitalised first domain label was written, measured
+  and **reverted**: it silently covered every capitalised domain
+  (`JOHN_SMITH@Mercy.org`) in every source target, and because `scanTarget`
+  routes a fixture whose extension is not `.json` / `.xml` / `.ndjson` down the
+  SAME branch as source, **it also lost a hit this scanner already had**
+  (measured: exit 1 on base, exit 0 with the exclusion). A gate that detects less
+  than the one it replaces is worse than the defect it was closing. One
+  `EMAILDOMAIN` line has a blast radius of one domain. Enumerated across the
+  scanned corpus: four distinct email-shaped domains, three of them only inside
+  the sentinel-exempt scanner test, and **exactly one live**, so the declaration
+  is both minimal and sufficient. A future one reds loud.
 - **The enumerate-then-read window is not closed.** A file that vanishes between
   enumeration and read makes the scan refuse (exit 2), which is the safe
   direction, so it is an availability question rather than a PHI-safety one. The
-  walk roots here are `src/` and `test/__fixtures__/`, and the build transient
-  that motivates closing this elsewhere lands at the repository root, outside
-  both.
+  walk roots here are `src/` and `test/`, and the build transient that motivates
+  closing this elsewhere lands at the repository root, outside both.
 - **Free-text PHI** in an opaque `Narrative.div` or an `Annotation.text` is
   covered only by the cross-cutting dashed-SSN + email pass: a bare name in
   narrative prose is not caught structurally (the same limitation the HL7 scanner
@@ -194,5 +302,29 @@ throwaway git repository rather than this one.
 
 ## Bypass entries
 
-_None. Every fixture is covered by token-level `scripts/phi-allow-list.txt`
-declarations; no whole-file bypass has been needed._
+_No `--allow-fixture` bypass has ever been needed. Every fixture is covered by
+token-level `scripts/phi-allow-list.txt` declarations._
+
+**Declared sentinel files, which are a different mechanism and are recorded here
+because they have the same effect.** These two exist to carry realistic-PHI-shaped
+strings, so scanning them would flag the very sentinels that exist to be flagged.
+They are named by exact path in the scanner's `SENTINEL_FILES` and subtracted
+from the **sweeping** routes only; naming one on the command line still scans it,
+and the sweep **announces** the skip rather than performing it in silence.
+
+### test/phi-leak.test.ts
+
+The redaction-contract sentinel battery. Its whole subject is strings that must
+never reach a diagnostic, so it spells them out.
+
+### test/scripts/phi-scan.test.ts
+
+This scanner's own test. It must spell out the values the scanner is meant to
+catch, including a dashed SSN, a non-test email domain and a date of birth.
+
+**Why this is not `--allow-fixture`.** That mechanism is a caller's per-run
+bypass and needs a flag. CI runs the scan with no flags, so a bypass that existed
+only on the command line would leave both files unscanned in exactly the route
+that matters. **Adding to `SENTINEL_FILES` means adding a subsection here**, and
+it is a whole-file exemption, so prefer a token-level allow-list declaration
+every time one will do.

@@ -1078,10 +1078,10 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
 
     it("reports a foreign element it joins to a FHIR element's occurrences", () => {
       const { resource, issues } = parseResourceXml(
-        `<Patient ${FHIR_NS}><name><given value="Peter"/></name><name xmlns="urn:vendor"><given value="Vendor"/></name></Patient>`,
+        `<Patient ${FHIR_NS}><name><given value="Peter"/></name><name xmlns="urn:vendor"><given value="Jane"/></name></Patient>`,
       );
       expect(serializeResource(resource)).toBe(
-        '{"resourceType":"Patient","name":[{"given":"Peter"},{"given":"Vendor"}]}',
+        '{"resourceType":"Patient","name":[{"given":"Peter"},{"given":"Jane"}]}',
       );
       expect(at(issues, ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toContain("Patient.name[1]");
     });

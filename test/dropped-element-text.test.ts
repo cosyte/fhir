@@ -278,7 +278,7 @@ describe("the walk reaches the whole document, at every depth", () => {
 
   it("reports each repeated occurrence at its own indexed location", () => {
     const { resource } = parseResourceXml(
-      `<Patient ${NS}><name><given>Ada</given></name><name><given value="Grace"/></name></Patient>`,
+      `<Patient ${NS}><name><given>Peter</given></name><name><given value="Jane"/></name></Patient>`,
     );
     const names = child(resource, "name");
     expect(isList(names)).toBe(true);

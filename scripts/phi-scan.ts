@@ -108,15 +108,39 @@ const REPO_ROOT = process.cwd();
 const ALLOW_LIST_PATH = join(REPO_ROOT, "scripts", "phi-allow-list.txt");
 const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
 
-// Roots walked in "all" mode. `test/__fixtures__` gets the full FHIR-aware scan;
-// `src` gets a conservative text pass (dashed-SSN + non-test email only) because
-// it is hand-written code, not data, JSDoc `@example` FHIR snippets carry
-// synthetic names / ids that must not trip the structured detectors. `test/*.ts`
-// is deliberately NOT walked: the PHI-leak suite ships a sentinel battery of
-// deliberately PHI-shaped strings to prove the redaction contract, and scanning
-// it would flag the very sentinels that exist to be flagged elsewhere.
-const FIXTURE_ROOT = join(REPO_ROOT, "test", "__fixtures__");
+// Roots walked in "all" mode. `test/__fixtures__/**` gets the full FHIR-aware
+// scan by wire-format extension; everything else in scope gets the source pass
+// (dashed SSN + non-test email + the FHIR-keyed literal recogniser below).
+//
+// `test` IS THE ROOT, NOT `test/__fixtures__`, AND THAT IS A WIDENING WITH A
+// MEASUREMENT BEHIND IT. The roots used to be `test/__fixtures__` and `src`, so
+// a tracked file directly under `test/` was reached by NEITHER route: 55 of them
+// here. Counted with this scanner's own key regex over those 55 files, 87
+// object-literal `family` / `given` sites and 21 `birthDate` sites, plus 33 more
+// `family` / `given` and 3 `birthDate` spelled as XML `value` attributes. The old comment justified the exclusion by the
+// PHI-leak suite's sentinel battery, and that justification covers TWO files
+// (`test/phi-leak.test.ts`, `test/scripts/phi-scan.test.ts`), not the other 53.
+// Those two are declared by path below, which is a reviewed exemption with an
+// audit trail rather than a silent hole across a whole directory.
+const TEST_ROOT = join(REPO_ROOT, "test");
 const SRC_ROOT = join(REPO_ROOT, "src");
+const WALK_ROOTS = [TEST_ROOT, SRC_ROOT];
+
+/** Repo-relative prefix whose contents get the structured FHIR scan. */
+const FIXTURE_PREFIX = "test/__fixtures__/";
+
+// Files whose whole POINT is to carry realistic-PHI-shaped strings: the
+// redaction-contract sentinel battery, and this scanner's own test, which must
+// spell out the values it is meant to catch. Scanning them would flag the very
+// sentinels that exist to be flagged. Declared HERE, by exact path, rather than
+// by directory: a new test file under `test/` is in scope by default, and adding
+// to this set is a reviewed act recorded in `phi-scan-overrides.md`.
+//
+// This is NOT the `--allow-fixture` mechanism. That one is a caller's per-run
+// bypass and needs a flag; CI runs the scan with no flags, so a bypass that only
+// exists on the command line would leave both files unscanned in exactly the
+// route that matters.
+const SENTINEL_FILES = new Set<string>(["test/phi-leak.test.ts", "test/scripts/phi-scan.test.ts"]);
 
 // Name tokens that are honorific / degree / suffix codes, never a person's
 // identifying name, extracted alongside real name tokens and skipped.
@@ -439,11 +463,74 @@ function gitIgnored(paths: string[]): Set<string> {
   return ignored;
 }
 
+/**
+ * Every path the INDEX says is in scope, or `null` when git named none.
+ *
+ * `null` and `[]` are deliberately different answers and the caller branches on
+ * which it got. `null` means the question could not be asked (no git, no
+ * repository, a pathspec matching nothing at all) and the walk is then the only
+ * evidence there is. `[]` cannot be produced here: an empty list is returned as
+ * `null` for exactly that reason.
+ *
+ * THE PATHSPEC IS LIMITED TO THE SCAN ROOTS ON PURPOSE. `git ls-files` with no
+ * pathspec answers for the whole repository, and a repository CONTAINING this
+ * one (a vendored copy, an agent worktree) would then answer with paths that
+ * have nothing to do with the scan. Scoping to the roots means a nested copy
+ * whose enclosing repository tracks nothing under them returns `null` and the
+ * walk is used, rather than a list that reconciles against the wrong tree.
+ */
+function trackedInScope(): string[] | null {
+  let out: Buffer;
+  try {
+    // SECURITY: array-form execFileSync, no shell.
+    out = execFileSync("git", ["ls-files", "-z", "--", ...WALK_ROOTS.map(normalizePath)], {
+      encoding: "buffer",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return null;
+  }
+  const paths = out
+    .toString("utf8")
+    .split("\0")
+    .filter((p) => p.length > 0)
+    // The walk exempts markdown (docs may legitimately describe violator
+    // values), so the index side has to exempt it too or the reconciliation
+    // would refuse over a file the scan is meant to skip.
+    .filter((p) => !p.toLowerCase().endsWith(".md"));
+  return paths.length > 0 ? paths : null;
+}
+
+/**
+ * Refuse (exit 2) over paths the index names and the scan did not open.
+ *
+ * EXISTENCE IS NOT OBSERVATION, and this is the check that says so. `walk`
+ * returns silently when its root does not exist, and yields nothing when the
+ * root is an empty directory, so an emptied or deleted `test/__fixtures__`
+ * printed `OK, no hits` and exited 0 over a corpus still fully present in the
+ * index (measured, both cases). A count of scanned files does not detect it
+ * either: the count counts the roots that DID exist, and a healthy-looking
+ * number is exactly what the surviving root produces.
+ */
+function refuseUnobserved(paths: string[]): void {
+  if (paths.length === 0) return;
+  const lines = paths.map((p) => `  - ${p}`).join("\n");
+  const noun =
+    paths.length === 1
+      ? "path is tracked in the index and was"
+      : "paths are tracked in the index and were";
+  throw new InvocationError(
+    `refusing the scan: ${String(paths.length)} in-scope ${noun} ` +
+      `not opened by the sweep:\n${lines}\n` +
+      "A scan that reports clean over a file it never read is reporting on its own scope, not " +
+      "on the corpus. Restore the file, or remove it from the index.",
+  );
+}
+
 function buildTargetsForAll(): Target[] {
   const files: string[] = [];
   const unscannable: Unscannable[] = [];
-  walk(FIXTURE_ROOT, files, unscannable);
-  walk(SRC_ROOT, files, unscannable);
+  for (const root of WALK_ROOTS) walk(root, files, unscannable);
 
   // One `git check-ignore` over both lists. An ignored entry is already out of
   // scope for the file route, so applying the same rule to a link keeps a single
@@ -457,9 +544,45 @@ function buildTargetsForAll(): Target[] {
       "corpus) untrack it and add it to .gitignore.",
   );
 
-  return files
+  const observed = new Set(files.map(normalizePath));
+
+  // Reconcile against the index BEFORE the sentinel filter, and before anything
+  // else subtracts: a declared sentinel file is still a file the sweep OPENED
+  // and then chose not to scan, which is a different claim from never having
+  // reached it. Filtering first would make an emptied root indistinguishable
+  // from a fully-declared one.
+  const tracked = trackedInScope();
+  if (tracked !== null) {
+    refuseUnobserved(tracked.filter((p) => !observed.has(p) && !ignored.has(p)));
+  }
+
+  const targets = files
     .filter((abs) => !ignored.has(normalizePath(abs)))
     .map((abs) => ({ path: normalizePath(abs), read: () => readFileSync(abs) }));
+
+  // A SWEEP THAT OPENED NOTHING MUST NOT REPORT CLEAN, whatever the index said.
+  // The reconciliation above is the sharp instrument and needs git to answer;
+  // this is the floor underneath it, for a tree git cannot answer about at all:
+  // a copy with no repository of its own, or one nested inside an unrelated
+  // repository that tracks nothing under the scan roots.
+  // `git rev-parse --is-inside-work-tree` is no help there, because it ANSWERS
+  // FOR THE ENCLOSING REPOSITORY and reports `true` for a nested copy whose own
+  // files git has never heard of.
+  //
+  // STATE WHAT IT COVERS, WHICH IS THE ZERO-FILES CASE AND NOT THE GENERAL ONE.
+  // With no usable index and only SOME roots emptied, the surviving root still
+  // yields targets and this arm does not fire; that state is reported clean and
+  // is a declared residual, not a covered case.
+  if (targets.length === 0) {
+    throw new InvocationError(
+      "refusing the scan: the sweep observed no files under any scan root. " +
+        `Roots are ${WALK_ROOTS.map(normalizePath).join(", ")}. ` +
+        "An empty result here is a statement about the scan, not about the corpus, and " +
+        "`OK, no hits` would read as the second. Run it from the repository root.",
+    );
+  }
+
+  return targets;
 }
 
 function buildTargetsForPaths(paths: string[]): Target[] {
@@ -634,12 +757,29 @@ function buildTargetsForStaged(): Target[] {
   // The `.ts` suffix rule still governs the CONTENTS of `src`; the root's own
   // path is admitted for the same reason the fixture root's is, that losing the
   // whole root from the index is not a thing to report clean.
+  //
+  // `test` REPLACED `test/__fixtures__` HERE TOO, for the same measured reason
+  // the walk root moved: a staged file directly under `test/` was listed by
+  // neither route. Keeping the two routes on different scopes would mean the
+  // hook and CI disagree about what the corpus is, which is the state that let
+  // the hole sit unnoticed. It also closes the recorded "a scan root's PARENT
+  // staged as a link defeats both routes" case for the fixture corpus: `test`
+  // staged as a mode-120000 entry is now in scope and refused on its mode.
+  //
+  // THE MARKDOWN EXEMPTION IS APPLIED HERE TOO, and leaving it out made the two
+  // routes disagree in BOTH directions: the walk skips `.md` by design ("docs
+  // may legitimately describe violator values"), so a tracked `test/notes.md`
+  // carrying a dashed SSN was never opened by CI while this route reported it as
+  // a hit (measured, exit 1 here against exit 0 there). A pre-commit hook that
+  // reds on documentation the sweep exempts is a hook that gets bypassed. The
+  // exemption is a scan-wide rule, not a property of one enumeration.
   const inScope = staged.filter(
     (s) =>
-      s.path === "test/__fixtures__" ||
-      s.path.startsWith("test/__fixtures__/") ||
-      s.path === "src" ||
-      (s.path.startsWith("src/") && s.path.endsWith(".ts")),
+      !s.path.toLowerCase().endsWith(".md") &&
+      (s.path === "test" ||
+        s.path.startsWith("test/") ||
+        s.path === "src" ||
+        (s.path.startsWith("src/") && s.path.endsWith(".ts"))),
   );
 
   // Unmerged first: such a record's destination mode is `000000`, which the mode
@@ -816,11 +956,380 @@ function scanCommonShapes(path: string, content: string, allow: AllowList, hits:
     hits.push({ path, location: "(ssn)", value: m[0], reason: "dashed SSN pattern" });
   }
   // Emails whose domain is not an allow-listed reserved / test domain.
+  //
+  // THIS PACKAGE'S DIAGNOSTIC FORM, `IssueCode@FHIRPath`, IS INDISTINGUISHABLE
+  // FROM AN ADDRESS BY SHAPE: both are one `@` between two dotted tokens, and
+  // `.name` is a real top-level domain, so no TLD test separates them. It is
+  // handled by ONE `EMAILDOMAIN` line in the allow-list, the file's own reviewed
+  // mechanism, and NOT by a shape exclusion here. A shape exclusion was tried and
+  // reverted: keyed on an all-caps local part plus a capitalised first domain
+  // label, it silently covered every capitalised domain (`JOHN_SMITH@Mercy.org`)
+  // in every source target, and because `scanTarget` routes a fixture with an
+  // unexpected extension down the same branch it also LOST a hit this scanner
+  // already had. One allow-list line has a blast radius of one domain.
   for (const m of content.matchAll(/\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g)) {
     const domain = (m[1] ?? "").toLowerCase();
     if (!allow.emailDomains.has(domain)) {
       hits.push({ path, location: "(email)", value: m[0], reason: "email with non-test domain" });
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FHIR-keyed literal recogniser (source files)
+// ---------------------------------------------------------------------------
+
+/**
+ * ENUMERATING A FILE BUYS THE SSN / EMAIL FLOOR AND NOTHING ELSE, so widening
+ * the scope without widening this is half a fix.
+ *
+ * `scanTarget` reaches the structured scanner only for a fixture with a FHIR
+ * wire-format extension, because the structured scanner assumes the FILE IS THE
+ * DOCUMENT. A test builds its resources as TypeScript object literals instead,
+ * so a real surname typed as `family: "…"` inside a `.ts` file was read by
+ * NOTHING before this: `scanCommonShapes` looks for a dashed SSN and an email
+ * and neither is a name, a date of birth or a street address. Measured on a
+ * `.ts` file carrying `{ resourceType: "Patient", name: [{ family: "…",
+ * given: ["…"] }] }`: exit 0, `OK, no hits`, both before the scope widening
+ * (never enumerated) and after it with this recogniser absent (enumerated,
+ * unread).
+ *
+ * This is IN ADDITION TO `scanCommonShapes`, never instead of it.
+ *
+ * The key set is closed and small, and every omission below is deliberate:
+ *
+ *   - `text` is NOT keyed. `HumanName.text` and `Address.text` are PHI, but a
+ *     flat text pass cannot tell them from `CodeableConcept.text`,
+ *     `Narrative.text` or an assertion message, all of which are ordinary in
+ *     this suite. Keying it would false-error on conformant test code, which is
+ *     the failure that gets a gate switched off.
+ *   - `identifier.value` and `telecom.value` are NOT keyed, for the same
+ *     reason and more sharply: bare `value:` is the single most overloaded key
+ *     in FHIR (`Quantity.value`, `Extension.value[x]`, every primitive) and the
+ *     XML scanner only dares read it inside a `<telecom>` / `<identifier>`
+ *     block. There is no equivalent block boundary in TypeScript source.
+ *
+ * So this recogniser covers NAMES, DATES OF BIRTH AND STREET ADDRESSES in
+ * source. It is not a claim that source is scanned as thoroughly as a fixture;
+ * a 9-digit identifier written inline still reaches only the dashed-SSN arm.
+ * Put a resource that needs full coverage in `test/__fixtures__/`.
+ */
+const SOURCE_LITERAL_KEYS =
+  /(?:^|[^\w$.])\\?["'`]?(family|given|birthDate|deceasedDateTime|line)\\?["'`]?\s*:\s*/g;
+
+/**
+ * A `${…}` substitution span, replaced by a space before anything is tokenized.
+ *
+ * NOT skipped, and not read either. Reading it reported the EXPRESSION as a
+ * person name: `` family: `${surname}` `` produced a hit whose value was
+ * `surname`, which is a variable, not anybody's name, and a gate that invents
+ * findings is a gate that gets ignored. Skipping the whole literal would drop
+ * the XML resources this suite writes as template literals with an interpolated
+ * namespace declaration, which is most of them. Blanking the span keeps every
+ * character the file spells out and reads none that it computes.
+ */
+const TEMPLATE_SUBSTITUTION = /\$\{[^{}]*\}/g;
+
+/**
+ * An XML entity reference or numeric character reference, blanked for the same
+ * reason a substitution is: it is a REFERENCE, not spelled-out content, and
+ * neither XML pass in this scanner resolves one.
+ *
+ * A SPACE, NOT A DELETION, and the direction matters. Blanking can only split a
+ * token apart, never join two, so it cannot hide a name that was written as
+ * letters: `Smith&amp;Jones` reports both halves. Deleting would have joined
+ * `A&#65;` into one token that the file never spells. Without this the entity
+ * and XXE cases in this suite's own XML tests reported `amp`, `lt`, `gt`, `xxe`,
+ * `lol`, `secret` and `xZZ` as person-name tokens, which are entity names and
+ * nobody's name.
+ *
+ * THE RESIDUAL, WHICH THE FIXTURE XML PASS HAS TOO AND ALWAYS HAS: a name
+ * spelled ENTIRELY as character references is blanked to nothing and not
+ * reported. The threat this gate is built for is an accidental commit, not an
+ * author encoding a name to evade it, and a partially encoded name still
+ * reports.
+ */
+const XML_ENTITY_REF = /&#?[A-Za-z0-9]+;/g;
+
+/**
+ * Decode the string escapes a TypeScript literal can spell a character with, so
+ * a name is not hidden from the token check by the way it was typed. `"Roe"`
+ * is `Roe` to every reader of the program and has to be `Roe` here too; this
+ * suite already contains that spelling. Unknown escapes drop to their literal
+ * character, which is what the language does for everything outside the short
+ * list below.
+ *
+ * BOUNDED FIXED POINT, NOT ONE PASS, and the reason is in this suite already: a
+ * resource is routinely written as a JSON document inside a TypeScript string,
+ * so that value is TWO layers of escaping and one decode leaves a backslash-u
+ * sequence whose only surviving name token is `Ro`, which nobody wrote. Decoding
+ * until the text stops changing reads what the program reads. The bound is a
+ * bound: this runs over source text and a fixed point is not guaranteed to be
+ * reached cheaply, so three rounds is the cap. A fourth layer of escaping is not
+ * decoded, and it fails toward reporting rather than away from it: the residue
+ * still tokenizes and still has to clear the allow-list.
+ */
+function decodeSourceEscapes(raw: string): string {
+  let out = raw;
+  for (let round = 0; round < 3; round += 1) {
+    const next = decodeSourceEscapesOnce(out);
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+function decodeSourceEscapesOnce(raw: string): string {
+  return raw.replace(/\\(u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(.))/gs, (...m) => {
+    const [, , braced, u4, x2, other] = m as (string | undefined)[];
+    const hex = braced ?? u4 ?? x2;
+    if (hex !== undefined) {
+      const cp = Number.parseInt(hex, 16);
+      // A lone surrogate is not a scalar value; leave the escape as written
+      // rather than manufacturing U+FFFD, which would change the token.
+      if (cp >= 0xd800 && cp <= 0xdfff) return `\\u${hex}`;
+      try {
+        return String.fromCodePoint(cp);
+      } catch {
+        return `\\u${hex}`;
+      }
+    }
+    // The single-character escapes. Anything not named here drops to the
+    // character itself, which is what the language does: `\q` is `q`, and `\\`
+    // is one backslash.
+    const single = other ?? "";
+    switch (single) {
+      case "n":
+        return "\n";
+      case "t":
+        return "\t";
+      case "r":
+        return "\r";
+      case "0":
+        return "\0";
+      default:
+        return single;
+    }
+  });
+}
+
+/** How far past a matched key the value reader will look. */
+const LITERAL_SCAN_LIMIT = 200_000;
+
+function isQuote(c: string | undefined): boolean {
+  return c === '"' || c === "'" || c === "`";
+}
+
+/**
+ * Read one quoted string starting at `i`, or `null`. Returns the raw body.
+ *
+ * AN ESCAPED DELIMITER OPENS A STRING TOO, and missing that read nothing at all
+ * for the commonest way this suite embeds a document: a JSON resource inside a
+ * DOUBLE-quoted TypeScript string spells its keys and values `\"family\"`, so
+ * both the key and the value begin with a backslash. The single-quoted spelling
+ * has no backslash and always worked, which is exactly why the gap was easy to
+ * miss.
+ */
+function readQuoted(text: string, i: number): { value: string; end: number } | null {
+  let start = i;
+  const escaped = text[i] === "\\" && isQuote(text[i + 1]);
+  if (escaped) start = i + 1;
+  const quote = text[start];
+  if (!isQuote(quote)) return null;
+
+  let j = start + 1;
+  let body = "";
+  while (j < text.length) {
+    const c = text[j];
+    if (c === undefined) break;
+    if (escaped) {
+      // The delimiter is the two-character sequence `\` + quote.
+      if (c === "\\" && text[j + 1] === quote) return { value: body, end: j + 2 };
+      body += c;
+      j += 1;
+      continue;
+    }
+    if (c === "\\") {
+      body += c + (text[j + 1] ?? "");
+      j += 2;
+      continue;
+    }
+    if (c === quote) return { value: body, end: j + 1 };
+    body += c;
+    j += 1;
+  }
+  return null;
+}
+
+/** Advance past whitespace and both comment forms. */
+function skipTrivia(text: string, i: number): number {
+  let j = i;
+  for (;;) {
+    while (j < text.length && /\s/.test(text[j] ?? "")) j += 1;
+    if (text.startsWith("//", j)) {
+      const nl = text.indexOf("\n", j);
+      if (nl < 0) return text.length;
+      j = nl + 1;
+      continue;
+    }
+    if (text.startsWith("/*", j)) {
+      const close = text.indexOf("*/", j);
+      if (close < 0) return text.length;
+      j = close + 2;
+      continue;
+    }
+    return j;
+  }
+}
+
+/**
+ * Read the string literal, or the array of string literals, that follows a
+ * matched key.
+ *
+ * IT SCANS RATHER THAN SLICING A WINDOW, and the earlier window is why. A fixed
+ * 4 KB slice with `indexOf("]")` for the array's end got BOTH ends wrong: a `]`
+ * inside a string (`"742 Evergreen Terrace [Apt 4]"`) or inside an index
+ * expression (`names[0]`) ended the array early and dropped every member after
+ * it, and an array whose closing bracket sat past the window dropped ALL of its
+ * members rather than the tail. Both failed toward reporting nothing, which is
+ * the direction this gate must never fail in. The scan tracks quoting and
+ * bracket depth, and its bound is a character budget, so a pathological input
+ * stops the scan instead of the file.
+ *
+ * A non-string member (a number, an identifier, a call) contributes nothing;
+ * this recogniser reports on values the file actually spells out.
+ */
+function readLiteralValues(text: string, from: number): string[] {
+  const limit = Math.min(text.length, from + LITERAL_SCAN_LIMIT);
+  let i = skipTrivia(text, from);
+  if (i >= limit) return [];
+
+  const direct = readQuoted(text, i);
+  if (direct !== null) return [decodeSourceEscapes(direct.value)];
+  if (text[i] !== "[") return [];
+
+  const out: string[] = [];
+  let depth = 0;
+  while (i < limit) {
+    const c = text[i];
+    if (c === "[") {
+      depth += 1;
+      i += 1;
+      continue;
+    }
+    if (c === "]") {
+      depth -= 1;
+      if (depth === 0) return out;
+      i += 1;
+      continue;
+    }
+    const quoted = readQuoted(text, i);
+    if (quoted !== null) {
+      out.push(decodeSourceEscapes(quoted.value));
+      i = quoted.end;
+      continue;
+    }
+    i += 1;
+  }
+  // Unterminated within the budget: return what was read rather than nothing.
+  return out;
+}
+
+/**
+ * ENUMERATING A FILE BUYS THE SSN / EMAIL FLOOR AND NOTHING ELSE, so widening
+ * the scope without widening this is half a fix.
+ *
+ * `scanTarget` reaches the structured scanner only for a fixture with a FHIR
+ * wire-format extension, because that scanner assumes the FILE IS THE DOCUMENT.
+ * A test builds its resources as TypeScript literals instead, so a real surname
+ * typed as `family: "…"` inside a `.ts` file was read by NOTHING before this:
+ * `scanCommonShapes` looks for a dashed SSN and an email and neither is a name,
+ * a date of birth or a street address.
+ *
+ * THIS PACKAGE READS TWO WIRE FORMATS AND ITS TESTS WRITE BOTH, so there are two
+ * arms. The object-literal arm covers `family: "…"`; the XML arm runs the same
+ * `xmlValues` extractor the fixture scanner uses over the whole text, which
+ * covers `<family value="…"/>` written inside a template literal. Keying only
+ * the first was measured leaving 33 `family` / `given` and 3 `birthDate` XML
+ * `value` attributes unread in the 55 files this scope widening admitted.
+ *
+ * SAY "TWO FORMATS", NEVER "BOTH SPELLINGS". That would be a claim about the
+ * spellings WITHIN the XML format, and the XML arm covers ONE of the three this
+ * suite uses: the double-quoted attribute. A single-quoted attribute
+ * (`value='…'`) and XML ELEMENT TEXT (`<given>…</given>`) are both unread, and
+ * the element-text case has a live site here. Declared in
+ * `phi-scan-overrides.md` rather than guarded, and it is why the rename in
+ * `test/dropped-element-text.test.ts` had a hand-renamed half: the scanner
+ * forced only the `value=` one.
+ *
+ * This is IN ADDITION TO `scanCommonShapes`, never instead of it.
+ *
+ * WHAT IT DOES NOT COVER, stated as the set rather than as a universal:
+ *
+ *   - `text` is NOT keyed. `HumanName.text` and `Address.text` are PHI, but a
+ *     flat pass cannot tell them from `CodeableConcept.text`, `Narrative.text`
+ *     or an assertion message, all of which are ordinary in this suite. Keying
+ *     it would false-error on conformant test code, which is the failure that
+ *     gets a gate switched off.
+ *   - `identifier.value` and `telecom.value` are NOT keyed, for the same reason
+ *     and more sharply: bare `value` is the most overloaded key in FHIR
+ *     (`Quantity.value`, `Extension.value[x]`, every primitive). The fixture XML
+ *     scanner only dares read it inside a `<telecom>` / `<identifier>` block,
+ *     and source has no equivalent boundary. So the XML arm here reads names,
+ *     dates and address lines and deliberately not `<value value="…"/>`.
+ *   - a value the file COMPUTES rather than spells (an identifier, a call, a
+ *     `${…}` substitution) is not read, and neither is a computed KEY
+ *     (`{ ["family"]: "…" }`).
+ *   - a letter run between an `&` and a `;` is blanked with the entity
+ *     references it is there to suppress, so it is not read either.
+ *
+ * So the two arms cover NAMES, DATES OF BIRTH AND STREET ADDRESSES spelled out
+ * in source as an object-literal value or a double-quoted XML attribute. That is
+ * not a claim that source is scanned as thoroughly as a fixture. Put a resource
+ * that needs full coverage in `test/__fixtures__/`.
+ */
+function scanSourceLiterals(path: string, content: string, allow: AllowList, hits: Hit[]): void {
+  const text = content.replace(TEMPLATE_SUBSTITUTION, " ").replace(XML_ENTITY_REF, " ");
+
+  SOURCE_LITERAL_KEYS.lastIndex = 0;
+  for (const m of text.matchAll(SOURCE_LITERAL_KEYS)) {
+    const key = m[1];
+    if (key === undefined || m.index === undefined) continue;
+    for (const value of readLiteralValues(text, m.index + m[0].length)) {
+      dispatchSourceValue(path, key, value, allow, hits);
+    }
+  }
+
+  // The XML spelling. `xmlValues` is the same extractor the fixture XML scanner
+  // uses, so the two formats are read by one rule rather than two that drift.
+  for (const key of ["family", "given", "birthDate", "deceasedDateTime", "line"] as const) {
+    for (const value of xmlValues(text, key)) {
+      dispatchSourceValue(path, key, decodeSourceEscapes(value), allow, hits);
+    }
+  }
+}
+
+function dispatchSourceValue(
+  path: string,
+  key: string,
+  value: string,
+  allow: AllowList,
+  hits: Hit[],
+): void {
+  switch (key) {
+    case "family":
+    case "given":
+      checkNameString(path, `(source) name.${key}`, value, allow, hits);
+      break;
+    case "birthDate":
+    case "deceasedDateTime":
+      checkDate(path, `(source) ${key}`, value, allow, hits);
+      break;
+    case "line":
+      checkAddressLine(path, "(source) address.line", value, allow, hits);
+      break;
+    default:
+      break;
   }
 }
 
@@ -1061,7 +1570,7 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
     );
   }
   const text = buf.toString("utf8");
-  const isFixture = target.path.startsWith("test/__fixtures__/");
+  const isFixture = target.path.startsWith(FIXTURE_PREFIX);
   if (isFixture && target.path.endsWith(".ndjson")) {
     scanNdjsonText(target, text, allow, hits);
   } else if (isFixture && target.path.endsWith(".xml")) {
@@ -1069,9 +1578,13 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   } else if (isFixture && target.path.endsWith(".json")) {
     scanJsonText(target, text, allow, hits);
   } else {
-    // Non-fixture target (hand-written src, or a non-FHIR fixture file):
-    // conservative shape pass only, no structured model to lean on.
+    // Non-fixture target (hand-written source, or a non-FHIR fixture file):
+    // no structured model to lean on, so the shape pass AND the FHIR-keyed
+    // literal recogniser. BOTH, not either: the shape pass alone is the
+    // SSN / email floor, which is what enumerating a source file buys on its
+    // own, and a name is neither.
     scanCommonShapes(target.path, text, allow, hits);
+    scanSourceLiterals(target.path, text, allow, hits);
   }
 }
 
@@ -1146,6 +1659,22 @@ function main(): number {
   }
 
   targets = targets.filter((t) => !allowed.has(t.path));
+
+  // The declared sentinel files are subtracted from the SWEEPING routes only. A
+  // path named explicitly on the command line is still scanned, because that is
+  // the caller's own request to read whatever is there and it errs toward
+  // scanning more. Skipping is announced rather than silent: an exemption
+  // nobody sees is the same shape of blind spot this gate exists to refuse.
+  if (args.mode !== "paths") {
+    const skipped = targets.filter((t) => SENTINEL_FILES.has(t.path)).map((t) => t.path);
+    if (skipped.length > 0) {
+      process.stdout.write(
+        `[phi-scan] skipping ${String(skipped.length)} declared sentinel file(s): ` +
+          `${skipped.join(", ")}\n`,
+      );
+      targets = targets.filter((t) => !SENTINEL_FILES.has(t.path));
+    }
+  }
 
   const hits: Hit[] = [];
   for (const t of targets) {

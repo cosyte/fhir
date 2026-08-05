@@ -277,7 +277,7 @@ describe("collectInvariantIssues", () => {
     });
     const patient = parse({
       resourceType: "Patient",
-      contact: [{ name: { family: "Ok" } }, { relationship: [{ text: "kin" }] }],
+      contact: [{ name: { family: "Roe" } }, { relationship: [{ text: "kin" }] }],
     });
     const issues = collectInvariantIssues(patient, nested);
     expect(issues).toHaveLength(1);

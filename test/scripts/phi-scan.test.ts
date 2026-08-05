@@ -139,27 +139,42 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 //
 // Every parser in the suite ships a `scripts/phi-scan.ts` and they differ in the
-// one thing every case below depends on: the walk roots and the `--staged`
-// scope. This package's fixture root is `test/__fixtures__`; a sibling's is
-// `test/fixtures`. A case that quietly ran a sibling's scanner, or a scanner
-// whose scope had drifted to a sibling's, would pass its refusal assertions
+// one thing every case below depends on: what gets the STRUCTURED scan. This
+// package's structured root is `test/__fixtures__/`; a sibling's is
+// `test/fixtures/`. A case that quietly ran a sibling's scanner, or a scanner
+// whose dispatch had drifted to a sibling's, would pass its refusal assertions
 // while proving nothing about this gate.
+//
+// THE DISCRIMINATOR MOVED WHEN THE WALK ROOT DID, and the old one would now be
+// a false green. It used to be that a sibling's `test/fixtures/` was out of
+// scope entirely; `test/` is the walk root now, so that path IS scanned here.
+// What still separates the two is the DISPATCH: only `test/__fixtures__/` gets
+// the structured scanner, and the case below picks a payload only the
+// structured scanner reads (`identifier.value`, which the source recogniser
+// deliberately does not key, because bare `value` is FHIR's most overloaded
+// name and there is no block boundary in source text to scope it with).
 
 describe("phi-scan: the scanner under test is this package's", () => {
-  it("scopes to test/__fixtures__, and a sibling's test/fixtures is out of scope", () => {
+  it("gives test/__fixtures__ the structured scan and a sibling's test/fixtures only the source pass", () => {
     const source = readFileSync(SCANNER_PATH, "utf8");
     expect(source).toContain("@cosyte/fhir");
-    expect(source).toContain('"__fixtures__"');
+    expect(source).toContain('"test/__fixtures__/"');
 
-    // The behavioural half: a staged link at a SIBLING's fixture root draws no
-    // refusal here, because that path is not in this package's staged scope.
+    // A 9-digit identifier: read by `scanIdentifier` (structured) and by nothing
+    // in the source pass. No dashed SSN, no email, no name, no birthDate, so
+    // every other detector is silent and the dispatch is the only variable.
+    const resource = '{"resourceType":"Patient","identifier":[{"value":"123456789"}]}\n';
+
     const root = makeRepo();
     mkdirSync(join(root, "test", "fixtures"), { recursive: true });
-    symlinkSync(join("..", "..", TARGET_NAME), join(root, "test", "fixtures", "patient.json"));
-    git(root, ["add", "test/fixtures/patient.json"]);
+    writeFileSync(join(root, "test", "fixtures", "patient.json"), resource);
+    const sibling = runIn(root, ["test/fixtures/patient.json"]);
+    expect(sibling.code, `stderr: ${sibling.stderr}`).toBe(0);
 
-    const r = runIn(root, ["--staged"]);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    writeFileSync(join(root, "test", "__fixtures__", "patient.json"), resource);
+    const ours = runIn(root, ["test/__fixtures__/patient.json"]);
+    expect(ours.code, `stderr: ${ours.stderr}`).toBe(1);
+    expect(ours.stderr).toContain("Patient.identifier.value");
   });
 });
 
@@ -673,17 +688,18 @@ describe("phi-scan: disclosed residuals on the --staged route", () => {
     expectNoPhi(r.stderr);
   });
 
-  it("PRE-EXISTING: an all-mode sweep that observed nothing still reports OK", () => {
-    // A sibling refuses a sweep that read no files at all. That rule was never
-    // ported here, and this change does not soften anything: it is simply not
-    // present. Pinned so the gap is a measured fact rather than a sentence.
+  it("CLOSED: an all-mode sweep that observed nothing now refuses instead of reporting OK", () => {
+    // This was a pinned gap: with both roots gone the sweep printed `OK, no
+    // hits` and exited 0, having opened nothing. Closing it reds this case, which
+    // is the pin doing its job.
     const root = makeRepo();
     rmSync(join(root, "src"), { recursive: true, force: true });
     rmSync(join(root, "test"), { recursive: true, force: true });
 
     const r = runIn(root, []);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-    expect(r.stdout).toMatch(/OK, no hits/);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stdout).not.toMatch(/OK, no hits/);
+    expect(r.stderr).toContain("observed no files");
   });
 });
 
@@ -792,13 +808,15 @@ describe("phi-scan: a scan root's OWN path is in scope, not just its contents", 
     });
   }
 
-  it("DISCLOSED GAP: a regular BLOB at the fixture root gets the shape pass, not the FHIR scan", () => {
-    // What admitting the path buys is the MODE check, above. It does not buy the
-    // structured scan: `scanTarget` computes `isFixture` from
+  it("a regular BLOB at the fixture root is now name-read, and the residual gap is narrower", () => {
+    // This was pinned as a whole gap: a resource written at exactly
+    // `test/__fixtures__` had its names, birthDate, address and telecom read by
+    // NOTHING, because `scanTarget` computes `isFixture` from
     // `startsWith("test/__fixtures__/")`, with a trailing slash, so the root's
-    // own path can never reach the FHIR-aware branch. Recorded in
-    // `phi-scan-overrides.md` and pinned here so it stays a measured fact rather
-    // than a sentence. NOT a regression: base did not admit the path at all.
+    // own path cannot reach the FHIR-aware branch. It still cannot. What changed
+    // is what the non-fixture branch does: the source recogniser reads `family`,
+    // `given`, `birthDate` and `line` there now, so three quarters of the gap is
+    // gone and the pin reds.
     const root = makeRepo();
     rmSync(join(root, "test", "__fixtures__"), { recursive: true, force: true });
     writeFileSync(
@@ -812,33 +830,44 @@ describe("phi-scan: a scan root's OWN path is in scope, not just its contents", 
     git(root, ["add", "test/__fixtures__"]);
     expect(gitOut(root, ["ls-files", "--stage", "test/__fixtures__"])).toMatch(/^100644 /);
 
-    // The gap: a name absent from the allow-list is not read at this path.
     const r = runIn(root, ["--staged"]);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("Okonkwo");
+    expect(r.stderr).toContain("(source)");
 
-    // And the control that makes that meaningful: the SAME resource one level
-    // inside the root IS caught, so the payload is genuinely detectable and it is
-    // the trailing slash that decides.
+    // THE RESIDUAL, PINNED RATHER THAN DESCRIBED. The structured-only detectors
+    // are still unreachable at this path: `identifier.value` and `telecom.value`
+    // are read by `scanIdentifier` / `scanTelecom` and by nothing in the source
+    // recogniser, which deliberately does not key bare `value`.
+    const gap = makeRepo();
+    rmSync(join(gap, "test", "__fixtures__"), { recursive: true, force: true });
+    writeFileSync(
+      join(gap, "test", "__fixtures__"),
+      '{"resourceType":"Patient","identifier":[{"value":"123456789"}]}',
+    );
+    git(gap, ["add", "test/__fixtures__"]);
+    expect(runIn(gap, ["--staged"]).code).toBe(0);
+
+    // The control that makes that meaningful: the SAME resource one level inside
+    // the root IS caught, so the payload is genuinely detectable and it is the
+    // trailing slash that decides.
     const inner = makeRepo();
     writeFileSync(
       join(inner, "test", "__fixtures__", "patient.json"),
-      JSON.stringify({
-        resourceType: "Patient",
-        name: [{ family: "Okonkwo", given: ["Chidinma"] }],
-        birthDate: "1961-11-02",
-      }),
+      '{"resourceType":"Patient","identifier":[{"value":"123456789"}]}',
     );
     git(inner, ["add", "test/__fixtures__/patient.json"]);
     const r2 = runIn(inner, ["--staged"]);
     expect(r2.code, `stderr: ${r2.stderr}`).toBe(1);
-    expect(r2.stderr).toContain("Okonkwo");
+    expect(r2.stderr).toContain("Patient.identifier.value");
   });
 
-  it("DISCLOSED GAP: a scan root's PARENT staged as a link defeats both routes", () => {
-    // The same shape one directory up, and unchanged by this slice: `test` is
-    // matched by neither `===` nor either prefix, and the all-mode walk returns
-    // silently because `existsSync(test/__fixtures__)` is false. Pinned so the
-    // gap is a measured fact rather than a sentence.
+  it("CLOSED: a scan root's PARENT staged as a link is refused, not walked past", () => {
+    // This was pinned as a gap on both routes: `test` matched neither `===` nor
+    // either prefix on `--staged`, and the all-mode walk returned silently
+    // because `existsSync(test/__fixtures__)` was false, so the whole fixture
+    // corpus could leave the index with both routes reporting OK. `test` is the
+    // scan root now, so both routes reach it and the pin reds.
     const root = makeRepo();
     writeFileSync(join(root, "src", "ordinary.ts"), "export const answer = 42;\n");
     git(root, ["add", "src/ordinary.ts"]);
@@ -849,8 +878,20 @@ describe("phi-scan: a scan root's OWN path is in scope, not just its contents", 
     git(root, ["add", "test"]);
     expect(gitOut(root, ["ls-files", "--stage", "test"])).toMatch(/^120000 /);
 
-    expect(runIn(root, ["--staged"]).code).toBe(0);
-    expect(runIn(root, []).code).toBe(0);
+    const staged = runIn(root, ["--staged"]);
+    expect(staged.code, `stderr: ${staged.stderr}`).toBe(2);
+    expect(staged.stderr).toContain("a symbolic link");
+    expectNoPhi(staged.stderr);
+
+    // The all-mode half refuses too, by a different mechanism and with a
+    // different message: `existsSync` and `readdirSync` both FOLLOW, so the walk
+    // reaches the link's target, which is a regular file, and `readdirSync`
+    // raises `ENOTDIR`. Asserted on the code and on the absence of a clean
+    // report, not on which of the two refusals fired.
+    const all = runIn(root, []);
+    expect(all.code, `stderr: ${all.stderr}`).toBe(2);
+    expect(all.stdout).not.toMatch(/OK, no hits/);
+    expectNoPhi(all.stderr);
   });
 });
 
@@ -920,5 +961,409 @@ describe("phi-scan: paths mode and the override-log gate", () => {
     const r = runIn(root, ["src/leak.ts"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("123-45-6789");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The walk root is `test`, not `test/__fixtures__`
+// ---------------------------------------------------------------------------
+//
+// Measured on this repository before the change: 55 tracked files sat directly
+// under `test/` and were reached by NEITHER route, the all-mode walk (rooted at
+// `test/__fixtures__` and `src`) nor `--staged` (scoped to the same two
+// prefixes). Counted with the scanner's own key regex over those 55 files: 87
+// object-literal `family` / `given` sites and 21 `birthDate` sites, plus 33 more
+// `family` / `given` and 3 `birthDate` spelled as XML `value` attributes, all of
+// them unread. The old justification for the exclusion was the
+// PHI-leak suite's sentinel battery, which is two files, not the directory.
+
+describe("phi-scan: tracked files directly under test/ are in scope", () => {
+  it("the all-mode walk reads a dashed SSN in a test/*.ts (the enumeration floor)", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "inline.test.ts"), 'const s = "SSN 123-45-6789";\n');
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/inline.test.ts");
+  });
+
+  it("the --staged route reads it too, so the hook and CI agree on the corpus", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "inline.test.ts"), 'const s = "SSN 123-45-6789";\n');
+    git(root, ["add", "test/inline.test.ts"]);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/inline.test.ts");
+  });
+
+  it("`test` staged as a symbolic link is refused, not walked past", () => {
+    // The scan roots' PARENT. Recorded as an open limitation before this change:
+    // `test` staged as a mode-120000 entry matched neither `===` nor either
+    // prefix, so the whole fixture corpus could leave the index with both routes
+    // reporting OK.
+    const root = makeRepo();
+    rmSync(join(root, "test"), { recursive: true, force: true });
+    symlinkSync(TARGET_NAME, join(root, "test"));
+    git(root, ["add", "test"]);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+
+  it("a declared sentinel file is skipped by the sweep, and says so", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "scripts"), { recursive: true });
+    writeFileSync(join(root, "test", "phi-leak.test.ts"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("declared sentinel");
+    expect(r.stdout).toContain("test/phi-leak.test.ts");
+  });
+
+  it("a sentinel named explicitly on the command line is still scanned", () => {
+    // The exemption is for the SWEEPING routes. Naming a path is the caller's
+    // own request to read whatever is there.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "phi-leak.test.ts"), SYNTHETIC_PHI);
+
+    const r = runIn(root, ["test/phi-leak.test.ts"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("123-45-6789");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Enumerating a source file buys the SSN / email floor and NOTHING else
+// ---------------------------------------------------------------------------
+//
+// The structured scanner assumes the FILE IS THE DOCUMENT and is reached only
+// for a fixture with a FHIR wire-format extension. A test builds its resources
+// as TypeScript object literals, so widening the scope without widening the
+// recogniser would enumerate these files and still read nothing in them.
+
+describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
+  const cases: [string, string, string][] = [
+    ["a family name", 'const p = { name: [{ family: "Nakamura" }] };\n', "Nakamura"],
+    ["a given name", 'const p = { name: [{ given: ["Hiroshi", "Ken"] }] };\n', "Hiroshi"],
+    ["a date of birth", 'const p = { birthDate: "1961-11-02" };\n', "1961-11-02"],
+    ["a street address", 'const p = { address: [{ line: ["42 Wallaby Way"] }] };\n', "42 Wallaby"],
+  ];
+
+  for (const [label, body, token] of cases) {
+    it(`reports ${label} written as a source literal, which the shape pass never saw`, () => {
+      const root = makeRepo();
+      writeFileSync(join(root, "test", "inline.test.ts"), body);
+
+      const r = runIn(root, []);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+      expect(r.stderr).toContain(token);
+      expect(r.stderr).toContain("(source)");
+    });
+  }
+
+  it("decodes the escapes a JSON-document-inside-a-TypeScript-string is spelled with", () => {
+    // Two layers: the TypeScript literal, then the JSON one. A single decode
+    // leaves `Nakamura`, whose name tokens are `Nakamur` and `u`, and
+    // neither is what the file says.
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "inline.test.ts"),
+      `const doc = '{"resourceType":"Patient","name":[{"family":"Nakamur\\\\u0061"}]}';\n`,
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("Nakamura");
+  });
+
+  // THE XML SPELLING. This package reads two wire formats and its tests write
+  // both, so keying only the object literal left the other half unread inside
+  // the newly widened scope. Measured on base, in the 55 files under `test/`
+  // outside the fixture root: 87 object-literal `family` / `given` key sites and
+  // 21 `birthDate` sites, PLUS 33 more `family` / `given` and 3 `birthDate`
+  // written as XML `value` attributes.
+
+  it("reads a name written as a FHIR XML value attribute in a template literal", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "inline.test.ts"),
+      'const xml = `<Patient><name><family value="Nakamura"/></name></Patient>`;\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("Nakamura");
+  });
+
+  it("reads a date of birth and a street address in the XML spelling too", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "inline.test.ts"),
+      'const xml = `<Patient><birthDate value="1961-11-02"/>' +
+        '<address><line value="742 Evergreen Terrace"/></address></Patient>`;\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("1961-11-02");
+    expect(r.stderr).toContain("742 Evergreen Terrace");
+  });
+
+  it("does not report an entity reference as a person name", () => {
+    // The XXE and entity cases in this suite's own XML tests. `amp`, `xxe`,
+    // `secret` are entity NAMES, not anybody's name.
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "inline.test.ts"),
+      'const xml = `<Patient><name><family value="A&amp;B &lt;x&gt; &#65;&#x42;"/>' +
+        '<family value="&xxe;"/><family value="&secret;"/></name></Patient>`;\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("splits on an entity reference rather than deleting it, so a real name still reports", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "inline.test.ts"),
+      'const xml = `<Patient><name><family value="Nakamura&amp;Rodriguez"/></name></Patient>`;\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("Nakamura");
+    expect(r.stderr).toContain("Rodriguez");
+  });
+
+  it("does not report a template substitution's expression text as a name", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "inline.test.ts"),
+      "const surname = process.env.X;\nconst p = { name: [{ family: `${surname}` }] };\n",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  // THE VALUE READER FAILS TOWARD REPORTING. Each case below was measured
+  // reporting NOTHING under a fixed-window reader that ended the array at the
+  // first `]` it found: a bracket inside a string or an index expression ended
+  // it early and dropped every member after, and a closing bracket past the
+  // window dropped them all.
+  const readerCases: [string, string, string][] = [
+    [
+      "a bracket inside an earlier index expression",
+      'const p = { name: [{ given: [names[0], "Nakamura"] }] };\n',
+      "Nakamura",
+    ],
+    [
+      "a bracket inside the string itself",
+      'const p = { address: [{ line: ["742 Evergreen Terrace [Apt 4]"] }] };\n',
+      "742 Evergreen Terrace",
+    ],
+    [
+      "a comment between the key and its value",
+      'const p = { name: [{ family: /* the surname */ "Nakamura" }] };\n',
+      "Nakamura",
+    ],
+    [
+      "an escaped-quote JSON document inside a double-quoted string",
+      'const doc = "{\\"resourceType\\":\\"Patient\\",\\"name\\":[{\\"family\\":\\"Nakamura\\"}]}";\n',
+      "Nakamura",
+    ],
+  ];
+
+  for (const [label, body, token] of readerCases) {
+    it(`reads the value past ${label}`, () => {
+      const root = makeRepo();
+      writeFileSync(join(root, "test", "inline.test.ts"), body);
+
+      const r = runIn(root, []);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+      expect(r.stderr).toContain(token);
+    });
+  }
+
+  it("reads a member far past the fixed window the old reader used", () => {
+    // THE FILLER IS DIGITS ON PURPOSE, so it contributes no name tokens and the
+    // only thing this case can report is the planted member. An earlier version
+    // filled with letter-bearing tokens, which reported 800 hits and pushed
+    // stderr past 70 KB; the planted name was then the LAST line of a very large
+    // pipe, and the assertion went red under CI while the scanner was correct.
+    // A case whose signal sits at the end of 70 KB of noise is testing the pipe,
+    // not the reader.
+    const filler = Array.from({ length: 400 }, () => `"0123456789"`).join(", ");
+    const root = makeRepo();
+    const body = `const p = { name: [{ given: [${filler}, "Nakamura"] }] };\n`;
+    // The premise: the planted member sits well past the 4096-character window
+    // the previous reader sliced, which dropped the WHOLE array rather than the
+    // tail.
+    expect(body.indexOf("Nakamura")).toBeGreaterThan(4096);
+    writeFileSync(join(root, "test", "inline.test.ts"), body);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("Nakamura");
+    expect(r.stderr).toContain("1 hit(s)");
+  });
+
+  it("declares the diagnostic form in the allow-list rather than excluding it by shape", () => {
+    // `IssueCode@FHIRPath` is one `@` between two dotted tokens and no email
+    // recogniser separates it from an address by shape. A shape exclusion was
+    // tried and reverted: it covered every capitalised domain in every source
+    // target and LOST a hit the scanner already had. One `EMAILDOMAIN` line has
+    // a blast radius of one domain, and this asserts both halves of that.
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "inline.test.ts"),
+      'const e = ["UNKNOWN_PROPERTY@Patient.name[1]", "JOHN_SMITH@Mercy.org"];\n',
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("JOHN_SMITH@Mercy.org");
+    expect(r.stderr).not.toContain("UNKNOWN_PROPERTY");
+  });
+
+  it("keeps that detection on a fixture with an unexpected extension", () => {
+    // The route the reverted shape exclusion regressed: `scanTarget` sends any
+    // fixture that is not `.json` / `.xml` / `.ndjson` down the same branch as
+    // source, so a weakening scoped to "source" reached fixtures too.
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "__fixtures__", "vendor.hl7"),
+      "contact JOHN_SMITH@Mercy.org\n",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("JOHN_SMITH@Mercy.org");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two routes agree about markdown
+// ---------------------------------------------------------------------------
+//
+// The walk exempts `.md` by design: docs may legitimately describe violator
+// values. Applying that on one route only made them disagree in BOTH
+// directions, and a hook that reds on documentation the sweep exempts is a hook
+// that gets bypassed.
+
+describe("phi-scan: the markdown exemption is scan-wide, not per route", () => {
+  it("neither route reports a tracked markdown file under test/", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "notes.md"), "describes 123-45-6789 as a violator\n");
+    git(root, ["add", "test/notes.md"]);
+
+    const staged = runIn(root, ["--staged"]);
+    expect(staged.code, `stderr: ${staged.stderr}`).toBe(0);
+
+    const all = runIn(root, []);
+    expect(all.code, `stderr: ${all.stderr}`).toBe(0);
+  });
+
+  it("but a markdown path named explicitly is still scanned", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "notes.md"), "describes 123-45-6789 as a violator\n");
+
+    const r = runIn(root, ["test/notes.md"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Existence is not observation
+// ---------------------------------------------------------------------------
+//
+// `walk` returns silently when its root does not exist and yields nothing when
+// the root is an empty directory, so an emptied or deleted `test/__fixtures__`
+// printed `OK, no hits` and exited 0 over a corpus still wholly present in the
+// index (measured, both cases). A scanned-file COUNT does not detect this: the
+// count counts the roots that did exist.
+
+describe("phi-scan: a sweep refuses to report clean over what it never opened", () => {
+  function committedRepo(): string {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "__fixtures__", "patient.json"),
+      '{"resourceType":"Patient","name":[{"family":"Chalmers","given":["Peter"]}]}\n',
+    );
+    git(root, ["add", "src/ordinary.ts", "test/__fixtures__/patient.json"]);
+    commit(root, "corpus");
+    return root;
+  }
+
+  it("passes when every tracked in-scope file was opened", () => {
+    const r = runIn(committedRepo(), []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("refuses when a walk root is EMPTIED but its corpus is still in the index", () => {
+    const root = committedRepo();
+    rmSync(join(root, "test", "__fixtures__", "patient.json"), { force: true });
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("test/__fixtures__/patient.json");
+    expect(r.stderr).not.toMatch(/HIT:/);
+  });
+
+  it("refuses when a walk root is REMOVED but its corpus is still in the index", () => {
+    const root = committedRepo();
+    rmSync(join(root, "test", "__fixtures__"), { recursive: true, force: true });
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("test/__fixtures__/patient.json");
+  });
+
+  it("names EVERY unobserved path, not just the first", () => {
+    const root = committedRepo();
+    writeFileSync(join(root, "test", "__fixtures__", "second.json"), "{}\n");
+    git(root, ["add", "test/__fixtures__/second.json"]);
+    commit(root, "second");
+    rmSync(join(root, "test", "__fixtures__"), { recursive: true, force: true });
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("patient.json");
+    expect(r.stderr).toContain("second.json");
+  });
+
+  it("refuses a sweep that observed no files at all, with no index to consult", () => {
+    // The floor underneath the reconciliation: a tree with no repository of its
+    // own. `git rev-parse --is-inside-work-tree` is no help, because it answers
+    // for the ENCLOSING repository.
+    const root = mkdtempSync(join(tmpdir(), "fhir-phi-scan-bare-"));
+    repos.push(root);
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(join(root, "src"));
+    mkdirSync(join(root, "test"));
+    copyFileSync(
+      join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
+      join(root, "scripts", "phi-allow-list.txt"),
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("observed no files");
+    expect(r.stdout).not.toContain("OK, no hits");
+  });
+
+  it("does not refuse over a tracked markdown file, which the walk exempts by design", () => {
+    const root = committedRepo();
+    writeFileSync(join(root, "test", "NOTES.md"), "describes 123-45-6789 as a violator\n");
+    git(root, ["add", "test/NOTES.md"]);
+    commit(root, "notes");
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
   });
 });
