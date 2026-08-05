@@ -124,10 +124,13 @@ export const ISSUE_CODES = {
    *   where the model name of each is that verbatim tag), and a **`<div/>` in the FHIR namespace
    *   beside the narrative**, because the narrative is modeled as `div` under every spelling of the
    *   XHTML namespace. The second is the costlier: `Narrative.div` is `0..1`, so the merge turns the
-   *   narrative into a repeat over an otherwise conformant document. Any element reached by a
-   *   **default** `xmlns` re-declaration also keeps its tag verbatim as its model name, so it groups
+   *   narrative into a repeat over an otherwise conformant document. A **foreign** element reached by
+   *   a **default** `xmlns` re-declaration also keeps its tag verbatim as its model name, so it groups
    *   with its FHIR namesake the same way; there the group additionally carries
-   *   {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT}, which is the code to read for it.
+   *   {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT}, which is the code to read for it. **A
+   *   FHIR-namespace element does not carry that flag**, because it is not foreign to its parent, and
+   *   that is exactly the narrative case: `<div xmlns="http://hl7.org/fhir"/>` beside the real XHTML
+   *   narrative draws this code and **nothing else**, so this is the only report there is to read.
    *
    * It also fires where a prefixed FHIR element groups with an unprefixed one carrying a **foreign**
    * default declaration, because that one is spelled exactly like the FHIR element; there the group

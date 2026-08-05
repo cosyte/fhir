@@ -32,9 +32,10 @@ list of shapes; two routes are worth naming because a document can reach them wh
 as conformant, and neither needs a prefix spelled two ways: a prefix rebound between siblings
 (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`), and a `<div/>` in the FHIR namespace
 landing in `Narrative.div` beside the real XHTML narrative, because the narrative is modeled as `div`
-under every spelling of the XHTML namespace. An element reached by a default `xmlns` re-declaration
-groups with its FHIR namesake the same way, and there the group already carried
-`UNEXPECTED_XML_CONTENT`. The narrative case is the costliest: `Narrative.div` is `0..1`, so an otherwise conformant
+under every spelling of the XHTML namespace. A **foreign** element reached by a default `xmlns`
+re-declaration groups with its FHIR namesake the same way, and there the group already carried
+`UNEXPECTED_XML_CONTENT`. A FHIR-namespace one does not, which is why this report and not that one
+is what covers the narrative case. The narrative case is the costliest: `Narrative.div` is `0..1`, so an otherwise conformant
 document read back with two occurrences, no diagnostics and `valid: true`, and a single-value read
 of the narrative yields nothing. The merge itself is unchanged, because dropping the grouping would
 be a silent first-wins loss (the XML reader has no `duplicates` mechanism); what changed is that it

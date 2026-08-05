@@ -177,13 +177,11 @@ Unless noted, all of these are
   means two properties of one model name in one `FhirComplex` and **the XML reader has no
   `duplicates` mechanism**, so it would be a silent first-wins loss: strictly worse.
 - **That report compares the EXPANDED NAME, not the tag alone** (2026-08-05). **Do not write down how
-  many shapes reach it**: the first draft of that docblock said "two routes" and shipped while its own
-  corpus exercised four. The rule is the comparison. Two worth naming, because they read as
-  conformant: a prefix rebound between siblings, and a `<div/>` in the FHIR namespace joining
-  `Narrative.div` (the narrative is modeled as `div` under every XHTML spelling); the second read back
-  with **zero** diagnostics and `valid: true` over a `0..1` slot. **Do not narrow it back to
-  `element.name`.** It is closed for the READ only: `serializeResourceXml` drops the bindings, so the
-  report is gone on the re-read. That half waits on the unbound-prefix residual below.
+  many shapes reach it**: that docblock said "two routes" while its own corpus exercised four. The
+  rule is the comparison. Two read as conformant: a prefix rebound between siblings, and a `<div/>`
+  in the FHIR namespace joining `Narrative.div`; the second read back with **zero** diagnostics and
+  `valid: true` over a `0..1` slot, and draws this report and no other. **Do not narrow it back to
+  `element.name`.** Closed for the READ only: `serializeResourceXml` drops the bindings.
   [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
 - **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
   slice, and do not restate a gap as a claim. **Pinned by a test:** the `_`-sibling discarded whole,
@@ -191,16 +189,17 @@ Unless noted, all of these are
   value-absent primitive, the foreign-root laundering (`test/xml.test.ts`, "declared residuals,
   pinned so they cannot move in silence"), and the cross-format singleton-wrapper laundering
   (`test/array-wrapped-scalar.test.ts`). **Each of those is a characterization test over a gap:
-  CLOSING one MUST red it, in the same change.** Not theoretical: the two closures below red three
-  of them on the spot, which is the mechanism working.
+  CLOSING one MUST red it, in the same change.** Not theoretical: the closures below red three of
+  them on the spot, which is the mechanism working.
   **"Pinned by a test" is load-bearing prose, so never write it without opening the test**: three
   such sentences were false for days, and the next reader does not re-check.
-  - **CLOSED 2026-08-05, tests now assert the fix rather than the gap:** the scalar beside a nested
-    array, and the prefix rebound between siblings.
+  - **CLOSED 2026-08-05:** the scalar beside a nested array, and the prefix rebound between siblings
+    **on the read**. The rebound prefix keeps a characterization test over the half still open: the
+    report does not survive `serializeResourceXml`, which drops the binding.
   - **STILL OPEN, deliberately deferred:** `serializeResourceXml` emits a prefixed foreign property
     with the prefix **unbound**, so the output is not namespace-well-formed and the binding is lost.
-    The binding was never modeled, so the remedies are to model it or to refuse a shape that reads
-    `valid: true` today. Both are larger than the defect.
+    It was never modeled, so the remedies are to model it or to refuse a shape that reads `valid:
+true` today. Both are larger than the defect.
     [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open) ·
     [`#singleton-wrapper-laundering`](documentation/agent-notes.md#singleton-wrapper-laundering) ·
     [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)

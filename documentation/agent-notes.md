@@ -897,8 +897,12 @@ property name with a colon, which withdraws a capability for a shape that reads 
 are larger decisions than the defect, and this item's standing instruction was not to let the remedy
 outgrow it. **Still open.**
 
-**AND IT REOPENS ROUTE 3 ACROSS ONE ROUND TRIP, WHICH IS WHY THE FIRST DRAFT OF THIS SECTION WAS
-WRONG.** That draft said "what is lost is the binding, not the diagnostic", measured on a **single**
+**AND IT REOPENS THE REBOUND-PREFIX HALF, RESIDUAL (iv), ACROSS ONE ROUND TRIP. NOT ROUTE 3, WHICH
+SURVIVES.** Measured: the narrative `div` is carried opaquely by `narrativeSource`, which
+materialises each `xmlns` on the fragment, so both divs are re-emitted with their namespaces and the
+re-read reproduces `MIXED_XML_SPELLING@Patient.text.div` unchanged. Only the rebound prefix loses it,
+because only a prefix needs a binding the model does not carry. **This is why the first draft of this
+section was wrong.** That draft said "what is lost is the binding, not the diagnostic", measured on a **single**
 `<v:x/>`, where the unbound prefix still satisfies `isForeign` and `UNEXPECTED_XML_CONTENT` is raised
 again. On the shape residual (iv) actually names, a **rebound** prefix, the writer drops both
 bindings, so the two occurrences become one expanded name and the `MIXED_XML_SPELLING` this very

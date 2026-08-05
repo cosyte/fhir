@@ -561,9 +561,10 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   because a document can reach them while otherwise reading as conformant: a prefix rebound between
   siblings (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`), and a `<div/>` in the FHIR
   namespace landing in `Narrative.div` beside the real XHTML narrative, which is the one that costs
-  the most because `Narrative.div` is `0..1`. An element reached by a **default** `xmlns`
+  the most because `Narrative.div` is `0..1`. A **foreign** element reached by a **default** `xmlns`
   re-declaration groups with its FHIR namesake the same way, and there the group already carried
-  `UNEXPECTED_XML_CONTENT`.
+  `UNEXPECTED_XML_CONTENT`. A FHIR-namespace one carries no such flag, which is exactly why this
+  report is the one that covers the narrative case.
 - **`serializeResourceXml`** emits compact, spec-clean FHIR XML that round-trips a spec-clean document
   **byte-for-byte** (decimals byte-exact, never through a `number`). It throws `FhirSerializeError`
   rather than emit a model the reader marked as having lost character data, so that finding cannot
