@@ -3,9 +3,9 @@
 **▶ The narrative lives in [`documentation/agent-notes.md`](documentation/agent-notes.md)**: every
 incident, every refuted gate pass, every shipped-phase history, verbatim and re-headed. This file
 keeps the cursor, the rules, and every trap; each trap below points at the section there that
-explains what it cost. Relocated 2026-08-04 (`CLAUDE-MD-AUDIT`, the 2026-08-04 amendment to the
-meta-repo's `documentation/decisions/0023-doc-budgets.md`). **Never delete a trap to save bytes.
-Move it there and leave the one-liner here.**
+explains what it cost. Relocated 2026-08-04 (`CLAUDE-MD-AUDIT`, amending the meta-repo's
+`decisions/0023-doc-budgets.md`). **Never delete a trap to save bytes. Move it there and leave the
+one-liner here.**
 
 ## Project
 
@@ -113,7 +113,7 @@ Every line here cost a defect or a refuted gate pass. The pointer is to
   edge set mechanically from the three interfaces of the `FhirNode` union (exactly four node-valued
   members), so a new node-valued field
   reds a test instead of silently redefining what a repeating element contains.
-- **Bounding a derived name is a shape test, not a truncation**, and the mechanism lives in
+- **Bounding a derived name is a shape test, not a truncation**; the mechanism lives in
   `src/model/path.ts` and nowhere else. `FhirComplex.properties[].name` stays exactly as the document
   wrote it. **The `hl7`/`deid` model-level lesson does NOT transfer**, because bounding those
   would be data loss. **No claim is made anywhere that a location never carries document content; do not
@@ -237,14 +237,20 @@ and the 11-way `Observation.value[x]` choice, is in
 
 ### Tooling and process
 
-- **`attw` must stay `node scripts/attw.mjs`, never the bare CLI** (`ATTW-FALSE-GREEN-PORT`, ported
-  from `terminology`). `@arethetypeswrong/cli@0.18.4` prints "This package does not contain types."
-  and exits **0** before reading the problem list, turning a broken publish into a pass, and `tsup`
-  opens a measured 1.86–2.46 s window in every build where `dist/` holds JS and no `.d.ts`. **The
-  gate takes two arms and a name match alone is not enough** (`-fjson` / `-Pfjson` carry their value
-  attached); **do not simplify the short-cluster arm back to the name set.** Re-read the section when
-  you bump the pin. **`scripts/verify.sh` in the meta-repo needs no change and must not be touched.**
+- **`attw` must stay `node scripts/attw.mjs`, never the bare CLI** (`ATTW-FALSE-GREEN-PORT`). The
+  bare CLI turns a broken publish into a pass during `tsup`'s JS-without-`.d.ts` window. **The gate
+  takes two arms and a name match alone is not enough**; **do not simplify the short-cluster arm
+  back to the name set.** Re-read the section when you bump the pin. **`scripts/verify.sh` in the
+  meta-repo needs no change and must not be touched.**
   [`#attw-false-green-port`](documentation/agent-notes.md#attw-false-green-port)
+- **The PHI scan's SCOPE and its RECOGNISER move together, never one alone.** Enumerating buys the
+  SSN + email floor only. **Read both spellings** (`family: "…"` AND `<family value="…"/>`); **never
+  key `text` / `identifier.value` / `telecom.value` in source.** A weakening scoped to "source" also
+  hits a fixture whose extension is not `.json` / `.xml` / `.ndjson`, so **declare a domain in the
+  allow-list, never a shape rule**. And **a scanned-file COUNT cannot detect a sweep that opened
+  nothing** (it counts the roots that DID exist), nor can **`is-inside-work-tree`**, which answers
+  for the ENCLOSING repo. Residuals: `phi-scan-overrides.md`
+  [`#phi-scan-scope-2026-08-05`](documentation/agent-notes.md#phi-scan-scope-2026-08-05)
 - **Two refuter passes max, then one narrow third against the remedy diff only. No fourth**
   (ADR 0016). A sub-problem that fails to converge twice gets **reverted and declared a gap**: a
   pure revert ships no ungraded behaviour, and a declared gap is not a claim.
@@ -254,35 +260,30 @@ and the 11-way `Observation.value[x]` choice, is in
 ## Tech Stack (the shared `@cosyte/*` standard)
 
 fhir inherits the canonical toolchain by depending on the published `@cosyte/*` config packages, not
-by copying files. The source of truth is the meta-repo's `documentation/conventions.md`. This is a
-summary.
+by copying files. Source of truth: the meta-repo's `documentation/conventions.md`.
 
 - **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
-  `@cosyte/tsconfig`. **Target ES2023**, `NodeNext`.
-- **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate.
-  It runs through `scripts/attw.mjs`. See the trap above.
-- **Node:** **>= 22**.
-- **Package manager:** `pnpm@10`.
-- **Lint/format:** **ESLint 10** (`@cosyte/eslint-config`) + Prettier (`@cosyte/prettier-config`).
-  Lint at `--max-warnings=0`.
-- **Testing:** **Vitest 4** + v8 coverage (`@cosyte/vitest-config`). Per-directory >= 90 gates come
-  online in Phase 1 when real code lands (P0 holds them at 0: there is no logic to cover yet).
-- **CI/CD:** thin callers of the reusable `cosyte/.github` workflows.
-- **Runtime deps:** **Zero.** Node stdlib only.
-- **License:** MIT.
+  `@cosyte/tsconfig`. **ES2023**, `NodeNext`.
+- **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate,
+  run through `scripts/attw.mjs` (trap above).
+- **Node >= 22, pnpm@10.** **Runtime deps: zero.**
+- **Lint/format:** **ESLint 10** + Prettier (`@cosyte/eslint-config`, `@cosyte/prettier-config`),
+  at `--max-warnings=0`.
+- **Testing:** **Vitest 4** + v8 coverage (`@cosyte/vitest-config`), per-dir >= 90 gates.
+- **CI/CD:** thin `cosyte/.github` callers. **License:** MIT.
 
 ## The four architecture ADRs (read before writing any parser code)
 
 Recorded in `documentation/decisions/` at bootstrap because they shape everything:
 
 1. **`0001`: decimal / integer64 representation.** String-backed; MUST preserve lexical precision.
-   `0.010` is not `0.01`. **Never** round-trip `decimal`/`integer64` through the JS `number` type.
-   That is a silent-data-corruption hazard for doses, lab values, and identifiers.
-2. **`0002`: FHIRPath posture.** Implement a bounded, vendored subset in-repo. No runtime
-   dependency, no full third-party engine. Needed for invariants + slicing (Phase 7).
-3. **`0003`: XML scope.** JSON-first; XML serialization deferred to Phase 8.
-4. **`0004`: R4-first.** `4.0.1` is the modeled version (ONC HTI-1 / §170.315(g)(10) anchor). R5 /
-   DSTU2 are read-tolerance only.
+   `0.010` is not `0.01`. **Never** round-trip `decimal`/`integer64` through the JS `number` type:
+   a silent-data-corruption hazard for doses, lab values, and identifiers.
+2. **`0002`: FHIRPath posture.** A bounded, vendored subset in-repo. No runtime dependency, no
+   third-party engine. Needed for invariants + slicing.
+3. **`0003`: XML scope.** JSON-first; XML came later.
+4. **`0004`: R4-first.** `4.0.1` is modeled (ONC HTI-1 / §170.315(g)(10) anchor). R5 / DSTU2 are
+   read-tolerance only.
 
 ## Engineering Guardrails
 
