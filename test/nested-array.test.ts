@@ -23,6 +23,7 @@ import {
   readSafety,
   resolvePath,
   serializeResource,
+  serializeResourceXml,
   validateResource,
   type FhirComplex,
   type FhirNode,
@@ -791,21 +792,129 @@ describe("the writer's output is bounded, and the bound is pinned not prose", ()
   });
 });
 
-describe("what preservation does NOT reach, pinned rather than claimed away", () => {
-  it("still loses a scalar written beside a nested array in the same array", () => {
-    // `["Peter"]` makes the array read as a list of complex elements, so the `"James"` beside it
-    // lands where an object was expected and becomes an empty element with nothing kept. This is a
-    // different loss from the one above (a scalar where a complex belongs, not an array inside an
-    // array), it reproduces identically without this change, and closing it means preserving a
-    // second unplaceable shape with its own model surface. Recorded and pinned, not fixed here.
+/**
+ * THE NEIGHBOURING SHAPE: A SCALAR OR `null` WHERE FHIR JSON HAS AN OBJECT.
+ *
+ * One branch over from the array-inside-an-array, and the same remedy, for a sharper reason. The
+ * reader has no element to build from a scalar at a complex position either, so it produces the same
+ * empty element and raises `UNKNOWN_PROPERTY`. What made this the worse of the two is what the
+ * writer then did with it: an empty element emits as `{}`, `{}` is a **conformant** empty element,
+ * and so the warning was gone the moment the output was read back. The writer presented an object as
+ * read at a position nothing was read at. That is a value the writer authored, which is the one
+ * thing the conservative half of Postel's Law may never do.
+ *
+ * The remedy is the one the array shape already uses, and it is deliberately NOT to model the scalar
+ * as a primitive: that would make it visible to every walker at a position walkers read as a complex
+ * element, which is a redefinition of the model. The text hangs off the node instead
+ * (`FhirComplex.nonObjectSource`), where only the writer reads it.
+ */
+describe("a scalar where an object belongs is handed back, not replaced with an object", () => {
+  /** Every non-object, non-array shape that reaches the complex-item branch of the reader. */
+  const SCALARS = [
+    { label: "a string", written: '"James"' },
+    { label: "a number", written: "42" },
+    { label: "a decimal", written: "1.2300" },
+    { label: "a boolean", written: "true" },
+    { label: "null", written: "null" },
+  ];
+
+  it.each(SCALARS)("writes $label back exactly as the sender wrote it", ({ written }) => {
+    const doc = `{"resourceType":"Patient","name":[{"family":"Roe"},${written}]}`;
+    // Byte-identical: the value is handed back, not re-authored.
+    expect(serializeResource(parseResource(doc).resource)).toBe(doc);
+  });
+
+  it.each(SCALARS)("reproduces the $label finding across a round trip", ({ written }) => {
+    const doc = `{"resourceType":"Patient","name":[{"family":"Roe"},${written}]}`;
+    const first = parseResource(doc).issues;
+    expect(first.map((i) => `${i.code}@${i.expression}`)).toEqual([
+      "UNKNOWN_PROPERTY@Patient.name[1]",
+    ]);
+    // The whole point: the second read says what the first read said. Before this, it said nothing,
+    // because `{}` is a conformant empty element and there was nothing left to report.
+    const again = parseResource(serializeResource(parseResource(doc).resource)).issues;
+    expect(again).toEqual(first);
+  });
+
+  it("does not touch a genuinely empty object, which stays `{}` and stays silent", () => {
+    // The distinction is the whole risk of the change: an object the sender really wrote empty must
+    // not acquire a finding, and must not become anything else on the way out.
+    const doc = '{"resourceType":"Patient","name":[{}]}';
+    expect(parseResource(doc).issues).toEqual([]);
+    expect(serializeResource(parseResource(doc).resource)).toBe(doc);
+  });
+
+  it("keeps the scalar OUT of the tree: the node is still the empty element", () => {
+    // Preservation is not modeling. A consumer walking `name` sees a complex with no properties at
+    // `[1]`, exactly as before, so no walker, safety rule or validator can read the scalar as a
+    // value. Only the writer can reach it.
+    const { resource } = parseResource(
+      '{"resourceType":"Patient","name":[{"family":"Roe"},"James"]}',
+    );
+    const name = req(getProperty(resource, "name"));
+    const item = isList(name) ? nth(name.items, 1) : undefined;
+    expect(item !== undefined && isComplex(item) && item.properties).toEqual([]);
+    // Not a nested array either: this shape carries no `NESTED_ARRAY` and no marker.
+    expect(item !== undefined && isNestedArray(item)).toBe(false);
+    expect(nestedArrays(resource, "Patient")).toEqual([]);
+    expect(item !== undefined && nestedArrayContent(item)).toEqual([]);
+  });
+
+  it("reaches the `_`-sibling's extension items too, which is the reader's other call site", () => {
+    const doc = '{"resourceType":"Patient","name":["Roe"],"_name":[{"extension":["x"]}]}';
+    const { resource, issues } = parseResource(doc);
+    expect(issues.map((i) => i.code)).toContain(ISSUE_CODES.UNKNOWN_PROPERTY);
+    expect(serializeResource(resource)).toBe(doc);
+  });
+
+  it("distinguishes two documents that wrote DIFFERENT scalars at one position", () => {
+    // Cross-format equivalence compares the preserved text, so the oracle cannot call two documents
+    // the same over content neither could place. Without that arm both are the empty element.
+    const a = parseResource(
+      '{"resourceType":"Patient","name":[{"family":"Roe"},"James"]}',
+    ).resource;
+    const b = parseResource(
+      '{"resourceType":"Patient","name":[{"family":"Roe"},"Peter"]}',
+    ).resource;
+    expect(nodesEquivalent(a, b)).toBe(false);
+    // And neither is equivalent to the document that really wrote an empty object there.
+    const empty = parseResource('{"resourceType":"Patient","name":[{"family":"Roe"},{}]}').resource;
+    expect(nodesEquivalent(a, empty)).toBe(false);
+  });
+
+  it("still hands back the array beside it, so BOTH findings survive the round trip", () => {
+    // The shape the two branches meet at, and the one the residual was filed under: `["Peter"]`
+    // makes the array read as a list of complex elements, so `"James"` lands where an object was
+    // expected. Both positions now write back what the sender wrote.
     const doc = '{"resourceType":"Patient","name":[{"given":[["Peter"],"James"]}]}';
     const { resource } = parseResource(doc);
-    const out = serializeResource(resource);
-    expect(out).toContain('[["Peter"],{}]');
-    expect(out).not.toContain("James");
-    // The document is still refused, so the loss is not sitting under an affirmative verdict.
+    expect(serializeResource(resource)).toBe(doc);
+    expect(parseResource(serializeResource(resource)).issues.map((i) => i.code)).toEqual([
+      ISSUE_CODES.UNKNOWN_PROPERTY,
+      ISSUE_CODES.NESTED_ARRAY,
+      ISSUE_CODES.UNKNOWN_PROPERTY,
+    ]);
+    // Unchanged: the nested array still refuses the affirmative verdict.
     expect(readSafety(resource).safeToSummarize).toBe(false);
     expect(validateResource(resource).valid).toBe(false);
+  });
+});
+
+describe("what preservation does NOT reach, pinned rather than claimed away", () => {
+  it("does not reach the XML writer, which emits the empty element it was handed", () => {
+    // Unchanged and declared: `serializeResourceXml` reads neither preserved text, so both the
+    // array shape and the scalar shape emit as an empty element there. That is the older residual,
+    // reproduced here so the JSON-side fix above cannot be read as covering both writers.
+    const scalar = parseResource(
+      '{"resourceType":"Patient","name":[{"family":"Roe"},"James"]}',
+    ).resource;
+    expect(serializeResourceXml(scalar)).toBe(
+      '<Patient xmlns="http://hl7.org/fhir"><name><family value="Roe"/></name><name/></Patient>',
+    );
+    const nested = parseResource('{"resourceType":"Patient","name":[[{"family":"Roe"}]]}').resource;
+    expect(serializeResourceXml(nested)).toBe(
+      '<Patient xmlns="http://hl7.org/fhir"><name/></Patient>',
+    );
   });
 
   it("still discards a `_`-sibling it drops whole, so an array inside one draws no refusal", () => {

@@ -444,7 +444,8 @@ function groupChildren(children: ScopedElement[]): {
 }
 
 /**
- * Report each grouped element whose occurrences did not all arrive under the same tag.
+ * Report each grouped element whose occurrences did not all arrive under the same **expanded name**:
+ * the namespace and the tag together (Namespaces in XML 1.0 §6.1), not the tag alone.
  *
  * **This is the cost of resolving prefixes, made visible rather than left to be found.** Two
  * prefixes bound to one namespace are two spellings of one name, so grouping them is the correct
@@ -454,8 +455,32 @@ function groupChildren(children: ScopedElement[]): {
  * element it would otherwise have inspected. Raising {@link mixedXmlSpelling} here is what keeps
  * that from happening silently.
  *
- * Only a group in the parent's own namespace can hold more than one tag: any other element is
- * modeled under its verbatim tag, so a differently-spelled one lands in a different group.
+ * **The namespace has to be in the comparison, because the tag alone misses the merges that are not
+ * spellings of one name at all.** {@link groupChildren} keys on the model name, and two elements can
+ * reach one model name carrying one tag and two different namespaces. **Do not write down how many
+ * such routes there are.** The rule is the comparison itself, and an earlier draft of this very
+ * docblock named two and shipped while its own differential corpus exercised four; see the trap on
+ * {@link modelNameOf}, which already says a default-declared foreign element "does all four".
+ * Two routes worth naming, because they are the ones a document can reach while otherwise reading as
+ * conformant: a prefix **rebound between siblings**
+ * (`<p:x xmlns:p="urn:a"/><p:x xmlns:p="urn:b"/>`, two foreign elements whose model name is that one
+ * verbatim tag) and a **FHIR-namespace `<div/>` beside the narrative** ({@link modelNameOf} models
+ * the narrative as `div` under every spelling of the XHTML namespace, so `{http://hl7.org/fhir}div`
+ * groups with it). Comparing tags is silent about both, and the second is the one that costs the
+ * most: `Narrative.div` is `0..1`, so the merge turns the narrative into a repeat that a single-value
+ * read yields nothing from, over a document that is otherwise conformant. An element reached by a
+ * **default** `xmlns` re-declaration groups with its FHIR namesake the same way, and whether that
+ * group also carries {@link unexpectedXmlContent} is decided by {@link isForeign}, which compares the
+ * element against **its parent's** namespace and not against the FHIR one.
+ *
+ * **State the predicate, not its consequence.** Three consecutive gate passes refuted a sentence
+ * here that summarised which documents come out of that predicate, each narrower than the last and
+ * each still wrong, because the set depends on the parent. Name the predicate and let the reader
+ * evaluate it.
+ *
+ * The comparison can only ever add a report, never retire one: two occurrences that differ in tag
+ * differ in the pair regardless of namespace. A conformant document reaches it only with occurrences
+ * that share both, so it stays silent there.
  */
 function reportMixedSpelling(
   order: readonly string[],
@@ -463,11 +488,16 @@ function reportMixedSpelling(
   path: string,
   issues: FhirIssue[],
 ): void {
+  // The two components are compared separately rather than through a joined key: a namespace URI is
+  // an attribute value this reader does not constrain, so no separator is provably unambiguous.
+  const sameSpelling = (a: ScopedElement, b: ScopedElement): boolean =>
+    a.element.name === b.element.name && a.resolved.namespace === b.resolved.namespace;
   for (const name of order) {
     const occurrences = byName.get(name);
     if (occurrences === undefined || occurrences.length < 2) continue;
-    const first = occurrences[0]?.element.name;
-    if (occurrences.some((o) => o.element.name !== first)) {
+    const first = occurrences[0];
+    if (first === undefined) continue;
+    if (occurrences.some((o) => !sameSpelling(o, first))) {
       issues.push(mixedXmlSpelling(childPath(path, name)));
     }
   }

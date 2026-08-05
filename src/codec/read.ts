@@ -228,11 +228,20 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
  * The array's own text is kept verbatim on the node, where it is readable without being an element:
  * putting it in the tree would change what a repeating element *contains* for every consumer that
  * walks one, which is a redefinition of the model rather than a preservation of the document.
+ *
+ * **A scalar or `null` here is the same problem one branch over, and its text is kept the same way.**
+ * The element is empty for the same reason, so without the text the writer has nothing to hand back
+ * and emits `{}`: an object the sender never wrote, at a position the reader never read, which is a
+ * value the writer authored rather than one it carried. The warning above is the only thing that
+ * says otherwise, and it does not survive a round trip, because `{}` reads back as a conformant
+ * empty element. Keeping the text costs the tree nothing, for the same reason it costs the tree
+ * nothing one branch over: it hangs off the node instead of being modeled at it
+ * ({@link FhirComplex.nonObjectSource}).
  */
 function readComplex(node: RawJson, path: string, issues: FhirIssue[]): FhirComplex {
   if (node.t === "obj") return buildComplex(node, path, issues);
   issues.push(unknownProperty(path));
-  if (node.t !== "arr") return complex([]);
+  if (node.t !== "arr") return { ...complex([]), nonObjectSource: rawJsonText(node) };
   issues.push(nestedArray(path));
   return markNestedArray(complex([]), { value: rawJsonText(node) });
 }

@@ -824,7 +824,12 @@ clean), pre-existing for the default spelling and extended to the prefixed one h
 **distinct expanded names merge** when one prefix is rebound between siblings
 (`<p:x xmlns:p="urn:a"/><p:x xmlns:p="urn:b"/>` -> one property), both flagged foreign, which the
 `isForeign` / `groupChildren` expanded-name argument does not cover.
-**(iii) AND (iv) ARE NOW PINNED BY TESTS (2026-08-05), AND THE REASON THEY NEEDED TO BE IS THE
+**(iv) IS CLOSED FOR THE READ (2026-08-05), AND NOT FOR THE ROUND TRIP:** `reportMixedSpelling` now
+compares the expanded name, so the merge is reported rather than silent, but `serializeResourceXml`
+drops the bindings and the report is gone on the re-read. The merge itself still happens,
+deliberately; see
+[`#fhir-writer-authors-values-2026-08-05`](#fhir-writer-authors-values-2026-08-05).
+**(iii) AND (iv) WERE PINNED BY TESTS (2026-08-05), AND THE REASON THEY NEEDED TO BE IS THE
 LESSON.** An audit of this file against the test tree found three residuals whose prose said
 "pinned by a test" or read as though it did, with no test anywhere: (iv) here, (iii) here (only the
 **flag** was pinned, never the round trip), and the singleton-wrapper laundering below. A false
@@ -845,6 +850,107 @@ the `_`-sibling content is still discarded, as above.
 **And the limit `#43` was right not to paper over is INHERITED, not undone: a forgery genuinely
 shaped like a FHIR name is still echoed, so no claim is made anywhere that a location never
 carries document content. Do not add one.**
+
+### `FHIR-WRITER-AUTHORS-VALUES` (2026-08-05)
+
+Three `PRE-EXISTING` laundering routes the `FHIR-RESIDUALS-NOT-PINNED` gate found while pinning
+other residuals. **Two closed here, one deferred, and the scope call is the interesting part.**
+
+**1. The JSON writer authored a value that was never read. CLOSED.** `readComplex` produces an empty
+element for anything that is not an object at a complex position, and the writer emitted that
+element as `{}`. `{}` is a **conformant** empty element, so the `UNKNOWN_PROPERTY` the reader raised
+was gone the moment the output was read back:
+`{"name":[{"family":"Roe"},"James"]}` -> `{"name":[{"family":"Roe"},{}]}` -> no diagnostics. **This
+is the fabrication class**, the same harm shape as a silent zero default: a confident value
+presented as read at a position where nothing was read at all.
+
+**The surface is wider than the item stated, and that is what decided the remedy.** The item named
+"a scalar beside a nested array", where the document already reads `valid: false` on the
+`NESTED_ARRAY`. Measured, the same branch is reached by any non-object beside an object in a complex
+list (`{"name":[{"family":"Roe"},"James"]}`, `…,null]`, `…,42]`, `…,true]`), and **those documents
+read `valid: true` with one warning** and came back with none. So a **refusal** was the wrong
+instrument: the existing `DROPPED_ELEMENT_TEXT` refusal is explicitly scoped to models the library
+already reports `valid: false` / `safeToSummarize: false`, and refusing here would remove the ability
+to write back documents that read clean. The remedy taken is the writer's **own already-documented
+principle**, one branch over in the same function: *"Conservatism here means refusing to author a
+value, not refusing to hand one back."* The text is kept on the node (`FhirComplex.nonObjectSource`)
+and written back, so the re-read reproduces the finding. The text is **value-exact, not byte-exact**,
+the same caveat `NestedArrayContent` already carries: a number's exact source survives, a string's
+escaping does not (`"Jamés"` returns as `"Jamés"`, `"a\/b"` as `"a/b"`). Both denote the same
+string, so this is a re-render, not a loss, and the round trip is byte-identical for every input that
+was already canonically escaped.
+
+**Modeling the scalar as a primitive was considered and rejected**, and it is the cheaper-looking
+fix, so it is written down: it would put a live value at a position every walker reads as a complex
+element, and `codingsOf` / the safety spine would then see values they do not see today. That is the
+line `FHIR-NESTED-ARRAY-PRESERVATION` drew ("if your change makes a nested array visible to any
+walker, you have crossed the line"), and it applies verbatim. A **new** field rather than a reuse of
+`nestedArraySource`: reusing it would set `nestedArray: true`, which drives a `NESTED_ARRAY`
+validation error the document never earned, and would make the public `nestedArrayContent` return a
+non-array.
+
+**2. `serializeResourceXml` emits a prefixed foreign property with the prefix unbound. DEFERRED,
+with the reason.** Measured: `<v:x xmlns:v="urn:vendor" value="1"/>` re-emits as `<v:x value="1"/>`,
+which is **not namespace-well-formed**, so a conformant parser rejects the writer's own output. The
+binding was never modeled, so the remedies are (a) carry namespaces in the model or (b) refuse any
+property name with a colon, which withdraws a capability for a shape that reads `valid: true`. Both
+are larger decisions than the defect, and this item's standing instruction was not to let the remedy
+outgrow it. **Still open.**
+
+**AND IT REOPENS THE REBOUND-PREFIX HALF, RESIDUAL (iv), ACROSS ONE ROUND TRIP. NOT ROUTE 3, WHICH
+SURVIVES.** Measured: the narrative `div` is carried opaquely by `narrativeSource`, which
+materialises each `xmlns` on the fragment, so both divs are re-emitted with their namespaces and the
+re-read reproduces `MIXED_XML_SPELLING@Patient.text.div` unchanged. Only the rebound prefix loses it,
+because only a prefix needs a binding the model does not carry. **This is why the first draft of this
+section was wrong.** That draft said "what is lost is the binding, not the diagnostic", measured on a **single**
+`<v:x/>`, where the unbound prefix still satisfies `isForeign` and `UNEXPECTED_XML_CONTENT` is raised
+again. On the shape residual (iv) actually names, a **rebound** prefix, the writer drops both
+bindings, so the two occurrences become one expanded name and the `MIXED_XML_SPELLING` this very
+slice added is **gone on the re-read**:
+
+```
+in   : <Observation xmlns="…fhir"><p:x xmlns:p="urn:a" value="1"/><p:x xmlns:p="urn:b" value="2"/></Observation>
+i1   : MIXED_XML_SPELLING@Observation.<withheld> + UNEXPECTED_XML_CONTENT x2
+out1 : <Observation xmlns="…fhir"><p:x value="1"/><p:x value="2"/></Observation>
+i2   : UNEXPECTED_XML_CONTENT x2                      <- the merge report is gone
+```
+
+So **(iv) is closed for the READ and not for the round trip**, and the round-trip half is a declared
+residual of route 2, not of route 3. It is pinned by `test/xml.test.ts` so it cannot move in silence.
+Route 2 is the thing that has to close before that report can survive a write, which is the honest
+reason it is the next item rather than a nice-to-have.
+
+**3. A FHIR-namespace `<div/>` merges into `Narrative.div` with zero diagnostics. CLOSED, one line.**
+`modelNameOf` tests `isNarrativeDiv` first and models the narrative as `div` under every spelling of
+the XHTML namespace, so `{http://hl7.org/fhir}div` joins `{http://www.w3.org/1999/xhtml}div` in one
+group. `reportMixedSpelling` compared **literal tags**, both are `div`, and the document read back
+with zero issues and `valid: true` while `Narrative.div` (`0..1`) had become a two-item list.
+Comparing the **expanded name** closes it, and closes residual (iv) with it, because a prefix rebound
+between siblings is the same defect with a different route in. `MIXED_XML_SPELLING` is the right
+code rather than a new one: its published reason is that *the count* changed and a single-value read
+of a repeat yields nothing, which is exactly the harm in both. The grouping itself is untouched, per
+the standing "report it or drop the grouping" trap: dropping means two properties of one model name
+and the XML reader has no `duplicates` mechanism, so it would be a silent first-wins loss.
+
+**The scope call, stated.** Routes 1 and 3 were taken, route 2 deferred. 1 and 3 are each a change of
+a few lines at the site that decides, with the harm and the remedy in the same sentence. 2 requires a
+new model capability or a new refusal before anything can be written at all.
+
+**Every test added or changed was demonstrated RED by mutation first**, nine of them, because
+`FHIR-RESIDUALS-NOT-PINNED` closed exactly the defect of a test that cannot fail. Three of the
+mutations were unnecessary in the end: the pre-existing characterization tests for the scalar route
+and the rebound prefix, and the `model-edges` enumeration, all went red on their own the moment
+`src/` changed, which is what those tests exist to do.
+
+**Measured over this repo's 7 hand-authored XML fixtures plus mutations (1,195 documents), NOT the
+FHIR R4 published-examples corpus.** 4 readings moved, all 4 read diagnostics **gained**, 0 lost, 0
+validation findings moved either way, 0 `valid`/`safeToSummarize` flips, 0 retractions or negations
+lost, 0 leaf values missing, 393 of 396 twin pairs identical with 3 **louder** and 0 weaker.
+**The differential's negative control fired on the first run**, exactly as its own trap says it
+would: `CONTROL.moved` still described the `FHIR-ELEMENT-TEXT-RECOVERY` slice, which had merged, so
+base and head agreed and every zero was meaningless. Re-keyed to this slice's own document. **Re-key
+it every time**, and note that the control reads XML only, so the JSON half of this slice is outside
+it and is covered by `test/nested-array.test.ts` instead.
 
 ### Singleton-wrapper laundering
 

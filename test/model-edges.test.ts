@@ -80,6 +80,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
       "FhirComplex.kind",
       "FhirComplex.nestedArray",
       "FhirComplex.nestedArraySource",
+      "FhirComplex.nonObjectSource",
       "FhirComplex.properties",
       "FhirList.items",
       "FhirList.kind",

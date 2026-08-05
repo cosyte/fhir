@@ -126,6 +126,26 @@ export interface FhirComplex {
    */
   readonly nestedArraySource?: string;
   /**
+   * The JSON text of a **non-object, non-array** value the sender wrote at a position where FHIR
+   * JSON has an object: a string, a number, a boolean, or `null` (json.html §2.6.2 gives a complex
+   * element an object and nothing else). The value is **not** modeled as FHIR, and deliberately not
+   * as a primitive either: putting it in the tree would make it visible to every walker at a
+   * position that walker reads as a complex element, which is a redefinition of the model rather
+   * than a preservation of the document. The node stays the empty element the reader had to produce
+   * there, and the text hangs off it where the writer can hand it back. The reader raises
+   * {@link ISSUE_CODES.UNKNOWN_PROPERTY} at the same position. An **array** is the neighbouring case
+   * and has its own field ({@link nestedArraySource}) plus a marker, because it additionally carries
+   * {@link ISSUE_CODES.NESTED_ARRAY}. Absent on every conformant document and on every document read
+   * from XML.
+   *
+   * **The text is value-exact, not byte-exact**, exactly as {@link NestedArrayContent} is: it is the
+   * value re-rendered the way this library renders every other JSON value it emits, so a number's
+   * exact source survives and a string's escaping does not (`"Jamés"` comes back as `"Jamés"`,
+   * `"a\/b"` as `"a/b"`). Both denote the same string, so nothing is lost; a caller comparing the
+   * writer's output to the input **byte for byte** will still see a difference here.
+   */
+  readonly nonObjectSource?: string;
+  /**
    * Set when the XML document wrote **character data directly on this element**, which a FHIR
    * element has no slot for (xml.html §2.6.1: a value travels in the `value` attribute, and an
    * element's other content is child elements). The text is dropped, so this node holds only what

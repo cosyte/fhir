@@ -243,7 +243,10 @@ const SHAPES: readonly Shape[] = [
     rootAttrs: ` xmlns:h="${XHTML}"`,
     narrative: true,
   },
-  // ── A `div` outside XHTML: the documented residual, which must not move. ─────────────────────
+  // ── A `div` outside XHTML: the documented residual. The unprefixed one MOVED on 2026-08-05 and
+  // ── the move is a GAIN: it keeps its tag, so it groups with a FHIR-namespace `div` under one name
+  // ── and now draws `MIXED_XML_SPELLING` as well as the flag it always drew. What must not move is
+  // ── what it CARRIES; a diagnostic gained here is the report catching up with the merge. ───────
   {
     id: "vendor-div-unprefixed",
     xml: '<div xmlns="urn:vendor"><Table>@</Table></div>',
@@ -767,13 +770,22 @@ function reconcile(tally: Tally, corpus: readonly Document[]): string[] {
  */
 const CONTROL = {
   /**
-   * A primitive whose value is written as element text. Base reports the loss and then SERIALIZES
-   * the document anyway (`<status/>` in XML, the member gone entirely in JSON); head refuses to
-   * serialize it at all. That difference is this slice, so it is what the control keys on.
+   * A `<div/>` in the FHIR namespace beside the real XHTML narrative. Both are modeled as `div`, so
+   * they merge into one two-item `Narrative.div`; base says nothing about that at all, head raises
+   * `MIXED_XML_SPELLING` because the report now compares the expanded name and not the tag alone.
+   * That difference is this slice, so it is what the control keys on.
+   *
+   * **Re-key this whenever the slice changes.** A `CONTROL.moved` describing a change that has
+   * already merged makes base and head agree, and then every zero in the report below is
+   * meaningless. That has happened, which is why the assertion exists.
    */
-  moved: `<Observation xmlns="http://hl7.org/fhir"><status>CONTROL</status></Observation>`,
-  /** The same document spelled conformantly, which this change must leave exactly as it was. */
-  unmoved: `<Observation xmlns="http://hl7.org/fhir"><status value="CONTROL"/></Observation>`,
+  moved:
+    `<Composition xmlns="http://hl7.org/fhir"><text><status value="generated"/>` +
+    `<div xmlns="http://www.w3.org/1999/xhtml">CONTROL</div><div/></text></Composition>`,
+  /** The same document without the intruder, which this change must leave exactly as it was. */
+  unmoved:
+    `<Composition xmlns="http://hl7.org/fhir"><text><status value="generated"/>` +
+    `<div xmlns="http://www.w3.org/1999/xhtml">CONTROL</div></text></Composition>`,
 } as const;
 
 /**
@@ -785,15 +797,19 @@ const CONTROL = {
  * The reading compared is the whole reading, not just the serialized JSON. Keep it that way even
  * when the current slice does not need it: a slice that moves only what the safety layer and the
  * validator SAY, without moving any value, would pass a `json`-only control on base and report a
- * comfortable zero. **The slice this control is currently written for moves only what a REFUSAL
- * moves** (`json`, `xml`, `leaves` and `reread`; the writers refuse a marked model), so today the
- * wider comparison is redundant rather than load-bearing. Do not narrow it on that basis; the next
- * reader slice needs it again.
+ * comfortable zero. **The slice this control is currently written for is exactly that shape**: it
+ * moves only `issues`, and would be invisible to a `json`-only comparison, so today the wider
+ * comparison is load-bearing rather than redundant.
  *
  * **What `whole()` compares is narrower than "the whole reading", and the gap matters.** It reads
  * `json`, `valid`, `findings`, `issues`, `safeToSummarize`, `retracted` and `negations` -- NOT `xml`,
  * `leaves`, `reread` or `thrown`. So this control would NOT catch a base/head divergence confined to
  * the XML writer. If you write an XML-writer-only slice, widen `whole()` before you trust it.
+ *
+ * **And the control only ever reads XML, so a JSON-read-path change is outside it entirely.** The
+ * slice this is written for also changes what `serializeResource` emits for a scalar written where
+ * FHIR JSON has an object, and no XML document can reach that position, so this control says nothing
+ * about that half. It is covered by `test/nested-array.test.ts`, not here.
  */
 function negativeControl(base: Codec, head: Codec): string[] {
   const problems: string[] = [];

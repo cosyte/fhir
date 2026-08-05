@@ -3,9 +3,10 @@
  *
  * The writer is the conservative half of Postel's Law: it emits well-formed, canonical FHIR JSON for
  * every model that FHIR can express, and it never authors a value of its own. It is **not**
- * unconditionally spec-clean, and the exception is stated at the foot of this comment: a document
- * that wrote an array inside an array, or a `resourceType` that is not a string, is handed back as
- * written rather than repaired, because repairing it means inventing or dropping content. Two details
+ * unconditionally spec-clean, and the exceptions are stated at the foot of this comment: a document
+ * that wrote an array inside an array, a scalar or `null` where FHIR JSON has an object, or a
+ * `resourceType` that is not a string, is handed back as written rather than repaired, because
+ * repairing it means inventing or dropping content. Two details
  * are load-bearing for the no-data-loss guarantee (json.html):
  *
  * - **Decimals are emitted from their exact lexical text** ({@link FhirDecimal.raw}), unquoted, so a
@@ -35,6 +36,14 @@
  * wrote, and omitting it drops content. Writing the array back is the only option under which
  * re-reading the output reproduces the same `NESTED_ARRAY` finding instead of laundering it away.
  * Conservatism here means refusing to author a value, not refusing to hand one back.
+ *
+ * **A position where the sender wrote a scalar or `null` where FHIR JSON has an object is written
+ * back as that scalar**, on the same reasoning and from the same kind of preserved text. This is the
+ * sharper of the two, because the alternative is not merely non-canonical, it is a value the writer
+ * *authors*: the model holds an empty element at that position, `{}` is a conformant empty element,
+ * and the `UNKNOWN_PROPERTY` the reader raised is therefore gone the moment the output is read back.
+ * The writer that emitted it presents an object as read where nothing was read at all. Handing the
+ * scalar back is what makes the re-read reproduce the finding instead.
  *
  * @packageDocumentation
  */
@@ -150,6 +159,10 @@ function emitComplex(node: FhirComplex): string {
   // empty element the reader had to produce there, so emitting the element would put an object on
   // the wire that no sender wrote.
   if (node.nestedArraySource !== undefined) return node.nestedArraySource;
+  // Same for a scalar or `null` there: hand back the text the sender wrote. Emitting the element
+  // instead writes `{}`, an object nobody sent, and `{}` reads back as a conformant empty element,
+  // so the `UNKNOWN_PROPERTY` the reader raised is gone after one round trip.
+  if (node.nonObjectSource !== undefined) return node.nonObjectSource;
   const parts: string[] = [];
 
   // Hoisting applies only to a `resourceType` that is actually a string, the shape FHIR defines. One
@@ -187,8 +200,9 @@ function emitComplex(node: FhirComplex): string {
  * @returns Compact JSON text, decimals byte-exact, primitive metadata split back into `_`-siblings
  *   with null-padded array alignment, and `resourceType` hoisted to the front where it is a string.
  *   A `resourceType` that is anything else keeps its position in the document rather than being
- *   dropped, and an array the sender wrote where FHIR gives an array no meaning is written back as
- *   it was read, so such output is deliberately not spec-clean.
+ *   dropped, and an array the sender wrote where FHIR gives an array no meaning, or a scalar or
+ *   `null` the sender wrote where FHIR has an object, is written back as it was read, so such output
+ *   is deliberately not spec-clean.
  * @throws {FhirSerializeError} If the model carries a node the XML reader MARKED as having lost
  *   character data. JSON has no character-data channel, so the member would simply be absent and the
  *   `DROPPED_ELEMENT_TEXT` finding would be lost across a round trip. Text the reader drops WITHOUT

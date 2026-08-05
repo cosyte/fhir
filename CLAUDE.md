@@ -55,7 +55,10 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   wording, not a fresh one**: read-path losses remain open and declared. A **status** or a dose
   number written as XML element text is dropped (reported, and the writer refuses, but the safety
   spine reads `negations: []`), which is the one that qualifies "never drops a modifier, status or
-  negation"; so are a scalar beside a nested array, a `_`-sibling discarded whole, a foreign child
+  negation"; so are a scalar beside a nested array (**still not modeled**, but since 2026-08-05 its
+  text is preserved and handed back, so the finding survives a **JSON** round trip; through the XML
+  writer it is still `<name/>` and both the value and the finding go), a `_`-sibling discarded
+  whole, a foreign child
   of a valued primitive, character data at the three `flagStrayText` sites, an unbound prefix, and a
   `<DIV>` wrapper. See
   [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
@@ -173,19 +176,35 @@ Unless noted, all of these are
   (`MIXED_XML_SPELLING`, plus `ARRAY_WRAPPED_SCALAR` at a safety-scoped element), because dropping
   means two properties of one model name in one `FhirComplex` and **the XML reader has no
   `duplicates` mechanism**, so it would be a silent first-wins loss: strictly worse.
+- **That report compares the EXPANDED NAME, not the tag alone** (2026-08-05). **Do not write down how
+  many shapes reach it**: that docblock said "two routes" while its own corpus exercised four. The
+  rule is the comparison. Two read as conformant: a prefix rebound between siblings, and a `<div/>`
+  in the FHIR namespace joining `Narrative.div`. The second used to read back with **zero**
+  diagnostics and `valid: true` over a `0..1` slot; it now draws this report, and no other. **Do not
+  narrow it back to `element.name`**, and **state the predicate, not which documents come out of
+  it**: three gate passes running refuted a summary of that set, which depends on the parent's
+  namespace. Closed for the READ only: `serializeResourceXml` drops the bindings.
+  [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
 - **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
   slice, and do not restate a gap as a claim. **Pinned by a test:** the `_`-sibling discarded whole,
-  the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, a scalar
-  beside a nested array, the §2.6.1 value-absent primitive, and, since 2026-08-05, the three an
-  audit found **claimed** but absent: a prefix rebound between siblings and the foreign-root
-  laundering (`test/xml.test.ts`, "declared residuals, pinned so they cannot move in silence"), and
-  the cross-format singleton-wrapper laundering (`test/array-wrapped-scalar.test.ts`). **Each of
-  those is a characterization test over a gap: CLOSING one MUST red it, in the same change.**
+  the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, the §2.6.1
+  value-absent primitive, the foreign-root laundering (`test/xml.test.ts`, "declared residuals,
+  pinned so they cannot move in silence"), and the cross-format singleton-wrapper laundering
+  (`test/array-wrapped-scalar.test.ts`). **Each of those is a characterization test over a gap:
+  CLOSING one MUST red it, in the same change.** Not theoretical: the closures below red three of
+  them on the spot, which is the mechanism working.
   **"Pinned by a test" is load-bearing prose, so never write it without opening the test**: three
   such sentences were false for days, and the next reader does not re-check.
-  [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open) ·
-  [`#singleton-wrapper-laundering`](documentation/agent-notes.md#singleton-wrapper-laundering) ·
-  [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
+  - **CLOSED 2026-08-05:** the scalar beside a nested array, and the prefix rebound between siblings
+    **on the read**. The rebound prefix keeps a characterization test over the half still open: the
+    report does not survive `serializeResourceXml`, which drops the binding.
+  - **STILL OPEN, deliberately deferred:** `serializeResourceXml` emits a prefixed foreign property
+    with the prefix **unbound**, so the output is not namespace-well-formed and the binding is lost.
+    It was never modeled, so the remedies are to model it or to refuse a shape that reads `valid:
+true` today. Both are larger than the defect.
+    [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open) ·
+    [`#singleton-wrapper-laundering`](documentation/agent-notes.md#singleton-wrapper-laundering) ·
+    [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
 - The raw XML reader is **XXE- and billion-laughs-proof by refusal**: any `<!DOCTYPE` is
   `DTD_FORBIDDEN`, any entity beyond the five predefined + numeric character references is
   `UNDEFINED_ENTITY`, no I/O, no URI resolution, bounded depth. **Do not relax that into resolution.**
@@ -274,8 +293,13 @@ Recorded in `documentation/decisions/` at bootstrap because they shape everythin
 - Postel's Law: the reader is liberal (lenient default + warnings), the writer is conservative: it
   authors no value of its own, and emits spec-clean FHIR for every model FHIR can express. It is
   **not** unconditionally spec-clean, and the exceptions are named on `serializeResource` (an array
-  inside an array, a non-string `resourceType`), because repairing either means inventing content or
-  dropping it.
+  inside an array, **a scalar or `null` where FHIR JSON has an object**, a non-string `resourceType`),
+  because repairing any of them means inventing content or dropping it. The middle one was the
+  **fabrication** route, closed 2026-08-05: the writer emitted `{}`, which re-reads clean, so the
+  `UNKNOWN_PROPERTY` was gone after one round trip. Hand the value back
+  (`FhirComplex.nonObjectSource`); **never model it as a primitive**, which would show it to every
+  walker at a complex position.
+  [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
 - Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
   not a claim that a location carries no document content** (a name is echoed when it matches the
   bounded published form). See the derived-name trap above, and do not widen it into one. **The
