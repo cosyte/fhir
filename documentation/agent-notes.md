@@ -452,12 +452,19 @@ own, though it fails **safe** on this route (reports the present variant, `quant
 no wrong number is handed out); (b) the JSON reader still does not model a nested array **as an
 element**, and deliberately never will, but `[["x"]]` no longer loses the inner value: it is kept
 as text and read with `nestedArrayContent()` (`FHIR-NESTED-ARRAY-PRESERVATION`, above). (c) The
-read -> write -> read **laundering** is duplicate-key-only **within JSON**: the array route
-round-trips faithfully through the JSON writer (it emits the list back), so the re-read reproduces
-the finding rather than losing it. That is pinned, so a future writer change cannot quietly
-introduce the laundering. **That sentence is scoped to one format and must stay scoped**: the same
-model through `serializeResourceXml` DOES launder, because XML cannot spell a singleton wrapper at
-all, which is residual (e) below and is pinned separately (2026-08-05).
+**THE ARRAY ROUTE** does not launder read -> write -> read **through the JSON writer**: the writer
+emits the list back, so the re-read reproduces the finding rather than losing it. That is pinned, so
+a future writer change cannot quietly introduce it. **This line used to say the laundering was
+"duplicate-key-only", and THAT IS RETRACTED: it was another universal written wider than the code,
+and narrowing it to "within JSON" in the 2026-08-05 slice was still wrong.** Three counter-routes,
+each reproduced at that date: the same array model through `serializeResourceXml` DOES launder,
+because XML cannot spell a singleton wrapper at all (residual (e) below, pinned 2026-08-05); a
+`_`-sibling the reader discards whole re-emits without it, so
+`MISPLACED_PRIMITIVE_EXTENSION@Patient.name` reads on the way in and the re-read is **clean**; and
+`{"given":[["Peter"],"James"]}` re-emits as `[["Peter"],{}]`, so the `UNKNOWN_PROPERTY` at `given[1]`
+disappears while the two findings at `given[0]` survive. The last two are pre-existing, unpinned, and
+belong to the residuals they come from, not to this one. **Do not restate the "only" here in any
+form; state what is pinned.**
 
 ### `PHI-WARNING-MESSAGE-LEAK` (2026-08-02)
 

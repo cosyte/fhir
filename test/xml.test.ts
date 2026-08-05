@@ -1185,11 +1185,14 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
    */
   describe("declared residuals, pinned so they cannot move in silence", () => {
     /**
-     * (1) The grouping keys on the MODEL NAME, and a foreign element's model name is its tag
-     * verbatim. A prefix rebound between siblings gives two elements one tag, so `{urn:a}x` and
-     * `{urn:b}x` (two distinct expanded names, Namespaces in XML 1.0 §6.1) land in one group and
-     * read as one element repeated. `isForeign` compares namespaces and this grouping does not, so
-     * the expanded-name argument that governs foreign-versus-FHIR separation does not reach here.
+     * (1) The grouping keys on the MODEL NAME, and the model name of a foreign element **other than
+     * the narrative `div`** is its tag verbatim (`modelNameOf` tests `isNarrativeDiv` first, and
+     * that one is modeled as `div` under every spelling of the XHTML namespace, so it CAN join a
+     * FHIR group; when it does, the tags differ and `MIXED_XML_SPELLING` says so). A prefix rebound
+     * between siblings gives two elements one tag, so `{urn:a}x` and `{urn:b}x` (two distinct
+     * expanded names, Namespaces in XML 1.0 §6.1) land in one group and read as one element
+     * repeated. `isForeign` compares namespaces and this grouping does not, so the expanded-name
+     * argument that governs foreign-versus-FHIR separation does not reach here.
      *
      * The harm is bounded by the flag rather than by the name: both occurrences are foreign to the
      * FHIR parent, so both are reported, and neither can be mistaken for the FHIR element beside
@@ -1235,11 +1238,18 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
     });
 
     /**
-     * (2) A foreign ROOT is read as the FHIR resource its local name spells, flagged once at the
-     * root, and then re-emitted by the conservative writer under the FHIR namespace. The flag is the
-     * only thing in the whole reading that says the document was not FHIR, and it lives in the issue
-     * list rather than in the model, so **one write and one re-read leaves a document that reads as
-     * authoritative FHIR with nothing to say it was ever anything else.**
+     * (2) A foreign ROOT **whose prefix is BOUND** is read as the FHIR resource its local name
+     * spells, flagged once at the root, and then re-emitted by the conservative writer under the
+     * FHIR namespace. The flag is the only thing in the whole reading that says the document was not
+     * FHIR, and it lives in the issue list rather than in the model, so **one write and one re-read
+     * leaves a document that reads as authoritative FHIR with nothing to say it was ever anything
+     * else.**
+     *
+     * The bound-prefix scope is the code's, not a simplification of it. `rootIsForeign` also covers
+     * an UNBOUND prefix, and that root reads differently in every respect: the tag is kept verbatim,
+     * so the resource is modeled as `v:Observation`, its children are foreign to it in turn and are
+     * flagged too, and the locations withhold the unresolvable name. That is the separate
+     * unbound-prefix residual, pinned above, and none of the sentences here reach it.
      *
      * The flag half is pinned above ("flags a prefix bound to a namespace that is not FHIR"). This
      * is the half that was not: the round trip. Closing it means the model carrying the root's
@@ -1279,10 +1289,10 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         expect(reread.issues).toEqual([]);
         expect(validateResource(reread.resource).valid).toBe(true);
         // Byte-identical to the same resource authored in FHIR from the start: after one round trip
-        // there is nothing left to distinguish them.
-        expect(serializeResourceXml(reread.resource)).toBe(
-          serializeResourceXml(parseResourceXml(EMITTED).resource),
-        );
+        // there is nothing left to distinguish them. Compared against the literal, not against
+        // another serialization of the same model, which would be the same expression on both sides
+        // and could not fail on its own.
+        expect(serializeResourceXml(reread.resource)).toBe(EMITTED);
       });
     });
   });
