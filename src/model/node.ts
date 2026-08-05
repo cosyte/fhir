@@ -137,6 +137,12 @@ export interface FhirComplex {
    * and has its own field ({@link nestedArraySource}) plus a marker, because it additionally carries
    * {@link ISSUE_CODES.NESTED_ARRAY}. Absent on every conformant document and on every document read
    * from XML.
+   *
+   * **The text is value-exact, not byte-exact**, exactly as {@link NestedArrayContent} is: it is the
+   * value re-rendered the way this library renders every other JSON value it emits, so a number's
+   * exact source survives and a string's escaping does not (`"Jamés"` comes back as `"Jamés"`,
+   * `"a\/b"` as `"a/b"`). Both denote the same string, so nothing is lost; a caller comparing the
+   * writer's output to the input **byte for byte** will still see a difference here.
    */
   readonly nonObjectSource?: string;
   /**

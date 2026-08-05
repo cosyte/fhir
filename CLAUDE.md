@@ -56,7 +56,8 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   number written as XML element text is dropped (reported, and the writer refuses, but the safety
   spine reads `negations: []`), which is the one that qualifies "never drops a modifier, status or
   negation"; so are a scalar beside a nested array (**still not modeled**, but since 2026-08-05 its
-  text is preserved and handed back, so the finding survives a round trip), a `_`-sibling discarded
+  text is preserved and handed back, so the finding survives a **JSON** round trip; through the XML
+  writer it is still `<name/>` and both the value and the finding go), a `_`-sibling discarded
   whole, a foreign child
   of a valued primitive, character data at the three `flagStrayText` sites, an unbound prefix, and a
   `<DIV>` wrapper. See
@@ -175,11 +176,14 @@ Unless noted, all of these are
   (`MIXED_XML_SPELLING`, plus `ARRAY_WRAPPED_SCALAR` at a safety-scoped element), because dropping
   means two properties of one model name in one `FhirComplex` and **the XML reader has no
   `duplicates` mechanism**, so it would be a silent first-wins loss: strictly worse.
-- **That report compares the EXPANDED NAME, not the tag alone** (closed 2026-08-05). Two elements
-  reach one model name under one tag two ways: a prefix rebound between siblings, and a `<div/>` in
-  the FHIR namespace joining `Narrative.div` (the narrative is modeled as `div` under every XHTML
-  spelling). The second read back with **zero** diagnostics and `valid: true` over a `0..1` slot.
-  **Do not narrow it back to `element.name`.**
+- **That report compares the EXPANDED NAME, not the tag alone** (2026-08-05). **Do not write down how
+  many shapes reach it**: the first draft of that docblock said "two routes" and shipped while its own
+  corpus exercised four. The rule is the comparison. Two worth naming, because they read as
+  conformant: a prefix rebound between siblings, and a `<div/>` in the FHIR namespace joining
+  `Narrative.div` (the narrative is modeled as `div` under every XHTML spelling); the second read back
+  with **zero** diagnostics and `valid: true` over a `0..1` slot. **Do not narrow it back to
+  `element.name`.** It is closed for the READ only: `serializeResourceXml` drops the bindings, so the
+  report is gone on the re-read. That half waits on the unbound-prefix residual below.
   [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
 - **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
   slice, and do not restate a gap as a claim. **Pinned by a test:** the `_`-sibling discarded whole,

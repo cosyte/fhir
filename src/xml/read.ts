@@ -457,14 +457,20 @@ function groupChildren(children: ScopedElement[]): {
  *
  * **The namespace has to be in the comparison, because the tag alone misses the merges that are not
  * spellings of one name at all.** {@link groupChildren} keys on the model name, and two elements can
- * reach one model name carrying one tag and two different namespaces. There are two such routes and
- * neither involves a prefix being spelled two ways: a prefix **rebound between siblings**
+ * reach one model name carrying one tag and two different namespaces. **Do not write down how many
+ * such routes there are.** The rule is the comparison itself, and an earlier draft of this very
+ * docblock named two and shipped while its own differential corpus exercised four; see the trap on
+ * {@link modelNameOf}, which already says a default-declared foreign element "does all four".
+ * Two routes worth naming, because they are the ones a document can reach while otherwise reading as
+ * conformant: a prefix **rebound between siblings**
  * (`<p:x xmlns:p="urn:a"/><p:x xmlns:p="urn:b"/>`, two foreign elements whose model name is that one
  * verbatim tag) and a **FHIR-namespace `<div/>` beside the narrative** ({@link modelNameOf} models
  * the narrative as `div` under every spelling of the XHTML namespace, so `{http://hl7.org/fhir}div`
  * groups with it). Comparing tags is silent about both, and the second is the one that costs the
  * most: `Narrative.div` is `0..1`, so the merge turns the narrative into a repeat that a single-value
- * read yields nothing from, over a document that is otherwise conformant.
+ * read yields nothing from, over a document that is otherwise conformant. Any element reached by a
+ * **default** `xmlns` re-declaration groups with its FHIR namesake the same way, and there the group
+ * already carries {@link unexpectedXmlContent} as well.
  *
  * The comparison can only ever add a report, never retire one: two occurrences that differ in tag
  * differ in the pair regardless of namespace. A conformant document reaches it only with occurrences

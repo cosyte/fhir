@@ -117,12 +117,17 @@ export const ISSUE_CODES = {
    *   written two ways. Nothing is lost and the reading is the correct one: the occurrences are
    *   modeled as repeats of a single element, exactly as the same document spelled one way would be.
    * - **The namespace differs, the tag does not.** Two elements that are not the same element at all
-   *   reach one model name under one tag. There are two such routes: a prefix **rebound between
-   *   siblings** (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`, where the model name of
-   *   each is that verbatim tag), and a **`<div/>` in the FHIR namespace beside the narrative**,
-   *   because the narrative is modeled as `div` under every spelling of the XHTML namespace. The
-   *   second is the costlier: `Narrative.div` is `0..1`, so the merge turns the narrative into a
-   *   repeat over an otherwise conformant document.
+   *   reach one model name under one tag. **This is not a closed list of routes and no sentence here
+   *   or anywhere else may make it one**: the rule is simply that the group's occurrences did not all
+   *   carry one expanded name. Two worth naming, because they are the ones that read as conformant:
+   *   a prefix **rebound between siblings** (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`,
+   *   where the model name of each is that verbatim tag), and a **`<div/>` in the FHIR namespace
+   *   beside the narrative**, because the narrative is modeled as `div` under every spelling of the
+   *   XHTML namespace. The second is the costlier: `Narrative.div` is `0..1`, so the merge turns the
+   *   narrative into a repeat over an otherwise conformant document. Any element reached by a
+   *   **default** `xmlns` re-declaration also keeps its tag verbatim as its model name, so it groups
+   *   with its FHIR namesake the same way; there the group additionally carries
+   *   {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT}, which is the code to read for it.
    *
    * It also fires where a prefixed FHIR element groups with an unprefixed one carrying a **foreign**
    * default declaration, because that one is spelled exactly like the FHIR element; there the group

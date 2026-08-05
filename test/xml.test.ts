@@ -1176,6 +1176,41 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       expect(issues).toEqual([]);
     });
 
+    /**
+     * THE ROUTE IS NOT A LIST OF TWO, AND THIS IS THE ONE THAT PROVES IT.
+     *
+     * An element reached by a **default** `xmlns` re-declaration has no prefix to keep, so its tag
+     * IS the FHIR spelling and its model name is that verbatim tag: it groups with its FHIR namesake
+     * under one name, one tag, two namespaces. A first draft of the docblock on this comparison said
+     * there were exactly two routes while the differential corpus was already exercising this one,
+     * which is the "universal written wider than the code" this reader keeps producing. The count is
+     * not written down anywhere now, and this pins why.
+     */
+    it.each([
+      {
+        label: "a repeating element",
+        inner: `<name><family value="a"/></name><name xmlns="urn:vendor"/>`,
+        at: "Patient.name",
+      },
+      {
+        label: "a resource-valued element",
+        inner:
+          `<contained><Observation><status value="final"/></Observation></contained>` +
+          `<contained xmlns="urn:vendor"><X/></contained>`,
+        at: "Patient.contained",
+      },
+    ])(
+      "reports a default-declared foreign $label grouping with its FHIR namesake",
+      ({ inner, at }) => {
+        const { issues } = parseResourceXml(`<Patient ${FHIR_NS}>${inner}</Patient>`);
+        expect(
+          issues.filter((i) => i.code === ISSUE_CODES.MIXED_XML_SPELLING).map((i) => i.expression),
+        ).toEqual([at]);
+        // The group already carried this, and it stays the code to read for "that one is foreign".
+        expect(issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toBe(true);
+      },
+    );
+
     it("says nothing when the second spelling is a different namespace", () => {
       // Prefixed foreign content is a different name, so it never joined the group in the first
       // place and no window widened.
@@ -1272,6 +1307,36 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         expect(serializeResource(resource)).toBe(
           '{"resourceType":"Observation","status":"final","p:x":["1","2"]}',
         );
+      });
+
+      /**
+       * AND THE REPORT DOES NOT SURVIVE THE PACKAGE'S OWN XML WRITER, WHICH IS A DECLARED RESIDUAL
+       * OF THE **UNBOUND-PREFIX** GAP AND NOT OF THIS ONE.
+       *
+       * `serializeResourceXml` emits the model name verbatim and has no binding to emit with it, so
+       * `<p:x xmlns:p="urn:a"/>` and `<p:x xmlns:p="urn:b"/>` come back as two `<p:x/>` with `p`
+       * bound to nothing. Re-reading them, the two occurrences now share one expanded name, so the
+       * merge report this slice added is gone. **So (iv) is closed for the READ and open for the
+       * round trip**, and the thing that has to close before the report can survive a write is the
+       * unbound prefix, which is a separate item with a separate remedy (model the binding, or
+       * refuse the shape). Characterization test over that gap: closing it MUST red this.
+       */
+      it("loses that report through the XML writer, because the bindings are not modeled", () => {
+        const { resource } = parseResourceXml(REBOUND);
+        const emitted = serializeResourceXml(resource);
+        // Not namespace-well-formed: `p` is bound to nothing here. That is the residual.
+        expect(emitted).toBe(
+          `<Observation ${FHIR_NS}><status value="final"/><p:x value="1"/><p:x value="2"/></Observation>`,
+        );
+        const again = parseResourceXml(emitted).issues;
+        expect(again.some((i) => i.code === ISSUE_CODES.MIXED_XML_SPELLING)).toBe(false);
+        // The foreign flag does survive, because an unbound prefix still satisfies `isForeign`. It
+        // is only the distinction between the two vendor namespaces that the round trip erases.
+        expect(
+          again
+            .filter((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)
+            .map((i) => i.expression),
+        ).toEqual(["Observation.<withheld>[0]", "Observation.<withheld>[1]"]);
       });
 
       it("reports the merge, because that report keys on the namespace as well as the tag", () => {

@@ -243,7 +243,10 @@ const SHAPES: readonly Shape[] = [
     rootAttrs: ` xmlns:h="${XHTML}"`,
     narrative: true,
   },
-  // ── A `div` outside XHTML: the documented residual, which must not move. ─────────────────────
+  // ── A `div` outside XHTML: the documented residual. The unprefixed one MOVED on 2026-08-05 and
+  // ── the move is a GAIN: it keeps its tag, so it groups with a FHIR-namespace `div` under one name
+  // ── and now draws `MIXED_XML_SPELLING` as well as the flag it always drew. What must not move is
+  // ── what it CARRIES; a diagnostic gained here is the report catching up with the merge. ───────
   {
     id: "vendor-div-unprefixed",
     xml: '<div xmlns="urn:vendor"><Table>@</Table></div>',

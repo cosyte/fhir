@@ -30,11 +30,15 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   the same as it does for an array inside an array.
 - **`MIXED_XML_SPELLING` compares the expanded name, not the tag alone (`FHIR-WRITER-AUTHORS-VALUES`).**
   An element's occurrences can share one tag and carry two different namespaces (Namespaces in XML
-  1.0 §6.1), and a tag-only comparison had nothing to compare, so those merges were silent. Two
-  routes reach it and neither needs a prefix spelled two ways: a prefix **rebound between siblings**
+  1.0 §6.1), and a tag-only comparison had nothing to compare, so those merges were silent. **The
+  rule is the comparison, not a list of shapes**, and several routes reach it; two are worth naming
+  because a document can reach them while otherwise reading as conformant, and neither needs a prefix
+  spelled two ways: a prefix **rebound between siblings**
   (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`), and a **`<div/>` in the FHIR namespace**
   landing in `Narrative.div` beside the real XHTML narrative, because the narrative is modeled as
-  `div` under every spelling of the XHTML namespace. The second is the costlier: `Narrative.div` is
+  `div` under every spelling of the XHTML namespace. An element reached by a **default** `xmlns`
+  re-declaration groups with its FHIR namesake the same way, and there the group already carried
+  `UNEXPECTED_XML_CONTENT`. The narrative case is the costliest: `Narrative.div` is
   `0..1`, so an otherwise conformant document read back as two occurrences with **zero** diagnostics
   and `valid: true`, and a single-value read of the narrative yields nothing rather than the prose.
   The merge itself is unchanged, because dropping the grouping would be a silent first-wins loss (the

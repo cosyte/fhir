@@ -824,8 +824,10 @@ clean), pre-existing for the default spelling and extended to the prefixed one h
 **distinct expanded names merge** when one prefix is rebound between siblings
 (`<p:x xmlns:p="urn:a"/><p:x xmlns:p="urn:b"/>` -> one property), both flagged foreign, which the
 `isForeign` / `groupChildren` expanded-name argument does not cover.
-**(iv) IS CLOSED (2026-08-05):** `reportMixedSpelling` now compares the expanded name, so the merge
-is reported rather than silent. The merge itself still happens, deliberately; see
+**(iv) IS CLOSED FOR THE READ (2026-08-05), AND NOT FOR THE ROUND TRIP:** `reportMixedSpelling` now
+compares the expanded name, so the merge is reported rather than silent, but `serializeResourceXml`
+drops the bindings and the report is gone on the re-read. The merge itself still happens,
+deliberately; see
 [`#fhir-writer-authors-values-2026-08-05`](#fhir-writer-authors-values-2026-08-05).
 **(iii) AND (iv) WERE PINNED BY TESTS (2026-08-05), AND THE REASON THEY NEEDED TO BE IS THE
 LESSON.** An audit of this file against the test tree found three residuals whose prose said
@@ -872,8 +874,11 @@ already reports `valid: false` / `safeToSummarize: false`, and refusing here wou
 to write back documents that read clean. The remedy taken is the writer's **own already-documented
 principle**, one branch over in the same function: *"Conservatism here means refusing to author a
 value, not refusing to hand one back."* The text is kept on the node (`FhirComplex.nonObjectSource`)
-and written back, so the output is byte-identical to the input and the re-read reproduces the
-finding.
+and written back, so the re-read reproduces the finding. The text is **value-exact, not byte-exact**,
+the same caveat `NestedArrayContent` already carries: a number's exact source survives, a string's
+escaping does not (`"Jamés"` returns as `"Jamés"`, `"a\/b"` as `"a/b"`). Both denote the same
+string, so this is a re-render, not a loss, and the round trip is byte-identical for every input that
+was already canonically escaped.
 
 **Modeling the scalar as a primitive was considered and rejected**, and it is the cheaper-looking
 fix, so it is written down: it would put a live value at a position every walker reads as a complex
@@ -887,11 +892,29 @@ non-array.
 **2. `serializeResourceXml` emits a prefixed foreign property with the prefix unbound. DEFERRED,
 with the reason.** Measured: `<v:x xmlns:v="urn:vendor" value="1"/>` re-emits as `<v:x value="1"/>`,
 which is **not namespace-well-formed**, so a conformant parser rejects the writer's own output. The
-re-read here does still raise `UNEXPECTED_XML_CONTENT` (the unbound prefix satisfies `isForeign`), so
-what is lost is the **binding**, not the diagnostic. The binding was never modeled, so the remedies
-are (a) carry namespaces in the model or (b) refuse any property name with a colon, which withdraws
-a capability for a shape that reads `valid: true`. Both are larger decisions than the defect, and
-this item's standing instruction was not to let the remedy outgrow it. **Still open.**
+binding was never modeled, so the remedies are (a) carry namespaces in the model or (b) refuse any
+property name with a colon, which withdraws a capability for a shape that reads `valid: true`. Both
+are larger decisions than the defect, and this item's standing instruction was not to let the remedy
+outgrow it. **Still open.**
+
+**AND IT REOPENS ROUTE 3 ACROSS ONE ROUND TRIP, WHICH IS WHY THE FIRST DRAFT OF THIS SECTION WAS
+WRONG.** That draft said "what is lost is the binding, not the diagnostic", measured on a **single**
+`<v:x/>`, where the unbound prefix still satisfies `isForeign` and `UNEXPECTED_XML_CONTENT` is raised
+again. On the shape residual (iv) actually names, a **rebound** prefix, the writer drops both
+bindings, so the two occurrences become one expanded name and the `MIXED_XML_SPELLING` this very
+slice added is **gone on the re-read**:
+
+```
+in   : <Observation xmlns="…fhir"><p:x xmlns:p="urn:a" value="1"/><p:x xmlns:p="urn:b" value="2"/></Observation>
+i1   : MIXED_XML_SPELLING@Observation.<withheld> + UNEXPECTED_XML_CONTENT x2
+out1 : <Observation xmlns="…fhir"><p:x value="1"/><p:x value="2"/></Observation>
+i2   : UNEXPECTED_XML_CONTENT x2                      <- the merge report is gone
+```
+
+So **(iv) is closed for the READ and not for the round trip**, and the round-trip half is a declared
+residual of route 2, not of route 3. It is pinned by `test/xml.test.ts` so it cannot move in silence.
+Route 2 is the thing that has to close before that report can survive a write, which is the honest
+reason it is the next item rather than a nice-to-have.
 
 **3. A FHIR-namespace `<div/>` merges into `Narrative.div` with zero diagnostics. CLOSED, one line.**
 `modelNameOf` tests `isNarrativeDiv` first and models the narrative as `div` under every spelling of

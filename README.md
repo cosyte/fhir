@@ -557,10 +557,13 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   number of occurrences differs, so that element carries `MIXED_XML_SPELLING`. Nothing is lost, but a
   check that reads a `0..1` element as a single value gets nothing from a repeat, and that should
   never be silent. **That report compares the expanded name, not the tag alone**, so it also covers
-  the merges where the tag is the same and the namespace is not: a prefix rebound between siblings
-  (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`), and a `<div/>` in the FHIR namespace
-  landing in `Narrative.div` beside the real XHTML narrative. The second is the one that costs the
-  most, because `Narrative.div` is `0..1`.
+  the merges where the tag is the same and the namespace is not. Two of those are worth naming
+  because a document can reach them while otherwise reading as conformant: a prefix rebound between
+  siblings (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`), and a `<div/>` in the FHIR
+  namespace landing in `Narrative.div` beside the real XHTML narrative, which is the one that costs
+  the most because `Narrative.div` is `0..1`. An element reached by a **default** `xmlns`
+  re-declaration groups with its FHIR namesake the same way, and there the group already carried
+  `UNEXPECTED_XML_CONTENT`.
 - **`serializeResourceXml`** emits compact, spec-clean FHIR XML that round-trips a spec-clean document
   **byte-for-byte** (decimals byte-exact, never through a `number`). It throws `FhirSerializeError`
   rather than emit a model the reader marked as having lost character data, so that finding cannot

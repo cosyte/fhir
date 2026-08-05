@@ -27,11 +27,14 @@ the same as it does for an array inside an array.
 
 **`MIXED_XML_SPELLING` now compares the expanded name, not the tag alone.** An element's occurrences
 can share one tag and carry two different namespaces (Namespaces in XML 1.0 §6.1), and a tag-only
-comparison had nothing to compare, so the merge was silent. Two routes reach it, and neither needs a
-prefix spelled two ways: a prefix rebound between siblings (`<p:x xmlns:p="urn:a"/>` beside
-`<p:x xmlns:p="urn:b"/>`), and a `<div/>` in the FHIR namespace landing in `Narrative.div` beside
-the real XHTML narrative, because the narrative is modeled as `div` under every spelling of the
-XHTML namespace. The second is the costlier: `Narrative.div` is `0..1`, so an otherwise conformant
+comparison had nothing to compare, so the merge was silent. The rule is the comparison rather than a
+list of shapes; two routes are worth naming because a document can reach them while otherwise reading
+as conformant, and neither needs a prefix spelled two ways: a prefix rebound between siblings
+(`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`), and a `<div/>` in the FHIR namespace
+landing in `Narrative.div` beside the real XHTML narrative, because the narrative is modeled as `div`
+under every spelling of the XHTML namespace. An element reached by a default `xmlns` re-declaration
+groups with its FHIR namesake the same way, and there the group already carried
+`UNEXPECTED_XML_CONTENT`. The narrative case is the costliest: `Narrative.div` is `0..1`, so an otherwise conformant
 document read back with two occurrences, no diagnostics and `valid: true`, and a single-value read
 of the narrative yields nothing. The merge itself is unchanged, because dropping the grouping would
 be a silent first-wins loss (the XML reader has no `duplicates` mechanism); what changed is that it
