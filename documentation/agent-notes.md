@@ -452,9 +452,19 @@ own, though it fails **safe** on this route (reports the present variant, `quant
 no wrong number is handed out); (b) the JSON reader still does not model a nested array **as an
 element**, and deliberately never will, but `[["x"]]` no longer loses the inner value: it is kept
 as text and read with `nestedArrayContent()` (`FHIR-NESTED-ARRAY-PRESERVATION`, above). (c) The
-read -> write -> read **laundering** is duplicate-key-only: the array route round-trips faithfully
-(the writer emits the list back), so the re-read reproduces the finding rather than losing it. That
-is now pinned, so a future writer change cannot quietly introduce the laundering.
+**THE ARRAY ROUTE** does not launder read -> write -> read **through the JSON writer**: the writer
+emits the list back, so the re-read reproduces the finding rather than losing it. That is pinned, so
+a future writer change cannot quietly introduce it. **This line used to say the laundering was
+"duplicate-key-only", and THAT IS RETRACTED: it was another universal written wider than the code,
+and narrowing it to "within JSON" in the 2026-08-05 slice was still wrong.** Three counter-routes,
+each reproduced at that date: the same array model through `serializeResourceXml` DOES launder,
+because XML cannot spell a singleton wrapper at all (residual (e) below, pinned 2026-08-05); a
+`_`-sibling the reader discards whole re-emits without it, so
+`MISPLACED_PRIMITIVE_EXTENSION@Patient.name` reads on the way in and the re-read is **clean**; and
+`{"given":[["Peter"],"James"]}` re-emits as `[["Peter"],{}]`, so the `UNKNOWN_PROPERTY` at `given[1]`
+disappears while the two findings at `given[0]` survive. The last two are pre-existing, unpinned, and
+belong to the residuals they come from, not to this one. **Do not restate the "only" here in any
+form; state what is pinned.**
 
 ### `PHI-WARNING-MESSAGE-LEAK` (2026-08-02)
 
@@ -814,6 +824,17 @@ clean), pre-existing for the default spelling and extended to the prefixed one h
 **distinct expanded names merge** when one prefix is rebound between siblings
 (`<p:x xmlns:p="urn:a"/><p:x xmlns:p="urn:b"/>` -> one property), both flagged foreign, which the
 `isForeign` / `groupChildren` expanded-name argument does not cover.
+**(iii) AND (iv) ARE NOW PINNED BY TESTS (2026-08-05), AND THE REASON THEY NEEDED TO BE IS THE
+LESSON.** An audit of this file against the test tree found three residuals whose prose said
+"pinned by a test" or read as though it did, with no test anywhere: (iv) here, (iii) here (only the
+**flag** was pinned, never the round trip), and the singleton-wrapper laundering below. A false
+"pinned" is worse than a plain gap, because the next reader stops checking. They live in
+`test/xml.test.ts` ("declared residuals, pinned so they cannot move in silence") and
+`test/array-wrapped-scalar.test.ts`, they are characterization tests over the gap rather than
+claims that the reading is right, and each was demonstrated **red** against a mutation of the
+behaviour it pins before it was allowed to go green: expanded-name grouping in `groupChildren` for
+the merge, a namespace arm in `reportMixedSpelling` for the silence, a marked model for the
+foreign-root round trip, and a writer refusal for the wrapper.
 **Three more residuals left open deliberately, each pinned by a test:** an **unbound** prefix
 (`<f:active/>` with no `xmlns:f` in scope) is flagged and its tag kept **verbatim**, so it does
 **not** read as a FHIR element and a retraction spelled that way is still not seen by the safety
@@ -832,7 +853,9 @@ wrapper away** (JSON `{"status":["entered-in-error"]}` -> `<status value="entere
 re-read `valid: true`, `safeToSummarize: true`). Clinical content survives (`retracted: true` on
 both sides) and XML genuinely cannot express a singleton wrapper, so this is a narrower laundering
 than the duplicate-key one, but it is a **cross-format** route by which the encoding complaint
-disappears.
+disappears. **Pinned 2026-08-05** in `test/array-wrapped-scalar.test.ts`, beside the JSON-route test
+that pins the opposite behaviour, so the two routes are read together. Before that date this section
+was cited as pinned and no test existed.
 
 ## P2, P3, and what the package does today
 
