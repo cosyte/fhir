@@ -94,8 +94,9 @@ issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", ex
   is an XML attribute FHIR gives no element to address.
 - **Lenient read, conservative write** (Postel's Law), `resourceType` resolvable in any position, and
   a `parseReference` classifier (relative / absolute / logical / fragment). The writer authors no
-  value of its own, and it emits spec-clean FHIR for every model FHIR can express; the two shapes it
-  cannot express (an array inside an array, a non-string `resourceType`) are handed back as written
+  value of its own, and it emits spec-clean FHIR for every model FHIR can express; the three shapes it
+  cannot express (an array inside an array, a scalar or `null` where FHIR JSON has an object, and a
+  non-string `resourceType`) are handed back as written
   rather than repaired, because repairing them means inventing or dropping content. See the
   no-data-loss notes below.
 - **A repeated property name is read, not resolved.** FHIR requires unique property names and JSON
@@ -228,6 +229,18 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   every member of a repeated key and every number's exact source survive, but insignificant
   whitespace does not and strings are re-escaped canonically, exactly as everywhere else this library
   emits JSON. Such output is deliberately **not** spec-clean.
+- **A scalar where FHIR JSON has an object is handed back too, and that one stops the writer authoring
+  a value.** One position over from the shape above: a string, number, boolean or `null` written where
+  a complex element belongs is content the reader has no element to make of it either, so it reports
+  `UNKNOWN_PROPERTY` and the model holds an empty element there. Emitting that element writes `{}`,
+  which is a **conformant** empty element, so the warning was gone the moment the output was read
+  back and the writer had presented an object as read at a position nothing was read at.
+  `serializeResource` now writes the value the sender wrote instead, so the finding survives the round
+  trip. The scalar is **not** modeled as a primitive, deliberately: putting it in the tree would make
+  it visible to every walker at a position walkers read as a complex element. It hangs off the node
+  (`FhirComplex.nonObjectSource`), where only the writer reads it. Such output is deliberately **not**
+  spec-clean, and `serializeResourceXml` does not carry it (that writer emits the empty element, the
+  same as it does for an array inside an array).
   **One gap, stated rather than implied:** the rule is bounded by what the reader modeled. A
   `_`-sibling the reader discards whole because it is misplaced or unrecognised (one sitting on an
   object or a non-primitive array, or a member of a `_`-sibling object that is neither an `id`
@@ -543,7 +556,11 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   that way reads as the repeat it is. The model matches the same document spelled one way; only the
   number of occurrences differs, so that element carries `MIXED_XML_SPELLING`. Nothing is lost, but a
   check that reads a `0..1` element as a single value gets nothing from a repeat, and that should
-  never be silent.
+  never be silent. **That report compares the expanded name, not the tag alone**, so it also covers
+  the merges where the tag is the same and the namespace is not: a prefix rebound between siblings
+  (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`), and a `<div/>` in the FHIR namespace
+  landing in `Narrative.div` beside the real XHTML narrative. The second is the one that costs the
+  most, because `Narrative.div` is `0..1`.
 - **`serializeResourceXml`** emits compact, spec-clean FHIR XML that round-trips a spec-clean document
   **byte-for-byte** (decimals byte-exact, never through a `number`). It throws `FhirSerializeError`
   rather than emit a model the reader marked as having lost character data, so that finding cannot

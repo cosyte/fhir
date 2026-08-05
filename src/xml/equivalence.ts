@@ -122,6 +122,11 @@ function propertiesEquivalent(
  * *different* content at the same position are not equivalent either. Comparing them can only ever
  * return `false` where it used to return `true`, and only for a document that carried the shape.
  *
+ * The scalar-where-an-object-belongs text is compared for exactly the same reason and in exactly the
+ * same direction: that node is an empty element too, its XML counterpart of a genuinely empty
+ * element is an identical empty element, and there is no marker beside the text to separate them, so
+ * the text is the whole of the distinction.
+ *
  * The dropped-element-text marker is compared on the same reasoning, mirrored across the wire: an
  * XML element whose character data the reader dropped is a value-absent node the sender did not write
  * value-absent, and the JSON counterpart of a genuinely absent value is an identical value-absent
@@ -132,6 +137,7 @@ function complexesEquivalent(a: FhirComplex, b: FhirComplex): boolean {
   return (
     a.nestedArray === b.nestedArray &&
     a.nestedArraySource === b.nestedArraySource &&
+    a.nonObjectSource === b.nonObjectSource &&
     a.droppedText === b.droppedText &&
     propertiesEquivalent(a.properties, b.properties) &&
     propertiesEquivalent(a.duplicates, b.duplicates)

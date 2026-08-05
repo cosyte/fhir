@@ -8,6 +8,43 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **`serializeResource` no longer substitutes `{}` for a scalar it never read (`FHIR-WRITER-AUTHORS-VALUES`).**
+  A string, number, boolean or `null` written where FHIR JSON has an object is content the reader has
+  no element to make of it, so it reports `UNKNOWN_PROPERTY` and the model holds an empty element
+  there. The writer emitted that element, and `{}` is a **conformant** empty element, so the warning
+  was gone the moment the output was read back: `{"name":[{"family":"Roe"},"James"]}` in,
+  `{"name":[{"family":"Roe"},{}]}` out, and the finding at `name[1]` gone with it. **That is the
+  fabrication class**: a value the writer authored and presented as read, at a position where nothing
+  was read at all. The writer now hands the value back, which is the treatment an array inside an
+  array already had one branch over in the same function, and the finding survives the round trip
+  instead of laundering away. Both of the reader's call sites are covered, including a `_`-sibling's
+  `extension` items. The scalar is deliberately **not** modeled as a primitive: putting it in the
+  tree would make it visible to every walker at a position walkers read as a complex element, which
+  is a redefinition of the model rather than a preservation of the document. It hangs off the node
+  (`FhirComplex.nonObjectSource`, new, string, absent on every conformant document and on every
+  document read from XML) where only the writer reads it, and `nodesEquivalent` compares it, so the
+  cross-format oracle cannot call two documents the same over content neither could place. Such
+  output is deliberately not spec-clean, and it is now the **third** named exception on
+  `serializeResource`, alongside an array inside an array and a non-string `resourceType`.
+  `serializeResourceXml` does not carry the text and still emits the empty element, unchanged and
+  the same as it does for an array inside an array.
+- **`MIXED_XML_SPELLING` compares the expanded name, not the tag alone (`FHIR-WRITER-AUTHORS-VALUES`).**
+  An element's occurrences can share one tag and carry two different namespaces (Namespaces in XML
+  1.0 §6.1), and a tag-only comparison had nothing to compare, so those merges were silent. Two
+  routes reach it and neither needs a prefix spelled two ways: a prefix **rebound between siblings**
+  (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`), and a **`<div/>` in the FHIR namespace**
+  landing in `Narrative.div` beside the real XHTML narrative, because the narrative is modeled as
+  `div` under every spelling of the XHTML namespace. The second is the costlier: `Narrative.div` is
+  `0..1`, so an otherwise conformant document read back as two occurrences with **zero** diagnostics
+  and `valid: true`, and a single-value read of the narrative yields nothing rather than the prose.
+  The merge itself is unchanged, because dropping the grouping would be a silent first-wins loss (the
+  XML reader has no `duplicates` mechanism); what changed is that it is no longer invisible. The
+  comparison can only ever add a report, never retire one, and a conformant document reaches it only
+  with occurrences that share both halves, so it stays silent there. Measured over this repo's 7
+  hand-authored XML fixtures plus mutations (1,195 documents), **not** the FHIR R4 published-examples
+  corpus: 4 readings moved, all 4 read diagnostics **gained** and 0 lost, 0 validation findings
+  moved in either direction, 0 `valid` or `safeToSummarize` flips, 0 retractions or negations lost,
+  0 leaf values missing, and of 396 twin pairs 393 identical, 3 louder, **0 weaker**.
 - **The PHI scanner's `--staged` route no longer reports clean over a staged rename, and an ordinary
   `git mv` of a tracked symbolic link into a scan root is refused (`PHI-SCAN-RENAME-BLIND-AT-PRECOMMIT`).**
   `R` and `C` are returned by neither `--diff-filter=AM` nor `AMT`, and git's rename detection is

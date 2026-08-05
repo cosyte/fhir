@@ -9,6 +9,7 @@ import {
   FhirXmlError,
   getProperty,
   ISSUE_CODES,
+  isComplex,
   isList,
   isPrimitive,
   isRetracted,
@@ -1126,6 +1127,55 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       expect(issues.some((i) => i.code === ISSUE_CODES.MIXED_XML_SPELLING)).toBe(false);
     });
 
+    /**
+     * THE NARRATIVE IS THE ONE ELEMENT FHIR PUTS IN ANOTHER NAMESPACE, SO IT IS THE ONE GROUP TWO
+     * DIFFERENT EXPANDED NAMES CAN REACH WITH NO REBINDING AT ALL.
+     *
+     * `modelNameOf` tests `isNarrativeDiv` FIRST and models the narrative as `div` under every
+     * spelling of the XHTML namespace, so a `<div/>` that is simply in its FHIR parent's namespace
+     * groups with it under one name. `{http://www.w3.org/1999/xhtml}div` and
+     * `{http://hl7.org/fhir}div` are two distinct expanded names (Namespaces in XML 1.0 §6.1)
+     * arriving under one tag, so a tag-only comparison had nothing to compare and this read came
+     * back with ZERO diagnostics, `valid: true`, over a document whose narrative slot is no longer
+     * readable. `Narrative.div` is `0..1`, so this is the sharpest instance of the widening the
+     * report exists for: a single-value read of the narrative now yields nothing rather than the
+     * prose the document actually carried.
+     */
+    it("reports a FHIR-namespace `div` that merges into the narrative beside the real one", () => {
+      const XHTML_NS = "http://www.w3.org/1999/xhtml";
+      const doc =
+        `<Composition ${FHIR_NS}><text><status value="generated"/>` +
+        `<div xmlns="${XHTML_NS}">Take 5 mg</div><div/></text></Composition>`;
+      const { resource, issues } = parseResourceXml(doc);
+      expect(
+        issues.filter((i) => i.code === ISSUE_CODES.MIXED_XML_SPELLING).map((i) => i.expression),
+      ).toEqual(["Composition.text.div"]);
+      // The merge itself is unchanged and is still the reading: dropping the grouping would be a
+      // silent first-wins loss, because the XML reader has no `duplicates` mechanism. What the
+      // report buys is that the widening is no longer invisible.
+      const text = req(getProperty(resource, "text"));
+      const div = isComplex(text) ? getProperty(text, "div") : undefined;
+      expect(div !== undefined && isList(div) && div.items.length).toBe(2);
+      // The narrative prose is still carried, and the intruder is still distinguishable by its own
+      // namespace declaration, so nothing was dropped: only the count changed.
+      expect(serializeResourceXml(resource)).toBe(
+        `<Composition ${FHIR_NS}><text><status value="generated"/>` +
+          `<div xmlns="${XHTML_NS}">Take 5 mg</div><div xmlns="http://hl7.org/fhir"/></text></Composition>`,
+      );
+    });
+
+    it("says nothing about a conformant narrative, which is the only legitimate namespace change", () => {
+      // The guard against the assertion above being a false alarm on every real document: one
+      // narrative in XHTML inside a FHIR `text` is a single occurrence, so no group holds two
+      // expanded names and nothing is reported.
+      const XHTML_NS = "http://www.w3.org/1999/xhtml";
+      const { issues } = parseResourceXml(
+        `<Composition ${FHIR_NS}><text><status value="generated"/>` +
+          `<div xmlns="${XHTML_NS}">Take 5 mg</div></text></Composition>`,
+      );
+      expect(issues).toEqual([]);
+    });
+
     it("says nothing when the second spelling is a different namespace", () => {
       // Prefixed foreign content is a different name, so it never joined the group in the first
       // place and no window widened.
@@ -1182,24 +1232,31 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
    * red and you must update it in the same change.** That is the whole point. What they forbid is a
    * silent change of behaviour at a position the reader is known to read imperfectly, in either
    * direction: closing the gap, or widening it.
+   *
+   * **(1) HAS SINCE BEEN CLOSED, AND THIS IS WHAT THAT LOOKS LIKE.** The merge itself is unchanged,
+   * because dropping the grouping would be a silent first-wins loss (the XML reader has no
+   * `duplicates` mechanism), so the arm taken was to REPORT it: `reportMixedSpelling` now compares
+   * the expanded name and not the tag alone. The assertions below moved from "says nothing" to
+   * "says this", in the change that made it true. (2) is still open.
    */
   describe("declared residuals, pinned so they cannot move in silence", () => {
     /**
      * (1) The grouping keys on the MODEL NAME, and the model name of a foreign element **other than
      * the narrative `div`** is its tag verbatim (`modelNameOf` tests `isNarrativeDiv` first, and
      * that one is modeled as `div` under every spelling of the XHTML namespace, so it CAN join a
-     * FHIR-namespace `div` group. The PREFIXED XHTML spelling joins with a different tag, so
-     * `MIXED_XML_SPELLING` fires there; the DEFAULT `xmlns` spelling joins with the same tag and
-     * that report, which compares tags, stays silent). A prefix rebound
+     * FHIR-namespace `div` group). A prefix rebound
      * between siblings gives two elements one tag, so `{urn:a}x` and `{urn:b}x` (two distinct
      * expanded names, Namespaces in XML 1.0 §6.1) land in one group and read as one element
      * repeated. `isForeign` compares namespaces and this grouping does not, so the expanded-name
-     * argument that governs foreign-versus-FHIR separation does not reach here.
+     * argument that governs foreign-versus-FHIR separation does not reach the grouping.
      *
-     * The harm is bounded by the flag rather than by the name: both occurrences are foreign to the
-     * FHIR parent, so both are reported, and neither can be mistaken for the FHIR element beside
-     * them. What is lost is the distinction BETWEEN THE TWO VENDOR VOCABULARIES, and nothing in the
-     * read says a second one was ever there.
+     * The merge is still the reading. What changed is that it is no longer silent: the report now
+     * compares the namespace as well as the tag, so **both** the prefixed spelling (different tags)
+     * and this one (same tag, different bindings) draw `MIXED_XML_SPELLING`. The harm is bounded by
+     * the flag rather than by the name: both occurrences are foreign to the FHIR parent, so both are
+     * reported, and neither can be mistaken for the FHIR element beside them. What is still lost in
+     * the MODEL is the distinction BETWEEN THE TWO VENDOR VOCABULARIES, and only the issue list says
+     * a second one was ever there.
      */
     describe("a prefix rebound between siblings merges two expanded names", () => {
       const REBOUND =
@@ -1217,11 +1274,15 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         );
       });
 
-      it("says nothing about the rebinding, because that report keys on the tag as well", () => {
+      it("reports the merge, because that report keys on the namespace as well as the tag", () => {
         const { issues } = parseResourceXml(REBOUND);
-        // `MIXED_XML_SPELLING` fires when one group holds more than one literal tag. Here the two
-        // tags are identical and it is the BINDING that differs, so it stays silent.
-        expect(issues.some((i) => i.code === ISSUE_CODES.MIXED_XML_SPELLING)).toBe(false);
+        // `MIXED_XML_SPELLING` fires when one group's occurrences did not all arrive under the same
+        // EXPANDED name. Here the two tags are identical and it is the BINDING that differs, which
+        // is exactly the case a tag-only comparison was silent about. The model still cannot tell
+        // the two namespaces apart, and that is what this says out loud.
+        expect(
+          issues.filter((i) => i.code === ISSUE_CODES.MIXED_XML_SPELLING).map((i) => i.expression),
+        ).toEqual(["Observation.<withheld>"]);
       });
 
       it("still flags both occurrences as foreign, which is what bounds the harm", () => {

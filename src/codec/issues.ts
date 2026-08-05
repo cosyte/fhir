@@ -109,17 +109,25 @@ export const ISSUE_CODES = {
    */
   MISPLACED_PRIMITIVE_EXTENSION: "MISPLACED_PRIMITIVE_EXTENSION",
   /**
-   * One XML element arrived under **more than one spelling of the same name**: its occurrences did
-   * not all carry the same tag, so `<f:status/>` and `<status/>` are one element written two ways
-   * (Namespaces in XML 1.0 §6.1, an expanded name is a namespace and a local name).
+   * One modeled XML element's occurrences did **not all arrive under the same expanded name**: the
+   * namespace and the tag together (Namespaces in XML 1.0 §6.1), not the tag alone. Either half can
+   * differ, and the two halves are different situations.
    *
-   * Usually those spellings resolve to the same namespace, and then nothing is lost and the reading
-   * is the correct one: the occurrences are modeled as repeats of a single element, exactly as the
-   * same document spelled one way would be. It also fires where a prefixed FHIR element groups with
-   * an unprefixed one carrying a **foreign** default declaration, because that one is spelled
-   * exactly like the FHIR element; there the group additionally carries
-   * {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT} at the foreign occurrence, and this code is not the
-   * one to read for that. This is raised because
+   * - **The tag differs, the namespace does not.** `<f:status/>` beside `<status/>` is one element
+   *   written two ways. Nothing is lost and the reading is the correct one: the occurrences are
+   *   modeled as repeats of a single element, exactly as the same document spelled one way would be.
+   * - **The namespace differs, the tag does not.** Two elements that are not the same element at all
+   *   reach one model name under one tag. There are two such routes: a prefix **rebound between
+   *   siblings** (`<p:x xmlns:p="urn:a"/>` beside `<p:x xmlns:p="urn:b"/>`, where the model name of
+   *   each is that verbatim tag), and a **`<div/>` in the FHIR namespace beside the narrative**,
+   *   because the narrative is modeled as `div` under every spelling of the XHTML namespace. The
+   *   second is the costlier: `Narrative.div` is `0..1`, so the merge turns the narrative into a
+   *   repeat over an otherwise conformant document.
+   *
+   * It also fires where a prefixed FHIR element groups with an unprefixed one carrying a **foreign**
+   * default declaration, because that one is spelled exactly like the FHIR element; there the group
+   * additionally carries {@link ISSUE_CODES.UNEXPECTED_XML_CONTENT} at the foreign occurrence, and
+   * this code is not the one to read for that. In every case this is raised because
    * the *count* is what changes. An element a consumer expects at most once now presents as a
    * repeat, and a single-value read of a repeated element yields nothing rather than a value, so a
    * check written against `0..1` can skip an element it would otherwise have inspected. Warning
@@ -250,8 +258,8 @@ export function misplacedPrimitiveExtension(expression: string): FhirIssue {
 /**
  * Build a {@link ISSUE_CODES.MIXED_XML_SPELLING} issue at `expression` (XML reader only).
  *
- * The location names the element whose occurrences were spelled more than one way, raised once for
- * that element rather than once per occurrence.
+ * The location names the element whose occurrences did not all arrive under one expanded name,
+ * raised once for that element rather than once per occurrence.
  *
  * @example
  * ```ts
