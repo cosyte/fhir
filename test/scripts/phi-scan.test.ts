@@ -1190,17 +1190,27 @@ describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
     });
   }
 
-  it("reads a member far past a fixed window, and every member before it", () => {
-    const filler = Array.from({ length: 400 }, (_, i) => `"tok${String(i)}xx"`).join(", ");
+  it("reads a member far past the fixed window the old reader used", () => {
+    // THE FILLER IS DIGITS ON PURPOSE, so it contributes no name tokens and the
+    // only thing this case can report is the planted member. An earlier version
+    // filled with letter-bearing tokens, which reported 800 hits and pushed
+    // stderr past 70 KB; the planted name was then the LAST line of a very large
+    // pipe, and the assertion went red under CI while the scanner was correct.
+    // A case whose signal sits at the end of 70 KB of noise is testing the pipe,
+    // not the reader.
+    const filler = Array.from({ length: 400 }, () => `"0123456789"`).join(", ");
     const root = makeRepo();
-    writeFileSync(
-      join(root, "test", "inline.test.ts"),
-      `const p = { name: [{ given: [${filler}, "Nakamura"] }] };\n`,
-    );
+    const body = `const p = { name: [{ given: [${filler}, "Nakamura"] }] };\n`;
+    // The premise: the planted member sits well past the 4096-character window
+    // the previous reader sliced, which dropped the WHOLE array rather than the
+    // tail.
+    expect(body.indexOf("Nakamura")).toBeGreaterThan(4096);
+    writeFileSync(join(root, "test", "inline.test.ts"), body);
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("Nakamura");
+    expect(r.stderr).toContain("1 hit(s)");
   });
 
   it("declares the diagnostic form in the allow-list rather than excluding it by shape", () => {
