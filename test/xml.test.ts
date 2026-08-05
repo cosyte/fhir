@@ -1188,7 +1188,9 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * (1) The grouping keys on the MODEL NAME, and the model name of a foreign element **other than
      * the narrative `div`** is its tag verbatim (`modelNameOf` tests `isNarrativeDiv` first, and
      * that one is modeled as `div` under every spelling of the XHTML namespace, so it CAN join a
-     * FHIR group; when it does, the tags differ and `MIXED_XML_SPELLING` says so). A prefix rebound
+     * FHIR-namespace `div` group. The PREFIXED XHTML spelling joins with a different tag, so
+     * `MIXED_XML_SPELLING` fires there; the DEFAULT `xmlns` spelling joins with the same tag and
+     * that report, which compares tags, stays silent). A prefix rebound
      * between siblings gives two elements one tag, so `{urn:a}x` and `{urn:b}x` (two distinct
      * expanded names, Namespaces in XML 1.0 §6.1) land in one group and read as one element
      * repeated. `isForeign` compares namespaces and this grouping does not, so the expanded-name
@@ -1245,8 +1247,12 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * leaves a document that reads as authoritative FHIR with nothing to say it was ever anything
      * else.**
      *
-     * The bound-prefix scope is the code's, not a simplification of it. `rootIsForeign` also covers
-     * an UNBOUND prefix, and that root reads differently in every respect: the tag is kept verbatim,
+     * The bound-prefix scope is THIS TEST's, and it is narrower than the residual. `rootIsForeign`
+     * fires on any resolvable non-FHIR namespace, so a root reached by a default
+     * `xmlns="urn:vendor"` launders in exactly the same way and is NOT pinned here: that is the
+     * older, default-spelling half of the same residual, and the notes have always said so.
+     * `rootIsForeign` also covers an UNBOUND prefix, and that root reads differently in every
+     * respect: the tag is kept verbatim,
      * so the resource is modeled as `v:Observation`, its children are foreign to it in turn and are
      * flagged too, and the locations withhold the unresolvable name. That is the separate
      * unbound-prefix residual, pinned above, and none of the sentences here reach it.
