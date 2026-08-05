@@ -176,10 +176,13 @@ Unless noted, all of these are
 - **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
   slice, and do not restate a gap as a claim. **Pinned by a test:** the `_`-sibling discarded whole,
   the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, a scalar
-  beside a nested array, the §2.6.1 value-absent primitive. **Filed and reproduced but NOT known to
-  be pinned, so check before you rely on one:** a prefix rebound between siblings (`groupChildren`
-  has no test for it), the foreign-root laundering (only the flag is pinned), and the cross-format
-  singleton-wrapper laundering (the notes call it pinned; the test was not found on audit).
+  beside a nested array, the §2.6.1 value-absent primitive, and, since 2026-08-05, the three an
+  audit found **claimed** but absent: a prefix rebound between siblings and the foreign-root
+  laundering (`test/xml.test.ts`, "declared residuals, pinned so they cannot move in silence"), and
+  the cross-format singleton-wrapper laundering (`test/array-wrapped-scalar.test.ts`). **Each of
+  those is a characterization test over a gap: CLOSING one MUST red it, in the same change.**
+  **"Pinned by a test" is load-bearing prose, so never write it without opening the test**: three
+  such sentences were false for days, and the next reader does not re-check.
   [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open) ·
   [`#singleton-wrapper-laundering`](documentation/agent-notes.md#singleton-wrapper-laundering) ·
   [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)

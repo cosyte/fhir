@@ -1170,4 +1170,120 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
     // an unknown attribute rather than as an unresolvable namespace.
     expect(issues.map((i) => i.code)).toEqual([ISSUE_CODES.UNKNOWN_PROPERTY]);
   });
+
+  /**
+   * TWO DECLARED RESIDUALS OF THE EXPANDED-NAME RULE, PINNED AS THE BEHAVIOUR THEY ARE.
+   *
+   * Neither is a claim that the reading is right. Both are gaps this repo has filed and reproduced,
+   * and the reason they are asserted here is that prose alone had recorded them as "pinned by a
+   * test" when no test existed, so the next reader believed a guard that was not there.
+   *
+   * **These are characterization tests: if you CLOSE one of these residuals, the test below must go
+   * red and you must update it in the same change.** That is the whole point. What they forbid is a
+   * silent change of behaviour at a position the reader is known to read imperfectly, in either
+   * direction: closing the gap, or widening it.
+   */
+  describe("declared residuals, pinned so they cannot move in silence", () => {
+    /**
+     * (1) The grouping keys on the MODEL NAME, and a foreign element's model name is its tag
+     * verbatim. A prefix rebound between siblings gives two elements one tag, so `{urn:a}x` and
+     * `{urn:b}x` (two distinct expanded names, Namespaces in XML 1.0 §6.1) land in one group and
+     * read as one element repeated. `isForeign` compares namespaces and this grouping does not, so
+     * the expanded-name argument that governs foreign-versus-FHIR separation does not reach here.
+     *
+     * The harm is bounded by the flag rather than by the name: both occurrences are foreign to the
+     * FHIR parent, so both are reported, and neither can be mistaken for the FHIR element beside
+     * them. What is lost is the distinction BETWEEN THE TWO VENDOR VOCABULARIES, and nothing in the
+     * read says a second one was ever there.
+     */
+    describe("a prefix rebound between siblings merges two expanded names", () => {
+      const REBOUND =
+        `<Observation ${FHIR_NS}><status value="final"/>` +
+        `<p:x xmlns:p="urn:a" value="1"/><p:x xmlns:p="urn:b" value="2"/></Observation>`;
+
+      it("reads {urn:a}x and {urn:b}x as ONE property with two occurrences", () => {
+        const { resource } = parseResourceXml(REBOUND);
+        expect(resource.properties.map((p) => p.name)).toEqual(["resourceType", "status", "p:x"]);
+        const merged = req(resource.properties.find((p) => p.name === "p:x")).value;
+        expect(isList(merged) && merged.items.length).toBe(2);
+        // The model, and therefore every consumer of it, cannot tell the two namespaces apart.
+        expect(serializeResource(resource)).toBe(
+          '{"resourceType":"Observation","status":"final","p:x":["1","2"]}',
+        );
+      });
+
+      it("says nothing about the rebinding, because that report keys on the tag as well", () => {
+        const { issues } = parseResourceXml(REBOUND);
+        // `MIXED_XML_SPELLING` fires when one group holds more than one literal tag. Here the two
+        // tags are identical and it is the BINDING that differs, so it stays silent.
+        expect(issues.some((i) => i.code === ISSUE_CODES.MIXED_XML_SPELLING)).toBe(false);
+      });
+
+      it("still flags both occurrences as foreign, which is what bounds the harm", () => {
+        const { issues } = parseResourceXml(REBOUND);
+        // The location withholds the tag (a colon is not a FHIR name), so the report addresses the
+        // position rather than echoing the vendor spelling back.
+        expect(
+          issues
+            .filter((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)
+            .map((i) => i.expression),
+        ).toEqual(["Observation.<withheld>[0]", "Observation.<withheld>[1]"]);
+        // Nothing was absorbed into the FHIR element beside it.
+        const { resource } = parseResourceXml(REBOUND);
+        expect(readSafety(resource).status).toBe("final");
+      });
+    });
+
+    /**
+     * (2) A foreign ROOT is read as the FHIR resource its local name spells, flagged once at the
+     * root, and then re-emitted by the conservative writer under the FHIR namespace. The flag is the
+     * only thing in the whole reading that says the document was not FHIR, and it lives in the issue
+     * list rather than in the model, so **one write and one re-read leaves a document that reads as
+     * authoritative FHIR with nothing to say it was ever anything else.**
+     *
+     * The flag half is pinned above ("flags a prefix bound to a namespace that is not FHIR"). This
+     * is the half that was not: the round trip. Closing it means the model carrying the root's
+     * vocabulary, or a writer refusal in the shape of the dropped-text one; either way this test
+     * goes red first.
+     */
+    describe("a foreign root launders into conformant FHIR across one round trip", () => {
+      const VENDOR_ROOT =
+        `<v:Observation xmlns:v="urn:vendor">` +
+        `<v:id value="o1"/><v:status value="entered-in-error"/></v:Observation>`;
+      const EMITTED = `<Observation ${FHIR_NS}><id value="o1"/><status value="entered-in-error"/></Observation>`;
+
+      it("flags the root, once, and reports nothing else about the vocabulary", () => {
+        const { issues } = parseResourceXml(VENDOR_ROOT);
+        expect(issues).toEqual([
+          {
+            code: ISSUE_CODES.UNEXPECTED_XML_CONTENT,
+            severity: "warning",
+            expression: "Observation",
+          },
+        ]);
+        // The flag is a warning, so the document is `valid` on the way in too: the flag is the only
+        // signal there is, which is why losing it loses everything.
+        expect(validateResource(parseResourceXml(VENDOR_ROOT).resource).valid).toBe(true);
+      });
+
+      it("re-emits it as a FHIR Observation with no trace of the vendor namespace", () => {
+        const { resource } = parseResourceXml(VENDOR_ROOT);
+        const emitted = serializeResourceXml(resource);
+        expect(emitted).toBe(EMITTED);
+        expect(emitted).not.toContain("urn:vendor");
+      });
+
+      it("LOSES THE FLAG ON THE RE-READ: the vendor document is now indistinguishable from FHIR", () => {
+        const { resource } = parseResourceXml(VENDOR_ROOT);
+        const reread = parseResourceXml(serializeResourceXml(resource));
+        expect(reread.issues).toEqual([]);
+        expect(validateResource(reread.resource).valid).toBe(true);
+        // Byte-identical to the same resource authored in FHIR from the start: after one round trip
+        // there is nothing left to distinguish them.
+        expect(serializeResourceXml(reread.resource)).toBe(
+          serializeResourceXml(parseResourceXml(EMITTED).resource),
+        );
+      });
+    });
+  });
 });

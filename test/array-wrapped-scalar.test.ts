@@ -10,11 +10,13 @@ import {
   isRetracted,
   list,
   parseResource,
+  parseResourceXml,
   primitive,
   readInterpretations,
   readObservationValue,
   readSafety,
   serializeResource,
+  serializeResourceXml,
   validateResource,
 } from "../src/index.js";
 
@@ -683,6 +685,51 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
       const reread = readSafety(parseResource(rewritten).resource);
       expect(reread.retracted).toBe(true);
       expect(reread.safeToSummarize).toBe(false);
+    });
+
+    /**
+     * THE OTHER FORMAT DOES LAUNDER IT, AND THAT IS A DECLARED RESIDUAL RATHER THAN A CLAIM.
+     *
+     * The test above pins the JSON route staying honest. The XML route does not, and this pins the
+     * gap as the behaviour it is: FHIR XML has no way to spell a singleton wrapper (a repeat is
+     * written as a repeated element, xml.html), so the conservative writer emits the one value it
+     * holds and the encoding complaint has nowhere to go. `ARRAY_WRAPPED_SCALAR` is an error, and
+     * `safeToSummarize` is `false` on the way in and `true` on the way out.
+     *
+     * It is narrower than the duplicate-key laundering, and the narrowing is asserted below rather
+     * than left in prose: the clinical content survives, so the retraction is still read on both
+     * sides. What is lost is the refusal to affirm over a document nobody can read unambiguously.
+     *
+     * This is a characterization test. **Closing this residual (a writer refusal in the shape of the
+     * dropped-text one is the obvious route) MUST make this go red**, and it is written so that it
+     * does.
+     */
+    it("DOES launder it across the format boundary, through the XML writer", () => {
+      const { resource } = parseResource(REPORTED);
+      const before = readSafety(resource);
+      expect(before.arrayWrappedScalars).toEqual(["Observation.status"]);
+      expect(before.safeToSummarize).toBe(false);
+      expect(validateResource(resource).valid).toBe(false);
+
+      const xml = serializeResourceXml(resource);
+      expect(xml).toBe(
+        '<Observation xmlns="http://hl7.org/fhir"><status value="entered-in-error"/></Observation>',
+      );
+
+      const reread = parseResourceXml(xml);
+      expect(reread.issues).toEqual([]);
+      const after = readSafety(reread.resource);
+      expect(after.arrayWrappedScalars).toEqual([]);
+      expect(after.safeToSummarize).toBe(true);
+      const revalidated = validateResource(reread.resource);
+      expect(revalidated.valid).toBe(true);
+      expect(revalidated.issues.some((i) => i.code === "ARRAY_WRAPPED_SCALAR")).toBe(false);
+
+      // What survives, and why this is the narrower laundering of the two: the retraction is read on
+      // both sides, so no clinical fact is lost with the finding.
+      expect(before.retracted).toBe(true);
+      expect(after.retracted).toBe(true);
+      expect(isRetracted(reread.resource)).toBe(true);
     });
 
     it("does not extend the cardinality rule beyond the elements the safety layer reads", () => {
