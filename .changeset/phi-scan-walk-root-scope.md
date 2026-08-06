@@ -3,8 +3,8 @@
 ---
 
 **The PHI commit-gate now scans the tracked files under `test/` that its markdown and sentinel rules
-do not exempt, reads the FHIR identifiers written as source literals, and refuses to report clean over a corpus it never opened
-(`PHI-SCAN-WALK-ROOT-SCOPE`, `PHI-SCAN-OBSERVED-NOTHING-IS-GLOBAL`).**
+do not exempt, reads the FHIR identifiers written as source literals, and refuses to report clean
+over a corpus it never opened.**
 
 Three things were true of `scripts/phi-scan.ts` and each made `OK, no hits` mean less than it read.
 
