@@ -144,7 +144,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   are unchanged, and both URLs were re-checked on the wire before this landed (`200 image/png`).
   **What the anchor does differs by surface, and it was measured rather than assumed**, because the
   other cosyte READMEs are expected to follow this markup. **On GitHub the anchor works and the theme
-  switch keeps working**: GitHub's markdown API under `mode: gfm` with a repository `context`, handed
+  switch keeps working**: GitHub's markdown API under `mode: gfm` (with or without a repository
+  `context`; the mode is the discriminator, the context is not), handed
   this exact block, returns the `<a>` intact with the `<img>` still a direct child of `<picture>`, so
   the `<source>` still applies, and the same structure was read off the live `github.com` rendering of
   a third-party README carrying the same shape. **Name that mode whenever this is repeated**: the

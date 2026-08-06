@@ -1323,11 +1323,14 @@ rendered before the anchor existed.
    with no accessible name beside the image (WCAG 2.4.4 / 4.1.2, Level A). **Do not repeat the earlier
    "no failure mode" phrasing**; this shape has one, it is minor, and it lives on npm only. It is
    unreachable for this package, which has no npm page, and it lands on live pages only when the
-   wave copies the markup.
+   wave copies the markup, or when this package's own publish block lifts.
 2. **The alt text is now doing double duty as the link's accessible name**, and it describes the
    artwork rather than the destination, which is what the base chose **because the image was not a
    link**. It is borderline against WCAG 2.4.4 rather than a clear failure, since the name begins with
-   "Cosyte" and the context supplies the purpose. It was **deliberately not changed here**: the alt
+   "Cosyte". **Do not add "and the context supplies the purpose" as a second reason**: this block is the
+   first thing in the document, in its own HTML block with no enclosing paragraph, list item, table cell
+   or heading, so there is essentially no programmatically determined context for 2.4.4 to draw on and
+   the accessible name is carrying the purpose alone. It was **deliberately not changed here**: the alt
    string is byte-identical across the sibling READMEs on purpose, so re-wording it is a decision for
    the wave, not for one repo to take unilaterally.
 3. **npm ignoring `<picture>` remains the GOOD outcome, not merely the tolerable one**, and nothing
@@ -1338,9 +1341,12 @@ rendered before the anchor existed.
 
 ### Bounds on the measurement
 
-The npm half rests on **archived** package pages plus the local `/markdown/raw` reproduction, not on
+The npm half rests on **archived** package pages plus the `/markdown/raw` reproduction, not on
 a live npm page: `npmjs.com` sits behind a challenge this container cannot pass, from `curl` or from a
-headless browser. The GitHub half is live and was taken twice, once through the markdown API on this
-repo's exact block and once off a rendered `github.com` page. **This package has no npm page today**,
+headless browser. **Both snapshots are over a year old** (`20241217195415` for the shape this README
+carries, `20250508123852` for the bare one), so the archived half is the dated half; the
+`/markdown/raw` reproduction is what is re-runnable today. The GitHub half is live and was taken twice,
+once through the markdown API on this repo's exact block and once off a rendered `github.com` page.
+**This package has no npm page today**,
 so nothing here is currently observable on npm for `@cosyte/fhir` specifically. Re-measure against a
 live package page when the publish block lifts.
