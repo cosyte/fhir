@@ -1221,3 +1221,126 @@ fixture-root gap. **Still open, pinned:** at exactly `test/__fixtures__`, `ident
 `telecom.value` are read by nothing, because `isFixture` tests a trailing slash and the remaining fix
 belongs to `scanTarget`'s dispatch. Full residual list, and the reviewed allow-list additions the
 widening forced, are in `phi-scan-overrides.md`.
+
+## The README lockup link, and what npm does with it (2026-08-06)
+
+The `<picture>` lockup at the top of `README.md` is now wrapped in `<a href="https://cosyte.com">`.
+The block inside it did not change. This section records **what was measured, and how to re-measure
+it**, because the same markup is expected to spread across the other cosyte READMEs and **the answer
+is not the same on the two surfaces it has to survive.**
+
+### The question
+
+`<picture>` on npm was already known to degrade safely: npm passes the tag through, npm package pages
+have no dark mode, and so the on-light `<img>` fallback is both what renders there and the correct cut
+for a permanently white page. **Whether an anchor wrapping a `<picture>` survives is a separate
+question, and that earlier finding does not answer it.**
+
+### The one-command discriminator, and it is the useful part of this note
+
+GitHub's markdown API renders the **same input** two different ways, and the two ways are exactly the
+two surfaces. Run both against this repo's block:
+
+```bash
+# What github.com does: anchor kept, <img> stays a direct child of <picture>.
+gh api -X POST /markdown -f mode=gfm -f context=cosyte/fhir -f text="$(cat block.html)"
+
+# What an npm package page does: the anchor collides and the <img> is lifted out.
+gh api -X POST /markdown/raw -H "Content-Type: text/x-markdown" --input block.html
+```
+
+**Name the mode whenever you record this.** The discriminator is `mode: gfm` against
+`mode: markdown`, and **not** the `context` argument: `gfm` preserves the anchor with or without a
+`context`. The API's **default** `mode: markdown`, and `/markdown/raw`, both return the collided
+structure instead. A worker who runs "GitHub's markdown renderer" the obvious way gets the opposite
+result and will read an unqualified record as false.
+
+### What was measured
+
+**On GitHub the anchor works, and the colour-scheme switch keeps working.** Under `mode: gfm`:
+
+```html
+<a href="https://cosyte.com" rel="nofollow">
+  <themed-picture data-catalyst-inline="true"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://camo.githubusercontent.com/...">
+    <img alt="Cosyte: ..." src="https://camo.githubusercontent.com/...">
+  </picture></themed-picture>
+</a>
+```
+
+The `<a>` is kept, and the `<img>` is still a **direct child** of `<picture>`, which is the condition
+the HTML spec puts on `<source>` applying at all: source selection runs only when the `img` element's
+**parent** is a `picture` element. Image URLs are proxied through `camo.githubusercontent.com`. This
+was also read off the live `github.com` rendering of a third-party README carrying the same shape, so
+it is not an artifact of the API.
+
+**On an npm package page the anchor is lost.** The renderer wraps a README `<img>` in **its own**
+anchor pointing at the image file. An `<a>` nested inside another `<a>` is not representable in HTML,
+so the parser closes the author's anchor early:
+
+```html
+<a href="https://cosyte.com" rel="nofollow"><themed-picture><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="...">
+  </picture></themed-picture></a><a target="_blank" rel="noopener noreferrer nofollow" href="...image file..."><img ... style="max-width: 100%;"></a>
+```
+
+The author's anchor ends up wrapping a `<picture>` with **no `<img>` in it**, which renders nothing,
+and the image is a **sibling**, linked to the image file rather than to `cosyte.com`.
+
+**Named sources, so the next reader can re-check rather than take it on trust.** Both are archived
+npm package pages, fetched with the Wayback `id_` suffix that returns the original bytes:
+
+| Shape | Package | Snapshot | What npm served |
+|---|---|---|---|
+| Author anchor around `<picture>` | `tsup` (its `chromatic.com` sponsor block) | `20241217195415` | The collided structure above: empty anchor, image a sibling linked to the image file |
+| **Bare** `<picture>`, no author anchor | `@biomejs/biome` (its top banner) | `20250508123852` | npm's anchor inserted **inside** the `<picture>`, around the `<img>` |
+
+The second row is the other half of the same mechanism: with no author anchor to collide with, npm's
+anchor still takes the `<img>` out of the direct-child position, so **the `<source>` is inert on npm
+either way.** `/markdown/raw` reproduces both structures on demand, including `target="_blank"`,
+`rel="noopener noreferrer nofollow"` and `style="max-width: 100%;"`. It is a GitHub API call, not a
+local computation, so it needs network and a token like any other.
+
+**Do not cite `turbo` for the bare case.** Its README wraps its `<picture>` in an author anchor, so
+that page is the **collision** case, not the bare one.
+
+**The mechanism was reproduced rather than inferred, and the input matters.** Parse the renderer's
+**pre-collision** emission, that is the author's anchor still wrapping a `<picture>` whose `<img>` the
+renderer has just wrapped in a second anchor, and an HTML parser yields exactly the structure npm
+serves: two sibling anchors, `img.parentElement` is the anchor the renderer added, the picture has no
+`img` descendant, and the author's anchor has empty text content. **Parsing the already-collided
+served bytes instead proves nothing**, because that is the output, not the input.
+
+### The disposition
+
+**The anchor is kept.** On GitHub it does what the requirement asked for. On npm it silently does
+nothing, and that outcome takes nothing away: the image npm renders is the same on-light fallback it
+rendered before the anchor existed.
+
+**Three things to state honestly rather than smooth over.**
+
+1. **There is a cost, small and real.** On npm the markup leaves an empty `<a href="https://cosyte.com">`
+   with no accessible name beside the image (WCAG 2.4.4 / 4.1.2, Level A). **Do not repeat the earlier
+   "no failure mode" phrasing**; this shape has one, it is minor, and it lives on npm only. It is
+   unreachable for this package, which has no npm page, and it lands on live pages only when the
+   wave copies the markup.
+2. **The alt text is now doing double duty as the link's accessible name**, and it describes the
+   artwork rather than the destination, which is what the base chose **because the image was not a
+   link**. It is borderline against WCAG 2.4.4 rather than a clear failure, since the name begins with
+   "Cosyte" and the context supplies the purpose. It was **deliberately not changed here**: the alt
+   string is byte-identical across the sibling READMEs on purpose, so re-wording it is a decision for
+   the wave, not for one repo to take unilaterally.
+3. **npm ignoring `<picture>` remains the GOOD outcome, not merely the tolerable one**, and nothing
+   here should be "improved" in a direction that depends on npm honouring it. A package page is white
+   whatever the reader's system preference says, while `prefers-color-scheme` reports the **reader's
+   OS**, not the page's ground. If npm ever honoured the tag, a dark-mode reader would be served the
+   on-dark cut on a white page. No gate anywhere can see that.
+
+### Bounds on the measurement
+
+The npm half rests on **archived** package pages plus the local `/markdown/raw` reproduction, not on
+a live npm page: `npmjs.com` sits behind a challenge this container cannot pass, from `curl` or from a
+headless browser. The GitHub half is live and was taken twice, once through the markdown API on this
+repo's exact block and once off a rendered `github.com` page. **This package has no npm page today**,
+so nothing here is currently observable on npm for `@cosyte/fhir` specifically. Re-measure against a
+live package page when the publish block lifts.
