@@ -96,11 +96,13 @@ issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", ex
   is an XML attribute FHIR gives no element to address.
 - **Lenient read, conservative write** (Postel's Law), `resourceType` resolvable in any position, and
   a `parseReference` classifier (relative / absolute / logical / fragment). The writer authors no
-  value of its own, and it emits spec-clean FHIR for every model FHIR can express; the three shapes it
-  cannot express (an array inside an array, a scalar or `null` where FHIR JSON has an object, and a
+  value of its own, and it emits spec-clean FHIR for every model FHIR can express; the four shapes it
+  cannot express (an array inside an array, a scalar or `null` where FHIR JSON has an object, a `null`
+  in a **primitive's** value channel that padded nothing, and a
   non-string `resourceType`) are handed back as written
   rather than repaired, because repairing them means inventing or dropping content. See the
-  no-data-loss notes below.
+  no-data-loss notes below. **The two `null` entries are different branches**, and for a long time
+  only the first was listed while the second was silently deleted on emit.
 - **A repeated property name is read, not resolved.** FHIR requires unique property names and JSON
   leaves the winner undefined, so the first value wins everywhere and a `DUPLICATE_PROPERTY` issue
   says where. On an **object** element both values are kept (`getAllProperties` reads them,
@@ -262,6 +264,37 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   the same array (`"given":[["Peter"],"James"]`) lands where an object was expected, and that scalar
   is still dropped. It is reported as an unexpected property and the resource is still refused, but
   unlike the array itself its content is not kept.
+- **A `null` in a primitive's own value channel is reported and written back, which is the other half
+  of the rule above and used to be missing.** The bullet above covers a `null` where FHIR JSON has an
+  **object**. A `null` where FHIR JSON has a **primitive** is a different branch, and it read with no
+  diagnostic at all and was then deleted on emit, so a non-conformant document came back as a clean
+  conformant one with the member simply gone and every layer affirmed it.
+  `{"identifier":[{"system":"…","value":null}]}` lost the identifier value;
+  `{"value":null,"unit":"mg"}` lost the magnitude and **kept the unit**, so a quantity read back as a
+  bare unit rather than as missing; `"status":null` lost the status. Nothing was _lost_ in the sense
+  the shapes above lose things (a `null` carries no content), which is precisely why it was
+  invisible: the output was indistinguishable from a document whose sender had legitimately omitted
+  the element.
+  **The rule is what §2.6.1 actually defines, not "the document wrote `null`".** FHIR JSON uses
+  `null` for one job: padding a repeating primitive's value array so that it aligns index-by-index
+  with the `_`-sibling array carrying that occurrence's `id`/`extension`. So the test is whether the
+  slot the `null` produced carries any such metadata. One that does is padding, draws nothing, and
+  round-trips byte-for-byte exactly as before. One that does not pads nothing and leaves an element
+  with neither a value nor children, which R4 `ele-1` requires one of: it draws
+  `UNDEFINED_JSON_NULL` (warning) at that position, `isUndefinedNull` marks the node, and
+  `serializeResource` writes the `null` back so re-reading the output reproduces the finding instead
+  of laundering it away. That covers a singleton primitive slot, where padding cannot apply because
+  there is no array to align, and any index of a repeating primitive whose aligned `_`-sibling slot
+  carries nothing. Such output is deliberately **not** spec-clean, on the same reasoning as the two
+  shapes above.
+  **What it deliberately does not do, stated rather than implied.** It does not refuse. A `null` is a
+  non-conformant encoding of an _absent_ value, not content the reader could not read, so unlike an
+  array inside an array or dropped element text there is nothing unreadable at the position, and
+  `validateResource` and `safeToSummarize` are unchanged; refusing would also withdraw round trips
+  that work today. It is scoped to the **value** channel: a `_`-sibling that is itself not an object
+  (`"_status":null`) is discarded whole by the reader with no node left to mark, which is a separate
+  open gap and is not covered here. And `serializeResourceXml` does not carry it. XML has no `null`,
+  so no document read from XML is ever marked, and that writer emits the empty element as before.
 - **A primitive whose value is written as XML element text is reported, not silently read as an
   absent value.** FHIR XML carries a primitive's value in the `value` attribute, so
   `<status>entered-in-error</status>` puts a code where the model has no slot for one: the character

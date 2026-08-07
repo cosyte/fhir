@@ -1924,3 +1924,155 @@ item was one sentence and time-boxed, and growing a claim correction is how the 
 
 **This section and the residual above were written AFTER the gate returned its verdict, so they are
 UNGRADED**, in the same shape `#65` and `#66` recorded their post-verdict edits.
+
+## Relocated out of `CLAUDE.md` on 2026-08-07 to make genuine room for a trap
+
+`FHIR-NULL-PRIMITIVE-LAUNDERED` needed a trap line and `CLAUDE.md` was at **27,979 of its 28,000-byte
+budget**, twenty-one bytes, which is why the preceding unit could not record its residual there at
+all. The three blocks below moved here **verbatim and in their original order**, exactly as the
+2026-08-04 relocation moved everything above them. **Nothing was deleted and no trap was touched**;
+`CLAUDE.md` keeps a one-line cursor pointing at each. The budget entry itself lives in the meta-repo
+and was **not** raised: `doc-budget.mjs` states the rule in its own comment, lower on shrink, and a
+rising entry is a rubber stamp.
+
+### The shipped envelope, P1 through P11
+
+- **Phases 1-9 landed; P10 landed (halves a + b); P11's buildable tiers landed.** The package reads,
+  round-trips and structurally validates R4 JSON **and** XML into one schema-free model;
+  preserves decimal/`integer64` lexical precision; never drops a modifier, status or negation;
+  validates code systems, binding strength, caller-supplied `StructureDefinition`s and
+  `constraint[]` invariants; and models Bundles, reference resolution and streaming NDJSON.
+  **Not** done: `type`/`profile` slicing discriminators and reslicing (`PROFILE_SLICE_UNCHECKED`),
+  a bundled US Core IG corpus, the `validator_cli.jar` differential (authored, **CI-only**, never
+  observed green in this container), value-set membership without a supplied terminology service,
+  typed per-resource models, and transaction **execution** (a stated non-goal).
+  **This is not a no-data-loss claim over the whole package, and the sentence above is base's own
+  wording, not a fresh one**: read-path losses remain open and declared, and the one that qualifies
+  "never drops a modifier, status or negation" is a **status** or a dose number written as XML
+  element text (dropped and reported, the writer refuses, but the safety spine reads `negations: []`).
+
+### Tech Stack (the shared `@cosyte/*` standard)
+
+fhir inherits the canonical toolchain by depending on the published `@cosyte/*` config packages, not
+by copying files. Source of truth: the meta-repo's `documentation/conventions.md`.
+
+- **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
+  `@cosyte/tsconfig`. **ES2023**, `NodeNext`.
+- **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate,
+  run through `scripts/attw.mjs` (trap above).
+- **Node >= 22, pnpm@10.** **Runtime deps: zero.**
+- **Lint/format:** **ESLint 10** + Prettier (`@cosyte/eslint-config`, `@cosyte/prettier-config`),
+  at `--max-warnings=0`.
+- **Testing:** **Vitest 4** + v8 coverage (`@cosyte/vitest-config`), per-dir >= 90 gates.
+- **CI/CD:** thin `cosyte/.github` callers. **License:** MIT.
+
+### The four architecture ADRs (read before writing any parser code)
+
+The text is in `documentation/decisions/`, which is the source of truth; these are the cursors.
+**`0001`** decimal / `integer64` are string-backed and MUST preserve lexical precision (the trap is
+stated in full above). **`0002`** FHIRPath is a bounded subset vendored in-repo, no runtime
+dependency, no third-party engine; needed for invariants + slicing. **`0003`** JSON-first, XML came
+later. **`0004`** R4-first: `4.0.1` is modeled (ONC HTI-1 / §170.315(g)(10) anchor), R5 / DSTU2 are
+read-tolerance only.
+
+### Deliberate omissions
+
+Verbatim from `CLAUDE.md`'s Engineering Guardrails. Every one of these is still **named** there, as a
+trap with a pointer here; what moved is the reasoning behind each.
+
+- **Deliberate omissions, each of which reads as an oversight and is not.** `markNestedArray` and
+  `markDroppedText` are reader-internal and **deliberately not exported**. `typeOf` stays the strict
+  single-value read, because a structural verdict should **reject** an unreadable type, not guess
+  one (only `readSafety` considers every type the document names). The writer emits **one member per
+  repeated name**, deliberately, because emitting both members a duplicated name wrote would be
+  invalid FHIR
+  ([`#fhir-duplicate-key-retraction-2026-07-28`](#fhir-duplicate-key-retraction-2026-07-28)).
+  The element-text refusal fires even when
+  text sits beside a value that arrived, and **do not justify that arm with "content the sender
+  wrote is still missing"** (the gate broke that sentence in one query with
+  `<status value="final">final</status>`); the honest reason is that the rule keys on the reader
+  dropping character data and never compares text to value. The two defensive `rootPath` calls in
+  the terminology layer and the dose locator are provably the identity where observable, and the
+  gate **deliberately does not pretend to cover them**.
+
+`markUndefinedNull` joined the unexported set on 2026-08-07, for the same reason and one more: that
+marker decides what the writer emits, so a consumer able to set it could make the writer emit a
+`null` no document ever carried. Closure pinned by `test/model-edges.test.ts`.
+
+### `FHIR-NPM-NAME`: the evidence, which was duplicated
+
+The retraction sub-bullet in `CLAUDE.md` carried three evidence clauses that are stated at greater
+length in [`#publish-state-fhir-npm-name`](#publish-state-fhir-npm-name) above: provenance is signed
+and in rekor **before** the refusal, so it is not a signing failure; scope-level creation works
+(`transform`, `synth` and `cli` created 2026-07-29, `deid` 2026-07-30, all after the first refusal);
+and the refusal is identical across publish paths and account sessions. The trap keeps its headline
+in `CLAUDE.md` and the evidence lives here. **The item itself is unchanged and still blocked on npm:
+do not re-derive, re-trace, re-fire or rename anything on the strength of this paragraph.**
+
+## The `null` laundering, closed (2026-08-07)
+
+`FHIR-NULL-PRIMITIVE-LAUNDERED`.
+
+The sharpest defect the drain run surfaced. `#67`'s gate rated it stop-the-line and the coordinator
+reproduced it independently against `78f8da9`'s own `dist/`, so it was not taken on report.
+
+**What it was.** `src/codec/read.ts` mapped a JSON `null` to a value-absent primitive and pushed no
+issue; `src/codec/write.ts` omits a value-absent primitive. So a non-conformant document was read
+with zero diagnostics and written back **clean, conformant, and missing the member**, and every layer
+affirmed it (`issues: []`, `valid: true`, `safeToSummarize: true`). **Nothing was lost in the
+ordinary sense**, because a `null` carries no content, and that is exactly what made it invisible:
+the output could not be told apart from a document whose sender had legitimately omitted the element.
+
+**The measured extent, sixteen positions probed at the base commit, JSON read path only.** Laundered
+silently: a singleton primitive slot (`"status":null`), a primitive inside a complex
+(`identifier[].value`), a quantity magnitude (`{"value":null,"unit":"mg"}` lost the magnitude and
+**kept the unit**, the worst shape of it), a dose magnitude three levels down in
+`MedicationRequest.dosageInstruction[].doseAndRate[].doseQuantity.value`, an
+`AllergyIntolerance.clinicalStatus.coding[].code`, a value inside a primitive's own `extension`, a
+`resourceType`, a bare `null` at an object slot (`"identifier":null`), an all-`null` array at an
+object slot (`"identifier":[null]`), and an all-value-absent repeating primitive
+(`{"given":[null]}` re-emitted as `{}`, losing the member outright). Already reported and already
+round-tripping, so untouched: a `null` **beside** an object in an array, and a `null` inside a
+`_`-sibling's `extension` array, both `UNKNOWN_PROPERTY` with the text handed back from
+`nonObjectSource`. Conformant and untouched: §2.6.1 null padding, both channels.
+
+**The asymmetry was the trap.** The README's declared exception list covered the **object** case
+(preserved and flagged) and not the **primitive** case (dropped and silent), so the docs read as
+though the whole class were handled. Both are now named.
+
+**The answer chosen: a diagnostic and a faithful hand-back, NOT a refusal.** A `null` is a
+non-conformant encoding of an *absent* value, not content the reader could not read, so nothing was
+unreadable at the position and the fatal tier and the content-was-unreadable refusals
+(`NESTED_ARRAY`, `DROPPED_ELEMENT_TEXT`) are the wrong instrument; refusing would also have withdrawn
+round trips that work today, which is the reason several sibling residuals are deferred. The
+laundering, which is the actual harm, is closed on the **write**: the `null` goes back where the
+sender wrote it, which is the rule `serializeResource` **already applied one branch over** at the
+complex position. That makes the writer uniform rather than introducing a philosophy.
+
+**The rule keys on §2.6.1, not on "the document wrote `null`".** FHIR JSON defines `null` for one
+job, padding a repeating primitive's value array so it aligns index-by-index with the `_`-sibling
+array carrying that occurrence's `id`/`extension`. So the test is **what reached the slot**: a slot
+with an `id` or an `extension` is padding and draws nothing; a slot with neither pads nothing and
+leaves an element with neither a value nor children, which R4 `ele-1` requires one of. That is why an
+`id` pads exactly as an `extension` does, why a padded singleton (`"birthDate":null` beside a
+`_birthDate` carrying an extension) draws nothing, and why `{"given":[null,null],"_given":[{"id":"a"},null]}`
+reports index 1 and not index 0.
+
+**No case moved onto the new code**, which is the cross-package rule a sibling repo paid a gate pass
+for: a widening that reroutes a case onto a new code silently breaks every consumer predicate written
+against the old one, and the package's own docs are such a consumer. The two positions that already
+reported still report exactly what they reported, pinned by a test that asserts the whole issue list
+rather than a membership check.
+
+**Deliberately not done, characterized by tests rather than left implicit.** `validateResource` and
+`safeToSummarize` are unchanged. The `_`-sibling that is itself not an object (`"_status":null`)
+stays a separately declared open gap. `serializeResourceXml` is untouched: XML has no `null`, so no
+XML-read document is ever marked, and the value-absent primitive still emits `<status/>`, which is
+its own declared deferral.
+
+**What could not grade this.** The read differential (`pnpm differential:read`) is an XML harness and
+XML cannot express a `null`, so it does not reach this change at all. Its `moved` count is separately
+blind to refusal identity, which is declared in four places; no zero from it is quoted here as
+evidence. **The standing corpus caveat holds:** this lineage's fixtures are 7 hand-authored XML
+files plus mutations, not the FHIR R4 published-examples corpus, and the sixteen probes above are a
+hand-authored JSON axis, which is a third axis again. None of them is corpus-wide.

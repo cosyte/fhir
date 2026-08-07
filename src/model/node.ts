@@ -72,6 +72,19 @@ export interface FhirPrimitive {
    */
   readonly nestedArrayMetaSource?: string;
   /**
+   * Set when the JSON document wrote a bare `null` in this primitive's **value** channel at a
+   * position FHIR JSON does not define one. FHIR JSON uses `null` for exactly one thing, padding a
+   * repeating primitive's value array so that it aligns index-by-index with the `_`-sibling array
+   * carrying that occurrence's `id`/`extension` (json.html §2.6.1); a `null` whose slot carries no
+   * such metadata aligns nothing, and the element then has neither a value nor children, which R4
+   * `ele-1` requires. The node stays the value-absent primitive it has always been, so no walker
+   * sees anything new; what the marker buys is that {@link ../codec/write.js serializeResource} can
+   * write the `null` back instead of omitting the member, which is what stops the shape being
+   * laundered into a conformant document with the member simply missing. Absent on every conformant
+   * document and on every document read from XML. See {@link isUndefinedNull}.
+   */
+  readonly undefinedNull?: true;
+  /**
    * Set when the XML document wrote **character data directly on this element**, which a FHIR
    * element has no slot for: a primitive's value travels in the `value` attribute (xml.html §2.6.1),
    * so the text is dropped and this node's `value` is whatever the attribute held, which for
@@ -365,6 +378,56 @@ export function nestedArrayContent(node: FhirNode): readonly NestedArrayContent[
  */
 export function isDroppedText(node: FhirNode): boolean {
   return (node.kind === "complex" || node.kind === "primitive") && node.droppedText === true;
+}
+
+/**
+ * Whether the JSON document wrote a bare `null` in this primitive's **value** channel at a position
+ * FHIR JSON does not define one.
+ *
+ * FHIR JSON defines `null` in one place only: as padding in a repeating primitive's value array, so
+ * that the array lines up index-by-index with the `_`-sibling array carrying that occurrence's
+ * `id`/`extension` (json.html §2.6.1). A `null` whose slot carries no such metadata pads nothing,
+ * and leaves an element with neither a value nor children, which R4 `ele-1` requires one of. This
+ * marks those and only those, so a padding `null` in a conformant document is never marked.
+ *
+ * The node is the same value-absent primitive it would be without the marker, and nothing is
+ * preserved on it, because a `null` carries no content to preserve: it is a non-conformant encoding
+ * of an absent value, not content the reader failed to read. That is why this marker does **not**
+ * refuse a safety summary the way {@link isNestedArray} and {@link isDroppedText} do, both of which
+ * mark content the reader could not read at all. What it buys is that the writer hands the `null`
+ * back rather than omitting the member, so re-reading the output reproduces the
+ * {@link ../codec/issues.js ISSUE_CODES.UNDEFINED_JSON_NULL} finding instead of losing it.
+ *
+ * Always `false` for a document read from XML, which has no `null`, and for every conformant JSON
+ * document.
+ *
+ * @param node - Any model node.
+ * @returns `true` when the document wrote an undefined `null` at this node's position.
+ * @example
+ * ```ts
+ * import { getProperty, isUndefinedNull, parseResource } from "@cosyte/fhir";
+ * const { resource } = parseResource('{"resourceType":"Observation","status":null}');
+ * isUndefinedNull(getProperty(resource, "status")!); // true
+ * ```
+ */
+export function isUndefinedNull(node: FhirNode): boolean {
+  return node.kind === "primitive" && node.undefinedNull === true;
+}
+
+/**
+ * Mark a primitive as sitting where the JSON document wrote an undefined `null`. The JSON reader's
+ * own helper, **not part of the package's public surface**, for the same reason
+ * {@link markNestedArray} and {@link markDroppedText} are not: this marker decides what the writer
+ * emits at that position, so a consumer setting it would make the writer emit a `null` a document
+ * never carried. Read it with {@link isUndefinedNull}, which is public.
+ *
+ * It copies the node rather than mutating it, and adds no element, property or item.
+ *
+ * @param node - The value-absent primitive the reader produced at that position.
+ * @internal
+ */
+export function markUndefinedNull(node: FhirPrimitive): FhirPrimitive {
+  return { ...node, undefinedNull: true };
 }
 
 /**

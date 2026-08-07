@@ -23,7 +23,28 @@ describe("issue & fatal code registries (stable public contract)", () => {
       NESTED_ARRAY: "NESTED_ARRAY",
       MISPLACED_PRIMITIVE_EXTENSION: "MISPLACED_PRIMITIVE_EXTENSION",
       MIXED_XML_SPELLING: "MIXED_XML_SPELLING",
+      UNDEFINED_JSON_NULL: "UNDEFINED_JSON_NULL",
     });
+  });
+
+  it("adding the null code moved no existing case off the code it already drew", () => {
+    // A widening that reroutes a case onto a new code silently breaks every consumer predicate
+    // written against the old one. These are the two positions a `null` already reported at, and
+    // both must still report exactly what they always did.
+    const beside = parseResource('{"resourceType":"Patient","identifier":[{"system":"s"},null]}');
+    expect(beside.issues).toEqual([
+      { code: "UNKNOWN_PROPERTY", severity: "warning", expression: "Patient.identifier[1]" },
+    ]);
+    const inExtension = parseResource(
+      '{"resourceType":"Patient","active":true,"_active":{"extension":[null]}}',
+    );
+    expect(inExtension.issues).toEqual([
+      {
+        code: "UNKNOWN_PROPERTY",
+        severity: "warning",
+        expression: "Patient.active.extension[0]",
+      },
+    ]);
   });
 
   it("pins the fatal codes (Phase 1 + the Phase-11 depth-bound DoS guard)", () => {

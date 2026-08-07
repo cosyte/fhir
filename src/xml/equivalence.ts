@@ -85,6 +85,9 @@ function primitivesEquivalent(a: FhirPrimitive, b: FhirPrimitive): boolean {
     a.nestedArraySource === b.nestedArraySource &&
     a.nestedArrayMetaSource === b.nestedArrayMetaSource &&
     a.droppedText === b.droppedText &&
+    // Two value-absent primitives that the writer emits differently are not the same node: one
+    // writes its member back as `null`, the other omits it.
+    a.undefinedNull === b.undefinedNull &&
     extensionsEquivalent(a.extension, b.extension)
   );
 }

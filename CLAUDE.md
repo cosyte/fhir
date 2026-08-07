@@ -19,15 +19,15 @@ semantics, and validate it against US Core, without reading the FHIR spec.
 ## Status
 
 - **Pre-alpha, unpublished on npm, and that is not missing work.** Every publish attempt is refused
-  by npm with a bare `E403` on `PUT https://registry.npmjs.org/@cosyte%2ffhir` (`FHIR-NPM-NAME`,
-  support request filed 2026-07-23, still open), so there is no git tag and no GitHub release.
+  by npm with a bare `E403` on the scoped `PUT` (`FHIR-NPM-NAME`, support request open since
+  2026-07-23), so there is no git tag and no GitHub release.
   **Read the version from `package.json`, never infer it from npm**: it runs ahead of the registry.
   Why: [`agent-notes.md#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
   - **The "name-similarity" reading is RETRACTED. DO NOT RENAME OR RESCOPE THE PACKAGE ON IT.** npm
-    has never named similarity or the unscoped `fhir` package in anything it returned. Provenance is
-    signed and in rekor before the refusal, so it is not a signing failure; scope-level creation
-    works (`transform`, `synth` and `cli` were created 2026-07-29 and `deid` 2026-07-30, all _after_
-    the first refusal); and the refusal is identical across publish paths and account sessions.
+    has never named similarity or the unscoped `fhir` package in anything it returned. The three
+    evidence clauses (provenance in rekor before the refusal, scope-level creation working after it,
+    the refusal identical across publish paths and sessions) moved to the notes 2026-08-07:
+    [`#fhir-npm-name-the-evidence-which-was-duplicated`](documentation/agent-notes.md#fhir-npm-name-the-evidence-which-was-duplicated).
   - **It is a HUMAN GATE, not work you can pick up.** The trace npm asked for was hand-checked free
     of credential material and sent 2026-08-05, so it waits on npm. **Leave it blocked.**
   - **Do not generalise the error code across the three affected packages.** `E403` is `fhir`'s
@@ -39,19 +39,16 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   - **Never re-fire a version npm has already traced:** `0.0.2`, `0.0.3`, `0.0.7`, `0.0.8`.
   - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
     hand before ever linking one.
-- **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.** The package reads,
-  round-trips and structurally validates R4 JSON **and** XML into one schema-free model;
-  preserves decimal/`integer64` lexical precision; never drops a modifier, status or negation;
-  validates code systems, binding strength, caller-supplied `StructureDefinition`s and
-  `constraint[]` invariants; and models Bundles, reference resolution and streaming NDJSON.
-  **Not** done: `type`/`profile` slicing discriminators and reslicing (`PROFILE_SLICE_UNCHECKED`),
-  a bundled US Core IG corpus, the `validator_cli.jar` differential (authored, **CI-only**, never
-  observed green in this container), value-set membership without a supplied terminology service,
-  typed per-resource models, and transaction **execution** (a stated non-goal).
-  **This is not a no-data-loss claim over the whole package, and the sentence above is base's own
-  wording, not a fresh one**: read-path losses remain open and declared, and the one that qualifies
-  "never drops a modifier, status or negation" is a **status** or a dose number written as XML
-  element text (dropped and reported, the writer refuses, but the safety spine reads `negations: []`).
+- **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.** The full envelope,
+  what is built and what is explicitly **not** (`PROFILE_SLICE_UNCHECKED`, no bundled US Core IG
+  corpus, the CI-only `validator_cli.jar` differential, value-set membership without a supplied
+  terminology service, typed per-resource models, transaction **execution**), was relocated
+  2026-08-07 to
+  [`#the-shipped-envelope-p1-through-p11`](documentation/agent-notes.md#the-shipped-envelope-p1-through-p11).
+  **▶ IT IS NOT A NO-DATA-LOSS CLAIM OVER THE WHOLE PACKAGE, and its wording is base's own, not a
+  fresh one**: read-path losses remain open and declared, and the one that qualifies "never drops a
+  modifier, status or negation" is a **status** or a dose number written as XML element text (dropped
+  and reported, the writer refuses, but the safety spine reads `negations: []`).
   The rest are enumerated in the notes, relocated 2026-08-07:
   [`#open-read-path-losses-enumerated`](documentation/agent-notes.md#open-read-path-losses-enumerated) ·
   [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
@@ -111,6 +108,17 @@ Every line here cost a defect or a refuted gate pass. The pointer is to
   would be data loss. **No claim is made anywhere that a location never carries document content; do not
   add one.** A forgery shaped like a FHIR name is still echoed.
   [`#phi-warning-message-leak-2026-08-02`](documentation/agent-notes.md#phi-warning-message-leak-2026-08-02)
+- **A `null` IS NOT A LOSS, WHICH IS WHY IT WAS INVISIBLE: READ SILENTLY, THEN DELETED ON EMIT, SO A
+  NON-CONFORMANT DOCUMENT CAME BACK CLEAN WITH THE MEMBER GONE.** `{"value":null,"unit":"mg"}` lost
+  the magnitude and **KEPT THE UNIT**, under `issues: []` / `valid: true` / `safeToSummarize: true`.
+  Closed 2026-08-07 by a **diagnostic plus a hand-back, NEVER a refusal**: `UNDEFINED_JSON_NULL`,
+  `isUndefinedNull`, and the writer writes the `null` back as it **already did one branch over**.
+  **THE RULE KEYS ON §2.6.1 PADDING, NOT ON "THE DOCUMENT WROTE `null`": the test is what reached the
+  SLOT.** **Do not widen it to every `null`** (false-errors on a conformant repeating primitive);
+  **do not narrow it to "inside an array"** (the singleton goes silent again). **The object position
+  is a DIFFERENT branch, still `UNKNOWN_PROPERTY` from `nonObjectSource`: do not move it onto the new
+  code.** `valid`/`safeToSummarize` are deliberately unchanged and pinned, so closing that MUST red.
+  [`#the-null-laundering-closed-2026-08-07`](documentation/agent-notes.md#the-null-laundering-closed-2026-08-07)
 - **A PHI sweep over leaf values is not a PHI sweep.** `phi-leak.test.ts` swept values only, which is
   why a 1,000,000-byte property name, which produced a 1,000,011-byte `expression`, survived it.
   Sentinels must cover names.
@@ -258,29 +266,16 @@ and the 11-way `Observation.value[x]` choice, is in
 - **The gates run on the strongest model**, always (ADR 0009/0024). Never set
   `CLAUDE_CODE_SUBAGENT_MODEL`: it silently overrides every refuter pin.
 
-## Tech Stack (the shared `@cosyte/*` standard)
+## Tech stack and the four architecture ADRs
 
-fhir inherits the canonical toolchain by depending on the published `@cosyte/*` config packages, not
-by copying files. Source of truth: the meta-repo's `documentation/conventions.md`.
-
-- **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
-  `@cosyte/tsconfig`. **ES2023**, `NodeNext`.
-- **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate,
-  run through `scripts/attw.mjs` (trap above).
-- **Node >= 22, pnpm@10.** **Runtime deps: zero.**
-- **Lint/format:** **ESLint 10** + Prettier (`@cosyte/eslint-config`, `@cosyte/prettier-config`),
-  at `--max-warnings=0`.
-- **Testing:** **Vitest 4** + v8 coverage (`@cosyte/vitest-config`), per-dir >= 90 gates.
-- **CI/CD:** thin `cosyte/.github` callers. **License:** MIT.
-
-## The four architecture ADRs (read before writing any parser code)
-
-The text is in `documentation/decisions/`, which is the source of truth; these are the cursors.
-**`0001`** decimal / `integer64` are string-backed and MUST preserve lexical precision (the trap is
-stated in full above). **`0002`** FHIRPath is a bounded subset vendored in-repo, no runtime
-dependency, no third-party engine; needed for invariants + slicing. **`0003`** JSON-first, XML came
-later. **`0004`** R4-first: `4.0.1` is modeled (ONC HTI-1 / §170.315(g)(10) anchor), R5 / DSTU2 are
-read-tolerance only.
+**Both sections relocated 2026-08-07** to make room for the trap above:
+[`#relocated-out-of-claudemd-on-2026-08-07-to-make-genuine-room-for-a-trap`](documentation/agent-notes.md#relocated-out-of-claudemd-on-2026-08-07-to-make-genuine-room-for-a-trap).
+The cursors, so you need not open it: the toolchain is **inherited** from the published `@cosyte/*`
+config packages, never copied, and is **ESLint 10 / Vitest 4 / ES2023 / Node >= 22 / pnpm@10, TS
+strict, dual ESM+CJS via tsup, per-dir coverage >= 90, MIT, RUNTIME DEPS ZERO.** The four ADRs are in
+`documentation/decisions/`, their source of truth: **`0001`** string-backed decimal/`integer64`,
+**`0002`** a bounded in-repo FHIRPath subset (no third-party engine), **`0003`** JSON-first,
+**`0004`** R4-first (`4.0.1` modeled; R5/DSTU2 read-tolerance only).
 
 ## Engineering Guardrails
 
@@ -304,34 +299,27 @@ read-tolerance only.
   longer carries English prose, NOT that every `expression` is resolvable FHIRPath. A `<withheld>`
   segment and the XML reader's `.@name` attribute form are deliberately **admitted** by
   `test/expression-grammar.test.ts` rather than hidden.
-- **Deliberate omissions, each of which reads as an oversight and is not.** `markNestedArray` and
-  `markDroppedText` are reader-internal and **deliberately not exported**. `typeOf` stays the strict
-  single-value read, because a structural verdict should **reject** an unreadable type, not guess
-  one (only `readSafety` considers every type the document names). The writer emits **one member per
-  repeated name**, deliberately, because emitting both members a duplicated name wrote would be
-  invalid FHIR
-  ([`#fhir-duplicate-key-retraction-2026-07-28`](documentation/agent-notes.md#fhir-duplicate-key-retraction-2026-07-28)).
-  The element-text refusal fires even when
-  text sits beside a value that arrived, and **do not justify that arm with "content the sender
-  wrote is still missing"** (the gate broke that sentence in one query with
-  `<status value="final">final</status>`); the honest reason is that the rule keys on the reader
-  dropping character data and never compares text to value. The two defensive `rootPath` calls in
-  the terminology layer and the dose locator are provably the identity where observable, and the
-  gate **deliberately does not pretend to cover them**.
+- **Deliberate omissions, each of which reads as an oversight and is not.** `markNestedArray`,
+  `markDroppedText` and `markUndefinedNull` are reader-internal and **not exported**; `typeOf` stays
+  the strict single-value read (**reject** an unreadable type, never guess); the writer emits **one
+  member per repeated name**; the element-text refusal fires even beside a value that arrived, and
+  **do not justify that arm with "content the sender wrote is still missing"** (the gate broke that
+  sentence with `<status value="final">final</status>`) since the rule keys on dropped character data
+  and never compares text to value; and the two defensive `rootPath` calls in the terminology layer
+  and the dose locator are the identity where observable, which the gate **does not pretend to
+  cover**. Each reason, relocated 2026-08-07:
+  [`#deliberate-omissions`](documentation/agent-notes.md#deliberate-omissions).
 - **PHI discipline:** synthetic-only fixtures, redaction in logs. Never commit realistic PHI. A
   vendor quirk is encoded only when a real de-identified resource grounds it, never invented.
 
 ## Standing disciplines (every change)
 
-Mirrors the three disciplines in the meta-repo's `documentation/conventions.md`. They bind here too:
+Disciplines **1 to 3 are the meta-repo's own**, in `documentation/conventions.md`, and bind here
+unchanged; only what is fhir-specific is repeated. **1** docs follow code: this repo's docs, the
+meta-repo's `documentation/repos/fhir.md`, and the `ecosystem-map.md` status table. **2** a Changeset
+(`patch` on the `0.0.x` ladder) plus a `CHANGELOG.md` `[Unreleased]` entry. **3** the crew skill is
+`fhir-resource-design`, plus the KB product doc. The fourth is this repo's own:
 
-1. **Documentation follows code**: a change to the public surface/stack/status isn't done until the
-   docs are: this repo's docs, the meta-repo `documentation/repos/fhir.md`, and the
-   `ecosystem-map.md` status table.
-2. **Version + changelog**: a Changeset (`patch` on the `0.0.x` ladder) + a `CHANGELOG.md`
-   `[Unreleased]` entry per meaningful change.
-3. **Crew + knowledgebase loop**: if the public API changes, flag/update the matching `crew`
-   healthcare skill (`fhir-resource-design`) + the KB product doc.
 4. **No internal project bookkeeping on a public surface** (founder directive, 2026-07-27). Item
    identifiers (`FHIR-P10`), phase/wave language, ADR numbers and meta-repo paths belong in the
    changeset, `CHANGELOG.md`, the commit, the PR and the roadmap, never in what a consumer is

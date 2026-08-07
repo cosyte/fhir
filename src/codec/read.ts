@@ -2,7 +2,8 @@
  * The JSON read path: a {@link RawJson} tree → the immutable {@link FhirNode} model.
  *
  * This is where the four silent-data-loss hazards of a FHIR JSON codec are handled (json.html): the
- * first three losslessly, the fourth by refusing to let the loss go unreported.
+ * first three losslessly, the fourth by refusing to let the loss go unreported. A fifth entry below
+ * is **not** a data loss and is listed with them because it used to read exactly like one.
  *
  * 1. **Decimal precision.** Number tokens arrive from {@link readRawJson} as exact source text and
  *    become {@link FhirDecimal} values, never a JavaScript `number`. A token that a naive
@@ -52,6 +53,17 @@
  *    is the preserving problem rather than the reporting one. Pinned by a test rather than left to
  *    this sentence.
  *
+ * 5. **A `null` in a primitive's value channel that pads nothing.** FHIR JSON defines `null` for one
+ *    job, aligning a repeating primitive's value array with its `_`-sibling array (json.html §2.6.1).
+ *    Anywhere else it encodes an absent value in a way the format does not define. **Nothing is lost
+ *    here**, because a `null` carries no content and the element really is value-absent, which is exactly
+ *    why it needed its own answer: read silently and written back as an omitted member, a
+ *    non-conformant document became a conformant one with the member simply gone, and every layer
+ *    then affirmed it. The reader raises `UNDEFINED_JSON_NULL` and marks the slot
+ *    ({@link ../model/node.js} `isUndefinedNull`) so the writer hands the `null` back rather than
+ *    dropping it, and re-reading the output reproduces the finding. See {@link applyNullRule} for
+ *    why this is a diagnostic and not a refusal.
+ *
  * Reading is lenient elsewhere (Postel's Law): an unexpected shape is preserved and flagged, not
  * rejected. Only genuinely unrecoverable structure (malformed JSON, broken `_`-alignment) throws.
  *
@@ -64,9 +76,11 @@ import {
   complex,
   list,
   markNestedArray,
+  markUndefinedNull,
   primitive,
   type FhirComplex,
   type FhirNode,
+  type FhirPrimitive,
   type PrimitiveMeta,
   type PrimitiveValue,
 } from "../model/node.js";
@@ -75,6 +89,7 @@ import {
   duplicateProperty,
   misplacedPrimitiveExtension,
   nestedArray,
+  undefinedJsonNull,
   unknownProperty,
   FATAL_CODES,
   FhirCodecError,
@@ -174,6 +189,46 @@ function scalarValue(node: RawJson, path: string, issues: FhirIssue[]): Primitiv
       // (the caller's primitive/complex decision governs the surrounding shape).
       return undefined;
   }
+}
+
+/**
+ * Apply the one rule FHIR JSON has about `null`, to a primitive slot the reader has already built.
+ *
+ * FHIR JSON uses `null` for a single purpose: padding a **repeating** primitive's value array so that
+ * it lines up index-by-index with the `_`-sibling array carrying that occurrence's `id`/`extension`
+ * (json.html §2.6.1, "JSON null values are used to fill out both arrays so that the id and/or
+ * extension are aligned to the matching value in the first array"). So the question is never "was
+ * this `null` written inside an array" but **"did it align with anything"**, and the answer is the
+ * metadata that actually reached this slot. A `null` beside no `id` and no `extension` pads nothing
+ * and leaves an element with neither a value nor children, which R4 `ele-1` requires one of.
+ *
+ * Reporting it is the whole of the remedy on the read side; **the marker is what makes the report
+ * survive.** Without it the writer omits a value-absent primitive, so `{"value":null,"unit":"mg"}`
+ * comes back as `{"unit":"mg"}`: a conformant `Quantity` carrying a unit and no magnitude, which is
+ * a document the sender never wrote and which re-reads with no diagnostic at all. Handing the `null`
+ * back is the same rule the writer already applies one branch over, where a `null` written at a
+ * complex position is written back from {@link FhirComplex.nonObjectSource}.
+ *
+ * **What this deliberately does not do.** It does not refuse: a `null` is a non-conformant encoding
+ * of an *absent* value, not content the reader could not read, so nothing is lost and the fatal tier
+ * (reserved for structure the reader cannot recover) is the wrong instrument, and refusing would
+ * withdraw round trips that work today. For the same reason it adds no safety-summary refusal:
+ * `nestedArray` and `droppedText` refuse because content was unreadable at that position, and that
+ * is not what happened here.
+ *
+ * @internal
+ */
+function applyNullRule(
+  node: FhirPrimitive,
+  rawValue: RawJson | undefined,
+  meta: PrimitiveMeta,
+  path: string,
+  issues: FhirIssue[],
+): FhirPrimitive {
+  if (rawValue?.t !== "null") return node;
+  if (meta.id !== undefined || meta.extension !== undefined) return node;
+  issues.push(undefinedJsonNull(path));
+  return markUndefinedNull(node);
 }
 
 /**
@@ -305,7 +360,7 @@ function buildPrimitiveList(
     if (nested) issues.push(nestedArray(itemPath));
     const value_ = rawValue === undefined ? undefined : scalarValue(rawValue, itemPath, issues);
     const metaValue = readMeta(rawMeta, itemPath, issues);
-    const node = primitive(value_, metaValue);
+    const node = applyNullRule(primitive(value_, metaValue), rawValue, metaValue, itemPath, issues);
     if (!nested) {
       items.push(node);
       continue;
@@ -371,7 +426,8 @@ function buildNode(
     );
   }
   const scalar = value === undefined ? undefined : scalarValue(value, path, issues);
-  return primitive(scalar, readMeta(meta, path, issues));
+  const metaValue = readMeta(meta, path, issues);
+  return applyNullRule(primitive(scalar, metaValue), value, metaValue, path, issues);
 }
 
 /** Build a {@link FhirComplex} from a raw object, recursing through its properties. */

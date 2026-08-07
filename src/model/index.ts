@@ -20,6 +20,7 @@ export {
   isDroppedText,
   isNestedArray,
   isPrimitive,
+  isUndefinedNull,
   list,
   nestedArrayContent,
   primitive,

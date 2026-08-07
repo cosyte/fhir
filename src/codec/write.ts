@@ -4,9 +4,12 @@
  * The writer is the conservative half of Postel's Law: it emits well-formed, canonical FHIR JSON for
  * every model that FHIR can express, and it never authors a value of its own. It is **not**
  * unconditionally spec-clean, and the exceptions are stated at the foot of this comment: a document
- * that wrote an array inside an array, a scalar or `null` where FHIR JSON has an object, or a
- * `resourceType` that is not a string, is handed back as written rather than repaired, because
- * repairing it means inventing or dropping content. Two details
+ * that wrote an array inside an array, a scalar or `null` where FHIR JSON has an object, a `null`
+ * the reader marked in a **primitive's** value channel, or a `resourceType` that is not a string, is
+ * handed back as written rather than repaired, because repairing it means inventing or dropping
+ * content. **The primitive `null` and the complex one are two different branches and both are
+ * listed**, because for a long time only the second was, and the first was omitted on emit: that
+ * turned a non-conformant document into a conformant one with the member gone. Two details
  * are load-bearing for the no-data-loss guarantee (json.html):
  *
  * - **Decimals are emitted from their exact lexical text** ({@link FhirDecimal.raw}), unquoted, so a
@@ -45,6 +48,21 @@
  * The writer that emitted it presents an object as read where nothing was read at all. Handing the
  * scalar back is what makes the re-read reproduce the finding instead.
  *
+ * **A `null` the reader marked in a primitive's own value channel is written back as `null`**, and
+ * this is the same reasoning again at the branch it was missing from. FHIR JSON defines a `null`
+ * only as padding that aligns a repeating primitive's value array with its `_`-sibling (json.html
+ * §2.6.1); one that padded nothing is marked on the way in
+ * ({@link ../model/node.js} `isUndefinedNull`) and drew `UNDEFINED_JSON_NULL`. The model holds a
+ * value-absent primitive there, and a value-absent primitive is ordinarily omitted, so without the
+ * marker `{"value":null,"unit":"mg"}` was emitted as `{"unit":"mg"}`: a **conformant** `Quantity`
+ * carrying a unit and no magnitude, which re-reads with no diagnostic at all. That is not the
+ * writer dropping a value the sender wrote, because a `null` holds none; it is the writer resolving
+ * a defect the sender's document had, into a clean document that no longer shows it. Writing the
+ * `null` back is what makes the re-read reproduce the finding.
+ *
+ * A **padding** `null` is not marked and never was omitted: the array alignment below emits it from
+ * the value-absent slot, so a conformant repeating primitive is untouched by any of this.
+ *
  * @packageDocumentation
  */
 
@@ -77,9 +95,19 @@ function emitPrimitiveValue(node: FhirPrimitive): string {
   return node.nestedArraySource ?? emitScalar(node.value);
 }
 
-/** Whether a primitive has anything to write in the value slot at all. */
+/**
+ * Whether a primitive has anything to write in the value slot at all.
+ *
+ * A slot the reader marked as an undefined `null` counts, and that is the whole of the write-side
+ * remedy: the `null` goes back where the sender wrote it instead of the member being omitted. It is
+ * the same rule {@link emitComplex} applies one branch over for a `null` written at a complex
+ * position. A **padding** `null` is not marked and does not reach this, so it is still emitted by
+ * the array alignment below, exactly as before.
+ */
 function hasValue(node: FhirPrimitive): boolean {
-  return node.value !== undefined || node.nestedArraySource !== undefined;
+  return (
+    node.value !== undefined || node.nestedArraySource !== undefined || node.undefinedNull === true
+  );
 }
 
 /** Whether a primitive carries `id`/`extension` metadata that must go to a `_`-sibling. */
@@ -200,9 +228,9 @@ function emitComplex(node: FhirComplex): string {
  * @returns Compact JSON text, decimals byte-exact, primitive metadata split back into `_`-siblings
  *   with null-padded array alignment, and `resourceType` hoisted to the front where it is a string.
  *   A `resourceType` that is anything else keeps its position in the document rather than being
- *   dropped, and an array the sender wrote where FHIR gives an array no meaning, or a scalar or
- *   `null` the sender wrote where FHIR has an object, is written back as it was read, so such output
- *   is deliberately not spec-clean.
+ *   dropped, and an array the sender wrote where FHIR gives an array no meaning, a scalar or
+ *   `null` the sender wrote where FHIR has an object, or a `null` the reader marked in a primitive's
+ *   value channel, is written back as it was read, so such output is deliberately not spec-clean.
  * @throws {FhirSerializeError} If the model carries a node the XML reader MARKED as having lost
  *   character data. JSON has no character-data channel, so the member would simply be absent and the
  *   `DROPPED_ELEMENT_TEXT` finding would be lost across a round trip. Text the reader drops WITHOUT
