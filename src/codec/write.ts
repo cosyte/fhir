@@ -4,11 +4,12 @@
  * The writer is the conservative half of Postel's Law: it emits well-formed, canonical FHIR JSON for
  * every model that FHIR can express, and it never authors a value of its own. It is **not**
  * unconditionally spec-clean, and the exceptions are stated at the foot of this comment: a document
- * that wrote an array inside an array, a scalar or `null` where FHIR JSON has an object, a `null`
+ * that wrote an array inside an array, a scalar or `null` where FHIR JSON has an object (at a
+ * complex element's own position **or** in a primitive's `_`-sibling), a `null`
  * the reader marked in a **primitive's** value channel, or a `resourceType` that is not a string, is
  * handed back as written rather than repaired, because repairing it means inventing or dropping
- * content. **The primitive `null` and the complex one are two different branches and both are
- * listed**, because for a long time only the second was, and the first was omitted on emit: that
+ * content. **Each of those is a separate branch and each is listed**, because for a long time only
+ * the complex one was, and the others were omitted on emit: that
  * turned a non-conformant document into a conformant one with the member gone. Two details
  * are load-bearing for the no-data-loss guarantee (json.html):
  *
@@ -63,6 +64,20 @@
  * A **padding** `null` is not marked and never was omitted: the array alignment below emits it from
  * the value-absent slot, so a conformant repeating primitive is untouched by any of this.
  *
+ * **A scalar or `null` the sender wrote in a primitive's `_`-sibling is written back there**, and
+ * this is the same reasoning at the last branch it was missing from. FHIR JSON gives that channel an
+ * `Element` object (json.html §2.6.2.3), so a scalar carries no metadata to model; the writer emits
+ * a `_`-sibling only for metadata it has, and `{"_status":null}` was therefore emitted as `{}`. The
+ * text the reader kept ({@link ../model/node.js} `nonObjectMetaSource`) is what it hands back
+ * instead. **Three places decide it and all three had to change**: {@link emitMeta}, which without a
+ * branch for that text emits `{}`, an `Element` object no sender wrote, at the position the text
+ * belongs (§2.6.2.1: "JSON objects and arrays are never empty") and one that re-reads clean, so the
+ * laundering completes on the next trip; {@link hasMeta}, which decides whether a `_`-sibling is
+ * emitted at all; and the `resourceType`
+ * hoist in {@link emitComplex}, which skipped the property outright once its value was at the front
+ * and so deleted the sibling whatever `hasMeta` said. **Count them before writing "two": a remedy
+ * short of any one of the three still launders, and one copy of that count ships in `.d.ts`.**
+ *
  * @packageDocumentation
  */
 
@@ -110,18 +125,39 @@ function hasValue(node: FhirPrimitive): boolean {
   );
 }
 
-/** Whether a primitive carries `id`/`extension` metadata that must go to a `_`-sibling. */
+/**
+ * Whether a primitive carries anything that must go to a `_`-sibling: `id`/`extension` metadata, or
+ * text the reader preserved because what the sender wrote there was not an object at all.
+ *
+ * The last disjunct is the write half of the `_`-sibling remedy, and it is the same rule
+ * {@link hasValue} applies one channel over: without it the writer emits no `_`-sibling, so
+ * `{"_status":null}` came back as `{}`: the member deleted and the `UNKNOWN_PROPERTY` gone with it.
+ *
+ * **This must stay in step with `carriesMetadata` in {@link ./read.js}**, which decides whether a
+ * `null` in the value channel is §2.6.2.3 padding; the two disagreeing is a laundering bug rather
+ * than a cosmetic one, and it has happened. The direction that laundering takes is the read
+ * exempting a slot that this then declines to emit, so a disjunct **added** here (as the last one
+ * was) cannot reopen it: it only ever makes this more true. The `id`/`extension` half is the half
+ * that must match, and it does, `length > 0` included.
+ */
 function hasMeta(node: FhirPrimitive): boolean {
   return (
     node.id !== undefined ||
     (node.extension !== undefined && node.extension.length > 0) ||
-    node.nestedArrayMetaSource !== undefined
+    node.nestedArrayMetaSource !== undefined ||
+    node.nonObjectMetaSource !== undefined
   );
 }
 
-/** Emit a primitive's `_`-sibling object `{ id?, extension? }`, or the array preserved in its place. */
+/**
+ * Emit a primitive's `_`-sibling: the object `{ id?, extension? }`, or the array or scalar the
+ * reader preserved in its place. A preserved scalar is handed back for the reason the module comment
+ * gives for the value channel, one channel over: the model holds no metadata there, so emitting an
+ * object would author one, and emitting nothing deletes the member.
+ */
 function emitMeta(node: FhirPrimitive): string {
   if (node.nestedArrayMetaSource !== undefined) return node.nestedArrayMetaSource;
+  if (node.nonObjectMetaSource !== undefined) return node.nonObjectMetaSource;
   const parts: string[] = [];
   if (node.id !== undefined) parts.push(`"id":${JSON.stringify(node.id)}`);
   if (node.extension !== undefined && node.extension.length > 0) {
@@ -201,7 +237,16 @@ function emitComplex(node: FhirComplex): string {
   if (hoisted) parts.push(`"resourceType":${JSON.stringify(rt.value.value)}`);
 
   for (const property of node.properties) {
-    if (property.name === "resourceType" && hoisted) continue;
+    if (property.name === "resourceType" && hoisted) {
+      // The value went to the front; anything its `_`-sibling carried still belongs in the document.
+      // Skipping the property outright dropped that sibling with no diagnostic anywhere, which is
+      // the same deletion this writer hands text back to avoid, and it is why the hoist had to be
+      // checked as well as `hasMeta`: a remedy in `hasMeta` alone never reaches this branch.
+      if (isPrimitive(property.value) && hasMeta(property.value)) {
+        parts.push(`"_resourceType":${emitMeta(property.value)}`);
+      }
+      continue;
+    }
     const value = property.value;
     switch (value.kind) {
       case "primitive":
@@ -229,7 +274,8 @@ function emitComplex(node: FhirComplex): string {
  *   with null-padded array alignment, and `resourceType` hoisted to the front where it is a string.
  *   A `resourceType` that is anything else keeps its position in the document rather than being
  *   dropped, and an array the sender wrote where FHIR gives an array no meaning, a scalar or
- *   `null` the sender wrote where FHIR has an object, or a `null` the reader marked in a primitive's
+ *   `null` the sender wrote where FHIR has an object (a complex element's position, or a primitive's
+ *   `_`-sibling), or a `null` the reader marked in a primitive's
  *   value channel, is written back as it was read, so such output is deliberately not spec-clean.
  * @throws {FhirSerializeError} If the model carries a node the XML reader MARKED as having lost
  *   character data. JSON has no character-data channel, so the member would simply be absent and the

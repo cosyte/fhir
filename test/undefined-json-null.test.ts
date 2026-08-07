@@ -283,14 +283,17 @@ describe("what this deliberately does not do, pinned so it cannot move in silenc
     ).toBe(true);
   });
 
-  it("does not cover a `_`-sibling that is not an object, which is its own declared gap", () => {
-    // `readMeta` reads metadata out of an object and has none to read from anything else, so the
-    // sibling is discarded whole and there is no slot to mark. Unchanged here on purpose.
+  it("leaves a `_`-sibling that is not an object to `UNKNOWN_PROPERTY`, not to this code", () => {
+    // That channel used to be this code's declared gap: it drew nothing at all and the member was
+    // deleted on emit. It is closed now, and closed on the neighbouring code rather than this one,
+    // because it is the same observation the reader already makes at a complex position (something
+    // FHIR JSON has an object for arrived as a scalar). See `underscore-sibling.test.ts` for the
+    // whole of that behaviour; what is pinned here is that no case moved onto UNDEFINED_JSON_NULL.
     const input = '{"resourceType":"Observation","status":"final","_status":null}';
-    expect(parseResource(input).issues).toEqual([]);
-    expect(serializeResource(parseResource(input).resource)).toBe(
-      '{"resourceType":"Observation","status":"final"}',
-    );
+    expect(parseResource(input).issues).toEqual([
+      { code: "UNKNOWN_PROPERTY", severity: "warning", expression: "Observation.status" },
+    ]);
+    expect(serializeResource(parseResource(input).resource)).toBe(input);
   });
 
   it("never marks a document read from XML, which has no `null`", () => {

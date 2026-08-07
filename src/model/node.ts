@@ -72,6 +72,27 @@ export interface FhirPrimitive {
    */
   readonly nestedArrayMetaSource?: string;
   /**
+   * The JSON text of a **non-object, non-array** value the sender wrote in this primitive's
+   * `_`-sibling (metadata) channel: a string, a number, a boolean, or a `null` at a **singleton**
+   * slot. FHIR JSON gives that channel an `Element` object and nothing else (json.html §2.6.2.3, "the
+   * `id` and/or `extension`"), so there is no metadata to read out of a scalar and the reader models
+   * none. This is the `_`-sibling counterpart of {@link FhirComplex.nonObjectSource} and it exists
+   * for the same reason: without the text the writer has no `_`-sibling to emit, so the member is
+   * dropped and a non-conformant document comes back conformant with it simply gone. The reader
+   * raises {@link ISSUE_CODES.UNKNOWN_PROPERTY} at the element's position.
+   *
+   * **A `null` at any slot of a repeating primitive's `_`-array is never marked here** (§2.6.2.3
+   * fills out *both* arrays), so a conformant document never carries this. The exemption is by
+   * **position**, not by whether that slot pads a value, so a `_`-array with no value array beside
+   * it keeps the silent drop it had before: declared, not closed. A `null` at a **singleton** `_`
+   * slot is never padding, on the same reasoning as {@link undefinedNull}, and is marked.
+   * An **array** in this channel is the neighbouring case with its own field
+   * ({@link nestedArrayMetaSource}) and its own code. Absent on every document read from XML.
+   *
+   * **The text is value-exact, not byte-exact**, exactly as {@link FhirComplex.nonObjectSource} is.
+   */
+  readonly nonObjectMetaSource?: string;
+  /**
    * Set when the JSON document wrote a bare `null` in this primitive's **value** channel at a
    * position FHIR JSON does not define one. FHIR JSON uses `null` for exactly one thing, padding a
    * repeating primitive's value array so that it aligns index-by-index with the `_`-sibling array
@@ -429,6 +450,25 @@ export function isUndefinedNull(node: FhirNode): boolean {
  */
 export function markUndefinedNull(node: FhirPrimitive): FhirPrimitive {
   return { ...node, undefinedNull: true };
+}
+
+/**
+ * Keep the JSON text of a non-object `_`-sibling on the primitive it sat beside. The JSON reader's
+ * own helper, **not part of the package's public surface**, for the same reason
+ * {@link markUndefinedNull} is not: it decides what the writer emits in that channel, so a consumer
+ * setting it would make the writer emit a `_`-sibling no document carried. Read it off
+ * {@link FhirPrimitive.nonObjectMetaSource}, which is public, exactly as
+ * {@link FhirComplex.nonObjectSource} is read off the node it hangs on.
+ *
+ * It copies the node rather than mutating it, and adds no element, property or item: the preserved
+ * text is a leaf of its own, and the node stays the primitive the reader already built.
+ *
+ * @param node - The primitive the reader produced beside that `_`-sibling.
+ * @param source - The `_`-sibling's JSON text.
+ * @internal
+ */
+export function markNonObjectMeta(node: FhirPrimitive, source: string): FhirPrimitive {
+  return { ...node, nonObjectMetaSource: source };
 }
 
 /**

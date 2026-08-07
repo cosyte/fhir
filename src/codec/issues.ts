@@ -44,6 +44,15 @@ export const ISSUE_CODES = {
   /**
    * A property the reader did not expect at this position and preserved verbatim (Postel's Law,
    * lenient read). Warning severity: nothing was lost, but a consumer may want to know.
+   *
+   * **Two JSON positions raise it for the same observation, and both preserve the text so that
+   * re-reading the writer's output raises it again.** FHIR JSON has an object at each of them
+   * (json.html §2.6.2), and what arrived was a string, a number, a boolean or a `null`: a **complex**
+   * element's own position (the text goes to {@link ../model/node.js} `nonObjectSource`), and a
+   * primitive's **`_`-sibling**, the channel §2.6.2.3 gives the `id` and/or `extension`
+   * (`nonObjectMetaSource`). Neither is modeled as FHIR, at either position, so no walker sees a new
+   * element. **A `null` padding a repeating primitive's `_`-array is the one exception §2.6.2.3
+   * defines and never draws this.**
    */
   UNKNOWN_PROPERTY: "UNKNOWN_PROPERTY",
   /**
@@ -188,7 +197,11 @@ export const ISSUE_CODES = {
    * reaches the complex branch when it is an item of an array the reader read as a *complex* array
    * (its first non-`null` item is not a scalar, so an object **or** an inner array puts it there), or
    * an item of a `_`-sibling's `extension` array. A `_`-sibling that is itself not an object
-   * (`"_status":null`) is a separately declared gap of the reader's and draws neither.
+   * (`"_status":null`) is a third position, and it draws {@link ISSUE_CODES.UNKNOWN_PROPERTY} too:
+   * FHIR JSON has an `Element` object in that channel, so a `null` there is the scalar-where-an-object
+   * -belongs observation rather than this one. **No case has ever moved between the two codes**; that
+   * channel drew nothing at all until it was closed, so a predicate written against either is
+   * unchanged by it.
    */
   UNDEFINED_JSON_NULL: "UNDEFINED_JSON_NULL",
 } as const;

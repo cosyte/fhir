@@ -2,8 +2,9 @@
  * The JSON read path: a {@link RawJson} tree → the immutable {@link FhirNode} model.
  *
  * This is where the four silent-data-loss hazards of a FHIR JSON codec are handled (json.html): the
- * first three losslessly, the fourth by refusing to let the loss go unreported. A fifth entry below
- * is **not** a data loss and is listed with them because it used to read exactly like one.
+ * first three losslessly, the fourth by refusing to let the loss go unreported. **Entries 5 and 6
+ * are not data losses at all** and are listed with them because each one used to read exactly like
+ * one. Count the entries rather than trusting this sentence: it said "a fifth" while six were listed.
  *
  * 1. **Decimal precision.** Number tokens arrive from {@link readRawJson} as exact source text and
  *    become {@link FhirDecimal} values, never a JavaScript `number`. A token that a naive
@@ -47,9 +48,16 @@
  *    discards *whole* because it is misplaced or unrecognised (a `_`-sibling on an object or on a
  *    non-primitive array, or a member of a `_`-sibling object that is neither an `id` **string**
  *    nor an
- *    `extension` array). Nothing there becomes a node, so there is nothing to mark, and an array
- *    inside such a sibling draws the `UNKNOWN_PROPERTY` warning for the discarded sibling and no
- *    refusal. Reaching it would mean reading raw JSON the codec deliberately does not model, which
+ *    `extension` array). **The list is the predicate, and 6 below does not shrink it**: a
+ *    `_`-sibling on an object or on a non-primitive array is still discarded whole, whatever it
+ *    holds. What 6 reaches is a `_`-sibling **on a primitive**, the only position whose sibling is
+ *    represented by a node at all (a complex element beside a misplaced sibling has a node, but it
+ *    stands for the element, not for the sibling). Nothing in the three listed
+ *    becomes a node, so there is nothing to mark, and an array inside such a sibling draws no
+ *    refusal. **Which warning it draws is per member, not one code for all three:** an array inside
+ *    the third, an unrecognised member of a `_`-sibling object, draws `UNKNOWN_PROPERTY`; the first
+ *    two draw `MISPLACED_PRIMITIVE_EXTENSION` for the misplaced sibling and nothing besides.
+ *    Reaching it would mean reading raw JSON the codec deliberately does not model, which
  *    is the preserving problem rather than the reporting one. Pinned by a test rather than left to
  *    this sentence.
  *
@@ -65,6 +73,20 @@
  *    dropping it, and re-reading the output reproduces the finding. See {@link applyNullRule} for
  *    why this is a diagnostic and not a refusal.
  *
+ * 6. **A `_`-sibling, on a primitive, that is not an object.** The same laundering, one channel over,
+ *    and closed the same way. FHIR JSON gives that channel an `Element` object (json.html §2.6.2.3,
+ *    "the `id` and/or `extension`"), so a string, a number, a boolean, or a `null` at a **singleton**
+ *    slot carries no metadata to read. **Nothing is lost here either**, and that is again why it was invisible: the
+ *    reader modeled no metadata, the writer emits a `_`-sibling only for metadata it has, and
+ *    `{"_status":null}` therefore came back as `{}`. The reader raises `UNKNOWN_PROPERTY` (the same
+ *    code, and the same observation, as a scalar at a complex position) and keeps the text
+ *    ({@link ../model/node.js} `nonObjectMetaSource`) so the writer hands it back. **The exemption is
+ *    by POSITION, not by whether that slot pads a value:** a `null` at any slot of a repeating
+ *    primitive's `_`-array is left alone, which is where §2.6.2.3 defines one. §2.6.2.3's Note also
+ *    scopes its `null` to a slot whose element *has* a value, and that half is NOT implemented, so a
+ *    `_`-array with no value array beside it keeps the silent drop it had before. Declared, not
+ *    closed. See {@link applyMetaSlotRule}.
+ *
  * Reading is lenient elsewhere (Postel's Law): an unexpected shape is preserved and flagged, not
  * rejected. Only genuinely unrecoverable structure (malformed JSON, broken `_`-alignment) throws.
  *
@@ -77,6 +99,7 @@ import {
   complex,
   list,
   markNestedArray,
+  markNonObjectMeta,
   markUndefinedNull,
   primitive,
   type FhirComplex,
@@ -268,6 +291,65 @@ function carriesMetadata(meta: PrimitiveMeta): boolean {
 }
 
 /**
+ * Apply the same rule one channel over, to the `_`-sibling slot itself.
+ *
+ * FHIR JSON gives the `_`-sibling an `Element` object and nothing else: json.html §2.6.2.3 puts "the
+ * `id` and/or `extension`" there, and §2.6.2 gives an element an object. A scalar, a boolean or a
+ * `null` in that channel carries no metadata this reader can model, so {@link readMeta} reads none
+ * out of it and the primitive is left holding nothing in that channel. **That was silent, and the
+ * silence was the defect**: the writer emits a `_`-sibling only when the model has metadata for one,
+ * so `{"_status":null}` and `{"_status":"x"}` both came back as `{}`: a conformant document with
+ * the member gone, and every layer affirming it, which is exactly the laundering
+ * {@link applyNullRule} closed in the value channel.
+ *
+ * The remedy is the same one, for the same reason: report it, and keep the text so the writer hands
+ * it back. Reporting alone does not survive a round trip, because a document with the member deleted
+ * re-reads clean.
+ *
+ * **The code is {@link ISSUE_CODES.UNKNOWN_PROPERTY}, and no case moves onto or off any code.** This
+ * is the same observation the reader already makes one branch over, where a scalar or `null` sits at
+ * a **complex** position: something FHIR JSON has an object for arrived as a scalar, nothing is
+ * modeled, the text is preserved, and the writer hands it back ({@link readComplex}). A consumer
+ * acts on it identically, so it needs no new code to key on, and the positions that draw
+ * `UNDEFINED_JSON_NULL` are untouched, because this channel drew *nothing* before.
+ *
+ * **Two exclusions, and both are load-bearing.**
+ *
+ * - **An array** is not this case. In a repeating primitive's `_`-array it is an array inside an
+ *   array, already marked and reported as `NESTED_ARRAY` with its own preserved text; at a singleton
+ *   slot {@link buildNode} has already thrown `PRIMITIVE_EXTENSION_MISALIGNED`.
+ * - **A `null` at a slot of a repeating primitive's `_`-array**, which is where §2.6.2.3 defines
+ *   one: it fills out *both* arrays so the two stay index-aligned, so a slot whose value needs no
+ *   metadata is spelled `null` there. **The test is `inArray`, so the exemption is by POSITION, not
+ *   by whether that slot pads a value.** §2.6.2.3's Note scopes its `null` to a slot whose element
+ *   *has* a value, and that half is deliberately NOT implemented: `{"_given":[null]}` with no
+ *   `given` beside it keeps the silent drop it had before, a declared residual rather than a claim.
+ *   A `null` at a **singleton** `_` slot is never padding, on exactly the reasoning
+ *   {@link applyNullRule} sets out for the value channel: §2.6.2.3 renders a value-absent singleton
+ *   as the `_` property alone.
+ *
+ * **This cannot reopen the drift that {@link carriesMetadata} guards.** That hazard is the read
+ * exempting a `null` as padding while `hasMeta` in {@link ./write.js} declines to emit the
+ * `_`-sibling, so the member is deleted anyway. The mark added here only ever makes `hasMeta` *more*
+ * true (it is a new disjunct there), and `carriesMetadata` is unchanged, so no slot can newly be
+ * exempted on the read and dropped on the write. Pinned by a test rather than by this sentence.
+ *
+ * @internal
+ */
+function applyMetaSlotRule(
+  node: FhirPrimitive,
+  rawMeta: RawJson | undefined,
+  inArray: boolean,
+  path: string,
+  issues: FhirIssue[],
+): FhirPrimitive {
+  if (rawMeta === undefined || rawMeta.t === "obj" || rawMeta.t === "arr") return node;
+  if (inArray && rawMeta.t === "null") return node;
+  issues.push(unknownProperty(path));
+  return markNonObjectMeta(node, rawJsonText(rawMeta));
+}
+
+/**
  * Read a primitive's `_`-sibling object into `{ id, extension }`.
  *
  * Positions here are named in **FHIRPath form**, `birthDate.id` and `birthDate.extension[0]`, not in
@@ -396,12 +478,12 @@ function buildPrimitiveList(
     if (nested) issues.push(nestedArray(itemPath));
     const value_ = rawValue === undefined ? undefined : scalarValue(rawValue, itemPath, issues);
     const metaValue = readMeta(rawMeta, itemPath, issues);
-    // `true`: this is a slot of a repeating primitive, the one place json.html §2.6.2.3 defines a
-    // `null`, so the padding exemption is available here and nowhere else.
-    const node = applyNullRule(
-      primitive(value_, metaValue),
-      rawValue,
-      metaValue,
+    // `true` in both: this is a slot of a repeating primitive, the one place json.html §2.6.2.3
+    // defines a `null`, so the padding exemption is available here and nowhere else. It applies to
+    // each channel separately, because §2.6.2.3 fills out both arrays.
+    const node = applyMetaSlotRule(
+      applyNullRule(primitive(value_, metaValue), rawValue, metaValue, true, itemPath, issues),
+      rawMeta,
       true,
       itemPath,
       issues,
@@ -472,9 +554,15 @@ function buildNode(
   }
   const scalar = value === undefined ? undefined : scalarValue(value, path, issues);
   const metaValue = readMeta(meta, path, issues);
-  // `false`: a singleton slot. §2.6.2.3 renders a value-absent singleton as the `_` property alone,
-  // so no `null` here is ever padding, however its `_`-sibling is filled in.
-  return applyNullRule(primitive(scalar, metaValue), value, metaValue, false, path, issues);
+  // `false` in both: a singleton slot. §2.6.2.3 renders a value-absent singleton as the `_` property
+  // alone, so no `null` here is ever padding, in either channel, however the other one is filled in.
+  return applyMetaSlotRule(
+    applyNullRule(primitive(scalar, metaValue), value, metaValue, false, path, issues),
+    meta,
+    false,
+    path,
+    issues,
+  );
 }
 
 /** Build a {@link FhirComplex} from a raw object, recursing through its properties. */

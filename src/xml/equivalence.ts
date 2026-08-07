@@ -84,6 +84,11 @@ function primitivesEquivalent(a: FhirPrimitive, b: FhirPrimitive): boolean {
     a.nestedArray === b.nestedArray &&
     a.nestedArraySource === b.nestedArraySource &&
     a.nestedArrayMetaSource === b.nestedArrayMetaSource &&
+    // A `_`-sibling the JSON reader could not read as an object leaves a primitive that looks
+    // exactly like one whose sender wrote no metadata at all, and the XML counterpart of the latter
+    // is an identical node. The preserved text is the whole of the distinction, as it is for
+    // `nonObjectSource` one branch over, and comparing it can only turn a `true` into a `false`.
+    a.nonObjectMetaSource === b.nonObjectMetaSource &&
     a.droppedText === b.droppedText &&
     // Two value-absent primitives that the writer emits differently are not the same node: one
     // writes its member back as `null`, the other omits it.
