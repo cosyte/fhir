@@ -199,7 +199,7 @@ function scalarValue(node: RawJson, path: string, issues: FhirIssue[]): Primitiv
  * "properties never have null values (except for a special case documented below)". The exception is
  * §2.6.2.3, and it is scoped to a **repeating** primitive: "In the case where the primitive element
  * may repeat, it is represented in two arrays. JSON null values are used to fill out both arrays so
- * that the id and/or extension are aligned to the matching value in the first array."
+ * that the id and/or extension are aligned with the matching value in the first array."
  *
  * **Two conditions, and both are load-bearing.**
  *
@@ -257,8 +257,9 @@ function applyNullRule(
  * which is true for `"extension":[]`; the writer requires `length > 0`, so the read exempted the
  * slot as padding and the writer then emitted neither the value nor the `_`-sibling, deleting the
  * member with no diagnostic anywhere. An empty array is not metadata in any case: json.html §2.6.2.1
- * says "JSON objects and arrays are never empty" and to omit an empty property. Pinned by a test
- * that walks both halves over the same matrix rather than by this sentence.
+ * says "JSON objects and arrays are never empty" and to omit an empty property. Pinned by tests over
+ * both halves rather than by this sentence: the empty-`extension` half and the `id` half each have
+ * their own.
  *
  * @internal
  */

@@ -153,7 +153,7 @@ export const ISSUE_CODES = {
    * null values (except for a special case documented below)". The exception is §2.6.2.3, and it is
    * about a **repeating** primitive: "In the case where the primitive element may repeat, it is
    * represented in two arrays. JSON null values are used to fill out both arrays so that the id
-   * and/or extension are aligned to the matching value in the first array."
+   * and/or extension are aligned with the matching value in the first array."
    *
    * So this is raised for a `null` that is **not** that. Two conditions, both required for the
    * exception to apply: the `null` sat **inside a repeating primitive's value array**, and the slot
@@ -184,10 +184,11 @@ export const ISSUE_CODES = {
    * **The neighbouring position has its own code and is not this one.** A `null` the reader takes to
    * the complex branch preserves its text ({@link ../model/node.js} `nonObjectSource`) and raises
    * {@link ISSUE_CODES.UNKNOWN_PROPERTY} instead; that behaviour is unchanged and no case moved onto
-   * this code. Two shapes reach that branch: an item of an array whose first non-`null` item is an
-   * object (`{"identifier":[{…},null]}`), and an item of a `_`-sibling's `extension` array. A
-   * `_`-sibling that is itself not an object (`"_status":null`) is a separately declared gap of the
-   * reader's and draws neither.
+   * this code. **The predicate, rather than a list of the documents that satisfy it:** a `null`
+   * reaches the complex branch when it is an item of an array the reader read as a *complex* array
+   * (its first non-`null` item is not a scalar, so an object **or** an inner array puts it there), or
+   * an item of a `_`-sibling's `extension` array. A `_`-sibling that is itself not an object
+   * (`"_status":null`) is a separately declared gap of the reader's and draws neither.
    */
   UNDEFINED_JSON_NULL: "UNDEFINED_JSON_NULL",
 } as const;

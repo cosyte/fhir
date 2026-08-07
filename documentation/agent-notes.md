@@ -2023,7 +2023,8 @@ affirmed it (`issues: []`, `valid: true`, `safeToSummarize: true`). **Nothing wa
 ordinary sense**, because a `null` carries no content, and that is exactly what made it invisible:
 the output could not be told apart from a document whose sender had legitimately omitted the element.
 
-**The measured extent, sixteen positions probed at the base commit, JSON read path only.** Laundered
+**The measured extent, probed at the base commit, JSON read path only. The list is what was probed,
+not a claim that it is every shape.** Laundered
 silently: a singleton primitive slot (`"status":null`), a primitive inside a complex
 (`identifier[].value`), a quantity magnitude (`{"value":null,"unit":"mg"}` lost the magnitude and
 **kept the unit**, the worst shape of it), a dose magnitude three levels down in
@@ -2114,7 +2115,7 @@ base, disclosed in the README rather than claimed closed, and a backlog line rat
 XML cannot express a `null`, so it does not reach this change at all. Its `moved` count is separately
 blind to refusal identity, which is declared in four places; no zero from it is quoted here as
 evidence. **The standing corpus caveat holds:** this lineage's fixtures are 7 hand-authored XML
-files plus mutations, not the FHIR R4 published-examples corpus, and the sixteen probes above are a
+files plus mutations, not the FHIR R4 published-examples corpus, and the probes above are a
 hand-authored JSON axis, which is a third axis again. None of them is corpus-wide.
 
 _Provenance: every measurement above was run against this codebase, the base figures against a clean

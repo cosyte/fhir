@@ -19,7 +19,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   bare unit rather than as missing; `"status":null` lost the status; `{"given":[null]}` lost the whole
   member. Nothing was lost in the ordinary sense (a `null` carries no content), which is why it was
   invisible: the output could not be told apart from a document whose sender had legitimately omitted
-  the element, and no layer said otherwise. Eleven positions were measured, including a patient
+  the element, and no layer said otherwise. The positions measured included a patient
   identifier, a dose magnitude three levels down, an `AllergyIntolerance` coding's `code`, and a
   `resourceType`.
   The rule now applied is the one FHIR JSON actually defines. `null` has a single job, padding a
