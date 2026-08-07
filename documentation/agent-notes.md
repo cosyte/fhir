@@ -1191,8 +1191,13 @@ works today: one fails, and the other was never the sender's document.
 **Repairing was not available.** XML has no escape for an element name, so the alternatives to
 refusing are mangling the name (authoring a name nobody wrote) or emitting the breakout (authoring
 elements nobody wrote). Both are the fabrication class. Refusing invents nothing, and
-`serializeResource` still encodes every one of these models correctly, so the capability is routed
-rather than lost. That is what makes this a refusal and not a withdrawal.
+`serializeResource` escapes a member name, so this refusal never reaches it and that route stays
+open. That is what makes this a refusal and not a withdrawal. **Narrowed 2026-08-07 from
+"`serializeResource` still encodes every one of these models correctly", the same wide claim `#65`
+and `#66` closed at the other sites**: that is a claim about the whole model and it is false, because
+a model refused here can carry one of the JSON writer's own declared exceptions and have it emitted. Pinned by a test rather than described
+(`{"resourceType":"Observation","name":[[{"family":"X"}]],"zz value="1"/><status":1}` is refused here
+and comes back out of `serializeResource` with the array inside an array intact).
 
 **▶ THE CHECK RUNS AT THE EMISSION SITE, NOT IN A PRE-PASS WALKER.** A pre-pass would have to
 re-derive the writer's own branching (which names become attributes, which become the tag, which are
