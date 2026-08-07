@@ -116,8 +116,9 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   `valid`/`safeToSummarize` and the `JSON->XML->JSON` residual are deliberately open and pinned.
   **THE `_`-SIBLING CHANNEL IS THE SAME LAUNDERING, CLOSED 2026-08-07 ON `UNKNOWN_PROPERTY`: NOT a
   new code, NOT this one** (it drew NONE before, so nothing moved between codes). Padding is **PER
-  CHANNEL**. **TWO write branches decide it, `hasMeta` AND THE `resourceType` HOIST**, which skipped
-  the property outright, so a `hasMeta`-only fix launders past itself.
+  CHANNEL**. **THREE write branches decide it: `emitMeta` (else `{}`), `hasMeta`, AND THE
+  `resourceType` HOIST**, which skipped the property outright, so a `hasMeta`-only fix launders past
+  itself.
   [`#the-null-laundering-closed-2026-08-07`](documentation/agent-notes.md#the-null-laundering-closed-2026-08-07) ·
   [`#the-_-sibling-channel-closed-2026-08-07`](documentation/agent-notes.md#the-_-sibling-channel-closed-2026-08-07)
 - **A PHI sweep over leaf values is not a PHI sweep.** `phi-leak.test.ts` swept values only, which is

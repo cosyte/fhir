@@ -50,11 +50,14 @@
  *    nor an
  *    `extension` array). **The list is the predicate, and 6 below does not shrink it**: a
  *    `_`-sibling on an object or on a non-primitive array is still discarded whole, whatever it
- *    holds. What 6 reaches is a `_`-sibling **on a primitive**, which is the only position that
- *    leaves a node to hang the text on. Nothing in the three listed
- *    becomes a node, so there is nothing to mark, and an array
- *    inside such a sibling draws the `UNKNOWN_PROPERTY` warning for the discarded sibling and no
- *    refusal. Reaching it would mean reading raw JSON the codec deliberately does not model, which
+ *    holds. What 6 reaches is a `_`-sibling **on a primitive**, the only position whose sibling is
+ *    represented by a node at all (a complex element beside a misplaced sibling has a node, but it
+ *    stands for the element, not for the sibling). Nothing in the three listed
+ *    becomes a node, so there is nothing to mark, and an array inside such a sibling draws no
+ *    refusal. **Which warning it draws is per member, not one code for all three:** an array inside
+ *    the third, an unrecognised member of a `_`-sibling object, draws `UNKNOWN_PROPERTY`; the first
+ *    two draw `MISPLACED_PRIMITIVE_EXTENSION` for the misplaced sibling and nothing besides.
+ *    Reaching it would mean reading raw JSON the codec deliberately does not model, which
  *    is the preserving problem rather than the reporting one. Pinned by a test rather than left to
  *    this sentence.
  *

@@ -207,58 +207,58 @@ bare string with no channel to say so.
 ## `FHIR-ARRAY-WRAPPED-SCALAR` (2026-07-28)
 
 **Pass two (NOT REFUTED) filed two more `PRE-EXISTING` ones,
-  the first worth queuing ahead of the next slice** -- and **`FHIR-ARRAY-WRAPPED-SCALAR`
-  (2026-07-28) closed BOTH of them.** They were: an **array-wrapped `0..1` element** reaching that
-  item's exact harm shape with no duplicate key at all (`{"resourceType":"Observation","status":
+the first worth queuing ahead of the next slice** -- and **`FHIR-ARRAY-WRAPPED-SCALAR`
+(2026-07-28) closed BOTH of them.** They were: an **array-wrapped `0..1` element** reaching that
+item's exact harm shape with no duplicate key at all (`{"resourceType":"Observation","status":
 ["entered-in-error"]}` -> `retracted: false`, `negations: []`, `safeToSummarize: true`,
-  `valid: true`, zero issues, because `primitiveString` returns `undefined` for a list and there is no
-  cardinality check without a per-resource model, and array-wrapping every element is realistic
-  generic XML->JSON converter output); and a **duplicated `resourceType` shadowing the type gate**,
-  since `typeOf` is a first-wins single-value read (`{"resourceType":"Observation","resourceType":
+`valid: true`, zero issues, because `primitiveString` returns `undefined` for a list and there is no
+cardinality check without a per-resource model, and array-wrapping every element is realistic
+generic XML->JSON converter output); and a **duplicated `resourceType` shadowing the type gate**,
+since `typeOf` is a first-wins single-value read (`{"resourceType":"Observation","resourceType":
 "MedicationStatement","status":"not-taken"}` -> `negations: []`). **Both are one defect** once you
-  see it: the type gate is what every type-scoped negation hangs off, so a single-value read of it is
-  the narrowest hole in the whole safety claim, and an array wrapper and a duplicate name are just two
-  ways to reach it. The fix has three parts. **(1)** The negation reads read _through_ an array
-  wrapper as well as across every written value (`primitiveStrings`/`primitiveBooleans`, internal,
-  recursive); `SafetyReadout.status`/`.resourceType` do too. **(2)** `readSafety` considers **every**
-  type the document names (`typesOf`, internal); `typeOf` is deliberately **unchanged** and still the
-  strict single-value read, because a _structural_ verdict should reject an unreadable type, not guess
-  one. **(3)** New `VALIDATION_CODES.ARRAY_WRAPPED_SCALAR` (**error**, `structure`) +
-  `SafetyReadout.arrayWrappedScalars` + `arrayWrappedScalars()` (public, mirroring
-  `shadowedProperties`), so the library **stops affirming**: `safeToSummarize` is `false` and
-  `assertSafeToSummarize` throws. `validateResource` also no longer returns early on an unreadable
-  `resourceType` without running the safety layer.
-  **The cardinality table is scoped ON PURPOSE and must not be widened casually**
-  (`SAFETY_SCALAR_ELEMENTS` = `status`/`clinicalStatus`/`verificationStatus`/`doNotPerform`/`code`, on
-  a **resource root** of a `SAFETY_RESOURCE_TYPES` type, plus `resourceType` on any root). It is the
-  cardinality of the closed set the safety layer already reads, **not** a per-resource model. A
-  name-only, depth-free rule emits a **false error on a conformant document**: `Questionnaire.code`
-  and `ElementDefinition.code` are both `0..*` in R4. That bound is pinned by tests in
-  `test/array-wrapped-scalar.test.ts` (25 assertions), not asserted in prose.
-  **The `conformance-refuter` REFUTED this slice THREE times, and the scope it ended at is narrower
-  than the scope it started at. Read this before touching `codingsOf`.** Pass one: the fix covered the
-  wrapper around the _element_ but `codingsOf` still read `Coding.system` / `Coding.code` with the
-  single-value `primitiveString`, and **those are `0..1` too** (datatypes.html), so one pair of
-  brackets around an inner `Coding.code` still produced the item's exact verdict on the three worst
-  reads in the library: a **refuted** allergy read as active, a recorded **"no known allergy"** read as
-  an allergy _to_ `716186003`, and a retracted Condition read as live. Pass one also caught two factual
-  errors, both corrected: the citation (the array rule is json.html **§2.6.2.2**, not §2.1) and
-  `MedicationRequest.status` (**`1..1`**, not `0..1`).
-  **Pass two and pass three then refuted two successive attempts to close that inner read**, and the
-  reason is worth keeping: `Coding.system` and `Coding.code` feed `codingsOf`'s `system` x `code`
-  **CROSS-PRODUCT**, so any rule yielding more than one value on either side **manufactures a
-  `(system, code)` pair the sender never wrote** -- and `NO_KNOWN_ALLERGY` is the one negation that is
-  a **positive clinical assertion**, so inventing it claims a patient has no known allergy over a
-  record that names an allergen. Missing a retraction withholds information; asserting an absence of
-  allergy does not. **The two directions are not equally safe, which is why the obvious fix is not.**
-  Attempt one read every value and manufactured the pair outright. Attempt two read only a
-  "single-valued" wrapper and **still** did, because it counted _strings_ rather than _array
-  positions_, and a FHIR JSON `null` is a real position marker, not padding (`["716186003", null]` is
-  two entries), so `[null, "...sct"]` x `["716186003", null]` still produced `(sct, 716186003)`.
-  **So `codingsOf` was reverted to its `main` behaviour and the inner wrapper was left a DECLARED GAP,
-  not a claim.** That was the ADR 0016 termination call: the same sub-problem had failed to converge
-  twice, there is no fourth pass, and a pure revert ships no ungraded behaviour. Everything that slice
-  shipped is element-level and was graded green.
+see it: the type gate is what every type-scoped negation hangs off, so a single-value read of it is
+the narrowest hole in the whole safety claim, and an array wrapper and a duplicate name are just two
+ways to reach it. The fix has three parts. **(1)** The negation reads read _through_ an array
+wrapper as well as across every written value (`primitiveStrings`/`primitiveBooleans`, internal,
+recursive); `SafetyReadout.status`/`.resourceType` do too. **(2)** `readSafety` considers **every**
+type the document names (`typesOf`, internal); `typeOf` is deliberately **unchanged** and still the
+strict single-value read, because a _structural_ verdict should reject an unreadable type, not guess
+one. **(3)** New `VALIDATION_CODES.ARRAY_WRAPPED_SCALAR` (**error**, `structure`) +
+`SafetyReadout.arrayWrappedScalars` + `arrayWrappedScalars()` (public, mirroring
+`shadowedProperties`), so the library **stops affirming**: `safeToSummarize` is `false` and
+`assertSafeToSummarize` throws. `validateResource` also no longer returns early on an unreadable
+`resourceType` without running the safety layer.
+**The cardinality table is scoped ON PURPOSE and must not be widened casually**
+(`SAFETY_SCALAR_ELEMENTS` = `status`/`clinicalStatus`/`verificationStatus`/`doNotPerform`/`code`, on
+a **resource root** of a `SAFETY_RESOURCE_TYPES` type, plus `resourceType` on any root). It is the
+cardinality of the closed set the safety layer already reads, **not** a per-resource model. A
+name-only, depth-free rule emits a **false error on a conformant document**: `Questionnaire.code`
+and `ElementDefinition.code` are both `0..*` in R4. That bound is pinned by tests in
+`test/array-wrapped-scalar.test.ts` (25 assertions), not asserted in prose.
+**The `conformance-refuter` REFUTED this slice THREE times, and the scope it ended at is narrower
+than the scope it started at. Read this before touching `codingsOf`.** Pass one: the fix covered the
+wrapper around the _element_ but `codingsOf` still read `Coding.system` / `Coding.code` with the
+single-value `primitiveString`, and **those are `0..1` too** (datatypes.html), so one pair of
+brackets around an inner `Coding.code` still produced the item's exact verdict on the three worst
+reads in the library: a **refuted** allergy read as active, a recorded **"no known allergy"** read as
+an allergy _to_ `716186003`, and a retracted Condition read as live. Pass one also caught two factual
+errors, both corrected: the citation (the array rule is json.html **§2.6.2.2**, not §2.1) and
+`MedicationRequest.status` (**`1..1`**, not `0..1`).
+**Pass two and pass three then refuted two successive attempts to close that inner read**, and the
+reason is worth keeping: `Coding.system` and `Coding.code` feed `codingsOf`'s `system` x `code`
+**CROSS-PRODUCT**, so any rule yielding more than one value on either side **manufactures a
+`(system, code)` pair the sender never wrote** -- and `NO_KNOWN_ALLERGY` is the one negation that is
+a **positive clinical assertion**, so inventing it claims a patient has no known allergy over a
+record that names an allergen. Missing a retraction withholds information; asserting an absence of
+allergy does not. **The two directions are not equally safe, which is why the obvious fix is not.**
+Attempt one read every value and manufactured the pair outright. Attempt two read only a
+"single-valued" wrapper and **still** did, because it counted _strings_ rather than _array
+positions_, and a FHIR JSON `null` is a real position marker, not padding (`["716186003", null]` is
+two entries), so `[null, "...sct"]` x `["716186003", null]` still produced `(sct, 716186003)`.
+**So `codingsOf` was reverted to its `main` behaviour and the inner wrapper was left a DECLARED GAP,
+not a claim.** That was the ADR 0016 termination call: the same sub-problem had failed to converge
+twice, there is no fourth pass, and a pure revert ships no ungraded behaviour. Everything that slice
+shipped is element-level and was graded green.
 
 ## `FHIR-CODING-SCALAR-WRAPPER` (2026-07-29)
 
@@ -872,8 +872,8 @@ read `valid: true` with one warning** and came back with none. So a **refusal** 
 instrument: the existing `DROPPED_ELEMENT_TEXT` refusal is explicitly scoped to models the library
 already reports `valid: false` / `safeToSummarize: false`, and refusing here would remove the ability
 to write back documents that read clean. The remedy taken is the writer's **own already-documented
-principle**, one branch over in the same function: *"Conservatism here means refusing to author a
-value, not refusing to hand one back."* The text is kept on the node (`FhirComplex.nonObjectSource`)
+principle**, one branch over in the same function: _"Conservatism here means refusing to author a
+value, not refusing to hand one back."_ The text is kept on the node (`FhirComplex.nonObjectSource`)
 and written back, so the re-read reproduces the finding. The text is **value-exact, not byte-exact**,
 the same caveat `NestedArrayContent` already carries: a number's exact source survives, a string's
 escaping does not (`"Jamés"` returns as `"Jamés"`, `"a\/b"` as `"a/b"`). Both denote the same
@@ -927,7 +927,7 @@ group. `reportMixedSpelling` compared **literal tags**, both are `div`, and the 
 with zero issues and `valid: true` while `Narrative.div` (`0..1`) had become a two-item list.
 Comparing the **expanded name** closes it, and closes residual (iv) with it, because a prefix rebound
 between siblings is the same defect with a different route in. `MIXED_XML_SPELLING` is the right
-code rather than a new one: its published reason is that *the count* changed and a single-value read
+code rather than a new one: its published reason is that _the count_ changed and a single-value read
 of a repeat yields nothing, which is exactly the harm in both. The grouping itself is untouched, per
 the standing "report it or drop the grouping" trap: dropping means two properties of one model name
 and the XML reader has no `duplicates` mechanism, so it would be a silent first-wins loss.
@@ -1079,8 +1079,8 @@ namespace declaration, and an **XML declaration**, which is not a processing ins
 `skipMisc` swallows, so `<?xml version="1.0"?><div …/>` is accepted and the output is rejected by
 expat while this library re-reads it clean.
 
-*Provenance: every load-bearing fact in this section is measured against this codebase at `658a1f0`
-and `45b42b5`, not cited. The XML 1.0 clauses above are the only external citations.*
+_Provenance: every load-bearing fact in this section is measured against this codebase at `658a1f0`
+and `45b42b5`, not cited. The XML 1.0 clauses above are the only external citations._
 
 #### Left open deliberately
 
@@ -1100,8 +1100,8 @@ and `45b42b5`, not cited. The XML 1.0 clauses above are the only external citati
 
 #### Open read-path losses, enumerated
 
-*Relocated verbatim from `CLAUDE.md` on 2026-08-07 under the doc budget, nothing dropped. The rule it
-qualifies stays there.*
+_Relocated verbatim from `CLAUDE.md` on 2026-08-07 under the doc budget, nothing dropped. The rule it
+qualifies stays there._
 
 A **status** or a dose number written as XML element text is dropped (reported, and the writer
 refuses, but the safety spine reads `negations: []`), which is the one that qualifies "never drops a
@@ -1347,6 +1347,7 @@ universal.** A sentence about "the writer" is a claim over every branch it has.
   `test/xml-tag-name.test.ts` ("declared gap, NOT closed here"). **The write path's module docblock
   had asserted the opposite** ("Narrative `<div>` XHTML is deferred and is not produced by the
   writer"), which was false: `writeItem` has emitted it since the narrative landed. Corrected.
+
 - **🔴 A `_`-sibling whose value is not an object is discarded with ZERO diagnostics.** Newly
   measured and **not** this item: `{"resourceType":"Observation","_status":"entered-in-error"}`
   reads as `{"resourceType":"Observation"}` with an empty issue list and `valid: true`. So does
@@ -1665,10 +1666,14 @@ result and will read an unqualified record as false.
 
 ```html
 <a href="https://cosyte.com" rel="nofollow">
-  <themed-picture data-catalyst-inline="true"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://camo.githubusercontent.com/...">
-    <img alt="Cosyte: ..." src="https://camo.githubusercontent.com/...">
-  </picture></themed-picture>
+  <themed-picture data-catalyst-inline="true"
+    ><picture>
+      <source
+        media="(prefers-color-scheme: dark)"
+        srcset="https://camo.githubusercontent.com/..."
+      />
+      <img alt="Cosyte: ..." src="https://camo.githubusercontent.com/..." /> </picture
+  ></themed-picture>
 </a>
 ```
 
@@ -1683,9 +1688,13 @@ anchor pointing at the image file. An `<a>` nested inside another `<a>` is not r
 so the parser closes the author's anchor early:
 
 ```html
-<a href="https://cosyte.com" rel="nofollow"><themed-picture><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="...">
-  </picture></themed-picture></a><a target="_blank" rel="noopener noreferrer nofollow" href="...image file..."><img ... style="max-width: 100%;"></a>
+<a href="https://cosyte.com" rel="nofollow"
+  ><themed-picture
+    ><picture>
+      <source media="(prefers-color-scheme: dark)" srcset="..." /> </picture></themed-picture></a
+><a target="_blank" rel="noopener noreferrer nofollow" href="...image file..."
+  ><img ... style="max-width: 100%;"
+/></a>
 ```
 
 The author's anchor ends up wrapping a `<picture>` with **no `<img>` in it**, which renders nothing,
@@ -1694,10 +1703,10 @@ and the image is a **sibling**, linked to the image file rather than to `cosyte.
 **Named sources, so the next reader can re-check rather than take it on trust.** Both are archived
 npm package pages, fetched with the Wayback `id_` suffix that returns the original bytes:
 
-| Shape | Package | Snapshot | What npm served |
-|---|---|---|---|
-| Author anchor around `<picture>` | `tsup` (its `chromatic.com` sponsor block) | `20241217195415` | The collided structure above: empty anchor, image a sibling linked to the image file |
-| **Bare** `<picture>`, no author anchor | `@biomejs/biome` (its top banner) | `20250508123852` | npm's anchor inserted **inside** the `<picture>`, around the `<img>` |
+| Shape                                  | Package                                    | Snapshot         | What npm served                                                                      |
+| -------------------------------------- | ------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------ |
+| Author anchor around `<picture>`       | `tsup` (its `chromatic.com` sponsor block) | `20241217195415` | The collided structure above: empty anchor, image a sibling linked to the image file |
+| **Bare** `<picture>`, no author anchor | `@biomejs/biome` (its top banner)          | `20250508123852` | npm's anchor inserted **inside** the `<picture>`, around the `<img>`                 |
 
 The second row is the other half of the same mechanism: with no author anchor to collide with, npm's
 anchor still takes the `<img>` out of the direct-child position, so **the `<source>` is inert on npm
@@ -1838,7 +1847,7 @@ fixtures plus mutations, not the FHIR R4 published-examples corpus.**
 
 `FHIR-UNBOUND-PREFIX-ROUNDTRIP` shipped "serializeResource encodes this model correctly" at three
 sites. The `div` slice narrowed one, the `SERIALIZE_ERROR_CODES` docblock, and left two, because
-leaving a *pair* contradictory was worse than leaving all three wide. The two are closed here:
+leaving a _pair_ contradictory was worse than leaving all three wide. The two are closed here:
 `refuseUnserializableNames`' runtime message, which reaches consumer logs, and `breaksTag`'s
 docblock.
 
@@ -2042,7 +2051,7 @@ round-tripping, so untouched: a `null` **beside** an object in an array, and a `
 though the whole class were handled. Both are now named.
 
 **The answer chosen: a diagnostic and a faithful hand-back, NOT a refusal.** A `null` is a
-non-conformant encoding of an *absent* value, not content the reader could not read, so nothing was
+non-conformant encoding of an _absent_ value, not content the reader could not read, so nothing was
 unreadable at the position and the fatal tier and the content-was-unreadable refusals
 (`NESTED_ARRAY`, `DROPPED_ELEMENT_TEXT`) are the wrong instrument; refusing would also have withdrawn
 round trips that work today, which is the reason several sibling residuals are deferred. The
@@ -2180,9 +2189,18 @@ consumer and were swept: `issues.ts` (which ships into `dist/index.d.ts` and `.d
 `UNKNOWN_PROPERTY` docblock, `read.ts`'s and `write.ts`'s module comments, `README.md` in three
 places, and the characterization test in `undefined-json-null.test.ts` that asserted the old gap.
 
-### Two write branches, and the one a read-side remedy never reaches
+### Three write branches, and the one a read-side remedy never reaches
 
-**`hasMeta` was not enough.** `emitComplex` hoists a string `resourceType` to the front and then
+**A gate refuted this section's own heading when it said two.** Pass 2 of the `_`-sibling slice
+found the count corrected in `CHANGELOG.md` and left standing in `write.ts`'s module comment, in
+`CLAUDE.md`'s trap line, and here. It reverted `emitMeta`'s one line while leaving `hasMeta` and the
+hoist exactly as those three sentences described them, which is the fix an agent following them would
+write, and got `{"_birthDate":null}` back as `{"_birthDate":{}}`: an `Element` object no sender wrote,
+emitted eight lines below that comment's own "it never authors a value of its own", re-reading clean
+because an empty `_`-sibling is the declared-open residual, so the laundering completes on the next
+trip. **The third branch is `emitMeta`**, which hands the preserved text back in place of the object.
+
+**`hasMeta` was not enough either.** `emitComplex` hoists a string `resourceType` to the front and then
 `continue`d past the property, so `{"_resourceType":"x"}` laundered **past** a fix that only added a
 disjunct to `hasMeta`. That branch is the local instance of the rule the previous slice paid a gate
 pass for: a remedy that closes the reported symptom is not the same as one that closes the class, and

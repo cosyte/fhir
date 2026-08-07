@@ -69,9 +69,14 @@
  * `Element` object (json.html §2.6.2.3), so a scalar carries no metadata to model; the writer emits
  * a `_`-sibling only for metadata it has, and `{"_status":null}` was therefore emitted as `{}`. The
  * text the reader kept ({@link ../model/node.js} `nonObjectMetaSource`) is what it hands back
- * instead. **Two places decide it and both had to change**: {@link hasMeta}, and the `resourceType`
+ * instead. **Three places decide it and all three had to change**: {@link emitMeta}, which without a
+ * branch for that text emits `{}`, an `Element` object no sender wrote, at the position the text
+ * belongs (§2.6.2.1: "JSON objects and arrays are never empty") and one that re-reads clean, so the
+ * laundering completes on the next trip; {@link hasMeta}, which decides whether a `_`-sibling is
+ * emitted at all; and the `resourceType`
  * hoist in {@link emitComplex}, which skipped the property outright once its value was at the front
- * and so deleted the sibling whatever `hasMeta` said.
+ * and so deleted the sibling whatever `hasMeta` said. **Count them before writing "two": a remedy
+ * short of any one of the three still launders, and one copy of that count ships in `.d.ts`.**
  *
  * @packageDocumentation
  */
