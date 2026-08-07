@@ -91,6 +91,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
       "FhirPrimitive.nestedArray",
       "FhirPrimitive.nestedArrayMetaSource",
       "FhirPrimitive.nestedArraySource",
+      "FhirPrimitive.nonObjectMetaSource",
       "FhirPrimitive.undefinedNull",
       "FhirPrimitive.value",
     ]);

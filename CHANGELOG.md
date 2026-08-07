@@ -8,6 +8,51 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A `_`-sibling whose value is not an object was read with no diagnostic and then deleted on emit,
+  so a non-conformant document came back clean and conformant with the member missing
+  (`FHIR-UNDERSCORE-SIBLING-LAUNDERED`).** The same laundering the entry below closed in a
+  primitive's value channel, one channel over, and closed the same way. FHIR JSON gives the
+  `_`-sibling an `Element` object and nothing else (json.html §2.6.2.3 puts "the `id` and/or
+  `extension`" there), so `readMeta` reads no metadata out of a string, a number, a boolean or a
+  `null`, and `serializeResource` emits a `_`-sibling only for metadata the model holds. Measured at
+  the base commit, every one of these parsed with `issues: []`, `valid: true` and
+  `safeToSummarize: true` and re-emitted with the sibling gone: `{"_status":null}` and
+  `{"_status":"x"}` both came back as `{}`; `{"status":"final","_status":null}` came back as
+  `{"status":"final"}`; a dose magnitude's own metadata channel three levels down
+  (`doseQuantity:{"value":5,"_value":"junk","unit":"mg"}`) and an `AllergyIntolerance`
+  `clinicalStatus.coding[].code`'s `_code` were deleted the same way; and in the array channel
+  `{"given":["a"],"_given":["x"]}` lost the whole `_given`, while
+  `{"given":["a","b"],"_given":[{"id":"q"},"junk"]}` came back as `[{"id":"q"},null]`, with the
+  writer emitting a padding `null` the sender never wrote. Nothing was lost in the ordinary sense,
+  which is why it was invisible: the output could not be told apart from a document whose sender
+  wrote no metadata there at all.
+  The reader now raises `UNKNOWN_PROPERTY` at that position and keeps the sibling's JSON text on
+  `FhirPrimitive.nonObjectMetaSource`, and `serializeResource` hands it back, so every shape above
+  round-trips byte-identically and re-reading the output reproduces the finding. **No new issue code
+  was added and no case moved between codes.** This is the same observation the reader already makes
+  where a scalar or `null` arrives at a **complex** position, which FHIR JSON also gives an object:
+  nothing is modeled, the text is preserved, the writer hands it back, and a consumer acts on it
+  identically. Those positions drew nothing at all before, so no predicate written against
+  `UNKNOWN_PROPERTY` or `UNDEFINED_JSON_NULL` changes meaning.
+  **The §2.6.2.3 padding exemption is respected in this channel too**, and on the same two-part
+  reasoning: §2.6.2.3 fills out _both_ arrays, so a `null` at a slot of a repeating primitive's
+  `_`-array is the padding the spec defines and draws nothing, while a `null` at a **singleton** `_`
+  slot is never padding and does. A conformant document is untouched, and no round trip that worked
+  before was withdrawn. An **array** in that channel keeps its existing `NESTED_ARRAY` code and text.
+  The write side needed **two** changes, not one: `hasMeta`, and the `resourceType` hoist, which
+  skipped the property outright once its value was moved to the front and so deleted the sibling
+  whatever `hasMeta` said. That second branch also stops silently dropping a `_resourceType` that
+  carried real `id` metadata. `nodesEquivalent` compares the preserved text, so a primitive that
+  carried a non-object sibling is no longer equivalent to one that never had a sibling.
+  **Declared open, not closed here:** an **empty** `_`-sibling object or array (`{"_status":{}}`,
+  `{"_status":{"extension":[]}}`, `{"_given":[]}`) is a different clause (§2.6.2.1's "never empty")
+  and is still deleted silently; a `_`-sibling object's own unreadable **member**
+  (`{"_status":{"foo":1}}`) is reported but that report still does not survive emit, because closing
+  it means putting preserved text in front of metadata the model already holds; a `_`-sibling beside
+  a **non-primitive** keeps `MISPLACED_PRIMITIVE_EXTENSION`, still lost across a round trip; and
+  `JSON -> XML -> JSON` still launders the shape, because XML has no `_`-sibling channel to carry the
+  text. `validateResource` and `readSafety` are unchanged: nothing was unreadable at that position in
+  the sense `NESTED_ARRAY` and `DROPPED_ELEMENT_TEXT` mean it.
 - **A JSON `null` at a primitive position was read with no diagnostic and then deleted on emit, so a
   non-conformant document came back clean and conformant with the member missing
   (`FHIR-NULL-PRIMITIVE-LAUNDERED`).** `parseResource` mapped `null` to a value-absent primitive and

@@ -96,8 +96,9 @@ issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", ex
   is an XML attribute FHIR gives no element to address.
 - **Lenient read, conservative write** (Postel's Law), `resourceType` resolvable in any position, and
   a `parseReference` classifier (relative / absolute / logical / fragment). The writer authors no
-  value of its own, and it emits spec-clean FHIR for every model FHIR can express; the four shapes it
-  cannot express (an array inside an array, a scalar or `null` where FHIR JSON has an object, a `null`
+  value of its own, and it emits spec-clean FHIR for every model FHIR can express; the shapes it
+  cannot express (an array inside an array, a scalar or `null` where FHIR JSON has an object (at a
+  complex element's own position, or in a primitive's `_`-sibling), a `null`
   in a **primitive's** value channel that padded nothing, and a
   non-string `resourceType`) are handed back as written
   rather than repaired, because repairing them means inventing or dropping content. See the
@@ -245,13 +246,24 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   (`FhirComplex.nonObjectSource`), where only the writer reads it. Such output is deliberately **not**
   spec-clean, and `serializeResourceXml` does not carry it (that writer emits the empty element, the
   same as it does for an array inside an array).
-  **One gap, stated rather than implied:** the rule is bounded by what the reader modeled. A
+  **The same rule reaches a primitive's `_`-sibling, which is the other place FHIR JSON has an
+  object.** §2.6.2.3 gives that channel the `id` and/or `extension`, so `{"_status":null}` and
+  `{"_status":"x"}` carry no metadata to model; the writer emits a `_`-sibling only for metadata it
+  has, so both used to come back as `{}` with **no diagnostic at all**: the member gone, and
+  `valid` and `safeToSummarize` both affirming. They now draw the same `UNKNOWN_PROPERTY` and the
+  text is handed back (`FhirPrimitive.nonObjectMetaSource`), so the finding survives the round trip.
+  **A `null` padding a repeating primitive's `_`-array is the one shape §2.6.2.3 defines and draws
+  nothing**; a `null` at a singleton `_` slot is never padding and does.
+  **Gaps, stated rather than implied:** the rule is bounded by what the reader modeled. A
   `_`-sibling the reader discards whole because it is misplaced or unrecognised (one sitting on an
   object or a non-primitive array, or a member of a `_`-sibling object that is neither an `id`
   **string** nor an
   `extension` array) leaves no node behind, so an array inside one draws the unexpected-property
   warning for the discarded sibling and no refusal. Reaching it would mean reading raw JSON the codec
-  does not model, which is the same problem as making the value readable.
+  does not model, which is the same problem as making the value readable. An **empty** `_`-sibling
+  object or array is a different clause of the spec (§2.6.2.1's "never empty") and is still deleted
+  silently; a `_`-sibling object's own unreadable **member** is reported but that report still does
+  not survive emit. Both are open and declared, not closed here.
   **What it deliberately does not do is put the array in the tree.** The preserved content is text,
   not an element: it is not reachable through a node's properties, items or extensions, so a list
   holds exactly the items it held before, of the same kinds, with the same contents, and nothing that
@@ -302,8 +314,9 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `validateResource` and `safeToSummarize` are unchanged; refusing would also withdraw round trips
   that work today, and nothing that round-trips today stops (a value-absent primitive written the
   conformant way carries no `null`, so it is never marked). It is scoped to the **value** channel: a
-  `_`-sibling that is itself not an object (`"_status":null`) is discarded whole by the reader with
-  no node left to mark, which is a separate open gap and is not covered here. And
+  `_`-sibling that is itself not an object (`"_status":null`) is the neighbouring position and draws
+  `UNKNOWN_PROPERTY` instead, on the reasoning above. **No case has ever moved between the two
+  codes**, because that channel drew nothing at all until it was closed. And
   `serializeResourceXml` does not carry it. XML has no `null`, so no document read from XML is ever
   marked, that writer emits the empty element as before, and a `JSON -> XML -> JSON` trip therefore
   still launders the shape: a declared residual, not a claim.

@@ -2,9 +2,8 @@
 
 **▶ The narrative lives in [`documentation/agent-notes.md`](documentation/agent-notes.md)**, verbatim
 and re-headed (2026-08-04, `CLAUDE-MD-AUDIT`, amending the meta-repo's `decisions/0023-doc-budgets.md`).
-This file keeps the cursor, the rules, and every trap, each pointing at the section there that
-explains what it cost. **Never delete a trap to save bytes. Move narrative there and leave the
-one-liner here.**
+Every trap here points at the section there that explains what it cost. **Never delete a trap to save
+bytes. Move narrative there and leave the one-liner here.**
 
 ## Project
 
@@ -39,13 +38,13 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
     hand before ever linking one.
 - **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.** The full envelope,
-  what is built and what is explicitly **not**, was relocated 2026-08-07 to
+  what is built and what is explicitly **not**, is at
   [`#the-shipped-envelope-p1-through-p11`](documentation/agent-notes.md#the-shipped-envelope-p1-through-p11).
   **▶ IT IS NOT A NO-DATA-LOSS CLAIM OVER THE WHOLE PACKAGE, and its wording is base's own, not a
   fresh one**: read-path losses remain open and declared, and the one that qualifies "never drops a
   modifier, status or negation" is a **status** or a dose number written as XML element text (dropped
   and reported, the writer refuses, but the safety spine reads `negations: []`).
-  The rest are enumerated in the notes, relocated 2026-08-07:
+  The rest:
   [`#open-read-path-losses-enumerated`](documentation/agent-notes.md#open-read-path-losses-enumerated) ·
   [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
   Per-phase detail: [`#shipped-phase-history-p11-back-to-p1`](documentation/agent-notes.md#shipped-phase-history-p11-back-to-p1).
@@ -53,9 +52,6 @@ semantics, and validate it against US Core, without reading the FHIR spec.
 - Roadmap: the meta-repo's `operations/roadmaps/fhir.md` (P0…P11).
 
 ## Traps
-
-Every line here cost a defect or a refuted gate pass. The pointer is to
-[`documentation/agent-notes.md`](documentation/agent-notes.md), which carries the measurement.
 
 ### The model and the safety spine
 
@@ -118,14 +114,19 @@ Every line here cost a defect or a refuted gate pass. The pointer is to
   `UNKNOWN_PROPERTY` from `nonObjectSource`; do not move it onto the new code. The set walked is what
   the READER read, not what FHIR types** (`{"subject":null}` is reported).
   `valid`/`safeToSummarize` and the `JSON->XML->JSON` residual are deliberately open and pinned.
-  [`#the-null-laundering-closed-2026-08-07`](documentation/agent-notes.md#the-null-laundering-closed-2026-08-07)
+  **THE `_`-SIBLING CHANNEL IS THE SAME LAUNDERING, CLOSED 2026-08-07 ON `UNKNOWN_PROPERTY`: NOT a
+  new code, NOT this one** (it drew NONE before, so nothing moved between codes). Padding is **PER
+  CHANNEL**. **TWO write branches decide it, `hasMeta` AND THE `resourceType` HOIST**, which skipped
+  the property outright, so a `hasMeta`-only fix launders past itself.
+  [`#the-null-laundering-closed-2026-08-07`](documentation/agent-notes.md#the-null-laundering-closed-2026-08-07) ·
+  [`#the-_-sibling-channel-closed-2026-08-07`](documentation/agent-notes.md#the-_-sibling-channel-closed-2026-08-07)
 - **A PHI sweep over leaf values is not a PHI sweep.** `phi-leak.test.ts` swept values only, which is
   why a 1,000,000-byte property name, which produced a 1,000,011-byte `expression`, survived it.
   Sentinels must cover names.
 
 ### The XML reader
 
-Unless noted, all of these are
+Unless noted:
 [`#fhir-reader-residuals-2026-08-02`](documentation/agent-notes.md#fhir-reader-residuals-2026-08-02).
 
 - **AN EXPANDED NAME IS A NAMESPACE _AND_ A LOCAL NAME (Namespaces in XML 1.0 §6.1). Never make a
@@ -186,7 +187,8 @@ Unless noted, all of these are
   namespace. Closed for the READ only: `serializeResourceXml` drops the bindings.
   [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
 - **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
-  slice, and do not restate a gap as a claim. **Pinned by a test:** the `_`-sibling discarded whole,
+  slice, and do not restate a gap as a claim. **Pinned by a test:** the **empty** `_`-sibling and a
+  `_`-object's unreadable member,
   the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, the §2.6.1
   value-absent primitive, the foreign-root laundering (`test/xml.test.ts`, "declared residuals,
   pinned so they cannot move in silence"), and the cross-format singleton-wrapper laundering
@@ -203,7 +205,7 @@ Unless noted, all of these are
     reader is unchanged, so no XML document reaches it and the read differential cannot grade it**
     (its own control is stale, firing on a clean tree). **DO NOT WIDEN IT** to the namespace or a
     prefix bound in the string: an unbound-prefix root is accepted on purpose, the same residual
-    through a value. [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation)
+    through a value. [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
   - **STILL OPEN; deferral RE-MEASURED 2026-08-07 and it HOLDS.** Only ONE of the two remedies
     withdraws a capability; **"both do" is a mis-transcription.** **Beside it,
     `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as
@@ -220,8 +222,8 @@ Unless noted, all of these are
 
 ### Terminology, profiles, invariants
 
-The layer-by-layer detail behind all of these, including the full binding-strength severity table
-and the 11-way `Observation.value[x]` choice, is in
+Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
+`Observation.value[x]` choice:
 [`#shipped-phase-history-p11-back-to-p1`](documentation/agent-notes.md#shipped-phase-history-p11-back-to-p1).
 
 - **No terminology content is vendored.** `KNOWN_SYSTEMS` holds the verified `system` URIs as
@@ -268,7 +270,7 @@ and the 11-way `Observation.value[x]` choice, is in
 
 ## Tech stack and the four architecture ADRs
 
-**Both sections relocated 2026-08-07** to make room for the trap above:
+**Relocated 2026-08-07:**
 [`#relocated-out-of-claudemd-on-2026-08-07-to-make-genuine-room-for-a-trap`](documentation/agent-notes.md#relocated-out-of-claudemd-on-2026-08-07-to-make-genuine-room-for-a-trap).
 The cursors, so you need not open it: the toolchain is **inherited** from the published `@cosyte/*`
 config packages, never copied, and is **ESLint 10 / Vitest 4 / ES2023 / Node >= 22 / pnpm@10, TS
@@ -291,7 +293,7 @@ strict, dual ESM+CJS via tsup, per-dir coverage >= 90, MIT, RUNTIME DEPS ZERO.**
   (`FhirComplex.nonObjectSource`); **never model it as a primitive**, which would show it to every
   walker at a complex position. **Two markup sites, each checked AT the site (XML only): a NAME that
   breaks its tag, and a `div` VALUE not spelling one element named `div`.** Not a claim over every
-  branch. [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation)
+  branch. [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
 - Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
   not a claim that a location carries no document content** (a name is echoed when it matches the
   bounded published form). See the derived-name trap above, and do not widen it into one. **The

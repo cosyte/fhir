@@ -2105,7 +2105,9 @@ previously **deleted**; each now round-trips byte-identically.
 
 **Deliberately not done, characterized by tests rather than left implicit.** `validateResource` and
 `safeToSummarize` are unchanged. The `_`-sibling that is itself not an object (`"_status":null`)
-stays a separately declared open gap. `serializeResourceXml` is untouched: XML has no `null`, so no
+stayed a separately declared open gap here and was **closed the next unit** (see
+[the `_`-sibling channel, closed](#the-_-sibling-channel-closed-2026-08-07)).
+`serializeResourceXml` is untouched: XML has no `null`, so no
 XML-read document is ever marked, and the value-absent primitive still emits `<status/>`, which is
 its own declared deferral. **A `JSON -> XML -> JSON` trip therefore still launders the shape**: the
 marker has nothing to write in XML, so re-reading that XML yields `issues: []` again. Identical at
@@ -2122,3 +2124,104 @@ _Provenance: every measurement above was run against this codebase, the base fig
 `78f8da9` and the head figures against the committed branch; the spec clauses are quoted from
 `hl7.org/fhir/R4/json.html` §2.6.2.1 and §2.6.2.3, which the conformance gate fetched rather than
 recalled after the first draft cited a section that does not exist._
+
+## The `_`-sibling channel, closed (2026-08-07)
+
+`FHIR-UNDERSCORE-SIBLING-LAUNDERED`. The same laundering class as the entry above, one channel over.
+Raised by that slice's own pass 2, which asked for it as an item **now** rather than after the next
+gate found it. Base was `42d17c6`.
+
+**What it was.** FHIR JSON gives a primitive's `_`-sibling an `Element` object and nothing else
+(json.html §2.6.2.3 puts "the `id` and/or `extension`" there; §2.6.2 gives an element an object). So
+`readMeta` reads metadata out of an object and had **none to read** from a string, a number, a
+boolean or a `null`, and returned `{}` silently; `write.ts`'s `hasMeta` emits a `_`-sibling only for
+metadata the model holds. The member was therefore deleted, and the document came back conformant
+with it gone. The shape of the harm is the one that makes this class hard to see: **nothing was lost
+in the ordinary sense**, so the output could not be told apart from a document whose sender wrote no
+metadata there at all, and every layer affirmed it.
+
+### The measured extent, at `42d17c6`
+
+Hand-authored JSON probes, base vs head, each parsed, re-emitted and **re-read**. All of the
+following read `issues: []`, `valid: true`, `safeToSummarize: true` at base and came back with the
+sibling deleted; all now draw `UNKNOWN_PROPERTY` at the element's position and round-trip
+**byte-identically**, with the re-read reproducing the finding:
+
+- **Singleton `_` slot:** `{"_status":null}`, `{"_status":"x"}`, `{"_status":1}`, `{"_status":true}`,
+  and each of those beside a value (`{"status":"final","_status":null}`).
+- **Clinically load-bearing depth:** a dose magnitude's own metadata channel three levels down in
+  `MedicationRequest.dosageInstruction[].doseAndRate[].doseQuantity` (`"_value":"junk"`), and
+  `AllergyIntolerance.clinicalStatus.coding[].code`'s `_code`.
+- **The hoisted `resourceType`:** `{"_resourceType":"x"}`.
+- **`_`-array slots:** `{"_given":["x"]}` (whole `_given` lost), `{"given":["a"],"_given":["x"]}`,
+  `{"given":["a"],"_given":[7]}`, and the sharpest one,
+  `{"given":["a","b"],"_given":[{"id":"q"},"junk"]}`, which came back `[{"id":"q"},null]`: **the
+  writer authoring a padding `null` the sender never wrote**.
+- **Both channels at one slot:** `{"given":[null],"_given":["x"]}` reported the value-channel `null`
+  at base and lost the sibling; it now reports both, and both survive the trip.
+
+**Conformant controls, unchanged and silent at base and head:** §2.6.2.3 padding
+(`{"given":["a","b"],"_given":[null,{"id":"q"}]}`), a value-absent singleton (`{"_status":{"id":"q1"}}`),
+a primitive `extension`, and a precision-critical `valueQuantity`.
+
+### Why `UNKNOWN_PROPERTY` and not a new code, or the value channel's code
+
+**A consumer must need to act differently for a new code to earn its place**, and here it does not.
+This is the observation the reader already makes one branch over, where a scalar or `null` arrives at
+a **complex** position, which FHIR JSON also gives an object: nothing is modeled, the text is
+preserved, the writer hands it back. `UNDEFINED_JSON_NULL` would have been wrong on its face for
+`{"_status":"x"}`, which is not a `null` at all, and the `CLAUDE.md` trap already forbids moving the
+complex branch onto it.
+
+**The widening is additive and provably so:** these positions drew **nothing** before, so no case
+moved from one code to another and no predicate written against either code changes meaning. That is
+the `x12#83` refutation shape, avoided the way `#84` avoided it. The package's own docs are such a
+consumer and were swept: `issues.ts` (which ships into `dist/index.d.ts` and `.d.cts`), the
+`UNKNOWN_PROPERTY` docblock, `read.ts`'s and `write.ts`'s module comments, `README.md` in three
+places, and the characterization test in `undefined-json-null.test.ts` that asserted the old gap.
+
+### Two write branches, and the one a read-side remedy never reaches
+
+**`hasMeta` was not enough.** `emitComplex` hoists a string `resourceType` to the front and then
+`continue`d past the property, so `{"_resourceType":"x"}` laundered **past** a fix that only added a
+disjunct to `hasMeta`. That branch is the local instance of the rule the previous slice paid a gate
+pass for: a remedy that closes the reported symptom is not the same as one that closes the class, and
+the only way to know which one you have is to re-run your own reproduction against your own fix, for
+every shape you name. Both rounds are in this repo's history as the `measure` probes; the head run is
+what the extent table above reports. The same three lines also stop a pre-existing silent drop of a
+`_resourceType` carrying real `id` metadata.
+
+**The `hasMeta`/`carriesMetadata` pairing cannot drift from this change.** The laundering direction is
+the read exempting a `null` as §2.6.2.3 padding while `hasMeta` declines to emit the `_`-sibling. The
+mark added here is a **new disjunct** in `hasMeta` and `carriesMetadata` is untouched, so `hasMeta`
+only ever becomes more true and that direction cannot be reopened. Pinned by a test that walks both
+halves of the exemption, the `id` one and the **empty-`extension`** one that produced the false fix.
+
+### Declared open, not closed
+
+- An **empty** `_`-sibling object or array (`{"_status":{}}`, `{"_status":{"extension":[]}}`,
+  `{"_given":[]}`) is a different spec clause (§2.6.2.1's "JSON objects and arrays are never empty"),
+  the sibling **is** an object, and it is still deleted with zero diagnostics.
+- A `_`-sibling object's own unreadable **member** (`{"_status":{"foo":1}}`), the minor named on the
+  item. **Measured, and it is NOT the same mechanism:** the reader **does** report there, and what is
+  lost is that the report does not survive emit. Closing it means putting preserved text in front of
+  a channel the model already holds (`{"_status":{"id":"q","foo":1}}` carries a real `id`), which is
+  a change to how the writer treats modeled metadata rather than the hand-back this rule performs
+  where the model holds nothing. Deliberately left, and pinned by a test so it cannot move in silence.
+- `MISPLACED_PRIMITIVE_EXTENSION` (a `_`-sibling beside a non-primitive) is still lost across a round
+  trip. Unchanged and out of scope.
+- **`JSON -> XML -> JSON` still launders**, because XML has no `_`-sibling channel: a primitive's
+  metadata is co-located as an `id` attribute and child `<extension>` elements, so the preserved text
+  has nowhere to go and the XML writer drops it. Carried forward from the entry above, its own question.
+
+### What could not grade this
+
+**The XML read differential cannot grade this class at all**: it is an XML harness, and the whole
+defect lives in a JSON-only channel. No zero of its is quoted here. **The standing corpus caveat
+holds:** the numbers above are a hand-authored JSON axis (probes plus the conformant controls), and
+this lineage's XML fixtures are 7 hand-authored files plus mutations. **Neither is the FHIR R4
+published-examples corpus**, and nothing here is corpus-wide.
+
+_Provenance: every figure above was produced by running one probe script against a clean `42d17c6`
+and then against the head tree, not recalled; the spec clauses are quoted from
+`hl7.org/fhir/R4/json.html` §2.6.2, §2.6.2.1 and §2.6.2.3._
