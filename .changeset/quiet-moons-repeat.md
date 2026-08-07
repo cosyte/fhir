@@ -28,19 +28,27 @@ type.
 
 Refusing rather than repairing, for the same reason as a name: escaping would author a text node
 where the sender wrote markup, and splicing authors elements. The capability is routed rather than
-lost, since `serializeResource` carries the string as a string and encodes every one of these models
-correctly.
+lost, since `serializeResource` carries the string as a string and this refusal never reaches it.
+That is a statement about the `div` string and not about the whole model, which can still carry one
+of that writer's own declared exceptions.
 
 Nothing that worked was withdrawn, measured rather than asserted: every `div` string the XML reader
 itself produces passes, over the fixture corpus and over seven spellings pinned by tests, and across
 360,020 generated and mutated `div` strings the refusal has 0 false positives against the 65,464
 whose base round trip returned them unchanged. The read differential over 1,195 documents moves 0
 readings, expected by construction rather than a surprise: no XML document this library can read
-produces a `div` string the check refuses.
+produces a `div` string the check refuses. Every count here is bounded by the same caveat this
+lineage carries: the corpus is 7 hand-authored XML fixtures plus mutations, and the 360,020 sweep is
+over generated `div` strings. Neither is the FHIR R4 published-examples corpus.
 
-Passing the check is not a claim that the round trip is lossless from there. A root whose prefix
-nothing binds is accepted and re-reads as a different property, which is the separately declared
-unbound-prefix gap reached through a value; a comment beside the root is accepted and does not
-survive the re-read. Two shapes base handled worse than recorded are closed by this too: `{"div":""}`
-emitted a `<text>` with the property simply gone, with an empty issue list and `valid: true` at both
-ends, and `{"div":"v"}` lost the property loudly. Both are refusals now.
+Passing the check is not a claim that the round trip is lossless, or that the output is well-formed,
+from there, and the counterexamples are pinned by tests rather than described: a root whose prefix
+nothing binds re-reads as a different property; a comment beside the root does not survive the
+re-read; a `div` holding 254 nested elements is accepted and the emitted document raises
+`MAX_DEPTH_EXCEEDED` on re-read, because the check spends the depth budget from a different starting
+depth; `<div>x</div>` comes back carrying a namespace the sender never wrote; and an XML declaration
+is accepted and makes the output one a conformant third-party parser rejects. All are pre-existing.
+
+Two shapes base handled worse than recorded are closed by this too: `{"div":""}` emitted a `<text>`
+with the property simply gone, with an empty issue list and `valid: true` at both ends, and
+`{"div":"v"}` lost the property loudly. Both are refusals now.

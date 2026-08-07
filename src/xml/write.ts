@@ -76,8 +76,8 @@ function tag(name: string, path: string, sink: RefusalSink): string {
  * **This is the check at the one site that emits markup rather than a name, and it is stated as the
  * question the site actually has to answer**: `writeItem` splices this string into the document
  * unexamined, so everything it spells becomes markup. `readRawXml` is the same parser
- * {@link parseResourceXml} re-reads the document with, run over the same bytes, so what it reports
- * as one element is what the re-read sees as one element. Two conditions, and both are load-bearing:
+ * {@link parseResourceXml} re-reads the document with, run over the same bytes, so the element
+ * STRUCTURE it reports is the structure the re-read sees. Two conditions, and both are load-bearing:
  *
  * - **it parses as a document with exactly one root element.** A string that closes its own element
  *   and opens siblings (`…</div></text><code>…</code><text>`) is trailing content after the root and
@@ -90,12 +90,22 @@ function tag(name: string, path: string, sink: RefusalSink): string {
  *   sender never wrote. The **local** name is compared because a prefixed narrative (`<h:div
  *   xmlns:h="…xhtml">`) is a spelling this library reads and round-trips today.
  *
- * **What it does NOT check**, because neither is this defect and refusing on either would withdraw
- * markup this library reads back unchanged: which namespace the root is in (an unprefixed `<div>`
- * under no declaration, and a vendor one, both reach `Narrative.div` on the read), and whether a
- * prefix on the root is bound inside the string (an unbound prefix is the separately declared
- * residual on this function's own output). Comments and processing instructions around the root
- * parse as prolog/misc and are accepted: neither is an element, and the re-read drops them.
+ * **What it does NOT check**, because neither is this defect: which namespace the root is in (an
+ * unprefixed `<div>` under no declaration, and a vendor one, both reach `Narrative.div` on the
+ * read), and whether a prefix on the root is bound inside the string (an unbound prefix is the
+ * separately declared residual on this function's own output). Comments and processing instructions
+ * around the root parse as prolog/misc and are accepted: neither is an element.
+ *
+ * **THE STRUCTURE IS WHAT THIS SETTLES. IT SETTLES NOTHING ELSE, AND THE THREE COUNTEREXAMPLES ARE
+ * ASSERTED RATHER THAN LEFT AS A CAVEAT.** (1) `readRawXml` bounds nesting depth, and this check
+ * spends that budget from 0 while the re-read spends it from the `div`'s depth in the document: a
+ * `div` holding 254 nested elements is accepted here and the emitted document raises
+ * `MAX_DEPTH_EXCEEDED` on re-read. Loud, and byte-identical on base. (2) An accepted string need not come back
+ * byte-identical: `<div>x</div>` re-reads as `<div xmlns="http://hl7.org/fhir">x</div>`, so the
+ * library inserts a declaration the sender did not write, with no diagnostic. (3) An XML declaration
+ * is not a processing instruction (XML 1.0 §2.6, §2.8) and is legal only at the start of an entity,
+ * but `skipMisc` swallows one, so `<?xml version="1.0"?><div …/>` is accepted here and the emitted
+ * document is rejected by a conformant third-party parser. All three are `PRE-EXISTING`.
  *
  * @param value - The raw string a `div` property carries.
  * @returns `true` when the string may be written verbatim.
@@ -295,10 +305,14 @@ function writeElement(
  *
  * **What passing that check does and does not settle, by example rather than by rule.** A string it
  * accepts contributes one element, and that element is the `div`; it is not a claim that the round
- * trip is lossless from there. `<v:div>x</v:div>` carrying no binding for `v` is accepted, and the
- * emitted document re-reads it as a property named `v:div` rather than as the narrative, which is
- * the same unbound-prefix residual the paragraph above declares for names. A comment beside the
- * root (`<!--c--><div …/>`) is accepted and does not survive the re-read.
+ * trip is lossless or that the output is well-formed from there. `<v:div>x</v:div>` carrying no
+ * binding for `v` is accepted, and the emitted document re-reads it as a property named `v:div`
+ * rather than as the narrative, which is the same unbound-prefix residual the paragraph above
+ * declares for names. A comment beside the root (`<!--c--><div …/>`) is accepted and does not
+ * survive the re-read. `emitsOneDivElement` carries three more counterexamples, each `PRE-EXISTING`
+ * and each asserted rather than argued: a depth bound this check spends from a different starting
+ * depth than the re-read, an inserted namespace declaration, and an XML declaration a conformant
+ * third-party parser rejects.
  *
  * @param node - The resource model to serialize (must carry a `resourceType` to name the root element).
  * @returns Canonical FHIR XML text.
@@ -311,14 +325,15 @@ function writeElement(
  * @throws {FhirSerializeError} With `UNSERIALIZABLE_ELEMENT_NAME` if any tag position holds a name
  *   that cannot be written as a tag without changing which elements the document holds: it would
  *   either fail to re-read at all, or re-read as DIFFERENT elements. The second is why this refuses
- *   rather than reports. {@link serializeResource} encodes every such model correctly, and is the
- *   route that stays open.
+ *   rather than reports. {@link serializeResource} escapes a member name, so this refusal never
+ *   reaches it and that route stays open (which is not the same as saying the JSON output is
+ *   spec-clean: this function's own exception list still applies to the rest of the model).
  * @throws {FhirSerializeError} With `UNSERIALIZABLE_DIV_MARKUP` if a `div` property carries a string
  *   that would not be spliced in as the one `div` element the property names. It would carry other
  *   elements into the document, or leave markup that does not re-read. Refused rather than repaired
  *   for the same reason as a name: escaping it would author a text node where the sender wrote
  *   markup, and splicing it authors elements the sender never wrote. {@link serializeResource}
- *   carries the string as a string and is the route that stays open.
+ *   carries the string as a string, so this refusal never reaches it and that route stays open.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";

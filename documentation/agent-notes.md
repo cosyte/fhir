@@ -996,13 +996,21 @@ re-derive the writer's branching and be free to disagree with it. `refuseUnseria
 raises `UNSERIALIZABLE_DIV_MARKUP` at the root once the walk is done, after the name refusal, so a
 model tripping both keeps the code base already reported.
 
-- **The same parser, over the same bytes, is the whole soundness argument.** `readRawXml` is what
-  `parseResourceXml` re-reads the emitted document with, and the fragment is balanced, so what it
-  counts as one element is what the re-read sees as one element.
+- **The same parser, over the same bytes, is what makes the STRUCTURE checkable.** `readRawXml` is
+  what `parseResourceXml` re-reads the emitted document with, and the fragment is balanced, so the
+  element structure it reports is the structure the re-read sees. **It settles the structure and
+  nothing else, and the 2026-08-07 gate refuted the wider sentence that stood here.** `readRawXml`
+  is depth-STATEFUL: this check spends the 256 budget from 0, the re-read spends it from the `div`'s
+  depth in the document, so a `div` holding 254 nested elements is accepted and the emitted document
+  raises `MAX_DEPTH_EXCEEDED` on re-read. Loud, byte-identical on base, and pinned by a test.
 - **The local name, not the full name**, because `<h:div xmlns:h="…xhtml">` is a spelling this
   library reads and round-trips today and refusing it would withdraw a working round trip.
 - **Not the namespace, and not whether a prefix is bound inside the string.** An unprefixed `<div>`
-  under no declaration and a vendor-namespace one both reach `Narrative.div` on the read. A root
+  under no declaration and a vendor-namespace one both reach `Narrative.div` on the read. **Only the
+  vendor one comes back unchanged**: `<div>x</div>` re-reads as `<div xmlns="http://hl7.org/fhir">x</div>`
+  with zero diagnostics, so the library inserts a declaration the sender never wrote and moves the
+  narrative out of the namespace R4 names for it. Pre-existing, pinned by a test, and the reason the
+  justification here is "both reach `Narrative.div`" and not "both round-trip unchanged". A root
   whose prefix nothing binds IS accepted, and the emitted document re-reads it as a property named
   `v:div`: that is the separately declared unbound-prefix residual reached through a value, not this
   defect, and folding it in would have made this slice the fix for a class it had not measured.
@@ -1040,6 +1048,34 @@ one was demonstrated red against a mutation of the behaviour it pins and against
 nothing else). The false-positive control is committed as a `fast-check` property that builds base's
 output by hand, so a reviewer re-derives it rather than trusting a number here.
 
+#### The gate refuted pass 1, and every finding was prose
+
+**Two `INTRODUCED` majors, both claim width, neither a defect in the check.** The gate could not
+break `emitsOneDivElement`: 55,677 accepted strings built from breakout atoms, none escaping the
+invariant that the emitted document holds one `<text>` holding the `div`; 200,000 generated XML
+documents read and re-serialized with **zero** refusals; and refusal-implies-base-did-not-round-trip
+confirmed case by case against a base tree materialised with `git archive 658a1f0`.
+
+**▶ 🛑 THAT MAKES SIX GATE PASSES RUNNING REFUTING A UNIVERSAL IN THIS AREA'S PROSE, AND THIS ONE
+SHIPPED IN `dist/index.d.ts` AGAIN.** "`serializeResource` encodes every one of these correctly" is
+false: `{"text":{"div":""},"name":[[{"family":"X"}]]}` is refused here and `serializeResource` emits
+the array inside an array, which is one of that writer's own declared exceptions. The claim is now
+"this refusal never reaches it and that route stays open", which is what was actually meant, and the
+same sentence was narrowed on the NAME arm beside it, where it was `PRE-EXISTING` and identical. The
+runtime error message carried it too, so it reached consumer logs. **The `#64` changelog entry and
+its pending changeset still carry the wide wording and were deliberately not edited**: they are a
+record of what that slice said.
+
+The second was the soundness sentence, corrected above. Three further `PRE-EXISTING` counterexamples
+the gate produced are now asserted in tests rather than described: the depth boundary, the inserted
+namespace declaration, and an **XML declaration**, which is not a processing instruction (XML 1.0
+§2.6 reserves the `xml` target, §2.8 allows the declaration only at the start of an entity) but which
+`skipMisc` swallows, so `<?xml version="1.0"?><div …/>` is accepted and the output is rejected by
+expat while this library re-reads it clean.
+
+*Provenance: every load-bearing fact in this section is measured against this codebase at `658a1f0`
+and `45b42b5`, not cited. The XML 1.0 clauses above are the only external citations.*
+
 #### Left open deliberately
 
 - The `_`-sibling whose value is not an object, the non-string `resourceType` tag substitution, and
@@ -1047,6 +1083,9 @@ output by hand, so a reviewer re-derives it rather than trusting a number here.
   read-path or attribute-path rather than this branch.
 - Comments and processing instructions beside the root are accepted and do not survive the re-read.
   Neither is an element, so neither can forge one; pinned by a test rather than argued.
+- **The accepted-`div` round trip is not idempotent and the output is not always well-formed**, per
+  the counterexamples above. All `PRE-EXISTING`, none introduced by the check, none folded in: each
+  is a different defect from the forgery this item names.
 
 #### Open read-path losses, enumerated
 

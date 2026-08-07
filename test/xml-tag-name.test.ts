@@ -8,8 +8,9 @@
  * markup that fails to parse: it is the markup that parses into DIFFERENT elements.
  *
  * The comparand throughout is **the same model through `serializeResource`**, the JSON writer, which
- * escapes a member name and encodes every one of these correctly. That is what makes the refusal a
- * refusal rather than a loss: the model is still writable, in the format that can express it.
+ * escapes a member name, so no name reaches a refusal there. That is what makes the refusal a
+ * refusal rather than a loss: the name is still writable, in the format that can express it. It is
+ * not a claim that the JSON output is spec-clean, which that writer's own exception list governs.
  *
  * **What is deliberately NOT refused is asserted just as hard as what is.** A prefixed name with no
  * declaration to bind it, and a name that is not a conformant XML name, are both written verbatim
@@ -602,11 +603,13 @@ describe("a model name at an XML tag position", () => {
     });
 
     /**
-     * ACCEPTED IS NOT LOSSLESS, AND THIS IS THE COUNTEREXAMPLE THAT KEEPS THAT FROM BEING CLAIMED.
+     * ACCEPTED IS NOT LOSSLESS, AND THESE ARE THE COUNTEREXAMPLES THAT KEEP THAT FROM BEING CLAIMED.
      *
      * The check answers one question (does this string spell the one `div` element the property
-     * names), and a string can pass it and still not come back the same. An unbound prefix on the
-     * root is the declared residual this file already pins for names, reached through a value.
+     * names), and a string can pass it and still not come back the same, and still leave output a
+     * conformant parser rejects. They are asserted rather than described, because a sentence in
+     * this area keeps being refuted and an example cannot drift from the code. Each reproduces on
+     * base; none is caused by the check.
      */
     it("accepts a root whose prefix nothing binds, which re-reads as a different property", () => {
       const node = model(
@@ -620,6 +623,53 @@ describe("a model name at an XML tag position", () => {
       const text = parseResourceXml(xml).resource.properties.find((p) => p.name === "text")?.value;
       const names = text?.kind === "complex" ? text.properties.map((p) => p.name) : [];
       expect(names).toEqual(["status", "v:div"]);
+    });
+
+    it("accepts a div whose nesting the re-read cannot afford, and that failure is loud", () => {
+      // The check spends the reader's depth budget from 0; the re-read spends it from the `div`'s
+      // depth in the document, so the two do not agree at the boundary. 253 survives, 254 does not.
+      const nest = (n: number): string =>
+        `<div xmlns="http://www.w3.org/1999/xhtml">${"<p>".repeat(n)}x${"</p>".repeat(n)}</div>`;
+      const build = (n: number): FhirComplex =>
+        model(
+          JSON.stringify({ resourceType: "Patient", text: { status: "generated", div: nest(n) } }),
+        );
+      expect(refusal(build(253))).toBeUndefined();
+      expect(() => parseResourceXml(serializeResourceXml(build(253)))).not.toThrow();
+      expect(refusal(build(254))).toBeUndefined();
+      expect(() => parseResourceXml(serializeResourceXml(build(254)))).toThrow();
+    });
+
+    it("accepts a div that comes back carrying a namespace the sender never wrote", () => {
+      // Not byte-identity: `<div>` under no declaration takes its parent's, which is the FHIR
+      // namespace rather than the XHTML one the datatype names, and nothing says so.
+      const node = model(
+        JSON.stringify({
+          resourceType: "Patient",
+          text: { status: "generated", div: "<div>x</div>" },
+        }),
+      );
+      const back = parseResourceXml(serializeResourceXml(node));
+      const text = back.resource.properties.find((p) => p.name === "text")?.value;
+      const read =
+        text?.kind === "complex" ? text.properties.find((p) => p.name === "div") : undefined;
+      expect(read?.value.kind === "primitive" ? read.value.value : undefined).toBe(
+        '<div xmlns="http://hl7.org/fhir">x</div>',
+      );
+      expect(back.issues).toEqual([]);
+    });
+
+    it("accepts an XML declaration, which is not a processing instruction", () => {
+      // XML 1.0 §2.6 reserves the `xml` target and §2.8 allows the declaration only at the start of
+      // an entity, but `skipMisc` swallows one, so this is written into the middle of a document and
+      // a conformant third-party parser rejects the result. This library's own re-read does not.
+      const div = '<?xml version="1.0"?><div xmlns="http://www.w3.org/1999/xhtml">x</div>';
+      const node = model(
+        JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } }),
+      );
+      const xml = serializeResourceXml(node);
+      expect(xml).toContain('<?xml version="1.0"?>');
+      expect(parseResourceXml(xml).issues).toEqual([]);
     });
 
     it("accepts a comment beside the root, which the re-read drops", () => {

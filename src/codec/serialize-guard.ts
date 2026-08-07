@@ -4,9 +4,9 @@
  *
  * {@link assertSerializable} runs in both writers, because a dropped-character-data marker has no
  * conformant encoding in either format. {@link breaksTag} governs the XML writer only, because the
- * harm is a name reaching a tag position, and JSON escapes a member name so `serializeResource`
- * encodes the same model correctly. {@link refuseUnserializableDivMarkup} is raised by the XML
- * writer for the same reason, at its one raw-markup site. No refusal here recognises anything new,
+ * harm is a name reaching a tag position, and JSON escapes a member name so no name reaches this
+ * refusal there. {@link refuseUnserializableDivMarkup} is raised by the XML writer for the same
+ * reason, at its one raw-markup site: JSON carries the string as a string. No refusal here recognises anything new,
  * invents a value, or changes a document that reads clean.
  *
  * **This module is a list of the refusals it implements, NOT a closed account of what a writer can
@@ -49,17 +49,22 @@ export const SERIALIZE_ERROR_CODES = {
   /**
    * The model carries a name that cannot occupy the `Name` slot of an XML start tag, so writing it
    * would emit markup that does not re-read as the element the model holds. **XML only**: JSON
-   * escapes a member name, so `serializeResource` encodes every one of these correctly and is the
-   * route that stays open for such a model.
+   * escapes a member name, so this refusal never reaches it and that route stays open. **Narrowed
+   * 2026-08-07 from "encodes every one of these correctly", which was false and shipped**: a model
+   * refused here can carry one of `serializeResource`'s own declared exceptions and emit that.
    *
    * See {@link breaksTag} for the exact predicate and for what is deliberately NOT refused.
    */
   UNSERIALIZABLE_ELEMENT_NAME: "UNSERIALIZABLE_ELEMENT_NAME",
   /**
    * A `div` property carries a string the XML writer would emit as raw markup, and that string does
-   * not contribute exactly one element named `div` to the document. **XML only**: JSON carries the
-   * same string as a string, so `serializeResource` encodes every one of these correctly and is the
-   * route that stays open.
+   * not contribute exactly one element named `div` to the document. **XML only**: `serializeResource`
+   * carries the string as a string, so this refusal never reaches it and that route stays open.
+   *
+   * **That is a statement about the `div` string, not about the whole model.** `serializeResource`
+   * has its own declared non-spec-clean exceptions, so a model refused here can still route through
+   * it and emit one of those: `{"text":{"div":""},"name":[[{"family":"X"}]]}` is refused here and
+   * `serializeResource` emits the array inside an array unchanged.
    *
    * See `emitsOneDivElement` in `../xml/write.js` for the exact predicate and what it does not cover.
    */
@@ -232,7 +237,7 @@ export function refuseUnserializableNames(locations: readonly string[]): never {
  */
 export function refuseUnserializableDivMarkup(locations: readonly string[]): never {
   throw new FhirSerializeError(
-    `cannot serialize to XML: ${String(locations.length)} div location(s) carry markup that would not be written as the one div element the model names; serializeResource encodes this model correctly`,
+    `cannot serialize to XML: ${String(locations.length)} div location(s) carry markup that would not be written as the one div element the model names; serializeResource carries the string as a string`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP,
     locations,
   );
