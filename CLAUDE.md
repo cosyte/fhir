@@ -200,7 +200,7 @@ Unless noted, all of these are
     `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as
     **different elements** and forged a `status`). **The line is "does OUR round trip survive it",
     NOT the XML `Name` production. DO NOT WIDEN IT:** `p:x`, `a&b`, `1abc` round-trip today.
-    Unreachable from XML.
+    **"Unreachable from XML" is FALSE: a stripped prefix fronts a `!`.**
     [`#fhir-unbound-prefix-roundtrip-2026-08-07`](documentation/agent-notes.md#fhir-unbound-prefix-roundtrip-2026-08-07) ·
     [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open) ·
     [`#singleton-wrapper-laundering`](documentation/agent-notes.md#singleton-wrapper-laundering) ·

@@ -1,8 +1,8 @@
 /**
  * The XML write path: the {@link FhirNode} model → spec-clean FHIR XML text (xml.html).
  *
- * The writer is the conservative half of Postel's Law, it always emits well-formed, canonical FHIR
- * XML, the exact inverse of {@link ./read.js}:
+ * The writer is the conservative half of Postel's Law, and for a model read from a conformant
+ * document it emits canonical FHIR XML, the exact inverse of {@link ./read.js}:
  *
  * - a resource complex is emitted as an element named by its `resourceType` (the property itself is
  *   not emitted, it *is* the tag), and the root carries the FHIR default namespace;
@@ -18,15 +18,8 @@
  * through a JavaScript `number`. Narrative `<div>` XHTML is written back as the opaque string the
  * model carries, verbatim and unchecked.
  *
- * **One thing this writer refuses, stated narrowly because the wide version of the sentence is
- * false: it will not write a NAME that breaks the tag it is written into.** A model can carry a name
- * at a tag position that XML cannot spell there, and for one shape of such a name the emitted markup
- * re-reads as a DIFFERENT set of elements rather than failing.
- *
- * **That is a rule about names, and it is NOT a guarantee that the output holds only elements the
- * sender wrote.** A `div` property is emitted as its own raw string, so caller-supplied markup
- * reaches the document body unexamined and can carry sibling elements out with it. See
- * {@link serializeResourceXml} for what is refused, for what is not, and for that gap.
+ * **It refuses exactly one thing: a NAME that breaks the tag it is written into.** That is a rule
+ * about names and nothing wider. `serializeResourceXml` lists what it does not cover.
  *
  * @packageDocumentation
  */
@@ -143,11 +136,10 @@ function writeItem(
 ): string {
   // A narrative `Narrative.div` is carried as its full opaque XHTML string (matching FHIR JSON); emit
   // it verbatim so the output is conformant `<div xmlns="…">…</div>`, never an escaped attribute.
-  // 🔴 THIS IS THE ONE MARKUP-EMITTING SITE `tag()` DOES NOT COVER, AND IT IS A FABRICATION ROUTE:
-  // the string is emitted unexamined, so a BALANCED one that closes itself and opens siblings puts
-  // spec-clean FHIR the sender never wrote into the document. The test keeps it from moving in
-  // silence; `serializeResourceXml`'s docblock carries the measurement. It is also not scoped to
-  // `Narrative`: any property named `div`, at any depth, takes this branch.
+  // 🔴 THIS IS THE ONE MARKUP-EMITTING SITE `tag()` DOES NOT COVER: the string is emitted unexamined,
+  // so markup inside it reaches the document. `serializeResourceXml`'s docblock carries the three
+  // measured shapes and `test/xml-tag-name.test.ts` pins them. Not scoped to `Narrative`: any
+  // property named `div`, at any depth, takes this branch.
   if (name === "div" && node.kind === "primitive" && typeof node.value === "string") {
     return node.value;
   }
@@ -242,23 +234,20 @@ function writeElement(
  *
  * ## 🔴 The bigger gap in this function, which the refusal above does NOT cover
  *
- * **A `div` property is written back as its own raw string, and that is a FABRICATION route, not
- * merely an unreadability one.** The value is emitted verbatim into the document body with nothing
- * examined, so markup inside it is markup in the output. An unbalanced string makes the document
- * unreadable, which is the benign half. The harmful half is a **balanced** string that closes its
- * own element and opens siblings: those siblings are then spec-clean FHIR that re-reads as content
- * of the resource, indistinguishable from content the sender wrote, with no diagnostic at either
- * end. A `div` carrying `</text><code><coding>…716186003…</coding></code><text>` on an
- * `AllergyIntolerance` re-reads with `noKnownAllergy: true` and a `no-known-allergy` negation over a
- * record that asserted nothing, and `readSafety` affirms it.
+ * **A `div` property is written back as its own raw string, examined by nothing, so markup inside it
+ * is markup in the output.** Measured, and no remedy is proposed here on purpose:
  *
- * **The branch keys on the NAME `div` alone, at any depth and in any resource**, so it is not
- * confined to `Narrative.div`: an `Observation` with a `div` member spelled `<status value="final"/>`
- * emits exactly that and re-reads with a status it never had.
+ * - a `div` on an `AllergyIntolerance` spelled
+ *   `<div xmlns="…xhtml">ok</div></text><code><coding>…716186003…</coding></code><text>` re-reads
+ *   with `noKnownAllergy: true` and a `no-known-allergy` negation over a record that asserted
+ *   nothing, with no diagnostic at either end and `readSafety` affirming it;
+ * - the branch keys on the name `div` alone, at any depth in any resource, so an `Observation` with
+ *   a `div` member spelled `<status value="final"/>` emits exactly that and re-reads with a status
+ *   it never had;
+ * - `{"div":"v"}` emits `<Patient …>v</Patient>`, which re-reads with the property gone, one
+ *   `UNEXPECTED_XML_CONTENT` warning and `safeToSummarize: false`.
  *
- * This is older than the name refusal above and is not closed by it. **Do not expect well-formedness
- * validation to close it either**: the harmful shape is well-formed. Closing it means deciding what
- * a `div` is allowed to contain, which is a different decision from what a name is allowed to be.
+ * Older than the name refusal above and not closed by it. Pinned by `test/xml-tag-name.test.ts`.
  *
  * @param node - The resource model to serialize (must carry a `resourceType` to name the root element).
  * @returns Canonical FHIR XML text.
@@ -271,8 +260,8 @@ function writeElement(
  * @throws {FhirSerializeError} With `UNSERIALIZABLE_ELEMENT_NAME` if any tag position holds a name
  *   that cannot be written as a tag without changing which elements the document holds: it would
  *   either fail to re-read at all, or re-read as DIFFERENT elements. The second is why this refuses
- *   rather than reports. Unreachable for a model read from XML; {@link serializeResource} encodes
- *   every such model correctly, and is the route that stays open.
+ *   rather than reports. {@link serializeResource} encodes every such model correctly, and is the
+ *   route that stays open.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";

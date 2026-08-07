@@ -28,17 +28,18 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   like `a&b`, `1abc`, `-lead` and `a"b`, are all rejected by a conformant third-party parser and are
   **still written**, because they round-trip through this library unchanged today and refusing them
   would withdraw that from documents that read `valid: true`. That gap is stated on
-  `serializeResourceXml` and pinned by tests. **Unreachable for a model read from XML**, whose tag
-  scanner cannot produce such a name, so no XML document loses the ability to be written back.
+  `serializeResourceXml` and pinned by tests. **Almost every model that reaches the refusal came from
+  JSON**, because the XML tag scanner cannot read a tag carrying one of those characters; the one
+  exception is a prefixed name whose local part begins `!` or `?`
+  (`<a:!x xmlns:a="http://hl7.org/fhir" value="1"/>`), which reads clean and is now refused where it
+  used to be written as markup this library could not re-read.
   **This governs NAMES, and it is not a guarantee that the writer emits only elements the sender
   wrote.** A separate and larger route, pre-existing and NOT closed here, is now measured and named
-  on `serializeResourceXml`: a `div` property is written back as its own raw string, so a **balanced**
-  string that closes its own element and opens siblings puts spec-clean FHIR into the output that
-  nobody wrote, and it re-reads as ordinary content with no diagnostic at either end. A `div`
-  carrying a `716186003` coding on an `AllergyIntolerance` comes back with `noKnownAllergy: true` and
-  a `no-known-allergy` negation over a record that asserted nothing. The branch keys on the name
-  `div` alone, so it is not confined to `Narrative.div`. Well-formedness validation does not close
-  it, because the harmful shape is well-formed.
+  on `serializeResourceXml`: a `div` property is written back as its own raw string, examined by
+  nothing, so markup inside it is markup in the output. A `div` on an `AllergyIntolerance` that
+  closes its own element and opens a `716186003` coding comes back with `noKnownAllergy: true` and a
+  `no-known-allergy` negation over a record that asserted nothing, with no diagnostic at either end.
+  The branch keys on the name `div` alone, so it is not confined to `Narrative.div`.
 - **`serializeResource` no longer substitutes `{}` for a scalar it never read (`FHIR-WRITER-AUTHORS-VALUES`).**
   A string, number, boolean or `null` written where FHIR JSON has an object is content the reader has
   no element to make of it, so it reports `UNKNOWN_PROPERTY` and the model holds an empty element

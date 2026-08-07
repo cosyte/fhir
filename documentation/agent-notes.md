@@ -1046,22 +1046,36 @@ is document content and one shape of it is a forgery built to look like markup. 
 refuses also fails the far narrower `elementName` / `resourceTypeName` shapes in `model/path.ts`, so
 each renders `<withheld>`. Pinned, because the guarantee holds only while that containment does.
 
-#### Unreachable from XML, by construction
+#### Reachability from XML: NEARLY none, and the "by construction" version was FALSE
 
-**No document `parseResourceXml` reads can reach this refusal.** The raw reader's `parseName` stops
-at exactly `isWs(c) || "/" || ">" || "=" || "<"`, and refuses an empty name and a `<!` or `<?`
-opener before a name is read. So the refused groups are reachable only from `parseResource` (JSON)
-or a hand-built model.
+**An earlier draft of this section said "no document `parseResourceXml` reads can reach this
+refusal", derived it "by construction" from the raw reader's `parseName`, and used it to justify
+skipping a verification step. Pass 2 of the gate broke it.** `parseName` does stop at exactly
+`isWs(c) || "/" || ">" || "=" || "<"` and does refuse an empty name, so no **unprefixed** tag can
+carry one. The proof overlooked **prefix stripping**: `modelNameOf` models a prefixed element under
+its LOCAL part, so a `!` or `?` can end up at the front of a modeled name even though no tag may
+start with one.
 
-**▶ 🩺 WHICH IS WHY `pnpm differential:read` WAS NOT RUN FOR THIS SLICE, AND A ZERO FROM IT WOULD
-HAVE BEEN MEANINGLESS.** That harness reads XML only, and its own docblock already says its control
-"would NOT catch a base/head divergence confined to the XML writer". Both halves apply here at once:
-the slice is XML-writer-only, and its trigger is unreachable from XML input, so base and head agree
-on every document in the corpus by construction. Reporting that agreement as "0 regressions" is the
-exact failure the control exists to prevent. The bound is bought instead by two fast-check
-properties in `test/xml-tag-name.test.ts`: **either the writer refuses, or its output re-reads as
-the same property names**, over an alphabet built from the tag-ambiguous characters; and **the
-refusal never fires for a model read from XML**.
+```
+in : <Patient xmlns="…fhir" xmlns:a="…fhir"><a:!x value="1"/></Patient>
+     issues [] , valid: true , properties ["resourceType", "!x"]
+out: REFUSED (UNSERIALIZABLE_ELEMENT_NAME).  Base wrote `<!x value="1"/>`, which this
+     library then could not re-read.
+```
+
+So the refusal IS better than base for that document, and it IS a document that used to serialize
+and now does not. **Both halves are the honest statement; the first alone was the overclaim.** The
+counterexample is now asserted in `test/xml-tag-name.test.ts` rather than left as prose, and the
+fast-check property beside it is retitled to the unprefixed case it actually covers.
+
+**▶ 🩺 `pnpm differential:read` WAS NOT RUN, AND THE REASON FIRST GIVEN FOR THAT WAS THE FALSE
+CLAIM ABOVE.** The reason that survives is only the harness's own: it reads XML, and its control
+docblock already says it "would NOT catch a base/head divergence confined to the XML writer", which
+this slice is. **Record the evidence that actually stands in its place**, rather than the harness
+zero: two fast-check properties in `test/xml-tag-name.test.ts`, and the two independent gate sweeps
+(3,221 probes over every code point `U+0000`-`U+02FF` at four positions plus higher and adversarial
+ones, cross-checked against **expat** as a conformant third-party parser, **0 false positives**).
+Widening `whole()` and re-keying the control is still the right move for the next writer-side slice.
 
 #### Every test proved red by mutation
 
@@ -1106,6 +1120,26 @@ IN THE `.d.ts`.** The rule the repo already had ("name the set the code actually
 the writer: **name the SITE, not the writer.** A sentence about "the writer" is a claim over every
 branch it has, and `writeItem` has a branch that emits raw markup.
 
+#### Pass 2 also REFUTED, and the pattern is the finding
+
+**Pass 2 returned `REFUTED` too, on two `INTRODUCED` majors, and BOTH were sentences the pass-1
+remedy had just written.** "Unreachable for a model read from XML" (false: prefix stripping) and
+"well-formedness does not close the `div` gap" (false: `readRawXml` rejects the flagship value). It
+also caught a fourth `div` test whose title claimed one thing while its single `toThrow()` assertion
+stayed green under the very remedies it said were ruled out, and a "silently deletes" that is loud.
+
+**▶ 🛑 THE PATTERN, WHICH MATTERS MORE THAN EITHER FINDING: EVERY REWRITE PRODUCED A FRESH FALSE
+UNIVERSAL.** Pass 1 refuted three, and the prose written to fix them carried two more. Both passes
+found nothing wrong with the code. **So the pass-2 remedy DELETED rather than reworded**, which is
+this repo's own standing rule that a disclosure reworded twice is deleted, not reworded a third
+time: the vacuous test is gone with a comment saying why, the remedy speculation about the `div` gap
+is gone entirely, and the measurements are stated with no claim attached about what would close
+them. Where a fact was still needed, it is a counterexample asserted in a test rather than a
+sentence.
+
+**The rule to carry forward: name the SITE, not the writer, and prefer a failing example to a
+universal.** A sentence about "the writer" is a claim over every branch it has.
+
 #### Left open deliberately, and NOT folded in
 
 - **The named residual itself.** Group 1 above, `#59`'s deferral, unchanged. Pinned in
@@ -1132,17 +1166,20 @@ branch it has, and `writeItem` has a branch that emits raw markup.
   affirming it. Worse than the name breakout this slice refuses, which at least left a bogus sibling
   behind: this emits FHIR no downstream system can tell from the real thing.
 
-  **Three things about it that the first draft of this note got WRONG, which is why it is spelled out
-  here.** (1) It is **not** "an entirely different sink" from the name defect; it is the same
-  fabrication class through a different branch. (2) The unbalanced-string variant
-  (`{"text":{"div":"<div>not closed"}}`, which merely makes the output unreadable) is the **benign**
-  half, and naming only that half is worse than saying nothing. (3) **Validating XHTML
-  well-formedness does NOT close it**, because the harmful shape is well-formed. Closing it means
-  deciding what a `div` may contain.
+  **What the first draft of this note got WRONG, twice over, and what is therefore NOT said here.**
+  Draft one called it "an entirely different sink" from the name defect and named only the benign
+  unbalanced variant (`{"text":{"div":"<div>not closed"}}`, which merely makes the output
+  unreadable). Draft two corrected that and added a remedy claim: "validating XHTML well-formedness
+  does NOT close it, because the harmful shape is well-formed." **That is also false** and pass 2
+  measured it: `readRawXml` rejects the `AllergyIntolerance` value above (trailing content after the
+  root). **So no claim about what would or would not close this is made here at all.** Two wrong
+  remedy claims in two drafts is the signal to stop guessing and measure it when the item is taken.
 
   It is also **not scoped to `Narrative`**: `writeItem` keys on the name `div` at any depth in any
   resource, so `{"resourceType":"Observation","div":"<status value=\"final\"/>"}` forges a status
-  outright, and `{"div":"v"}` silently deletes the property. Pinned by
+  outright. `{"div":"v"}` loses the property, but **loudly**, not silently: the value lands as
+  character data on a FHIR element, so the re-read carries `UNEXPECTED_XML_CONTENT` and
+  `safeToSummarize: false`. That is the one of the three shapes that fails safe. Pinned by
   `test/xml-tag-name.test.ts` ("declared gap, NOT closed here"). **The write path's module docblock
   had asserted the opposite** ("Narrative `<div>` XHTML is deferred and is not produced by the
   writer"), which was false: `writeItem` has emitted it since the narrative landed. Corrected.

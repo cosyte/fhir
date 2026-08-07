@@ -166,10 +166,14 @@ const TAG_OPENER_STEALING = new Set(["!", "?"]);
  * fabrication class. Refusing invents nothing, and the JSON writer still encodes the model
  * correctly.
  *
- * **Unreachable from `parseResourceXml`, by construction rather than by measurement.** The raw
- * reader's tag scanner stops at exactly the {@link TAG_BREAKING} set, and refuses an empty name and
- * a `<!` / `<?` opener before a name is read at all, so no name it produces can satisfy this
- * predicate. Every model that reaches it came from JSON, or was built by hand.
+ * **Nearly unreachable from `parseResourceXml`, and the exception is worth knowing because an
+ * earlier draft of this comment claimed "unreachable, by construction" and that was false.** The raw
+ * reader's tag scanner stops at exactly the {@link TAG_BREAKING} set and refuses an empty name, so
+ * no tag it reads carries one of those. But a prefixed name has its prefix STRIPPED, which can move
+ * a `!` or `?` to the front of the modeled name: `<a:!x xmlns:a="http://hl7.org/fhir" value="1"/>`
+ * reads with zero issues and is refused here. Base wrote it as `<!x value="1"/>`, which this library
+ * then could not re-read, so the refusal is the better of the two. It is still a document that used
+ * to serialize and now does not.
  *
  * @param name - The tag name about to be written.
  * @returns `true` when the name must be refused.

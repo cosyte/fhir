@@ -16,11 +16,10 @@
  * and both re-read through this library unchanged. Those are declared gaps, and the tests over them
  * are characterization tests: if you close one, they go red and you update them in the same change.
  *
- * **🔴 AND THE LAST BLOCK IN THIS FILE IS THE GAP THIS REFUSAL DOES NOT CLOSE, WHICH IS BIGGER THAN
- * THE ONE IT DOES.** A `div` property is emitted as raw markup, so it can carry whole elements into
- * the document. That is a fabrication route, it is `PRE-EXISTING`, and nothing here fixes it. It is
- * pinned so that the disclosure on `serializeResourceXml` is load-bearing rather than prose. **Do
- * not read this file as saying the writer cannot author an element.**
+ * **🔴 AND THE LAST BLOCK IN THIS FILE IS A GAP THIS REFUSAL DOES NOT CLOSE.** A `div` property is
+ * emitted as raw markup, so it can carry whole elements into the document. `PRE-EXISTING`, nothing
+ * here fixes it, pinned so the disclosure on `serializeResourceXml` is load-bearing rather than
+ * prose. **Do not read this file as saying the writer cannot author an element.**
  */
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
@@ -392,12 +391,17 @@ describe("a model name at an XML tag position", () => {
     });
 
     /**
-     * The refusal cannot fire for a model read from XML, and that is a property of the raw reader's
-     * tag scanner rather than a lucky corpus: it stops at exactly the characters that break a tag,
-     * and refuses an empty name and a `<!` or `<?` opener before any name is read. So no XML
-     * document, conformant or not, loses the ability to be written back.
+     * **The refusal does not fire for an UNPREFIXED tag, and that is a property of the raw reader's
+     * scanner rather than of a lucky corpus**: it stops at exactly the characters that break a tag
+     * and refuses an empty name, so no such tag can carry one.
+     *
+     * **It is NOT "unreachable from XML", which is what this comment said and what shipped in the
+     * `.d.ts`.** A prefixed name has its prefix STRIPPED, so a `!` or `?` can end up at the front of
+     * a modeled name that no tag could start with. The counterexample is asserted below rather than
+     * left as prose, and it is the reason this generator emits no `xmlns:` declaration: it is scoped
+     * to the unprefixed case on purpose, and the scope is now stated.
      */
-    it("is unreachable from a model this library read from XML", () => {
+    it("does not fire for an unprefixed tag this library read from XML", () => {
       const alphabet = [..."ab19-._:&\"'/<>= \t!?", "é"];
       fc.assert(
         fc.property(
@@ -419,6 +423,25 @@ describe("a model name at an XML tag position", () => {
         ),
         { numRuns: 3000 },
       );
+    });
+
+    /**
+     * THE COUNTEREXAMPLE TO "UNREACHABLE FROM XML", ASSERTED SO THE CLAIM CANNOT COME BACK.
+     *
+     * The prefix is stripped to give the model name, so a local part beginning `!` or `?` is
+     * reachable from a document whose TAG begins with neither. This one reads with zero issues and
+     * `valid: true`, and it is refused. Base wrote it as `<!x value="1"/>`, which this library could
+     * not then re-read, so the refusal is the better of the two behaviours. It is still a document
+     * that used to serialize and now does not, and that is the honest shape of the cost.
+     */
+    it("IS reachable from XML through prefix stripping, which is a real cost", () => {
+      const doc =
+        `<Patient ${FHIR_NS} xmlns:a="http://hl7.org/fhir">` + `<a:!x value="1"/></Patient>`;
+      const { resource, issues } = parseResourceXml(doc);
+      expect(issues).toEqual([]);
+      expect(validateResource(resource).valid).toBe(true);
+      expect(resource.properties.map((p) => p.name)).toEqual(["resourceType", "!x"]);
+      expect(refusal(resource)?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME);
     });
   });
 
@@ -474,24 +497,27 @@ describe("a model name at an XML tag position", () => {
       expect(readSafety(parseResourceXml(xml).resource).status).toBe("final");
     });
 
-    it("silently deletes the property when the string carries no markup", () => {
+    it("loses the property when the string carries no markup, loudly rather than silently", () => {
       const node = model(JSON.stringify({ resourceType: "Patient", div: "v" }));
       expect(node.properties.map((p) => p.name)).toEqual(["resourceType", "div"]);
       const xml = serializeResourceXml(node);
       expect(xml).toBe(`<Patient ${FHIR_NS}>v</Patient>`);
-      expect(parseResourceXml(xml).resource.properties.map((p) => p.name)).toEqual([
-        "resourceType",
+      const back = parseResourceXml(xml);
+      expect(back.resource.properties.map((p) => p.name)).toEqual(["resourceType"]);
+      // "Silently" was written here and is FALSE. The value lands as character data on a FHIR
+      // element, which the dropped-text machinery reports, so this round trip is loud and the
+      // safety spine declines. Of the three shapes, this is the one that fails safe.
+      expect(back.issues.map((i) => `${i.code}:${i.severity}`)).toEqual([
+        "UNEXPECTED_XML_CONTENT:warning",
       ]);
+      expect(readSafety(back.resource).safeToSummarize).toBe(false);
     });
 
-    it("is NOT closed by well-formedness, because the harmful shape is well-formed", () => {
-      // The benign half, an unbalanced string, makes the document unreadable and is the variant the
-      // first draft of the disclosure named. Recording both is the point: fixing only this one
-      // leaves the fabrication above untouched.
-      const unbalanced = model(
-        JSON.stringify({ resourceType: "Patient", text: { div: "<div>not closed" } }),
-      );
-      expect(() => parseResourceXml(serializeResourceXml(unbalanced))).toThrow();
-    });
+    // A FOURTH TEST WAS DELETED HERE RATHER THAN REWRITTEN A THIRD TIME. It was titled "is NOT
+    // closed by well-formedness, because the harmful shape is well-formed", and BOTH halves were
+    // wrong: the flagship value above is NOT well-formed (`readRawXml` rejects it, trailing content
+    // after the root), and the test asserted only `toThrow()` over the benign unbalanced variant, so
+    // it stayed green under the very remedies it claimed to rule out. No replacement claim about
+    // what would or would not close this gap is made here. Measure it when someone takes the item.
   });
 });
