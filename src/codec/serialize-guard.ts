@@ -177,8 +177,15 @@ const TAG_OPENER_STEALING = new Set(["!", "?"]);
  * **Repairing rather than refusing is not available.** XML has no escape for an element name, so
  * the only alternatives to refusing are mangling the name (authoring a name the sender never
  * wrote) or emitting the breakout (authoring elements the sender never wrote). Both are the
- * fabrication class. Refusing invents nothing, and the JSON writer still encodes the model
- * correctly.
+ * fabrication class. Refusing invents nothing, and `serializeResource` escapes a member name, so
+ * this refusal never reaches it and that route stays open. **Narrowed 2026-08-07 from "the JSON
+ * writer still encodes the model correctly", which was false and had shipped**: that is a claim
+ * about the whole model, and `serializeResource` has its own declared exceptions, so a model refused
+ * here can carry one and emit it. Measured, not argued:
+ * `{"resourceType":"Observation","name":[[{"family":"X"}]],"zz value=\"1\"/><status":1}` reads with
+ * `UNKNOWN_PROPERTY` and `NESTED_ARRAY`, is refused here, and `serializeResource` emits it with
+ * `"name":[[{"family":"X"}]]` intact -- an array inside an array, which is the first entry on that
+ * writer's own exception list.
  *
  * **Nearly unreachable from `parseResourceXml`, and the exception is worth knowing because an
  * earlier draft of this comment claimed "unreachable, by construction" and that was false.** The raw
@@ -210,13 +217,20 @@ export function breaksTag(name: string): boolean {
  * because the refused name never reached a segment at all. Both readings are safe; only the weaker
  * one is true.
  *
+ * **The message says what this refusal does NOT reach, not that the model is fine elsewhere**, and
+ * the difference is the whole correction. It used to end "serializeResource encodes this model
+ * correctly", which is a claim about the whole model and is false: that writer has its own declared
+ * exceptions and a model refused here can carry one. Narrowed 2026-08-07 to match the wording the
+ * `div` refusal beside it already used, so the pair no longer contradicts each other in a consumer's
+ * log.
+ *
  * @param locations - The bounded locations whose name cannot be written, in walk order.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}.
  * @internal
  */
 export function refuseUnserializableNames(locations: readonly string[]): never {
   throw new FhirSerializeError(
-    `cannot serialize to XML: ${String(locations.length)} location(s) carry a name that cannot be written as an XML tag without changing which elements the document holds; serializeResource encodes this model correctly`,
+    `cannot serialize to XML: ${String(locations.length)} location(s) carry a name that cannot be written as an XML tag without changing which elements the document holds; serializeResource escapes a member name, so this refusal never reaches it`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME,
     locations,
   );
