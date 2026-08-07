@@ -1,12 +1,17 @@
 /**
- * The write-path refusals, and the rule both of them are instances of: **a writer may decline to
- * hand a model back, but it may never author content of its own.**
+ * The write-path refusals: the places a writer declines to hand a model back rather than encode it
+ * into something that re-reads as content nobody wrote.
  *
  * There are two, and they are refused at different scopes. {@link assertSerializable} runs in both
  * writers, because a dropped-character-data marker has no conformant encoding in either format.
  * {@link breaksTag} governs the XML writer only, because the harm is a name reaching a tag position,
  * and JSON escapes a member name so `serializeResource` encodes the same model correctly. Neither
  * refusal recognises anything new, invents a value, or changes a document that reads clean.
+ *
+ * **These two are a list, NOT a closed account of what a writer can author.** The XML writer emits a
+ * `div` property as a raw string and nothing here examines it; that route is measured on
+ * `serializeResourceXml` and is not covered by either refusal below. Do not read this module as a
+ * guarantee about the writers, only as the two refusals it implements.
  *
  * The rest of this comment is the first refusal.
  *
@@ -177,10 +182,15 @@ export function breaksTag(name: string): boolean {
 /**
  * Refuse to serialize a model whose tag positions hold names XML cannot spell.
  *
- * `locations` never echoes the offending name: every name this refuses also fails the far narrower
- * `elementName` / `resourceTypeName` shapes that bound a location, so each one renders as
- * `WITHHELD`. That is asserted by a test rather than left to inspection, because the name is
- * document content and one of the shapes it takes here is a forgery.
+ * **`locations` never echoes the offending name**, which is the property that matters, because the
+ * name is document content and one of the shapes it takes here is a forgery. Every name this refuses
+ * also fails the far narrower `elementName` / `resourceTypeName` shapes that bound a location.
+ *
+ * **It does not follow that every location CONTAINS a `WITHHELD` segment, and that stronger sentence
+ * was wrong.** A nested resource's type is reported at the location of the element wrapping it, so
+ * a bad `resourceType` inside `contained` reports `Patient.contained[0]`: no withheld segment,
+ * because the refused name never reached a segment at all. Both readings are safe; only the weaker
+ * one is true.
  *
  * @param locations - The bounded locations whose name cannot be written, in walk order.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}.

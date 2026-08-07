@@ -297,8 +297,8 @@ Recorded in `documentation/decisions/` at bootstrap because they shape everythin
   inside an array, **a scalar or `null` where FHIR JSON has an object**, a non-string `resourceType`),
   because repairing any of them means inventing content or dropping it. Hand a value back
   (`FhirComplex.nonObjectSource`); **never model it as a primitive**, which would show it to every
-  walker at a complex position. **A name that would author ELEMENTS is refused instead** (XML only;
-  JSON escapes it).
+  walker at a complex position. **A NAME that would break its tag is refused** (XML only). **🔴 A
+  `div` VALUE IS NOT: it is emitted as raw markup and DOES author elements.**
   [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
 - Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
   not a claim that a location carries no document content** (a name is echoed when it matches the

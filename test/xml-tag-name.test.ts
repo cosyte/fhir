@@ -15,6 +15,12 @@
  * declaration to bind it, and a name that is not a conformant XML name, are both written verbatim
  * and both re-read through this library unchanged. Those are declared gaps, and the tests over them
  * are characterization tests: if you close one, they go red and you update them in the same change.
+ *
+ * **🔴 AND THE LAST BLOCK IN THIS FILE IS THE GAP THIS REFUSAL DOES NOT CLOSE, WHICH IS BIGGER THAN
+ * THE ONE IT DOES.** A `div` property is emitted as raw markup, so it can carry whole elements into
+ * the document. That is a fabrication route, it is `PRE-EXISTING`, and nothing here fixes it. It is
+ * pinned so that the disclosure on `serializeResourceXml` is load-bearing rather than prose. **Do
+ * not read this file as saying the writer cannot author an element.**
  */
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
@@ -212,12 +218,29 @@ describe("a model name at an XML tag position", () => {
      * fails that shape by construction, since the shape is far narrower than XML's. Asserted rather
      * than reasoned about, because it is the assertion that would notice if either shape moved.
      */
-    it("never echoes the refused name, at any position", () => {
+    it("never echoes the refused name, at a property position", () => {
       for (const [, name] of [...BREAKS_THE_TAG, ...FABRICATES_ELEMENTS]) {
         const err = refusal(withName(name));
         expect(err?.locations).toEqual([`Patient.${WITHHELD}`]);
-        expect(err?.message).not.toContain(name === "" ? " never" : name);
+        // The empty name is skipped: every string contains "", so the assertion would be vacuous.
+        if (name !== "") expect(err?.message).not.toContain(name);
       }
+    });
+
+    /**
+     * **The stronger sentence "every location renders `WITHHELD`" was written, and it is FALSE.** A
+     * nested resource's type is reported at the location of the element WRAPPING it, so the refused
+     * name never becomes a segment and there is nothing to withhold. What is asserted here is the
+     * weaker and true property, which is also the one that carries the safety: it is echoed nowhere.
+     */
+    it("echoes nothing at a nested-resource position either, where there is no segment", () => {
+      const bad = "O/><Patient";
+      const err = refusal(
+        model(JSON.stringify({ resourceType: "Patient", contained: [{ resourceType: bad }] })),
+      );
+      expect(err?.locations).toEqual(["Patient.contained[0]"]);
+      expect(err?.locations.join("|")).not.toContain(bad);
+      expect(err?.message).not.toContain(bad);
     });
 
     /**
@@ -321,8 +344,15 @@ describe("a model name at an XML tag position", () => {
      * THE INVARIANT THE REFUSAL EXISTS TO BUY, ASSERTED OVER GENERATED NAMES RATHER THAN A LIST.
      *
      * Either the writer refuses, or its output re-reads as the same property names in the same
-     * order. A list of shapes can only ever say "not these"; this says "not any", over an alphabet
-     * built from exactly the characters that make a tag ambiguous plus ordinary ones.
+     * order. A list of shapes can only ever say "not these"; this widens that to every name the
+     * alphabet below can spell, which is built from exactly the characters that make a tag
+     * ambiguous plus a few ordinary ones.
+     *
+     * **It is NOT a universal over all names, and the earlier draft of this comment claimed it
+     * was.** The alphabet is the scope. It deliberately cannot spell `div`, which is a live
+     * counterexample to the invariant as stated: `{"div":"v"}` emits `<Patient>v</Patient>` and the
+     * property is gone on the re-read, because that name takes the raw-string branch rather than a
+     * tag. That gap is pinned directly, below, rather than hidden by an alphabet that avoids it.
      */
     it("either refuses, or its output re-reads as the same property names", () => {
       const alphabet = [..."ab19-._:&\"'/<>= \t\n\r!?", " ", "", "\f", "é"];
@@ -389,6 +419,79 @@ describe("a model name at an XML tag position", () => {
         ),
         { numRuns: 3000 },
       );
+    });
+  });
+
+  /**
+   * 🔴 THE GAP THIS REFUSAL DOES NOT CLOSE, AND IT IS BIGGER THAN THE ONE IT DOES.
+   *
+   * `writeItem` emits a `div` property as its own raw string. It is the one markup-emitting site the
+   * name check does not cover, and it is a FABRICATION route rather than merely an unreadability
+   * one: a BALANCED string that closes its own element and opens siblings puts spec-clean FHIR into
+   * the document that the sender never wrote, and it re-reads as ordinary content of the resource.
+   *
+   * `PRE-EXISTING`, older than the refusal above and not caused by it. Pinned here so it cannot move
+   * in silence and so the disclosure on `serializeResourceXml` is load-bearing rather than prose.
+   * **Characterization tests over a gap: closing it MUST red these, in the same change.**
+   */
+  describe("declared gap, NOT closed here: a div property is emitted as raw markup", () => {
+    it("forges a no-known-allergy negation the record never asserted", () => {
+      const forged = model(
+        JSON.stringify({
+          resourceType: "AllergyIntolerance",
+          text: {
+            status: "generated",
+            div:
+              '<div xmlns="http://www.w3.org/1999/xhtml">ok</div></text>' +
+              '<code><coding><system value="http://snomed.info/sct"/>' +
+              '<code value="716186003"/></coding></code><text>',
+          },
+        }),
+      );
+      // Nothing on the way in: no allergy code anywhere in the model, and no negation.
+      expect(readSafety(forged).noKnownAllergy).toBe(false);
+      expect(readSafety(forged).negations).toEqual([]);
+
+      // Not refused. The name check governs names, and this is content.
+      const xml = serializeResourceXml(forged);
+      expect(xml).toContain('<code value="716186003"/>');
+
+      // And it comes back as a positive clinical assertion, with the safety spine affirming it.
+      const back = parseResourceXml(xml);
+      expect(back.issues).toEqual([]);
+      expect(readSafety(back.resource).noKnownAllergy).toBe(true);
+      expect(readSafety(back.resource).negations).toEqual(["no-known-allergy"]);
+      expect(readSafety(back.resource).safeToSummarize).toBe(true);
+    });
+
+    it("is keyed on the NAME div alone, so it is not confined to Narrative.div", () => {
+      const forged = model(
+        JSON.stringify({ resourceType: "Observation", div: '<status value="final"/>' }),
+      );
+      expect(readSafety(forged).status).toBeUndefined();
+      const xml = serializeResourceXml(forged);
+      expect(xml).toBe(`<Observation ${FHIR_NS}><status value="final"/></Observation>`);
+      expect(readSafety(parseResourceXml(xml).resource).status).toBe("final");
+    });
+
+    it("silently deletes the property when the string carries no markup", () => {
+      const node = model(JSON.stringify({ resourceType: "Patient", div: "v" }));
+      expect(node.properties.map((p) => p.name)).toEqual(["resourceType", "div"]);
+      const xml = serializeResourceXml(node);
+      expect(xml).toBe(`<Patient ${FHIR_NS}>v</Patient>`);
+      expect(parseResourceXml(xml).resource.properties.map((p) => p.name)).toEqual([
+        "resourceType",
+      ]);
+    });
+
+    it("is NOT closed by well-formedness, because the harmful shape is well-formed", () => {
+      // The benign half, an unbalanced string, makes the document unreadable and is the variant the
+      // first draft of the disclosure named. Recording both is the point: fixing only this one
+      // leaves the fabrication above untouched.
+      const unbalanced = model(
+        JSON.stringify({ resourceType: "Patient", text: { div: "<div>not closed" } }),
+      );
+      expect(() => parseResourceXml(serializeResourceXml(unbalanced))).toThrow();
     });
   });
 });

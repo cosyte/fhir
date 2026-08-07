@@ -1082,18 +1082,70 @@ point, so the baseline run's restore discarded every source edit in it, silently
 and the whole implementation had to be redone from context. Snapshot to a scratch path first and
 `cp` back. Untracked test files survive; tracked source does not.
 
+#### The gate: pass 1 REFUTED, and what it was refuted for
+
+**Pass 1 returned `REFUTED`, and every finding was about CLAIM WIDTH, not about the code.** It could
+not break the refused set: 3,221 probes over every code point `U+0000`-`U+02FF` at four positions
+plus higher and adversarial ones, cross-checked against **expat** as an independent conformant
+parser, found **0 false positives** (nothing refused that base round-tripped) and no XML input that
+reaches the refusal. Claims 1, 2, 3 and 7 above were verified rather than broken.
+
+What it broke was three sentences, and one of them led straight to the `div` fabrication recorded
+below: **"it will not author an element the sender never wrote"** on the write path, **"a writer may
+decline to hand a model back, but it may never author content of its own"** on the guard, and **"A
+name that would author ELEMENTS is refused"** in `CLAUDE.md`. Two of the three shipped to consumers
+in `dist/index.d.ts`. Also refuted: a fast-check docblock claiming the property said **"not any"**
+when its alphabet cannot spell `div`, the one name that breaks the invariant; and
+`refuseUnserializableNames` claiming every location renders `WITHHELD`, which is false at a nested
+resource's type (reported at the wrapping element's location, so there is no segment to withhold).
+The remedy was claim-narrowing plus pinning the gap, and **the guard was deliberately not grown**:
+growing it would have made this slice the fix for a class it had not measured.
+
+**▶ 🛑 FIVE GATE PASSES RUNNING HAVE NOW REFUTED A UNIVERSAL IN THIS AREA'S PROSE, AND THIS ONE WAS
+IN THE `.d.ts`.** The rule the repo already had ("name the set the code actually walks") extends to
+the writer: **name the SITE, not the writer.** A sentence about "the writer" is a claim over every
+branch it has, and `writeItem` has a branch that emits raw markup.
+
 #### Left open deliberately, and NOT folded in
 
 - **The named residual itself.** Group 1 above, `#59`'s deferral, unchanged. Pinned in
   `test/xml-tag-name.test.ts` ("declared gap, still written") as a characterization test over the
   gap, and still pinned in `test/xml.test.ts` for the rebound-prefix round trip. Closing it MUST red
   both.
-- **`Narrative.div` is written back verbatim and unchecked.** Measured:
-  `{"text":{"div":"<div>not closed"}}` emits markup that this library then refuses to re-read. Same
-  headline as the item, an entirely different sink (opaque content, not a name), and closing it means
-  validating XHTML well-formedness. Now named on `serializeResourceXml`. **The write path's module
-  docblock had asserted the opposite** ("Narrative `<div>` XHTML is deferred and is not produced by
-  the writer"), which was false: `writeItem` has emitted it since the narrative landed. Corrected.
+- **🔴 A `div` PROPERTY IS WRITTEN BACK AS RAW MARKUP, AND IT IS A FABRICATION ROUTE STRICTLY WORSE
+  THAN THE ONE THIS SLICE CLOSED. `PRE-EXISTING`, byte-identical at `e2e5965`, STOP-THE-LINE, its own
+  item.** Found by the pass-1 gate while refuting this slice's prose, which had claimed the writer
+  "will not author an element the sender never wrote". It does.
+
+  ```
+  in : AllergyIntolerance, text.div = '<div xmlns="…xhtml">ok</div></text>
+       <code><coding><system value="http://snomed.info/sct"/>
+       <code value="716186003"/></coding></code><text>'
+       -> no allergy code in the model, noKnownAllergy false, negations []
+  out: spec-clean FHIR R4 XML, accepted by expat, NOT refused
+  re : noKnownAllergy TRUE, negations ["no-known-allergy"], safeToSummarize TRUE
+  ```
+
+  `716186003` is this repo's own `NO_KNOWN_ALLERGY`, documented in `src/safety/codes.ts` as a
+  **positive** clinical assertion. So the writer manufactures a positive no-known-allergy record out
+  of a document that asserted nothing, with **zero diagnostics on both sides** and the safety spine
+  affirming it. Worse than the name breakout this slice refuses, which at least left a bogus sibling
+  behind: this emits FHIR no downstream system can tell from the real thing.
+
+  **Three things about it that the first draft of this note got WRONG, which is why it is spelled out
+  here.** (1) It is **not** "an entirely different sink" from the name defect; it is the same
+  fabrication class through a different branch. (2) The unbalanced-string variant
+  (`{"text":{"div":"<div>not closed"}}`, which merely makes the output unreadable) is the **benign**
+  half, and naming only that half is worse than saying nothing. (3) **Validating XHTML
+  well-formedness does NOT close it**, because the harmful shape is well-formed. Closing it means
+  deciding what a `div` may contain.
+
+  It is also **not scoped to `Narrative`**: `writeItem` keys on the name `div` at any depth in any
+  resource, so `{"resourceType":"Observation","div":"<status value=\"final\"/>"}` forges a status
+  outright, and `{"div":"v"}` silently deletes the property. Pinned by
+  `test/xml-tag-name.test.ts` ("declared gap, NOT closed here"). **The write path's module docblock
+  had asserted the opposite** ("Narrative `<div>` XHTML is deferred and is not produced by the
+  writer"), which was false: `writeItem` has emitted it since the narrative landed. Corrected.
 - **🔴 A `_`-sibling whose value is not an object is discarded with ZERO diagnostics.** Newly
   measured and **not** this item: `{"resourceType":"Observation","_status":"entered-in-error"}`
   reads as `{"resourceType":"Observation"}` with an empty issue list and `valid: true`. So does
