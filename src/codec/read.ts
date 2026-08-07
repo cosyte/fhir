@@ -2,8 +2,9 @@
  * The JSON read path: a {@link RawJson} tree → the immutable {@link FhirNode} model.
  *
  * This is where the four silent-data-loss hazards of a FHIR JSON codec are handled (json.html): the
- * first three losslessly, the fourth by refusing to let the loss go unreported. A fifth entry below
- * is **not** a data loss and is listed with them because it used to read exactly like one.
+ * first three losslessly, the fourth by refusing to let the loss go unreported. **Entries 5 and 6
+ * are not data losses at all** and are listed with them because each one used to read exactly like
+ * one. Count the entries rather than trusting this sentence: it said "a fifth" while six were listed.
  *
  * 1. **Decimal precision.** Number tokens arrive from {@link readRawJson} as exact source text and
  *    become {@link FhirDecimal} values, never a JavaScript `number`. A token that a naive
