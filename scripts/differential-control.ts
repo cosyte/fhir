@@ -186,8 +186,8 @@ export const PROBE =
  * (`readJson`) rather than the one this arm is handed, so a mutant here would assert sensitivity for
  * a comparison that is not under test. That section remains ungraded by this control.
  *
- * **A SECOND DECLARED GAP, AND IT IS THE LIVE ONE: every mutant here perturbs a SUCCESSFUL emit, so
- * none of them covers a change to WHICH refusal a writer raises.** The differential's `emit()`
+ * **A SECOND DECLARED GAP, AND IT IS THE LIVE ONE: every mutant here is exercised on a document
+ * whose writes SUCCEED, so none of them covers a change to WHICH refusal a writer raises.** The differential's `emit()`
  * records every `FhirSerializeError` as one `REFUSED` sentinel and a `Reading` carries neither the
  * refusal code nor its message, so swapping one refusal for another moves no reading at all. That is
  * `PRE-EXISTING` in `read-differential.ts` and is NOT closed here: a mutant for it would red this arm

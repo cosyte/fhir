@@ -1813,8 +1813,10 @@ sentence in a changelog.
 **Measured at `df99f54`.** Clean tree (`src/` restored to `origin/main`, harness changes kept): 0
 differing source files, control RED, exit 1. Working tree: 1 differing source file, control GREEN,
 exit 0. Against `658a1f0`, a base before a genuinely writer-only slice: 2 differing source files,
-control GREEN. All three ran 1,195 documents and moved 0 readings, which is now printed with the
-sentence that says which case it is rather than left as a bare zero.
+control GREEN. All three ran 1,195 documents and moved 0 readings, which is now printed with an
+annotation that names the candidate causes and picks none of them, rather than left as a bare zero.
+(That sentence said "the sentence that says which case it is" until the gate withdrew exactly that
+claim three paragraphs below; swept post-pass-2 and therefore UNGRADED.)
 
 **What none of this promises is that a reading moved, and the first attempt to say so was itself a
 false claim.** The report originally annotated a zero with "no document in this corpus reaches the

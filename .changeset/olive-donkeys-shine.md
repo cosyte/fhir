@@ -41,8 +41,8 @@ comparison the old control used.
 
 Two gaps are declared rather than closed, because closing either would make the control red on every
 run for a blindness this change does not fix. The JSON-fixtures section of the report scores with a
-comparison this control is not handed. And every perturbation is of a successful write, so a change
-to which refusal a writer raises is not covered: the harness records every refusal as one sentinel
+comparison this control is not handed. And every perturbation is exercised on a document whose writes
+succeed, so a change to which refusal a writer raises is not covered: the harness records every refusal as one sentinel
 and its reading carries no refusal code, so swapping one for another moves nothing. Both are named
 where a reader meets them, and the report no longer attributes a zero to a cause it cannot know.
 
