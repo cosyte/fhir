@@ -1783,12 +1783,20 @@ replaces it with three arms, and only the third is slice-relative:
 
 1. **The two trees really are two trees**, decided by hashing every file under the materialized base
    `src/` and under the working tree `src/` and comparing the manifests. Over the bytes that were
-   imported, not over a ref name, because the failure being caught is a base that already carries the
-   change and that includes a materialization which picked up the working tree.
+   imported, not over a ref name, so a materialization that picked up the working tree is caught.
+   **It refuses exactly one case, byte-identical, and the first draft of its docblock claimed more
+   than that and was refuted:** the comparison is symmetric, so it cannot order the two trees, and a
+   base that already carries the change is green the moment anything else differs. The differing-file
+   COUNT is what catches that, and it is printed for the reader rather than asserted on.
 2. **The comparison can see a change.** Five deliberately perturbed copies of the head codec, one per
    method the XML reading is built from, each of which must be visible to the comparison the report
-   scores with. `parseResource` is deliberately absent and declared: it feeds the JSON-fixtures
-   section, which scores with a different comparison.
+   scores with. Two gaps are declared rather than closed: `parseResource` feeds the JSON-fixtures
+   section, which scores with a different comparison; and every mutant perturbs a **successful**
+   emit, so **which refusal a writer raises is not covered** -- `emit()` collapses every
+   `FhirSerializeError` to one sentinel and a `Reading` carries no refusal code, so swapping one
+   refusal for another moves nothing. Closing that would red the arm on every run for a
+   `PRE-EXISTING` blindness this change does not fix, which is the permanent-false-red shape being
+   replaced. It is named on the report instead.
 3. **A conformant narrative has not moved.** A bar, not a key; a slice that intends to move it is
    expected to red this and say so, not to re-key it.
 
@@ -1808,10 +1816,16 @@ exit 0. Against `658a1f0`, a base before a genuinely writer-only slice: 2 differ
 control GREEN. All three ran 1,195 documents and moved 0 readings, which is now printed with the
 sentence that says which case it is rather than left as a bare zero.
 
-**What none of this promises is that a reading moved.** A write-path slice can change real code that
-no readable document reaches, and 0 moved readings is then the true answer. The report says so in
-words. **The standing corpus caveat is unchanged: 7 hand-authored XML fixtures plus mutations, not
-the FHIR R4 published-examples corpus.**
+**What none of this promises is that a reading moved, and the first attempt to say so was itself a
+false claim.** The report originally annotated a zero with "no document in this corpus reaches the
+changed code", which the gate falsified in one run: change which refusal `assertSerializable` raises,
+one line, and 0 readings move while **360 documents execute that line**. The harness cannot tell the
+two causes apart, so the annotation now names both and picks neither -- no document reaches the
+changed code, **or** the change is of a shape the comparison does not carry, the live example being
+refusal identity. **A zero on that line is not evidence that a change is safe.** The lesson is the one
+this whole section is about, arriving one level up: replacing a bare zero with a wrong reason closes a
+question the bare zero left open. **The standing corpus caveat is unchanged: 7 hand-authored XML
+fixtures plus mutations, not the FHIR R4 published-examples corpus.**
 
 ### The name arm's wide claim, finished
 

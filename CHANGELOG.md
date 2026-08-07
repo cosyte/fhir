@@ -21,7 +21,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   perturbed copy of the codec per method must be visible to the comparison the report scores with,
   and a conformant narrative must not move. There is now one comparison, shared with the report, so
   the two cannot drift apart again. The polarity is asserted on both sides by tests rather than
-  assumed.
+  assumed. Two gaps are declared rather than closed, because closing either would red the control on
+  every run for a blindness this change does not fix: the JSON-fixtures section scores with a
+  comparison the control is not handed, and a change to _which_ refusal a writer raises moves no
+  reading, because every refusal is recorded as one sentinel. The report no longer attributes a zero
+  to a cause it cannot know.
 - **`UNSERIALIZABLE_ELEMENT_NAME`'s runtime message no longer tells the caller the JSON writer
   encodes the model correctly.** The message reached consumer logs saying "serializeResource encodes
   this model correctly", which is a claim about the whole model and is false: that writer has its own

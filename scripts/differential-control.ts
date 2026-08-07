@@ -107,15 +107,20 @@ function manifest(root: string): Map<string, string> {
 /**
  * Compare the source the two codecs were imported from, byte for byte.
  *
- * **This runs over the materialized directory, not over `git diff`.** The failure it exists to catch
- * is a base checkout that already carries the change, and the two ways that happens are a `--base`
- * ref that is not before the change and a materialization that picked up the working tree. A `git`
- * query would answer for the refs; hashing what was actually written to disk and imported answers
- * for the thing the differential ran.
+ * **This runs over the materialized directory, not over `git diff`.** A `git` query would answer for
+ * the refs; hashing what was actually written to disk and imported answers for the thing the
+ * differential ran, which is what catches a materialization that picked up the working tree.
+ *
+ * **WHAT IT REFUSES IS EXACTLY ONE CASE: the two trees are byte-identical.** It does NOT establish
+ * that base precedes head, and it does not establish that base is free of the change. The
+ * comparison is symmetric, so it cannot order the two at all, and a base that already carries the
+ * change is green as soon as anything else differs: a base directory equal to head's `src/` plus one
+ * unrelated edit reports `differingFiles: 1` and no problem. An earlier draft of this comment
+ * claimed the wider thing and was refuted with that example.
  *
  * A count of differing files is returned as well as any problem, because it is the cheapest sanity
- * read a reviewer has: a slice touching one file that reports 40 differing files is measuring
- * against the wrong ref even though this arm is green.
+ * read a reviewer has, and it is the number that catches the case above: a slice touching one file
+ * that reports 40 differing files is measuring against the wrong ref even though this arm is green.
  *
  * @param baseSrc - The materialized base `src/` directory.
  * @param headSrc - The working tree `src/` directory.
@@ -180,6 +185,15 @@ export const PROBE =
  * feeds the differential's JSON-fixtures section, which scores with a comparison of its own
  * (`readJson`) rather than the one this arm is handed, so a mutant here would assert sensitivity for
  * a comparison that is not under test. That section remains ungraded by this control.
+ *
+ * **A SECOND DECLARED GAP, AND IT IS THE LIVE ONE: every mutant here perturbs a SUCCESSFUL emit, so
+ * none of them covers a change to WHICH refusal a writer raises.** The differential's `emit()`
+ * records every `FhirSerializeError` as one `REFUSED` sentinel and a `Reading` carries neither the
+ * refusal code nor its message, so swapping one refusal for another moves no reading at all. That is
+ * `PRE-EXISTING` in `read-differential.ts` and is NOT closed here: a mutant for it would red this arm
+ * on every run for a blindness this change does not fix, which is the permanent-false-red shape the
+ * control it replaced already had. It is named on the printed report instead, beside the zero it can
+ * produce. **Do not read a green arm 2 as covering the refusal identity.**
  */
 export const MUTANTS: readonly Mutant[] = [
   {

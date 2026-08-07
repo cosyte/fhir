@@ -945,15 +945,20 @@ async function main(): Promise<void> {
       line("src/ files differing between the two trees", differingFiles);
       line("documents", tally.documents);
       line("readings moved", tally.moved);
-      // A bare zero here has been read as a pass before. It is not one, in either direction: say
-      // which case the run is in, in words, beside the number.
+      // A bare zero here has been read as a pass before, so the number is annotated. THE
+      // ANNOTATION NAMES THE CANDIDATE CAUSES AND PICKS NONE OF THEM: this harness cannot tell
+      // them apart, and an earlier draft of these lines asserted the first one, which was a fresh
+      // false claim of exactly the shape this slice exists to remove. It was refuted in one run.
       if (tally.moved === 0) {
         process.stdout.write(
           differingFiles === 0
             ? "    (0 because there is no change in front of the harness at all -- see HARNESS PROBLEMS)\n"
-            : `    (0 across ${String(differingFiles)} differing source file(s): no document in this corpus reaches\n` +
-                "     the changed code. That is an observation about the corpus, NOT evidence that the change\n" +
-                "     is safe, and it is what a write-path slice normally looks like here.)\n",
+            : `    (0 across ${String(differingFiles)} differing source file(s). Two things produce that and this\n` +
+                "     harness does not distinguish them: no document in the corpus reaches the changed code, OR\n" +
+                "     the change is of a shape this comparison does not carry. The second is not hypothetical --\n" +
+                "     `emit()` records EVERY writer refusal as one sentinel, so a change to WHICH refusal fires\n" +
+                "     is invisible here while `serializations REFUSED` below still counts them. Attribute it\n" +
+                "     yourself; a 0 on this line is not evidence that the change is safe.)\n",
         );
       }
       process.stdout.write("\n  no-suppression bar\n");
