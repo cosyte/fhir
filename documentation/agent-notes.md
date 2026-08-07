@@ -1191,8 +1191,13 @@ works today: one fails, and the other was never the sender's document.
 **Repairing was not available.** XML has no escape for an element name, so the alternatives to
 refusing are mangling the name (authoring a name nobody wrote) or emitting the breakout (authoring
 elements nobody wrote). Both are the fabrication class. Refusing invents nothing, and
-`serializeResource` still encodes every one of these models correctly, so the capability is routed
-rather than lost. That is what makes this a refusal and not a withdrawal.
+`serializeResource` escapes a member name, so this refusal never reaches it and that route stays
+open. That is what makes this a refusal and not a withdrawal. **Narrowed 2026-08-07 from
+"`serializeResource` still encodes every one of these models correctly", the same wide claim `#65`
+and `#66` closed at the other sites**: that is a claim about the whole model and it is false, because
+a model refused here can carry one of the JSON writer's own declared exceptions and have it emitted. Pinned by a test rather than described
+(`{"resourceType":"Observation","name":[[{"family":"X"}]],"zz value="1"/><status":1}` is refused here
+and comes back out of `serializeResource` with the array inside an array intact).
 
 **▶ THE CHECK RUNS AT THE EMISSION SITE, NOT IN A PRE-PASS WALKER.** A pre-pass would have to
 re-derive the writer's own branching (which names become attributes, which become the tag, which are
@@ -1857,3 +1862,65 @@ Version PR consumes a changeset its text is frozen into a published `CHANGELOG.m
 body, and neither is retractable under ADR 0001. It was left alone on instruction, not on judgement.
 The window is open only while the changeset is pending -- the same cheap moment the 2026-08-06
 changeset correction turned on. **Raise it before the next Version PR, not after.**
+
+## The changeset window, closed (2026-08-07, `FHIR-CHANGESET-WINDOW`)
+
+`conformance-refuter` **NOT REFUTED**, 1 pass. Zero executable bytes: two `.md` files.
+`scripts/verify.sh` green, all 11 steps audited from its `ran:` list, 56 files / 1,090 tests,
+97.86% stmt / 94.67% branch, all unchanged from `e6f97f7` as a claim correction must leave them.
+
+**The site the section above named is closed.** `.changeset/gentle-pugs-attack.md` no longer says
+`serializeResource` "escapes a member name and encodes every one of these models correctly". It now
+says only that the JSON route stays open, names the limit, and gives the counterexample already
+pinned by `test/xml-tag-name.test.ts`. **A second live copy turned up in this file** and is narrowed
+in place with the old wording quoted: the `#64` narrative's "Repairing was not available" paragraph
+asserted the wide claim as its own design rationale. An archive records what was believed, so the
+sentence is annotated rather than deleted.
+
+**▶ WHAT WAS MEASURED BEFORE ANY WORD WAS REWRITTEN.** All 13 names the refusal covers are refused by
+`serializeResourceXml` and written by `serializeResource` with the member name intact, so the narrow
+half of the sentence is true. Three of that writer's declared exceptions reach it beside a refused
+name (an array inside an array, a scalar where FHIR JSON has an object, a non-string `resourceType`),
+so the wide half is not. **The two unplaceable shapes this lineage defers do NOT falsify it**, which
+is worth writing down because assuming they did would have been another guess: beside a refused name,
+`{"resourceType":"Patient","name":[{"given":[["Peter"],"James"]}],"a b":1}` and
+`{"resourceType":"Patient","_given":[[1]],"a b":1}` both come back out of `serializeResource`
+byte-identical to their input. The 27 documents whose emitted XML re-reads differently are a
+`serializeResourceXml` measurement and do not bear on a sentence about the JSON writer.
+
+**▶ 🔴 A `null` AT A PRIMITIVE POSITION IS READ WITH ZERO DIAGNOSTICS AND THEN DELETED BY THE WRITER.
+`PRE-EXISTING`, NOT CLOSED HERE, AND IT IS ITS OWN ITEM.** Found while measuring the sentence above,
+widened by the gate, and reproduced first-hand at `1577cf3` on `dist/`:
+
+```
+in : {"resourceType":"Patient","identifier":[{"system":"http://hospital.example/mrn","value":null}]}
+     parse [] , validateResource valid:true issues [] , readSafety safeToSummarize:true
+out: {"resourceType":"Patient","identifier":[{"system":"http://hospital.example/mrn"}]}   <- value GONE
+
+in : {"resourceType":"Observation","status":"final","code":{"text":"x"},
+      "valueQuantity":{"value":null,"unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}}
+     readSafety safeToSummarize:true
+out: ..."valueQuantity":{"unit":"mg","system":"...","code":"mg"}    <- MAGNITUDE gone, unit kept
+
+in : {"resourceType":"Observation","status":null,"code":{"text":"x"}}
+out: {"resourceType":"Observation","code":{"text":"x"}}             <- status GONE, no diagnostic
+```
+
+`src/codec/read.ts` returns `undefined` for a JSON `null` and pushes no issue; the writer then omits
+a value-absent primitive. **Non-conformant input is laundered into a clean conformant document with
+the member missing, and every layer affirms.** `json.html` §2.6.2.3 sanctions `null` only as
+array-alignment padding, and this repo already cites that rule in `src/safety/codes.ts`.
+**README's declared exception list does not cover this**: "a scalar or `null` where FHIR JSON has an
+object" is the object case, which is preserved and flagged (`nonObjectSource`); the primitive case is
+dropped and silent. A dose magnitude and a patient identifier are both in the blast radius, so this
+is the safety spine's own subject matter, not a tidiness item.
+
+**▶ THE `div` PARAGRAPH AT THE FOOT OF `gentle-pugs-attack.md` IS LEFT ALONE, DELIBERATELY.** It says
+the `div` route is "pre-existing and NOT closed here" and walks through the `no-known-allergy`
+forgery. That is accurate about `#64` and stale about the release, because `quiet-moons-repeat.md`
+closes it in the same Version PR and "here" has no referent in a release body. Not folded in: the
+item was one sentence and time-boxed, and growing a claim correction is how the last one got wide.
+**Settle it before the Version PR runs.**
+
+**This section and the residual above were written AFTER the gate returned its verdict, so they are
+UNGRADED**, in the same shape `#65` and `#66` recorded their post-verdict edits.

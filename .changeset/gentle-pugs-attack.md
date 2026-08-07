@@ -17,9 +17,14 @@ The writer now refuses, with a new `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT
 position that writes a tag: a property name, a root `resourceType`, the wrapper of a resource-valued
 element, and a nested resource's own type. Refusing rather than repairing, because XML has no escape
 for an element name, so the alternatives are mangling the name or emitting the breakout, and both
-author content nobody wrote. The capability is routed rather than lost: `serializeResource` escapes
-a member name and encodes every one of these models correctly. Locations stay bounded and never echo
-the offending name, which can itself be a forgery.
+author content nobody wrote. The capability is routed rather than lost: `serializeResource` escapes a
+member name, so this refusal never reaches it and that route stays open. **That is a statement about
+the name, not about the model.** The JSON writer has its own declared exceptions, so a model refused
+here can carry one and have it emitted:
+`{"resourceType":"Observation","name":[[{"family":"X"}]],"zz value="1"/><status":1}` is refused here
+and comes back out of `serializeResource` with `"name":[[{"family":"X"}]]` intact, an array inside an
+array and the first entry on that writer's own exception list. Pinned by a test rather than
+described. Locations stay bounded and never echo the offending name, which can itself be a forgery.
 
 The line is deliberately narrow: "does this library's own round trip survive it", not "is this a
 conformant XML name". A prefixed name with nothing to bind it (`<v:x/>`), and names like `a&b`,
