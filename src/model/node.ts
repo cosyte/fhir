@@ -73,17 +73,19 @@ export interface FhirPrimitive {
   readonly nestedArrayMetaSource?: string;
   /**
    * The JSON text of a **non-object, non-array** value the sender wrote in this primitive's
-   * `_`-sibling (metadata) channel: a string, a number, a boolean, or a `null` that pads nothing.
-   * FHIR JSON gives that channel an `Element` object and nothing else (json.html §2.6.2.3, "the
+   * `_`-sibling (metadata) channel: a string, a number, a boolean, or a `null` at a **singleton**
+   * slot. FHIR JSON gives that channel an `Element` object and nothing else (json.html §2.6.2.3, "the
    * `id` and/or `extension`"), so there is no metadata to read out of a scalar and the reader models
    * none. This is the `_`-sibling counterpart of {@link FhirComplex.nonObjectSource} and it exists
    * for the same reason: without the text the writer has no `_`-sibling to emit, so the member is
    * dropped and a non-conformant document comes back conformant with it simply gone. The reader
    * raises {@link ISSUE_CODES.UNKNOWN_PROPERTY} at the element's position.
    *
-   * **A `null` at a slot of a repeating primitive's `_`-array is padding and is never marked here**
-   * (§2.6.2.3 fills out *both* arrays), so a conformant document never carries this. A `null` at a
-   * **singleton** `_` slot is not padding, on the same reasoning as {@link undefinedNull}, and is.
+   * **A `null` at any slot of a repeating primitive's `_`-array is never marked here** (§2.6.2.3
+   * fills out *both* arrays), so a conformant document never carries this. The exemption is by
+   * **position**, not by whether that slot pads a value, so a `_`-array with no value array beside
+   * it keeps the silent drop it had before: declared, not closed. A `null` at a **singleton** `_`
+   * slot is never padding, on the same reasoning as {@link undefinedNull}, and is marked.
    * An **array** in this channel is the neighbouring case with its own field
    * ({@link nestedArrayMetaSource}) and its own code. Absent on every document read from XML.
    *

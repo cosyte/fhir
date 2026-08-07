@@ -39,9 +39,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `_`-array is the padding the spec defines and draws nothing, while a `null` at a **singleton** `_`
   slot is never padding and does. A conformant document is untouched, and no round trip that worked
   before was withdrawn. An **array** in that channel keeps its existing `NESTED_ARRAY` code and text.
-  The write side needed **two** changes, not one: `hasMeta`, and the `resourceType` hoist, which
-  skipped the property outright once its value was moved to the front and so deleted the sibling
-  whatever `hasMeta` said. That second branch also stops silently dropping a `_resourceType` that
+  The write side needed **three** changes, not one: `emitMeta`, which without a branch for the
+  preserved text emits `{}` and so authors a `_`-sibling object the sender never wrote; `hasMeta`,
+  which decides whether a `_`-sibling is emitted at all; and the `resourceType` hoist, which skipped
+  the property outright once its value was moved to the front and so deleted the sibling whatever
+  `hasMeta` said. That last branch also stops silently dropping a `_resourceType` that
   carried real `id` metadata. `nodesEquivalent` compares the preserved text, so a primitive that
   carried a non-object sibling is no longer equivalent to one that never had a sibling.
   **Declared open, not closed here:** an **empty** `_`-sibling object or array (`{"_status":{}}`,
@@ -49,7 +51,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   and is still deleted silently; a `_`-sibling object's own unreadable **member**
   (`{"_status":{"foo":1}}`) is reported but that report still does not survive emit, because closing
   it means putting preserved text in front of metadata the model already holds; a `_`-sibling beside
-  a **non-primitive** keeps `MISPLACED_PRIMITIVE_EXTENSION`, still lost across a round trip; and
+  a **non-primitive** keeps `MISPLACED_PRIMITIVE_EXTENSION`, still lost across a round trip; the
+  `_`-array exemption is by **position**, so §2.6.2.3's Note half that scopes its `null` to a slot
+  whose element _has_ a value is not implemented and `{"_given":[null]}` with no `given` beside it
+  keeps its silent drop; and
   `JSON -> XML -> JSON` still launders the shape, because XML has no `_`-sibling channel to carry the
   text. `validateResource` and `readSafety` are unchanged: nothing was unreadable at that position in
   the sense `NESTED_ARRAY` and `DROPPED_ELEMENT_TEXT` mean it.

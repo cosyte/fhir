@@ -48,8 +48,10 @@
  *    discards *whole* because it is misplaced or unrecognised (a `_`-sibling on an object or on a
  *    non-primitive array, or a member of a `_`-sibling object that is neither an `id` **string**
  *    nor an
- *    `extension` array). **The list is the predicate: a `_`-sibling that is not an object at all is
- *    not one of them**: it keeps its text and is reported, per 6 below. Nothing in the three listed
+ *    `extension` array). **The list is the predicate, and 6 below does not shrink it**: a
+ *    `_`-sibling on an object or on a non-primitive array is still discarded whole, whatever it
+ *    holds. What 6 reaches is a `_`-sibling **on a primitive**, which is the only position that
+ *    leaves a node to hang the text on. Nothing in the three listed
  *    becomes a node, so there is nothing to mark, and an array
  *    inside such a sibling draws the `UNKNOWN_PROPERTY` warning for the discarded sibling and no
  *    refusal. Reaching it would mean reading raw JSON the codec deliberately does not model, which
@@ -68,16 +70,19 @@
  *    dropping it, and re-reading the output reproduces the finding. See {@link applyNullRule} for
  *    why this is a diagnostic and not a refusal.
  *
- * 6. **A `_`-sibling that is not an object.** The same laundering, one channel over, and closed the
- *    same way. FHIR JSON gives that channel an `Element` object (json.html §2.6.2.3, "the `id`
- *    and/or `extension`"), so a string, a number, a boolean, or a `null` that pads nothing carries no
- *    metadata to read. **Nothing is lost here either**, and that is again why it was invisible: the
+ * 6. **A `_`-sibling, on a primitive, that is not an object.** The same laundering, one channel over,
+ *    and closed the same way. FHIR JSON gives that channel an `Element` object (json.html §2.6.2.3,
+ *    "the `id` and/or `extension`"), so a string, a number, a boolean, or a `null` at a **singleton**
+ *    slot carries no metadata to read. **Nothing is lost here either**, and that is again why it was invisible: the
  *    reader modeled no metadata, the writer emits a `_`-sibling only for metadata it has, and
  *    `{"_status":null}` therefore came back as `{}`. The reader raises `UNKNOWN_PROPERTY` (the same
  *    code, and the same observation, as a scalar at a complex position) and keeps the text
- *    ({@link ../model/node.js} `nonObjectMetaSource`) so the writer hands it back. A `null` **padding
- *    a repeating primitive's `_`-array** is the one shape §2.6.2.3 defines and is untouched. See
- *    {@link applyMetaSlotRule}.
+ *    ({@link ../model/node.js} `nonObjectMetaSource`) so the writer hands it back. **The exemption is
+ *    by POSITION, not by whether that slot pads a value:** a `null` at any slot of a repeating
+ *    primitive's `_`-array is left alone, which is where §2.6.2.3 defines one. §2.6.2.3's Note also
+ *    scopes its `null` to a slot whose element *has* a value, and that half is NOT implemented, so a
+ *    `_`-array with no value array beside it keeps the silent drop it had before. Declared, not
+ *    closed. See {@link applyMetaSlotRule}.
  *
  * Reading is lenient elsewhere (Postel's Law): an unexpected shape is preserved and flagged, not
  * rejected. Only genuinely unrecoverable structure (malformed JSON, broken `_`-alignment) throws.
@@ -310,11 +315,15 @@ function carriesMetadata(meta: PrimitiveMeta): boolean {
  * - **An array** is not this case. In a repeating primitive's `_`-array it is an array inside an
  *   array, already marked and reported as `NESTED_ARRAY` with its own preserved text; at a singleton
  *   slot {@link buildNode} has already thrown `PRIMITIVE_EXTENSION_MISALIGNED`.
- * - **A `null` at a slot of a repeating primitive's `_`-array is padding**, and the one FHIR JSON
- *   defines: §2.6.2.3 fills out *both* arrays so the two stay index-aligned, so a slot whose value
- *   needs no metadata is spelled `null` there. A `null` at a **singleton** `_` slot is never padding,
- *   on exactly the reasoning {@link applyNullRule} sets out for the value channel: §2.6.2.3 renders a
- *   value-absent singleton as the `_` property alone.
+ * - **A `null` at a slot of a repeating primitive's `_`-array**, which is where §2.6.2.3 defines
+ *   one: it fills out *both* arrays so the two stay index-aligned, so a slot whose value needs no
+ *   metadata is spelled `null` there. **The test is `inArray`, so the exemption is by POSITION, not
+ *   by whether that slot pads a value.** §2.6.2.3's Note scopes its `null` to a slot whose element
+ *   *has* a value, and that half is deliberately NOT implemented: `{"_given":[null]}` with no
+ *   `given` beside it keeps the silent drop it had before, a declared residual rather than a claim.
+ *   A `null` at a **singleton** `_` slot is never padding, on exactly the reasoning
+ *   {@link applyNullRule} sets out for the value channel: §2.6.2.3 renders a value-absent singleton
+ *   as the `_` property alone.
  *
  * **This cannot reopen the drift that {@link carriesMetadata} guards.** That hazard is the read
  * exempting a `null` as padding while `hasMeta` in {@link ./write.js} declines to emit the
