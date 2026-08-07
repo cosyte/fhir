@@ -952,6 +952,115 @@ base and head agreed and every zero was meaningless. Re-keyed to this slice's ow
 it every time**, and note that the control reads XML only, so the JSON half of this slice is outside
 it and is covered by `test/nested-array.test.ts` instead.
 
+### `div` forges a negation (2026-08-07)
+
+**THE `div` BRANCH NO LONGER SPLICES A STRING INTO THE DOCUMENT UNEXAMINED.** The item that carried
+this defect forbade proposing a remedy before measuring one, because two earlier drafts had guessed
+and both guesses were false. The measurement came first, and it changed the shape of the answer
+twice, so the order is the point.
+
+**▶ 🛑 THE STANDING CAVEAT, WHICH TRAVELS WITH EVERY NUMBER BELOW: this repo's XML corpus is 7
+hand-authored fixtures plus mutations, NOT the FHIR R4 published-examples corpus.** The sweep here
+is over generated `div` STRINGS, which is a third axis again, and is not corpus-wide either.
+
+#### What was measured, before anything was proposed
+
+A battery of 16 `div` strings through `parseResource` -> `serializeResourceXml` -> `parseResourceXml`
+on `658a1f0`, recording emission, re-read issues, `validateResource`, and the whole safety readout at
+both ends. What it established, and each line changed the remedy:
+
+- The flagship forgery re-reads with `noKnownAllergy: true`, `negations: ["no-known-allergy"]`,
+  `safeToSummarize: true` and an **empty issue list**, exactly as the item says. It also re-reads
+  `validateResource().valid === false`, because the breakout leaves two `<text>` elements. **The item
+  never claimed `valid: true` on the re-read and neither does anything here.**
+- `{"resourceType":"Observation","div":"<status value=\"final\"/>"}` is **one perfectly well-formed
+  element**. So the second wrong guess ("well-formedness does not close it") was wrong in the other
+  direction too: well-formedness is not sufficient, not merely not necessary. A check that stopped at
+  well-formedness would have left the status forgery wide open.
+- **A shape nobody had recorded: `{"div":""}` is dropped in SILENCE.** Base emitted
+  `<text><status value="generated"/></text>`, the property simply gone, empty issue list and
+  `valid: true` at both ends. Of the three recorded shapes `{"div":"v"}` was the one said to fail
+  safe; this fourth one does not fail at all.
+- **Every `div` string the XML READER produces passes the check**, over 7 spellings (default and
+  prefixed XHTML, no declaration, vendor namespace, empty element, a comment inside, an escaped `<`)
+  and over the fixture corpus. `narrativeSource` serializes one element and materialises the
+  namespace declarations it inherited, so the string it hands back is always one balanced element
+  whose local name is `div`.
+
+#### The remedy the measurement chose, and why it is at the write
+
+`emitsOneDivElement` in `src/xml/write.ts`: the string is written only when `readRawXml` parses it as
+a document with exactly one root element **and** that root's local name is `div`. It runs at the
+branch that splices the string in, next to `tag()`, for the reason `tag()` gives: a pre-pass would
+re-derive the writer's branching and be free to disagree with it. `refuseUnserializableDivMarkup`
+raises `UNSERIALIZABLE_DIV_MARKUP` at the root once the walk is done, after the name refusal, so a
+model tripping both keeps the code base already reported.
+
+- **The same parser, over the same bytes, is the whole soundness argument.** `readRawXml` is what
+  `parseResourceXml` re-reads the emitted document with, and the fragment is balanced, so what it
+  counts as one element is what the re-read sees as one element.
+- **The local name, not the full name**, because `<h:div xmlns:h="…xhtml">` is a spelling this
+  library reads and round-trips today and refusing it would withdraw a working round trip.
+- **Not the namespace, and not whether a prefix is bound inside the string.** An unprefixed `<div>`
+  under no declaration and a vendor-namespace one both reach `Narrative.div` on the read. A root
+  whose prefix nothing binds IS accepted, and the emitted document re-reads it as a property named
+  `v:div`: that is the separately declared unbound-prefix residual reached through a value, not this
+  defect, and folding it in would have made this slice the fix for a class it had not measured.
+- **Refusing rather than repairing**, for the same reason as a name: escaping authors a text node
+  where the sender wrote markup, splicing authors elements, and `serializeResource` carries the
+  string as a string, so the capability is routed rather than lost.
+
+#### The numbers, and the one instrument that could not grade this
+
+**360,020 `div` strings** (a directed set of 20, 120,000 built from markup atoms, and 240,000 one-
+and two-edit mutations of six strings this library reads back unchanged, which is where a false
+positive would live). **107,807 accepted, 252,213 refused, and of the 65,464 whose BASE round trip
+returned the string unchanged, 0 are refused: 0 false positives.** The sweep carries a negative
+control that fires when the imported tree parses no FHIR resource at all; pointed at `@cosyte/hl7` it
+exits 2 and prints that every number above it is meaningless, and against this package it is silent.
+
+**▶ THE READ DIFFERENTIAL CANNOT GRADE THIS SLICE, AND SAYING SO IS THE HONEST RESULT.**
+`pnpm differential:read` over 1,195 documents reports 0 readings moved, 0 newly throwing, 0 leaf
+values missing, 0 diagnostics lost and the same 360 refusals as base. Those zeros are **expected by
+construction**: no XML document this library can read produces a `div` string the check refuses, so
+the harness has nothing to see. Two further facts, both `PRE-EXISTING` and neither introduced here:
+its `CONTROL.moved` still names the merged `MIXED_XML_SPELLING` slice, so the negative control fires
+on an **unmodified working tree** (verified by stashing and re-running), and its `whole()` compares
+`json`/`valid`/`findings`/`issues`/safety but **not `xml`**, so it could not see an XML-writer-only
+divergence in any case. Re-keying it needs a document THIS change moves and there is none.
+**Do not report those zeros as a green control.**
+
+#### What pinned it, and what pins it now
+
+The three characterization tests in `test/xml-tag-name.test.ts` went **red on this change**, which is
+the mechanism working, and were rewritten as the same shapes with their new outcome so the base-to-head
+comparison stays readable in one place. Six refusal tests plus a block of what is still written; every
+one was demonstrated red against a mutation of the behaviour it pins and against **only** that one
+(the check forced to `true` reds five; swapping the two refusals' order reds the precedence test and
+nothing else). The false-positive control is committed as a `fast-check` property that builds base's
+output by hand, so a reviewer re-derives it rather than trusting a number here.
+
+#### Left open deliberately
+
+- The `_`-sibling whose value is not an object, the non-string `resourceType` tag substitution, and
+  `escapeAttr` passing XML-illegal control characters. All `PRE-EXISTING`, all named on the item, all
+  read-path or attribute-path rather than this branch.
+- Comments and processing instructions beside the root are accepted and do not survive the re-read.
+  Neither is an element, so neither can forge one; pinned by a test rather than argued.
+
+#### Open read-path losses, enumerated
+
+*Relocated verbatim from `CLAUDE.md` on 2026-08-07 under the doc budget, nothing dropped. The rule it
+qualifies stays there.*
+
+A **status** or a dose number written as XML element text is dropped (reported, and the writer
+refuses, but the safety spine reads `negations: []`), which is the one that qualifies "never drops a
+modifier, status or negation"; so are a scalar beside a nested array (**still not modeled**, but
+since 2026-08-05 its text is preserved and handed back, so the finding survives a **JSON** round
+trip; through the XML writer it is still `<name/>` and both the value and the finding go), a
+`_`-sibling discarded whole, a foreign child of a valued primitive, character data at the three
+`flagStrayText` sites, an unbound prefix, and a `<DIV>` wrapper.
+
 ### `FHIR-UNBOUND-PREFIX-ROUNDTRIP` (2026-08-07)
 
 **THE DEFERRAL STANDS, AND MEASURING IT FOUND A STRICTLY WORSE DEFECT IN THE SAME FUNCTION.** The

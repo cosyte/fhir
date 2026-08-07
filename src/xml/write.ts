@@ -16,7 +16,8 @@
  * Output is compact (no insignificant whitespace), so a spec-clean document round-trips **byte-for-byte**
  * through {@link ./read.js}. A decimal value is emitted from its exact lexical text and never routes
  * through a JavaScript `number`. Narrative `<div>` XHTML is written back as the opaque string the
- * model carries, verbatim and unchecked.
+ * model carries, verbatim. Its XHTML is not validated, but the string is checked at that branch for
+ * the one property splicing it in depends on ({@link emitsOneDivElement}).
  *
  * @packageDocumentation
  */
@@ -31,20 +32,25 @@ import {
 import {
   assertSerializable,
   breaksTag,
+  refuseUnserializableDivMarkup,
   refuseUnserializableNames,
 } from "../codec/serialize-guard.js";
 import { childPath, rootPath } from "../model/path.js";
 import { FHIR_XML_NAMESPACE } from "./read.js";
+import { readRawXml } from "./raw-xml.js";
 
 /**
- * The one mutable thing the writer carries: the locations whose name cannot be written as a tag.
+ * The one mutable thing the writer carries: the locations it refuses, by reason.
  *
  * Collected rather than thrown at the first hit so a caller sees every position in one pass, the
  * same shape {@link assertSerializable} reports. The writer still builds its string; the refusal is
  * raised at the root once the walk is complete, so a partially-built document is never returned.
  */
-interface TagNameSink {
-  readonly refused: string[];
+interface RefusalSink {
+  /** Locations whose name cannot be written as a tag ({@link breaksTag}). */
+  readonly refusedNames: string[];
+  /** `div` locations whose raw markup fails {@link emitsOneDivElement}. */
+  readonly refusedDivs: string[];
 }
 
 /**
@@ -58,9 +64,51 @@ interface TagNameSink {
  *
  * @returns The name, unchanged, so a caller can write `<${tag(...)}>` inline.
  */
-function tag(name: string, path: string, sink: TagNameSink): string {
-  if (breaksTag(name)) sink.refused.push(path);
+function tag(name: string, path: string, sink: RefusalSink): string {
+  if (breaksTag(name)) sink.refusedNames.push(path);
   return name;
+}
+
+/**
+ * Whether the raw string a `div` property carries would contribute exactly one element to the
+ * document, and that element is the `div` the model names.
+ *
+ * **This is the check at the one site that emits markup rather than a name, and it is stated as the
+ * question the site actually has to answer**: `writeItem` splices this string into the document
+ * unexamined, so everything it spells becomes markup. `readRawXml` is the same parser
+ * {@link parseResourceXml} re-reads the document with, run over the same bytes, so what it reports
+ * as one element is what the re-read sees as one element. Two conditions, and both are load-bearing:
+ *
+ * - **it parses as a document with exactly one root element.** A string that closes its own element
+ *   and opens siblings (`…</div></text><code>…</code><text>`) is trailing content after the root and
+ *   fails here. That shape is the reason this exists: it put a SNOMED `716186003` coding into an
+ *   `AllergyIntolerance` that asserted nothing, and the re-read affirmed a `no-known-allergy`
+ *   negation with no diagnostic at either end.
+ * - **that root's local name is `div`.** Well-formedness alone does not settle it, and assuming it
+ *   did was one of two wrong guesses recorded against this defect: `<status value="final"/>` is one
+ *   perfectly well-formed element, and emitting it for a property named `div` authors a status the
+ *   sender never wrote. The **local** name is compared because a prefixed narrative (`<h:div
+ *   xmlns:h="…xhtml">`) is a spelling this library reads and round-trips today.
+ *
+ * **What it does NOT check**, because neither is this defect and refusing on either would withdraw
+ * markup this library reads back unchanged: which namespace the root is in (an unprefixed `<div>`
+ * under no declaration, and a vendor one, both reach `Narrative.div` on the read), and whether a
+ * prefix on the root is bound inside the string (an unbound prefix is the separately declared
+ * residual on this function's own output). Comments and processing instructions around the root
+ * parse as prolog/misc and are accepted: neither is an element, and the re-read drops them.
+ *
+ * @param value - The raw string a `div` property carries.
+ * @returns `true` when the string may be written verbatim.
+ */
+function emitsOneDivElement(value: string): boolean {
+  let name: string;
+  try {
+    name = readRawXml(value).name;
+  } catch {
+    return false; // not one well-formed element: unbalanced, multi-root, a DTD, an undefined entity.
+  }
+  const colon = name.indexOf(":");
+  return (colon === -1 ? name : name.slice(colon + 1)) === "div";
 }
 
 /** Serialize a scalar primitive value to its lexical text (decimal from exact `raw`, never a `number`). */
@@ -106,7 +154,7 @@ function writePrimitiveElement(
   path: string,
   name: string,
   node: FhirPrimitive,
-  sink: TagNameSink,
+  sink: RefusalSink,
 ): string {
   const tagName = tag(name, path, sink);
   let attrs = "";
@@ -129,16 +177,21 @@ function writeItem(
   name: string,
   node: FhirNode,
   inExtension: boolean,
-  sink: TagNameSink,
+  sink: RefusalSink,
 ): string {
   // A narrative `Narrative.div` is carried as its full opaque XHTML string (matching FHIR JSON); emit
   // it verbatim so the output is conformant `<div xmlns="…">…</div>`, never an escaped attribute.
-  // 🔴 THIS IS THE ONE MARKUP-EMITTING SITE `tag()` DOES NOT COVER: the string is emitted unexamined,
-  // so markup inside it reaches the document. `serializeResourceXml`'s docblock carries the three
-  // measured shapes and `test/xml-tag-name.test.ts` pins them. Not scoped to `Narrative`: any
-  // property named `div`, at any depth, takes this branch.
+  // THIS IS THE ONE SITE THAT WRITES MARKUP RATHER THAN A NAME, so `tag()` cannot cover it and
+  // `emitsOneDivElement` is its counterpart: the string is checked here, at the site that splices it
+  // in, for the only property that makes it safe to splice: that it spells the one `div` element
+  // this property names. Not scoped to `Narrative`: any property named `div`, at any depth in any
+  // resource, takes this branch, which is why the check is on the branch and not on a resource type.
+  // Nothing is repaired: a string that fails is recorded and the refusal is raised at the root, so
+  // the forged markup is never built into the returned document.
   if (name === "div" && node.kind === "primitive" && typeof node.value === "string") {
-    return node.value;
+    if (emitsOneDivElement(node.value)) return node.value;
+    sink.refusedDivs.push(path);
+    return "";
   }
   if (node.kind === "primitive") return writePrimitiveElement(path, name, node, sink);
   if (node.kind === "list")
@@ -160,7 +213,7 @@ function writeProperty(
   name: string,
   node: FhirNode,
   inExtension: boolean,
-  sink: TagNameSink,
+  sink: RefusalSink,
 ): string {
   const path = childPath(parentPath, name);
   if (node.kind === "list")
@@ -181,7 +234,7 @@ function writeElement(
   node: FhirComplex,
   isRoot: boolean,
   inExtension: boolean,
-  sink: TagNameSink,
+  sink: RefusalSink,
 ): string {
   const written = tag(tagName, path, sink);
   const isResource = resourceTypeOf(node) !== undefined;
@@ -229,22 +282,23 @@ function writeElement(
  * library's own round trip does survive them, and refusing would withdraw that from models it reads
  * as valid. What IS refused is the subset where nothing survives; see the `@throws` below.
  *
- * ## 🔴 The bigger gap in this function, which the refusal above does NOT cover
+ * ## The `div` branch, which writes markup rather than a name
  *
- * **A `div` property is written back as its own raw string, examined by nothing, so markup inside it
- * is markup in the output.** Measured, and no remedy is proposed here on purpose:
+ * A `div` property is written back as its own raw string, so what that string spells is markup in
+ * the output. `emitsOneDivElement` is checked at that branch before the string is spliced in, and
+ * the string is written only when it parses as exactly one element whose local name is `div`; a
+ * string that fails raises `UNSERIALIZABLE_DIV_MARKUP` below. The shape that check exists for is
+ * `<div xmlns="…xhtml">ok</div></text><code><coding>…716186003…</coding></code><text>` on an
+ * `AllergyIntolerance`: it used to be spliced in whole, and the emitted document re-read with
+ * `noKnownAllergy: true` and a `no-known-allergy` negation over a record that had asserted nothing,
+ * with no diagnostic at either end and `readSafety` affirming it.
  *
- * - a `div` on an `AllergyIntolerance` spelled
- *   `<div xmlns="…xhtml">ok</div></text><code><coding>…716186003…</coding></code><text>` re-reads
- *   with `noKnownAllergy: true` and a `no-known-allergy` negation over a record that asserted
- *   nothing, with no diagnostic at either end and `readSafety` affirming it;
- * - the branch keys on the name `div` alone, at any depth in any resource, so an `Observation` with
- *   a `div` member spelled `<status value="final"/>` emits exactly that and re-reads with a status
- *   it never had;
- * - `{"div":"v"}` emits `<Patient …>v</Patient>`, which re-reads with the property gone, one
- *   `UNEXPECTED_XML_CONTENT` warning and `safeToSummarize: false`.
- *
- * Older than the name refusal above and not closed by it. Pinned by `test/xml-tag-name.test.ts`.
+ * **What passing that check does and does not settle, by example rather than by rule.** A string it
+ * accepts contributes one element, and that element is the `div`; it is not a claim that the round
+ * trip is lossless from there. `<v:div>x</v:div>` carrying no binding for `v` is accepted, and the
+ * emitted document re-reads it as a property named `v:div` rather than as the narrative, which is
+ * the same unbound-prefix residual the paragraph above declares for names. A comment beside the
+ * root (`<!--c--><div …/>`) is accepted and does not survive the re-read.
  *
  * @param node - The resource model to serialize (must carry a `resourceType` to name the root element).
  * @returns Canonical FHIR XML text.
@@ -259,6 +313,12 @@ function writeElement(
  *   either fail to re-read at all, or re-read as DIFFERENT elements. The second is why this refuses
  *   rather than reports. {@link serializeResource} encodes every such model correctly, and is the
  *   route that stays open.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_DIV_MARKUP` if a `div` property carries a string
+ *   that would not be spliced in as the one `div` element the property names. It would carry other
+ *   elements into the document, or leave markup that does not re-read. Refused rather than repaired
+ *   for the same reason as a name: escaping it would author a text node where the sender wrote
+ *   markup, and splicing it authors elements the sender never wrote. {@link serializeResource}
+ *   carries the string as a string and is the route that stays open.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -271,8 +331,11 @@ export function serializeResourceXml(node: FhirComplex): string {
   assertSerializable(node);
   const rt = resourceTypeOf(node);
   const tagName = rt ?? "Resource";
-  const sink: TagNameSink = { refused: [] };
+  const sink: RefusalSink = { refusedNames: [], refusedDivs: [] };
   const xml = writeElement(rootPath(tagName), tagName, node, true, false, sink);
-  if (sink.refused.length > 0) refuseUnserializableNames([...new Set(sink.refused)]);
+  // Names first, which is the order base raised them in, so a model that trips both keeps the code
+  // it already reported. Both are raised after the walk, so neither returns a half-built document.
+  if (sink.refusedNames.length > 0) refuseUnserializableNames([...new Set(sink.refusedNames)]);
+  if (sink.refusedDivs.length > 0) refuseUnserializableDivMarkup([...new Set(sink.refusedDivs)]);
   return xml;
 }

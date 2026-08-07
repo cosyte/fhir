@@ -2,16 +2,16 @@
  * The write-path refusals: the places a writer declines to hand a model back rather than encode it
  * into something that re-reads as content nobody wrote.
  *
- * There are two, and they are refused at different scopes. {@link assertSerializable} runs in both
- * writers, because a dropped-character-data marker has no conformant encoding in either format.
- * {@link breaksTag} governs the XML writer only, because the harm is a name reaching a tag position,
- * and JSON escapes a member name so `serializeResource` encodes the same model correctly. Neither
- * refusal recognises anything new, invents a value, or changes a document that reads clean.
+ * {@link assertSerializable} runs in both writers, because a dropped-character-data marker has no
+ * conformant encoding in either format. {@link breaksTag} governs the XML writer only, because the
+ * harm is a name reaching a tag position, and JSON escapes a member name so `serializeResource`
+ * encodes the same model correctly. {@link refuseUnserializableDivMarkup} is raised by the XML
+ * writer for the same reason, at its one raw-markup site. No refusal here recognises anything new,
+ * invents a value, or changes a document that reads clean.
  *
- * **These two are a list, NOT a closed account of what a writer can author.** The XML writer emits a
- * `div` property as a raw string and nothing here examines it; that route is measured on
- * `serializeResourceXml` and is not covered by either refusal below. Do not read this module as a
- * guarantee about the writers, only as the two refusals it implements.
+ * **This module is a list of the refusals it implements, NOT a closed account of what a writer can
+ * author.** The predicate behind the third one lives at its site in `../xml/write.js`, next to the
+ * code that emits the markup, because a copy here would be free to disagree with it.
  *
  * The rest of this comment is the first refusal.
  *
@@ -55,6 +55,15 @@ export const SERIALIZE_ERROR_CODES = {
    * See {@link breaksTag} for the exact predicate and for what is deliberately NOT refused.
    */
   UNSERIALIZABLE_ELEMENT_NAME: "UNSERIALIZABLE_ELEMENT_NAME",
+  /**
+   * A `div` property carries a string the XML writer would emit as raw markup, and that string does
+   * not contribute exactly one element named `div` to the document. **XML only**: JSON carries the
+   * same string as a string, so `serializeResource` encodes every one of these correctly and is the
+   * route that stays open.
+   *
+   * See `emitsOneDivElement` in `../xml/write.js` for the exact predicate and what it does not cover.
+   */
+  UNSERIALIZABLE_DIV_MARKUP: "UNSERIALIZABLE_DIV_MARKUP",
 } as const;
 
 /** Discriminant union of every {@link SERIALIZE_ERROR_CODES} value. */
@@ -204,6 +213,27 @@ export function refuseUnserializableNames(locations: readonly string[]): never {
   throw new FhirSerializeError(
     `cannot serialize to XML: ${String(locations.length)} location(s) carry a name that cannot be written as an XML tag without changing which elements the document holds; serializeResource encodes this model correctly`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME,
+    locations,
+  );
+}
+
+/**
+ * Refuse to serialize a model whose `div` property carries markup the XML writer cannot emit as the
+ * one element the model names.
+ *
+ * **`locations` never echoes the string**, for the same reason the name refusal never echoes the
+ * name: it is document content, and one of the shapes it takes here is a forgery of a clinical
+ * assertion. A `div` location is built from names the model already carries, so it is bounded by
+ * `childPath` exactly as every other write-path location is.
+ *
+ * @param locations - The bounded locations whose `div` markup is refused, in walk order.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP}.
+ * @internal
+ */
+export function refuseUnserializableDivMarkup(locations: readonly string[]): never {
+  throw new FhirSerializeError(
+    `cannot serialize to XML: ${String(locations.length)} div location(s) carry markup that would not be written as the one div element the model names; serializeResource encodes this model correctly`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP,
     locations,
   );
 }
