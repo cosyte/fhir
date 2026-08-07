@@ -16,12 +16,21 @@ left the element out.
 
 FHIR JSON defines `null` for one job, padding a repeating primitive's value array so it aligns
 index-by-index with the `_`-sibling array carrying that occurrence's `id`/`extension`
-(json.html §2.6.1). The rule now applied is that one. A `null` whose slot carries such metadata is
-padding: it draws nothing and round-trips byte-for-byte exactly as before. A `null` whose slot
-carries none pads nothing and leaves an element with neither a value nor children, which R4 `ele-1`
-requires one of, so the reader raises a new `UNDEFINED_JSON_NULL` warning at that position,
+(json.html §2.6.2.3, the one exception to §2.6.2.1's "properties never have null values"). The rule
+now applied is that one, and it has two conditions, both required for a `null` to be the exception:
+it sat **inside a repeating primitive's value array**, and the slot it produced **carries an `id` or
+a non-empty `extension`** for it to align with. Padding draws nothing and round-trips byte-for-byte
+exactly as before. Anything else leaves an element with neither a value nor children, which R4
+`ele-1` requires one of, so the reader raises a new `UNDEFINED_JSON_NULL` warning at that position,
 `isUndefinedNull` marks the node, and `serializeResource` writes the `null` back. Re-reading the
 output reproduces the finding rather than losing it.
+
+A singleton slot is never padding, whatever sits beside it: §2.6.2.3 renders a value-absent singleton
+as the `_` property alone, so `{"status":null,"_status":{…}}` is reported too. The conformant
+spelling carries no `null`, is never marked, and is emitted exactly as before, so no round trip was
+withdrawn. The set this walks is what the reader read as a primitive, not what FHIR types as one: the
+model is schema-free, so `{"subject":null}` on an `Observation` is reported here rather than as an
+unexpected property.
 
 This is a diagnostic and not a refusal. A `null` is a non-conformant encoding of an absent value
 rather than content the reader could not read, so the refusals that exist for unreadable content are

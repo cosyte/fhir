@@ -24,13 +24,32 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `resourceType`.
   The rule now applied is the one FHIR JSON actually defines. `null` has a single job, padding a
   repeating primitive's value array so it aligns index-by-index with the `_`-sibling array carrying
-  that occurrence's `id`/`extension` (json.html §2.6.1), so the test is whether the slot the `null`
-  produced carries any such metadata. One that does is padding, draws nothing, and round-trips
-  byte-for-byte exactly as before. One that does not pads nothing and leaves an element with neither a
-  value nor children, which R4 `ele-1` requires one of: the reader raises a new `UNDEFINED_JSON_NULL`
+  that occurrence's `id`/`extension` (json.html §2.6.2.3, the one exception to §2.6.2.1's "properties
+  never have null values"). Two conditions are required for a `null` to be that exception, and both
+  are checked: it sat **inside a repeating primitive's value array**, and the slot it produced
+  **carries an `id` or a non-empty `extension`** for it to align with. Padding draws nothing and
+  round-trips byte-for-byte exactly as before. Anything else leaves an element with neither a value
+  nor children, which R4 `ele-1` requires one of: the reader raises a new `UNDEFINED_JSON_NULL`
   warning at that position, `isUndefinedNull` marks the node, and `serializeResource` writes the
   `null` back, so re-reading the output reproduces the finding instead of laundering it away. Every
   measured position now round-trips byte-identically.
+  Both conditions were learned from the conformance gate, which refuted the first attempt. Testing
+  only the metadata exempted a **singleton** `null` beside a `_`-sibling, and §2.6.2.3 renders a
+  value-absent singleton as the `_` property alone, so `{"value":null,"_value":{"id":"q1"},"unit":"mg"}`
+  was still laundered. Treating `"extension":[]` as metadata split the read from the writer, whose
+  `hasMeta` requires a non-empty array, so the read affirmed the slot and the writer then deleted the
+  member: that reproduced all three headline shapes past the fix, and made the diagnostic unstable
+  across the package's own round trip. The predicate now matches the writer's exactly and is pinned
+  by a test that walks both halves over one matrix. The conformant spelling of a value-absent
+  primitive carries no `null`, is never marked, and is emitted exactly as before, so no round trip was
+  withdrawn.
+  **The set the code walks is what the reader read as a primitive, not what FHIR types as one.** The
+  model is schema-free, so a bare `null` at any singleton property reaches the primitive branch
+  whatever the element's FHIR type would be, and `{"subject":null}` on an `Observation` is reported
+  here rather than as an unexpected property. Only an array item and an item of a `_`-sibling's
+  `extension` array reach the complex branch.
+  A `JSON -> XML -> JSON` trip still launders the shape, because `serializeResourceXml` has no `null`
+  to write: declared as a residual rather than claimed closed.
   This is a **diagnostic, not a refusal**, deliberately. A `null` is a non-conformant encoding of an
   absent value, not content the reader could not read, so the fatal tier and the
   content-was-unreadable refusals (`NESTED_ARRAY`, `DROPPED_ELEMENT_TEXT`) are the wrong instrument,

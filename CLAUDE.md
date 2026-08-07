@@ -1,10 +1,9 @@
 # @cosyte/fhir: Project Guide for Claude
 
-**▶ The narrative lives in [`documentation/agent-notes.md`](documentation/agent-notes.md)**: every
-incident, every refuted gate pass, every shipped-phase history, verbatim and re-headed. This file
-keeps the cursor, the rules, and every trap; each trap below points at the section there that
-explains what it cost. Relocated 2026-08-04 (`CLAUDE-MD-AUDIT`, amending the meta-repo's
-`decisions/0023-doc-budgets.md`). **Never delete a trap to save bytes. Move it there and leave the
+**▶ The narrative lives in [`documentation/agent-notes.md`](documentation/agent-notes.md)**, verbatim
+and re-headed (2026-08-04, `CLAUDE-MD-AUDIT`, amending the meta-repo's `decisions/0023-doc-budgets.md`).
+This file keeps the cursor, the rules, and every trap, each pointing at the section there that
+explains what it cost. **Never delete a trap to save bytes. Move narrative there and leave the
 one-liner here.**
 
 ## Project
@@ -40,10 +39,7 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
     hand before ever linking one.
 - **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.** The full envelope,
-  what is built and what is explicitly **not** (`PROFILE_SLICE_UNCHECKED`, no bundled US Core IG
-  corpus, the CI-only `validator_cli.jar` differential, value-set membership without a supplied
-  terminology service, typed per-resource models, transaction **execution**), was relocated
-  2026-08-07 to
+  what is built and what is explicitly **not**, was relocated 2026-08-07 to
   [`#the-shipped-envelope-p1-through-p11`](documentation/agent-notes.md#the-shipped-envelope-p1-through-p11).
   **▶ IT IS NOT A NO-DATA-LOSS CLAIM OVER THE WHOLE PACKAGE, and its wording is base's own, not a
   fresh one**: read-path losses remain open and declared, and the one that qualifies "never drops a
@@ -111,13 +107,17 @@ Every line here cost a defect or a refuted gate pass. The pointer is to
 - **A `null` IS NOT A LOSS, WHICH IS WHY IT WAS INVISIBLE: READ SILENTLY, THEN DELETED ON EMIT, SO A
   NON-CONFORMANT DOCUMENT CAME BACK CLEAN WITH THE MEMBER GONE.** `{"value":null,"unit":"mg"}` lost
   the magnitude and **KEPT THE UNIT**, under `issues: []` / `valid: true` / `safeToSummarize: true`.
-  Closed 2026-08-07 by a **diagnostic plus a hand-back, NEVER a refusal**: `UNDEFINED_JSON_NULL`,
-  `isUndefinedNull`, and the writer writes the `null` back as it **already did one branch over**.
-  **THE RULE KEYS ON §2.6.1 PADDING, NOT ON "THE DOCUMENT WROTE `null`": the test is what reached the
-  SLOT.** **Do not widen it to every `null`** (false-errors on a conformant repeating primitive);
-  **do not narrow it to "inside an array"** (the singleton goes silent again). **The object position
-  is a DIFFERENT branch, still `UNKNOWN_PROPERTY` from `nonObjectSource`: do not move it onto the new
-  code.** `valid`/`safeToSummarize` are deliberately unchanged and pinned, so closing that MUST red.
+  Closed 2026-08-07 by a **diagnostic plus a hand-back, NEVER a refusal** (`UNDEFINED_JSON_NULL`,
+  `isUndefinedNull`, writer hands it back as it **already did one branch over**).
+  **THE §2.6.2.3 EXEMPTION HAS TWO CONDITIONS AND A GATE REFUTED A DRAFT CHECKING ONE: (a) INSIDE a
+  repeating primitive's value ARRAY** (a singleton is NEVER padding, so `{"value":null,"_value":
+{"id":"q1"}}` IS reported) **and (b) an `id` or a NON-EMPTY `extension` in the slot, WHICH MUST
+  MATCH `hasMeta` IN `write.ts`** (`"extension":[]` read as metadata but wrote as none, so the read
+  affirmed and the writer deleted the member: all three headline shapes came back, past the fix).
+  **Do not widen to every `null`** (false-errors on conformant padding). **The complex branch stays
+  `UNKNOWN_PROPERTY` from `nonObjectSource`; do not move it onto the new code. The set walked is what
+  the READER read, not what FHIR types** (`{"subject":null}` is reported).
+  `valid`/`safeToSummarize` and the `JSON->XML->JSON` residual are deliberately open and pinned.
   [`#the-null-laundering-closed-2026-08-07`](documentation/agent-notes.md#the-null-laundering-closed-2026-08-07)
 - **A PHI sweep over leaf values is not a PHI sweep.** `phi-leak.test.ts` swept values only, which is
   why a 1,000,000-byte property name, which produced a 1,000,011-byte `expression`, survived it.

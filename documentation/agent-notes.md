@@ -2034,7 +2034,7 @@ object slot (`"identifier":[null]`), and an all-value-absent repeating primitive
 (`{"given":[null]}` re-emitted as `{}`, losing the member outright). Already reported and already
 round-tripping, so untouched: a `null` **beside** an object in an array, and a `null` inside a
 `_`-sibling's `extension` array, both `UNKNOWN_PROPERTY` with the text handed back from
-`nonObjectSource`. Conformant and untouched: §2.6.1 null padding, both channels.
+`nonObjectSource`. Conformant and untouched: §2.6.2.3 null padding, both channels.
 
 **The asymmetry was the trap.** The README's declared exception list covered the **object** case
 (preserved and flagged) and not the **primitive** case (dropped and silent), so the docs read as
@@ -2049,14 +2049,47 @@ laundering, which is the actual harm, is closed on the **write**: the `null` goe
 sender wrote it, which is the rule `serializeResource` **already applied one branch over** at the
 complex position. That makes the writer uniform rather than introducing a philosophy.
 
-**The rule keys on §2.6.1, not on "the document wrote `null`".** FHIR JSON defines `null` for one
-job, padding a repeating primitive's value array so it aligns index-by-index with the `_`-sibling
-array carrying that occurrence's `id`/`extension`. So the test is **what reached the slot**: a slot
-with an `id` or an `extension` is padding and draws nothing; a slot with neither pads nothing and
-leaves an element with neither a value nor children, which R4 `ele-1` requires one of. That is why an
-`id` pads exactly as an `extension` does, why a padded singleton (`"birthDate":null` beside a
-`_birthDate` carrying an extension) draws nothing, and why `{"given":[null,null],"_given":[{"id":"a"},null]}`
-reports index 1 and not index 0.
+**The rule keys on §2.6.2.3, not on "the document wrote `null`", AND IT HAS TWO CONDITIONS. The gate
+refuted a first draft that checked only one, and the miss was not academic: it left every headline
+shape in the item still laundering.** FHIR JSON forbids `null` outright (§2.6.2.1, "properties never
+have null values (except for a special case documented below)") and carves out one exception, and the
+exception is about a **repeating** primitive: the value array and the `_`-sibling array are padded so
+they align index-by-index. So both of these must hold for a `null` to be the exception.
+
+- **(a) It sat inside a repeating primitive's value array.** The first draft tested only the metadata,
+  which exempted a **singleton** `null` beside any `_`-sibling. §2.6.2.3 states the singleton encoding
+  positively ("If the primitive has an id attribute or extension, but no value, only the property with
+  the `_` is rendered"), so `{"value":null,"_value":{"id":"q1"},"unit":"mg"}` is not the padded form of
+  anything, and the draft laundered it into a conformant unit-only `Quantity` with zero diagnostics:
+  the item's own named worst shape, surviving its own remedy.
+- **(b) The slot carries an `id` or a NON-EMPTY `extension`. This predicate must match `hasMeta` in
+  `codec/write.ts` exactly, and the two disagreeing is a laundering bug rather than a cosmetic one.**
+  `readMeta` sets `extension: []` for `"extension":[]`, so a draft testing `extension !== undefined`
+  exempted the slot on the read while the writer, which requires `length > 0`, emitted neither the
+  value nor the `_`-sibling and deleted the member. That reproduced **all three** of the item's shapes
+  (`status`, `identifier[].value`, and the quantity magnitude with the unit kept) verbatim past the
+  fix. It also made the diagnostic unstable across the package's own round trip: the writer normalizes
+  the empty `_`-sibling away, so read 1 affirmed and read 2 flagged the writer's own output, an
+  inconsistency the base did not have. An empty array is not metadata in any case (§2.6.2.1: "JSON
+  objects and arrays are never empty").
+
+Both conditions are pinned by tests that walk a matrix rather than by these sentences. `{"given":
+[null,null],"_given":[{"id":"a"},null]}` reports index 1 and not index 0, so an `id` pads exactly as a
+non-empty `extension` does.
+
+**The set the code walks is what the READER read as a primitive, not what FHIR types as one.** The
+model is schema-free, so a bare `null` at any **singleton** property reaches the primitive branch
+whatever the element's FHIR type would be: `{"subject":null}` on an `Observation` draws the code even
+though `Observation.subject` is a `Reference`. Only an array item, and an item of a `_`-sibling's
+`extension` array, reach the complex branch. **Never write "in a primitive's value channel" as if it
+were a claim about FHIR types**, which is what the first draft's shipped `.d.ts` said.
+
+**And the citation was wrong in the first draft, in eight places including three that ship into
+`dist/index.d.ts`.** It said `json.html §2.6.1`. There is no such section: json.html is §2.6.2 with
+subsections §2.6.2.1 to §2.6.2.6, and `§2.6.1` is **xml.html**, which this repo's own README already
+uses it to mean. The base's existing citations corroborate it (`json.html §2.6.2.3` is already cited
+for the `_`-sibling carrier on `MISPLACED_PRIMITIVE_EXTENSION`). A wrong section number inside a trap
+is worse than none, because the next reader trusts it.
 
 **No case moved onto the new code**, which is the cross-package rule a sibling repo paid a gate pass
 for: a widening that reroutes a case onto a new code silently breaks every consumer predicate written
@@ -2064,11 +2097,18 @@ against the old one, and the package's own docs are such a consumer. The two pos
 reported still report exactly what they reported, pinned by a test that asserts the whole issue list
 rather than a membership check.
 
+**No round trip was withdrawn to buy any of this, which is the constraint several sibling residuals
+are deferred under.** The conformant spelling of a value-absent primitive carries no `null` at all, so
+it is never marked and is emitted exactly as before. Every shape that changed was one the writer
+previously **deleted**; each now round-trips byte-identically.
+
 **Deliberately not done, characterized by tests rather than left implicit.** `validateResource` and
 `safeToSummarize` are unchanged. The `_`-sibling that is itself not an object (`"_status":null`)
 stays a separately declared open gap. `serializeResourceXml` is untouched: XML has no `null`, so no
 XML-read document is ever marked, and the value-absent primitive still emits `<status/>`, which is
-its own declared deferral.
+its own declared deferral. **A `JSON -> XML -> JSON` trip therefore still launders the shape**: the
+marker has nothing to write in XML, so re-reading that XML yields `issues: []` again. Identical at
+base, disclosed in the README rather than claimed closed, and a backlog line rather than a claim.
 
 **What could not grade this.** The read differential (`pnpm differential:read`) is an XML harness and
 XML cannot express a `null`, so it does not reach this change at all. Its `moved` count is separately
@@ -2076,3 +2116,8 @@ blind to refusal identity, which is declared in four places; no zero from it is 
 evidence. **The standing corpus caveat holds:** this lineage's fixtures are 7 hand-authored XML
 files plus mutations, not the FHIR R4 published-examples corpus, and the sixteen probes above are a
 hand-authored JSON axis, which is a third axis again. None of them is corpus-wide.
+
+_Provenance: every measurement above was run against this codebase, the base figures against a clean
+`78f8da9` and the head figures against the committed branch; the spec clauses are quoted from
+`hl7.org/fhir/R4/json.html` §2.6.2.1 and §2.6.2.3, which the conformance gate fetched rather than
+recalled after the first draft cited a section that does not exist._

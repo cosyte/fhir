@@ -264,9 +264,9 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   the same array (`"given":[["Peter"],"James"]`) lands where an object was expected, and that scalar
   is still dropped. It is reported as an unexpected property and the resource is still refused, but
   unlike the array itself its content is not kept.
-- **A `null` in a primitive's own value channel is reported and written back, which is the other half
-  of the rule above and used to be missing.** The bullet above covers a `null` where FHIR JSON has an
-  **object**. A `null` where FHIR JSON has a **primitive** is a different branch, and it read with no
+- **A `null` the reader reads into a primitive slot is reported and written back, which is the other
+  half of the rule above and used to be missing.** The bullet above covers the `null` the reader
+  takes to the **complex** branch. Every other `null` is a different branch, and it read with no
   diagnostic at all and was then deleted on emit, so a non-conformant document came back as a clean
   conformant one with the member simply gone and every layer affirmed it.
   `{"identifier":[{"system":"…","value":null}]}` lost the identifier value;
@@ -275,26 +275,38 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   the shapes above lose things (a `null` carries no content), which is precisely why it was
   invisible: the output was indistinguishable from a document whose sender had legitimately omitted
   the element.
-  **The rule is what §2.6.1 actually defines, not "the document wrote `null`".** FHIR JSON uses
-  `null` for one job: padding a repeating primitive's value array so that it aligns index-by-index
-  with the `_`-sibling array carrying that occurrence's `id`/`extension`. So the test is whether the
-  slot the `null` produced carries any such metadata. One that does is padding, draws nothing, and
-  round-trips byte-for-byte exactly as before. One that does not pads nothing and leaves an element
-  with neither a value nor children, which R4 `ele-1` requires one of: it draws
-  `UNDEFINED_JSON_NULL` (warning) at that position, `isUndefinedNull` marks the node, and
-  `serializeResource` writes the `null` back so re-reading the output reproduces the finding instead
-  of laundering it away. That covers a singleton primitive slot, where padding cannot apply because
-  there is no array to align, and any index of a repeating primitive whose aligned `_`-sibling slot
-  carries nothing. Such output is deliberately **not** spec-clean, on the same reasoning as the two
-  shapes above.
+  **The rule is what §2.6.2.3 actually defines, not "the document wrote `null`".** FHIR JSON forbids
+  `null` (§2.6.2.1: "properties never have null values (except for a special case documented below)")
+  and carves out one exception, which is about a **repeating** primitive: the value array and the
+  `_`-sibling array are padded with `null` so they align index-by-index. So two conditions are
+  required for a `null` to be that exception, and both are checked: it sat **inside a repeating
+  primitive's value array**, and the slot it produced **carries an `id` or a non-empty `extension`**
+  for it to align with. One that is padding draws nothing and round-trips byte-for-byte exactly as
+  before. One that is not leaves an element with neither a value nor children, which R4 `ele-1`
+  requires one of: it draws `UNDEFINED_JSON_NULL` (warning) at that position, `isUndefinedNull` marks
+  the node, and `serializeResource` writes the `null` back so re-reading the output reproduces the
+  finding instead of laundering it away. Such output is deliberately **not** spec-clean, on the same
+  reasoning as the two shapes above.
+  **A singleton slot is never padding, whatever sits beside it.** §2.6.2.3 states the singleton
+  encoding positively ("If the primitive has an id attribute or extension, but no value, only the
+  property with the `_` is rendered"), so a value-absent singleton is `{"_status":{…}}` and both
+  `{"status":null}` and `{"status":null,"_status":{…}}` are reported. **And the set this walks is
+  what the reader read as a primitive, not what FHIR types as one:** the model is schema-free, so a
+  bare `null` at any singleton property reaches the primitive branch whatever the element's FHIR type
+  would be, and `{"subject":null}` on an `Observation` is reported here rather than as an unexpected
+  property. Only an array item, and an item of a `_`-sibling's `extension` array, reach the complex
+  branch.
   **What it deliberately does not do, stated rather than implied.** It does not refuse. A `null` is a
   non-conformant encoding of an _absent_ value, not content the reader could not read, so unlike an
   array inside an array or dropped element text there is nothing unreadable at the position, and
   `validateResource` and `safeToSummarize` are unchanged; refusing would also withdraw round trips
-  that work today. It is scoped to the **value** channel: a `_`-sibling that is itself not an object
-  (`"_status":null`) is discarded whole by the reader with no node left to mark, which is a separate
-  open gap and is not covered here. And `serializeResourceXml` does not carry it. XML has no `null`,
-  so no document read from XML is ever marked, and that writer emits the empty element as before.
+  that work today, and nothing that round-trips today stops (a value-absent primitive written the
+  conformant way carries no `null`, so it is never marked). It is scoped to the **value** channel: a
+  `_`-sibling that is itself not an object (`"_status":null`) is discarded whole by the reader with
+  no node left to mark, which is a separate open gap and is not covered here. And
+  `serializeResourceXml` does not carry it. XML has no `null`, so no document read from XML is ever
+  marked, that writer emits the empty element as before, and a `JSON -> XML -> JSON` trip therefore
+  still launders the shape: a declared residual, not a claim.
 - **A primitive whose value is written as XML element text is reported, not silently read as an
   absent value.** FHIR XML carries a primitive's value in the `value` attribute, so
   `<status>entered-in-error</status>` puts a code where the model has no slot for one: the character

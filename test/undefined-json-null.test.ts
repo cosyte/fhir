@@ -16,7 +16,8 @@ import {
  *
  * FHIR JSON uses `null` for exactly one job, padding a repeating primitive's value array so that it
  * aligns index-by-index with the `_`-sibling array carrying that occurrence's `id`/`extension`
- * (json.html §2.6.1). A `null` that pads nothing leaves an element with neither a value nor children,
+ * (json.html §2.6.2.3, the one exception to §2.6.2.1's "properties never have null values"). A `null`
+ * that pads nothing leaves an element with neither a value nor children,
  * which R4 `ele-1` requires one of.
  *
  * Read silently and then omitted on emit, that shape did something worse than lose data: it
@@ -128,7 +129,7 @@ describe("a `null` that pads nothing is reported and written back", () => {
   });
 });
 
-describe("padding is what §2.6.1 defines, and padding is untouched", () => {
+describe("padding is what §2.6.2.3 defines, and padding is untouched", () => {
   const padded =
     '{"resourceType":"Patient","name":[{"given":["Peter",null],' +
     '"_given":[null,{"extension":[{"url":"http://example.org/x","valueString":"y"}]}]}]}';
@@ -153,8 +154,8 @@ describe("padding is what §2.6.1 defines, and padding is untouched", () => {
   });
 
   it("an `id` pads just as an `extension` does, and a slot with neither does not", () => {
-    // The rule keys on what reached the slot, not on whether an array was involved: index 0 aligns
-    // with an `id`, index 1 aligns with a `null`, so only the second is reported.
+    // Inside the array, the second condition is what reached the slot: index 0 aligns with an `id`,
+    // index 1 aligns with a `null`, so only the second is reported.
     const mixed =
       '{"resourceType":"Patient","name":[{"given":[null,null],"_given":[{"id":"a"},null]}]}';
     expect(parseResource(mixed).issues).toEqual([
@@ -176,10 +177,67 @@ describe("padding is what §2.6.1 defines, and padding is untouched", () => {
     expect(serializeResource(parseResource(canonical).resource)).toBe(canonical);
   });
 
-  it("a `null` beside a `_`-sibling that carries an extension is padding at a singleton slot too", () => {
-    const singleton =
+  it("an EMPTY extension array is not metadata, and the read must agree with the writer", () => {
+    // The two halves disagreeing here is a laundering bug, not a cosmetic one. `readMeta` sets
+    // `extension: []` for `"extension":[]`, but the writer's `hasMeta` requires `length > 0`, so
+    // treating the empty array as padding exempted the slot on the read and then deleted the member
+    // on emit, with no diagnostic anywhere. That reproduced all three of the shapes at the top of
+    // this file verbatim, past the fix meant to close them.
+    const shapes = [
+      '{"resourceType":"Observation","status":null,"_status":{"extension":[]}}',
+      '{"resourceType":"Patient","identifier":[{"system":"http://hospital.example/mrn","value":null,"_value":{"extension":[]}}]}',
+      '{"resourceType":"Observation","valueQuantity":{"value":null,"_value":{"extension":[]},"unit":"mg"}}',
+      '{"resourceType":"Patient","name":[{"given":["Peter",null],"_given":[null,{"extension":[]}]}]}',
+    ];
+    for (const input of shapes) {
+      const first = parseResource(input);
+      expect(first.issues.map((issue) => issue.code)).toEqual(["UNDEFINED_JSON_NULL"]);
+      // And the two reads must agree. The writer normalizes an empty `_`-sibling away, so a guard
+      // that leaned on it affirmed read 1 and then flagged the writer's own output on read 2.
+      const reRead = parseResource(serializeResource(first.resource));
+      expect(reRead.issues).toEqual(first.issues);
+    }
+  });
+
+  it("a singleton slot is NEVER padding, whatever `_`-sibling sits beside it", () => {
+    // json.html §2.6.2.3 states the singleton encoding positively: a value-absent singleton renders
+    // only the `_` property. So `{"active":null,"_active":{…}}` is not the padded form of anything,
+    // and exempting it laundered the item's named quantity shape with zero diagnostics.
+    const withExtension =
       '{"resourceType":"Patient","active":null,"_active":{"extension":[{"url":"http://example.org/x","valueString":"y"}]}}';
-    expect(parseResource(singleton).issues).toEqual([]);
+    const withId =
+      '{"resourceType":"Observation","valueQuantity":{"value":null,"_value":{"id":"q1"},"unit":"mg"}}';
+    for (const input of [withExtension, withId]) {
+      expect(parseResource(input).issues.map((issue) => issue.code)).toEqual([
+        "UNDEFINED_JSON_NULL",
+      ]);
+      // Reported and handed back, so the round trip is byte-identical rather than tidied up.
+      expect(serializeResource(parseResource(input).resource)).toBe(input);
+    }
+    // The conformant spelling of the same intent carries no `null`, draws nothing, and is emitted
+    // exactly as before: no round trip was withdrawn to buy the report above.
+    const conformant =
+      '{"resourceType":"Patient","_active":{"extension":[{"url":"http://example.org/x","valueString":"y"}]}}';
+    expect(parseResource(conformant).issues).toEqual([]);
+    expect(serializeResource(parseResource(conformant).resource)).toBe(conformant);
+  });
+});
+
+describe("the set the code walks is what the reader read, not what FHIR types", () => {
+  it("reports a singleton `null` at an element FHIR types as an object", () => {
+    // The model is schema-free, so `Observation.subject` (a Reference) reaches the primitive branch
+    // like any other singleton. Stated rather than implied: a description saying this code only ever
+    // fires "in a primitive's value channel" would be false for every `0..1` object-typed element.
+    for (const [input, expression] of [
+      ['{"resourceType":"Observation","subject":null}', "Observation.subject"],
+      ['{"resourceType":"AllergyIntolerance","code":null}', "AllergyIntolerance.code"],
+      ['{"resourceType":"Patient","name":null}', "Patient.name"],
+    ] as const) {
+      expect(parseResource(input).issues).toEqual([
+        { code: "UNDEFINED_JSON_NULL", severity: "warning", expression },
+      ]);
+      expect(serializeResource(parseResource(input).resource)).toBe(input);
+    }
   });
 });
 

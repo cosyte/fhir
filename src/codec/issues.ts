@@ -147,20 +147,30 @@ export const ISSUE_CODES = {
    */
   MIXED_XML_SPELLING: "MIXED_XML_SPELLING",
   /**
-   * A JSON `null` sat in a **primitive's value channel** at a position FHIR JSON does not define one.
+   * A JSON `null` sat at a position FHIR JSON does not define one.
    *
-   * FHIR JSON uses `null` for exactly one purpose: padding a **repeating** primitive's value array so
-   * that it lines up index-by-index with the `_`-sibling array carrying that occurrence's
-   * `id`/`extension` (json.html §2.6.1, "JSON null values are used to fill out both arrays so that
-   * the id and/or extension are aligned to the matching value in the first array"). The rule this
-   * code applies is therefore not "the document wrote `null`" but **"the `null` padded nothing"**: it
-   * is raised where the slot the `null` produced carries no `id` and no `extension`, so it aligns
-   * with nothing and leaves an element with neither a value nor children, which R4 `ele-1` requires
-   * one of. A padding `null` in a conformant document never draws it.
+   * FHIR JSON forbids `null` and carves out one exception. json.html §2.6.2.1: "properties never have
+   * null values (except for a special case documented below)". The exception is §2.6.2.3, and it is
+   * about a **repeating** primitive: "In the case where the primitive element may repeat, it is
+   * represented in two arrays. JSON null values are used to fill out both arrays so that the id
+   * and/or extension are aligned to the matching value in the first array."
    *
-   * That covers the singleton primitive slot, where §2.6.1 padding cannot apply at all because there
-   * is no array to align (`"status":null`, `"value":null`), and any index of a repeating primitive
-   * whose aligned `_`-sibling slot carries nothing.
+   * So this is raised for a `null` that is **not** that. Two conditions, both required for the
+   * exception to apply: the `null` sat **inside a repeating primitive's value array**, and the slot
+   * it produced **carries an `id` or a non-empty `extension`** for it to align with. A `null` failing
+   * either leaves an element with neither a value nor children, which R4 `ele-1` requires one of.
+   * A padding `null` in a conformant document never draws it.
+   *
+   * **A singleton slot is never padding, whatever sits beside it.** §2.6.2.3 states the singleton
+   * encoding positively: "If the primitive has an id attribute or extension, but no value, only the
+   * property with the `_` is rendered." So a value-absent singleton is `{"_status":{…}}`, and both
+   * `{"status":null}` and `{"status":null,"_status":{…}}` draw this.
+   *
+   * **The set this walks is what the reader read as a primitive, not what FHIR types as one.** The
+   * model is schema-free, so a bare `null` at any **singleton** property reaches the primitive branch
+   * whatever that element's FHIR type would be: `{"subject":null}` on an `Observation` draws this
+   * code, even though `Observation.subject` is a `Reference`. Only an **array item** and a
+   * `_`-sibling's `extension` item reach the complex branch (see below).
    *
    * **Unlike {@link ISSUE_CODES.NESTED_ARRAY}, this does not say content was unreadable.** A `null`
    * carries nothing, so nothing was lost; the element really is value-absent. What it says is that
@@ -171,11 +181,13 @@ export const ISSUE_CODES = {
    * that reason, so the finding survives a round trip rather than being laundered away. Warning
    * severity.
    *
-   * **The neighbouring position has its own code and is not this one.** A `null` written where FHIR
-   * JSON has an **object** is read by the complex branch, which preserves its text
-   * ({@link ../model/node.js} `nonObjectSource`) and raises {@link ISSUE_CODES.UNKNOWN_PROPERTY};
-   * that behaviour is unchanged and no case moved onto this code. A `_`-sibling that is itself not an
-   * object (`"_status":null`) is a separately declared gap of the reader's and draws neither.
+   * **The neighbouring position has its own code and is not this one.** A `null` the reader takes to
+   * the complex branch preserves its text ({@link ../model/node.js} `nonObjectSource`) and raises
+   * {@link ISSUE_CODES.UNKNOWN_PROPERTY} instead; that behaviour is unchanged and no case moved onto
+   * this code. Two shapes reach that branch: an item of an array whose first non-`null` item is an
+   * object (`{"identifier":[{…},null]}`), and an item of a `_`-sibling's `extension` array. A
+   * `_`-sibling that is itself not an object (`"_status":null`) is a separately declared gap of the
+   * reader's and draws neither.
    */
   UNDEFINED_JSON_NULL: "UNDEFINED_JSON_NULL",
 } as const;

@@ -75,7 +75,7 @@ export interface FhirPrimitive {
    * Set when the JSON document wrote a bare `null` in this primitive's **value** channel at a
    * position FHIR JSON does not define one. FHIR JSON uses `null` for exactly one thing, padding a
    * repeating primitive's value array so that it aligns index-by-index with the `_`-sibling array
-   * carrying that occurrence's `id`/`extension` (json.html §2.6.1); a `null` whose slot carries no
+   * carrying that occurrence's `id`/`extension` (json.html §2.6.2.3); a `null` whose slot carries no
    * such metadata aligns nothing, and the element then has neither a value nor children, which R4
    * `ele-1` requires. The node stays the value-absent primitive it has always been, so no walker
    * sees anything new; what the marker buys is that {@link ../codec/write.js serializeResource} can
@@ -386,7 +386,8 @@ export function isDroppedText(node: FhirNode): boolean {
  *
  * FHIR JSON defines `null` in one place only: as padding in a repeating primitive's value array, so
  * that the array lines up index-by-index with the `_`-sibling array carrying that occurrence's
- * `id`/`extension` (json.html §2.6.1). A `null` whose slot carries no such metadata pads nothing,
+ * `id`/`extension` (json.html §2.6.2.3). A `null` outside that array, or one whose slot carries no
+ * such metadata, pads nothing,
  * and leaves an element with neither a value nor children, which R4 `ele-1` requires one of. This
  * marks those and only those, so a padding `null` in a conformant document is never marked.
  *

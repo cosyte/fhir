@@ -51,7 +51,7 @@
  * **A `null` the reader marked in a primitive's own value channel is written back as `null`**, and
  * this is the same reasoning again at the branch it was missing from. FHIR JSON defines a `null`
  * only as padding that aligns a repeating primitive's value array with its `_`-sibling (json.html
- * §2.6.1); one that padded nothing is marked on the way in
+ * §2.6.2.3); one that padded nothing is marked on the way in
  * ({@link ../model/node.js} `isUndefinedNull`) and drew `UNDEFINED_JSON_NULL`. The model holds a
  * value-absent primitive there, and a value-absent primitive is ordinarily omitted, so without the
  * marker `{"value":null,"unit":"mg"}` was emitted as `{"unit":"mg"}`: a **conformant** `Quantity`
