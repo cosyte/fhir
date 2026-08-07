@@ -139,6 +139,34 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **The README lockup now links to `cosyte.com`.** The `<picture>` block above the heading is wrapped
+  in an `<a href="https://cosyte.com">`. The `<source>`, the `<img>`, the alt text and both image URLs
+  are unchanged, and both URLs were re-checked on the wire before this landed (`200 image/png`).
+  **What the anchor does differs by surface, and it was measured rather than assumed**, because the
+  other cosyte READMEs are expected to follow this markup. **On GitHub the anchor works and the theme
+  switch keeps working**: GitHub's markdown API under `mode: gfm` (with or without a repository
+  `context`; the mode is the discriminator, the context is not), handed
+  this exact block, returns the `<a>` intact with the `<img>` still a direct child of `<picture>`, so
+  the `<source>` still applies, and the same structure was read off the live `github.com` rendering of
+  a third-party README carrying the same shape. **Name that mode whenever this is repeated**: the
+  API's default `mode: markdown`, and `/markdown/raw`, return the collided structure instead, so an
+  unqualified claim reads as false to whoever re-runs it the obvious way. **On an npm package page the
+  anchor is lost**: the renderer wraps a README `<img>` in its own anchor to the image file, an `<a>`
+  nested inside an `<a>` is not representable in HTML, and the parser therefore closes the author's
+  anchor early and lifts the `<img>` out of both the `<picture>` and the anchor. The image still
+  renders and still resolves to the on-light fallback, which is the correct cut for a package page
+  with no dark mode, but it is linked to the image file rather than to `cosyte.com`, and an empty
+  anchor carrying no accessible name is left beside it. **That cost is accepted and recorded rather
+  than designed around.** It regresses nothing: the image npm would show is the same one it would have
+  shown without the anchor. Measured on two archived npm package pages, named so they can be
+  re-checked: `tsup` at snapshot `20241217195415` for the author-anchor shape, and `@biomejs/biome` at
+  `20250508123852` for the bare `<picture>`, where the renderer's anchor lands inside the picture and
+  makes the `<source>` inert just the same. Reproduced directly in an HTML parser. The alt text was
+  **deliberately left unchanged** even though it is now also the link's accessible name: it is
+  byte-identical across the sibling READMEs on purpose, so re-wording it is a decision for the wave
+  rather than for one repo. **This package has no npm package page today**, so GitHub is the only
+  surface on which the change is currently visible. No resource model, `IssueCode`, validation
+  verdict, codec output or value-free diagnostic differs.
 - **Corrected the recorded cause of the `E403` that keeps this package off npm (`FHIR-NPM-NAME`).**
   No change to the package surface, runtime behavior, build output or dependencies; this is a
   documentation correction only. `CLAUDE.md` stated as fact that npm rejects the scoped name via a
