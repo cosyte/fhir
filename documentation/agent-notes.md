@@ -1066,6 +1066,12 @@ runtime error message carried it too, so it reached consumer logs. **The `#64` c
 its pending changeset still carry the wide wording and were deliberately not edited**: they are a
 record of what that slice said.
 
+**▶ AND THE NAME ARM IS ONLY PARTLY NARROWED, WHICH IS A BACKLOG LINE RATHER THAN A CLAIM.** Exactly
+one site was touched there, its `SERIALIZE_ERROR_CODES` docblock. `refuseUnserializableNames`'s
+runtime message and `breaksTag`'s docblock still say the JSON writer "encodes the model correctly",
+byte-identical to base, and the same `name: [[{"family":"X"}]]` counterexample falsifies both. The
+message reaches consumer logs. `PRE-EXISTING`, not folded in.
+
 The second was the soundness sentence, corrected above. Three further `PRE-EXISTING` counterexamples
 the gate produced are now asserted in tests rather than described: the depth boundary, the inserted
 namespace declaration, and an **XML declaration**, which is not a processing instruction (XML 1.0
@@ -1084,8 +1090,13 @@ and `45b42b5`, not cited. The XML 1.0 clauses above are the only external citati
 - Comments and processing instructions beside the root are accepted and do not survive the re-read.
   Neither is an element, so neither can forge one; pinned by a test rather than argued.
 - **The accepted-`div` round trip is not idempotent and the output is not always well-formed**, per
-  the counterexamples above. All `PRE-EXISTING`, none introduced by the check, none folded in: each
-  is a different defect from the forgery this item names.
+  the counterexamples above, and pass 2 added another of that class: `<div>]]></div>` is accepted and
+  emitted, and `]]>` is excluded from `CharData` (XML 1.0 §2.4), so expat rejects the output while
+  this library re-reads it. All `PRE-EXISTING`, none introduced by the check, none folded in: each is
+  a different defect from the forgery this item names.
+- **The pre-merge edits after pass 2 are UNGRADED**, and pass 2 said they needed no further pass: a
+  definite article that read as a closed enumeration, an error code asserted in the depth test rather
+  than a bare throw, and the name-arm scoping sentence above. ADR 0016's cap is not spent on them.
 
 #### Open read-path losses, enumerated
 

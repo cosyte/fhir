@@ -637,7 +637,9 @@ describe("a model name at an XML tag position", () => {
       expect(refusal(build(253))).toBeUndefined();
       expect(() => parseResourceXml(serializeResourceXml(build(253)))).not.toThrow();
       expect(refusal(build(254))).toBeUndefined();
-      expect(() => parseResourceXml(serializeResourceXml(build(254)))).toThrow();
+      // The CODE, not just a throw: a bare `toThrow()` stays green if the failure degrades to
+      // something else, and the prose above names this one.
+      expect(() => parseResourceXml(serializeResourceXml(build(254)))).toThrow(/depth bound/);
     });
 
     it("accepts a div that comes back carrying a namespace the sender never wrote", () => {

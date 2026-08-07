@@ -96,8 +96,9 @@ function tag(name: string, path: string, sink: RefusalSink): string {
  * separately declared residual on this function's own output). Comments and processing instructions
  * around the root parse as prolog/misc and are accepted: neither is an element.
  *
- * **THE STRUCTURE IS WHAT THIS SETTLES. IT SETTLES NOTHING ELSE, AND THE THREE COUNTEREXAMPLES ARE
- * ASSERTED RATHER THAN LEFT AS A CAVEAT.** (1) `readRawXml` bounds nesting depth, and this check
+ * **THE STRUCTURE IS WHAT THIS SETTLES. IT SETTLES NOTHING ELSE, AND THE COUNTEREXAMPLES BELOW ARE
+ * ASSERTED RATHER THAN LEFT AS A CAVEAT. They are examples, not an enumeration.** `readRawXml`
+ * bounds nesting depth, and this check
  * spends that budget from 0 while the re-read spends it from the `div`'s depth in the document: a
  * `div` holding 254 nested elements is accepted here and the emitted document raises
  * `MAX_DEPTH_EXCEEDED` on re-read. Loud, and byte-identical on base. (2) An accepted string need not come back
