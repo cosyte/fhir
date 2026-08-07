@@ -952,6 +952,246 @@ base and head agreed and every zero was meaningless. Re-keyed to this slice's ow
 it every time**, and note that the control reads XML only, so the JSON half of this slice is outside
 it and is covered by `test/nested-array.test.ts` instead.
 
+### `FHIR-UNBOUND-PREFIX-ROUNDTRIP` (2026-08-07)
+
+**THE DEFERRAL STANDS, AND MEASURING IT FOUND A STRICTLY WORSE DEFECT IN THE SAME FUNCTION.** The
+item asked whether `#59`'s deferral of the unbound prefix still holds. It does, unchanged, on the
+measurement below. What the same measurement turned up is that "a prefixed foreign property with the
+prefix unbound" is one member of a class `serializeResourceXml` never checked at all, and another
+member of that class **fabricates clinical content across one round trip**.
+
+**▶ 🛑 THE STANDING CAVEAT, WHICH TRAVELS WITH EVERY NUMBER BELOW: this repo's XML corpus is 7
+hand-authored fixtures plus mutations, NOT the FHIR R4 published-examples corpus.** The sweeps here
+are over generated NAMES rather than over documents, which is a different axis and is stated as such
+each time; neither is corpus-wide.
+
+#### The deferral, re-measured
+
+`#59` recorded two remedies: **(a) carry namespaces in the model**, or **(b) refuse any property
+name with a colon**. Both still stand, and both are still larger than the defect:
+
+- **(a)** needs a binding per OCCURRENCE, not per complex. The shape residual (iv) names is a prefix
+  **rebound between siblings**, so one prefix carries two URIs among the children of one element. A
+  prefix-to-URI map hung on the complex cannot represent that, and picking either binding would
+  assert that the other occurrence was in a namespace it was not: the fabrication class. So (a) is a
+  new model capability on the node, not an inert map beside it, and `test/model-edges.test.ts`
+  polices that surface deliberately.
+- **(b)** withdraws writing back a document that reads `valid: true`. Measured: a prefixed foreign
+  property draws one `UNEXPECTED_XML_CONTENT` at **warning** severity, `validateResource` returns
+  `valid: true`, and `serializeResourceXml` -> `parseResourceXml` returns the property unchanged.
+
+**▶ 🩺 AND ONE THING THE BACKLOG SAID WAS NOT WHAT `#59` MEASURED.** The item reads "both remedies
+withdraw a capability for a shape that reads `valid: true`". `#59`'s own sentence attaches the
+withdrawal to **(b) alone** and then says "**Both are larger** decisions than the defect". Only (b)
+withdraws anything; (a) adds. The compression matters because it makes (a) look disqualified when it
+is merely expensive, and a future reader weighing the two should weigh the real pair.
+
+#### What the measurement found instead
+
+`serializeResourceXml` builds a start tag by interpolating a name the document supplied, with **no
+check of any kind**. The model is schema-free and the JSON reader admits any member name, so the
+tag position is reachable by arbitrary text. Measured over 2,350 sampled names (every code point
+`U+0001`-`U+02FF` at three positions in a name, eight higher ones, plus a hand-written adversarial
+set), the emitted markup falls into exactly three groups:
+
+1. **It re-reads as the same one element.** `p:x`, `:x`, `a:b:c` (the named residual), and also
+   `a&b`, `1abc`, `-lead`, `a"b`, `a\vb`, `a\fb`, `a b`. A conformant third-party parser
+   rejects all of them. This library does not.
+2. **It does not re-read at all.** A name containing XML's own whitespace (space, tab, CR, LF) or
+   `/`, `>`, `=`, `<`, an empty name, or a name beginning `!` or `?` (which make `<` open a markup
+   declaration or a processing instruction instead of an element).
+3. **It re-reads as DIFFERENT elements, and a conformant parser ACCEPTS it.** The breakout:
+
+```
+in   : {"resourceType":"Observation","zz value=\"1\"/><status":"final"}
+i1   : (no diagnostics) valid: true, readSafety().status: undefined
+out  : <Observation xmlns="…fhir"><zz value="1"/><status value="final"/></Observation>
+i2   : (no diagnostics) valid: true, readSafety().status: "final"   <- FORGED
+```
+
+**A clinical status the sender never wrote, asserted by our own writer, under `valid: true` at both
+ends and with zero diagnostics on either side.** Same harm shape as the JSON writer authoring `{}`
+for a value it never read (`#59` route 1), and worse than the item's own headline: the headline was
+"a conformant parser rejects our output", and this is a conformant parser **accepting** it and
+reading content that was never sent. The root `resourceType` is the same site
+(`{"resourceType":"P xmlns=\"urn:evil\""}` emits a second `xmlns`).
+
+#### The remedy, and why the line is where it is
+
+Group 2 and group 3 are refused: a new `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME`, thrown
+by `serializeResourceXml` only. Group 1 keeps being written, which is `#59`'s deferral intact.
+
+**THE LINE IS "DOES THIS LIBRARY'S OWN ROUND TRIP SURVIVE IT", NOT "IS THIS A CONFORMANT XML NAME",
+AND THAT CHOICE IS THE WHOLE DESIGN.** The tidier rule is the `Name` production (XML 1.0 §2.3), and
+it was rejected on measurement: `a&b`, `1abc`, `-lead` and `a"b` all fail that production and all
+round-trip through this library today, so refusing them would withdraw a working round trip from
+models that read `valid: true`. That is precisely the cost `#59` declined to pay for the prefix, and
+paying it here for the same class would be incoherent. Group 2 and 3 cost nothing, because nothing
+works today: one fails, and the other was never the sender's document.
+
+**Repairing was not available.** XML has no escape for an element name, so the alternatives to
+refusing are mangling the name (authoring a name nobody wrote) or emitting the breakout (authoring
+elements nobody wrote). Both are the fabrication class. Refusing invents nothing, and
+`serializeResource` still encodes every one of these models correctly, so the capability is routed
+rather than lost. That is what makes this a refusal and not a withdrawal.
+
+**▶ THE CHECK RUNS AT THE EMISSION SITE, NOT IN A PRE-PASS WALKER.** A pre-pass would have to
+re-derive the writer's own branching (which names become attributes, which become the tag, which are
+dropped entirely) and that duplicate is free to drift. `tag()` is called from every site that writes
+a name and from no other, which is the same discipline the reader uses for `isForeign`. It cost
+threading a bounded path through four functions.
+
+**▶ THE LOCATIONS CANNOT ECHO THE NAME, AND THAT IS ASSERTED RATHER THAN REASONED.** A refused name
+is document content and one shape of it is a forgery built to look like markup. Every name this
+refuses also fails the far narrower `elementName` / `resourceTypeName` shapes in `model/path.ts`, so
+each renders `<withheld>`. Pinned, because the guarantee holds only while that containment does.
+
+#### Reachability from XML: NEARLY none, and the "by construction" version was FALSE
+
+**An earlier draft of this section said "no document `parseResourceXml` reads can reach this
+refusal", derived it "by construction" from the raw reader's `parseName`, and used it to justify
+skipping a verification step. Pass 2 of the gate broke it.** `parseName` does stop at exactly
+`isWs(c) || "/" || ">" || "=" || "<"` and does refuse an empty name, so no **unprefixed** tag can
+carry one. The proof overlooked **prefix stripping**: `modelNameOf` models a prefixed element under
+its LOCAL part, so a `!` or `?` can end up at the front of a modeled name even though no tag may
+start with one.
+
+```
+in : <Patient xmlns="…fhir" xmlns:a="…fhir"><a:!x value="1"/></Patient>
+     issues [] , valid: true , properties ["resourceType", "!x"]
+out: REFUSED (UNSERIALIZABLE_ELEMENT_NAME).  Base wrote `<!x value="1"/>`, which this
+     library then could not re-read.
+```
+
+So the refusal IS better than base for that document, and it IS a document that used to serialize
+and now does not. **Both halves are the honest statement; the first alone was the overclaim.** The
+counterexample is now asserted in `test/xml-tag-name.test.ts` rather than left as prose, and the
+fast-check property beside it is retitled to the unprefixed case it actually covers.
+
+**▶ 🩺 `pnpm differential:read` WAS NOT RUN, AND THE REASON FIRST GIVEN FOR THAT WAS THE FALSE
+CLAIM ABOVE.** The reason that survives is only the harness's own: it reads XML, and its control
+docblock already says it "would NOT catch a base/head divergence confined to the XML writer", which
+this slice is. **Record the evidence that actually stands in its place**, rather than the harness
+zero: two fast-check properties in `test/xml-tag-name.test.ts`, and the two independent gate sweeps
+(3,221 probes over every code point `U+0000`-`U+02FF` at four positions plus higher and adversarial
+ones, cross-checked against **expat** as a conformant third-party parser, **0 false positives**).
+Widening `whole()` and re-keying the control is still the right move for the next writer-side slice.
+
+#### Every test proved red by mutation
+
+Twelve mutations, each run against the new suite, each red, restored from a snapshot between runs:
+dropping the leading-`!`/`?` arm; dropping `=`; dropping `/` (the fabrication character); widening
+XML's `S` to the JavaScript `\s` class (which over-refuses `\v`, `\f`, `U+00A0`); dropping the
+empty-name arm; over-refusing via the `Name` production; and stopping the check at each of the four
+tag-writing sites, plus echoing the name instead of the location, dropping the dedup, and emitting
+the markup anyway. **The first pass of this matrix left one mutation GREEN**: the wrapper tag of a
+resource-valued element had no test, because the existing case exercised the inner `resourceType`
+and the outer name happened to be `contained`. A test was added for it. That is the matrix earning
+its keep, and it is the reason to run one rather than to reason about coverage.
+
+**▶ 🛑 A PROCESS TRAP THIS SLICE PAID FOR, AND IT COST THE WHOLE IMPLEMENTATION ONCE. A MUTATION
+HARNESS MUST RESTORE FROM A SNAPSHOT, NEVER FROM `git checkout --`.** The first version of the
+matrix restored with `git checkout -- src/...` between runs. The slice was uncommitted at that
+point, so the baseline run's restore discarded every source edit in it, silently and irreversibly,
+and the whole implementation had to be redone from context. Snapshot to a scratch path first and
+`cp` back. Untracked test files survive; tracked source does not.
+
+#### The gate: pass 1 REFUTED, and what it was refuted for
+
+**Pass 1 returned `REFUTED`, and every finding was about CLAIM WIDTH, not about the code.** It could
+not break the refused set: 3,221 probes over every code point `U+0000`-`U+02FF` at four positions
+plus higher and adversarial ones, cross-checked against **expat** as an independent conformant
+parser, found **0 false positives** (nothing refused that base round-tripped) and no XML input that
+reaches the refusal. Claims 1, 2, 3 and 7 above were verified rather than broken.
+
+What it broke was three sentences, and one of them led straight to the `div` fabrication recorded
+below: **"it will not author an element the sender never wrote"** on the write path, **"a writer may
+decline to hand a model back, but it may never author content of its own"** on the guard, and **"A
+name that would author ELEMENTS is refused"** in `CLAUDE.md`. Two of the three shipped to consumers
+in `dist/index.d.ts`. Also refuted: a fast-check docblock claiming the property said **"not any"**
+when its alphabet cannot spell `div`, the one name that breaks the invariant; and
+`refuseUnserializableNames` claiming every location renders `WITHHELD`, which is false at a nested
+resource's type (reported at the wrapping element's location, so there is no segment to withhold).
+The remedy was claim-narrowing plus pinning the gap, and **the guard was deliberately not grown**:
+growing it would have made this slice the fix for a class it had not measured.
+
+**▶ 🛑 FIVE GATE PASSES RUNNING HAVE NOW REFUTED A UNIVERSAL IN THIS AREA'S PROSE, AND THIS ONE WAS
+IN THE `.d.ts`.** The rule the repo already had ("name the set the code actually walks") extends to
+the writer: **name the SITE, not the writer.** A sentence about "the writer" is a claim over every
+branch it has, and `writeItem` has a branch that emits raw markup.
+
+#### Pass 2 also REFUTED, and the pattern is the finding
+
+**Pass 2 returned `REFUTED` too, on two `INTRODUCED` majors, and BOTH were sentences the pass-1
+remedy had just written.** "Unreachable for a model read from XML" (false: prefix stripping) and
+"well-formedness does not close the `div` gap" (false: `readRawXml` rejects the flagship value). It
+also caught a fourth `div` test whose title claimed one thing while its single `toThrow()` assertion
+stayed green under the very remedies it said were ruled out, and a "silently deletes" that is loud.
+
+**▶ 🛑 THE PATTERN, WHICH MATTERS MORE THAN EITHER FINDING: EVERY REWRITE PRODUCED A FRESH FALSE
+UNIVERSAL.** Pass 1 refuted three, and the prose written to fix them carried two more. Both passes
+found nothing wrong with the code. **So the pass-2 remedy DELETED rather than reworded**, which is
+this repo's own standing rule that a disclosure reworded twice is deleted, not reworded a third
+time: the vacuous test is gone with a comment saying why, the remedy speculation about the `div` gap
+is gone entirely, and the measurements are stated with no claim attached about what would close
+them. Where a fact was still needed, it is a counterexample asserted in a test rather than a
+sentence.
+
+**The rule to carry forward: name the SITE, not the writer, and prefer a failing example to a
+universal.** A sentence about "the writer" is a claim over every branch it has.
+
+#### Left open deliberately, and NOT folded in
+
+- **The named residual itself.** Group 1 above, `#59`'s deferral, unchanged. Pinned in
+  `test/xml-tag-name.test.ts` ("declared gap, still written") as a characterization test over the
+  gap, and still pinned in `test/xml.test.ts` for the rebound-prefix round trip. Closing it MUST red
+  both.
+- **🔴 A `div` PROPERTY IS WRITTEN BACK AS RAW MARKUP, AND IT IS A FABRICATION ROUTE STRICTLY WORSE
+  THAN THE ONE THIS SLICE CLOSED. `PRE-EXISTING`, byte-identical at `e2e5965`, STOP-THE-LINE, its own
+  item.** Found by the pass-1 gate while refuting this slice's prose, which had claimed the writer
+  "will not author an element the sender never wrote". It does.
+
+  ```
+  in : AllergyIntolerance, text.div = '<div xmlns="…xhtml">ok</div></text>
+       <code><coding><system value="http://snomed.info/sct"/>
+       <code value="716186003"/></coding></code><text>'
+       -> no allergy code in the model, noKnownAllergy false, negations []
+  out: spec-clean FHIR R4 XML, accepted by expat, NOT refused
+  re : noKnownAllergy TRUE, negations ["no-known-allergy"], safeToSummarize TRUE
+  ```
+
+  `716186003` is this repo's own `NO_KNOWN_ALLERGY`, documented in `src/safety/codes.ts` as a
+  **positive** clinical assertion. So the writer manufactures a positive no-known-allergy record out
+  of a document that asserted nothing, with **zero diagnostics on both sides** and the safety spine
+  affirming it. Worse than the name breakout this slice refuses, which at least left a bogus sibling
+  behind: this emits FHIR no downstream system can tell from the real thing.
+
+  **What the first draft of this note got WRONG, twice over, and what is therefore NOT said here.**
+  Draft one called it "an entirely different sink" from the name defect and named only the benign
+  unbalanced variant (`{"text":{"div":"<div>not closed"}}`, which merely makes the output
+  unreadable). Draft two corrected that and added a remedy claim: "validating XHTML well-formedness
+  does NOT close it, because the harmful shape is well-formed." **That is also false** and pass 2
+  measured it: `readRawXml` rejects the `AllergyIntolerance` value above (trailing content after the
+  root). **So no claim about what would or would not close this is made here at all.** Two wrong
+  remedy claims in two drafts is the signal to stop guessing and measure it when the item is taken.
+
+  It is also **not scoped to `Narrative`**: `writeItem` keys on the name `div` at any depth in any
+  resource, so `{"resourceType":"Observation","div":"<status value=\"final\"/>"}` forges a status
+  outright. `{"div":"v"}` loses the property, but **loudly**, not silently: the value lands as
+  character data on a FHIR element, so the re-read carries `UNEXPECTED_XML_CONTENT` and
+  `safeToSummarize: false`. That is the one of the three shapes that fails safe. Pinned by
+  `test/xml-tag-name.test.ts` ("declared gap, NOT closed here"). **The write path's module docblock
+  had asserted the opposite** ("Narrative `<div>` XHTML is deferred and is not produced by the
+  writer"), which was false: `writeItem` has emitted it since the narrative landed. Corrected.
+- **🔴 A `_`-sibling whose value is not an object is discarded with ZERO diagnostics.** Newly
+  measured and **not** this item: `{"resourceType":"Observation","_status":"entered-in-error"}`
+  reads as `{"resourceType":"Observation"}` with an empty issue list and `valid: true`. So does
+  `"_gender":"v"` beside a real `gender`, and `"_gender":[1]`. The notes describe the `_`-sibling
+  sites as reporting `MISPLACED_PRIMITIVE_EXTENSION`; this route reports nothing. Read-path, its own
+  slice, do not fold it into a writer change.
+- **Still deferred from `#47`:** the two unplaceable shapes and the 27 documents whose emitted XML
+  re-reads differently. Untouched.
+
 ### Singleton-wrapper laundering
 
 (e) `PRE-EXISTING`, and the one to pick up first: `serializeResourceXml` **normalizes a singleton

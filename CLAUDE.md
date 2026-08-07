@@ -28,8 +28,8 @@ semantics, and validate it against US Core, without reading the FHIR spec.
     signed and in rekor before the refusal, so it is not a signing failure; scope-level creation
     works (`transform`, `synth` and `cli` were created 2026-07-29 and `deid` 2026-07-30, all _after_
     the first refusal); and the refusal is identical across publish paths and account sessions.
-  - **It is a HUMAN GATE, not work you can pick up.** The debug trace npm asked for is captured and
-    hand-checked free of credential material; the only remaining step is the founder sending it.
+  - **It is a HUMAN GATE, not work you can pick up.** The trace npm asked for was hand-checked free
+    of credential material and sent 2026-08-05, so it waits on npm. **Leave it blocked.**
   - **Do not generalise the error code across the three affected packages.** `E403` is `fhir`'s
     **publish** refusal, at policy, after CI is green and after provenance reaches the transparency
     log. `transform`'s is an **install** failure (`E404`); `synth`'s is an **install** failure
@@ -42,11 +42,8 @@ semantics, and validate it against US Core, without reading the FHIR spec.
 - **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.** The package reads,
   round-trips and structurally validates R4 JSON **and** XML into one schema-free model;
   preserves decimal/`integer64` lexical precision; never drops a modifier, status or negation;
-  surfaces measured values by their true `value[x]` type with UCUM-`code` fidelity; validates code
-  systems and binding strength content-free; validates against caller-supplied
-  `StructureDefinition`s (snapshot, slicing, fixed/pattern, must-support-as-obligation); evaluates
-  `constraint[]` invariants through a bounded in-repo FHIRPath engine; models Bundles, reference
-  resolution and streaming NDJSON; and gates itself with fuzz, PHI-leak and type-level test tiers.
+  validates code systems, binding strength, caller-supplied `StructureDefinition`s and
+  `constraint[]` invariants; and models Bundles, reference resolution and streaming NDJSON.
   **Not** done: `type`/`profile` slicing discriminators and reslicing (`PROFILE_SLICE_UNCHECKED`),
   a bundled US Core IG corpus, the `validator_cli.jar` differential (authored, **CI-only**, never
   observed green in this container), value-set membership without a supplied terminology service,
@@ -198,10 +195,13 @@ Unless noted, all of these are
   - **CLOSED 2026-08-05:** the scalar beside a nested array, and the prefix rebound between siblings
     **on the read**. The rebound prefix keeps a characterization test over the half still open: the
     report does not survive `serializeResourceXml`, which drops the binding.
-  - **STILL OPEN, deliberately deferred:** `serializeResourceXml` emits a prefixed foreign property
-    with the prefix **unbound**, so the output is not namespace-well-formed and the binding is lost.
-    It was never modeled, so the remedies are to model it or to refuse a shape that reads `valid:
-true` today. Both are larger than the defect.
+  - **STILL OPEN; deferral RE-MEASURED 2026-08-07 and it HOLDS.** Only ONE of the two remedies
+    withdraws a capability; **"both do" is a mis-transcription.** **Beside it,
+    `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as
+    **different elements** and forged a `status`). **The line is "does OUR round trip survive it",
+    NOT the XML `Name` production. DO NOT WIDEN IT:** `p:x`, `a&b`, `1abc` round-trip today.
+    **"Unreachable from XML" is FALSE: a stripped prefix fronts a `!`.**
+    [`#fhir-unbound-prefix-roundtrip-2026-08-07`](documentation/agent-notes.md#fhir-unbound-prefix-roundtrip-2026-08-07) ·
     [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open) ·
     [`#singleton-wrapper-laundering`](documentation/agent-notes.md#singleton-wrapper-laundering) ·
     [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
@@ -295,11 +295,10 @@ Recorded in `documentation/decisions/` at bootstrap because they shape everythin
   authors no value of its own, and emits spec-clean FHIR for every model FHIR can express. It is
   **not** unconditionally spec-clean, and the exceptions are named on `serializeResource` (an array
   inside an array, **a scalar or `null` where FHIR JSON has an object**, a non-string `resourceType`),
-  because repairing any of them means inventing content or dropping it. The middle one was the
-  **fabrication** route, closed 2026-08-05: the writer emitted `{}`, which re-reads clean, so the
-  `UNKNOWN_PROPERTY` was gone after one round trip. Hand the value back
+  because repairing any of them means inventing content or dropping it. Hand a value back
   (`FhirComplex.nonObjectSource`); **never model it as a primitive**, which would show it to every
-  walker at a complex position.
+  walker at a complex position. **A NAME that would break its tag is refused** (XML only). **🔴 A
+  `div` VALUE IS NOT: it is emitted as raw markup and DOES author elements.**
   [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
 - Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
   not a claim that a location carries no document content** (a name is echoed when it matches the

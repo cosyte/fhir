@@ -1,5 +1,19 @@
 /**
- * The write-path refusal that stops a dropped-character-data finding from laundering.
+ * The write-path refusals: the places a writer declines to hand a model back rather than encode it
+ * into something that re-reads as content nobody wrote.
+ *
+ * There are two, and they are refused at different scopes. {@link assertSerializable} runs in both
+ * writers, because a dropped-character-data marker has no conformant encoding in either format.
+ * {@link breaksTag} governs the XML writer only, because the harm is a name reaching a tag position,
+ * and JSON escapes a member name so `serializeResource` encodes the same model correctly. Neither
+ * refusal recognises anything new, invents a value, or changes a document that reads clean.
+ *
+ * **These two are a list, NOT a closed account of what a writer can author.** The XML writer emits a
+ * `div` property as a raw string and nothing here examines it; that route is measured on
+ * `serializeResourceXml` and is not covered by either refusal below. Do not read this module as a
+ * guarantee about the writers, only as the two refusals it implements.
+ *
+ * The rest of this comment is the first refusal.
  *
  * FHIR XML carries a primitive's value in the `value` attribute (xml.html §2.6.1, "values of
  * primitive types in a `value` attribute"), so character data written directly on a FHIR element is
@@ -32,6 +46,15 @@ export const SERIALIZE_ERROR_CODES = {
    * launder the `DROPPED_ELEMENT_TEXT` finding across a round trip.
    */
   DROPPED_ELEMENT_TEXT: "DROPPED_ELEMENT_TEXT",
+  /**
+   * The model carries a name that cannot occupy the `Name` slot of an XML start tag, so writing it
+   * would emit markup that does not re-read as the element the model holds. **XML only**: JSON
+   * escapes a member name, so `serializeResource` encodes every one of these correctly and is the
+   * route that stays open for such a model.
+   *
+   * See {@link breaksTag} for the exact predicate and for what is deliberately NOT refused.
+   */
+  UNSERIALIZABLE_ELEMENT_NAME: "UNSERIALIZABLE_ELEMENT_NAME",
 } as const;
 
 /** Discriminant union of every {@link SERIALIZE_ERROR_CODES} value. */
@@ -94,6 +117,93 @@ export function assertSerializable(node: FhirComplex): void {
   throw new FhirSerializeError(
     `cannot serialize: the reader dropped character data at ${String(locations.length)} location(s), which this model cannot encode`,
     SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT,
+    locations,
+  );
+}
+
+/**
+ * The characters that end or restructure a start tag, so a name containing one cannot occupy the
+ * `Name` slot of `STag` / `EmptyElemTag` (XML 1.0 5th ed. §3.1). `S` is XML's own four whitespace
+ * characters (§2.3), not a wider Unicode class: `\v`, `\f` and `U+00A0` sit inside a tag name
+ * without ending it, and this library round-trips them today.
+ */
+const TAG_BREAKING = /[ \t\n\r/>=<]/u;
+
+/**
+ * The characters that, at the FRONT of a name, make `<` open something other than an element:
+ * `<?` a processing instruction (§2.6) and `<!` a comment or markup declaration (§2.5, §2.8).
+ * Neither is positional anywhere else, which is why this is a first-character test and not a
+ * membership test like {@link TAG_BREAKING}.
+ */
+const TAG_OPENER_STEALING = new Set(["!", "?"]);
+
+/**
+ * Whether emitting `name` in an XML tag position would produce markup that does not re-read as the
+ * one element the model holds.
+ *
+ * **The line is "does this library's own round trip survive it", not "is this a conformant XML
+ * name", and the difference is the whole reason this refusal is narrow.** The strictly tidier rule
+ * would be the `Name` production (XML 1.0 §2.3), but `a&b`, `1abc`, `-lead` and `a"b` all fail that
+ * production while `serializeResourceXml` -> `parseResourceXml` returns them **unchanged today**.
+ * Refusing those would withdraw a working round trip from models that read `valid: true`, which is
+ * the cost the unbound-prefix residual was deferred rather than pay. So they are NOT refused here,
+ * and they remain part of the same declared gap: a conformant third-party parser rejects them, and
+ * this library keeps writing them.
+ *
+ * **What IS refused is the subset where nothing works today**, measured over 2,350 sampled names
+ * (every code point `U+0001`-`U+02FF` at three positions, plus eight higher ones and a hand-written
+ * adversarial set): the emitted markup either fails to re-read at all, or re-reads as a DIFFERENT
+ * set of elements. The second is the one that decided the remedy. A JSON property name spelled
+ * `zz value="1"/><status` reads with zero diagnostics and no `status`, and emits
+ * `<zz value="1"/><status value="final"/>`, which a conformant parser accepts and this library
+ * re-reads as an `Observation` **whose status is `final`**. That is a clinical value fabricated
+ * across one round trip under `valid: true` on both sides, the same harm shape as the JSON writer
+ * authoring `{}` for a value it never read.
+ *
+ * **Repairing rather than refusing is not available.** XML has no escape for an element name, so
+ * the only alternatives to refusing are mangling the name (authoring a name the sender never
+ * wrote) or emitting the breakout (authoring elements the sender never wrote). Both are the
+ * fabrication class. Refusing invents nothing, and the JSON writer still encodes the model
+ * correctly.
+ *
+ * **Nearly unreachable from `parseResourceXml`, and the exception is worth knowing because an
+ * earlier draft of this comment claimed "unreachable, by construction" and that was false.** The raw
+ * reader's tag scanner stops at exactly the {@link TAG_BREAKING} set and refuses an empty name, so
+ * no tag it reads carries one of those. But a prefixed name has its prefix STRIPPED, which can move
+ * a `!` or `?` to the front of the modeled name: `<a:!x xmlns:a="http://hl7.org/fhir" value="1"/>`
+ * reads with zero issues and is refused here. Base wrote it as `<!x value="1"/>`, which this library
+ * then could not re-read, so the refusal is the better of the two. It is still a document that used
+ * to serialize and now does not.
+ *
+ * @param name - The tag name about to be written.
+ * @returns `true` when the name must be refused.
+ * @internal
+ */
+export function breaksTag(name: string): boolean {
+  return name === "" || TAG_BREAKING.test(name) || TAG_OPENER_STEALING.has(name.slice(0, 1));
+}
+
+/**
+ * Refuse to serialize a model whose tag positions hold names XML cannot spell.
+ *
+ * **`locations` never echoes the offending name**, which is the property that matters, because the
+ * name is document content and one of the shapes it takes here is a forgery. Every name this refuses
+ * also fails the far narrower `elementName` / `resourceTypeName` shapes that bound a location.
+ *
+ * **It does not follow that every location CONTAINS a `WITHHELD` segment, and that stronger sentence
+ * was wrong.** A nested resource's type is reported at the location of the element wrapping it, so
+ * a bad `resourceType` inside `contained` reports `Patient.contained[0]`: no withheld segment,
+ * because the refused name never reached a segment at all. Both readings are safe; only the weaker
+ * one is true.
+ *
+ * @param locations - The bounded locations whose name cannot be written, in walk order.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}.
+ * @internal
+ */
+export function refuseUnserializableNames(locations: readonly string[]): never {
+  throw new FhirSerializeError(
+    `cannot serialize to XML: ${String(locations.length)} location(s) carry a name that cannot be written as an XML tag without changing which elements the document holds; serializeResource encodes this model correctly`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME,
     locations,
   );
 }
