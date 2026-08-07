@@ -18,10 +18,6 @@
  * through a JavaScript `number`. Narrative `<div>` XHTML is written back as the opaque string the
  * model carries, verbatim and unchecked.
  *
- * **Beyond the dropped-text refusal it shares with the JSON writer, it refuses one thing: a NAME
- * that breaks the tag it is written into.** That is a rule about names and nothing wider.
- * `serializeResourceXml` lists what it does not cover.
- *
  * @packageDocumentation
  */
 
