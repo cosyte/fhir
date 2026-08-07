@@ -8,6 +8,58 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A JSON `null` at a primitive position was read with no diagnostic and then deleted on emit, so a
+  non-conformant document came back clean and conformant with the member missing
+  (`FHIR-NULL-PRIMITIVE-LAUNDERED`).** `parseResource` mapped `null` to a value-absent primitive and
+  pushed no issue; `serializeResource` omits a value-absent primitive. Measured at the base commit:
+  `{"identifier":[{"system":"http://hospital.example/mrn","value":null}]}` parsed with `issues: []`,
+  `valid: true` and `safeToSummarize: true`, and re-emitted as
+  `{"identifier":[{"system":"http://hospital.example/mrn"}]}` with the value gone;
+  `{"value":null,"unit":"mg"}` lost the magnitude and **kept the unit**, so a quantity read back as a
+  bare unit rather than as missing; `"status":null` lost the status; `{"given":[null]}` lost the whole
+  member. Nothing was lost in the ordinary sense (a `null` carries no content), which is why it was
+  invisible: the output could not be told apart from a document whose sender had legitimately omitted
+  the element, and no layer said otherwise. The positions measured included a patient
+  identifier, a dose magnitude three levels down, an `AllergyIntolerance` coding's `code`, and a
+  `resourceType`.
+  The rule now applied is the one FHIR JSON actually defines. `null` has a single job, padding a
+  repeating primitive's value array so it aligns index-by-index with the `_`-sibling array carrying
+  that occurrence's `id`/`extension` (json.html §2.6.2.3, the one exception to §2.6.2.1's "properties
+  never have null values"). Two conditions are required for a `null` to be that exception, and both
+  are checked: it sat **inside a repeating primitive's value array**, and the slot it produced
+  **carries an `id` or a non-empty `extension`** for it to align with. Padding draws nothing and
+  round-trips byte-for-byte exactly as before. Anything else leaves an element with neither a value
+  nor children, which R4 `ele-1` requires one of: the reader raises a new `UNDEFINED_JSON_NULL`
+  warning at that position, `isUndefinedNull` marks the node, and `serializeResource` writes the
+  `null` back, so re-reading the output reproduces the finding instead of laundering it away. Every
+  measured position now round-trips byte-identically.
+  Both conditions were learned from the conformance gate, which refuted the first attempt. Testing
+  only the metadata exempted a **singleton** `null` beside a `_`-sibling, and §2.6.2.3 renders a
+  value-absent singleton as the `_` property alone, so `{"value":null,"_value":{"id":"q1"},"unit":"mg"}`
+  was still laundered. Treating `"extension":[]` as metadata split the read from the writer, whose
+  `hasMeta` requires a non-empty array, so the read affirmed the slot and the writer then deleted the
+  member: that reproduced all three headline shapes past the fix, and made the diagnostic unstable
+  across the package's own round trip. The predicate now matches the writer's exactly and is pinned
+  by a test that walks both halves over one matrix. The conformant spelling of a value-absent
+  primitive carries no `null`, is never marked, and is emitted exactly as before, so no round trip was
+  withdrawn.
+  **The set the code walks is what the reader read as a primitive, not what FHIR types as one.** The
+  model is schema-free, so a bare `null` at any singleton property reaches the primitive branch
+  whatever the element's FHIR type would be, and `{"subject":null}` on an `Observation` is reported
+  here rather than as an unexpected property. Only an array item and an item of a `_`-sibling's
+  `extension` array reach the complex branch.
+  A `JSON -> XML -> JSON` trip still launders the shape, because `serializeResourceXml` has no `null`
+  to write: declared as a residual rather than claimed closed.
+  This is a **diagnostic, not a refusal**, deliberately. A `null` is a non-conformant encoding of an
+  absent value, not content the reader could not read, so the fatal tier and the
+  content-was-unreadable refusals (`NESTED_ARRAY`, `DROPPED_ELEMENT_TEXT`) are the wrong instrument,
+  and refusing would withdraw round trips that work today. `validateResource` and `safeToSummarize`
+  are unchanged and characterized by tests rather than left implicit. **No existing case moved onto
+  the new code**: a `null` where FHIR JSON has an **object** still draws `UNKNOWN_PROPERTY` and is
+  still handed back from `nonObjectSource`, and a `_`-sibling that is itself not an object
+  (`"_status":null`) remains a separately declared open gap. The writer's declared exception list, in
+  its own documentation and in the README, previously named only the object branch, so the docs read
+  as though the whole class were covered; both now name the primitive branch as a fourth exception.
 - **The read differential's negative control could not tell a changed tree from a clean one, so its
   zeros were evidence for nothing (`FHIR-XML-WRITE-RESIDUALS`).** Development tooling only; no
   runtime behaviour changes. The control keyed on a hand-written document whose reading "this slice

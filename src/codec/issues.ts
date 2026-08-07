@@ -146,6 +146,51 @@ export const ISSUE_CODES = {
    * The location names the element, once per element, not once per occurrence.
    */
   MIXED_XML_SPELLING: "MIXED_XML_SPELLING",
+  /**
+   * A JSON `null` sat at a position FHIR JSON does not define one.
+   *
+   * FHIR JSON forbids `null` and carves out one exception. json.html §2.6.2.1: "properties never have
+   * null values (except for a special case documented below)". The exception is §2.6.2.3, and it is
+   * about a **repeating** primitive: "In the case where the primitive element may repeat, it is
+   * represented in two arrays. JSON null values are used to fill out both arrays so that the id
+   * and/or extension are aligned with the matching value in the first array."
+   *
+   * So this is raised for a `null` that is **not** that. Two conditions, both required for the
+   * exception to apply: the `null` sat **inside a repeating primitive's value array**, and the slot
+   * it produced **carries an `id` or a non-empty `extension`** for it to align with. A `null` failing
+   * either leaves an element with neither a value nor children, which R4 `ele-1` requires one of.
+   * A padding `null` in a conformant document never draws it.
+   *
+   * **A singleton slot is never padding, whatever sits beside it.** §2.6.2.3 states the singleton
+   * encoding positively: "If the primitive has an id attribute or extension, but no value, only the
+   * property with the `_` is rendered." So a value-absent singleton is `{"_status":{…}}`, and both
+   * `{"status":null}` and `{"status":null,"_status":{…}}` draw this.
+   *
+   * **The set this walks is what the reader read as a primitive, not what FHIR types as one.** The
+   * model is schema-free, so a bare `null` at any **singleton** property reaches the primitive branch
+   * whatever that element's FHIR type would be: `{"subject":null}` on an `Observation` draws this
+   * code, even though `Observation.subject` is a `Reference`. Only an **array item** and a
+   * `_`-sibling's `extension` item reach the complex branch (see below).
+   *
+   * **Unlike {@link ISSUE_CODES.NESTED_ARRAY}, this does not say content was unreadable.** A `null`
+   * carries nothing, so nothing was lost; the element really is value-absent. What it says is that
+   * the document encoded that absence in a way FHIR JSON does not define, which matters because the
+   * absence is otherwise indistinguishable from an element the sender legitimately omitted, and a
+   * `Quantity` that arrives as `{"value":null,"unit":"mg"}` would then read back as a conformant
+   * quantity with a unit and no magnitude. `serializeResource` writes the `null` back for exactly
+   * that reason, so the finding survives a round trip rather than being laundered away. Warning
+   * severity.
+   *
+   * **The neighbouring position has its own code and is not this one.** A `null` the reader takes to
+   * the complex branch preserves its text ({@link ../model/node.js} `nonObjectSource`) and raises
+   * {@link ISSUE_CODES.UNKNOWN_PROPERTY} instead; that behaviour is unchanged and no case moved onto
+   * this code. **The predicate, rather than a list of the documents that satisfy it:** a `null`
+   * reaches the complex branch when it is an item of an array the reader read as a *complex* array
+   * (its first non-`null` item is not a scalar, so an object **or** an inner array puts it there), or
+   * an item of a `_`-sibling's `extension` array. A `_`-sibling that is itself not an object
+   * (`"_status":null`) is a separately declared gap of the reader's and draws neither.
+   */
+  UNDEFINED_JSON_NULL: "UNDEFINED_JSON_NULL",
 } as const;
 
 /** Discriminant union of every {@link ISSUE_CODES} value. */
@@ -278,6 +323,23 @@ export function misplacedPrimitiveExtension(expression: string): FhirIssue {
  */
 export function mixedXmlSpelling(expression: string): FhirIssue {
   return { code: ISSUE_CODES.MIXED_XML_SPELLING, severity: "warning", expression };
+}
+
+/**
+ * Build a {@link ISSUE_CODES.UNDEFINED_JSON_NULL} issue at `expression`.
+ *
+ * The location is the primitive slot the `null` occupied, so it indexes into a repeating element
+ * (`Patient.name[0].given[1]`) where the `null` sat in an array, and names the element itself
+ * (`Observation.status`) where it did not.
+ *
+ * @example
+ * ```ts
+ * import { undefinedJsonNull } from "@cosyte/fhir";
+ * const issue = undefinedJsonNull("Observation.valueQuantity.value");
+ * ```
+ */
+export function undefinedJsonNull(expression: string): FhirIssue {
+  return { code: ISSUE_CODES.UNDEFINED_JSON_NULL, severity: "warning", expression };
 }
 
 /**

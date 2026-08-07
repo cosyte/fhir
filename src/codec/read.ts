@@ -2,7 +2,8 @@
  * The JSON read path: a {@link RawJson} tree → the immutable {@link FhirNode} model.
  *
  * This is where the four silent-data-loss hazards of a FHIR JSON codec are handled (json.html): the
- * first three losslessly, the fourth by refusing to let the loss go unreported.
+ * first three losslessly, the fourth by refusing to let the loss go unreported. A fifth entry below
+ * is **not** a data loss and is listed with them because it used to read exactly like one.
  *
  * 1. **Decimal precision.** Number tokens arrive from {@link readRawJson} as exact source text and
  *    become {@link FhirDecimal} values, never a JavaScript `number`. A token that a naive
@@ -52,6 +53,18 @@
  *    is the preserving problem rather than the reporting one. Pinned by a test rather than left to
  *    this sentence.
  *
+ * 5. **A `null` in a primitive's value channel that pads nothing.** FHIR JSON defines `null` for one
+ *    job, aligning a repeating primitive's value array with its `_`-sibling array (json.html
+ *    §2.6.2.3, the one exception to §2.6.2.1's "properties never have null values").
+ *    Anywhere else it encodes an absent value in a way the format does not define. **Nothing is lost
+ *    here**, because a `null` carries no content and the element really is value-absent, which is exactly
+ *    why it needed its own answer: read silently and written back as an omitted member, a
+ *    non-conformant document became a conformant one with the member simply gone, and every layer
+ *    then affirmed it. The reader raises `UNDEFINED_JSON_NULL` and marks the slot
+ *    ({@link ../model/node.js} `isUndefinedNull`) so the writer hands the `null` back rather than
+ *    dropping it, and re-reading the output reproduces the finding. See {@link applyNullRule} for
+ *    why this is a diagnostic and not a refusal.
+ *
  * Reading is lenient elsewhere (Postel's Law): an unexpected shape is preserved and flagged, not
  * rejected. Only genuinely unrecoverable structure (malformed JSON, broken `_`-alignment) throws.
  *
@@ -64,9 +77,11 @@ import {
   complex,
   list,
   markNestedArray,
+  markUndefinedNull,
   primitive,
   type FhirComplex,
   type FhirNode,
+  type FhirPrimitive,
   type PrimitiveMeta,
   type PrimitiveValue,
 } from "../model/node.js";
@@ -75,6 +90,7 @@ import {
   duplicateProperty,
   misplacedPrimitiveExtension,
   nestedArray,
+  undefinedJsonNull,
   unknownProperty,
   FATAL_CODES,
   FhirCodecError,
@@ -174,6 +190,81 @@ function scalarValue(node: RawJson, path: string, issues: FhirIssue[]): Primitiv
       // (the caller's primitive/complex decision governs the surrounding shape).
       return undefined;
   }
+}
+
+/**
+ * Apply the one rule FHIR JSON has about `null`, to a primitive slot the reader has already built.
+ *
+ * FHIR JSON forbids `null` outright and then carves out exactly one exception. json.html §2.6.2.1:
+ * "properties never have null values (except for a special case documented below)". The exception is
+ * §2.6.2.3, and it is scoped to a **repeating** primitive: "In the case where the primitive element
+ * may repeat, it is represented in two arrays. JSON null values are used to fill out both arrays so
+ * that the id and/or extension are aligned with the matching value in the first array."
+ *
+ * **Two conditions, and both are load-bearing.**
+ *
+ * - **Inside an array.** The exception is written about the two parallel arrays and nothing else, and
+ *   the same section states the singleton encoding positively: "If the primitive has an id attribute
+ *   or extension, but no value, only the property with the `_` is rendered." So a value-absent
+ *   singleton is spelled `{"_status":{…}}` and never `{"status":null,"_status":{…}}`. **A `null` at a
+ *   singleton slot is therefore never padding, whatever sits beside it.** An earlier draft of this
+ *   rule tested only the metadata, which exempted `{"value":null,"_value":{"id":"q1"},"unit":"mg"}`
+ *   and laundered the magnitude away with no diagnostic: the exact shape this rule exists to catch.
+ * - **Aligned with something.** Padding aligns the value array with an `id`/`extension` in the
+ *   `_`-sibling array, so a slot the `_`-sibling puts nothing in aligns with nothing.
+ *   {@link carriesMetadata} is that test, and it must agree with the writer (see there).
+ *
+ * A `null` failing either condition leaves an element with neither a value nor children, which R4
+ * `ele-1` requires one of.
+ *
+ * Reporting it is the whole of the remedy on the read side; **the marker is what makes the report
+ * survive.** Without it the writer omits a value-absent primitive, so `{"value":null,"unit":"mg"}`
+ * comes back as `{"unit":"mg"}`: a conformant `Quantity` carrying a unit and no magnitude, which is
+ * a document the sender never wrote and which re-reads with no diagnostic at all. Handing the `null`
+ * back is the same rule the writer already applies one branch over, where a `null` written at a
+ * complex position is written back from {@link FhirComplex.nonObjectSource}.
+ *
+ * **What this deliberately does not do.** It does not refuse: a `null` is a non-conformant encoding
+ * of an *absent* value, not content the reader could not read, so nothing is lost and the fatal tier
+ * (reserved for structure the reader cannot recover) is the wrong instrument, and refusing would
+ * withdraw round trips that work today. Nothing that round-trips today stops: a value-absent
+ * singleton written the conformant way carries no `null`, so it is never marked and is emitted
+ * exactly as before. For the same reason it adds no safety-summary refusal: `nestedArray` and
+ * `droppedText` refuse because content was unreadable at that position, and that is not what
+ * happened here.
+ *
+ * @internal
+ */
+function applyNullRule(
+  node: FhirPrimitive,
+  rawValue: RawJson | undefined,
+  meta: PrimitiveMeta,
+  inArray: boolean,
+  path: string,
+  issues: FhirIssue[],
+): FhirPrimitive {
+  if (rawValue?.t !== "null") return node;
+  if (inArray && carriesMetadata(meta)) return node;
+  issues.push(undefinedJsonNull(path));
+  return markUndefinedNull(node);
+}
+
+/**
+ * Whether this slot's `_`-sibling put anything on the wire for the padding to align **with**.
+ *
+ * **This must agree exactly with `hasMeta` in {@link ./write.js}, and the two disagreeing is a
+ * laundering bug rather than a cosmetic one.** An earlier draft tested `extension !== undefined`,
+ * which is true for `"extension":[]`; the writer requires `length > 0`, so the read exempted the
+ * slot as padding and the writer then emitted neither the value nor the `_`-sibling, deleting the
+ * member with no diagnostic anywhere. An empty array is not metadata in any case: json.html §2.6.2.1
+ * says "JSON objects and arrays are never empty" and to omit an empty property. Pinned by tests over
+ * both halves rather than by this sentence: the empty-`extension` half and the `id` half each have
+ * their own.
+ *
+ * @internal
+ */
+function carriesMetadata(meta: PrimitiveMeta): boolean {
+  return meta.id !== undefined || (meta.extension !== undefined && meta.extension.length > 0);
 }
 
 /**
@@ -305,7 +396,16 @@ function buildPrimitiveList(
     if (nested) issues.push(nestedArray(itemPath));
     const value_ = rawValue === undefined ? undefined : scalarValue(rawValue, itemPath, issues);
     const metaValue = readMeta(rawMeta, itemPath, issues);
-    const node = primitive(value_, metaValue);
+    // `true`: this is a slot of a repeating primitive, the one place json.html §2.6.2.3 defines a
+    // `null`, so the padding exemption is available here and nowhere else.
+    const node = applyNullRule(
+      primitive(value_, metaValue),
+      rawValue,
+      metaValue,
+      true,
+      itemPath,
+      issues,
+    );
     if (!nested) {
       items.push(node);
       continue;
@@ -371,7 +471,10 @@ function buildNode(
     );
   }
   const scalar = value === undefined ? undefined : scalarValue(value, path, issues);
-  return primitive(scalar, readMeta(meta, path, issues));
+  const metaValue = readMeta(meta, path, issues);
+  // `false`: a singleton slot. §2.6.2.3 renders a value-absent singleton as the `_` property alone,
+  // so no `null` here is ever padding, however its `_`-sibling is filled in.
+  return applyNullRule(primitive(scalar, metaValue), value, metaValue, false, path, issues);
 }
 
 /** Build a {@link FhirComplex} from a raw object, recursing through its properties. */

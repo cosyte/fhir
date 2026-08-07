@@ -91,6 +91,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
       "FhirPrimitive.nestedArray",
       "FhirPrimitive.nestedArrayMetaSource",
       "FhirPrimitive.nestedArraySource",
+      "FhirPrimitive.undefinedNull",
       "FhirPrimitive.value",
     ]);
   });
@@ -129,6 +130,28 @@ describe("the model's edge set is derived from the type, not from a search", () 
     // content here for a walker to reach and none for a diagnostic to leak.
     expect(membersOf("FhirComplex").get("droppedText")).toBe("true");
     expect(membersOf("FhirPrimitive").get("droppedText")).toBe("true");
+  });
+
+  it("types the undefined-`null` marker as `true`, which carries no edge and no content", () => {
+    // A `null` has nothing to preserve, so like the dropped-text marker this is a literal `true`
+    // rather than a source string. It changes what the writer emits at the position and nothing a
+    // walker can observe: the node is still the value-absent primitive it always was.
+    expect(membersOf("FhirPrimitive").get("undefinedNull")).toBe("true");
+    // It exists on the primitive only. A `null` written where FHIR JSON has an object is the
+    // neighbouring case and is handled by `FhirComplex.nonObjectSource`, unchanged.
+    expect(membersOf("FhirComplex").has("undefinedNull")).toBe(false);
+  });
+
+  it("can only set the undefined-`null` marker through the JSON reader's own helper", () => {
+    // Same closure as the two markers above: nothing else in the package marks a node, so the
+    // marker can only ever mean that a document wrote a `null` that padded nothing at that
+    // position, and the writer can never be made to emit a `null` no document carried.
+    expect(
+      sourceFiles(SRC)
+        .filter((file) => /markUndefinedNull/.test(readFileSync(file, "utf8")))
+        .map((file) => file.slice(SRC.length))
+        .sort(),
+    ).toEqual(["codec/read.ts", "model/node.ts"]);
   });
 
   it("can only set the dropped-element-text marker through the XML reader's own helper", () => {
