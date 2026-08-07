@@ -274,7 +274,29 @@ describe("a model name at an XML tag position", () => {
     it("counts locations in the message and never the content", () => {
       const err = refusal(withName("a b"));
       expect(err?.message).toContain("1 location(s)");
-      expect(err?.message).toContain("serializeResource encodes this model correctly");
+      expect(err?.message).toContain("serializeResource escapes a member name");
+      expect(err?.message).toContain("this refusal never reaches it");
+    });
+
+    it("does not tell the caller the JSON writer encodes the model correctly", () => {
+      // The message used to end "serializeResource encodes this model correctly" and that reached
+      // consumer logs. It is a claim about the WHOLE MODEL, and the counterexample below falsifies
+      // it, so the message now says only what this refusal does not reach.
+      expect(refusal(withName("a b"))?.message).not.toContain("encodes this model correctly");
+    });
+
+    it("a model refused here can carry a JSON-writer exception, which is why the claim was cut", () => {
+      const node = model(
+        JSON.stringify({
+          resourceType: "Observation",
+          name: [[{ family: "X" }]],
+          'zz value="1"/><status': 1,
+        }),
+      );
+      expect(refusal(node)?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME);
+      // An array inside an array is the first entry on `serializeResource`'s own declared exception
+      // list, and it comes straight back out. The name route stays open; the model is not "correct".
+      expect(serializeResource(node)).toContain('"name":[[{"family":"X"}]]');
     });
   });
 

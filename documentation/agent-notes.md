@@ -1749,3 +1749,95 @@ once through the markdown API on this repo's exact block and once off a rendered
 **This package has no npm page today**,
 so nothing here is currently observable on npm for `@cosyte/fhir` specifically. Re-measure against a
 live package page when the publish block lifts.
+
+## A control that cleared nothing, and the half-narrowed claim beside it (2026-08-07)
+
+`FHIR-XML-WRITE-RESIDUALS`, the two halves the `div` slice filed and did not fix. Both were
+`PRE-EXISTING`. Neither changes a runtime read.
+
+### The control was red on a clean tree AND on a changed one, so it cleared neither
+
+The read differential's negative control keyed on `CONTROL.moved`, a hand-written document whose
+reading "the slice being measured" was required to move, with a comment instructing the next author
+to re-key it. It was re-keyed once (2026-08-05, off `FHIR-ELEMENT-TEXT-RECOVERY`, which had merged)
+and it went stale again immediately: the re-key named `MIXED_XML_SPELLING`, which merged in the same
+slice that wrote it.
+
+**The consequence is the part worth keeping.** A stale `CONTROL.moved` makes base and head agree on
+that document, so the control fires. It fires whether the working tree is changed or not. Verified
+both ways on 2026-08-07 at `df99f54`: with a clean tree it printed the same problem the `div` slice
+had reported from a modified one. **Red in both states is a constant, not an alarm.** It could not
+distinguish a tree it should clear from one it should refuse, so it cleared neither, and every zero
+this harness has ever reported stood behind it. Those zeros are inadmissible as evidence, which is
+how the `div` slice reported its own and the right call.
+
+It also compared less than the report it was clearing. `whole()` read seven fields; `fold()` compared
+the entire `Reading`. Missing from `whole()`: `xml`, `leaves`, `reread` and `thrown` -- so a
+difference confined to the XML writer was invisible to the control while being fully visible to the
+tally. That is exactly the axis the two preceding slices changed.
+
+**The remedy deletes the hand-keyed document rather than rewording it a third time**, on the ground
+that a control whose correctness depends on a human remembering to edit a string literal for the next
+slice has one failure mode and has hit it every time it has been looked at. `scripts/differential-control.ts`
+replaces it with three arms, and only the third is slice-relative:
+
+1. **The two trees really are two trees**, decided by hashing every file under the materialized base
+   `src/` and under the working tree `src/` and comparing the manifests. Over the bytes that were
+   imported, not over a ref name, because the failure being caught is a base that already carries the
+   change and that includes a materialization which picked up the working tree.
+2. **The comparison can see a change.** Five deliberately perturbed copies of the head codec, one per
+   method the XML reading is built from, each of which must be visible to the comparison the report
+   scores with. `parseResource` is deliberately absent and declared: it feeds the JSON-fixtures
+   section, which scores with a different comparison.
+3. **A conformant narrative has not moved.** A bar, not a key; a slice that intends to move it is
+   expected to red this and say so, not to re-key it.
+
+There is now **one** comparison, `sameReading`, used by both `fold()` and the control, so the control
+can never again be narrower than the thing it clears.
+
+**Arm 2 is the one that makes it prove it can fail.** A control that has never been observed red on a
+tree it should be red on has not cleared any tree -- the same never-pointed-at-its-input shape this
+ecosystem keeps finding. It is exercised from `test/scripts/read-differential.test.ts`, which asserts
+both polarities and, separately, reconstructs the deleted `whole()` field for field and asserts that
+it goes **red naming `serializeResourceXml`**. The blindness is a failing assertion now, not a
+sentence in a changelog.
+
+**Measured at `df99f54`.** Clean tree (`src/` restored to `origin/main`, harness changes kept): 0
+differing source files, control RED, exit 1. Working tree: 1 differing source file, control GREEN,
+exit 0. Against `658a1f0`, a base before a genuinely writer-only slice: 2 differing source files,
+control GREEN. All three ran 1,195 documents and moved 0 readings, which is now printed with the
+sentence that says which case it is rather than left as a bare zero.
+
+**What none of this promises is that a reading moved.** A write-path slice can change real code that
+no readable document reaches, and 0 moved readings is then the true answer. The report says so in
+words. **The standing corpus caveat is unchanged: 7 hand-authored XML fixtures plus mutations, not
+the FHIR R4 published-examples corpus.**
+
+### The name arm's wide claim, finished
+
+`FHIR-UNBOUND-PREFIX-ROUNDTRIP` shipped "serializeResource encodes this model correctly" at three
+sites. The `div` slice narrowed one, the `SERIALIZE_ERROR_CODES` docblock, and left two, because
+leaving a *pair* contradictory was worse than leaving all three wide. The two are closed here:
+`refuseUnserializableNames`' runtime message, which reaches consumer logs, and `breaksTag`'s
+docblock.
+
+**The counterexample, measured rather than argued.**
+`{"resourceType":"Observation","name":[[{"family":"X"}]],"zz value="1"/><status":1}` reads with
+`UNKNOWN_PROPERTY` and `NESTED_ARRAY`, is refused by `serializeResourceXml` with
+`UNSERIALIZABLE_ELEMENT_NAME`, and comes back out of `serializeResource` with
+`"name":[[{"family":"X"}]]` intact. An array inside an array is the first entry on that writer's own
+declared exception list, so "encodes this model correctly" is false about the model it is asserted
+over. Both sites now say only what the refusal does not reach, which is the wording the `div` refusal
+beside them already carried, and a test falsifies the old sentence rather than describing the fix.
+
+**`breaksTag` does not reach `dist/index.d.ts`** (it is not re-exported from `src/index.ts`), so that
+site never shipped to consumers; the runtime message did, through `err.message`.
+
+**Two copies of the same wide sentence are NOT edited here and one of them is a live exposure.**
+`CHANGELOG.md`'s `[Unreleased]` copy IS corrected in place, marked as narrowed rather than silently
+rewritten, because `CHANGELOG.md` is in `package.json`'s `files` and therefore ships in the tarball.
+**`.changeset/gentle-pugs-attack.md` still carries it**, and that is the site that matters: once a
+Version PR consumes a changeset its text is frozen into a published `CHANGELOG.md` and the release
+body, and neither is retractable under ADR 0001. It was left alone on instruction, not on judgement.
+The window is open only while the changeset is pending -- the same cheap moment the 2026-08-06
+changeset correction turned on. **Raise it before the next Version PR, not after.**

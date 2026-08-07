@@ -52,9 +52,16 @@
  * A previous run of an uncommitted ancestor of this file published a tally that sat after a
  * `continue`, so it counted only the documents whose reading had MOVED: 434 where the truth was 836.
  * Every tally here is therefore accumulated in one pass over every document with no early exit, and
- * `reconcile()` cross-checks the ones that have an independently derivable total. It also runs a
- * **negative control**: it asserts the base tree it loaded actually behaves like base and not like
- * head, so a stale or mis-resolved checkout fails loudly instead of reporting a comfortable zero.
+ * `reconcile()` cross-checks the ones that have an independently derivable total.
+ *
+ * It also runs a **negative control**, in `differential-control.ts`, and that file is worth reading
+ * before any number here is quoted. The short version: the control asserts the two trees really are
+ * two trees over the imported bytes, and asserts that the comparison it scores with can SEE a change
+ * by perturbing the head codec one method at a time. The second arm exists because the control it
+ * replaced was hand-keyed to a named slice, went stale twice, and was therefore red on a modified
+ * tree and on a clean one alike -- which cleared neither. **A control that has never been observed
+ * red on a tree it should be red on has not cleared any tree**, so this one is exercised from
+ * `test/scripts/read-differential.test.ts` on both sides rather than trusted.
  *
  * @packageDocumentation
  */
@@ -65,33 +72,15 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import type { Codec } from "./differential-control.js";
+import {
+  sensitivityProblems,
+  sourceTreesDiffer,
+  unmovedProblems,
+} from "./differential-control.js";
+
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURES = join(REPO, "test", "__fixtures__");
-
-/** The slice of the package surface this differential exercises. Both trees expose it identically. */
-interface Codec {
-  parseResourceXml: (src: string) => { resource: unknown; issues: readonly RawIssue[] };
-  parseResource: (src: string) => { resource: unknown; issues: readonly RawIssue[] };
-  serializeResource: (resource: never) => string;
-  serializeResourceXml: (resource: never) => string;
-  validateResource: (resource: never) => { valid: boolean; issues: readonly RawIssue[] };
-  readSafety: (resource: never) => RawSafety;
-}
-
-interface RawIssue {
-  readonly code: string;
-  readonly severity?: string;
-  readonly expression?: string;
-}
-
-interface RawSafety {
-  readonly retracted: boolean;
-  readonly safeToSummarize: boolean;
-  readonly negations: readonly string[];
-  readonly shadowedProperties: readonly string[];
-  readonly arrayWrappedScalars: readonly string[];
-  readonly nestedArrays: readonly string[];
-}
 
 /** Everything one tree makes of one document. `thrown` is a reading too, and a comparable one. */
 interface Reading {
@@ -514,6 +503,22 @@ function read(codec: Codec, xml: string): Reading {
   }
 }
 
+/**
+ * Whether two trees made the same thing of one document.
+ *
+ * **This is the one comparison in this file, and that is the point.** `fold()` scores `moved` with
+ * it and the negative control is asserted with it, so the control can never again be narrower than
+ * the report it is clearing: the previous one read seven of the eleven fields and left out the two
+ * the XML writer lands in, which made it silent for a writer-only slice while `fold()` was not.
+ *
+ * Every field of a {@link Reading} is in scope, including `xml`, `leaves`, `reread` and `thrown`. If
+ * a field is ever added that should NOT count as movement, exclude it here, once, with the reason --
+ * do not add a second comparison beside this one.
+ */
+function sameReading(a: Reading, b: Reading): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 // The tallies
 // ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -605,7 +610,7 @@ function emptyTally(): Tally {
  */
 function fold(tally: Tally, doc: Document, base: Reading, head: Reading): void {
   tally.documents += 1;
-  const moved = JSON.stringify(base) !== JSON.stringify(head);
+  const moved = !sameReading(base, head);
   if (moved) tally.moved += 1;
   else tally.unmoved += 1;
 
@@ -756,84 +761,51 @@ function reconcile(tally: Tally, corpus: readonly Document[]): string[] {
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * The document whose reading THE SLICE BEING MEASURED moves, and one it does not.
- *
- * **This pair belongs to the change in the working tree, not to the harness, so a slice that changes
- * the reader updates it.** The first version of this control named the capitalized-child narrative of
- * the slice that committed this file. That slice then merged, `origin/main` began carrying it, and
- * the control fired on every subsequent run: a permanent false red on the harness's own alarm, which
- * is worse than no alarm, because the next reader learns to scroll past it. If you are reading this
- * because the control fired, check that first: it may be describing the previous slice, not yours.
- *
- * `moved` must be a document THIS change reads differently from base, and `unmoved` one it does not
- * touch. Neither may be a document the corpus is scored on, so the control cannot flatter the tally.
- */
-const CONTROL = {
-  /**
-   * A `<div/>` in the FHIR namespace beside the real XHTML narrative. Both are modeled as `div`, so
-   * they merge into one two-item `Narrative.div`; base says nothing about that at all, head raises
-   * `MIXED_XML_SPELLING` because the report now compares the expanded name and not the tag alone.
-   * That difference is this slice, so it is what the control keys on.
-   *
-   * **Re-key this whenever the slice changes.** A `CONTROL.moved` describing a change that has
-   * already merged makes base and head agree, and then every zero in the report below is
-   * meaningless. That has happened, which is why the assertion exists.
-   */
-  moved:
-    `<Composition xmlns="http://hl7.org/fhir"><text><status value="generated"/>` +
-    `<div xmlns="http://www.w3.org/1999/xhtml">CONTROL</div><div/></text></Composition>`,
-  /** The same document without the intruder, which this change must leave exactly as it was. */
-  unmoved:
-    `<Composition xmlns="http://hl7.org/fhir"><text><status value="generated"/>` +
-    `<div xmlns="http://www.w3.org/1999/xhtml">CONTROL</div></text></Composition>`,
-} as const;
-
-/**
  * The negative control. A differential is only worth reading if the two trees really are two trees,
- * and the cheapest way for this to silently report all-zero is for `--base` to resolve to something
- * that already carries the change. So: assert the two disagree on a document whose reading this
- * slice is known to move, and assert they AGREE on one it does not.
+ * and if the comparison it scores with can see a change at all.
  *
- * The reading compared is the whole reading, not just the serialized JSON. Keep it that way even
- * when the current slice does not need it: a slice that moves only what the safety layer and the
- * validator SAY, without moving any value, would pass a `json`-only control on base and report a
- * comfortable zero. **The slice this control is currently written for is exactly that shape**: it
- * moves only `issues`, and would be invisible to a `json`-only comparison, so today the wider
- * comparison is load-bearing rather than redundant.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────
+ * WHAT WAS HERE BEFORE, AND WHY IT WAS DELETED RATHER THAN RE-KEYED
+ * ────────────────────────────────────────────────────────────────────────────────────────────────
+ * This used to be a hand-written pair of documents, `CONTROL.moved` and `CONTROL.unmoved`, with
+ * `moved` required to be "a document THIS change reads differently from base" and an instruction to
+ * re-key it every slice. It was re-keyed once and went stale twice. Both times the named slice had
+ * merged, so base and head agreed on it, so the control fired -- on a tree that WAS modified and on
+ * a tree that was NOT. Red in both states is not an alarm, it is a constant, and it cleared nothing:
+ * the zeros it stood behind were inadmissible rather than reassuring, and that is how they were
+ * reported.
  *
- * **What `whole()` compares is narrower than "the whole reading", and the gap matters.** It reads
- * `json`, `valid`, `findings`, `issues`, `safeToSummarize`, `retracted` and `negations` -- NOT `xml`,
- * `leaves`, `reread` or `thrown`. So this control would NOT catch a base/head divergence confined to
- * the XML writer. If you write an XML-writer-only slice, widen `whole()` before you trust it.
+ * It is deleted, not reworded a third time. A control whose correctness depends on a human
+ * remembering to re-key a string literal for the next slice has one failure mode and it has fired
+ * every time. The three arms behind it are mechanical, and only the third is slice-relative:
  *
- * **And the control only ever reads XML, so a JSON-read-path change is outside it entirely.** The
- * slice this is written for also changes what `serializeResource` emits for a scalar written where
- * FHIR JSON has an object, and no XML document can reach that position, so this control says nothing
- * about that half. It is covered by `test/nested-array.test.ts`, not here.
+ *   - the two trees really are two trees, decided over the imported BYTES;
+ *   - the comparison can see a change, decided by perturbing the head codec one method at a time;
+ *   - a conformant narrative has not moved.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────
+ * AND THE COMPARISON IS NOW THE REPORT'S OWN
+ * ────────────────────────────────────────────────────────────────────────────────────────────────
+ * The old control compared a `whole()` of its own that read seven fields and left out `xml`,
+ * `leaves`, `reread` and `thrown`, while `fold()` compared the entire {@link Reading}. So the control
+ * was narrower than the thing it was controlling, and blind on exactly the axis the two slices
+ * before this one changed: the XML writer. There is now one comparison, {@link sameReading}, used by
+ * both, so they cannot drift apart again, and the sensitivity arm reds if it ever stops seeing the
+ * writer.
+ *
+ * **What none of this promises is that a reading MOVED.** A slice can change real code that no
+ * readable document reaches, which is what a write-path refusal usually is, and then zero moved
+ * readings is the true answer rather than a broken harness. The report says which case it is in
+ * words rather than leaving a bare zero to be read as a pass.
  */
-function negativeControl(base: Codec, head: Codec): string[] {
-  const problems: string[] = [];
-  const whole = (r: Reading): string =>
-    JSON.stringify({
-      json: r.json,
-      valid: r.valid,
-      findings: r.findings,
-      issues: r.issues,
-      safeToSummarize: r.safeToSummarize,
-      retracted: r.retracted,
-      negations: r.negations,
-    });
-  if (whole(read(base, CONTROL.moved)) === whole(read(head, CONTROL.moved))) {
-    problems.push(
-      "the base tree reads the control document exactly as head does: either --base does not name a tree from before this change, or CONTROL.moved still describes an earlier slice, so every zero below is meaningless",
-    );
-  }
-  if (whole(read(base, CONTROL.unmoved)) !== whole(read(head, CONTROL.unmoved))) {
-    problems.push(
-      "the two trees disagree on the conformant spelling, which this change must not touch",
-    );
-  }
-  return problems;
+function negativeControl(base: Codec, head: Codec, baseSrc: string): string[] {
+  const readsAlike = (a: Codec, b: Codec, xml: string): boolean =>
+    sameReading(read(a, xml), read(b, xml));
+  return [
+    ...sourceTreesDiffer(baseSrc, join(REPO, "src")).problems,
+    ...sensitivityProblems(head, readsAlike),
+    ...unmovedProblems(base, head, readsAlike),
+  ];
 }
 
 function argOf(flag: string, fallback: string): string {
@@ -848,7 +820,9 @@ async function main(): Promise<void> {
   const head = (await import(pathToFileURL(join(REPO, "src", "index.ts")).href)) as Codec;
 
   try {
-    const controlProblems = negativeControl(base, head);
+    const baseSrc = join(dir, "src");
+    const controlProblems = negativeControl(base, head, baseSrc);
+    const { differingFiles } = sourceTreesDiffer(baseSrc, join(REPO, "src"));
     const corpus = buildCorpus();
     const tally = emptyTally();
     // Every headline number is also accumulated per shape, so a reviewer can attribute it rather
@@ -942,6 +916,7 @@ async function main(): Promise<void> {
         cwd: REPO,
         encoding: "utf8",
       }).trim(),
+      sourceFilesDiffering: differingFiles,
       corpus: tally.documents,
       shapes: SHAPES.length,
       jsonFixtures: jsonFixtures.length,
@@ -967,8 +942,20 @@ async function main(): Promise<void> {
         process.stdout.write(`  ${label.padEnd(52)} ${String(value)}\n`);
       };
       process.stdout.write(`\nread differential: ${ref} (${report.baseSha}) -> working tree\n\n`);
+      line("src/ files differing between the two trees", differingFiles);
       line("documents", tally.documents);
       line("readings moved", tally.moved);
+      // A bare zero here has been read as a pass before. It is not one, in either direction: say
+      // which case the run is in, in words, beside the number.
+      if (tally.moved === 0) {
+        process.stdout.write(
+          differingFiles === 0
+            ? "    (0 because there is no change in front of the harness at all -- see HARNESS PROBLEMS)\n"
+            : `    (0 across ${String(differingFiles)} differing source file(s): no document in this corpus reaches\n` +
+                "     the changed code. That is an observation about the corpus, NOT evidence that the change\n" +
+                "     is safe, and it is what a write-path slice normally looks like here.)\n",
+        );
+      }
       process.stdout.write("\n  no-suppression bar\n");
       line("valid false -> true", tally.validFalseToTrue);
       line("valid true -> false", tally.validTrueToFalse);

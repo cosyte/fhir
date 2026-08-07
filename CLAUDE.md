@@ -156,9 +156,9 @@ Unless noted, all of these are
 - **Do not declare a differential twin for a shape the reader still does not read**: the twin
   section requires `valid`/`safeToSummarize` to match, so it scores a refusal as _weaker_ for doing
   the right thing. Score a refusal base-vs-head.
-- **If the harness's negative control fires, suspect it first.** It was a permanent false red once,
-  hard-coded to a change that had merged. It must name the change under measurement and compare the
-  **whole** reading, not just `json`.
+- **The control was RED on a clean tree AND a changed one, so it cleared neither: its zeros are
+  inadmissible.** `CONTROL.moved` DELETED; three arms, ONE comparison (`sameReading`). **Never
+  re-key a document in.**
 - **If you add a writer refusal, check what the harness does with it before you trust a zero**: it
   reported 5,159 phantom leaf losses, and the leaf comparison now **skips** a refused document. **A
   slice that changes the reader _and_ adds a refusal has a real blind spot there**; measure the

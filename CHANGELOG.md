@@ -8,6 +8,29 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **The read differential's negative control could not tell a changed tree from a clean one, so its
+  zeros were evidence for nothing (`FHIR-XML-WRITE-RESIDUALS`).** Development tooling only; no
+  runtime behaviour changes. The control keyed on a hand-written document whose reading "this slice
+  moves", with an instruction to re-key it every slice. It was re-keyed once and went stale twice:
+  both times the named slice had merged, so base and head agreed on it, so the control fired -- on a
+  modified tree and on a clean one alike. Red in both states is a constant, not an alarm, and it
+  cleared neither. It also compared a narrower reading than the report it was clearing (seven fields,
+  not `xml`, `leaves`, `reread` or `thrown`), so it was blind on exactly the axis the two preceding
+  changes moved: the XML writer. The hand-keyed document is deleted rather than re-keyed, and three
+  mechanical arms replace it: the two trees are compared over the bytes actually imported, one
+  perturbed copy of the codec per method must be visible to the comparison the report scores with,
+  and a conformant narrative must not move. There is now one comparison, shared with the report, so
+  the two cannot drift apart again. The polarity is asserted on both sides by tests rather than
+  assumed.
+- **`UNSERIALIZABLE_ELEMENT_NAME`'s runtime message no longer tells the caller the JSON writer
+  encodes the model correctly.** The message reached consumer logs saying "serializeResource encodes
+  this model correctly", which is a claim about the whole model and is false: that writer has its own
+  declared exceptions, and a model refused for its name can carry one.
+  `{"resourceType":"Observation","name":[[{"family":"X"}]],"zz value="1"/><status":1}` is refused by
+  `serializeResourceXml` and comes back out of `serializeResource` with the array inside an array
+  intact. It now says only what the refusal does not reach, matching the wording the `div` refusal
+  beside it already used, and the same correction is applied to the predicate's own documentation, so
+  the two no longer contradict each other. Pinned by a test that falsifies the old sentence.
 - **`serializeResourceXml` no longer splices a `div` string into the document unexamined (`FHIR-DIV-FORGES-A-NEGATION`).**
   `Narrative.div` is carried as an opaque XHTML string and written back verbatim, so whatever the
   string spells became markup in the output. It was the one branch of the writer that puts a **value**
@@ -61,7 +84,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   resource-valued element, and a nested resource's own type. Refusing rather than repairing, because
   XML has no escape for an element name, so the alternatives are mangling the name or emitting the
   breakout and both author content nobody wrote. **The capability is routed rather than lost**:
-  `serializeResource` escapes a member name and encodes every one of these models correctly.
+  `serializeResource` escapes a member name, so this refusal never reaches it and that route stays
+  open. (Narrowed here before release, from "and encodes every one of these models correctly", which
+  was false: that is a claim about the whole model, and a model refused for its name can still carry
+  one of the JSON writer's own declared exceptions and have it emitted.)
   Locations are bounded as usual and never echo the offending name, which can itself be a forgery.
   **The line is deliberately narrow, and it is "does this library's own round trip survive it", not
   "is this a conformant XML name".** A prefixed name with nothing to bind it (`<v:x/>`), and names
