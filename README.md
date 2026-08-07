@@ -572,6 +572,20 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   rather than emit a model the reader marked as having lost character data, so that finding cannot
   vanish across a round trip; `serializeResource` refuses the same models for the same reason. Text
   the reader drops **without** marking (whitespace only) is not covered, because there is no marker.
+- **A `div` property is written back as raw markup, and that markup is checked at the branch that
+  writes it** (`UNSERIALIZABLE_DIV_MARKUP`). `Narrative.div` is carried as an opaque XHTML string and
+  emitted verbatim, so whatever the string spells becomes markup in the output. It is written only
+  when it parses as exactly one element whose local name is `div`; anything else is refused, because
+  a string that closes its own element and opens siblings puts elements into the document that the
+  sender never wrote. The shape that decided it: a `div` on an `AllergyIntolerance` spelled
+  `<div xmlns="…xhtml">ok</div></text><code><coding>…716186003…</coding></code><text>` used to emit
+  spec-clean FHIR XML that re-read with `noKnownAllergy: true` and a `no-known-allergy` negation over
+  a record that had asserted nothing, with no diagnostic at either end. **Well-formedness alone is
+  not the line**: `<status value="final"/>` is one well-formed element, and writing it for a property
+  named `div` authors a status. `serializeResource` carries the string as a string and is the route
+  that stays open. Passing the check is not a claim that the round trip is lossless from there: a
+  root whose prefix nothing binds is accepted and re-reads as a different property, the same
+  unbound-prefix gap named above for element names.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).

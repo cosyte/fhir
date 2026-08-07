@@ -49,17 +49,12 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   observed green in this container), value-set membership without a supplied terminology service,
   typed per-resource models, and transaction **execution** (a stated non-goal).
   **This is not a no-data-loss claim over the whole package, and the sentence above is base's own
-  wording, not a fresh one**: read-path losses remain open and declared. A **status** or a dose
-  number written as XML element text is dropped (reported, and the writer refuses, but the safety
-  spine reads `negations: []`), which is the one that qualifies "never drops a modifier, status or
-  negation"; so are a scalar beside a nested array (**still not modeled**, but since 2026-08-05 its
-  text is preserved and handed back, so the finding survives a **JSON** round trip; through the XML
-  writer it is still `<name/>` and both the value and the finding go), a `_`-sibling discarded
-  whole, a foreign child
-  of a valued primitive, character data at the three `flagStrayText` sites, an unbound prefix, and a
-  `<DIV>` wrapper. See
+  wording, not a fresh one**: read-path losses remain open and declared, and the one that qualifies
+  "never drops a modifier, status or negation" is a **status** or a dose number written as XML
+  element text (dropped and reported, the writer refuses, but the safety spine reads `negations: []`).
+  The rest are enumerated in the notes, relocated 2026-08-07:
+  [`#open-read-path-losses-enumerated`](documentation/agent-notes.md#open-read-path-losses-enumerated) ·
   [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
-  and [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open).
   Per-phase detail: [`#shipped-phase-history-p11-back-to-p1`](documentation/agent-notes.md#shipped-phase-history-p11-back-to-p1).
   Today's envelope, stated precisely: [`#p2-p3-and-what-the-package-does-today`](documentation/agent-notes.md#p2-p3-and-what-the-package-does-today).
 - Roadmap: the meta-repo's `operations/roadmaps/fhir.md` (P0…P11).
@@ -195,6 +190,12 @@ Unless noted, all of these are
   - **CLOSED 2026-08-05:** the scalar beside a nested array, and the prefix rebound between siblings
     **on the read**. The rebound prefix keeps a characterization test over the half still open: the
     report does not survive `serializeResourceXml`, which drops the binding.
+  - **CLOSED 2026-08-07: the `div` FORGERY.** A `div` string is written only when it spells exactly
+    one element named `div`, checked at the branch splicing it in. **THE CHECK IS ON THE WRITE; the
+    reader is unchanged, so no XML document reaches it and the read differential cannot grade it**
+    (its own control is stale, firing on a clean tree). **DO NOT WIDEN IT** to the namespace or a
+    prefix bound in the string: an unbound-prefix root is accepted on purpose, the same residual
+    through a value. [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation)
   - **STILL OPEN; deferral RE-MEASURED 2026-08-07 and it HOLDS.** Only ONE of the two remedies
     withdraws a capability; **"both do" is a mis-transcription.** **Beside it,
     `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as
@@ -274,16 +275,12 @@ by copying files. Source of truth: the meta-repo's `documentation/conventions.md
 
 ## The four architecture ADRs (read before writing any parser code)
 
-Recorded in `documentation/decisions/` at bootstrap because they shape everything:
-
-1. **`0001`: decimal / integer64 representation.** String-backed; MUST preserve lexical precision.
-   `0.010` is not `0.01`. **Never** round-trip `decimal`/`integer64` through the JS `number` type:
-   a silent-data-corruption hazard for doses, lab values, and identifiers.
-2. **`0002`: FHIRPath posture.** A bounded, vendored subset in-repo. No runtime dependency, no
-   third-party engine. Needed for invariants + slicing.
-3. **`0003`: XML scope.** JSON-first; XML came later.
-4. **`0004`: R4-first.** `4.0.1` is modeled (ONC HTI-1 / §170.315(g)(10) anchor). R5 / DSTU2 are
-   read-tolerance only.
+The text is in `documentation/decisions/`, which is the source of truth; these are the cursors.
+**`0001`** decimal / `integer64` are string-backed and MUST preserve lexical precision (the trap is
+stated in full above). **`0002`** FHIRPath is a bounded subset vendored in-repo, no runtime
+dependency, no third-party engine; needed for invariants + slicing. **`0003`** JSON-first, XML came
+later. **`0004`** R4-first: `4.0.1` is modeled (ONC HTI-1 / §170.315(g)(10) anchor), R5 / DSTU2 are
+read-tolerance only.
 
 ## Engineering Guardrails
 
@@ -297,9 +294,9 @@ Recorded in `documentation/decisions/` at bootstrap because they shape everythin
   inside an array, **a scalar or `null` where FHIR JSON has an object**, a non-string `resourceType`),
   because repairing any of them means inventing content or dropping it. Hand a value back
   (`FhirComplex.nonObjectSource`); **never model it as a primitive**, which would show it to every
-  walker at a complex position. **A NAME that would break its tag is refused** (XML only). **🔴 A
-  `div` VALUE IS NOT: it is emitted as raw markup and DOES author elements.**
-  [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
+  walker at a complex position. **Two markup sites, each checked AT the site (XML only): a NAME that
+  breaks its tag, and a `div` VALUE not spelling one element named `div`.** Not a claim over every
+  branch. [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation)
 - Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
   not a claim that a location carries no document content** (a name is echoed when it matches the
   bounded published form). See the derived-name trap above, and do not widen it into one. **The

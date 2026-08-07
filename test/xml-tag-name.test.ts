@@ -8,18 +8,20 @@
  * markup that fails to parse: it is the markup that parses into DIFFERENT elements.
  *
  * The comparand throughout is **the same model through `serializeResource`**, the JSON writer, which
- * escapes a member name and encodes every one of these correctly. That is what makes the refusal a
- * refusal rather than a loss: the model is still writable, in the format that can express it.
+ * escapes a member name, so no name reaches a refusal there. That is what makes the refusal a
+ * refusal rather than a loss: the name is still writable, in the format that can express it. It is
+ * not a claim that the JSON output is spec-clean, which that writer's own exception list governs.
  *
  * **What is deliberately NOT refused is asserted just as hard as what is.** A prefixed name with no
  * declaration to bind it, and a name that is not a conformant XML name, are both written verbatim
  * and both re-read through this library unchanged. Those are declared gaps, and the tests over them
  * are characterization tests: if you close one, they go red and you update them in the same change.
  *
- * **🔴 AND THE LAST BLOCK IN THIS FILE IS A GAP THIS REFUSAL DOES NOT CLOSE.** A `div` property is
- * emitted as raw markup, so it can carry whole elements into the document. `PRE-EXISTING`, nothing
- * here fixes it, pinned so the disclosure on `serializeResourceXml` is load-bearing rather than
- * prose. **Do not read this file as saying the writer cannot author an element.**
+ * **THE LAST TWO BLOCKS ARE THE OTHER MARKUP-EMITTING SITE**, the `div` branch, which writes a
+ * VALUE into markup position rather than a name. It used to carry whole elements into the document
+ * and is now checked at that branch; the blocks are paired the same way, one for what is refused and
+ * one for what is still written. **Two sites are covered here. Do not read that as a statement about
+ * every branch `serializeResourceXml` has.**
  */
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
@@ -446,78 +448,286 @@ describe("a model name at an XML tag position", () => {
   });
 
   /**
-   * 🔴 THE GAP THIS REFUSAL DOES NOT CLOSE, AND IT IS BIGGER THAN THE ONE IT DOES.
+   * THE SECOND MARKUP-EMITTING SITE: a `div` property, whose raw string `writeItem` splices in.
    *
-   * `writeItem` emits a `div` property as its own raw string. It is the one markup-emitting site the
-   * name check does not cover, and it is a FABRICATION route rather than merely an unreadability
-   * one: a BALANCED string that closes its own element and opens siblings puts spec-clean FHIR into
-   * the document that the sender never wrote, and it re-reads as ordinary content of the resource.
+   * The name check above governs names. This one governs the one branch that writes a *value* into
+   * markup position, and the harm it closes is a FABRICATION rather than an unreadability: a string
+   * that closes its own element and opens siblings puts spec-clean FHIR into the document that the
+   * sender never wrote, and it re-reads as ordinary content of the resource.
    *
-   * `PRE-EXISTING`, older than the refusal above and not caused by it. Pinned here so it cannot move
-   * in silence and so the disclosure on `serializeResourceXml` is load-bearing rather than prose.
-   * **Characterization tests over a gap: closing it MUST red these, in the same change.**
+   * **The three tests that used to sit here were characterization tests over the open gap, and they
+   * went red on this change, which is the mechanism working.** They are rewritten below as the same
+   * shapes with their new outcome, so the comparison base-to-head is still readable in one place.
    */
-  describe("declared gap, NOT closed here: a div property is emitted as raw markup", () => {
-    it("forges a no-known-allergy negation the record never asserted", () => {
+  describe("a div property carrying markup that is not the div the model names", () => {
+    /** The flagship: a balanced breakout that forges a positive clinical assertion. */
+    const FORGED_ALLERGY =
+      '<div xmlns="http://www.w3.org/1999/xhtml">ok</div></text>' +
+      '<code><coding><system value="http://snomed.info/sct"/>' +
+      '<code value="716186003"/></coding></code><text>';
+
+    it("no longer forges a no-known-allergy negation the record never asserted", () => {
       const forged = model(
         JSON.stringify({
           resourceType: "AllergyIntolerance",
-          text: {
-            status: "generated",
-            div:
-              '<div xmlns="http://www.w3.org/1999/xhtml">ok</div></text>' +
-              '<code><coding><system value="http://snomed.info/sct"/>' +
-              '<code value="716186003"/></coding></code><text>',
-          },
+          text: { status: "generated", div: FORGED_ALLERGY },
         }),
       );
       // Nothing on the way in: no allergy code anywhere in the model, and no negation.
       expect(readSafety(forged).noKnownAllergy).toBe(false);
       expect(readSafety(forged).negations).toEqual([]);
 
-      // Not refused. The name check governs names, and this is content.
-      const xml = serializeResourceXml(forged);
-      expect(xml).toContain('<code value="716186003"/>');
+      const err = refusal(forged);
+      expect(err?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP);
+      expect(err?.locations).toEqual(["AllergyIntolerance.text.div"]);
+      // Value-free like every other diagnostic here: the string is document content, and this shape
+      // of it is a forgery, so it must not be echoed into a message or a location.
+      expect(`${String(err?.message)}${err?.locations.join("")}`).not.toContain("716186003");
 
-      // And it comes back as a positive clinical assertion, with the safety spine affirming it.
-      const back = parseResourceXml(xml);
-      expect(back.issues).toEqual([]);
-      expect(readSafety(back.resource).noKnownAllergy).toBe(true);
-      expect(readSafety(back.resource).negations).toEqual(["no-known-allergy"]);
-      expect(readSafety(back.resource).safeToSummarize).toBe(true);
+      // The route that stays open. JSON carries the string as a string, so the model is still
+      // writable in the format that can express it, and the coding is still absent from the read.
+      const json = serializeResource(forged);
+      expect(json).toContain("716186003");
+      expect(readSafety(parseResource(json).resource).noKnownAllergy).toBe(false);
     });
 
-    it("is keyed on the NAME div alone, so it is not confined to Narrative.div", () => {
+    it("is keyed on the NAME div alone, so the refusal is not confined to Narrative.div", () => {
       const forged = model(
         JSON.stringify({ resourceType: "Observation", div: '<status value="final"/>' }),
       );
       expect(readSafety(forged).status).toBeUndefined();
-      const xml = serializeResourceXml(forged);
-      expect(xml).toBe(`<Observation ${FHIR_NS}><status value="final"/></Observation>`);
-      expect(readSafety(parseResourceXml(xml).resource).status).toBe("final");
+      // One well-formed element, and refused anyway: well-formedness is not the line, being the
+      // `div` this property names is. Emitting this authors an `Observation.status` outright.
+      expect(refusal(forged)?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP);
+      expect(refusal(forged)?.locations).toEqual(["Observation.div"]);
+      expect(readSafety(parseResource(serializeResource(forged)).resource).status).toBeUndefined();
     });
 
-    it("loses the property when the string carries no markup, loudly rather than silently", () => {
+    it("refuses a string carrying no markup, which base lost loudly", () => {
       const node = model(JSON.stringify({ resourceType: "Patient", div: "v" }));
       expect(node.properties.map((p) => p.name)).toEqual(["resourceType", "div"]);
-      const xml = serializeResourceXml(node);
-      expect(xml).toBe(`<Patient ${FHIR_NS}>v</Patient>`);
-      const back = parseResourceXml(xml);
-      expect(back.resource.properties.map((p) => p.name)).toEqual(["resourceType"]);
-      // "Silently" was written here and is FALSE. The value lands as character data on a FHIR
-      // element, which the dropped-text machinery reports, so this round trip is loud and the
-      // safety spine declines. Of the three shapes, this is the one that fails safe.
-      expect(back.issues.map((i) => `${i.code}:${i.severity}`)).toEqual([
+      // Base emitted `<Patient …>v</Patient>`: the property gone, one `UNEXPECTED_XML_CONTENT` and
+      // `safeToSummarize: false`. That was the one of the three shapes that failed safe, and it is
+      // still a round trip that did not survive, so refusing withdraws nothing that worked.
+      expect(refusal(node)?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP);
+      const base = parseResourceXml(`<Patient ${FHIR_NS}>v</Patient>`);
+      expect(base.resource.properties.map((p) => p.name)).toEqual(["resourceType"]);
+      expect(base.issues.map((i) => `${i.code}:${i.severity}`)).toEqual([
         "UNEXPECTED_XML_CONTENT:warning",
       ]);
-      expect(readSafety(back.resource).safeToSummarize).toBe(false);
     });
 
-    // A FOURTH TEST WAS DELETED HERE RATHER THAN REWRITTEN A THIRD TIME. It was titled "is NOT
-    // closed by well-formedness, because the harmful shape is well-formed", and BOTH halves were
-    // wrong: the flagship value above is NOT well-formed (`readRawXml` rejects it, trailing content
-    // after the root), and the test asserted only `toThrow()` over the benign unbalanced variant, so
-    // it stayed green under the very remedies it claimed to rule out. No replacement claim about
-    // what would or would not close this gap is made here. Measure it when someone takes the item.
+    it("refuses an empty div, which base dropped in silence", () => {
+      // Not in the three shapes recorded against this defect, and the worst of them on the way in:
+      // base emitted `<text><status value="generated"/></text>`, so the property vanished with an
+      // empty issue list and `valid: true` at both ends. Measured while taking the item.
+      const node = model(
+        JSON.stringify({ resourceType: "Patient", text: { status: "generated", div: "" } }),
+      );
+      expect(refusal(node)?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP);
+      const base = parseResourceXml(
+        `<Patient ${FHIR_NS}><text><status value="generated"/></text></Patient>`,
+      );
+      expect(base.issues).toEqual([]);
+      expect(validateResource(base.resource).valid).toBe(true);
+    });
+
+    it("reports every refused div location once, in walk order, and never the markup", () => {
+      const node = model(
+        JSON.stringify({
+          resourceType: "Patient",
+          text: { status: "generated", div: "<p>a</p>" },
+          contained: [{ resourceType: "Observation", div: "<p>b</p>" }],
+        }),
+      );
+      const err = refusal(node);
+      expect(err?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP);
+      expect(err?.locations).toEqual(["Patient.text.div", "Patient.contained[0].div"]);
+    });
+
+    it("raises the NAME refusal first when a model trips both, as base did", () => {
+      const node = model(JSON.stringify({ resourceType: "Patient", div: "<p>a</p>", "a b": "v" }));
+      expect(refusal(node)?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME);
+    });
+  });
+
+  /**
+   * WHAT IS STILL WRITTEN, ASSERTED AS HARD AS WHAT IS REFUSED.
+   *
+   * The cost of the refusal above is whatever it takes away, so the spellings this library reads a
+   * narrative under are pinned here. Each is a document `parseResourceXml` produces the string for,
+   * so a refusal that caught one of them would be withdrawing a round trip that works.
+   */
+  describe("div markup that is still written", () => {
+    const NARRATIVES = [
+      ["the default XHTML spelling", '<div xmlns="http://www.w3.org/1999/xhtml">ok</div>'],
+      ["a prefixed XHTML spelling", '<h:div xmlns:h="http://www.w3.org/1999/xhtml">ok</h:div>'],
+      [
+        "XHTML structure inside it",
+        '<div xmlns="http://www.w3.org/1999/xhtml"><p>a</p><br/></div>',
+      ],
+      ["an empty narrative element", '<div xmlns="http://www.w3.org/1999/xhtml"/>'],
+      ["no namespace declaration at all", "<div>ok</div>"],
+      ["a vendor namespace", '<div xmlns="urn:vendor">ok</div>'],
+      [
+        "an escaped less-than in the prose",
+        '<div xmlns="http://www.w3.org/1999/xhtml">a &lt; b</div>',
+      ],
+    ] as const;
+
+    it.each(NARRATIVES)("writes %s verbatim", (_label, div) => {
+      const node = model(
+        JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } }),
+      );
+      const xml = serializeResourceXml(node);
+      expect(xml).toBe(
+        `<Patient ${FHIR_NS}><text><status value="generated"/>${div}</text></Patient>`,
+      );
+    });
+
+    it.each(NARRATIVES)("re-writes the string the reader hands back for %s", (_label, div) => {
+      // The rows above are not asserted to be every spelling. Each is asserted to be one the reader
+      // produces a `div` string for, and that string is asserted to be writable in turn, which is
+      // what makes "no working round trip was withdrawn" checkable rather than a claim.
+      const doc = `<Patient ${FHIR_NS}><text><status value="generated"/>${div}</text></Patient>`;
+      const text = parseResourceXml(doc).resource.properties.find((p) => p.name === "text")?.value;
+      const read =
+        text?.kind === "complex" ? text.properties.find((p) => p.name === "div") : undefined;
+      const value = read?.value.kind === "primitive" ? read.value.value : undefined;
+      expect(typeof value).toBe("string");
+      const again = model(
+        JSON.stringify({ resourceType: "Patient", text: { status: "generated", div: value } }),
+      );
+      expect(refusal(again)).toBeUndefined();
+      expect(serializeResourceXml(again)).toContain(String(value));
+    });
+
+    /**
+     * ACCEPTED IS NOT LOSSLESS, AND THESE ARE THE COUNTEREXAMPLES THAT KEEP THAT FROM BEING CLAIMED.
+     *
+     * The check answers one question (does this string spell the one `div` element the property
+     * names), and a string can pass it and still not come back the same, and still leave output a
+     * conformant parser rejects. They are asserted rather than described, because a sentence in
+     * this area keeps being refuted and an example cannot drift from the code. Each reproduces on
+     * base; none is caused by the check.
+     */
+    it("accepts a root whose prefix nothing binds, which re-reads as a different property", () => {
+      const node = model(
+        JSON.stringify({
+          resourceType: "Patient",
+          text: { status: "generated", div: "<v:div>x</v:div>" },
+        }),
+      );
+      const xml = serializeResourceXml(node);
+      expect(xml).toContain("<v:div>x</v:div>");
+      const text = parseResourceXml(xml).resource.properties.find((p) => p.name === "text")?.value;
+      const names = text?.kind === "complex" ? text.properties.map((p) => p.name) : [];
+      expect(names).toEqual(["status", "v:div"]);
+    });
+
+    it("accepts a div whose nesting the re-read cannot afford, and that failure is loud", () => {
+      // The check spends the reader's depth budget from 0; the re-read spends it from the `div`'s
+      // depth in the document, so the two do not agree at the boundary. 253 survives, 254 does not.
+      const nest = (n: number): string =>
+        `<div xmlns="http://www.w3.org/1999/xhtml">${"<p>".repeat(n)}x${"</p>".repeat(n)}</div>`;
+      const build = (n: number): FhirComplex =>
+        model(
+          JSON.stringify({ resourceType: "Patient", text: { status: "generated", div: nest(n) } }),
+        );
+      expect(refusal(build(253))).toBeUndefined();
+      expect(() => parseResourceXml(serializeResourceXml(build(253)))).not.toThrow();
+      expect(refusal(build(254))).toBeUndefined();
+      // The CODE, not just a throw: a bare `toThrow()` stays green if the failure degrades to
+      // something else, and the prose above names this one.
+      expect(() => parseResourceXml(serializeResourceXml(build(254)))).toThrow(/depth bound/);
+    });
+
+    it("accepts a div that comes back carrying a namespace the sender never wrote", () => {
+      // Not byte-identity: `<div>` under no declaration takes its parent's, which is the FHIR
+      // namespace rather than the XHTML one the datatype names, and nothing says so.
+      const node = model(
+        JSON.stringify({
+          resourceType: "Patient",
+          text: { status: "generated", div: "<div>x</div>" },
+        }),
+      );
+      const back = parseResourceXml(serializeResourceXml(node));
+      const text = back.resource.properties.find((p) => p.name === "text")?.value;
+      const read =
+        text?.kind === "complex" ? text.properties.find((p) => p.name === "div") : undefined;
+      expect(read?.value.kind === "primitive" ? read.value.value : undefined).toBe(
+        '<div xmlns="http://hl7.org/fhir">x</div>',
+      );
+      expect(back.issues).toEqual([]);
+    });
+
+    it("accepts an XML declaration, which is not a processing instruction", () => {
+      // XML 1.0 §2.6 reserves the `xml` target and §2.8 allows the declaration only at the start of
+      // an entity, but `skipMisc` swallows one, so this is written into the middle of a document and
+      // a conformant third-party parser rejects the result. This library's own re-read does not.
+      const div = '<?xml version="1.0"?><div xmlns="http://www.w3.org/1999/xhtml">x</div>';
+      const node = model(
+        JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } }),
+      );
+      const xml = serializeResourceXml(node);
+      expect(xml).toContain('<?xml version="1.0"?>');
+      expect(parseResourceXml(xml).issues).toEqual([]);
+    });
+
+    it("accepts a comment beside the root, which the re-read drops", () => {
+      const div = '<!--c--><div xmlns="http://www.w3.org/1999/xhtml"/>';
+      const node = model(
+        JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } }),
+      );
+      const xml = serializeResourceXml(node);
+      expect(xml).toContain(div);
+      const text = parseResourceXml(xml).resource.properties.find((p) => p.name === "text")?.value;
+      const read =
+        text?.kind === "complex" ? text.properties.find((p) => p.name === "div") : undefined;
+      // One element still, and it is the div: the comment is not an element, and it does not survive.
+      expect(read?.value.kind === "primitive" ? read.value.value : undefined).toBe(
+        '<div xmlns="http://www.w3.org/1999/xhtml"/>',
+      );
+    });
+
+    /**
+     * THE FALSE-POSITIVE CONTROL: A REFUSAL COSTS NOTHING THAT WORKED.
+     *
+     * Base spliced the string in unexamined, so base's output for any `div` is exactly the document
+     * this builds by hand. The property is one-directional on purpose (refused implies base's round
+     * trip did not return the same string) because an ACCEPTED string need not come back
+     * byte-identical either (an unprefixed `<div>` picks up its parent's namespace on the way back).
+     */
+    it("refuses nothing whose base round trip returned the same string", () => {
+      const alphabet = [..."<>/divp \"='!?-&;\n", "716186003", "status", "value", "code"];
+      fc.assert(
+        fc.property(
+          fc.array(fc.constantFrom(...alphabet), { minLength: 1, maxLength: 12 }),
+          (chars) => {
+            const div = chars.join("");
+            const node = model(
+              JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } }),
+            );
+            if (refusal(node)?.code !== SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP) return;
+            const baseOutput = `<Patient ${FHIR_NS}><text><status value="generated"/>${div}</text></Patient>`;
+            let returned: unknown;
+            try {
+              const text = parseResourceXml(baseOutput).resource.properties.find(
+                (p) => p.name === "text",
+              )?.value;
+              const read =
+                text?.kind === "complex"
+                  ? text.properties.find((p) => p.name === "div")
+                  : undefined;
+              returned = read?.value.kind === "primitive" ? read.value.value : undefined;
+            } catch {
+              return; // base's output did not re-read at all.
+            }
+            expect(returned).not.toBe(div);
+          },
+        ),
+        { numRuns: 2000 },
+      );
+    });
   });
 });
