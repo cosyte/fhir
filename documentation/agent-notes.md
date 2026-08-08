@@ -2456,9 +2456,9 @@ was not run in both polarities.
 
 ### Controls, run in both polarities
 
-- **Positive, transformed carrier.** `src/xml/write.ts`'s module docblock is found in `index.d.ts` and
-  `index.d.cts`, so the probe finds text the DTS rollup has rewrapped and re-emitted.
-- **Positive, verbatim carrier.** A `//` comment in `src/codec/read.ts` is found in both sourcemaps'
+- **Positive, declaration carrier.** `src/xml/write.ts`'s module docblock is found in `index.d.ts`
+  and `index.d.cts`, so the probe reads the declarations.
+- **Positive, sourcemap carrier.** A `//` comment in `src/codec/read.ts` is found in both sourcemaps'
   decoded `sourcesContent`, so the probe reads the maps and not only the plain files.
 - **Negative, synthetic.** A string present in no source is found nowhere.
 - **Negative, wrong package.** The identical probe, run with this repo's `src/` against the published
@@ -2500,13 +2500,15 @@ not have. Same lesson as `#70`, found again here rather than cited.
   control above exercises, and where it carries none the third pass scans **more** than reaches
   `dist/`. That is over-inclusive, which the bullet already declares as the gate's ceiling, and it is
   the safe direction. Widening the slice to reword it would be writing a fresh reach claim inside the
-  correction of a reach claim, which is the exact failure this lineage has now paid for four times.
+  correction of a reach claim, which is the failure this lineage keeps paying for.
 
-### 🛑 Pass 1 refuted this slice for doing the very thing it was correcting, twice
+### 🛑 Two gate passes refuted this slice for doing the very thing it was correcting
 
-**Both findings were `INTRODUCED` by draft one, both in the unsafe polarity, and both remedies were
-deletions.** Recorded here because the lesson is that writing the rule down is not the same as
-obeying it, and this note is where the next reader looks for that.
+**Every finding across both passes was `INTRODUCED` by this slice rather than `PRE-EXISTING`, and
+every remedy was a deletion.** Recorded here because the lesson is that writing the rule down is not
+the same as obeying it, and this note is where the next reader looks for that.
+
+**Pass 1**, two findings:
 
 - **A fresh universal, written inside the correction of the old universal, in the same paragraph that
   said it named no set.** Draft one added, after the failing example: *"Every `src/**/index.ts` barrel
@@ -2525,5 +2527,14 @@ obeying it, and this note is where the next reader looks for that.
 **line granularity**, so prose that ships with a `{@link …}` tail rewritten or dropped is invisible to
 it. Pass 1's own probe is the one to reuse: drop all non-alphanumerics, then slide a fixed-width
 normalised window across the whole docblock. It is strictly more generous, and it is what surfaced
-the partial hits the line-granular probe could not see. **A reach probe that has not been run in both
-polarities AND at sub-line granularity has not been run.**
+the partial hits the line-granular probe could not see.
+
+**▶ PASS 2 THEN REFUTED THE CONTROL SECTION ITSELF, WHICH IS THE WARRANT FOR EVERYTHING ELSE HERE.**
+It called `src/xml/write.ts`'s docblock a **transformed** carrier, "text the DTS rollup has rewrapped
+and re-emitted". It is not. That docblock is byte-identical in `dist/index.d.ts` and
+`dist/index.d.cts`, indentation included, which anyone can check with a substring test in two lines.
+So a section headed as controls in both polarities carried no transformed positive at all, inside a
+slice whose entire subject is false statements about what a build produces. **The transformation
+framing is deleted** and each positive control is now named for the artifact it reads. Two smaller
+deletions went with it: a closing line setting a probe standard the wrong-package control had not
+been run to, and a count of how many times this lineage has paid for the same failure.
