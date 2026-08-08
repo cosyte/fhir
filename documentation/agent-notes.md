@@ -2538,3 +2538,158 @@ slice whose entire subject is false statements about what a build produces. **Th
 framing is deleted** and each positive control is now named for the artifact it reads. Two smaller
 deletions went with it: a closing line setting a probe standard the wrong-package control had not
 been run to, and a count of how many times this lineage has paid for the same failure.
+
+## The `JSON -> XML -> JSON` laundering, closed (2026-08-08, `FHIR-JSON-ONLY-SHAPE-LAUNDERED`)
+
+The last leg of the laundering lineage, and the one the two entries above each declared open at their
+own foot. Base was `5ced746`.
+
+**What it was.** The JSON reader marks four positions FHIR JSON gives no meaning to and keeps what
+the sender wrote at them, so `serializeResource` hands the text back and a re-read reproduces the
+finding: an array inside an array (`nestedArray` + `nestedArraySource`), a scalar or `null` where
+FHIR JSON has an object (`nonObjectSource`), that same shape in a primitive's `_`-sibling
+(`nonObjectMetaSource`, `nestedArrayMetaSource`), and a `null` in a primitive's value channel that
+padded nothing (`undefinedNull`). **XML has none of those channels** -- no array of arrays, no
+`_`-sibling (a primitive's metadata is co-located as an `id` attribute and child `<extension>`
+elements), and no `null` at all. So `serializeResourceXml` emitted the node the reader was left
+holding, an empty element or none, and that output re-reads with an **empty issue list**. Three of
+the four also re-read `valid: true`; the array-inside-an-array one emits `<name/>`, which re-reads
+`issues: []` and `valid: false`. **Not because it is empty, and not because it repeats**, which is
+what a first draft of this sentence said and the gate measured false: `<coding/>` is equally empty
+and equally repeating and re-reads `valid: true`, while a `0..1` `<maritalStatus/>` re-reads
+`valid: false`. What decides it is the modeled datatype: the element re-reads as a value-absent
+primitive where the schema types a complex one, and the validator draws `TYPE_MISMATCH`. The finding
+is gone in all four, which is the property that matters here.
+
+The shape of the harm is this lineage's own: **nothing is lost in the ordinary sense**, so the output
+cannot be told apart from a document whose sender wrote the conformant thing, and every layer
+affirms it.
+
+### The measured extent, at `5ced746`
+
+Hand-authored JSON probes, base vs head, each parsed, written to XML and **re-read**. The middle
+column is the document base put on the wire; the right column is what re-reading that document gave.
+
+| in | base emitted | re-read |
+| --- | --- | --- |
+| `{"valueQuantity":{"value":null,"unit":"mg"}}` (`UNDEFINED_JSON_NULL`) | `<value/><unit value="mg"/>` | `issues: []`, back to `{"unit":"mg"}`: a unit with **no magnitude** |
+| `{"status":"final","_status":null}` (`UNKNOWN_PROPERTY`) | `<status value="final"/>` | `issues: []`, the member gone |
+| `{"_status":"x"}` (`UNKNOWN_PROPERTY`) | `<status/>` | `issues: []`, the member gone |
+| `{"coding":[{"code":"active"},"junk"]}` (`UNKNOWN_PROPERTY`) | `<coding/>` for item 1 | `issues: []`, the item back as `null` |
+| `{"name":[[{"family":"Roe"}]]}` (`UNKNOWN_PROPERTY`+`NESTED_ARRAY`, `safeToSummarize: false`) | `<name/>` | `issues: []`, **`safeToSummarize: true`** |
+| `{"name":[{"given":[["a"]]}]}` (same pair) | `<given/>` | `issues: []`, `safeToSummarize: true` |
+| `doseQuantity` three levels down with `"_value":"junk"` | the dose element, clean | `issues: []` |
+
+The first row is the harm the value-channel rule exists for, arriving through the other door. The
+`name` rows are the sharper ones: a **refusal to summarize turned into an affirmation**.
+
+**Conformant controls, unchanged and silent at base and head:** §2.6.2.3 padding
+(`{"given":["a","b"],"_given":[null,{"id":"q"}]}`), a value-absent singleton
+(`{"_issued":{"id":"q1"}}`), a primitive `extension`, a precision-critical `valueQuantity`, and every
+XML fixture, which still round-trips byte-for-byte.
+
+### Why a refusal, when the two entries above chose a report and a hand-back
+
+Because there is nothing to hand back **into**. Those two closed a channel that exists in the format
+being written; here the format has no channel at all, and the three options are exhaustive: emit the
+empty element (which is the laundering), invent an XML spelling (which authors markup nobody wrote,
+the fabrication class `UNSERIALIZABLE_ELEMENT_NAME` and `UNSERIALIZABLE_DIV_MARKUP` already exist
+for), or refuse. It is the same instrument `DROPPED_ELEMENT_TEXT` already is, one format over: that
+marker has no encoding in **either** wire format and both writers refuse it; these have one in JSON
+and none in XML, so only the XML writer does.
+
+**No round trip that works is withdrawn, and this is mechanical rather than argued.** Every marker is
+set by the JSON reader alone. A census over `src/` asserts it (`markUndefinedNull`,
+`markNonObjectMeta` and `markNestedArray` are referenced only by `codec/read.ts` and `model/node.ts`;
+`nonObjectSource` is assigned only in `codec/read.ts`), which is a stronger statement than the
+7-fixture sweep beside it because it does not depend on the corpus. So no document read from XML can
+reach the refusal, and no conformant JSON document carries a marker either.
+**What that census is, exactly, because pass 1 read it wider than it is:** it is a grep over `src/`
+for the marking helpers by name and for a `nonObjectSource:` assignment. A helper renamed, or the
+field set by object shorthand, would evade the patterns. It reds when a new file starts setting one
+**the way the reader does today**; it is not a proof about every spelling.
+
+### A whole-model pre-pass, deliberately, where the two refusals beside it check at their site
+
+`tag()` and `emitsOneDivElement` are checked **at** the site that writes, because their answer depends
+on the writer's branching: which name becomes a tag, which becomes an attribute, which is dropped. A
+pre-pass would have to re-derive that and would be free to disagree. **This question does not depend
+on the branching at all** -- no branch of the XML writer can express any of these shapes, wherever
+the node sits -- so the pre-pass cannot drift, and it reaches three positions a site-local check
+would each have to be repeated at: the `div` branch, which returns before the primitive is written;
+the `id`/`url`/`resourceType` properties, which are consumed as attributes or skipped and never reach
+`writeItem`; and a member a repeated property name shadowed, which the writer's own walk never
+visits. The walk is `collectMarked`'s, shared with `droppedText` and `nestedArrays` rather than
+copied, so a refusal cannot come to visit a different part of a document than a report of the same
+kind does.
+
+**Raised last**, after the name and `div` refusals. A model can trip two, and base's answer must not
+move: `{"zz value=\"1\"/><status":1,"issued":null}` keeps `UNSERIALIZABLE_ELEMENT_NAME`, a bad `div`
+beside a marker keeps `UNSERIALIZABLE_DIV_MARKUP`, and dropped character data keeps
+`DROPPED_ELEMENT_TEXT`. All three orderings are pinned by tests. **No case moved onto the new code**,
+because these positions raised no serialize error at all before.
+
+### Declared open, not closed, and pinned so none of it reads as covered
+
+- **An array-wrapped `0..1` element still launders across this boundary.** No node is marked: the
+  model holds a genuine list of one, and XML spells a repeating element by repeating it, so one
+  occurrence is exactly what comes back. Closing it needs a cardinality decision on the **write**
+  path, which is a different change; `array-wrapped-scalar.test.ts` owns it and still pins it.
+- **A repeated property name is dropped by BOTH writers**, so there is no hand-back for XML to be
+  missing. `DUPLICATE_PROPERTY` and the safety refusal carry it instead. Not this class.
+- **A JSON decimal comes back from XML as a string**, because XML carries no JSON type. The lexical
+  value survives byte-exact and no magnitude changes, but the `DECIMAL_PRECISION_AT_RISK`
+  information-severity finding is not reproduced on the re-read. Pre-existing, and named here only so
+  the closure above is not read as covering it.
+- **A non-string `resourceType` still launders the same way, and it is the closest residual to this
+  closure, so it is named here rather than left to the item.**
+  `{"resourceType":["Observation"],"status":"final"}` reads `valid: false` / `safeToSummarize: false`,
+  emits `<Resource xmlns="http://hl7.org/fhir"><status value="final"/></Resource>`, and that document
+  re-reads `issues: []` / `valid: true` / `safeToSummarize: true`. Identical harm shape to the `name`
+  row above. It is **not** a marked node: the writer substitutes the tag rather than the reader
+  marking the position, so closing it is a decision about what the writer does with an unreadable
+  `resourceType`, not about a channel XML lacks. `PRE-EXISTING`, reproduces on `5ced746`, and declared
+  deferred in the backlog item. Raised by the conformance gate's pass 1.
+- The residuals the two entries above declared in their own channel are untouched: an **empty**
+  `_`-sibling object or array, a `_`-sibling object's own unreadable member, and
+  `MISPLACED_PRIMITIVE_EXTENSION` beside a non-primitive.
+
+### What could not grade this
+
+**The read differential cannot grade this class at all.** It is an XML harness, and every marker here
+is set by the JSON reader; its 0-of-1,195 moved readings is by construction, not evidence, and the
+harness prints that caveat itself. Its `moved` count is separately blind to refusal identity, which
+is declared in four places. No zero of its is quoted as evidence here. **The standing corpus caveat
+holds:** the figures above are a hand-authored JSON probe axis plus this repo's JSON fixtures, and
+this lineage's XML fixtures are 7 hand-authored files plus mutations. **Neither is the FHIR R4
+published-examples corpus**, and nothing here is corpus-wide.
+
+### What the gate moved, and the two claims it refuted
+
+Pass 1 found **no defect in the code** and two `INTRODUCED` majors, both claim width, which is the
+shape this lineage keeps paying for.
+
+1. **"`serializeResource` writes all four back BYTE-IDENTICALLY" is false for three of the four
+   families**, and it was the sentence justifying the withdrawal, shipped in `README.md`,
+   `CHANGELOG.md`, the changeset and the guard's own docblock. The preserved text is **value-exact,
+   not byte-exact**, which `FhirComplex.nonObjectSource` already states on the field:
+   `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back spelling the second
+   member `"Practitioner/2"`. Only `undefinedNull` is byte-identical, because a `null` has no
+   escaping to lose. **The test beside the claim did not ground it**: its four rows carry no JSON
+   escape, so it was green while the sentence was false. The claim is corrected everywhere and a
+   failing example is now pinned beside the four rows.
+2. **The runtime message promised a route that does not carry one case the refusal deliberately
+   reaches.** It ended "serializeResource writes it back, so this refusal never reaches it", and for
+   a marker inside a member a repeated property name shadowed that writer **drops** it. The message
+   now says only what the refusal does not reach, which is the wording the two refusals beside it
+   were narrowed to on 2026-08-07. The location caveat is stated with it: FHIRPath cannot address a
+   shadowed member, so the location resolves to the surviving one.
+
+Two minors moved with them: each disjunct of the predicate is now pinned by a hand-built node (the
+suite was green with any single clause deleted, because the reader always sets `nestedArray` beside
+`nestedArraySource`), and the census claim is scoped to what it greps.
+
+_Provenance: every figure above was produced by running one probe script against a clean `5ced746`
+and then against the head tree, not recalled; the spec clauses are `hl7.org/fhir/R4/json.html`
+§2.6.2, §2.6.2.1 and §2.6.2.3 for the JSON channels and `xml.html` §2.6.1 for the XML one. The two
+corrections above are the conformance gate's pass 1 against `a608731`._

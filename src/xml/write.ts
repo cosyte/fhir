@@ -31,6 +31,7 @@ import {
 } from "../model/node.js";
 import {
   assertSerializable,
+  assertXmlSerializable,
   breaksTag,
   refuseUnserializableDivMarkup,
   refuseUnserializableNames,
@@ -336,6 +337,19 @@ function writeElement(
  *   for the same reason as a name: escaping it would author a text node where the sender wrote
  *   markup, and splicing it authors elements the sender never wrote. {@link serializeResource}
  *   carries the string as a string, so this refusal never reaches it and that route stays open.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_JSON_ONLY_SHAPE` if the model carries a shape the
+ *   JSON reader marked at a position FHIR JSON gives no meaning to: an array inside an array, a
+ *   scalar or `null` where FHIR JSON has an object (a complex element's position or a primitive's
+ *   `_`-sibling), or a `null` in a primitive's value channel that padded nothing. XML has no array of
+ *   arrays, no `_`-sibling and no `null`, so this writer emitted the empty element the reader was
+ *   left holding and the finding was gone on the next read; `{"value":null,"unit":"mg"}` came back as
+ *   a `Quantity` carrying a unit and no magnitude under an empty issue list. This refusal does not
+ *   reach {@link serializeResource}, which writes these back from the text the reader preserved at
+ *   every position that writer walks; **it does not walk a member a repeated property name shadowed,
+ *   and this refusal does reach one**, so that is the refusal's limit and not a route the shape
+ *   always survives. The text handed back is value-exact, **not byte-exact**. **Only a model read
+ *   from JSON reaches this**: XML cannot write any of those shapes, so a document read from XML
+ *   carries none of the markers.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -354,5 +368,8 @@ export function serializeResourceXml(node: FhirComplex): string {
   // it already reported. Both are raised after the walk, so neither returns a half-built document.
   if (sink.refusedNames.length > 0) refuseUnserializableNames([...new Set(sink.refusedNames)]);
   if (sink.refusedDivs.length > 0) refuseUnserializableDivMarkup([...new Set(sink.refusedDivs)]);
+  // Last, for the same reason: a model carrying a JSON-only shape AND a name this cannot write keeps
+  // the name refusal it already raised, so no case moves onto the newer code.
+  assertXmlSerializable(node);
   return xml;
 }

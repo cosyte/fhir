@@ -323,9 +323,8 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `_`-sibling that is itself not an object (`"_status":null`) is the neighbouring position and draws
   `UNKNOWN_PROPERTY` instead, on the reasoning above. **No case has ever moved between the two
   codes**, because that channel drew nothing at all until it was closed. And
-  `serializeResourceXml` does not carry it. XML has no `null`, so no document read from XML is ever
-  marked, that writer emits the empty element as before, and a `JSON -> XML -> JSON` trip therefore
-  still launders the shape: a declared residual, not a claim.
+  `serializeResourceXml` does not carry it: XML has no `null`, so it **refuses** rather than emit the
+  empty element (see `UNSERIALIZABLE_JSON_ONLY_SHAPE` below).
 - **A primitive whose value is written as XML element text is reported, not silently read as an
   absent value.** FHIR XML carries a primitive's value in the `value` attribute, so
   `<status>entered-in-error</status>` puts a code where the model has no slot for one: the character
@@ -650,6 +649,32 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   that stays open. Passing the check is not a claim that the round trip is lossless from there: a
   root whose prefix nothing binds is accepted and re-reads as a different property, the same
   unbound-prefix gap named above for element names.
+- **A shape only FHIR JSON can spell is refused rather than emitted as an empty element**
+  (`UNSERIALIZABLE_JSON_ONLY_SHAPE`). The JSON reader marks four positions FHIR JSON gives no meaning
+  to and keeps what the sender wrote there, so `serializeResource` hands it back and re-reading the
+  output reproduces the finding: an array inside an array, a scalar or `null` where FHIR JSON has an
+  object, that same shape in a primitive's `_`-sibling, and a `null` in a primitive's value channel
+  that padded nothing. **XML has none of those channels**: no array of arrays, no `_`-sibling (a
+  primitive's metadata is co-located as an `id` attribute and child `<extension>` elements), and no
+  `null` at all. So this writer used to emit the node the reader was left holding, and that output
+  re-reads with an empty issue list, and three of the four also `valid: true`. `{"value":null,"unit":"mg"}` came back through XML as a `Quantity` carrying a unit
+  and **no magnitude**, with an empty issue list; `{"name":[[{"family":"Roe"}]]}` came back with the
+  name gone and `safeToSummarize` flipped from `false` to `true`. Refusing, because there is nothing
+  to hand back into and inventing an XML spelling would author markup nobody wrote. **Only a model
+  read from JSON reaches it**: XML cannot write any of those shapes, so a document read from XML
+  carries no marker and nothing that round-trips today stops. `serializeResource` writes all four
+  back at every position that writer walks, and the re-read reproduces the finding. **It does not
+  walk a member a repeated property name shadowed, and this refusal does reach one**, so that is the
+  refusal's own limit rather than a route the shape always survives; `DUPLICATE_PROPERTY` and the
+  safety refusal are what carry such a document. **Value-exact, not byte-exact**, which is the same
+  limit the preserved text carries everywhere else in this README:
+  `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back with the second
+  member spelled `"Practitioner/2"`, the same string in different bytes. Only the value-channel
+  `null` family is byte-identical, because a `null` has no escaping to lose. That the route stays
+  open is a statement about these shapes, not about the whole model. **Not** closed by it, and pinned rather than implied: an array-wrapped `0..1`
+  element still launders across this boundary (no node is marked, and XML spells a repeating element
+  by repeating it), a repeated property name is dropped by **both** writers, and a JSON decimal comes
+  back from XML as a string because XML carries no JSON type.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).

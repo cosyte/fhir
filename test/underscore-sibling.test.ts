@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FhirSerializeError,
   ISSUE_CODES,
+  SERIALIZE_ERROR_CODES,
   getProperty,
   isList,
   parseResource,
@@ -303,13 +305,16 @@ describe("a `_`-sibling that is not an object is reported and handed back", () =
       }
     });
 
-    it("never marks a document read from XML, and does not close the `JSON -> XML -> JSON` trip", () => {
+    it("never marks a document read from XML, and the `JSON -> XML -> JSON` trip is now refused rather than laundered", () => {
       // XML has no `null` and no `_`-sibling: a primitive's metadata is co-located as an `id`
-      // attribute and child `<extension>` elements, so there is no channel for this text to travel
-      // in. The XML writer therefore drops it, and that trip still launders. Declared residual.
+      // attribute and child `<extension>` elements, so there is still no channel for this text to
+      // travel in. What changed is that the XML writer refuses instead of dropping it. Both halves
+      // are asserted: the document read from XML is untouched (it carries no marker, so nothing that
+      // works is withdrawn), and the marked one no longer emits the document below.
       const xml = '<Observation xmlns="http://hl7.org/fhir"><status value="final"/></Observation>';
       const fromXml = parseResourceXml(xml);
       expect(fromXml.issues).toEqual([]);
+      expect(serializeResourceXml(fromXml.resource)).toBe(xml);
       expect(serializeResource(fromXml.resource)).toBe(
         '{"resourceType":"Observation","status":"final"}',
       );
@@ -317,9 +322,25 @@ describe("a `_`-sibling that is not an object is reported and handed back", () =
       const { resource } = parseResource(
         '{"resourceType":"Observation","status":"final","_status":"x"}',
       );
-      expect(serializeResourceXml(resource)).toBe(xml);
-      expect(serializeResource(parseResourceXml(serializeResourceXml(resource)).resource)).toBe(
+      let raised: unknown;
+      try {
+        serializeResourceXml(resource);
+      } catch (error) {
+        raised = error;
+      }
+      expect(raised).toBeInstanceOf(FhirSerializeError);
+      expect(raised).toMatchObject({
+        code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+        locations: ["Observation.status"],
+      });
+      // What base emitted was exactly the XML above, indistinguishable from the document whose
+      // sender wrote no `_status` at all, and re-reading it gave the member back gone and clean.
+      expect(serializeResource(parseResourceXml(xml).resource)).toBe(
         '{"resourceType":"Observation","status":"final"}',
+      );
+      // The JSON route still carries it, so the shape is not stranded.
+      expect(serializeResource(resource)).toBe(
+        '{"resourceType":"Observation","status":"final","_status":"x"}',
       );
     });
   });

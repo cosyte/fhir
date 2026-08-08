@@ -8,6 +8,47 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **`JSON -> XML -> JSON` laundered every shape the JSON reader marks, because XML has no channel for
+  any of them (`FHIR-JSON-ONLY-SHAPE-LAUNDERED`).** The reader marks four positions FHIR JSON gives no
+  meaning to and keeps what the sender wrote at them, so `serializeResource` hands it back and a
+  re-read reproduces the finding: an array inside an array, a scalar or `null` where FHIR JSON has an
+  object, that same shape in a primitive's `_`-sibling, and a `null` in a primitive's value channel
+  that padded nothing. XML has no array of arrays, no `_`-sibling and no `null`, so
+  `serializeResourceXml` emitted the node the reader was left holding -- an empty element, or none --
+  and **that output re-reads with an empty issue list** (three of the four also `valid: true`; the
+  array-inside-an-array one emits `<name/>`, which re-reads `issues: []` and `valid: false`, because
+  that element re-reads as a value-absent primitive where the schema types a complex datatype and
+  draws `TYPE_MISMATCH`; emptiness is not what decides it, and the `coding` row is the control). Measured against `5ced746`, one shape per marker, each read then
+  written to XML then re-read: `{"value":null,"unit":"mg"}` came back as a `Quantity` carrying a unit
+  and **no magnitude** under an empty issue list, which is the exact harm the value-channel rule
+  exists for, arriving through the other door; `{"status":"final","_status":null}` came back with the
+  member gone; `{"coding":[{"code":"active"},"junk"]}` came back with the item as `null`; and
+  `{"name":[[{"family":"Roe"}]]}` came back with the name gone and **`safeToSummarize` flipped from
+  `false` to `true`**, turning a refusal to summarize into an affirmation.
+  The XML writer now raises a new `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE`, value-free
+  and carrying bounded locations. **Refusing, because there is nothing to hand back into**: emitting
+  the empty element is what laundered, and inventing an XML spelling for a JSON-only shape would
+  author markup the sender never wrote, which is the fabrication class the two refusals beside it
+  already exist for. **Nothing that works is withdrawn**: the markers are set by the JSON reader
+  alone, asserted by a census over `src/` rather than argued, so **no document read from XML reaches
+  it** and no conformant JSON document does either -- the XML fixture corpus still round-trips
+  byte-for-byte and the read differential moves 0 of 1,195 readings, which is by construction rather
+  than a surprise. `serializeResource` writes all four back and the re-read reproduces the finding.
+  **Value-exact, not byte-exact**, the limit the preserved text already carried:
+  `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back spelling the second
+  member `"Practitioner/2"`, and only the value-channel `null` family is byte-identical. That the
+  route stays open is a statement about these shapes, not about the whole model; a marker inside a
+  member a repeated property name shadowed is dropped by that writer too, so the runtime message says
+  only what the refusal does not reach rather than promising a route. **Raised last**, after
+  the name and `div` refusals, so a model that trips two keeps the code it already reported and **no
+  case moved onto the new one**. Deliberately **not** closed, and pinned rather than implied: an
+  array-wrapped `0..1` element still launders across this boundary (no node is marked, and XML spells
+  a repeating element by repeating it), a repeated property name is dropped by **both** writers, and a
+  JSON decimal comes back from XML as a string because XML carries no JSON type. Every count here is
+  bounded by the caveat this lineage carries: the corpus is 7 hand-authored XML fixtures plus
+  mutations and this repo's hand-authored JSON fixtures, **not** the FHIR R4 published-examples
+  corpus. Measurement, controls and what was left: `documentation/agent-notes.md`.
+
 - **An internal gate's rationale asserted that everything in `src/` is in the tarball, which is wider
   than what a build produces (`FHIR-TARBALL-REACH-CLAIM`).** Development tooling and internal
   documentation only; no runtime behaviour changes.
@@ -110,9 +151,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   a **non-primitive** keeps `MISPLACED_PRIMITIVE_EXTENSION`, still lost across a round trip; the
   `_`-array exemption is by **position**, so §2.6.2.3's Note half that scopes its `null` to a slot
   whose element _has_ a value is not implemented and `{"_given":[null]}` with no `given` beside it
-  keeps its silent drop; and
-  `JSON -> XML -> JSON` still launders the shape, because XML has no `_`-sibling channel to carry the
-  text. `validateResource` and `readSafety` are unchanged: nothing was unreadable at that position in
+  keeps its silent drop.
+  `validateResource` and `readSafety` are unchanged: nothing was unreadable at that position in
   the sense `NESTED_ARRAY` and `DROPPED_ELEMENT_TEXT` mean it.
 - **A JSON `null` at a primitive position was read with no diagnostic and then deleted on emit, so a
   non-conformant document came back clean and conformant with the member missing
@@ -154,8 +194,6 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   whatever the element's FHIR type would be, and `{"subject":null}` on an `Observation` is reported
   here rather than as an unexpected property. Only an array item and an item of a `_`-sibling's
   `extension` array reach the complex branch.
-  A `JSON -> XML -> JSON` trip still launders the shape, because `serializeResourceXml` has no `null`
-  to write: declared as a residual rather than claimed closed.
   This is a **diagnostic, not a refusal**, deliberately. A `null` is a non-conformant encoding of an
   absent value, not content the reader could not read, so the fatal tier and the
   content-was-unreadable refusals (`NESTED_ARRAY`, `DROPPED_ELEMENT_TEXT`) are the wrong instrument,
