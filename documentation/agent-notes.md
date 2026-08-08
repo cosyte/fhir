@@ -2269,14 +2269,21 @@ closure and the "not closed" disclosure in the same document.
 the paragraph describes:
 
 ```
-in : {"resourceType":"AllergyIntolerance","text":{"div":
+D  = {"resourceType":"AllergyIntolerance","text":{"div":
       "<div xmlns=\"...xhtml\">ok</div></text><code><coding>...716186003...</coding></code><text>"}}
-     parseResource issues []
-out: REFUSED  UNSERIALIZABLE_DIV_MARKUP  at ["AllergyIntolerance.text.div"]
-     serializeResource still writes it, so the JSON route the changeset claims stays open does
-base-shaped output (what the UNCHECKED splice used to emit), re-read:
-     readSafety noKnownAllergy: true , negations ["no-known-allergy"]
+
+parseResource(D)                  -> issues []
+serializeResourceXml(D)           -> REFUSED UNSERIALIZABLE_DIV_MARKUP ["AllergyIntolerance.text.div"]
+serializeResource(D)              -> writes it, so the JSON route the changeset claims stays open does
+
+X  = the document base's UNCHECKED splice used to emit for D
+readSafety(parseResourceXml(X))   -> noKnownAllergy true , negations ["no-known-allergy"]
 ```
+
+**`readSafety` on `D` itself is `noKnownAllergy: false` with `negations: []`**, and its JSON round
+trip is byte-identical. The forgery is a property of `X`, the emitted XML, and of nothing else; an
+earlier draft of this block ran the two probes together in a way that read as though the negation
+attached to `serializeResource`, and the gate measured it and said so.
 
 So the paragraph is **accurate about base and false about the release**. Negative control: the same
 two probes against `@cosyte/hl7` and `@cosyte/ccda` find neither `serializeResourceXml` nor
@@ -2320,12 +2327,30 @@ as saying the JSON output is spec-clean: **this function's own** exception list 
 rest of the model)". The clause is inside `serializeResourceXml`'s own doc comment, so "this
 function" resolves to the XML writer, and **the XML writer's exception list does not govern the JSON
 output**, which is what the clause qualifies. The list that does is `serializeResource`'s, named one
-clause earlier. Now names `serializeResource` outright, matching the
-`SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME` docblock and `test/xml-tag-name.test.ts`'s suite
-docblock ("which that writer's own exception list governs"), both opened and read rather than cited.
+clause earlier. Now names `serializeResource`. Elsewhere in the module the claim already scoped
+itself to the JSON writer without the ambiguity -- the
+`SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME` docblock and `refuseUnserializableNames` both
+name `serializeResource`, and `test/xml-tag-name.test.ts`'s suite docblock says "which **that
+writer's** own exception list governs", which is unambiguous by position rather than by naming it.
+Each was opened and read rather than cited. **No count of sites is given**: the draft that gave one
+said "the four sites" in `CHANGELOG.md` and named a different pair in the changeset, and the gate
+caught the disagreement.
 
-**Where it ships, measured on the built artifacts rather than assumed**: the sentence renders into
-`dist/index.d.ts` and `dist/index.d.cts` and into **neither** `dist/index.mjs` nor `dist/index.cjs`.
+**Where it ships. THE FIRST ANSWER WAS WRONG AND THE GATE REFUTED IT, AND THE MECHANISM IS THIS
+REPO'S OWN WARNING ARRIVING AS A DEFECT.** The draft said the sentence renders into `dist/index.d.ts`
+and `dist/index.d.cts` "and nowhere else", reasoned from the JS bundles being byte-identical. False:
+`dist/index.mjs.map` and `dist/index.cjs.map` carry **every tracked source byte** in
+`sourcesContent`, both ship in the tarball (`npm pack --dry-run` lists ten files), and both carry
+this clause. `sourcemap: true` is the shared `@cosyte/tsup-config` default, so it is systematic
+rather than a local flag. **`scripts/check-no-internal-refs.sh` states this in capitals already**:
+_do not reason about this boundary from what reaches `dist/`, because everything in `src/` is in the
+tarball._ Two drafts of the ncpdp copy of that script were refuted for the same inference; this makes
+three in the ecosystem.
+
+The universal was **cut rather than extended to "and two sourcemaps"**, which is the standing remedy,
+and no count of artifacts or of sites is given anywhere in this slice's carriers now. What is stated
+instead is the site a consumer is *shown*: `dist/index.d.ts` and `dist/index.d.cts` are what an
+editor surfaces at the call site.
 
 **No claim is made here that `serializeResourceXml` has no declared gaps of its own** -- it does, in
 its "What this output is NOT guaranteed to be" section. A draft of this note said the JSON writer was
@@ -2337,9 +2362,11 @@ existence of the list.
 
 `emitsOneDivElement`'s docblock calls an unbound prefix "the separately declared residual on **this
 function's own output**", and that function returns a boolean, not a document. Same shape as the
-defect above. **`PRE-EXISTING`, and it reaches no consumer**: the function is file-internal, is not
-exported, and renders into neither declaration file. Left rather than widen a time-boxed claim
-correction, in the same shape `#70` left `scripts/read-differential.ts:440`.
+defect above. **`PRE-EXISTING`.** The function is file-internal, is not exported, and renders into
+neither declaration file, so no consumer is *shown* it at a call site. **It is NOT true that it
+reaches no consumer** -- it is in both sourcemaps, like everything else in `src/`, and the draft that
+said otherwise was the same bad inference the gate caught above. Left rather than widen a time-boxed
+claim correction, in the same shape `#70` left `scripts/read-differential.ts:440`.
 
 The `#64` narrative above cites `test/xml-tag-name.test.ts` ("declared gap, NOT closed here") for the
 `{"div":"v"}` shape. `#65` renamed that block to "declared gap, still written: a name this library
@@ -2347,6 +2374,7 @@ round-trips and XML does not admit" and made both `div` shapes refusals, so the 
 block that no longer exists. **Archive text, recording what was believed at `#64`**, internal only
 (`documentation/` is not in `files`), and left for the reason `#67` gave for leaving its own.
 
-_Provenance: every figure above was produced by running two probe scripts against the built `dist/`
-at `a48e4e2` and against the head tree, plus a fold-newline sweep over every tracked file and over
-the four built artifacts, not recalled._
+_Provenance: every figure above was produced by running probe scripts against the built `dist/` at
+`a48e4e2` and against the head tree, plus a fold-newline sweep over every tracked file and over the
+built artifacts, not recalled. No artifact count is given here on purpose: the first draft gave one
+and it was wrong._

@@ -16,12 +16,14 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   exception list does not govern the JSON output, which is what the clause is qualifying. The list
   that does is `serializeResource`'s, the JSON writer named in the clause immediately before it. A
   consumer meeting it in an editor was pointed at the wrong writer for the qualification on the route
-  the sentence had just told them stays open. It now names `serializeResource` outright, which is the
-  wording
-  `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME`, `breaksTag` and the suite docblock in
-  `test/xml-tag-name.test.ts` already carried, so the four sites give one account. **No behaviour
+  the sentence had just told them stays open. It now names `serializeResource`, which is how the same
+  claim already read where it is written elsewhere in the module
+  (`SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME`, `refuseUnserializableNames`, and the suite
+  docblock in `test/xml-tag-name.test.ts`), each opened and read rather than cited. **No count of
+  sites is given**, deliberately, for the same reason the entry below gives none. **No behaviour
   changed and no executable byte moved**: the sentence renders into `dist/index.d.ts` and
-  `dist/index.d.cts` and nowhere else, which is the whole reason it was worth correcting.
+  `dist/index.d.cts`, where a consumer's editor shows it, and into `dist/index.mjs.map` and
+  `dist/index.cjs.map`, which carry every source byte in `sourcesContent` and ship in the tarball.
 - **The documented gap around the nested-array rule gave three members one warning code, and it is
   true for one of them (`FHIR-README-ARRAY-WARNING-WRONG`).** The sentence said a `_`-sibling the
   reader discards _whole_ leaves no node behind, "so an array inside one draws the unexpected-property

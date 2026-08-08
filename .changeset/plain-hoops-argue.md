@@ -13,16 +13,20 @@ writer's exception list does not govern the JSON output. The list that does is `
 the JSON writer named one clause earlier. So the qualification on the route a consumer had just been
 pointed at named the wrong writer, in the declarations their editor reads.
 
-It now names `serializeResource` outright. That is the wording the same claim already carried at the
-other sites it is written: the `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME` docblock, and the
-suite docblock in `test/xml-tag-name.test.ts` ("not a claim that the JSON output is spec-clean, which
-that writer's own exception list governs"). Both were opened and read rather than cited.
+It now names `serializeResource`. The claim already read that way where it is written elsewhere in
+the module: the `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME` docblock and
+`refuseUnserializableNames` both scope it to the JSON writer, and `test/xml-tag-name.test.ts`'s suite
+docblock has "not a claim that the JSON output is spec-clean, which that writer's own exception list
+governs". Each was opened and read rather than cited. **No total is given**, because a complete set
+of sites is the shape this lineage keeps getting wrong.
 
 Documentation only and npm-facing: that sentence renders into `dist/index.d.ts` and
-`dist/index.d.cts` and into no other built artifact, which is the whole reason it was worth
-correcting. No behaviour changed, no predicate moved, and no executable byte moved.
+`dist/index.d.cts`, so it reaches a consumer's editor. It is also in `dist/index.mjs.map` and
+`dist/index.cjs.map`, which carry every source byte in `sourcesContent` and ship in the tarball. No
+behaviour changed, no predicate moved, and no executable byte moved.
 
-One more site of the same shape is named rather than folded in, because it reaches no consumer:
-`emitsOneDivElement`'s docblock calls an unbound prefix "the separately declared residual on this
-function's own output", and that function returns a boolean rather than a document. It is
-file-internal, is not exported, and renders into neither declaration file. Pre-existing.
+One more site of the same shape is named rather than folded in: `emitsOneDivElement`'s docblock calls
+an unbound prefix "the separately declared residual on this function's own output", and that function
+returns a boolean rather than a document. It renders into neither declaration file, so it is not
+shown at any call site a consumer reaches, though it ships in the sourcemaps like everything else in
+`src/`. Pre-existing.
