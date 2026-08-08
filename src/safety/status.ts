@@ -339,8 +339,13 @@ export function arrayWrappedScalars(resource: FhirComplex, path: string): string
  * misplaced or unrecognised (one sitting on an object or on a non-primitive array, or a member of a
  * `_`-sibling object that is neither an `id` **string** nor an `extension` array) leaves no node
  * behind, so an
- * array inside one draws the reader's unexpected-property warning for the discarded sibling and is
- * **not** refused here. Reaching it would mean reading raw JSON the codec does not model.
+ * array inside one is reported by the reader against the discarded sibling and is **not** refused
+ * here. **Which warning the reader draws is per member, not one code for all three:** an
+ * unrecognised member of a `_`-sibling object draws `UNKNOWN_PROPERTY`
+ * (`{"birthDate":"1980-01-01","_birthDate":{"foo":[["x"]]}}`, at `Patient.birthDate.foo`), while a
+ * `_`-sibling on an object or on a non-primitive array draws `MISPLACED_PRIMITIVE_EXTENSION` for the
+ * misplaced sibling and nothing besides. Reaching it would mean reading raw JSON the codec does not
+ * model.
  *
  * **This layer reports these; it does not read them.** The codec does not model an inner array, so
  * whatever the sender wrote inside one is not recoverable here, and this location is the only thing

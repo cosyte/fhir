@@ -644,8 +644,11 @@ describe("the two report channels name the same position, for the cases below", 
 
 describe("the one channel the rule does not reach, pinned rather than claimed away", () => {
   // The rule is bounded by what the reader modeled. A `_`-sibling the reader discards WHOLE, because
-  // it is misplaced or unrecognised, leaves no node to mark, so an array inside one is flagged as an
-  // unexpected property and is not refused. Reaching it means reading raw JSON the codec does not
+  // it is misplaced or unrecognised, leaves no node to mark, so an array inside one is reported
+  // against the discarded sibling and is not refused. WHICH code reports it is per member, not one
+  // code for all three: `UNKNOWN_PROPERTY` for an unrecognised member of a `_`-sibling object,
+  // `MISPLACED_PRIMITIVE_EXTENSION` for a sibling on an object or on a non-primitive array.
+  // Reaching it means reading raw JSON the codec does not
   // model, which is the preserving problem, not the reporting one. This behaviour is unchanged from
   // before the rule existed; it is pinned so that the claim on the public surface stays true and so
   // that closing it later is a deliberate act.
@@ -685,7 +688,10 @@ describe("the one channel the rule does not reach, pinned rather than claimed aw
       expect(nestedArrays(resource, "Patient")).toEqual([]);
       expect(readSafety(resource).safeToSummarize).toBe(true);
       // Not silent: the discarded `_`-sibling itself is reported, as it was before this rule.
-      expect(issues.map((i) => i.code)).toContain(code);
+      // EXACT, not `toContain`: the public surface says the misplaced-sibling members draw
+      // `MISPLACED_PRIMITIVE_EXTENSION` "and nothing besides", so a second code appearing here
+      // would falsify that sentence rather than merely add noise.
+      expect(issues.map((i) => i.code)).toEqual([code]);
     }
   });
 });

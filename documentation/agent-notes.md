@@ -335,8 +335,13 @@ finding.
 total, and the first draft said it was, in five shipped surfaces including a `dist`-rendered
 fail-safe sentence.** A `_`-sibling the reader discards WHOLE (one on an object or a non-primitive
 array, or a member of a `_`-sibling object that is neither an `id` **string** nor an `extension`
-array) leaves no node to mark, so an array inside one draws `UNKNOWN_PROPERTY` and **no refusal**:
-`{"name":{...},"_name":[[...]]}` still reads `safeToSummarize: true`. The underlying loss is
+array) leaves no node to mark, so an array inside one is reported against the discarded sibling and
+draws **no refusal**: `{"name":{...},"_name":[[...]]}` still reads `safeToSummarize: true`.
+**WHICH code reports it is per member, not one code for all three** (corrected 2026-08-08,
+`FHIR-README-ARRAY-WARNING-WRONG`): that `_name` example draws `MISPLACED_PRIMITIVE_EXTENSION`, as
+does a `_`-sibling on a non-primitive array; only an unrecognised member of a `_`-sibling object
+(`{"birthDate":"1980-01-01","_birthDate":{"foo":[["x"]]}}`) draws `UNKNOWN_PROPERTY`. The
+underlying loss is
 `PRE-EXISTING` and identical on `main`; the **overclaim** was `INTRODUCED`. **The remedy taken was
 the refuter's own: correct the claim and pin the gap with a test, NOT grow the guard** -- marking
 inside those discard paths means reading raw JSON the codec does not model, which is new ungraded
@@ -2196,7 +2201,7 @@ found the count corrected in `CHANGELOG.md` and left standing in `write.ts`'s mo
 `CLAUDE.md`'s trap line, and here. It reverted `emitMeta`'s one line while leaving `hasMeta` and the
 hoist exactly as those three sentences described them, which is the fix an agent following them would
 write, and got `{"_birthDate":null}` back as `{"_birthDate":{}}`: an `Element` object no sender wrote,
-emitted eight lines below that comment's own "it never authors a value of its own", re-reading clean
+emitted in flat contradiction of that comment's own "it never authors a value of its own", re-reading clean
 because an empty `_`-sibling is the declared-open residual, so the laundering completes on the next
 trip. **The third branch is `emitMeta`**, which hands the preserved text back in place of the object.
 

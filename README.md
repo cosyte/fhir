@@ -258,8 +258,14 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `_`-sibling the reader discards whole because it is misplaced or unrecognised (one sitting on an
   object or a non-primitive array, or a member of a `_`-sibling object that is neither an `id`
   **string** nor an
-  `extension` array) leaves no node behind, so an array inside one draws the unexpected-property
-  warning for the discarded sibling and no refusal. Reaching it would mean reading raw JSON the codec
+  `extension` array) leaves no node behind, so an array inside one is reported against the discarded
+  sibling and draws no refusal. **Which warning it draws is per member, not one code for all three.**
+  An unrecognised member of a `_`-sibling object draws `UNKNOWN_PROPERTY`:
+  `{"birthDate":"1980-01-01","_birthDate":{"foo":[["x"]]}}` reports it at `Patient.birthDate.foo`. A
+  `_`-sibling on an object and one on a non-primitive array instead draw
+  `MISPLACED_PRIMITIVE_EXTENSION` for the misplaced sibling and nothing besides:
+  `{"name":{"family":"Roe"},"_name":[[{"id":"x"}]]}` reports that one code at `Patient.name`, and no
+  unexpected-property warning. Reaching it would mean reading raw JSON the codec
   does not model, which is the same problem as making the value readable. An **empty** `_`-sibling
   object or array is a different clause of the spec (§2.6.2.1's "never empty") and is still deleted
   silently; a `_`-sibling object's own unreadable **member** is reported but that report still does
