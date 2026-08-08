@@ -2504,9 +2504,9 @@ not have. Same lesson as `#70`, found again here rather than cited.
 
 ### 🛑 Two gate passes refuted this slice for doing the very thing it was correcting
 
-**Every finding across both passes was `INTRODUCED` by this slice rather than `PRE-EXISTING`, and
-every remedy was a deletion.** Recorded here because the lesson is that writing the rule down is not
-the same as obeying it, and this note is where the next reader looks for that.
+**Every finding across both passes was `INTRODUCED` by this slice rather than `PRE-EXISTING`.**
+Recorded here because the lesson is that writing the rule down is not the same as obeying it, and
+this note is where the next reader looks for that.
 
 **Pass 1**, two findings:
 
@@ -2529,7 +2529,7 @@ it. Pass 1's own probe is the one to reuse: drop all non-alphanumerics, then sli
 normalised window across the whole docblock. It is strictly more generous, and it is what surfaced
 the partial hits the line-granular probe could not see.
 
-**▶ PASS 2 THEN REFUTED THE CONTROL SECTION ITSELF, WHICH IS THE WARRANT FOR EVERYTHING ELSE HERE.**
+**▶ PASS 2 THEN REFUTED THE CONTROL SECTION ITSELF.**
 It called `src/xml/write.ts`'s docblock a **transformed** carrier, "text the DTS rollup has rewrapped
 and re-emitted". It is not. That docblock is byte-identical in `dist/index.d.ts` and
 `dist/index.d.cts`, indentation included, which anyone can check with a substring test in two lines.
