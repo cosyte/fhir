@@ -208,9 +208,20 @@ function carriesJsonOnlyShape(node: FhirNode): boolean {
  * wrote, which is the fabrication class two refusals beside this one already exist for. Nothing that
  * works is withdrawn: this fires only on a model the JSON reader marked, so **no document read from
  * XML ever reaches it** and no conformant JSON document does either. The capability is routed rather
- * than lost -- `serializeResource` writes all four back, byte-identically to the input -- and that is
- * a statement about these shapes, not about the whole model: a model refused here can carry one of
- * that writer's own declared exceptions and have it emitted.
+ * than lost: `serializeResource` writes all four back and the re-read reproduces the finding.
+ *
+ * **That is value-exact, NOT byte-exact, and the difference is not cosmetic enough to leave
+ * implicit.** The preserved text is the value re-rendered the way this library renders every JSON
+ * value, so `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back with the
+ * second member spelled `"Practitioner/2"`: the same string, different bytes, and a caller diffing
+ * the output against the input sees it. {@link FhirComplex.nonObjectSource} states the same limit on
+ * the field itself. Only the `undefinedNull` family is byte-identical, because a `null` has no
+ * escaping to lose.
+ *
+ * **And "that route stays open" is a statement about these shapes, not about the whole model.** A
+ * model refused here can carry one of that writer's own declared exceptions and have it emitted, and
+ * a marker sitting in a member a repeated property name shadowed is dropped by that writer too (see
+ * the walk, below).
  *
  * **Raised last**, after the name and `div` refusals, so a model that trips two keeps the code it
  * already reported and no case moves onto this one.
@@ -220,7 +231,12 @@ function carriesJsonOnlyShape(node: FhirNode): boolean {
  * name shadowed. That last one is wider than the XML writer's own walk, which visits `properties`
  * only, so `{"name":[[{"family":"Roe"}]],"name":[{"family":"Roe"}]}` is refused for a marker sitting
  * in a member the writer would never have reached. Wider in the direction that refuses more, and the
- * JSON writer drops that member too, so it is not a loss this refusal invented.
+ * JSON writer drops that member too, so it is not a loss this refusal invented -- **but it is the one
+ * case where neither writer carries the shape, so do not read the message as pointing at a route
+ * that keeps it.** The location it reports is the property, and a consumer resolving that location
+ * reaches the **surviving** member rather than the shadowed one, because FHIRPath cannot address a
+ * shadowed member at all: the same reason `collectMarked` de-duplicates two markers at one location.
+ * `DUPLICATE_PROPERTY` and the safety refusal are what carry that document.
  *
  * @param node - The model about to be serialized to XML.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE}.
@@ -230,7 +246,11 @@ export function assertXmlSerializable(node: FhirComplex): void {
   const locations = collectMarked(node, rootPath(typeOf(node) ?? "Resource"), carriesJsonOnlyShape);
   if (locations.length === 0) return;
   throw new FhirSerializeError(
-    `cannot serialize to XML: ${String(locations.length)} location(s) carry a shape only FHIR JSON can spell, which XML has no channel for; serializeResource writes it back, so this refusal never reaches it`,
+    // Says only what this refusal does NOT reach, which is the wording the two refusals beside it
+    // were narrowed to. It deliberately does not promise that `serializeResource` writes the shape
+    // back: it does for every position that writer walks, and a marked node inside a member a
+    // repeated property name shadowed is dropped by it as well.
+    `cannot serialize to XML: ${String(locations.length)} location(s) carry a shape only FHIR JSON can spell, which XML has no channel for; this refusal does not reach serializeResource`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
     locations,
   );

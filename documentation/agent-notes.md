@@ -2594,10 +2594,13 @@ and none in XML, so only the XML writer does.
 **No round trip that works is withdrawn, and this is mechanical rather than argued.** Every marker is
 set by the JSON reader alone. A census over `src/` asserts it (`markUndefinedNull`,
 `markNonObjectMeta` and `markNestedArray` are referenced only by `codec/read.ts` and `model/node.ts`;
-`nonObjectSource` is assigned only in `codec/read.ts`) and reds if any other file starts setting one,
-which is a stronger statement than the 7-fixture sweep beside it because it does not depend on the
-corpus. So no document read from XML can reach the refusal, and no conformant JSON document carries a
-marker either.
+`nonObjectSource` is assigned only in `codec/read.ts`), which is a stronger statement than the
+7-fixture sweep beside it because it does not depend on the corpus. So no document read from XML can
+reach the refusal, and no conformant JSON document carries a marker either.
+**What that census is, exactly, because pass 1 read it wider than it is:** it is a grep over `src/`
+for the marking helpers by name and for a `nonObjectSource:` assignment. A helper renamed, or the
+field set by object shorthand, would evade the patterns. It reds when a new file starts setting one
+**the way the reader does today**; it is not a proof about every spelling.
 
 ### A whole-model pre-pass, deliberately, where the two refusals beside it check at their site
 
@@ -2631,6 +2634,15 @@ because these positions raised no serialize error at all before.
   value survives byte-exact and no magnitude changes, but the `DECIMAL_PRECISION_AT_RISK`
   information-severity finding is not reproduced on the re-read. Pre-existing, and named here only so
   the closure above is not read as covering it.
+- **A non-string `resourceType` still launders the same way, and it is the closest residual to this
+  closure, so it is named here rather than left to the item.**
+  `{"resourceType":["Observation"],"status":"final"}` reads `valid: false` / `safeToSummarize: false`,
+  emits `<Resource xmlns="http://hl7.org/fhir"><status value="final"/></Resource>`, and that document
+  re-reads `issues: []` / `valid: true` / `safeToSummarize: true`. Identical harm shape to the `name`
+  row above. It is **not** a marked node: the writer substitutes the tag rather than the reader
+  marking the position, so closing it is a decision about what the writer does with an unreadable
+  `resourceType`, not about a channel XML lacks. `PRE-EXISTING`, reproduces on `5ced746`, and declared
+  deferred in the backlog item. Raised by the conformance gate's pass 1.
 - The residuals the two entries above declared in their own channel are untouched: an **empty**
   `_`-sibling object or array, a `_`-sibling object's own unreadable member, and
   `MISPLACED_PRIMITIVE_EXTENSION` beside a non-primitive.
@@ -2645,6 +2657,32 @@ holds:** the figures above are a hand-authored JSON probe axis plus this repo's 
 this lineage's XML fixtures are 7 hand-authored files plus mutations. **Neither is the FHIR R4
 published-examples corpus**, and nothing here is corpus-wide.
 
+### What the gate moved, and the two claims it refuted
+
+Pass 1 found **no defect in the code** and two `INTRODUCED` majors, both claim width, which is the
+shape this lineage keeps paying for.
+
+1. **"`serializeResource` writes all four back BYTE-IDENTICALLY" is false for three of the four
+   families**, and it was the sentence justifying the withdrawal, shipped in `README.md`,
+   `CHANGELOG.md`, the changeset and the guard's own docblock. The preserved text is **value-exact,
+   not byte-exact**, which `FhirComplex.nonObjectSource` already states on the field:
+   `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back spelling the second
+   member `"Practitioner/2"`. Only `undefinedNull` is byte-identical, because a `null` has no
+   escaping to lose. **The test beside the claim did not ground it**: its four rows carry no JSON
+   escape, so it was green while the sentence was false. The claim is corrected everywhere and a
+   failing example is now pinned beside the four rows.
+2. **The runtime message promised a route that does not carry one case the refusal deliberately
+   reaches.** It ended "serializeResource writes it back, so this refusal never reaches it", and for
+   a marker inside a member a repeated property name shadowed that writer **drops** it. The message
+   now says only what the refusal does not reach, which is the wording the two refusals beside it
+   were narrowed to on 2026-08-07. The location caveat is stated with it: FHIRPath cannot address a
+   shadowed member, so the location resolves to the surviving one.
+
+Two minors moved with them: each disjunct of the predicate is now pinned by a hand-built node (the
+suite was green with any single clause deleted, because the reader always sets `nestedArray` beside
+`nestedArraySource`), and the census claim is scoped to what it greps.
+
 _Provenance: every figure above was produced by running one probe script against a clean `5ced746`
 and then against the head tree, not recalled; the spec clauses are `hl7.org/fhir/R4/json.html`
-§2.6.2, §2.6.2.1 and §2.6.2.3 for the JSON channels and `xml.html` §2.6.1 for the XML one._
+§2.6.2, §2.6.2.1 and §2.6.2.3 for the JSON channels and `xml.html` §2.6.1 for the XML one. The two
+corrections above are the conformance gate's pass 1 against `a608731`._

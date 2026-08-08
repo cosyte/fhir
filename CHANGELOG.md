@@ -30,8 +30,13 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   alone, asserted by a census over `src/` rather than argued, so **no document read from XML reaches
   it** and no conformant JSON document does either -- the XML fixture corpus still round-trips
   byte-for-byte and the read differential moves 0 of 1,195 readings, which is by construction rather
-  than a surprise. `serializeResource` writes all four back byte-identically and is the route that
-  stays open; that is a statement about these shapes, not about the whole model. **Raised last**, after
+  than a surprise. `serializeResource` writes all four back and the re-read reproduces the finding.
+  **Value-exact, not byte-exact**, the limit the preserved text already carried:
+  `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back spelling the second
+  member `"Practitioner/2"`, and only the value-channel `null` family is byte-identical. That the
+  route stays open is a statement about these shapes, not about the whole model; a marker inside a
+  member a repeated property name shadowed is dropped by that writer too, so the runtime message says
+  only what the refusal does not reach rather than promising a route. **Raised last**, after
   the name and `div` refusals, so a model that trips two keeps the code it already reported and **no
   case moved onto the new one**. Deliberately **not** closed, and pinned rather than implied: an
   array-wrapped `0..1` element still launders across this boundary (no node is marked, and XML spells

@@ -3,10 +3,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  complex,
   FhirSerializeError,
   ISSUE_CODES,
   parseResource,
   parseResourceXml,
+  primitive,
   readSafety,
   SERIALIZE_ERROR_CODES,
   serializeResource,
@@ -143,12 +145,50 @@ describe("the four marked shapes are refused rather than emitted as an empty ele
     },
   );
 
-  it.each(CASES)("leaves the JSON route open for $what, byte-identically", ({ json }) => {
-    // The capability is routed, not lost. `serializeResource` writes every one of these back exactly
-    // as the sender wrote it, and re-reading that output reproduces the finding.
+  it.each(CASES)("leaves the JSON route open for $what, reproducing the finding", ({ json }) => {
+    // The capability is routed, not lost: `serializeResource` writes every one of these back and
+    // re-reading that output reproduces the finding. These four inputs happen to carry no JSON
+    // escape, so they also come back byte-identical -- which is NOT the general property, and the
+    // test below is the failing example that stops this one being read as one.
     const { resource, codes } = fromJson(json);
     expect(serializeResource(resource)).toBe(json);
     expect(parseResource(serializeResource(resource)).issues.map((i) => i.code)).toEqual(codes);
+  });
+
+  it("hands the text back VALUE-exact, not BYTE-exact, which the four rows above do not show", () => {
+    // The preserved text is the value re-rendered the way this library renders every JSON value, so
+    // an escape the sender chose does not survive. `Practitioner\/2` is not exotic: escaping `/` is
+    // what PHP's `json_encode` does by default. Same string, different bytes, and a caller diffing
+    // the writer's output against its input sees it. Stated on `FhirComplex.nonObjectSource` too.
+    const input =
+      '{"resourceType":"Observation","status":"final","performer":[{"reference":"Practitioner/1"},"Practitioner\\/2"]}';
+    const { resource, refused } = fromJson(input);
+    expect(refused).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+      locations: ["Observation.performer[1]"],
+    });
+    const out = serializeResource(resource);
+    expect(out).not.toBe(input);
+    expect(out).toBe(
+      '{"resourceType":"Observation","status":"final","performer":[{"reference":"Practitioner/1"},"Practitioner/2"]}',
+    );
+    // Value-exact is the half that matters: the finding comes back and the string denotes the same.
+    expect(parseResource(out).issues.map((i) => i.code)).toEqual([ISSUE_CODES.UNKNOWN_PROPERTY]);
+  });
+
+  it("says only what the refusal does not reach, never that the JSON writer keeps the shape", () => {
+    // The one input where neither writer carries it: a marker inside a member a repeated property
+    // name shadowed. A message promising `serializeResource` writes it back would point an operator
+    // at a route that silently drops it, so the message names the refusal's own limit instead.
+    const { resource, refused } = fromJson(
+      '{"resourceType":"Patient","name":[{"family":"Roe"}],"name":[[{"family":"Roe"}]]}',
+    );
+    expect(refused?.message).toContain("this refusal does not reach serializeResource");
+    expect(refused?.message).not.toContain("writes it back");
+    // And the drop it must not promise against, asserted rather than described.
+    expect(serializeResource(resource)).toBe(
+      '{"resourceType":"Patient","name":[{"family":"Roe"}]}',
+    );
   });
 
   it("turns a refusal to summarize into an affirmation, which is why an array inside an array is here", () => {
@@ -299,6 +339,64 @@ describe("nothing that works is withdrawn, asserted in both polarities", () => {
     expect(refused).toEqual([]);
     expect(unreadable).toEqual(["quirk-primitive-extension-misaligned.json"]);
     expect(emitted.length).toBeGreaterThan(0);
+  });
+});
+
+describe("every disjunct of the predicate is pinned on its own", () => {
+  /**
+   * The four rows above go through the reader, which sets more than one field at a time: it always
+   * sets `nestedArray` beside `nestedArraySource`, so a suite built only from documents leaves each
+   * of those clauses individually deletable while staying green. These build the node directly, one
+   * field at a time, which is also the "node built by hand" case the predicate's docblock names.
+   */
+  const ONE_FIELD = [
+    ["nestedArray, the marker with no text", { ...primitive("x"), nestedArray: true } as const],
+    [
+      "nestedArraySource, the text with no marker",
+      { ...primitive("x"), nestedArraySource: '[["a"]]' } as const,
+    ],
+    [
+      "nestedArrayMetaSource, the `_`-sibling channel",
+      { ...primitive("x"), nestedArrayMetaSource: '[["a"]]' } as const,
+    ],
+    ["nonObjectMetaSource", { ...primitive("x"), nonObjectMetaSource: '"x"' } as const],
+    ["undefinedNull", { ...primitive(undefined), undefinedNull: true } as const],
+  ] as const;
+
+  it.each(ONE_FIELD)("refuses a primitive carrying only %s", (_label, node) => {
+    const resource = complex([
+      { name: "resourceType", value: primitive("Observation") },
+      { name: "issued", value: node },
+    ]);
+    expect(refusal(resource)).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+      locations: ["Observation.issued"],
+    });
+  });
+
+  it.each([
+    ["nestedArray", { ...complex([]), nestedArray: true } as const],
+    ["nestedArraySource", { ...complex([]), nestedArraySource: "[[1]]" } as const],
+    ["nonObjectSource", { ...complex([]), nonObjectSource: '"x"' } as const],
+  ] as const)("refuses a complex carrying only %s", (_label, node) => {
+    const resource = complex([
+      { name: "resourceType", value: primitive("Observation") },
+      { name: "subject", value: node },
+    ]);
+    expect(refusal(resource)).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+      locations: ["Observation.subject"],
+    });
+  });
+
+  it("emits the same model with none of them set, so each row above is the field and not the shape", () => {
+    // The negative pole. Without it every row above would pass for a writer that refused everything.
+    const resource = complex([
+      { name: "resourceType", value: primitive("Observation") },
+      { name: "issued", value: primitive("x") },
+      { name: "subject", value: complex([]) },
+    ]);
+    expect(refusal(resource)).toBeUndefined();
   });
 });
 

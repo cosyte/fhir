@@ -28,12 +28,21 @@ spelling for a JSON-only shape would author markup the sender never wrote, the f
 two refusals beside it already exist for.
 
 Nothing that works is withdrawn, and that is mechanical rather than argued. The markers are set by the
-JSON reader alone, asserted by a census over `src/` that reds if any other file starts setting one, so
-no document read from XML can reach the refusal; the XML fixture corpus still round-trips
+JSON reader alone, asserted by a census over `src/` that names the file each marking helper and each
+`nonObjectSource` assignment appears in, so a new one anywhere else reds a test (a helper renamed, or
+a field set by shorthand, would evade the patterns, which is why the sweep is over `src/` and not a
+claim about every possible spelling). So no document read from XML can reach the refusal; the XML
+fixture corpus still round-trips
 byte-for-byte, and the read differential moves 0 of 1,195 readings, by construction rather than as a
-surprise. `serializeResource` writes all four shapes back byte-identically and is the route that stays
-open. **That is a statement about these shapes, not about the whole model**: a model refused here can
-carry one of that writer's own declared exceptions and have it emitted.
+surprise. `serializeResource` writes all four shapes back and the re-read reproduces the finding.
+**Value-exact, not byte-exact**, which is the limit the preserved text already carried and is stated
+here rather than left to the reader: `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}`
+comes back spelling the second member `"Practitioner/2"`, the same string in different bytes, and only
+the value-channel `null` family is byte-identical. **That the route stays open is a statement about
+these shapes, not about the whole model**: a model refused here can carry one of that writer's own
+declared exceptions and have it emitted, and a marker inside a member a repeated property name
+shadowed is dropped by that writer as well, which is why the runtime message names only what the
+refusal does not reach instead of promising a route.
 
 Raised **last**, after the name and `div` refusals, so a model that trips two keeps the code it
 already reported and no case moved onto the new one. Pinned by tests on all three orderings, the

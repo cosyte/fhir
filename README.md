@@ -663,8 +663,12 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   to hand back into and inventing an XML spelling would author markup nobody wrote. **Only a model
   read from JSON reaches it**: XML cannot write any of those shapes, so a document read from XML
   carries no marker and nothing that round-trips today stops. `serializeResource` writes all four
-  back, byte-identically, and is the route that stays open. That is a statement about these shapes,
-  not about the whole model. **Not** closed by it, and pinned rather than implied: an array-wrapped `0..1`
+  back and the re-read reproduces the finding. **Value-exact, not byte-exact**, which is the same
+  limit the preserved text carries everywhere else in this README:
+  `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back with the second
+  member spelled `"Practitioner/2"`, the same string in different bytes. Only the value-channel
+  `null` family is byte-identical, because a `null` has no escaping to lose. That the route stays
+  open is a statement about these shapes, not about the whole model. **Not** closed by it, and pinned rather than implied: an array-wrapped `0..1`
   element still launders across this boundary (no node is marked, and XML spells a repeating element
   by repeating it), a repeated property name is dropped by **both** writers, and a JSON decimal comes
   back from XML as a string because XML carries no JSON type.
