@@ -10,8 +10,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 - **An internal gate's rationale asserted that everything in `src/` is in the tarball, which is wider
   than what a build produces (`FHIR-TARBALL-REACH-CLAIM`).** Development tooling and internal
-  documentation only; no runtime behaviour changes, and none of the files involved is in `files`, so
-  no published byte moves. `scripts/check-no-internal-refs.sh` explains why `//` comments sit outside
+  documentation only; no runtime behaviour changes.
+  `scripts/check-no-internal-refs.sh` explains why `//` comments sit outside
   its scope, and grounded that explanation in the sentence "SO EVERYTHING IN `src/` IS IN THE
   TARBALL"; `CLAUDE.md` carried the same universal as "everything in `src/` does", one clause over
   from the warning it was grounding, and a phrase-keyed sweep had already missed it once. A real

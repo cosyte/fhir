@@ -4,8 +4,7 @@
 
 Cut a claim about what a build produces from an internal gate's rationale.
 
-Development tooling and internal documentation only. No runtime behaviour changes, no published byte
-moves, and nothing this touches is listed in `files`, so none of it reaches an installed copy.
+Development tooling and internal documentation only. No runtime behaviour changes.
 
 `scripts/check-no-internal-refs.sh` explains why `//` comments sit outside the gate's scope, and
 grounded that explanation in a sentence asserting, in capitals, that everything in the sources is in

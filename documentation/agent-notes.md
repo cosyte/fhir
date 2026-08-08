@@ -2424,8 +2424,7 @@ purpose: three drafts gave one and all three were wrong.**_
 `FHIR-TARBALL-REACH-CLAIM`, 2026-08-08. `scripts/check-no-internal-refs.sh` asserted, in capitals,
 *"SO EVERYTHING IN `src/` IS IN THE TARBALL"*, and `CLAUDE.md` carried the same universal as
 *"everything in `src/` does"*. **Both are cut. Neither is reworded, and no replacement set is named.**
-Nothing here changes gate behaviour: `check:no-internal-refs` reads the sentence nowhere, and the
-files involved are outside `package.json`'s `files`, so no byte of this slice reaches a consumer.
+Nothing here changes gate behaviour: `check:no-internal-refs` reads the sentence nowhere.
 
 ### 🛑 The direction, which is counter-intuitive and is the reason the slice exists
 
@@ -2471,10 +2470,8 @@ was not run in both polarities.
 - **Failing example.** The module docblock of `src/codec/index.ts` is in **no file of the packed
   tarball**, neither raw nor in a decoded `sourcesContent`. It is a barrel of pure re-exports: the
   bundler elides it, so it contributes no mapped source, and it declares nothing of its own, so the
-  DTS rollup emits none of its text. Every `src/**/index.ts` barrel here answers the same way, and
-  each answers all-or-nothing across its whole docblock, which is what distinguishes the finding from
-  a probe artifact. **One example is asserted and no set is named**, because the set is a property of
-  a build and this file is exactly where such a set has gone stale before.
+  DTS rollup emits none of its text. **One example is asserted and no set is named**, because the set
+  is a property of a build and this file is exactly where such a set has gone stale before.
 - **The trap.** `src/terminology/service.ts` is in **neither** sourcemap and its docblock is in
   **both** `.d.ts` files. A type-only module compiles to no JavaScript, so nothing maps it, while its
   interfaces are precisely what the declarations carry. Anyone deriving reach from the bundles or the
@@ -2504,3 +2501,29 @@ not have. Same lesson as `#70`, found again here rather than cited.
   `dist/`. That is over-inclusive, which the bullet already declares as the gate's ceiling, and it is
   the safe direction. Widening the slice to reword it would be writing a fresh reach claim inside the
   correction of a reach claim, which is the exact failure this lineage has now paid for four times.
+
+### 🛑 Pass 1 refuted this slice for doing the very thing it was correcting, twice
+
+**Both findings were `INTRODUCED` by draft one, both in the unsafe polarity, and both remedies were
+deletions.** Recorded here because the lesson is that writing the rule down is not the same as
+obeying it, and this note is where the next reader looks for that.
+
+- **A fresh universal, written inside the correction of the old universal, in the same paragraph that
+  said it named no set.** Draft one added, after the failing example: *"Every `src/**/index.ts` barrel
+  here answers the same way, and each answers all-or-nothing across its whole docblock."* Pass 1
+  falsified it under both available readings, with `src/fhirpath/index.ts` on the glob reading and
+  `src/quantity/index.ts` on the charitable pure-barrel reading. **Deleted, not narrowed.** Narrowing
+  is what produced it.
+- **A `files` claim about the slice itself, in three carriers, one of which ships.** Draft one said
+  *"nothing this touches is listed in `files`, so none of it reaches an installed copy"* in the
+  changeset (which freezes into a release body), in `CHANGELOG.md`, and here. `CHANGELOG.md` **is** in
+  `files`, and pass 1 unpacked a real tarball and found the sentence inside it. Base's own prose has
+  this right in both places, so it was a regression, not `PRE-EXISTING`. **The whole clause is
+  deleted rather than qualified**, which leaves the slice claiming no reach for itself at all.
+
+**▶ AND THE PROBE HAD A BLIND SPOT THIS NOTE OWES THE NEXT READER.** The method above matches at
+**line granularity**, so prose that ships with a `{@link …}` tail rewritten or dropped is invisible to
+it. Pass 1's own probe is the one to reuse: drop all non-alphanumerics, then slide a fixed-width
+normalised window across the whole docblock. It is strictly more generous, and it is what surfaced
+the partial hits the line-granular probe could not see. **A reach probe that has not been run in both
+polarities AND at sub-line granularity has not been run.**
