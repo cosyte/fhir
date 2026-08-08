@@ -1474,10 +1474,16 @@ on any non-zero step, and it lists `attw` as a REQUIRED script, so the script na
    because this library's diagnostics are value-free by contract, an `IssueCode` plus a FHIRPath
    expression). `//` and plain `/* */` comments are **not gated** and identifiers are **welcome** in
    them, because **the convention says source comments are a place identifiers belong**. That is the
-   whole reason. **Do not justify this boundary from what reaches `dist/`** (everything in `src/`
-   does: `dist` is `files[0]`, there is no `.npmignore`, and `dist/*.map` carries every tracked
-   source byte in `sourcesContent`). The line is what a consumer is **shown**, not what lands on
-   their disk. Also: **removing a doc comment to satisfy the gate is a regression**, not a fix.
+   whole reason. **Do not justify this boundary from what reaches `dist/`** (`dist` is `files[0]`,
+   there is no `.npmignore`, and `dist/*.map` carries source text in `sourcesContent`). The line is
+   what a consumer is **shown**, not what lands on their disk. Also: **removing a doc comment to
+   satisfy the gate is a regression**, not a fix.
+   **▶ THE PARENTHESIS USED TO SAY "everything in `src/` does" AND THAT IS FALSE**, measured
+   2026-08-08: `tsup` elides the barrel `index.ts` re-exports, so 11 of 60 tracked `src/**/*.ts`
+   files reach no tarball artifact at all. The **warning** is unchanged and still right; only its
+   over-wide ground was cut. `scripts/check-no-internal-refs.sh:191-197` still carries the wide
+   version and is `PRE-EXISTING`:
+   [where it ships, answered wrong twice](#the-stale-div-disclosure-deleted-2026-08-08-fhir-changeset-div-stale).
 
    **This copy of the gate diverges from `hl7`/`ncpdp` in exactly one place, and the divergence is a
    REMOVAL: there is no `slice` rule here.** `slice` is R4 vocabulary in this package
@@ -2336,21 +2342,31 @@ Each was opened and read rather than cited. **No count of sites is given**: the 
 said "the four sites" in `CHANGELOG.md` and named a different pair in the changeset, and the gate
 caught the disagreement.
 
-**Where it ships. THE FIRST ANSWER WAS WRONG AND THE GATE REFUTED IT, AND THE MECHANISM IS THIS
-REPO'S OWN WARNING ARRIVING AS A DEFECT.** The draft said the sentence renders into `dist/index.d.ts`
-and `dist/index.d.cts` "and nowhere else", reasoned from the JS bundles being byte-identical. False:
-`dist/index.mjs.map` and `dist/index.cjs.map` carry **every tracked source byte** in
-`sourcesContent`, both ship in the tarball (`npm pack --dry-run` lists ten files), and both carry
-this clause. `sourcemap: true` is the shared `@cosyte/tsup-config` default, so it is systematic
-rather than a local flag. **`scripts/check-no-internal-refs.sh` states this in capitals already**:
-_do not reason about this boundary from what reaches `dist/`, because everything in `src/` is in the
-tarball._ Two drafts of the ncpdp copy of that script were refuted for the same inference; this makes
-three in the ecosystem.
+**WHERE IT SHIPS WAS ANSWERED WRONG TWICE AND IS NOW NOT ANSWERED AT ALL. THIS IS THE ENTRY TO READ
+BEFORE WRITING ANY SENTENCE ABOUT WHAT REACHES A CONSUMER.**
 
-The universal was **cut rather than extended to "and two sourcemaps"**, which is the standing remedy,
-and no count of artifacts or of sites is given anywhere in this slice's carriers now. What is stated
-instead is the site a consumer is *shown*: `dist/index.d.ts` and `dist/index.d.cts` are what an
-editor surfaces at the call site.
+- **Draft one** said the sentence renders into `dist/index.d.ts` and `dist/index.d.cts` "and nowhere
+  else", reasoned from the JS bundles being byte-identical. **Pass 1 refuted it**: `dist/*.map` carry
+  source text in `sourcesContent` and both ship (`npm pack --dry-run` lists ten files). `sourcemap:
+  true` is the shared `@cosyte/tsup-config` default, so it is systematic rather than a local flag.
+- **Draft two extended the sentence to name the two sourcemaps "which carry every source byte in
+  `sourcesContent`". Pass 2 refuted THAT**, and the correction was wrong in the opposite direction:
+  the maps carry **49** `sources` entries against **60** tracked `src/**/*.ts` files. `tsup` elides
+  the barrel `index.ts` re-export files, so `src/codec/index.ts`, `src/validate/index.ts`,
+  `src/terminology/service.ts` and eight more are in **no** tarball file at all.
+- **Draft three deletes the sentence.** The item asked for the referent, not for where it ships, so
+  there is no quantifier left to be wrong about. **PASS 1 PRESCRIBED THE CUT AND DRAFT TWO REWORDED
+  INSTEAD, WHICH IS WHY THERE WAS A DRAFT THREE.** Cutting a claim is the remedy; a narrower
+  replacement is still a new claim, and this lineage has now been refuted for that four times.
+
+**▶ `scripts/check-no-internal-refs.sh:191-197` IS WHERE THE BAD INFERENCE WAS IMPORTED FROM, AND ITS
+OWN VERSION IS ALSO FALSE.** It states in capitals that `dist/*.map` "carries every tracked source
+byte in `sourcesContent`. SO EVERYTHING IN `src/` IS IN THE TARBALL." The warning it draws from that
+(do not reason about the doc-comment boundary from what reaches `dist/`) is sound and should be kept;
+its stated ground is over-wide by the measurement above. `PRE-EXISTING` at `a48e4e2`, **not corrected
+here** because it errs conservative -- it claims more ships than does, so the gate is not made unsafe
+-- and because correcting a gate's rationale is its own slice. Two drafts of the ncpdp copy of that
+script were refuted for this same inference; with the two above, that is four in the ecosystem.
 
 **No claim is made here that `serializeResourceXml` has no declared gaps of its own** -- it does, in
 its "What this output is NOT guaranteed to be" section. A draft of this note said the JSON writer was
@@ -2363,10 +2379,10 @@ existence of the list.
 `emitsOneDivElement`'s docblock calls an unbound prefix "the separately declared residual on **this
 function's own output**", and that function returns a boolean, not a document. Same shape as the
 defect above. **`PRE-EXISTING`.** The function is file-internal, is not exported, and renders into
-neither declaration file, so no consumer is *shown* it at a call site. **It is NOT true that it
-reaches no consumer** -- it is in both sourcemaps, like everything else in `src/`, and the draft that
-said otherwise was the same bad inference the gate caught above. Left rather than widen a time-boxed
-claim correction, in the same shape `#70` left `scripts/read-differential.ts:440`.
+neither declaration file, so no consumer is *shown* it at a call site. **A draft said "so it reaches
+no consumer"; that is a different and wider claim, it was not measured, and it was cut** -- the
+phrase is in both sourcemaps. Left rather than widen a time-boxed claim correction, in the same shape
+`#70` left `scripts/read-differential.ts:440`.
 
 The `#64` narrative above cites `test/xml-tag-name.test.ts` ("declared gap, NOT closed here") for the
 `{"div":"v"}` shape. `#65` renamed that block to "declared gap, still written: a name this library

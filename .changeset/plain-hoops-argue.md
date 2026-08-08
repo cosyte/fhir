@@ -20,13 +20,10 @@ docblock has "not a claim that the JSON output is spec-clean, which that writer'
 governs". Each was opened and read rather than cited. **No total is given**, because a complete set
 of sites is the shape this lineage keeps getting wrong.
 
-Documentation only and npm-facing: that sentence renders into `dist/index.d.ts` and
-`dist/index.d.cts`, so it reaches a consumer's editor. It is also in `dist/index.mjs.map` and
-`dist/index.cjs.map`, which carry every source byte in `sourcesContent` and ship in the tarball. No
-behaviour changed, no predicate moved, and no executable byte moved.
+Documentation only: that sentence renders into the shipped type declarations, where a consumer's
+editor shows it. No behaviour changed, no predicate moved, and no executable byte moved.
 
 One more site of the same shape is named rather than folded in: `emitsOneDivElement`'s docblock calls
 an unbound prefix "the separately declared residual on this function's own output", and that function
 returns a boolean rather than a document. It renders into neither declaration file, so it is not
-shown at any call site a consumer reaches, though it ships in the sourcemaps like everything else in
-`src/`. Pre-existing.
+shown at any call site a consumer reaches. Pre-existing.
