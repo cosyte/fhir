@@ -37,9 +37,4 @@ begins `!` or `?` (`<a:!x xmlns:a="http://hl7.org/fhir" value="1"/>`), which rea
 refused where it used to be written as markup this library could not re-read.
 
 **This governs names, and it is not a guarantee that the writer emits only elements the sender
-wrote.** A separate and larger route, pre-existing and NOT closed here, is now measured and named on
-`serializeResourceXml`: a `div` property is written back as its own raw string, examined by nothing,
-so markup inside it is markup in the output. A `div` on an `AllergyIntolerance` that closes its own
-element and opens a `716186003` coding comes back with `noKnownAllergy: true` and a
-`no-known-allergy` negation over a record that asserted nothing, with no diagnostic at either end.
-The branch keys on the name `div` alone, so it is not confined to `Narrative.div`.
+wrote.**

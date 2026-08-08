@@ -8,6 +8,20 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **`serializeResourceXml`'s `UNSERIALIZABLE_ELEMENT_NAME` `@throws` pointed its exception-list
+  clause at the wrong function, in the shipped type declarations (`FHIR-CHANGESET-DIV-STALE`).** The
+  clause read "which is not the same as saying the JSON output is spec-clean: **this function's
+  own** exception list still applies to the rest of the model". It sits inside `serializeResourceXml`'s
+  own doc comment, so "this function" resolves to the XML writer -- and the XML writer's own
+  exception list does not govern the JSON output, which is what the clause is qualifying. The list
+  that does is `serializeResource`'s, the JSON writer named in the clause immediately before it. A
+  consumer meeting it in an editor was pointed at the wrong writer for the qualification on the route
+  the sentence had just told them stays open. It now names `serializeResource` outright, which is the
+  wording
+  `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME`, `breaksTag` and the suite docblock in
+  `test/xml-tag-name.test.ts` already carried, so the four sites give one account. **No behaviour
+  changed and no executable byte moved**: the sentence renders into `dist/index.d.ts` and
+  `dist/index.d.cts` and nowhere else, which is the whole reason it was worth correcting.
 - **The documented gap around the nested-array rule gave three members one warning code, and it is
   true for one of them (`FHIR-README-ARRAY-WARNING-WRONG`).** The sentence said a `_`-sibling the
   reader discards _whole_ leaves no node behind, "so an array inside one draws the unexpected-property
@@ -227,12 +241,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   (`<a:!x xmlns:a="http://hl7.org/fhir" value="1"/>`), which reads clean and is now refused where it
   used to be written as markup this library could not re-read.
   **This governs NAMES, and it is not a guarantee that the writer emits only elements the sender
-  wrote.** A separate and larger route, pre-existing and NOT closed here, is now measured and named
-  on `serializeResourceXml`: a `div` property is written back as its own raw string, examined by
-  nothing, so markup inside it is markup in the output. A `div` on an `AllergyIntolerance` that
-  closes its own element and opens a `716186003` coding comes back with `noKnownAllergy: true` and a
-  `no-known-allergy` negation over a record that asserted nothing, with no diagnostic at either end.
-  The branch keys on the name `div` alone, so it is not confined to `Narrative.div`.
+  wrote.**
 - **`serializeResource` no longer substitutes `{}` for a scalar it never read (`FHIR-WRITER-AUTHORS-VALUES`).**
   A string, number, boolean or `null` written where FHIR JSON has an object is content the reader has
   no element to make of it, so it reports `UNKNOWN_PROPERTY` and the model holds an empty element
