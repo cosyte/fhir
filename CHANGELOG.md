@@ -8,6 +8,26 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **An internal gate's rationale asserted that everything in `src/` is in the tarball, which is wider
+  than what a build produces (`FHIR-TARBALL-REACH-CLAIM`).** Development tooling and internal
+  documentation only; no runtime behaviour changes.
+  `scripts/check-no-internal-refs.sh` explains why `//` comments sit outside
+  its scope, and grounded that explanation in the sentence "SO EVERYTHING IN `src/` IS IN THE
+  TARBALL"; `CLAUDE.md` carried the same universal as "everything in `src/` does", one clause over
+  from the warning it was grounding, and a phrase-keyed sweep had already missed it once. A real
+  `npm pack` refutes it by example: the module docblock of `src/codec/index.ts` is in no file of the
+  packed tarball, neither raw nor in a sourcemap's decoded `sourcesContent`, because the bundler
+  elides a pure re-export barrel and it declares nothing for the type-declaration rollup to carry.
+  Both carriers are **cut rather than reworded**, the warning itself is unchanged, and **no
+  replacement set is named**: such a set is a property of a build, not a fact worth freezing in prose.
+  What replaces the ground is the method, and the direction it has to be read in. A wrong "this
+  ships" costs a needless sweep; a wrong "this does not ship" licenses writing internal bookkeeping
+  into a file that renders straight into the shipped declarations, and a published version is
+  permanent. `src/terminology/service.ts` is the trap that sets that direction: a type-only module is
+  in **neither** sourcemap and in **both** `.d.ts` files. So reach is derived from a real `npm pack`,
+  never from a grep over `src/`, with newlines and comment markers folded before matching, controlled
+  in both polarities and against the wrong package. Derivation, controls and what was deliberately
+  left: `documentation/agent-notes.md`.
 - **`serializeResourceXml`'s `UNSERIALIZABLE_ELEMENT_NAME` `@throws` pointed its exception-list
   clause at the wrong function, in the shipped type declarations (`FHIR-CHANGESET-DIV-STALE`).** The
   clause read "which is not the same as saying the JSON output is spec-clean: **this function's

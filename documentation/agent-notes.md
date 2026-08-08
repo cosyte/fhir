@@ -1481,7 +1481,10 @@ on any non-zero step, and it lists `attw` as a REQUIRED script, so the script na
    **▶ THE PARENTHESIS USED TO SAY "everything in `src/` does"**, which is wider than what a build
    produces (2026-08-08). The **warning** is unchanged and still right; only its over-wide ground was
    cut, and **no replacement set is named here on purpose**.
-   `scripts/check-no-internal-refs.sh:191-197` still carries the wide version and is `PRE-EXISTING`:
+   The same sentence in `scripts/check-no-internal-refs.sh` and the same clause in `CLAUDE.md` were
+   **cut the same way** on 2026-08-08, and the gate script now carries the method instead of the
+   claim: [tarball reach, derived from a real `npm pack`](#tarball-reach-derived-from-a-real-npm-pack).
+   Prior drafts and why a narrower replacement is still a new claim:
    [where it ships, answered wrong four times](#the-stale-div-disclosure-deleted-2026-08-08-fhir-changeset-div-stale).
 
    **This copy of the gate diverges from `hl7`/`ncpdp` in exactly one place, and the divergence is a
@@ -2378,6 +2381,8 @@ way) -- and because correcting a gate's rationale is its own slice. **Whoever ta
 that the OPPOSITE error is the unsafe one**: a sentence claiming less ships than does would license
 writing internal bookkeeping into a file that renders straight into the declarations. That is the
 error draft three made, one surface over.
+**▶ TAKEN AND CLOSED 2026-08-08**, cut rather than reworded, and the remaining carrier in `CLAUDE.md`
+was cut with it: [tarball reach, derived from a real `npm pack`](#tarball-reach-derived-from-a-real-npm-pack).
 
 **No claim is made here that `serializeResourceXml` has no declared gaps of its own** -- it does, in
 its "What this output is NOT guaranteed to be" section. A draft of this note said the JSON writer was
@@ -2413,3 +2418,123 @@ _Provenance: every figure that remains above was produced by running probe scrip
 `dist/` at `a48e4e2` and against the head tree, plus a fold-newline sweep over every tracked file and
 over the built artifacts, not recalled. **No artifact count and no set of files is given here on
 purpose: three drafts gave one and all three were wrong.**_
+
+## Tarball reach, derived from a real `npm pack`
+
+`FHIR-TARBALL-REACH-CLAIM`, 2026-08-08. `scripts/check-no-internal-refs.sh` asserted, in capitals,
+*"SO EVERYTHING IN `src/` IS IN THE TARBALL"*, and `CLAUDE.md` carried the same universal as
+*"everything in `src/` does"*. **Both are cut. Neither is reworded, and no replacement set is named.**
+Nothing here changes gate behaviour: `check:no-internal-refs` reads the sentence nowhere.
+
+### 🛑 The direction, which is counter-intuitive and is the reason the slice exists
+
+A wrong **"this ships"** costs a needless sweep. A wrong **"this does not ship"** licenses writing
+internal bookkeeping into a file that renders straight into the declarations, and a published version
+is permanent. So the over-wide claim that was here was the **safe** error, and any correction of it
+is written in the **unsafe** direction. That is why the remedy is deletion plus a method, and why the
+only positive statement kept is a single failing example.
+
+### The method, and it is the command rather than the inference
+
+```
+pnpm build && npm pack --pack-destination <scratch> && tar -xzf <scratch>/cosyte-fhir-*.tgz -C <scratch>/x
+```
+
+Then search **every byte-carrier the tarball actually has**: each packed file raw, **plus every
+decoded `sourcesContent` entry of every `.map`**. Normalise needle and haystack **identically**: fold
+newlines first, then strip a leading `*`, `*/` or `//` comment marker from each line. That
+normalisation is deliberately generous, so it can only produce **more** matches, which is the safe
+direction for a question phrased as "does this reach anything".
+
+**Both halves of that normalisation are load-bearing, and the second was learned the hard way in this
+very slice.** A first probe folded whitespace only. Asked whether `emitsOneDivElement`'s docblock
+reaches the tarball it answered **no**, because the clause wraps across `*`-prefixed comment lines
+and the packed bytes keep the markers. Marker-stripped, the same clause is found in both sourcemaps.
+**That is the identical class of mis-specified probe that `#71`'s pass 3 was refuted for**, reproduced
+here against a different transformation, which is the argument for never trusting a reach answer that
+was not run in both polarities.
+
+### Controls, run in both polarities
+
+- **Positive, declaration carrier.** `src/xml/write.ts`'s module docblock is found in `index.d.ts`
+  and `index.d.cts`, so the probe reads the declarations.
+- **Positive, sourcemap carrier.** A `//` comment in `src/codec/read.ts` is found in both sourcemaps'
+  decoded `sourcesContent`, so the probe reads the maps and not only the plain files.
+- **Negative, synthetic.** A string present in no source is found nowhere.
+- **Negative, wrong package.** The identical probe, run with this repo's `src/` against the published
+  `@cosyte/hl7` tarball, reports **every** probed file as reaching nothing. So a "no hit" verdict is
+  produced by the tarball under test rather than by the working tree.
+
+### The failing example, and the trap that sets the direction
+
+- **Failing example.** The module docblock of `src/codec/index.ts` is in **no file of the packed
+  tarball**, neither raw nor in a decoded `sourcesContent`. It is a barrel of pure re-exports: the
+  bundler elides it, so it contributes no mapped source, and it declares nothing of its own, so the
+  DTS rollup emits none of its text. **One example is asserted and no set is named**, because the set
+  is a property of a build and this file is exactly where such a set has gone stale before.
+- **The trap.** `src/terminology/service.ts` is in **neither** sourcemap and its docblock is in
+  **both** `.d.ts` files. A type-only module compiles to no JavaScript, so nothing maps it, while its
+  interfaces are precisely what the declarations carry. Anyone deriving reach from the bundles or the
+  maps alone will call it unreachable and be wrong in the unsafe direction. This is the same module
+  class that refuted `#71`.
+
+### The carrier the phrase-keyed sweep would have missed
+
+`#71` cut the parenthesis from this file and left the identical universal in `CLAUDE.md`, one
+sentence over from the warning it was grounding. A sweep **keyed on the enumeration** (tarball,
+`sourcesContent`, sourcemap, `.npmignore`, `files[0]`, `npm pack`, "everything in `src/`", "reaches
+`dist/`") **with newlines folded first** found it; a sweep keyed on the gate script's wording would
+not have. Same lesson as `#70`, found again here rather than cited.
+
+### Considered and deliberately left
+
+- **`emitsOneDivElement`'s docblock referent**, which the item lists beside this one. **Not folded
+  in, and the ground is measured rather than assumed.** Its reach is *not* what the item supposed:
+  the docblock is in neither declaration file, but it **is** in the tarball, in both sourcemaps'
+  decoded `sourcesContent`. So the two defects do not even share a surface. More decisively, naming
+  the right referent means settling which artifact the unbound-prefix residual lands on, which is
+  `FHIR-XML-WRITE-RESIDUALS` material and needs `test/xml.test.ts` opened rather than cited. A
+  referent correction that has to import another item's verification is a second unit, not this one.
+- **The `dist/` bullet's "the dts build copies doc text verbatim"**, immediately below the cut. Left:
+  where the DTS rollup carries a docblock at all it carries the text verbatim, which the positive
+  control above exercises, and where it carries none the third pass scans **more** than reaches
+  `dist/`. That is over-inclusive, which the bullet already declares as the gate's ceiling, and it is
+  the safe direction. Widening the slice to reword it would be writing a fresh reach claim inside the
+  correction of a reach claim, which is the failure this lineage keeps paying for.
+
+### 🛑 Two gate passes refuted this slice for doing the very thing it was correcting
+
+**Every finding across both passes was `INTRODUCED` by this slice rather than `PRE-EXISTING`.**
+Recorded here because the lesson is that writing the rule down is not the same as obeying it, and
+this note is where the next reader looks for that.
+
+**Pass 1**, two findings:
+
+- **A fresh universal, written inside the correction of the old universal, in the same paragraph that
+  said it named no set.** Draft one added, after the failing example: *"Every `src/**/index.ts` barrel
+  here answers the same way, and each answers all-or-nothing across its whole docblock."* Pass 1
+  falsified it under both available readings, with `src/fhirpath/index.ts` on the glob reading and
+  `src/quantity/index.ts` on the charitable pure-barrel reading. **Deleted, not narrowed.** Narrowing
+  is what produced it.
+- **A `files` claim about the slice itself, in three carriers, one of which ships.** Draft one said
+  *"nothing this touches is listed in `files`, so none of it reaches an installed copy"* in the
+  changeset (which freezes into a release body), in `CHANGELOG.md`, and here. `CHANGELOG.md` **is** in
+  `files`, and pass 1 unpacked a real tarball and found the sentence inside it. Base's own prose has
+  this right in both places, so it was a regression, not `PRE-EXISTING`. **The whole clause is
+  deleted rather than qualified**, which leaves the slice claiming no reach for itself at all.
+
+**▶ AND THE PROBE HAD A BLIND SPOT THIS NOTE OWES THE NEXT READER.** The method above matches at
+**line granularity**, so prose that ships with a `{@link …}` tail rewritten or dropped is invisible to
+it. Pass 1's own probe is the one to reuse: drop all non-alphanumerics, then slide a fixed-width
+normalised window across the whole docblock. It is strictly more generous, and it is what surfaced
+the partial hits the line-granular probe could not see.
+
+**▶ PASS 2 THEN REFUTED THE CONTROL SECTION ITSELF.**
+It called `src/xml/write.ts`'s docblock a **transformed** carrier, "text the DTS rollup has rewrapped
+and re-emitted". It is not. That docblock is byte-identical in `dist/index.d.ts` and
+`dist/index.d.cts`, indentation included, which anyone can check with a substring test in two lines.
+So a section headed as controls in both polarities carried no transformed positive at all, inside a
+slice whose entire subject is false statements about what a build produces. **The transformation
+framing is deleted** and each positive control is now named for the artifact it reads. Two smaller
+deletions went with it: a closing line setting a probe standard the wrong-package control had not
+been run to, and a count of how many times this lineage has paid for the same failure.

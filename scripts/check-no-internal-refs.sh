@@ -188,17 +188,31 @@
 #   * src/ `//` COMMENTS   OUT of scope, because THE CONVENTION SAYS SO: it names source
 #                          comments as one of the places identifiers BELONG. That is the
 #                          whole reason, and it is deliberately the only one.
-#                          DO NOT REASON ABOUT THIS BOUNDARY FROM WHAT REACHES `dist/`.
-#                          Two drafts of the ncpdp copy tried and both were false, each
-#                          caught by a refuter. The measured fact, and the only one worth
-#                          writing down: `dist` is `files[0]`, there is no `.npmignore`,
-#                          the bundles carry source comments and `dist/*.map` carries every
-#                          tracked source byte in `sourcesContent`. SO EVERYTHING IN `src/`
-#                          IS IN THE TARBALL. This gate's line is therefore not "what
-#                          reaches the consumer's disk" (everything does) but WHAT THE
-#                          CONSUMER IS SHOWN: JSDoc their editor renders on hover, and
-#                          message text their log prints. Those are passes three and four.
-#                          A comment they would have to go digging for is not.
+#                          DO NOT REASON ABOUT THIS BOUNDARY FROM WHAT REACHES `dist/`,
+#                          AND DO NOT WRITE A REACH CLAIM BACK IN HERE TO REPLACE THE ONE
+#                          THAT WAS CUT. Two drafts of the ncpdp copy tried and both were
+#                          false, each caught by a refuter; the third is the one that
+#                          shipped here, and it was false too. It said everything in `src/`
+#                          is in the tarball. `pnpm build && npm pack` refutes that by
+#                          example: the module docblock of `src/codec/index.ts` is in no
+#                          file of the packed tarball, neither raw nor in a sourcemap's
+#                          decoded `sourcesContent`. So the ground is DELETED rather than
+#                          reworded a fourth time, and no replacement set is named.
+#                          THE DIRECTION IS COUNTER-INTUITIVE, WHICH IS THE WHOLE REASON
+#                          THIS PARAGRAPH IS STILL HERE: a wrong "this ships" costs a
+#                          needless sweep, but a wrong "this does not ship" licenses
+#                          writing bookkeeping into a file that does, and a published
+#                          version is permanent. `src/terminology/service.ts` is the trap
+#                          that proved it: it is in NEITHER sourcemap, and its docblock is
+#                          in BOTH `.d.ts` files. So derive reach from a real `npm pack`,
+#                          never from a grep over `src/`, and fold newlines and comment
+#                          markers before matching, or a doc comment that wraps reads as
+#                          absent. Re-derive it; do not trust this line for it.
+#                          WHAT THIS GATE'S LINE IS: not what reaches the consumer's disk
+#                          but WHAT THE CONSUMER IS SHOWN, i.e. JSDoc their editor renders
+#                          on hover, and message text their log prints. Those are passes
+#                          three and four. A comment they would have to go digging for is
+#                          not.
 #   * dist/                NOT SCANNED, and this is the gate's stated ceiling rather than a
 #                          hole that has been closed. `dist/` is untracked build output:
 #                          neither this script nor CI can read it without building first,
