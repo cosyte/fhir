@@ -702,7 +702,8 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   That is a statement about which wrappers this refuses, not a claim that every wrapper it lets
   through survives. `serializeResource` writes the wrapper back and is the route that stays open.
   **Not** closed by it: a wrapper that only a **shadowed** member carried is the repeated-property-name
-  case rather than this one, and it is refused on that code; and the window does not reach
+  case rather than this one, and both writers now refuse it (on whichever of the two codes is raised
+  first, which is this one where the wrapper is itself unspellable); and the window does not reach
   `Observation.value[x]`, a `0..1` choice whose wrapper still launders.
 - **A member a repeated property name shadowed is refused, by BOTH writers**
   (`UNSERIALIZABLE_SHADOWED_PROPERTY`). The reader keeps it, validation raises an error over it and

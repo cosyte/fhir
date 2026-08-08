@@ -196,7 +196,8 @@ now run over every value written for the element each reads (`status`, `verifica
 locations in `SafetyReadout.shadowedProperties` (`assertSafeToSummarize` throws). The `_`-sibling was
 **last**-wins and silent; it is now first-wins + flagged like everywhere else (its shadowed member is
 not modeled: an R4 `Element` carries `id`/`extension` only, so it cannot make a verdict wrong). The
-writer still emits one member per name, deliberately: both would be invalid FHIR.
+writer emitted one member per name, deliberately, at the time; that decision was **superseded
+2026-08-08** and both writers now refuse ([`#the-shadowed-member`](#the-shadowed-member-2026-08-08)).
 **Refuter pass one (`conformance-refuter`, REFUTED) drove all of that**; it also left two
 `PRE-EXISTING` majors/minors as backlog lines, NOT fixed here: `readObservationValue` still returns
 one of two written `valueQuantity` values with no signal on its own surface (no issue channel), and
@@ -2007,10 +2008,7 @@ trap with a pointer here; what moved is the reasoning behind each.
 - **Deliberate omissions, each of which reads as an oversight and is not.** `markNestedArray` and
   `markDroppedText` are reader-internal and **deliberately not exported**. `typeOf` stays the strict
   single-value read, because a structural verdict should **reject** an unreadable type, not guess
-  one (only `readSafety` considers every type the document names). The writer emits **one member per
-  repeated name**, deliberately, because emitting both members a duplicated name wrote would be
-  invalid FHIR
-  ([`#fhir-duplicate-key-retraction-2026-07-28`](#fhir-duplicate-key-retraction-2026-07-28)).
+  one (only `readSafety` considers every type the document names).
   The element-text refusal fires even when
   text sits beside a value that arrived, and **do not justify that arm with "content the sender
   wrote is still missing"** (the gate broke that sentence in one query with
@@ -2960,6 +2958,15 @@ ambiguity the document held.
 `safeToSummarize: false`** -- the bound every refusal beside it kept, held by construction rather
 than by measurement. Nothing that reads clean stops serializing.
 
+**It does NOT follow that the location string matches, and pass 1 refuted the draft that said so.**
+The root SEGMENT is derived per call site, not shared. Measured on
+`{"status":"final","status":"entered-in-error"}` (no readable `resourceType`): the guard reports
+`Resource.status`, `readSafety` reports `$this.status`, and `validateResource` raises **no**
+`DUPLICATE_PROPERTY` at all, because it returns before the safety collector when no type is readable.
+`valid` is still `false` there, so the bound above survives; the location agreement does not. The
+root-segment divergence is `#75`'s declared `Resource.*` vs `MedicationStatement.*` residual and is
+**PRE-EXISTING** -- the remedy is the sentence, never growing the guard.
+
 ### What it does not cover, and why the bound is the reason
 
 - A repeated name inside a **primitive's `_`-sibling** is not modeled at all (an R4 `Element` is
@@ -2994,8 +3001,16 @@ The falsified claim was "the writer emits one member per repeated name", plus ev
 **carrier**, rooted at `/workspace/fhir` rather than by phrase: `src/` doc comments that render
 (`codec/write.ts` module + `serializeResource`, `codec/serialize-guard.ts` module + three docblocks +
 the code table, `xml/write.ts` `@throws`), `README.md`, `CHANGELOG.md`, `.changeset/*`, `CLAUDE.md`,
-`documentation/`, and the four tests that pinned the gap. Two pending changesets carried it; per
+`documentation/`, and the tests that pinned the gap. Two pending changesets carried it; per
 ADR 0001 the falsified clause was **deleted, never reworded**.
+
+**🛑 AND THE SWEEP STILL MISSED THREE, WHICH PASS 1 FOUND: THIS FILE.** `agent-notes.md` was in the
+enumerated carrier list and was still swept by PHRASE, so the claim survived twice here -- once in
+**§ Deliberate omissions, whose own contract line says it is verbatim from `CLAUDE.md`**, the very
+line the same commit corrected, and once inside the section `CLAUDE.md`'s duplicate-property trap
+points at. Plus a comment in `test/array-wrapped-scalar.test.ts`. **A relocated copy is a carrier of
+the thing it copies**, and correcting the original without it leaves the next agent reading the new
+refusal as a regression against a documented deliberate choice.
 
 ### Budget
 

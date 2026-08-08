@@ -30,9 +30,12 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   returns `"final"`, so emitting both members would hand every other consumer the member this one
   calls shadowed. FHIR XML can repeat an element, but two repeated elements re-read as a **list**, a
   repeating element the sender never wrote. **The window is `shadowedProperties`**, the same call
-  `validateResource` raises its error from and the same one `readSafety` requires empty, so it can
-  never name a location those two do not and **a model refused here already reads `valid: false` with
-  `safeToSummarize: false`**, so nothing that reads clean stops serializing. **Raised last** in both
+  `validateResource` raises its error from and the same one `readSafety` requires empty, so **a model
+  refused here already reads `valid: false` with `safeToSummarize: false`** and nothing that reads
+  clean stops serializing. The location's root SEGMENT is derived per call site and is not shared,
+  so on a document whose `resourceType` is unreadable this reports `Resource.status` where
+  `readSafety` reports `$this.status` and `validateResource` raises no duplicate error at all: a
+  pre-existing, already-declared divergence that is not this window's to close. **Raised last** in both
   writers, so a model that trips two keeps the code it already reported. Deliberately **not** closed,
   and measured rather than implied: a repeated name inside a primitive's `_`-sibling is not modeled at
   all, so there is nothing to refuse; and one inside a complex sitting in a primitive's `extension`
@@ -1341,9 +1344,7 @@ true`, 0 `valid true -> false`, 0 `safeToSummarize false -> true`, 0 retractions
   member is not carried on the model there: a primitive's metadata is an R4 `Element`, `id` and
   `extension` only, so nothing in it can make a safety verdict wrong, and `shadowedProperties` says
   so). The JSON/XML equivalence oracle no longer calls a document carrying a shadowed member
-  equivalent to one without it. And the writer continues to emit one member per name, which is now a
-  **deliberate** narrowing rather than a silent one: emitting both would produce invalid FHIR, and
-  emit is the wrong place to resolve an ambiguity the reader already reported.
+  equivalent to one without it.
 
 ### Changed
 

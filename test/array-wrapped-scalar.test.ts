@@ -674,10 +674,10 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
 
   describe("what this slice deliberately does not change", () => {
     it("does NOT launder the defect through a write and re-read", () => {
-      // The duplicate-key route launders: the writer emits one member per name, so the survivor is
-      // conformant and the re-read is clean. The array route does not, because the model keeps the
-      // list and the writer emits it back. Pinned so a future writer change cannot quietly introduce
-      // the laundering the duplicate-key route has.
+      // The duplicate-key route used to launder: the writer emitted one member per name, so the
+      // survivor was conformant and the re-read clean. That is closed (both writers refuse). The
+      // array route never laundered here, because the model keeps the list and the writer emits it
+      // back. Pinned so a future writer change cannot quietly introduce that laundering.
       const { resource } = parseResource(REPORTED);
       const rewritten = serializeResource(resource);
       expect(rewritten).toBe(REPORTED);

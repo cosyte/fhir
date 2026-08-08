@@ -90,9 +90,10 @@ export const SERIALIZE_ERROR_CODES = {
    * primitive's value channel that padded nothing. **XML only**: this refusal does not reach
    * `serializeResource`, which writes these back from the text the reader preserved at every position
    * that writer walks. **It does not walk a member a repeated property name shadowed, and this
-   * refusal does reach one** -- that model is now refused by both writers on
-   * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY} instead, so it is still not a
-   * route the shape survives. See {@link assertXmlSerializable}.
+   * refusal does reach one** -- `serializeResource` refuses that model on
+   * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY} rather than emitting it, so it is
+   * still not a route the shape survives. The XML writer keeps reporting THIS code on such a model,
+   * because this one is raised first. See {@link assertXmlSerializable}.
    *
    * XML has no array-of-arrays, no `_`-sibling and no `null`, so the XML writer has nowhere to put
    * any of it and emits the element the reader was left holding: an empty one, or none. That output
