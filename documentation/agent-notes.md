@@ -1478,12 +1478,11 @@ on any non-zero step, and it lists `attw` as a REQUIRED script, so the script na
    there is no `.npmignore`, and `dist/*.map` carries source text in `sourcesContent`). The line is
    what a consumer is **shown**, not what lands on their disk. Also: **removing a doc comment to
    satisfy the gate is a regression**, not a fix.
-   **▶ THE PARENTHESIS USED TO SAY "everything in `src/` does" AND THAT IS FALSE**, measured
-   2026-08-08: `tsup` elides the barrel `index.ts` re-exports, so 11 of 60 tracked `src/**/*.ts`
-   files reach no tarball artifact at all. The **warning** is unchanged and still right; only its
-   over-wide ground was cut. `scripts/check-no-internal-refs.sh:191-197` still carries the wide
-   version and is `PRE-EXISTING`:
-   [where it ships, answered wrong twice](#the-stale-div-disclosure-deleted-2026-08-08-fhir-changeset-div-stale).
+   **▶ THE PARENTHESIS USED TO SAY "everything in `src/` does"**, which is wider than what a build
+   produces (2026-08-08). The **warning** is unchanged and still right; only its over-wide ground was
+   cut, and **no replacement set is named here on purpose**.
+   `scripts/check-no-internal-refs.sh:191-197` still carries the wide version and is `PRE-EXISTING`:
+   [where it ships, answered wrong four times](#the-stale-div-disclosure-deleted-2026-08-08-fhir-changeset-div-stale).
 
    **This copy of the gate diverges from `hl7`/`ncpdp` in exactly one place, and the divergence is a
    REMOVAL: there is no `slice` rule here.** `slice` is R4 vocabulary in this package
@@ -2350,23 +2349,35 @@ BEFORE WRITING ANY SENTENCE ABOUT WHAT REACHES A CONSUMER.**
   source text in `sourcesContent` and both ship (`npm pack --dry-run` lists ten files). `sourcemap:
   true` is the shared `@cosyte/tsup-config` default, so it is systematic rather than a local flag.
 - **Draft two extended the sentence to name the two sourcemaps "which carry every source byte in
-  `sourcesContent`". Pass 2 refuted THAT**, and the correction was wrong in the opposite direction:
-  the maps carry **49** `sources` entries against **60** tracked `src/**/*.ts` files. `tsup` elides
-  the barrel `index.ts` re-export files, so `src/codec/index.ts`, `src/validate/index.ts`,
-  `src/terminology/service.ts` and eight more are in **no** tarball file at all.
-- **Draft three deletes the sentence.** The item asked for the referent, not for where it ships, so
-  there is no quantifier left to be wrong about. **PASS 1 PRESCRIBED THE CUT AND DRAFT TWO REWORDED
-  INSTEAD, WHICH IS WHY THERE WAS A DRAFT THREE.** Cutting a claim is the remedy; a narrower
-  replacement is still a new claim, and this lineage has now been refuted for that four times.
+  `sourcesContent`". Pass 2 refuted THAT**: the maps do not carry every source file.
+- **Draft three deleted the sentence from both frozen carriers, and then said in THIS note which
+  files "reach no tarball artifact at all". Pass 3 refuted the replacement**, and its own probe was
+  the fault: the DTS rollup strips the `export` keyword, so grepping for `export interface X {`
+  returned a false negative for a module whose text does render into both declaration files. **A
+  type-only module is exactly the class whose text lands ONLY in the declarations**, which is the
+  opposite of what the sentence concluded.
+- **Draft four states no reach and no count at all**, which is where this should have stopped after
+  pass 1. **THE ITEM ASKED FOR THE REFERENT, NOT FOR WHERE THE SENTENCE SHIPS.** Cutting a claim is
+  the remedy; a narrower replacement is still a new claim, and this slice produced three of them in a
+  row before that took.
+
+**▶ SO: DO NOT WRITE A SENTENCE HERE ABOUT WHICH `src/` FILES REACH WHICH BUILT ARTIFACT.** Four
+drafts tried, three were measurably false, and the surviving true statement is the one that describes
+no set: the corrected `@throws` renders into the shipped type declarations, where an editor shows it.
+If a future slice genuinely needs the mapping, it is a measurement to run then, per file, against a
+fresh build -- not a fact to carry in prose.
 
 **▶ `scripts/check-no-internal-refs.sh:191-197` IS WHERE THE BAD INFERENCE WAS IMPORTED FROM, AND ITS
 OWN VERSION IS ALSO FALSE.** It states in capitals that `dist/*.map` "carries every tracked source
 byte in `sourcesContent`. SO EVERYTHING IN `src/` IS IN THE TARBALL." The warning it draws from that
 (do not reason about the doc-comment boundary from what reaches `dist/`) is sound and should be kept;
-its stated ground is over-wide by the measurement above. `PRE-EXISTING` at `a48e4e2`, **not corrected
-here** because it errs conservative -- it claims more ships than does, so the gate is not made unsafe
--- and because correcting a gate's rationale is its own slice. Two drafts of the ncpdp copy of that
-script were refuted for this same inference; with the two above, that is four in the ecosystem.
+its stated ground is wider than what a build produces. `PRE-EXISTING` at `a48e4e2`, **not corrected
+here** because it errs conservative -- it claims more ships than does, so the gate is not made unsafe,
+and the gate's behaviour does not read it (`check:no-internal-refs` scans all 60 source files either
+way) -- and because correcting a gate's rationale is its own slice. **Whoever takes it should note
+that the OPPOSITE error is the unsafe one**: a sentence claiming less ships than does would license
+writing internal bookkeeping into a file that renders straight into the declarations. That is the
+error draft three made, one surface over.
 
 **No claim is made here that `serializeResourceXml` has no declared gaps of its own** -- it does, in
 its "What this output is NOT guaranteed to be" section. A draft of this note said the JSON writer was
@@ -2390,7 +2401,15 @@ round-trips and XML does not admit" and made both `div` shapes refusals, so the 
 block that no longer exists. **Archive text, recording what was believed at `#64`**, internal only
 (`documentation/` is not in `files`), and left for the reason `#67` gave for leaving its own.
 
-_Provenance: every figure above was produced by running probe scripts against the built `dist/` at
-`a48e4e2` and against the head tree, plus a fold-newline sweep over every tracked file and over the
-built artifacts, not recalled. No artifact count is given here on purpose: the first draft gave one
-and it was wrong._
+**Gate: `conformance-refuter` REFUTED, REFUTED, REFUTED -- the full ADR 0016 allowance of three
+passes, spent, and NOT converged.** Every refutation was claim-width in this note and in the two
+frozen carriers; **no pass broke the code, and `src/` is one comment line**. Passes 1 and 2 were
+remedied and re-graded. **Pass 3's finding was remedied by DELETION, as pass 3 itself prescribed, and
+that final edit is therefore UNGRADED** -- the same shape `#65`, `#66` and `#67` recorded their
+post-verdict edits in. It removes prose and adds no claim, which is the only kind of post-verdict
+edit that is safe to make with the cap spent.
+
+_Provenance: every figure that remains above was produced by running probe scripts against the built
+`dist/` at `a48e4e2` and against the head tree, plus a fold-newline sweep over every tracked file and
+over the built artifacts, not recalled. **No artifact count and no set of files is given here on
+purpose: three drafts gave one and all three were wrong.**_
