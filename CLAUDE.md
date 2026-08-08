@@ -332,7 +332,7 @@ meta-repo's `documentation/repos/fhir.md`, and the `ecosystem-map.md` status tab
    [`#no-internal-project-bookkeeping-on-a-public-surface`](documentation/agent-notes.md#no-internal-project-bookkeeping-on-a-public-surface)
    - Doc comments and string literals are **gated** (they reach the consumer's editor and logs);
      `//` and `/* */` comments are **not**, and identifiers **belong** there. **Do not justify that
-     boundary from what reaches `dist/`**: everything in `src/` does. **Removing a doc comment to
+     boundary from what reaches `dist/`**; measure reach, never grep it. **Removing a doc comment to
      satisfy the gate is a regression, not a fix.**
    - **There is deliberately no `slice` rule in this copy**: `slice` is R4 vocabulary here
      (`ElementDefinition.slicing`), measured at 41 matches with one of them ours. **Do not paste the
