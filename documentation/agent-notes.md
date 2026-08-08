@@ -2849,9 +2849,7 @@ refused, all 180 refusals landing on documents already `valid: false`.
    hand-built `list([list([]), list([])])`, which holds two items and emits none. The laundering is
    `PRE-EXISTING`; the universal asserting it cannot happen was this slice's. **Scoped, not fixed by
    widening the guard**: widening would refuse arity-2 wrappers and withdraw the round trip the arity
-   rule exists to protect. The gate's own closing worry -- that the gap is unreachable only because
-   `assertXmlSerializable` fires first on the nested-array marker, with nothing asserting that
-   ordering -- is now a test.
+   rule exists to protect.
 3. **The sweep arithmetic did not reconcile** and the docblock said "six resource types" where the
    window covers seven. Both corrected; the conclusion was unaffected.
 
@@ -2861,3 +2859,31 @@ strict read); the repo-wide prose says "the six resource types" over a set of **
 (`src/safety/codes.ts`, and it reaches `dist/index.d.ts`); and a single `<resourceType value="…"/>`
 child element is dropped by `serializeResourceXml` under `issues: []`, since only the list form is
 refused.
+
+### The gate, pass 2, and the sentence the remedy itself got wrong
+
+Pass 2 re-checked pass 1's three findings and confirmed all three remedied, then **`REFUTED` on one
+`INTRODUCED` major sitting inside the remedy** -- which is the fail-to-converge signal, and the reason
+the answer was **deletion rather than another paragraph**.
+
+**The remedy answered pass 1's closing worry with a false mechanism.** It said the arity gap is
+unreachable from the wire because `UNSERIALIZABLE_JSON_ONLY_SHAPE` "refuses first, which is
+load-bearing ordering rather than a coincidence", and titled a test after it. **Measured: reversing
+the two guard calls leaves every assertion in that test passing.** The ordering is observable only in
+WHICH code a model tripping both reports, and that is already pinned by the "raised last" block. What
+actually holds the gap shut is that **the JSON reader models a nested array as a marked COMPLEX**, so
+`{"status":[["a"],["b"]]}` is `list([complex, complex])` and the item count this refusal reads is 2
+under any ordering; the guard beside it refusing **at all** is the other half. A maintainer trusting
+the shipped sentence would have preserved an inert line order while the two real protections could be
+narrowed silently.
+
+Three sentences deleted (`src/xml/write.ts`'s `@throws`, `src/codec/serialize-guard.ts`, the test's
+own comment), the test retitled to what it asserts, and the model shape it rests on asserted directly.
+Two minors with it: the README said a namespace-less `<div>` "comes back with one inserted" where the
+inserted one is the **FHIR** namespace, not the XHTML one a reader would assume; and `PRE-EXISTING`,
+refuter vocabulary with no referent for a consumer, was rendering into `dist/index.d.ts`.
+
+**The standing lesson, and it is the one this repo keeps paying for: the code survived two passes with
+no defect found, and both refutations were sentences. The pressure that creates is to write a longer
+sentence to survive the gate, and a longer sentence is what produced the false ordering claim. The
+shortest correct remedy is fewer words.**

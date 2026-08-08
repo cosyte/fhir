@@ -390,11 +390,14 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
       ).toBe(true);
     });
 
-    it("is unreachable from a parsed document, and THAT ORDERING IS LOAD-BEARING", () => {
-      // The only reason the gap above cannot be reached from the wire: the JSON reader marks a
-      // nested array and `UNSERIALIZABLE_JSON_ONLY_SHAPE` is raised BEFORE this refusal, so every
-      // spelling of it is refused on the older code. Nothing else asserts that dependency, and
-      // reordering the two would open the gap to real input rather than to a hand-built node.
+    it("is unreachable from a parsed document: NEITHER READER BUILDS A LIST OF LISTS", () => {
+      // What actually holds the gap shut, measured rather than assumed. The JSON reader models a
+      // nested array as a marked COMPLEX, so `{"status":[["a"],["b"]]}` is `list([complex, complex])`
+      // and the item count this refusal reads is 2 whatever order the guards run in; every spelling
+      // is refused on `UNSERIALIZABLE_JSON_ONLY_SHAPE` because that guard fires at all, not because
+      // it fires first. An earlier revision of this test was named for a guard ORDER and did not
+      // pin one; the ordering that IS load-bearing (which code a model tripping two reports) is
+      // pinned by the "raised last" block above.
       for (const src of [
         '{"resourceType":"Observation","status":[["a"],["b"]]}',
         '{"resourceType":"Observation","status":["a",["b"]]}',
@@ -404,6 +407,16 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
           SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
         );
       }
+      // The model shape itself, which is the actual protection.
+      const nested = parseResource(
+        '{"resourceType":"Observation","status":[["a"],["b"]]}',
+      ).resource;
+      const nestedStatus = nested.properties.find((p) => p.name === "status");
+      expect(
+        nestedStatus?.value.kind === "list" &&
+          nestedStatus.value.items.every((i) => i.kind === "complex"),
+      ).toBe(true);
+
       // …and XML cannot spell a list of lists at all, so no XML-read model reaches it either.
       const xml = parseResourceXml(
         '<Observation xmlns="http://hl7.org/fhir"><status value="a"/><status value="b"/></Observation>',

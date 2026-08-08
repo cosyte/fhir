@@ -309,10 +309,9 @@ export function assertXmlSerializable(node: FhirComplex): void {
  *
  * **This counts ITEMS, and the sentence above reasons about EMITTED ELEMENTS. They are the same
  * number for a model a reader produced and not in general**, which is the limit to read this on: a
- * hand-built `list([list([]), list([])])` holds two items and emits none. The JSON reader marks a
- * nested array there and {@link assertXmlSerializable} refuses it first, so no parsed document
- * reaches the gap, and XML cannot spell it at all. **That ordering is load-bearing**, not incidental,
- * and is pinned as such rather than left to be rediscovered.
+ * hand-built `list([list([]), list([])])` holds two items and emits none. No parsed document reaches
+ * the gap: the JSON reader models a nested array as a marked complex, so the list it builds holds
+ * complexes rather than lists and never gets here, and XML cannot spell the shape at all.
  *
  * That is a statement about which wrappers this refuses, **not** a claim that every wrapper it lets
  * through survives. What is measured, stated as the axis rather than as a total: 6

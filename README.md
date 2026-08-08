@@ -635,7 +635,8 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   _unconditionally_ spec-clean**: a prefixed name is written with no declaration to bind it and a
   non-conformant name verbatim, so `<v:x value="1"/>`, `<a&b/>` and `<1abc/>` are all emitted, and the
   byte-for-byte claim is scoped to a spec-clean input (a `<div>x</div>` carrying no XHTML namespace
-  comes back with one inserted). It throws `FhirSerializeError`
+  comes back as `<div xmlns="http://hl7.org/fhir">x</div>`, the FHIR namespace rather than the XHTML
+  one the conformant repair would use). It throws `FhirSerializeError`
   rather than emit a model the reader marked as having lost character data, so that finding cannot
   vanish across a round trip; `serializeResource` refuses the same models for the same reason. Text
   the reader drops **without** marking (whitespace only) is not covered, because there is no marker.

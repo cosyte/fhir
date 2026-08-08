@@ -372,9 +372,9 @@ function writeElement(
  *   re-read as a list. **That is a statement about a model a reader produced, not about every
  *   `FhirComplex` this accepts**, and the difference is reachable: a hand-built
  *   `list([list([]), list([])])` at `Observation.status` counts two items here and emits **no**
- *   element, so it launders exactly as an empty wrapper does. No reader produces it -- the JSON one
- *   marks a nested array and `UNSERIALIZABLE_JSON_ONLY_SHAPE` refuses first, which is load-bearing
- *   ordering rather than a coincidence, and XML has no such shape. `PRE-EXISTING`, and pinned.
+ *   element, so it launders exactly as an empty wrapper does. Neither reader builds one: the JSON
+ *   reader models a nested array as a marked complex, so a list of lists never reaches this at all,
+ *   and XML has no such shape.
  *   {@link serializeResource} writes the wrapper back, so this refusal does not reach
  *   it. See `assertXmlArrayWrapper` for the window this is scoped to and what it does not cover.
  * @example
