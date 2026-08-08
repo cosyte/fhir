@@ -19,11 +19,14 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   merely tolerated), so a consumer keying on the warning was told the wrong one for two members out
   of three. **No behaviour changed and no predicate moved**: the reader has reported these positions
   this way since the rule was written, and `test/nested-array.test.ts` already pinned which code each
-  member draws; the prose describing it was what was wrong. Corrected on every surface that carried
-  it rather than only the reported one: `README.md`, `CHANGELOG.md`, the test's own comment, and the
-  doc comments on the nested-array safety readout and validation code, **both of which render into
-  `dist/index.d.ts` and `dist/index.d.cts`**, so a partial sweep would have left the claim shipping
-  in the type declarations. Stated as a failing example rather than as a universal, and the
+  member draws; the prose describing it was what was wrong. Corrected beyond the site that was
+  reported, because a partial sweep leaves the claim shipping: `README.md`, `CHANGELOG.md`, the
+  test's own comment, the narrative in `documentation/agent-notes.md`, and the doc comments on the
+  nested-array safety readout and validation code, **which render into `dist/index.d.ts` and
+  `dist/index.d.cts`**. **No total is claimed here**, deliberately: the first sweep of this change
+  missed a carrier that named `UNKNOWN_PROPERTY` directly instead of using the phrase, so a
+  completeness claim is the shape most likely to be wrong again. Stated as a failing example rather
+  than as a universal, and the
   characterization test now asserts the **exact** issue list rather than merely containing the
   expected code, so "and nothing besides" is pinned rather than claimed.
 - **A `_`-sibling whose value is not an object was read with no diagnostic and then deleted on emit,

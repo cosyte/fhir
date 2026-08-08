@@ -2,7 +2,7 @@
 "@cosyte/fhir": patch
 ---
 
-Correct which warning a discarded `_`-sibling draws, on every surface that stated it
+Correct which warning a discarded `_`-sibling draws
 (`FHIR-README-ARRAY-WARNING-WRONG`).
 
 The documented gap around the nested-array rule said that a `_`-sibling the reader discards *whole*
@@ -18,11 +18,14 @@ No behaviour changed and no code moved: the reader has reported these positions 
 rule was written, and the existing test already pinned which code each member draws. What was wrong
 was the prose describing it.
 
-Documentation only, but it was **npm-facing on three surfaces, not one**: `README.md`, and the doc
-comments on the nested-array safety readout and on the nested-array validation code, both of which
-render into `dist/index.d.ts` and `dist/index.d.cts` and so reach a consumer's editor. Correcting
-only the one that was reported would have left the claim shipping in the type declarations, which is
-the failure mode this lineage has already paid for once.
+Documentation only, but it was npm-facing beyond the site that was reported. `README.md` and
+`CHANGELOG.md` both ship in the tarball, and the doc comments on the nested-array safety readout and
+on the nested-array validation code render into `dist/index.d.ts` and `dist/index.d.cts`, so they
+reach a consumer's editor. Correcting only the site that was reported would have left the claim
+shipping in the type declarations, which is the failure mode this lineage has already paid for once.
+No count is given here on purpose: a phrase sweep that misses a synonym reads as absence, and this
+one did miss one (a carrier naming `UNKNOWN_PROPERTY` directly rather than "the unexpected-property
+warning"), so a total is exactly the shape that keeps being wrong.
 
 Stated as a failing example rather than as a universal, and the characterization test that pins the
 per-member codes now asserts the **exact** issue list rather than merely containing the expected

@@ -335,8 +335,13 @@ finding.
 total, and the first draft said it was, in five shipped surfaces including a `dist`-rendered
 fail-safe sentence.** A `_`-sibling the reader discards WHOLE (one on an object or a non-primitive
 array, or a member of a `_`-sibling object that is neither an `id` **string** nor an `extension`
-array) leaves no node to mark, so an array inside one draws `UNKNOWN_PROPERTY` and **no refusal**:
-`{"name":{...},"_name":[[...]]}` still reads `safeToSummarize: true`. The underlying loss is
+array) leaves no node to mark, so an array inside one is reported against the discarded sibling and
+draws **no refusal**: `{"name":{...},"_name":[[...]]}` still reads `safeToSummarize: true`.
+**WHICH code reports it is per member, not one code for all three** (corrected 2026-08-08,
+`FHIR-README-ARRAY-WARNING-WRONG`): that `_name` example draws `MISPLACED_PRIMITIVE_EXTENSION`, as
+does a `_`-sibling on a non-primitive array; only an unrecognised member of a `_`-sibling object
+(`{"birthDate":"1980-01-01","_birthDate":{"foo":[["x"]]}}`) draws `UNKNOWN_PROPERTY`. The
+underlying loss is
 `PRE-EXISTING` and identical on `main`; the **overclaim** was `INTRODUCED`. **The remedy taken was
 the refuter's own: correct the claim and pin the gap with a test, NOT grow the guard** -- marking
 inside those discard paths means reading raw JSON the codec does not model, which is new ungraded
