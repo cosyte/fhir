@@ -1,5 +1,11 @@
 /**
- * The XML write path: the {@link FhirNode} model → spec-clean FHIR XML text (xml.html).
+ * The XML write path: the {@link FhirNode} model → compact FHIR XML text (xml.html).
+ *
+ * **The output is NOT unconditionally spec-clean, and this line used to say it was.** A property name
+ * carrying a prefix is written with no declaration to bind it and a name that is not a conformant XML
+ * name at all is written verbatim, so `<v:x value="1"/>`, `<a&b/>` and `<1abc/>` are all emitted; a
+ * conformant third-party parser rejects each. The exceptions are enumerated on
+ * {@link serializeResourceXml}, with the refusals, and this header deliberately keeps no second copy.
  *
  * The writer is the conservative half of Postel's Law, and for a model read from a conformant
  * document it emits canonical FHIR XML, the exact inverse of {@link ./read.js}:
@@ -14,7 +20,10 @@
  *   resource (`<contained><Patient>…</Patient></contained>`).
  *
  * Output is compact (no insignificant whitespace), so a spec-clean document round-trips **byte-for-byte**
- * through {@link ./read.js}. A decimal value is emitted from its exact lexical text and never routes
+ * through {@link ./read.js}. **That is scoped to a spec-clean document and must stay scoped**: a
+ * narrative `<div>x</div>` carrying no XHTML namespace comes back as
+ * `<div xmlns="http://hl7.org/fhir">x</div>`, a declaration the sender never wrote.
+ * A decimal value is emitted from its exact lexical text and never routes
  * through a JavaScript `number`. Narrative `<div>` XHTML is written back as the opaque string the
  * model carries, verbatim. Its XHTML is not validated, but the string is checked at that branch for
  * the one property splicing it in depends on ({@link emitsOneDivElement}).
@@ -279,8 +288,9 @@ function writeElement(
 }
 
 /**
- * Serialize a resource (or any {@link FhirComplex}) to spec-clean, compact FHIR XML text, the exact
- * inverse of {@link parseResourceXml}. Decimals are emitted byte-exact (never through a `number`),
+ * Serialize a resource (or any {@link FhirComplex}) to compact FHIR XML text, the exact
+ * inverse of {@link parseResourceXml} for a model read from a conformant document (**the summary
+ * line said "spec-clean" unqualified and the section below has always contradicted it**). Decimals are emitted byte-exact (never through a `number`),
  * primitive metadata is co-located (`id` attribute + child `<extension>`s), repeating elements are
  * repeated, and the root carries the FHIR namespace.
  *
@@ -357,9 +367,15 @@ function writeElement(
  *   two items, or any wrapper on `resourceType`, where the type is the tag and a tag cannot be
  *   repeated. `{"resourceType":"Observation","status":["entered-in-error"]}` used to come back as
  *   `<status value="entered-in-error"/>` and re-read with an empty issue list, moving `valid` and
- *   `safeToSummarize` both from `false` to `true`. A wrapper of two or more items elsewhere is
- *   written as repeated elements and re-reads as a list, so it is deliberately left alone rather
- *   than refused. {@link serializeResource} writes the wrapper back, so this refusal does not reach
+ *   `safeToSummarize` both from `false` to `true`. **A wrapper of two or more items elsewhere is left
+ *   alone rather than refused**, because a model read from JSON writes it as repeated elements that
+ *   re-read as a list. **That is a statement about a model a reader produced, not about every
+ *   `FhirComplex` this accepts**, and the difference is reachable: a hand-built
+ *   `list([list([]), list([])])` at `Observation.status` counts two items here and emits **no**
+ *   element, so it launders exactly as an empty wrapper does. No reader produces it -- the JSON one
+ *   marks a nested array and `UNSERIALIZABLE_JSON_ONLY_SHAPE` refuses first, which is load-bearing
+ *   ordering rather than a coincidence, and XML has no such shape. `PRE-EXISTING`, and pinned.
+ *   {@link serializeResource} writes the wrapper back, so this refusal does not reach
  *   it. See `assertXmlArrayWrapper` for the window this is scoped to and what it does not cover.
  * @example
  * ```ts

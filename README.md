@@ -630,8 +630,12 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   re-declaration groups with its FHIR namesake the same way, and there the group already carried
   `UNEXPECTED_XML_CONTENT`. A FHIR-namespace one carries no such flag, which is exactly why this
   report is the one that covers the narrative case.
-- **`serializeResourceXml`** emits compact, spec-clean FHIR XML that round-trips a spec-clean document
-  **byte-for-byte** (decimals byte-exact, never through a `number`). It throws `FhirSerializeError`
+- **`serializeResourceXml`** emits compact FHIR XML that round-trips a spec-clean document
+  **byte-for-byte** (decimals byte-exact, never through a `number`). **Its output is not
+  _unconditionally_ spec-clean**: a prefixed name is written with no declaration to bind it and a
+  non-conformant name verbatim, so `<v:x value="1"/>`, `<a&b/>` and `<1abc/>` are all emitted, and the
+  byte-for-byte claim is scoped to a spec-clean input (a `<div>x</div>` carrying no XHTML namespace
+  comes back with one inserted). It throws `FhirSerializeError`
   rather than emit a model the reader marked as having lost character data, so that finding cannot
   vanish across a round trip; `serializeResource` refuses the same models for the same reason. Text
   the reader drops **without** marking (whitespace only) is not covered, because there is no marker.

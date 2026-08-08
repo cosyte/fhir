@@ -32,8 +32,12 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   raises a new `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER` inside that window for the
   wrappers XML cannot write back as a wrapper: **fewer than two items**, plus **any** wrapper on
   `resourceType`, where the type is the tag and a tag cannot be repeated. A wrapper of two or more
-  items elsewhere is written as repeated elements and re-reads as a list, so it is deliberately left
-  alone: refusing it would withdraw a round trip that works today **and keeps the finding**. Refused
+  items elsewhere is left alone, because a model read from JSON writes it as repeated elements that
+  re-read as a list, and refusing it would withdraw a round trip that works today **and keeps the
+  finding**. That is scoped to a model a reader produced rather than to every `FhirComplex` the writer
+  accepts: the check counts items while the reasoning is about emitted elements, and a hand-built
+  `list([list([]), list([])])` holds two items and emits none. No reader produces it, because the JSON
+  one marks a nested array and the refusal beside this one fires first. Refused
   rather than reported because the XML writer returns a string and has no diagnostics channel, and
   rather than repaired because inventing an XML spelling would author markup nobody wrote. **Raised
   last**, after the three refusals beside it, so no case moves onto the new code. It is one walk of

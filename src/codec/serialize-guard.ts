@@ -307,10 +307,20 @@ export function assertXmlSerializable(node: FhirComplex): void {
  * it would withdraw a round trip that works today **and keeps the finding**, which is the cost the
  * unbound-prefix residual was deferred rather than pay.
  *
+ * **This counts ITEMS, and the sentence above reasons about EMITTED ELEMENTS. They are the same
+ * number for a model a reader produced and not in general**, which is the limit to read this on: a
+ * hand-built `list([list([]), list([])])` holds two items and emits none. The JSON reader marks a
+ * nested array there and {@link assertXmlSerializable} refuses it first, so no parsed document
+ * reaches the gap, and XML cannot spell it at all. **That ordering is load-bearing**, not incidental,
+ * and is pinned as such rather than left to be rediscovered.
+ *
  * That is a statement about which wrappers this refuses, **not** a claim that every wrapper it lets
- * through survives. What is measured: over generated two- and three-item wrappers at the reported
- * element positions of six resource types, none laundered; every arity-0 and arity-1 wrapper in the
- * same sweep did. That axis is a generated grammar, not the FHIR R4 published-examples corpus.
+ * through survives. What is measured, stated as the axis rather than as a total: 6
+ * `(resource type, element)` root pairs x 10 item shapes in each of two array positions x arities 2
+ * and 3 gave 1,200 candidates, of which 732 produced a reported wrapper this still emits, and none
+ * laundered; the same roots x 11 shapes at arities 0 and 1 gave 66 candidates, of which 60 were
+ * emitted and **all 60** laundered. A generated grammar, **not** the FHIR R4 published-examples
+ * corpus, and 6 root pairs is not the whole window.
  *
  * ## Refusing rather than reporting or repairing
  *

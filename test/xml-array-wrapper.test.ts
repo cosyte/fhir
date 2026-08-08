@@ -371,6 +371,50 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
       expect(coding.refused).toBeUndefined();
     });
 
+    it("counts ITEMS, not emitted elements, and the two part on a hand-built node", () => {
+      // The predicate tests `items.length`, while the sentence justifying it reasons about how many
+      // ELEMENTS get emitted. Those are the same number for a model a reader produced and not in
+      // general: a list whose items are themselves lists holds two items and emits none. Base
+      // launders it identically, so this is `PRE-EXISTING` and pinned rather than fixed -- widening
+      // the guard to catch it would start refusing arity-2 wrappers, withdrawing the working round
+      // trip the arity rule exists to protect.
+      const empties = complex([
+        { name: "resourceType", value: primitive("Observation") },
+        { name: "status", value: list([list([]), list([])]) },
+      ]);
+      expect(refusal(empties)).toBeUndefined();
+      expect(readSafety(empties).arrayWrappedScalars).toEqual(["Observation.status"]);
+      expect(serializeResourceXml(empties)).toBe('<Observation xmlns="http://hl7.org/fhir"/>');
+      expect(
+        readSafety(parseResourceXml(serializeResourceXml(empties)).resource).safeToSummarize,
+      ).toBe(true);
+    });
+
+    it("is unreachable from a parsed document, and THAT ORDERING IS LOAD-BEARING", () => {
+      // The only reason the gap above cannot be reached from the wire: the JSON reader marks a
+      // nested array and `UNSERIALIZABLE_JSON_ONLY_SHAPE` is raised BEFORE this refusal, so every
+      // spelling of it is refused on the older code. Nothing else asserts that dependency, and
+      // reordering the two would open the gap to real input rather than to a hand-built node.
+      for (const src of [
+        '{"resourceType":"Observation","status":[["a"],["b"]]}',
+        '{"resourceType":"Observation","status":["a",["b"]]}',
+        '{"resourceType":"Observation","status":[[],[]]}',
+      ]) {
+        expect(fromJson(src).refused?.code).toBe(
+          SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+        );
+      }
+      // …and XML cannot spell a list of lists at all, so no XML-read model reaches it either.
+      const xml = parseResourceXml(
+        '<Observation xmlns="http://hl7.org/fhir"><status value="a"/><status value="b"/></Observation>',
+      );
+      const status = xml.resource.properties.find((p) => p.name === "status");
+      expect(status?.value.kind).toBe("list");
+      expect(
+        status?.value.kind === "list" && status.value.items.every((i) => i.kind !== "list"),
+      ).toBe(true);
+    });
+
     it("does not extend past the safety layer's window, `Observation.value[x]` included", () => {
       // A `0..1` choice element, and a wrapper on it still launders -- because the window this took
       // its cardinality from does not reach it. Widening it means a per-resource model, which is a
