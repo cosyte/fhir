@@ -8,6 +8,42 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **An array wrapper around a `0..1` element was flattened away by the XML writer, so a document that
+  read `valid: false` came back `valid: true` (`FHIR-XML-WRITE-RESIDUALS`).** FHIR JSON writes a
+  single-valued element as a name/value pair and reserves the array for a repeating one
+  (json.html §2.6.2.2), so `{"status":["entered-in-error"]}` is a shape the spec does not define; the
+  safety layer reports it as an error-severity `ARRAY_WRAPPED_SCALAR` and declines to affirm
+  `safeToSummarize` over it, because a single-value read finds no string in it at all. FHIR XML spells
+  a repeat by **repeating the element** (xml.html) and carries no other mark for one, so a wrapper of
+  fewer than two items emitted at most one element and the complaint had nowhere to go. Measured at
+  the base commit, `{"resourceType":"Observation","status":["entered-in-error"]}` emitted
+  `<Observation xmlns="http://hl7.org/fhir"><status value="entered-in-error"/></Observation>` and came
+  back with `arrayWrappedScalars: []`, `safeToSummarize: true`, `valid: true` and an empty issue list.
+  Array-wrapping every element is ordinary generic converter output, which is how a C-CDA or v2 feed
+  reaches a FHIR surface, so the wrapper usually sits on `resourceType` too, and a wrapped type gate
+  suppresses every type-scoped negation behind it:
+  `{"resourceType":["MedicationStatement"],"status":["not-taken"]}` came back as `<Resource>` with no
+  negation readable at all.
+  **The cardinality decision this took on the write path, stated because it is the whole slice.** A
+  writer cannot decide cardinality in general and this one does not try: there is no per-resource
+  model here, and a name-only rule would emit a false error on a conformant document
+  (`Questionnaire.code` and `ElementDefinition.code` are `0..*` in R4). So the write path takes its
+  cardinality from the one window that already has one, the locations the safety layer reports, and
+  raises a new `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER` inside that window for the
+  wrappers XML cannot write back as a wrapper: **fewer than two items**, plus **any** wrapper on
+  `resourceType`, where the type is the tag and a tag cannot be repeated. A wrapper of two or more
+  items elsewhere is written as repeated elements and re-reads as a list, so it is deliberately left
+  alone: refusing it would withdraw a round trip that works today **and keeps the finding**. Refused
+  rather than reported because the XML writer returns a string and has no diagnostics channel, and
+  rather than repaired because inventing an XML spelling would author markup nobody wrote. **Raised
+  last**, after the three refusals beside it, so no case moves onto the new code. It is one walk of
+  the safety layer's own window rather than a second traversal with its own element table, so it can
+  never name a location `arrayWrappedScalars` does not.
+  `serializeResource` writes the wrapper back and is the route that stays open. **Not** closed by it,
+  and pinned rather than implied: a wrapper that only a **shadowed** member carried is still dropped,
+  by **both** writers, which is the repeated-property-name residual rather than this one; and the
+  window does not reach `Observation.value[x]`, a `0..1` choice whose wrapper still launders, because
+  widening it means a per-resource model.
 - **`JSON -> XML -> JSON` laundered every shape the JSON reader marks, because XML has no channel for
   any of them (`FHIR-JSON-ONLY-SHAPE-LAUNDERED`).** The reader marks four positions FHIR JSON gives no
   meaning to and keeps what the sender wrote at them, so `serializeResource` hands it back and a
@@ -124,8 +160,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   which is why it was invisible: the output could not be told apart from a document whose sender
   wrote no metadata there at all.
   The reader now raises `UNKNOWN_PROPERTY` at that position and keeps the sibling's JSON text on
-  `FhirPrimitive.nonObjectMetaSource`, and `serializeResource` hands it back, so every shape above
-  round-trips byte-identically and re-reading the output reproduces the finding. **No new issue code
+  `FhirPrimitive.nonObjectMetaSource`, and `serializeResource` hands it back, so
+  re-reading the output reproduces the finding. **No new issue code
   was added and no case moved between codes.** This is the same observation the reader already makes
   where a scalar or `null` arrives at a **complex** position, which FHIR JSON also gives an object:
   nothing is modeled, the text is preserved, the writer hands it back, and a consumer acts on it

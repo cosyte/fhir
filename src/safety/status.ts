@@ -324,6 +324,26 @@ export function arrayWrappedScalars(resource: FhirComplex, path: string): string
 }
 
 /**
+ * The subset of {@link arrayWrappedScalars} whose wrapper FHIR XML has no repetition to spell back,
+ * so writing the model to XML would emit a document the wrapper cannot be read out of again.
+ *
+ * **Same walk, same window, one call.** This is deliberately not a second traversal with its own
+ * element table: a copy would be free to drift from the window this layer reports, and the read
+ * window and the report window must be the same window. It narrows that window (`unspellableInXml`)
+ * and never widens it, so it can never name a location `arrayWrappedScalars` does not.
+ *
+ * The XML write path is its only consumer; it is not part of the public surface.
+ *
+ * @param resource - The resource model.
+ * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
+ * @returns Those locations, in the same document order, each once.
+ * @internal
+ */
+export function unspellableXmlWrappers(resource: FhirComplex, path: string): string[] {
+  return walkSafety(resource, path).unspellableInXml;
+}
+
+/**
  * Collect the FHIRPath locations where the document wrote an **array inside an array**, a deep walk
  * of the whole resource.
  *
@@ -475,11 +495,13 @@ function collectNested(
   }
 }
 
-/** The three fail-closed findings a single walk of the resource collects. */
+/** The fail-closed findings a single walk of the resource collects. */
 interface SafetyWalk {
   readonly modifiers: string[];
   readonly shadowed: string[];
   readonly arrayWrapped: string[];
+  /** The subset of {@link SafetyWalk.arrayWrapped} FHIR XML has no repetition to spell back. */
+  readonly unspellableInXml: string[];
 }
 
 /**
@@ -488,9 +510,30 @@ interface SafetyWalk {
  * not it carries a readable `resourceType`.
  */
 function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
-  const out: SafetyWalk = { modifiers: [], shadowed: [], arrayWrapped: [] };
+  const out: SafetyWalk = { modifiers: [], shadowed: [], arrayWrapped: [], unspellableInXml: [] };
   walkComplex(resource, path, out, true);
   return out;
+}
+
+/**
+ * Whether a wrapper the safety layer reports is one FHIR XML has no way to write back as a wrapper.
+ *
+ * FHIR XML spells a repeat by **repeating the element** (xml.html) and has no other mark for one, so
+ * what survives a trip through XML is a wrapper that emits two or more elements: the re-read groups
+ * them into a list and this layer reports the location again. A wrapper holding fewer than two items
+ * emits at most one element, which re-reads as an ordinary single-valued element, and the report is
+ * gone.
+ *
+ * **`resourceType` is the exception at every arity, and it is a fact about XML rather than about
+ * this library's writer**: FHIR XML has no `resourceType` element at all, the type IS the tag, and a
+ * tag cannot be repeated. So no wrapper there has a spelling, however many entries it holds.
+ *
+ * This is a predicate about which wrappers a format can carry. It is deliberately **not** a claim
+ * that every wrapper it lets through survives; see the write-path refusal that consumes it.
+ */
+function unspellableInXml(name: string, value: FhirNode): boolean {
+  if (!isList(value)) return false;
+  return name === "resourceType" || value.items.length < 2;
 }
 
 /**
@@ -501,10 +544,19 @@ function checkArrayWrapping(node: FhirComplex, path: string, out: SafetyWalk): v
   const types = typesOf(node);
   const isSafetyType = types.some((type) => SAFETY_RESOURCE_TYPES.has(type));
   const reported = new Set<string>();
-  const report = (location: string): void => {
-    if (reported.has(location)) return;
-    reported.add(location);
-    out.arrayWrapped.push(location);
+  const unspellable = new Set<string>();
+  // The two sets are de-duplicated INDEPENDENTLY on purpose. A repeated property name puts two
+  // wrappers at one location, and if only the first were considered, `{"status":["b","c"],
+  // "status":["a"]}` would hide the unwritable one behind the writable one that arrived first.
+  const report = (location: string, unwritable: boolean): void => {
+    if (!reported.has(location)) {
+      reported.add(location);
+      out.arrayWrapped.push(location);
+    }
+    if (unwritable && !unspellable.has(location)) {
+      unspellable.add(location);
+      out.unspellableInXml.push(location);
+    }
   };
   for (const property of [...node.properties, ...(node.duplicates ?? [])]) {
     const clinical = SAFETY_SCALAR_ELEMENTS.has(property.name);
@@ -513,7 +565,7 @@ function checkArrayWrapping(node: FhirComplex, path: string, out: SafetyWalk): v
     // makes the clinical scoping below unreachable in the first place.
     if (property.name !== "resourceType" && !(clinical && isSafetyType)) continue;
     const at = childPath(path, property.name);
-    if (isList(property.value)) report(at);
+    if (isList(property.value)) report(at, unspellableInXml(property.name, property.value));
     // The same converter shape one level down, on a `Coding` inside a CodeableConcept-valued element.
     if (clinical && isSafetyType && SAFETY_CODEABLE_ELEMENTS.has(property.name)) {
       checkCodingWrapping(property.value, at, report);
@@ -546,7 +598,7 @@ function checkArrayWrapping(node: FhirComplex, path: string, out: SafetyWalk): v
 function checkCodingWrapping(
   value: FhirNode,
   path: string,
-  report: (location: string) => void,
+  report: (location: string, unspellable: boolean) => void,
 ): void {
   const concepts = isList(value) ? value.items : [value];
   concepts.forEach((concept, conceptIndex) => {
@@ -561,8 +613,16 @@ function checkCodingWrapping(
         if (!isComplex(coding)) return;
         const at = isList(member) ? `${base}.coding[${String(index)}]` : `${base}.coding`;
         for (const name of CODING_SCALAR_ELEMENTS) {
-          if (getAllProperties(coding, name).some((scalar) => isList(scalar))) {
-            report(`${at}.${name}`);
+          const members = getAllProperties(coding, name);
+          if (members.some((scalar) => isList(scalar))) {
+            // Per WRITTEN MEMBER, not per location: a `Coding` whose `system` is a singleton and
+            // whose `code` holds two entries loses the `system` wrapper on the way through XML even
+            // though the `code` wrapper keeps the location reported. The member that vanishes is
+            // what this answers, so `some` is the right quantifier.
+            report(
+              `${at}.${name}`,
+              members.some((scalar) => unspellableInXml(name, scalar)),
+            );
           }
         }
       });

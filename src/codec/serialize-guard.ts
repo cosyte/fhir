@@ -7,13 +7,17 @@
  * harm is a name reaching a tag position, and JSON escapes a member name so no name reaches this
  * refusal there. {@link refuseUnserializableDivMarkup} is raised by the XML writer for the same
  * reason, at its one raw-markup site: JSON carries the string as a string.
- * {@link assertXmlSerializable} is XML-only for the mirror-image reason: the shapes it refuses are
- * ones the JSON writer hands back, and XML has no channel to hand them back into. No refusal here
- * recognises anything new, invents a value, or changes a document that reads clean.
+ * {@link assertXmlSerializable} and {@link assertXmlArrayWrapper} are XML-only for the mirror-image
+ * reason: the shapes they refuse are ones the JSON writer hands back, and XML has no channel to hand
+ * them back into. No refusal here recognises anything new, invents a value, or changes a document
+ * that reads clean.
  *
  * **This module is a list of the refusals it implements, NOT a closed account of what a writer can
- * author.** The predicate behind the third one lives at its site in `../xml/write.js`, next to the
- * code that emits the markup, because a copy here would be free to disagree with it.
+ * author.** Two of the predicates deliberately live somewhere else rather than being copied here,
+ * because a copy would be free to disagree with the thing it copies: `emitsOneDivElement` sits in
+ * `../xml/write.js` next to the code that emits the markup, and the cardinality window
+ * {@link assertXmlArrayWrapper} refuses on is the safety layer's own walk in `../safety/status.js`,
+ * the same walk that reports it to a caller.
  *
  * The rest of this comment is the first refusal.
  *
@@ -38,7 +42,7 @@
 import type { FhirComplex, FhirNode } from "../model/node.js";
 import { rootPath } from "../model/path.js";
 import { typeOf } from "../safety/codes.js";
-import { collectMarked, droppedText } from "../safety/status.js";
+import { collectMarked, droppedText, unspellableXmlWrappers } from "../safety/status.js";
 
 /** Every reason a writer refuses to serialize a model. */
 export const SERIALIZE_ERROR_CODES = {
@@ -88,6 +92,20 @@ export const SERIALIZE_ERROR_CODES = {
    * See {@link assertXmlSerializable} for the exact set of markers and for what it does NOT cover.
    */
   UNSERIALIZABLE_JSON_ONLY_SHAPE: "UNSERIALIZABLE_JSON_ONLY_SHAPE",
+  /**
+   * The model carries, at a location this library already reports as an array-wrapped `0..1` safety
+   * element, a wrapper FHIR XML has no repetition to spell back: one holding fewer than two items,
+   * or any wrapper at all on `resourceType`. **XML only**: `serializeResource` writes the list back
+   * and the re-read reports the same location, so that route stays open.
+   *
+   * XML spells a repeat by repeating the element and has no other mark for one, so a wrapper of
+   * fewer than two items emits at most one element and re-reads as an ordinary single-valued
+   * element. The encoding complaint the reader raised is then gone, and with it an `error`-severity
+   * `ARRAY_WRAPPED_SCALAR` and a `safeToSummarize: false`.
+   *
+   * See {@link assertXmlArrayWrapper} for the exact predicate and for what it deliberately leaves.
+   */
+  UNSERIALIZABLE_ARRAY_WRAPPER: "UNSERIALIZABLE_ARRAY_WRAPPER",
 } as const;
 
 /** Discriminant union of every {@link SERIALIZE_ERROR_CODES} value. */
@@ -254,6 +272,80 @@ export function assertXmlSerializable(node: FhirComplex): void {
     // repeated property name shadowed is dropped by it as well.
     `cannot serialize to XML: ${String(locations.length)} location(s) carry a shape only FHIR JSON can spell, which XML has no channel for; this refusal does not reach serializeResource`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+    locations,
+  );
+}
+
+/**
+ * Refuse to serialize **to XML** a model carrying an array wrapper around a `0..1` element that XML
+ * has no repetition to spell back, which the XML writer would flatten away.
+ *
+ * ## The cardinality decision this implements, and what it is scoped to
+ *
+ * FHIR JSON writes a single-valued element as a name/value pair and reserves the array for a
+ * repeating one (json.html §2.6.2.2), so `{"status":["entered-in-error"]}` is a shape the spec does
+ * not define; the safety layer reports it as `ARRAY_WRAPPED_SCALAR`, an **error**, and refuses to
+ * affirm `safeToSummarize` over it. FHIR XML spells a repeat by **repeating the element**
+ * (xml.html) and carries no other mark for one, so the writer emitted the single element it held and
+ * the encoding complaint had nowhere to go: `{"resourceType":"Observation",
+ * "status":["entered-in-error"]}` came back as `<status value="entered-in-error"/>`, re-read with an
+ * empty issue list, and moved `valid` and `safeToSummarize` both from `false` to `true`.
+ *
+ * **A writer cannot decide cardinality in general and this one does not try.** This library has no
+ * per-resource model, and a name-only rule false-errors on a conformant document (`Questionnaire.code`
+ * and `ElementDefinition.code` are `0..*` in R4). So the write path takes its cardinality from the
+ * one window that already has one: the locations `arrayWrappedScalars` reports. Outside that
+ * window the writer keeps saying nothing, `Observation.valueQuantity` included -- a `0..1` choice
+ * whose wrapper still launders here, declared rather than implied.
+ *
+ * ## Which wrappers inside that window, and why not all of them
+ *
+ * Only the ones XML cannot write back as a wrapper: fewer than two items, plus **any** wrapper on
+ * `resourceType`, where the type is the tag and a tag cannot be repeated (a three-entry one is
+ * flattened exactly as a singleton is). A wrapper of two or more items elsewhere emits repeated
+ * elements, the re-read groups them into a list, and the location is reported again -- so refusing
+ * it would withdraw a round trip that works today **and keeps the finding**, which is the cost the
+ * unbound-prefix residual was deferred rather than pay.
+ *
+ * That is a statement about which wrappers this refuses, **not** a claim that every wrapper it lets
+ * through survives. What is measured: over generated two- and three-item wrappers at the reported
+ * element positions of six resource types, none laundered; every arity-0 and arity-1 wrapper in the
+ * same sweep did. That axis is a generated grammar, not the FHIR R4 published-examples corpus.
+ *
+ * ## Refusing rather than reporting or repairing
+ *
+ * The XML writer returns a string and has no diagnostics channel, and XML has no shape to hand a
+ * wrapper back into, so the two routes {@link assertXmlSerializable} weighed are the two here.
+ * Inventing an XML spelling would author markup the sender never wrote. Refusing recognises nothing
+ * and invents nothing, and it costs a round trip only for models this library already reports as
+ * `valid: false` with `safeToSummarize: false`, the same bound {@link assertSerializable} accepted.
+ *
+ * **Raised last**, after the name, `div` and JSON-only-shape refusals, so a model that trips two
+ * keeps the code it already reported and no case moves onto this one.
+ *
+ * **Reached from XML in principle rather than never**: an XML document CAN put a list at a reported
+ * location, by repeating the element -- but two repeated elements are two items, which this leaves
+ * alone. The shapes it refuses are ones a single element does not produce.
+ *
+ * **The window walked includes a member a repeated property name shadowed**, which the XML writer
+ * itself never visits, so `{"status":["b","c"],"status":["a"]}` is refused for a wrapper the writer
+ * would have dropped either way. Wider in the direction that refuses more, and the same choice
+ * {@link assertXmlSerializable} made at the same fork; the shadowed member is dropped by both
+ * writers, so do not read this refusal as pointing at a route that keeps it.
+ *
+ * @param node - The model about to be serialized to XML.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER}.
+ * @internal
+ */
+export function assertXmlArrayWrapper(node: FhirComplex): void {
+  const locations = unspellableXmlWrappers(node, rootPath(typeOf(node) ?? "Resource"));
+  if (locations.length === 0) return;
+  throw new FhirSerializeError(
+    // Says what this refusal does not reach, in the wording the three refusals beside it were
+    // narrowed to. `serializeResource` does write these wrappers back -- pinned by the JSON half of
+    // the same test -- with the shadowed-member limit stated in the docblock rather than here.
+    `cannot serialize to XML: ${String(locations.length)} location(s) carry an array wrapper around a 0..1 element that XML has no repeated element to spell back; this refusal does not reach serializeResource`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER,
     locations,
   );
 }

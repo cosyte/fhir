@@ -671,10 +671,33 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back with the second
   member spelled `"Practitioner/2"`, the same string in different bytes. Only the value-channel
   `null` family is byte-identical, because a `null` has no escaping to lose. That the route stays
-  open is a statement about these shapes, not about the whole model. **Not** closed by it, and pinned rather than implied: an array-wrapped `0..1`
-  element still launders across this boundary (no node is marked, and XML spells a repeating element
-  by repeating it), a repeated property name is dropped by **both** writers, and a JSON decimal comes
+  open is a statement about these shapes, not about the whole model. **Not** closed by it, and pinned rather than implied:
+  a repeated property name is dropped by **both** writers, and a JSON decimal comes
   back from XML as a string because XML carries no JSON type.
+- **An array wrapper XML cannot spell back is refused rather than flattened away**
+  (`UNSERIALIZABLE_ARRAY_WRAPPER`). FHIR JSON writes a single-valued element as a name/value pair and
+  reserves the array for a repeating one (json.html §2.6.2.2), so `{"status":["entered-in-error"]}` is
+  a shape the spec does not define: it is reported as an error-severity `ARRAY_WRAPPED_SCALAR` and
+  `safeToSummarize` is `false` over it, because a single-value read finds no string in it at all. FHIR
+  XML spells a repeat by **repeating the element** and carries no other mark for one, so a wrapper of
+  fewer than two items used to emit at most one element and re-read as an ordinary single-valued
+  element: that document came back with `arrayWrappedScalars: []`, `safeToSummarize: true`,
+  `valid: true` and an empty issue list, and
+  `{"resourceType":["MedicationStatement"],"status":["not-taken"]}` came back as `<Resource>` with no
+  negation readable at all. **A writer cannot decide cardinality in general and this one does not
+  try**: there is no per-resource model here, and a name-only rule would emit a false error on a
+  conformant document (`Questionnaire.code` and `ElementDefinition.code` are `0..*` in R4). So this
+  takes its cardinality from the one window that already has one, the locations
+  `arrayWrappedScalars` reports, and inside it refuses the wrappers XML cannot write back as a
+  wrapper: **fewer than two items**, plus **any** wrapper on `resourceType`, where the type is the tag
+  and a tag cannot be repeated. **A wrapper of two or more items elsewhere is deliberately left
+  alone**: it is written as repeated elements, the re-read groups them into a list and the location is
+  reported again, so refusing it would withdraw a round trip that works today _and_ keeps the finding.
+  That is a statement about which wrappers this refuses, not a claim that every wrapper it lets
+  through survives. `serializeResource` writes the wrapper back and is the route that stays open.
+  **Not** closed by it: a wrapper that only a **shadowed** member carried is dropped by both writers,
+  which is the repeated-property-name gap rather than this one, and the window does not reach
+  `Observation.value[x]`, a `0..1` choice whose wrapper still launders.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).

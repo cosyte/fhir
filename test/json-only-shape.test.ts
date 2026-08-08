@@ -448,17 +448,24 @@ describe("no case moves onto the new code", () => {
 });
 
 describe("what is deliberately NOT closed here, pinned so it cannot be read as covered", () => {
-  it("an array-wrapped `0..1` element still launders across the format boundary", () => {
-    // No node is marked: the model holds a genuine list of one, and XML spells a repeating element
-    // by repeating it, so one occurrence is exactly what comes back. Closing it would need a
-    // cardinality decision on the write path, which is a different change. Its own suite owns it.
+  it("an array-wrapped `0..1` element is CLOSED, on a different code and a different mechanism", () => {
+    // Was a declared gap here: no node is marked, so nothing this suite's refusal walks reaches it.
+    // It was closed on its own code (`UNSERIALIZABLE_ARRAY_WRAPPER`), from the safety layer's
+    // cardinality window rather than from a marker, and raised AFTER this one. Kept in this suite
+    // because the two must not be confused: the boundary between the codes is what is asserted.
     const { resource, refused } = fromJson(
       '{"resourceType":"Observation","status":["entered-in-error"]}',
     );
-    expect(refused).toBeUndefined();
+    expect(refused).toMatchObject({ code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER });
     expect(readSafety(resource).safeToSummarize).toBe(false);
-    const back = parseResourceXml(serializeResourceXml(resource));
-    expect(readSafety(back.resource).safeToSummarize).toBe(true);
+
+    // …and a model carrying BOTH keeps the older code, which is what "raised last" means.
+    const both = fromJson(
+      '{"resourceType":"Observation","status":["entered-in-error"],"name":[[{"family":"Roe"}]]}',
+    );
+    expect(both.refused).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+    });
   });
 
   it("a repeated property name is still dropped, by BOTH writers rather than by this one", () => {

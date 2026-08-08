@@ -2693,3 +2693,131 @@ _Provenance: every figure above was produced by running one probe script against
 and then against the head tree, not recalled; the spec clauses are `hl7.org/fhir/R4/json.html`
 §2.6.2, §2.6.2.1 and §2.6.2.3 for the JSON channels and `xml.html` §2.6.1 for the XML one. The two
 corrections above are the conformance gate's pass 1 against `a608731`._
+
+## The array wrapper laundering, closed (2026-08-08)
+
+The residual `#74` ranked first among what it left, and the one that needed a **product call** rather
+than a parser fix: closing it meant deciding what a writer does about cardinality.
+
+### The defect, measured against `8a91d29`
+
+FHIR JSON writes a single-valued element as a name/value pair and reserves the array for a repeating
+one (json.html §2.6.2.2), so `{"status":["entered-in-error"]}` is a shape the spec does not define.
+The safety layer already reported it (`ARRAY_WRAPPED_SCALAR`, error severity) and declined to affirm
+`safeToSummarize` over it, because a single-value read finds no string in it at all.
+
+FHIR XML spells a repeat by **repeating the element** (xml.html) and carries no other mark for one.
+So a wrapper of fewer than two items emitted at most one element and the complaint had nowhere to go:
+
+| in | reported | XML out | re-read |
+| --- | --- | --- | --- |
+| `{"resourceType":"Observation","status":["entered-in-error"]}` | `Observation.status` | `<status value="entered-in-error"/>` | `[]`, `valid: true`, `safeToSummarize: true` |
+| `{"resourceType":"Observation","status":[]}` | `Observation.status` | element absent | `[]`, `valid: true` |
+| `{"resourceType":["MedicationStatement"],"status":["not-taken"]}` | both | `<Resource>` | no negation readable at all |
+
+The second row is the one worth keeping in view: an **empty** wrapper leaves nothing behind at all.
+The third is the sharper half, because a wrapped type gate suppresses every type-scoped negation
+behind it, and array-wrapping every element is ordinary generic converter output.
+
+### The cardinality decision, and the alternatives weighed
+
+**A writer cannot decide cardinality in general, and this one does not try.** There is no
+per-resource model here and there must not be one (`SAFETY_SCALAR_ELEMENTS` is the cardinality of a
+closed set, not a model); a name-only, depth-free rule emits a false error on a conformant document,
+because `Questionnaire.code` and `ElementDefinition.code` are `0..*` in R4.
+
+Four routes were on the table:
+
+1. **Refuse every list at a reported location, arity-blind.** Rejected on measurement, not taste: an
+   XML document CAN put a list at a reported location by repeating the element, and
+   `<status value="a"/><status value="b"/>` round-trips **byte-exact today with the finding read on
+   both sides**. Refusing it withdraws a working round trip and buys nothing, which is exactly the
+   cost the unbound-prefix residual was deferred rather than pay.
+2. **Refuse only what XML cannot spell back as a wrapper.** Taken. Fewer than two items, plus **any**
+   wrapper on `resourceType`, where the type is the tag and a tag cannot be repeated. The
+   `resourceType` clause is a fact about XML, not about this writer's branching, and it is measured
+   at arities 0, 1, 2 and 3.
+3. **Report instead of refuse.** Not available: the XML writer returns a string and has no
+   diagnostics channel, the same fork `assertXmlSerializable` reached.
+4. **Invent an XML spelling for a wrapper.** Rejected: it authors markup the sender never wrote,
+   which is the fabrication class two refusals beside it already exist for.
+
+**Where the cardinality comes from is the load-bearing half.** The write path takes it from the one
+window that already has one, the locations `arrayWrappedScalars` reports, by narrowing the safety
+layer's **own walk** (`unspellableXmlWrappers`) rather than adding a second traversal with its own
+element table. A copy would be free to drift from the window this library reports to a caller, and
+the read window and the report window must be the same window. It narrows and never widens, so it
+can never name a location `arrayWrappedScalars` does not.
+
+`SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER`, **raised last** so no case moves onto it.
+
+### Two things the predicate answers that a location-level one would get wrong
+
+- **Per written MEMBER, not per location.** A `Coding` whose `system` is a singleton and whose `code`
+  holds two keeps the location reported after the trip, while the `system` wrapper is gone. The
+  member that vanishes is the question, so the quantifier is `some`.
+- **The two sets de-duplicate independently.** A repeated property name puts two wrappers at one
+  location; sharing the de-duplication would hide `{"status":["b","c"],"status":["a"]}`'s singleton
+  behind the writable wrapper that arrived first. Pinned in both orders.
+
+### What it does NOT cover, measured rather than implied
+
+- **A writable wrapper only a SHADOWED member carried still launders.**
+  `{"status":"final","status":["a","b"]}` reports `Observation.status` and comes back reporting
+  nothing. It is not this class: the wrapper is writable, what drops it is the repeated property
+  name, and `serializeResource` drops it **identically** (`{"resourceType":"Observation",
+  "status":"final"}`, `safeToSummarize` `false -> true` on that route too). The repeated name is its
+  own declared-open residual.
+- **`Observation.value[x]`**, a `0..1` choice, is outside the window and its wrapper still launders.
+  Widening means the per-resource model this library does not have.
+
+### The axis of every "0" and every count reported here
+
+- **"0 readings moved of 1,195"** is the XML read differential, over 7 hand-authored XML fixtures
+  plus mutations. It **cannot grade this class**: the refusal fires on wrappers of fewer than two
+  items, and a single XML element reads as a primitive, not a list. That zero is by construction. The
+  harness prints the caveat itself, and `leaf values not compared (head refused to serialize)` is
+  `0`, so no document base serialized is refused at head.
+- **"732 two- and three-item wrappers, 0 laundered"** and **"60 arity-0/1 wrappers, 60 laundered"**
+  are a generated grammar: 6 (type, element) roots x 10 item shapes, written to XML and re-read.
+  Not a corpus.
+- **The 14 `_`-sibling shapes measured 14/14 byte-exact** below is this repo's own probe list.
+
+**None is the FHIR R4 published-examples corpus. Nothing here is corpus-wide.**
+
+### Mutation coverage, both polarities
+
+Ten mutations run against the three suites that own this: dropping the `resourceType` disjunct (2
+red), dropping the arity clause (18), widening arity to `< 3` (9), narrowing to `< 1` (13), sharing
+the de-duplication set (22), `some -> every` on the `Coding` quantifier (1), raising the refusal
+first instead of last (2), removing it entirely (22), the `isList` guard returning `true` (1), and
+the predicate made dead (23). Every clause is load-bearing.
+
+### The falsified "byte-identically" claim beside it, graded per carrier
+
+`#74` recorded the `_`-sibling changeset's "byte-identically" as falsified and owed a deletion.
+**Re-measured before editing, and it is half right, which is why it was measured:**
+
+- `.changeset/tidy-hounds-gather.md` said "so **the shape** round-trips byte-identically", a
+  universal over the shape class, and it is **false**: `{"_status":"Practitioner\/2"}` returns
+  `{"_status":"Practitioner/2"}`, `{"_status":"aAb"}` returns `{"_status":"aAb"}`, and even
+  insignificant whitespace before the value is lost. The preserved text is re-rendered, not sliced.
+  **Deleted, never reworded** (a changeset freezes permanently).
+- `CHANGELOG.md` said "so **every shape above** round-trips byte-identically", scoped to its own
+  enumeration, and **all 14 enumerated shapes measure byte-exact**. It was true as scoped. It was
+  deleted anyway, for a different and stated reason: the same release body carries `#74`'s correction
+  ("value-exact, not byte-exact ... only the value-channel `null` family is byte-identical") ninety
+  lines above it, and the `_`-sibling channel is one of the families that correction names. Two
+  statements that contradict each other in one release body is what a reader acts on.
+- `documentation/agent-notes.md`'s two uses are enumerations too, and both measure true. **Left
+  alone**: deleting a true claim is its own defect.
+
+`src/xml/index.ts`'s summary was stale on both halves and is corrected, with the second carrier of
+the same sentence swept rather than left: `src/index.ts`'s Phase 8 comment said the same thing.
+Measured: "emits spec-clean XML" is false (`<v:x value="1"/>`, `<a&b/>`, `<1abc/>` are all emitted),
+and "round-tripping byte-for-byte" is false unqualified (`<div>x</div>` comes back as
+`<div xmlns="http://hl7.org/fhir">x</div>`).
+
+_Provenance: every figure above was produced by running probe scripts against a clean `8a91d29` and
+then against the head tree, not recalled. Spec clauses: `hl7.org/fhir/R4/json.html` §2.6.2.2 for the
+JSON array rule and `xml.html` for XML's repeated-element spelling._

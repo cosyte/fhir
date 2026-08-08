@@ -6,11 +6,11 @@ import {
   codingsOf,
   complex,
   FhirSafetyError,
+  FhirSerializeError,
   getProperty,
   isRetracted,
   list,
   parseResource,
-  parseResourceXml,
   primitive,
   readInterpretations,
   readObservationValue,
@@ -688,48 +688,50 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
     });
 
     /**
-     * THE OTHER FORMAT DOES LAUNDER IT, AND THAT IS A DECLARED RESIDUAL RATHER THAN A CLAIM.
+     * THE OTHER FORMAT USED TO LAUNDER IT. IT IS NOW REFUSED, AND THIS IS WHAT IT USED TO DO.
      *
-     * The test above pins the JSON route staying honest. The XML route does not, and this pins the
-     * gap as the behaviour it is: FHIR XML has no way to spell a singleton wrapper (a repeat is
-     * written as a repeated element, xml.html), so the conservative writer emits the one value it
-     * holds and the encoding complaint has nowhere to go. `ARRAY_WRAPPED_SCALAR` is an error, and
-     * `safeToSummarize` is `false` on the way in and `true` on the way out.
+     * The test above pins the JSON route staying honest. The XML route did not: FHIR XML spells a
+     * repeat by repeating the element (xml.html) and carries no other mark for one, so a wrapper of
+     * fewer than two items emitted at most one element and the encoding complaint had nowhere to go.
+     * Measured at `8a91d29`, base: this document emitted
+     * `<Observation xmlns="http://hl7.org/fhir"><status value="entered-in-error"/></Observation>`,
+     * which re-read with an **empty issue list**, `arrayWrappedScalars: []`, `safeToSummarize: true`
+     * and `valid: true`.
      *
-     * It is narrower than the duplicate-key laundering, and the narrowing is asserted below rather
-     * than left in prose: the clinical content survives, so the retraction is still read on both
-     * sides. What is lost is the refusal to affirm over a document nobody can read unambiguously.
+     * The clinical content did survive that trip, which is what made it the narrower laundering of
+     * the two: the retraction read `true` on both sides. What vanished was the refusal to affirm
+     * over a document nobody can read unambiguously.
      *
-     * This is a characterization test. **Closing this residual (a writer refusal in the shape of the
-     * dropped-text one is the obvious route) MUST make this go red**, and it is written so that it
-     * does.
+     * Closed by `UNSERIALIZABLE_ARRAY_WRAPPER` (`xml-array-wrapper.test.ts` owns the predicate). What
+     * this asserts is the boundary: the JSON route is unchanged and still hands the wrapper back.
      */
-    it("DOES launder it across the format boundary, through the XML writer", () => {
+    it("no longer launders it across the format boundary: the XML writer refuses", () => {
       const { resource } = parseResource(REPORTED);
       const before = readSafety(resource);
       expect(before.arrayWrappedScalars).toEqual(["Observation.status"]);
       expect(before.safeToSummarize).toBe(false);
       expect(validateResource(resource).valid).toBe(false);
 
-      const xml = serializeResourceXml(resource);
-      expect(xml).toBe(
-        '<Observation xmlns="http://hl7.org/fhir"><status value="entered-in-error"/></Observation>',
-      );
+      let err: unknown;
+      try {
+        serializeResourceXml(resource);
+      } catch (caught) {
+        err = caught;
+      }
+      expect(err).toBeInstanceOf(FhirSerializeError);
+      expect(err).toMatchObject({
+        code: "UNSERIALIZABLE_ARRAY_WRAPPER",
+        locations: ["Observation.status"],
+      });
 
-      const reread = parseResourceXml(xml);
-      expect(reread.issues).toEqual([]);
-      const after = readSafety(reread.resource);
-      expect(after.arrayWrappedScalars).toEqual([]);
-      expect(after.safeToSummarize).toBe(true);
-      const revalidated = validateResource(reread.resource);
-      expect(revalidated.valid).toBe(true);
-      expect(revalidated.issues.some((i) => i.code === "ARRAY_WRAPPED_SCALAR")).toBe(false);
-
-      // What survives, and why this is the narrower laundering of the two: the retraction is read on
-      // both sides, so no clinical fact is lost with the finding.
-      expect(before.retracted).toBe(true);
-      expect(after.retracted).toBe(true);
-      expect(isRetracted(reread.resource)).toBe(true);
+      // The route that stays open, asserted rather than promised: JSON writes the wrapper back and
+      // the re-read reproduces every finding, including the retraction the XML trip used to keep.
+      expect(serializeResource(resource)).toBe(REPORTED);
+      const back = readSafety(parseResource(serializeResource(resource)).resource);
+      expect(back.arrayWrappedScalars).toEqual(["Observation.status"]);
+      expect(back.safeToSummarize).toBe(false);
+      expect(back.retracted).toBe(true);
+      expect(isRetracted(resource)).toBe(true);
     });
 
     it("does not extend the cardinality rule beyond the elements the safety layer reads", () => {
@@ -752,6 +754,15 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
       expect(value.type).toBe("Quantity");
       expect(value.quantity).toBeUndefined();
       expect(value.node.kind).toBe("list");
+
+      // …and the write-path refusal is scoped to the same window, so this wrapper is written out and
+      // still launders. Stated as the fact it is: the refusal took its cardinality from this layer
+      // rather than growing a per-resource model, so it inherits exactly this bound.
+      expect(serializeResourceXml(resource)).toBe(
+        '<Observation xmlns="http://hl7.org/fhir"><status value="final"/>' +
+          '<valueQuantity><value value="5"/><system value="http://unitsofmeasure.org"/>' +
+          '<code value="mg"/></valueQuantity></Observation>',
+      );
     });
   });
 });

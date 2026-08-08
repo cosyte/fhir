@@ -31,6 +31,7 @@ import {
 } from "../model/node.js";
 import {
   assertSerializable,
+  assertXmlArrayWrapper,
   assertXmlSerializable,
   breaksTag,
   refuseUnserializableDivMarkup,
@@ -350,6 +351,16 @@ function writeElement(
  *   always survives. The text handed back is value-exact, **not byte-exact**. **Only a model read
  *   from JSON reaches this**: XML cannot write any of those shapes, so a document read from XML
  *   carries none of the markers.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_ARRAY_WRAPPER` if the model carries an array
+ *   wrapper around a `0..1` element, at a location this library already reports as
+ *   `ARRAY_WRAPPED_SCALAR`, that XML has no repeated element to spell back: one holding fewer than
+ *   two items, or any wrapper on `resourceType`, where the type is the tag and a tag cannot be
+ *   repeated. `{"resourceType":"Observation","status":["entered-in-error"]}` used to come back as
+ *   `<status value="entered-in-error"/>` and re-read with an empty issue list, moving `valid` and
+ *   `safeToSummarize` both from `false` to `true`. A wrapper of two or more items elsewhere is
+ *   written as repeated elements and re-reads as a list, so it is deliberately left alone rather
+ *   than refused. {@link serializeResource} writes the wrapper back, so this refusal does not reach
+ *   it. See `assertXmlArrayWrapper` for the window this is scoped to and what it does not cover.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -371,5 +382,8 @@ export function serializeResourceXml(node: FhirComplex): string {
   // Last, for the same reason: a model carrying a JSON-only shape AND a name this cannot write keeps
   // the name refusal it already raised, so no case moves onto the newer code.
   assertXmlSerializable(node);
+  // And this one after that, on the same rule: it is the newest code, so it goes at the end of the
+  // chain and no model that already reported one of the three above moves onto it.
+  assertXmlArrayWrapper(node);
   return xml;
 }

@@ -13,7 +13,7 @@ conformant one with the member simply gone, and no layer saying so. Nothing was 
 sense, which is why it was invisible.
 
 The reader now raises `UNKNOWN_PROPERTY` at that position and keeps the sibling's JSON text, and the
-writer hands it back, so the shape round-trips byte-identically and re-reading the output reproduces
+writer hands it back, so re-reading the output reproduces
 the finding. **No new issue code, and no case moved between codes**: this is the same observation the
 reader already makes where a scalar or `null` arrives at a complex position, which FHIR JSON also
 gives an object, and those `_`-sibling positions drew nothing at all before.
