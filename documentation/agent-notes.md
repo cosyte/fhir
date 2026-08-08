@@ -2554,8 +2554,12 @@ padded nothing (`undefinedNull`). **XML has none of those channels** -- no array
 elements), and no `null` at all. So `serializeResourceXml` emitted the node the reader was left
 holding, an empty element or none, and that output re-reads with an **empty issue list**. Three of
 the four also re-read `valid: true`; the array-inside-an-array one emits `<name/>`, which re-reads
-`issues: []` and `valid: false`, because an empty repeating element is invalid on its own terms. The
-finding is gone in all four, which is the property that matters here.
+`issues: []` and `valid: false`. **Not because it is empty, and not because it repeats**, which is
+what a first draft of this sentence said and the gate measured false: `<coding/>` is equally empty
+and equally repeating and re-reads `valid: true`, while a `0..1` `<maritalStatus/>` re-reads
+`valid: false`. What decides it is the modeled datatype: the element re-reads as a value-absent
+primitive where the schema types a complex one, and the validator draws `TYPE_MISMATCH`. The finding
+is gone in all four, which is the property that matters here.
 
 The shape of the harm is this lineage's own: **nothing is lost in the ordinary sense**, so the output
 cannot be told apart from a document whose sender wrote the conformant thing, and every layer

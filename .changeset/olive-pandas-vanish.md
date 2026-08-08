@@ -16,8 +16,10 @@ writer emitted the node the reader was left holding, an empty element or none, a
 re-reads with an **empty issue list**: the finding is gone and the shape is erased. Not always fully
 conformant, and the difference is pinned rather than smoothed over: three of the four emitted
 documents re-read `valid: true`, while the array-inside-an-array one emits `<name/>`, which re-reads
-`issues: []` and `valid: false` because an empty repeating element is invalid on its own terms. The
-finding is gone in all four. Measured
+`issues: []` and `valid: false`: the emitted element re-reads as a value-absent primitive at an
+element the schema types as a complex datatype, which the validator reports as `TYPE_MISMATCH`.
+Neither emptiness nor repetition decides that (the `coding` row emits an equally empty repeating
+element and re-reads `valid: true`). The finding is gone in all four. Measured
 one shape per marker, each read, written to XML and re-read. `{"value":null,"unit":"mg"}` came back as
 a `Quantity` carrying a unit and **no magnitude** under an empty issue list, which is the harm the
 value-channel rule exists for arriving through the other door. `{"status":"final","_status":null}`

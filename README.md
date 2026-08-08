@@ -663,7 +663,10 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   to hand back into and inventing an XML spelling would author markup nobody wrote. **Only a model
   read from JSON reaches it**: XML cannot write any of those shapes, so a document read from XML
   carries no marker and nothing that round-trips today stops. `serializeResource` writes all four
-  back and the re-read reproduces the finding. **Value-exact, not byte-exact**, which is the same
+  back at every position that writer walks, and the re-read reproduces the finding. **It does not
+  walk a member a repeated property name shadowed, and this refusal does reach one**, so that is the
+  refusal's own limit rather than a route the shape always survives; `DUPLICATE_PROPERTY` and the
+  safety refusal are what carry such a document. **Value-exact, not byte-exact**, which is the same
   limit the preserved text carries everywhere else in this README:
   `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back with the second
   member spelled `"Practitioner/2"`, the same string in different bytes. Only the value-channel

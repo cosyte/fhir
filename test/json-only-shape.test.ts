@@ -116,9 +116,11 @@ describe("the four marked shapes are refused rather than emitted as an empty ele
       at: "Patient.name[0]",
       base: '<Patient xmlns="http://hl7.org/fhir"><name/></Patient>',
       reReadJson: '{"resourceType":"Patient"}',
-      // The one row whose emitted document does not re-read fully clean: an empty repeating element
-      // is invalid on its own terms. `issues` is still empty and `safeToSummarize` still flips, so
-      // the finding is still gone; the `valid` flag is what the emitted shape happens to trip.
+      // The one row whose emitted document does not re-read fully clean, and NOT because it is
+      // empty or because it repeats: `<coding/>` in the row above is both and re-reads `valid: true`.
+      // `<name/>` re-reads as a value-absent primitive where the schema types a complex datatype, so
+      // the validator draws TYPE_MISMATCH. `issues` is still empty and `safeToSummarize` still flips,
+      // so the finding is still gone either way.
       reReadValid: false,
     },
   ] as const;
