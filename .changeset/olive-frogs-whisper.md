@@ -35,10 +35,8 @@ a model refused here already reads `valid: false` with `safeToSummarize: false`:
 clean stops serializing. Raised last in both writers, so a model that trips two keeps the code it
 already reported.
 
-The location's root SEGMENT is derived per call site and is not shared, so on a document whose
-`resourceType` is unreadable this reports `Resource.status` where `readSafety` reports `$this.status`
-and `validateResource` raises no duplicate error at all. That divergence is pre-existing, already
-declared, and is not this window's to close.
+The location's root SEGMENT is derived per call site and is not shared, a pre-existing and
+already-declared divergence that is not this window's to close.
 
 Deliberately not closed, and measured rather than implied. A repeated name inside a primitive's
 `_`-sibling is not modeled at all, so there is nothing to refuse. One inside a complex sitting in a

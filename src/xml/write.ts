@@ -381,8 +381,8 @@ function writeElement(
  * @throws {FhirSerializeError} With `UNSERIALIZABLE_SHADOWED_PROPERTY` if the model carries a member
  *   a repeated property name shadowed. This writer walks `properties` only, so
  *   `{"status":"final","status":"entered-in-error"}` came back as `<status value="final"/>`: the
- *   retraction absent, and `valid` and `safeToSummarize` both moved from `false` to `true`. **This is
- *   the one refusal here that also reaches {@link serializeResource}**, because that writer drops the
+ *   retraction absent, and `valid` and `safeToSummarize` both moved from `false` to `true`. This
+ *   refusal also reaches {@link serializeResource}, because that writer drops the
  *   member too and there is no route that keeps it. XML *can* repeat an element, but two repeated
  *   elements re-read as a list, which is a repeating element the sender never wrote. See
  *   `assertNoShadowedProperty` for the window and for the two positions it leaves.

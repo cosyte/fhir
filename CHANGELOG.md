@@ -32,9 +32,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   repeating element the sender never wrote. **The window is `shadowedProperties`**, the same call
   `validateResource` raises its error from and the same one `readSafety` requires empty, so **a model
   refused here already reads `valid: false` with `safeToSummarize: false`** and nothing that reads
-  clean stops serializing. The location's root SEGMENT is derived per call site and is not shared,
-  so on a document whose `resourceType` is unreadable this reports `Resource.status` where
-  `readSafety` reports `$this.status` and `validateResource` raises no duplicate error at all: a
+  clean stops serializing. The location's root SEGMENT is derived per call site and is not shared, a
   pre-existing, already-declared divergence that is not this window's to close. **Raised last** in both
   writers, so a model that trips two keeps the code it already reported. Deliberately **not** closed,
   and measured rather than implied: a repeated name inside a primitive's `_`-sibling is not modeled at
