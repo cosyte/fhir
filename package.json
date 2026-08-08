@@ -1,6 +1,6 @@
 {
   "name": "@cosyte/fhir",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Developer-focused FHIR toolkit for Node.js and TypeScript, R4-first resource model, JSON and XML codec, and layered validation. Pre-alpha.",
   "keywords": [
     "fhir",
