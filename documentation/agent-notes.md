@@ -2915,3 +2915,92 @@ CARRIERS, not the sentences**, and the carrier list is at least: `src/` doc comm
 `README.md`, `CHANGELOG.md`, `.changeset/*`, and `documentation/`. The code itself survived three
 passes with **no defect found at any of them**, which is now the tenth consecutive slice in this repo
 with that shape, and it is the argument for cutting a slice back rather than hardening it further.
+
+## The shadowed member (2026-08-08)
+
+`FHIR-XML-WRITE-RESIDUALS`, the repeated-property-name residual `#74` and `#75` both declared open.
+`SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY`, raised **last** in both writers, as a
+whole-model pre-pass.
+
+### The defect, measured against `914c03a`
+
+The reader keeps the member a repeated name shadowed (`FhirComplex.duplicates`), `validateResource`
+raises an **error**-severity `DUPLICATE_PROPERTY` over it and `readSafety` refuses to affirm
+`safeToSummarize`. **All three are findings about the input.** Each writer walks `properties` only,
+so each emitted one member per name, and that output is a different document carrying none of them.
+
+`{"resourceType":"Observation","status":"final","status":"entered-in-error"}` emitted
+`{"resourceType":"Observation","status":"final"}` and
+`<Observation xmlns="http://hl7.org/fhir"><status value="final"/></Observation>`. Both re-read with
+an empty issue list, `valid` `false -> true`, `safeToSummarize` `false -> true`, and
+`negations: ["entered-in-error"] -> []`. **The retraction is in neither output.** Which member is
+lost depends only on the order the sender wrote them in.
+
+This is `#fhir-duplicate-key-retraction-2026-07-28` arriving one layer later: that slice closed the
+**read**, and the write path re-opened the same verdict.
+
+### Refusing rather than handing both back, which is the decision worth keeping
+
+Handing both back is the route the four JSON-only shapes take, and here it is the worse of the two,
+**measured**: FHIR JSON requires unique names (json.html §2.6.2), RFC 8259 §4 leaves the winner
+undefined, and `JSON.parse` resolves such a name **last-wins** where this library reads
+**first-wins**. On the mirror spelling `{"status":"entered-in-error","status":"final"}` the model
+holds the retraction and `JSON.parse` returns `"final"` -- so emitting both members hands every other
+consumer the member this one calls shadowed. That is the writer authoring a different clinical
+answer, the fabrication class the refusals beside it exist for.
+
+FHIR XML *can* repeat an element, so the format is not the obstacle there. But two repeated elements
+re-read as a **list** -- a repeating element the sender never wrote, and a different model from the
+ambiguity the document held.
+
+### The window, which is not a second table
+
+`shadowedProperties`: the same call `validateResource` raises its error from and the same one
+`readSafety` requires empty. So **a model refused here already reads `valid: false` with
+`safeToSummarize: false`** -- the bound every refusal beside it kept, held by construction rather
+than by measurement. Nothing that reads clean stops serializing.
+
+### What it does not cover, and why the bound is the reason
+
+- A repeated name inside a **primitive's `_`-sibling** is not modeled at all (an R4 `Element` is
+  `id` and `extension`; `read.js` flags it and carries no shadowed member), so there is nothing to
+  refuse.
+- A repeated name inside a complex sitting in a **primitive's `extension`** IS modeled and is still
+  dropped by both writers: `{"_status":{"extension":[{"url":"u","valueString":"x",
+  "valueString":"y"}]}}` loses `"y"` on both paths. `shadowedProperties` does not descend a
+  primitive's metadata, and that document reads `valid: true` with `safeToSummarize: true` -- so
+  refusing it would withdraw a round trip from a model this library reports as clean, the one cost
+  none of these refusals pays. **Declared, and pinned by a test in the state that makes it a gap.**
+
+### The axis of every "0"
+
+- **"0 of 1,195 readings moved" / "0 newly throwing"** -- the XML read differential, which **cannot
+  grade this class at all**: the XML reader has no `duplicates` mechanism, so no document in that
+  corpus carries a shadowed member. That zero is by construction, **not evidence**.
+- **"0 of 33 fixtures newly refused"** -- this repo's 26 hand-authored JSON and 7 hand-authored XML
+  fixtures, each through both writers.
+- **"0 false positives over 2,480 generated documents"** -- a grammar of 8 `(resource type, element)`
+  root pairs x 10 value shapes x 3 placements (root, one level down, inside a Bundle entry), with
+  and without the repeated name. 2,400 refused on the new code, 18 kept an earlier code (which is
+  the raised-last rule measured), 62 emitted, and **no document without a shadowed member reached
+  the new code**. A generated grammar, 8 root pairs, **not the whole window**.
+
+**None of these is the FHIR R4 published-examples corpus. Nothing here is corpus-wide.**
+
+### The sweep, and the carriers it opened
+
+The falsified claim was "the writer emits one member per repeated name", plus every restatement of
+"dropped by both writers" that `#74` and `#75` wrote as a declared-open residual. Enumerated by
+**carrier**, rooted at `/workspace/fhir` rather than by phrase: `src/` doc comments that render
+(`codec/write.ts` module + `serializeResource`, `codec/serialize-guard.ts` module + three docblocks +
+the code table, `xml/write.ts` `@throws`), `README.md`, `CHANGELOG.md`, `.changeset/*`, `CLAUDE.md`,
+`documentation/`, and the four tests that pinned the gap. Two pending changesets carried it; per
+ADR 0001 the falsified clause was **deleted, never reworded**.
+
+### Budget
+
+`fhir/CLAUDE.md` ends at 27,990 of 28,000. The trap was funded by relocation only: an enumeration
+sitting on the line that says "never a count or an enumeration here", a vendor-quirk sentence stated
+twice in one file, an evidence summary whose own sentence says it had already moved to these notes,
+and one line of brand narrative. **No trap was deleted**, and the falsified omission was a
+correction rather than a saving.

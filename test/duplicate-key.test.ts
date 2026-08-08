@@ -13,6 +13,7 @@ import {
   parseResourceXml,
   primitive,
   readSafety,
+  SERIALIZE_ERROR_CODES,
   serializeResource,
   shadowedProperties,
   validateResource,
@@ -336,15 +337,18 @@ describe("the validator rejects a document that broke the unique-name rule", () 
   });
 });
 
-describe("the write path stays spec-clean, and equivalence stays honest", () => {
-  it("emits one member per name (a duplicate is never written back out)", () => {
+describe("the write path refuses rather than narrows, and equivalence stays honest", () => {
+  it("refuses rather than emitting one member per name", () => {
+    // Emitting the survivor alone was the silence this whole file exists about, arriving one layer
+    // later: `DUPLICATE_PROPERTY`, the validation error and the safety refusal are all findings
+    // about the INPUT, and the output was a different document carrying none of them.
     const { resource } = parseResource(RETRACTION_LAST);
-    const out = serializeResource(resource);
-    expect(out).toBe(
-      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic panel"}}',
+    expect(() => serializeResource(resource)).toThrow(
+      expect.objectContaining({
+        code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY,
+        locations: ["Observation.status"],
+      }),
     );
-    // The emitted document is conformant: reading it back raises no duplicate issue.
-    expect(codes(parseResource(out).issues)).not.toContain(ISSUE_CODES.DUPLICATE_PROPERTY);
   });
 
   it("does not call a document with a shadowed member equivalent to one without it", () => {
@@ -355,8 +359,12 @@ describe("the write path stays spec-clean, and equivalence stays honest", () => 
     );
     expect(nodesEquivalent(json.resource, xml.resource)).toBe(false);
     // Without the duplicate the two wire formats agree, so the `false` above is the duplicate, not a
-    // mapping difference.
-    const clean = parseResource(serializeResource(json.resource));
+    // mapping difference. The same document with the repeated name written once, rather than the
+    // writer's output, since the writer no longer emits one.
+    const clean = parseResource(
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic panel"}}',
+    );
+    expect(codes(clean.issues)).not.toContain(ISSUE_CODES.DUPLICATE_PROPERTY);
     expect(nodesEquivalent(clean.resource, xml.resource)).toBe(true);
   });
 });

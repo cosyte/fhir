@@ -108,8 +108,9 @@ issues; // → [{ code: "DECIMAL_PRECISION_AT_RISK", severity: "information", ex
   leaves the winner undefined, so the first value wins everywhere and a `DUPLICATE_PROPERTY` issue
   says where. On an **object** element both values are kept (`getAllProperties` reads them,
   `getProperty` still returns the first), the element is treated as genuinely ambiguous, and nothing
-  downstream pretends otherwise: it validates as an error, and the safety readout declines to
-  summarize it rather than answering from one arbitrary half of the document. Inside a **primitive's
+  downstream pretends otherwise: it validates as an error, the safety readout declines to
+  summarize it rather than answering from one arbitrary half of the document, and **both writers
+  refuse** rather than emit the surviving member alone. Inside a **primitive's
   `_element` metadata** (`id` and `extension`, which no safety verdict reads) the issue is raised but
   the shadowed member is not kept, and validation and the safety readout are unaffected.
 
@@ -671,14 +672,14 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   back at every position that writer walks, and the re-read reproduces the finding. **It does not
   walk a member a repeated property name shadowed, and this refusal does reach one**, so that is the
   refusal's own limit rather than a route the shape always survives; `DUPLICATE_PROPERTY` and the
-  safety refusal are what carry such a document. **Value-exact, not byte-exact**, which is the same
+  safety refusal are what carry such a document, which is refused outright now rather than
+  narrowed. **Value-exact, not byte-exact**, which is the same
   limit the preserved text carries everywhere else in this README:
   `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back with the second
   member spelled `"Practitioner/2"`, the same string in different bytes. Only the value-channel
   `null` family is byte-identical, because a `null` has no escaping to lose. That the route stays
   open is a statement about these shapes, not about the whole model. **Not** closed by it, and pinned rather than implied:
-  a repeated property name is dropped by **both** writers, and a JSON decimal comes
-  back from XML as a string because XML carries no JSON type.
+  a JSON decimal comes back from XML as a string because XML carries no JSON type.
 - **An array wrapper XML cannot spell back is refused rather than flattened away**
   (`UNSERIALIZABLE_ARRAY_WRAPPER`). FHIR JSON writes a single-valued element as a name/value pair and
   reserves the array for a repeating one (json.html §2.6.2.2), so `{"status":["entered-in-error"]}` is
@@ -700,9 +701,26 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   reported again, so refusing it would withdraw a round trip that works today _and_ keeps the finding.
   That is a statement about which wrappers this refuses, not a claim that every wrapper it lets
   through survives. `serializeResource` writes the wrapper back and is the route that stays open.
-  **Not** closed by it: a wrapper that only a **shadowed** member carried is dropped by both writers,
-  which is the repeated-property-name gap rather than this one, and the window does not reach
+  **Not** closed by it: a wrapper that only a **shadowed** member carried is the repeated-property-name
+  case rather than this one, and it is refused on that code; and the window does not reach
   `Observation.value[x]`, a `0..1` choice whose wrapper still launders.
+- **A member a repeated property name shadowed is refused, by BOTH writers**
+  (`UNSERIALIZABLE_SHADOWED_PROPERTY`). The reader keeps it, validation raises an error over it and
+  `safeToSummarize` is `false`: **all three about the input**. Each writer walks the surviving
+  members only, so `{"resourceType":"Observation","status":"final","status":"entered-in-error"}`
+  used to come back as `{"resourceType":"Observation","status":"final"}` and
+  `<Observation xmlns="http://hl7.org/fhir"><status value="final"/></Observation>`: both re-read with
+  an empty issue list, `valid` and `safeToSummarize` both `false → true`, and **the retraction in
+  neither output**. Which member is lost depends only on the order the sender wrote them in.
+  **Handing both back is not the alternative it looks like**: `JSON.parse` resolves a repeated name
+  last-wins where this library reads first-wins, so emitting both members hands every other consumer
+  the member this one calls shadowed. XML can repeat an element, but two repeated elements re-read as
+  a **list**, a repeating element nobody wrote. The window is `shadowedProperties`, the same call
+  validation raises its error from, so a model refused here already reads `valid: false`. **Not**
+  closed by it, and measured rather than implied: a repeated name inside a primitive's `_element`
+  metadata is not modeled at all, and one inside a complex in a primitive's `extension` is still
+  dropped by both writers, and that document reads `valid: true`, so refusing it would withdraw a round
+  trip from a model this library reports as clean.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).

@@ -7,9 +7,9 @@ bytes. Move narrative there and leave the one-liner here.**
 
 ## Project
 
-**`@cosyte/fhir`**: a developer-focused FHIR parser + utility library for Node.js/TypeScript,
-published under the Cosyte brand. Open-source (MIT). The FHIR member of the cosyte parser suite; it
-mirrors the API shape of `@cosyte/hl7`, the reference parser.
+**`@cosyte/fhir`**: a developer-focused FHIR parser + utility library for Node.js/TypeScript.
+The FHIR member of the cosyte parser suite; it mirrors the API shape of `@cosyte/hl7`, the
+reference parser.
 
 **North star:** A developer can read a real-world FHIR resource, model it with correct primitive
 semantics, and validate it against US Core, without reading the FHIR spec.
@@ -23,8 +23,7 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   Why: [`agent-notes.md#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
   - **The "name-similarity" reading is RETRACTED. DO NOT RENAME OR RESCOPE THE PACKAGE ON IT.** npm
     has never named similarity or the unscoped `fhir` package in anything it returned. The three
-    evidence clauses (provenance in rekor before the refusal, scope-level creation working after it,
-    the refusal identical across publish paths and sessions) moved to the notes 2026-08-07:
+    evidence clauses moved to the notes 2026-08-07, and are not summarised again here:
     [`#fhir-npm-name-the-evidence-which-was-duplicated`](documentation/agent-notes.md#fhir-npm-name-the-evidence-which-was-duplicated).
   - **It is a HUMAN GATE, not work you can pick up.** The trace npm asked for was hand-checked free
     of credential material and sent 2026-08-05, so it waits on npm. **Leave it blocked.**
@@ -206,6 +205,9 @@ Unless noted:
     written MEMBER (`some`, not `every`), and the two dedupe sets are INDEPENDENT or a short wrapper
     hides behind a long one at one location.
     [`#the-array-wrapper-laundering`](documentation/agent-notes.md#the-array-wrapper-laundering-closed-2026-08-08)
+  - **CLOSED 2026-08-08: the SHADOWED member, BOTH writers** (`UNSERIALIZABLE_SHADOWED_PROPERTY`,
+    window `shadowedProperties`). **DO NOT hand both back**: `JSON.parse` is last-wins, this is
+    first-wins. [`#shadowed-member`](documentation/agent-notes.md#the-shadowed-member-2026-08-08)
   - **STILL OPEN; deferral RE-MEASURED 2026-08-07 and it HOLDS.** Only ONE of the two remedies
     withdraws a capability. **Beside it,
     `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as
@@ -291,10 +293,9 @@ strict, dual ESM+CJS via tsup, per-dir coverage >= 90, MIT, RUNTIME DEPS ZERO.**
   there, never from a copy**: this line's copy listed three and had been two short since the `null`
   and `_`-sibling closures. Repairing one means inventing content or dropping it. Hand a value back
   (`FhirComplex.nonObjectSource`); **never model it as a primitive**, which would show it to every
-  walker at a complex position. **Every XML refusal is EITHER checked AT the site that writes the
-  thing (a NAME breaking its tag, a `div` VALUE not spelling one `div`) OR a WHOLE-MODEL PRE-PASS
-  RAISED LAST (a JSON-only marker, an unspellable array wrapper). Read the list off
-  `SERIALIZE_ERROR_CODES`, never a count here.**
+  walker at a complex position. **Every write refusal is EITHER checked AT the site that writes the
+  thing OR a WHOLE-MODEL PRE-PASS RAISED LAST, and two of them run in BOTH writers. Read the list
+  off `SERIALIZE_ERROR_CODES`, never a count or an enumeration here.**
   [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
 - Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
   not a claim that a location carries no document content** (a name is echoed when it matches the
@@ -305,16 +306,16 @@ strict, dual ESM+CJS via tsup, per-dir coverage >= 90, MIT, RUNTIME DEPS ZERO.**
   `test/expression-grammar.test.ts` rather than hidden.
 - **Deliberate omissions, each of which reads as an oversight and is not.** `markNestedArray`,
   `markDroppedText` and `markUndefinedNull` are reader-internal and **not exported**; `typeOf` stays
-  the strict single-value read (**reject** an unreadable type, never guess); the writer emits **one
-  member per repeated name**; the element-text refusal fires even beside a value that arrived, and
+  the strict single-value read (**reject** an unreadable type, never guess);
+  the element-text refusal fires even beside a value that arrived, and
   **do not justify that arm with "content the sender wrote is still missing"** (the gate broke that
   sentence with `<status value="final">final</status>`) since the rule keys on dropped character data
   and never compares text to value; and the two defensive `rootPath` calls in the terminology layer
   and the dose locator are the identity where observable, which the gate **does not pretend to
   cover**. Each reason, relocated 2026-08-07:
   [`#deliberate-omissions`](documentation/agent-notes.md#deliberate-omissions).
-- **PHI discipline:** synthetic-only fixtures, redaction in logs. Never commit realistic PHI. A
-  vendor quirk is encoded only when a real de-identified resource grounds it, never invented.
+- **PHI discipline:** synthetic-only fixtures, redaction in logs. Never commit realistic PHI. The
+  vendor-quirk grounding rule is stated once, under "Terminology, profiles, invariants".
 
 ## Standing disciplines (every change)
 

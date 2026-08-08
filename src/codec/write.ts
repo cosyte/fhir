@@ -25,13 +25,13 @@
  * round-trips byte-for-byte. String values and object keys are escaped via `JSON.stringify` (correct
  * and canonical for strings, only numbers need the raw-text treatment).
  *
- * The **one** input the writer cannot round-trip is a document that repeated a property name. FHIR
- * requires unique property names (json.html), so writing both members back would emit a document
- * that is invalid by the rule the writer exists to uphold; the node's `duplicates` are therefore not
- * emitted and one value per name is written. That narrowing is deliberate and it is never silent: the
- * reader raised `DUPLICATE_PROPERTY` on the way in, the validator rejects such a resource, and the
- * safety readout refuses to summarize it. Emit is the wrong place to resolve the ambiguity, so the
- * writer does not try.
+ * A document that repeated a property name is **refused**, not narrowed. Writing one member per name
+ * was silent where it mattered: the reader's `DUPLICATE_PROPERTY`, the validator's rejection and the
+ * safety readout's refusal are all findings about the **input**, and the output is a different
+ * document that carries none of them. Emitting both members is not the alternative it looks like,
+ * because `JSON.parse` resolves a repeated name last-wins while this library reads first-wins, so it
+ * would hand every other consumer the value this one calls shadowed. See `assertNoShadowedProperty`
+ * in {@link ./serialize-guard.js}.
  *
  * **A position where the sender wrote an array inside an array is written back as that array**, from
  * the text the reader preserved. That output is not spec-clean, and it is the one place the writer
@@ -89,7 +89,7 @@ import {
   type FhirPrimitive,
   type PrimitiveValue,
 } from "../model/node.js";
-import { assertSerializable } from "./serialize-guard.js";
+import { assertNoShadowedProperty, assertSerializable } from "./serialize-guard.js";
 
 /** Serialize a scalar primitive value to its JSON text. `undefined` is a value-absent slot → `null`. */
 function emitScalar(value: PrimitiveValue | undefined): string {
@@ -277,10 +277,18 @@ function emitComplex(node: FhirComplex): string {
  *   `null` the sender wrote where FHIR has an object (a complex element's position, or a primitive's
  *   `_`-sibling), or a `null` the reader marked in a primitive's
  *   value channel, is written back as it was read, so such output is deliberately not spec-clean.
- * @throws {FhirSerializeError} If the model carries a node the XML reader MARKED as having lost
- *   character data. JSON has no character-data channel, so the member would simply be absent and the
- *   `DROPPED_ELEMENT_TEXT` finding would be lost across a round trip. Text the reader drops WITHOUT
+ * @throws {FhirSerializeError} With `DROPPED_ELEMENT_TEXT` if the model carries a node the XML reader
+ *   MARKED as having lost character data. JSON has no character-data channel, so the member would
+ *   simply be absent and the finding would be lost across a round trip. Text the reader drops WITHOUT
  *   marking (character data that is `String.trim()`-empty) is not covered, because there is no marker.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_SHADOWED_PROPERTY` if the model carries a member
+ *   a repeated property name shadowed. This writer walks `properties` only, so
+ *   `{"status":"final","status":"entered-in-error"}` came back as `{"status":"final"}`: the
+ *   retraction absent, and `valid` and `safeToSummarize` both moved from `false` to `true`.
+ *   `serializeResourceXml` drops it too, so **this refusal reaches both writers** and there is no
+ *   route here that keeps the member. A repeated name inside a primitive's `_`-sibling is not
+ *   modeled, and one inside a complex in a primitive's `extension` is outside the window; see
+ *   `assertNoShadowedProperty` for both.
  * @example
  * ```ts
  * import { parseResource, serializeResource } from "@cosyte/fhir";
@@ -290,5 +298,8 @@ function emitComplex(node: FhirComplex): string {
  */
 export function serializeResource(node: FhirComplex): string {
   assertSerializable(node);
+  // Last, so a model that also carries dropped character data keeps the code it already reported and
+  // no case moves onto the newer one. Same position it takes at the end of the XML writer's chain.
+  assertNoShadowedProperty(node);
   return emitComplex(node);
 }
