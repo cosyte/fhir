@@ -6,8 +6,10 @@
  * conformant encoding in either format. {@link breaksTag} governs the XML writer only, because the
  * harm is a name reaching a tag position, and JSON escapes a member name so no name reaches this
  * refusal there. {@link refuseUnserializableDivMarkup} is raised by the XML writer for the same
- * reason, at its one raw-markup site: JSON carries the string as a string. No refusal here recognises anything new,
- * invents a value, or changes a document that reads clean.
+ * reason, at its one raw-markup site: JSON carries the string as a string.
+ * {@link assertXmlSerializable} is XML-only for the mirror-image reason: the shapes it refuses are
+ * ones the JSON writer hands back, and XML has no channel to hand them back into. No refusal here
+ * recognises anything new, invents a value, or changes a document that reads clean.
  *
  * **This module is a list of the refusals it implements, NOT a closed account of what a writer can
  * author.** The predicate behind the third one lives at its site in `../xml/write.js`, next to the
@@ -33,10 +35,10 @@
  * invented, and no document that reads clean today changes shape. It costs the round trip only for
  * models the library already reports as `valid: false` with `safeToSummarize: false`.
  */
-import type { FhirComplex } from "../model/node.js";
+import type { FhirComplex, FhirNode } from "../model/node.js";
 import { rootPath } from "../model/path.js";
 import { typeOf } from "../safety/codes.js";
-import { droppedText } from "../safety/status.js";
+import { collectMarked, droppedText } from "../safety/status.js";
 
 /** Every reason a writer refuses to serialize a model. */
 export const SERIALIZE_ERROR_CODES = {
@@ -69,6 +71,21 @@ export const SERIALIZE_ERROR_CODES = {
    * See `emitsOneDivElement` in `../xml/write.js` for the exact predicate and what it does not cover.
    */
   UNSERIALIZABLE_DIV_MARKUP: "UNSERIALIZABLE_DIV_MARKUP",
+  /**
+   * The model carries, at one or more locations, a shape the JSON reader marked because FHIR JSON
+   * gives that position no meaning: an array inside an array, a scalar or `null` where FHIR JSON has
+   * an object (a complex element's own position or a primitive's `_`-sibling), or a `null` in a
+   * primitive's value channel that padded nothing. **XML only**: `serializeResource` writes every one
+   * of them back from the text the reader preserved, so this refusal never reaches it and that route
+   * stays open.
+   *
+   * XML has no array-of-arrays, no `_`-sibling and no `null`, so the XML writer has nowhere to put
+   * any of it and emits the element the reader was left holding: an empty one, or none. That output
+   * re-reads clean, so the finding the reader raised is gone after one trip.
+   *
+   * See {@link assertXmlSerializable} for the exact set of markers and for what it does NOT cover.
+   */
+  UNSERIALIZABLE_JSON_ONLY_SHAPE: "UNSERIALIZABLE_JSON_ONLY_SHAPE",
 } as const;
 
 /** Discriminant union of every {@link SERIALIZE_ERROR_CODES} value. */
@@ -131,6 +148,90 @@ export function assertSerializable(node: FhirComplex): void {
   throw new FhirSerializeError(
     `cannot serialize: the reader dropped character data at ${String(locations.length)} location(s), which this model cannot encode`,
     SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT,
+    locations,
+  );
+}
+
+/**
+ * Whether this node carries one of the shapes only the JSON reader can produce: a marker it set, or
+ * text it preserved, at a position FHIR JSON gives no meaning to.
+ *
+ * **This is the literal union of the fields, not a rule about them**, because each is a separate
+ * field the writer would otherwise walk straight past. `nestedArray` and `nestedArraySource` travel
+ * together out of the reader today; both are tested rather than one inferred from the other, so a
+ * node built by hand cannot slip between them. A {@link FhirList} carries none of them: the markers
+ * hang on the empty element or the value-absent primitive the reader produced, never on the list
+ * around it.
+ *
+ * Every one of these is documented on its field as absent from any document read from XML, and
+ * {@link FhirComplex.droppedText} is deliberately NOT here: it is the XML reader's own marker and
+ * {@link assertSerializable} already refuses it, in both writers.
+ */
+function carriesJsonOnlyShape(node: FhirNode): boolean {
+  if (node.kind === "list") return false;
+  if (node.nestedArray === true || node.nestedArraySource !== undefined) return true;
+  if (node.kind === "complex") return node.nonObjectSource !== undefined;
+  return (
+    node.undefinedNull === true ||
+    node.nonObjectMetaSource !== undefined ||
+    node.nestedArrayMetaSource !== undefined
+  );
+}
+
+/**
+ * Refuse to serialize **to XML** a model carrying a shape only FHIR JSON can spell, which the XML
+ * writer would drop.
+ *
+ * The JSON reader marks four positions FHIR JSON gives no meaning to and preserves what the sender
+ * wrote at them, so `serializeResource` can hand it back and a re-read reproduces the finding: an
+ * array inside an array, a scalar or `null` where FHIR JSON has an object, that same shape in a
+ * primitive's `_`-sibling, and a `null` in a primitive's value channel that padded nothing. **XML has
+ * no channel for any of them** -- no array of arrays, no `_`-sibling (a primitive's metadata is
+ * co-located as an `id` attribute and child `<extension>` elements), and no `null` at all -- so the
+ * XML writer emitted the node the reader was left holding and the finding did not survive the trip.
+ *
+ * **Measured at `5ced746`, base, one shape per marker, each read then written to XML then re-read:**
+ *
+ * | in | read | XML out | re-read |
+ * | --- | --- | --- | --- |
+ * | `{"valueQuantity":{"value":null,"unit":"mg"}}` | `UNDEFINED_JSON_NULL` | `<value/><unit value="mg"/>` | `[]`, back to `{"unit":"mg"}` |
+ * | `{"status":"final","_status":null}` | `UNKNOWN_PROPERTY` | `<status value="final"/>` | `[]` |
+ * | `{"name":[{"family":"a"},"junk"]}` | `UNKNOWN_PROPERTY` | `<name/>` for item 1 | `[]` |
+ * | `{"name":[[{"family":"Roe"}]]}` | `UNKNOWN_PROPERTY`+`NESTED_ARRAY`, `safeToSummarize: false` | `<name/>` | `[]`, `safeToSummarize: true` |
+ *
+ * The first is the shape this library already records as the harm the value-channel rule exists for:
+ * a `Quantity` that comes back carrying a unit and **no magnitude**, clean at every layer. The last
+ * turns a refusal to summarize into an affirmation.
+ *
+ * **Refusing, because there is nothing to hand back to.** Emitting the empty element is what
+ * launders; inventing an XML spelling for a JSON-only shape would author markup the sender never
+ * wrote, which is the fabrication class two refusals beside this one already exist for. Nothing that
+ * works is withdrawn: this fires only on a model the JSON reader marked, so **no document read from
+ * XML ever reaches it** and no conformant JSON document does either. The capability is routed rather
+ * than lost -- `serializeResource` writes all four back, byte-identically to the input -- and that is
+ * a statement about these shapes, not about the whole model: a model refused here can carry one of
+ * that writer's own declared exceptions and have it emitted.
+ *
+ * **Raised last**, after the name and `div` refusals, so a model that trips two keeps the code it
+ * already reported and no case moves onto this one.
+ *
+ * **The set walked is `collectMarked`'s**, the same walk {@link droppedText} and `nestedArrays` use:
+ * every node at every depth, a primitive's `extension` metadata, and members a repeated property
+ * name shadowed. That last one is wider than the XML writer's own walk, which visits `properties`
+ * only, so `{"name":[[{"family":"Roe"}]],"name":[{"family":"Roe"}]}` is refused for a marker sitting
+ * in a member the writer would never have reached. Wider in the direction that refuses more, and the
+ * JSON writer drops that member too, so it is not a loss this refusal invented.
+ *
+ * @param node - The model about to be serialized to XML.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE}.
+ * @internal
+ */
+export function assertXmlSerializable(node: FhirComplex): void {
+  const locations = collectMarked(node, rootPath(typeOf(node) ?? "Resource"), carriesJsonOnlyShape);
+  if (locations.length === 0) return;
+  throw new FhirSerializeError(
+    `cannot serialize to XML: ${String(locations.length)} location(s) carry a shape only FHIR JSON can spell, which XML has no channel for; serializeResource writes it back, so this refusal never reaches it`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
     locations,
   );
 }

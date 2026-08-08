@@ -182,12 +182,14 @@ describe("the preserved text has exactly the consumers it was audited with", () 
     expect(referencing(/markNestedArray/)).toEqual(["codec/read.ts", "model/node.ts"]);
   });
 
-  it("is read by name in exactly three places, all of them audited", () => {
-    // The point is not that these three files are correct, it is that no fourth file has quietly
+  it("is read by name in exactly the places it was audited with, and no other", () => {
+    // The point is not that these files are correct, it is that no unaudited file has quietly
     // started reading the field: a consumer that did would be interpreting content this package
     // deliberately does not interpret. `codec/read.ts` is absent on purpose, it sets the text
-    // through the helper above and never reads it back.
+    // through the helper above and never reads it back. No count is asserted in this sentence,
+    // because the list below is the assertion and a count beside it is a second thing to keep true.
     expect(referencing(/nestedArray(Meta)?Source/)).toEqual([
+      "codec/serialize-guard.ts", // tests for its PRESENCE and refuses; it never reads the text
       "codec/write.ts", // emits it verbatim, so a round trip neither invents nor drops an element
       "model/node.ts", // declares it and hands it back through `nestedArrayContent`
       "xml/equivalence.ts", // compares it, so two documents nesting different content are not equal

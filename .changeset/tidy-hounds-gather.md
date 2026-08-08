@@ -24,6 +24,5 @@ The §2.6.2.3 padding exemption holds in this channel too: §2.6.2.3 fills out *
 withdrawn. An array in that channel keeps its existing `NESTED_ARRAY` code and preserved text.
 
 Still open and stated rather than implied: an **empty** `_`-sibling object or array is a different
-clause of the spec (§2.6.2.1's "never empty") and is still dropped silently; a `_`-sibling object's
-own unreadable member is reported but the report still does not survive emit; and `JSON -> XML ->
-JSON` still launders the shape, because XML has no `_`-sibling channel to carry the text.
+clause of the spec (§2.6.2.1's "never empty") and is still dropped silently; and a `_`-sibling
+object's own unreadable member is reported but the report still does not survive emit.

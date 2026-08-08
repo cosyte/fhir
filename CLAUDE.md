@@ -113,7 +113,7 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   **Do not widen to every `null`** (false-errors on conformant padding). **The complex branch stays
   `UNKNOWN_PROPERTY` from `nonObjectSource`; do not move it onto the new code. The set walked is what
   the READER read, not what FHIR types** (`{"subject":null}` is reported).
-  `valid`/`safeToSummarize` and the `JSON->XML->JSON` residual are deliberately open and pinned.
+  `valid`/`safeToSummarize` are deliberately open and pinned.
   **THE `_`-SIBLING CHANNEL IS THE SAME LAUNDERING, CLOSED 2026-08-07 ON `UNKNOWN_PROPERTY`: NOT a
   new code, NOT this one** (it drew NONE before, so nothing moved between codes). Padding is **PER
   CHANNEL**. **THREE write branches decide it: `emitMeta` (else `{}`), `hasMeta`, AND THE
@@ -154,7 +154,7 @@ Unless noted:
   clinical prose with zero diagnostics under `valid: true`**, laundering on re-read. The narrative is
   recognised by its **expanded** name `{http://www.w3.org/1999/xhtml}div`.
 - **On the narrative branch, "did a finding disappear" is the wrong question.** Compare the same
-  document spelled the other way (394 of 396 twin pairs identical, 2 louder, **0 weaker**). Re-run
+  document spelled the other way. Re-run
   `pnpm differential:read` (`scripts/read-differential.ts`) if you touch it.
 - **Do not answer a duplicate reaching the vital-signs unit check via `category.coding` by widening
   the cardinality table**. See the closed-table trap above.
@@ -288,13 +288,14 @@ strict, dual ESM+CJS via tsup, per-dir coverage >= 90, MIT, RUNTIME DEPS ZERO.**
 - No `console.*` in library code. Throw typed errors or return results.
 - Postel's Law: the reader is liberal (lenient default + warnings), the writer is conservative: it
   authors no value of its own, and emits spec-clean FHIR for every model FHIR can express. It is
-  **not** unconditionally spec-clean, and the exceptions are named on `serializeResource` (an array
-  inside an array, **a scalar or `null` where FHIR JSON has an object**, a non-string `resourceType`),
-  because repairing any of them means inventing content or dropping it. Hand a value back
+  **not** unconditionally spec-clean; its exceptions are named on `serializeResource`. **Read them
+  there, never from a copy**: this line's copy listed three and had been two short since the `null`
+  and `_`-sibling closures. Repairing one means inventing content or dropping it. Hand a value back
   (`FhirComplex.nonObjectSource`); **never model it as a primitive**, which would show it to every
   walker at a complex position. **Two markup sites, each checked AT the site (XML only): a NAME that
   breaks its tag, and a `div` VALUE not spelling one element named `div`.** Not a claim over every
-  branch. [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
+  branch. **A THIRD, for JSON-only shapes: a PRE-PASS raised LAST, never widened past a marker.**
+  [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
 - Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
   not a claim that a location carries no document content** (a name is echoed when it matches the
   bounded published form). See the derived-name trap above, and do not widen it into one. **The

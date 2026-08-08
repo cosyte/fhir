@@ -418,8 +418,13 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  * A repeated property name can put two marked nodes at the same FHIRPath location, and FHIRPath
  * cannot address the individual members, so a second identical location would say nothing new. The
  * shadowed-name and array-wrapper reports already collapse theirs for the same reason.
+ *
+ * Shared with the write-path guard rather than copied, so a refusal cannot come to visit a different
+ * part of a document than a report of the same kind does.
+ *
+ * @internal
  */
-function collectMarked(
+export function collectMarked(
   resource: FhirComplex,
   path: string,
   marked: (node: FhirNode) => boolean,

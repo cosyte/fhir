@@ -5,6 +5,7 @@ import {
   codingsOf,
   evaluateInvariant,
   FhirSafetyError,
+  FhirSerializeError,
   getProperty,
   isComplex,
   isList,
@@ -22,6 +23,7 @@ import {
   complex,
   readSafety,
   resolvePath,
+  SERIALIZE_ERROR_CODES,
   serializeResource,
   serializeResourceXml,
   validateResource,
@@ -907,19 +909,56 @@ describe("a scalar where an object belongs is handed back, not replaced with an 
 });
 
 describe("what preservation does NOT reach, pinned rather than claimed away", () => {
-  it("does not reach the XML writer, which emits the empty element it was handed", () => {
-    // Unchanged and declared: `serializeResourceXml` reads neither preserved text, so both the
-    // array shape and the scalar shape emit as an empty element there. That is the older residual,
-    // reproduced here so the JSON-side fix above cannot be read as covering both writers.
+  it("is not carried by the XML writer either, which now refuses instead of emitting the empty element", () => {
+    // The preserved text still does not reach `serializeResourceXml`: XML has no array of arrays and
+    // no object-position scalar, so there is nothing to hand it back into. What changed is what the
+    // writer does about that. It used to emit the empty element the reader was left holding, and the
+    // finding was gone on the next read; it now refuses, so the JSON route stays the one that
+    // carries the shape. The bytes it used to emit are asserted here, through the re-read, so the
+    // laundering this closes is recorded rather than described.
+    /** The `FhirSerializeError` the XML writer raises for `node`, or `undefined`. */
+    const errorFrom = (node: FhirComplex): FhirSerializeError | undefined => {
+      try {
+        serializeResourceXml(node);
+      } catch (error) {
+        return error instanceof FhirSerializeError ? error : undefined;
+      }
+      return undefined;
+    };
+
     const scalar = parseResource(
       '{"resourceType":"Patient","name":[{"family":"Roe"},"James"]}',
     ).resource;
-    expect(serializeResourceXml(scalar)).toBe(
-      '<Patient xmlns="http://hl7.org/fhir"><name><family value="Roe"/></name><name/></Patient>',
-    );
+    expect(() => serializeResourceXml(scalar)).toThrow(FhirSerializeError);
+    expect(errorFrom(scalar)).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+      locations: ["Patient.name[1]"],
+    });
+    // What base emitted, and what re-reading it gave back: an empty element and an empty issue list.
+    expect(
+      parseResourceXml(
+        '<Patient xmlns="http://hl7.org/fhir"><name><family value="Roe"/></name><name/></Patient>',
+      ).issues,
+    ).toEqual([]);
+
     const nested = parseResource('{"resourceType":"Patient","name":[[{"family":"Roe"}]]}').resource;
-    expect(serializeResourceXml(nested)).toBe(
-      '<Patient xmlns="http://hl7.org/fhir"><name/></Patient>',
+    expect(readSafety(nested).safeToSummarize).toBe(false);
+    expect(errorFrom(nested)).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+      locations: ["Patient.name[0]"],
+    });
+    // Base emitted `<Patient><name/></Patient>`, which re-reads with no finding at all and turns the
+    // refusal to summarize into an affirmation. That is the whole of the harm, in two assertions.
+    const wasEmitted = parseResourceXml('<Patient xmlns="http://hl7.org/fhir"><name/></Patient>');
+    expect(wasEmitted.issues).toEqual([]);
+    expect(readSafety(wasEmitted.resource).safeToSummarize).toBe(true);
+
+    // The JSON route is untouched and still carries both shapes back byte-identically.
+    expect(serializeResource(scalar)).toBe(
+      '{"resourceType":"Patient","name":[{"family":"Roe"},"James"]}',
+    );
+    expect(serializeResource(nested)).toBe(
+      '{"resourceType":"Patient","name":[[{"family":"Roe"}]]}',
     );
   });
 
