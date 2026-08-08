@@ -119,8 +119,10 @@ export const VALIDATION_CODES = {
    * repeating element and for nothing else (json.html §2.6.2.2), so a list of lists has no meaning at
    * any position and this is a non-conformant encoding wherever it appears, which is why it needs no
    * cardinality rule and cannot fire on a conformant document. Reported at every position the model
-   * has a node for; a `_`-sibling the reader discards whole is the stated exception, and draws the
-   * unexpected-property warning instead. An `error`, and one of the two on this list
+   * has a node for; a `_`-sibling the reader discards whole is the stated exception, and draws a
+   * reader warning instead: `UNKNOWN_PROPERTY` for an unrecognised member of a `_`-sibling object,
+   * `MISPLACED_PRIMITIVE_EXTENSION` for a sibling on an object or on a non-primitive array, not one
+   * code for all three. An `error`, and one of the two on this list
    * where the reader could **not model** what the sender wrote (the other is
    * {@link VALIDATION_CODES.DROPPED_ELEMENT_TEXT}): the codec does not model an inner array, so this
    * reports a loss of *structure* rather than an ambiguity, though the array's JSON text is kept and

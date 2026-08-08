@@ -8,6 +8,24 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **The documented gap around the nested-array rule gave three members one warning code, and it is
+  true for one of them (`FHIR-README-ARRAY-WARNING-WRONG`).** The sentence said a `_`-sibling the
+  reader discards _whole_ leaves no node behind, "so an array inside one draws the unexpected-property
+  warning for the discarded sibling and no refusal", over an enumeration of three members. Only an
+  unrecognised member of a `_`-sibling object draws `UNKNOWN_PROPERTY`; a `_`-sibling on an object
+  and one on a non-primitive array draw `MISPLACED_PRIMITIVE_EXTENSION` for the misplaced sibling
+  and nothing besides. The two codes carry different contracts
+  (`MISPLACED_PRIMITIVE_EXTENSION` says content was **not readable** at that position rather than
+  merely tolerated), so a consumer keying on the warning was told the wrong one for two members out
+  of three. **No behaviour changed and no predicate moved**: the reader has reported these positions
+  this way since the rule was written, and `test/nested-array.test.ts` already pinned which code each
+  member draws; the prose describing it was what was wrong. Corrected on every surface that carried
+  it rather than only the reported one: `README.md`, `CHANGELOG.md`, the test's own comment, and the
+  doc comments on the nested-array safety readout and validation code, **both of which render into
+  `dist/index.d.ts` and `dist/index.d.cts`**, so a partial sweep would have left the claim shipping
+  in the type declarations. Stated as a failing example rather than as a universal, and the
+  characterization test now asserts the **exact** issue list rather than merely containing the
+  expected code, so "and nothing besides" is pinned rather than claimed.
 - **A `_`-sibling whose value is not an object was read with no diagnostic and then deleted on emit,
   so a non-conformant document came back clean and conformant with the member missing
   (`FHIR-UNDERSCORE-SIBLING-LAUNDERED`).** The same laundering the entry below closed in a
@@ -960,8 +978,9 @@ true`, 0 `valid true -> false`, 0 `safeToSummarize false -> true`, 0 retractions
   it is not. A `_`-sibling the reader discards _whole_ because it is misplaced or unrecognised (one
   sitting on an object or a non-primitive array, or a member of a `_`-sibling object that is neither
   an `id` _string_ nor an `extension` array) leaves no node to report against, so an array inside
-  one draws the
-  unexpected-property warning for the discarded sibling and no refusal. That behaviour is unchanged
+  one is reported against the discarded sibling and draws no refusal: `UNKNOWN_PROPERTY` for an
+  unrecognised member of a `_`-sibling object, `MISPLACED_PRIMITIVE_EXTENSION` for a sibling on an
+  object or on a non-primitive array, not one code for all three. That behaviour is unchanged
   from before this slice; what changed is that it is now stated on every public surface and pinned by
   a test. Both report channels also name the same FHIRPath position where the nested array is the
   element or is the extension item itself, including inside a primitive's `extension` metadata where

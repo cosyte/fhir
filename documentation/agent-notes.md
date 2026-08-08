@@ -2196,7 +2196,7 @@ found the count corrected in `CHANGELOG.md` and left standing in `write.ts`'s mo
 `CLAUDE.md`'s trap line, and here. It reverted `emitMeta`'s one line while leaving `hasMeta` and the
 hoist exactly as those three sentences described them, which is the fix an agent following them would
 write, and got `{"_birthDate":null}` back as `{"_birthDate":{}}`: an `Element` object no sender wrote,
-emitted eight lines below that comment's own "it never authors a value of its own", re-reading clean
+emitted in flat contradiction of that comment's own "it never authors a value of its own", re-reading clean
 because an empty `_`-sibling is the declared-open residual, so the laundering completes on the next
 trip. **The third branch is `emitMeta`**, which hands the preserved text back in place of the object.
 
