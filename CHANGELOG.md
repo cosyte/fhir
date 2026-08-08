@@ -36,8 +36,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   re-read as a list, and refusing it would withdraw a round trip that works today **and keeps the
   finding**. That is scoped to a model a reader produced rather than to every `FhirComplex` the writer
   accepts: the check counts items while the reasoning is about emitted elements, and a hand-built
-  `list([list([]), list([])])` holds two items and emits none. No reader produces it, because the JSON
-  one marks a nested array and the refusal beside this one fires first. Refused
+  `list([list([]), list([])])` holds two items and emits none. Refused
   rather than reported because the XML writer returns a string and has no diagnostics channel, and
   rather than repaired because inventing an XML spelling would author markup nobody wrote. **Raised
   last**, after the three refusals beside it, so no case moves onto the new code. It is one walk of

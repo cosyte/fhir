@@ -28,8 +28,7 @@ because a model read from JSON writes it as repeated elements that re-read as a 
 would withdraw a round trip that works today **and keeps the finding**. That is a statement about a
 model a reader produced, not about every `FhirComplex` the writer accepts: the check counts items
 while the reasoning is about emitted elements, and a hand-built `list([list([]), list([])])` holds two
-items and emits none. No reader produces it, because the JSON one marks a nested array and the
-refusal beside this one fires first.
+items and emits none.
 
 Refused rather than reported, because the XML writer returns a string and has no diagnostics channel;
 refused rather than repaired, because inventing an XML spelling would author markup nobody wrote.

@@ -2877,13 +2877,41 @@ under any ordering; the guard beside it refusing **at all** is the other half. A
 the shipped sentence would have preserved an inert line order while the two real protections could be
 narrowed silently.
 
-Three sentences deleted (`src/xml/write.ts`'s `@throws`, `src/codec/serialize-guard.ts`, the test's
-own comment), the test retitled to what it asserts, and the model shape it rests on asserted directly.
-Two minors with it: the README said a namespace-less `<div>` "comes back with one inserted" where the
-inserted one is the **FHIR** namespace, not the XHTML one a reader would assume; and `PRE-EXISTING`,
-refuter vocabulary with no referent for a consumer, was rendering into `dist/index.d.ts`.
+The claim was deleted from `src/xml/write.ts`'s `@throws`, `src/codec/serialize-guard.ts` and the
+test's own comment, the test retitled to what it asserts, and the model shape it rests on asserted
+directly. Two minors with it: the README said a namespace-less `<div>` "comes back with one inserted"
+where the inserted one is the **FHIR** namespace, not the XHTML one a reader would assume; and this
+slice's own `PRE-EXISTING`, refuter vocabulary with no referent for a consumer, was rendering into
+`dist/index.d.ts`. **One `PRE-EXISTING` occurrence still renders there from base's `emitsOneDivElement`
+docblock; that is a backlog line, not this slice's.**
 
 **The standing lesson, and it is the one this repo keeps paying for: the code survived two passes with
 no defect found, and both refutations were sentences. The pressure that creates is to write a longer
 sentence to survive the gate, and a longer sentence is what produced the false ordering claim. The
 shortest correct remedy is fewer words.**
+
+### The gate, pass 3, the cap, and the pattern worth escalating
+
+**`REFUTED`, and the ADR 0016 cap is spent. There is no pass 4.** The refuter's own instruction was
+to apply the remedy and ship rather than open another round, because it is a grep-verifiable deletion.
+
+**The finding: the false ordering claim survived in two carriers the pass-2 remedy never opened, and
+both reach consumers** -- `CHANGELOG.md` (in `package.json` `files`, so it ships in the tarball) and
+`.changeset/quick-melons-refuse.md`, which freezes into the release body. Deleted in both, never
+reworded. Neither existed at `8a91d29`, so both were this slice's.
+
+One minor with it, and it is the same shape one level down: **"the JSON reader models a nested array
+as a marked COMPLEX" is itself an over-generalization.** Measured: `{"status":[["a"],["b"]]}` is
+`list([complex, complex])`, but `{"status":["a",["b"]]}` and `{"_status":[["x"],["y"]]}` are
+`list([primitive, primitive])` -- the marker lands on a primitive, and which of the two it is depends
+on the spelling. The safety-bearing conclusion is unaffected and is what the prose now says: **every
+list the JSON reader constructs holds primitives or complexes, never lists.**
+
+**▶ ESCALATED RATHER THAN ABSORBED: this slice's gate caught the SAME failure three times** -- pass 1
+finding 1, pass 2's implied scope, and pass 3 -- always "fixed the site it was reported at, missed the
+carriers a consumer sees". Three different carrier classes: `dist/index.d.ts`, then the npm tarball's
+`CHANGELOG.md`, then a pending changeset. **A sweep here is not done until it has enumerated the
+CARRIERS, not the sentences**, and the carrier list is at least: `src/` doc comments that render,
+`README.md`, `CHANGELOG.md`, `.changeset/*`, and `documentation/`. The code itself survived three
+passes with **no defect found at any of them**, which is now the tenth consecutive slice in this repo
+with that shape, and it is the argument for cutting a slice back rather than hardening it further.
