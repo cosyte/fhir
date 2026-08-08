@@ -273,8 +273,10 @@ export {
 export type { Expr, FpColl, FpItem, InvariantResult, Token, TokenType } from "./fhirpath/index.js";
 
 // Phase 8, the XML codec + cross-format equivalence (xml.html). A zero-dependency, XXE- and
-// billion-laughs-proof XML reader (refuses any DTD / non-predefined entity), a spec-clean writer that
-// round-trips byte-for-byte, and `nodesEquivalent`, the JSON↔XML model-equivalence oracle. The reader
+// billion-laughs-proof XML reader (refuses any DTD / non-predefined entity), a writer that round-trips
+// a spec-clean document byte-for-byte and refuses rather than emit one a finding would not survive
+// (it is NOT unconditionally spec-clean; its exceptions and refusals are named on the function), and
+// `nodesEquivalent`, the JSON↔XML model-equivalence oracle. The reader
 // produces the same schema-free model as the JSON codec; primitive values are kept as lexical strings.
 export { readRawXml } from "./xml/raw-xml.js";
 export type { XmlAttribute, XmlElement, XmlNode, XmlText } from "./xml/raw-xml.js";

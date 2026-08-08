@@ -2350,7 +2350,7 @@ BEFORE WRITING ANY SENTENCE ABOUT WHAT REACHES A CONSUMER.**
 - **Draft one** said the sentence renders into `dist/index.d.ts` and `dist/index.d.cts` "and nowhere
   else", reasoned from the JS bundles being byte-identical. **Pass 1 refuted it**: `dist/*.map` carry
   source text in `sourcesContent` and both ship (`npm pack --dry-run` lists ten files). `sourcemap:
-  true` is the shared `@cosyte/tsup-config` default, so it is systematic rather than a local flag.
+true` is the shared `@cosyte/tsup-config` default, so it is systematic rather than a local flag.
 - **Draft two extended the sentence to name the two sourcemaps "which carry every source byte in
   `sourcesContent`". Pass 2 refuted THAT**: the maps do not carry every source file.
 - **Draft three deleted the sentence from both frozen carriers, and then said in THIS note which
@@ -2395,7 +2395,7 @@ existence of the list.
 `emitsOneDivElement`'s docblock calls an unbound prefix "the separately declared residual on **this
 function's own output**", and that function returns a boolean, not a document. Same shape as the
 defect above. **`PRE-EXISTING`.** The function is file-internal, is not exported, and renders into
-neither declaration file, so no consumer is *shown* it at a call site. **A draft said "so it reaches
+neither declaration file, so no consumer is _shown_ it at a call site. **A draft said "so it reaches
 no consumer"; that is a different and wider claim, it was not measured, and it was cut** -- the
 phrase is in both sourcemaps. Left rather than widen a time-boxed claim correction, in the same shape
 `#70` left `scripts/read-differential.ts:440`.
@@ -2422,8 +2422,8 @@ purpose: three drafts gave one and all three were wrong.**_
 ## Tarball reach, derived from a real `npm pack`
 
 `FHIR-TARBALL-REACH-CLAIM`, 2026-08-08. `scripts/check-no-internal-refs.sh` asserted, in capitals,
-*"SO EVERYTHING IN `src/` IS IN THE TARBALL"*, and `CLAUDE.md` carried the same universal as
-*"everything in `src/` does"*. **Both are cut. Neither is reworded, and no replacement set is named.**
+_"SO EVERYTHING IN `src/` IS IN THE TARBALL"_, and `CLAUDE.md` carried the same universal as
+_"everything in `src/` does"_. **Both are cut. Neither is reworded, and no replacement set is named.**
 Nothing here changes gate behaviour: `check:no-internal-refs` reads the sentence nowhere.
 
 ### 🛑 The direction, which is counter-intuitive and is the reason the slice exists
@@ -2489,7 +2489,7 @@ not have. Same lesson as `#70`, found again here rather than cited.
 ### Considered and deliberately left
 
 - **`emitsOneDivElement`'s docblock referent**, which the item lists beside this one. **Not folded
-  in, and the ground is measured rather than assumed.** Its reach is *not* what the item supposed:
+  in, and the ground is measured rather than assumed.** Its reach is _not_ what the item supposed:
   the docblock is in neither declaration file, but it **is** in the tarball, in both sourcemaps'
   decoded `sourcesContent`. So the two defects do not even share a surface. More decisively, naming
   the right referent means settling which artifact the unbound-prefix residual lands on, which is
@@ -2511,13 +2511,13 @@ this note is where the next reader looks for that.
 **Pass 1**, two findings:
 
 - **A fresh universal, written inside the correction of the old universal, in the same paragraph that
-  said it named no set.** Draft one added, after the failing example: *"Every `src/**/index.ts` barrel
-  here answers the same way, and each answers all-or-nothing across its whole docblock."* Pass 1
+  said it named no set.** Draft one added, after the failing example: _"Every `src/**/index.ts` barrel
+  here answers the same way, and each answers all-or-nothing across its whole docblock."_ Pass 1
   falsified it under both available readings, with `src/fhirpath/index.ts` on the glob reading and
   `src/quantity/index.ts` on the charitable pure-barrel reading. **Deleted, not narrowed.** Narrowing
   is what produced it.
 - **A `files` claim about the slice itself, in three carriers, one of which ships.** Draft one said
-  *"nothing this touches is listed in `files`, so none of it reaches an installed copy"* in the
+  _"nothing this touches is listed in `files`, so none of it reaches an installed copy"_ in the
   changeset (which freezes into a release body), in `CHANGELOG.md`, and here. `CHANGELOG.md` **is** in
   `files`, and pass 1 unpacked a real tarball and found the sentence inside it. Base's own prose has
   this right in both places, so it was a regression, not `PRE-EXISTING`. **The whole clause is
@@ -2570,15 +2570,15 @@ affirms it.
 Hand-authored JSON probes, base vs head, each parsed, written to XML and **re-read**. The middle
 column is the document base put on the wire; the right column is what re-reading that document gave.
 
-| in | base emitted | re-read |
-| --- | --- | --- |
-| `{"valueQuantity":{"value":null,"unit":"mg"}}` (`UNDEFINED_JSON_NULL`) | `<value/><unit value="mg"/>` | `issues: []`, back to `{"unit":"mg"}`: a unit with **no magnitude** |
-| `{"status":"final","_status":null}` (`UNKNOWN_PROPERTY`) | `<status value="final"/>` | `issues: []`, the member gone |
-| `{"_status":"x"}` (`UNKNOWN_PROPERTY`) | `<status/>` | `issues: []`, the member gone |
-| `{"coding":[{"code":"active"},"junk"]}` (`UNKNOWN_PROPERTY`) | `<coding/>` for item 1 | `issues: []`, the item back as `null` |
-| `{"name":[[{"family":"Roe"}]]}` (`UNKNOWN_PROPERTY`+`NESTED_ARRAY`, `safeToSummarize: false`) | `<name/>` | `issues: []`, **`safeToSummarize: true`** |
-| `{"name":[{"given":[["a"]]}]}` (same pair) | `<given/>` | `issues: []`, `safeToSummarize: true` |
-| `doseQuantity` three levels down with `"_value":"junk"` | the dose element, clean | `issues: []` |
+| in                                                                                            | base emitted                 | re-read                                                             |
+| --------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------- |
+| `{"valueQuantity":{"value":null,"unit":"mg"}}` (`UNDEFINED_JSON_NULL`)                        | `<value/><unit value="mg"/>` | `issues: []`, back to `{"unit":"mg"}`: a unit with **no magnitude** |
+| `{"status":"final","_status":null}` (`UNKNOWN_PROPERTY`)                                      | `<status value="final"/>`    | `issues: []`, the member gone                                       |
+| `{"_status":"x"}` (`UNKNOWN_PROPERTY`)                                                        | `<status/>`                  | `issues: []`, the member gone                                       |
+| `{"coding":[{"code":"active"},"junk"]}` (`UNKNOWN_PROPERTY`)                                  | `<coding/>` for item 1       | `issues: []`, the item back as `null`                               |
+| `{"name":[[{"family":"Roe"}]]}` (`UNKNOWN_PROPERTY`+`NESTED_ARRAY`, `safeToSummarize: false`) | `<name/>`                    | `issues: []`, **`safeToSummarize: true`**                           |
+| `{"name":[{"given":[["a"]]}]}` (same pair)                                                    | `<given/>`                   | `issues: []`, `safeToSummarize: true`                               |
+| `doseQuantity` three levels down with `"_value":"junk"`                                       | the dose element, clean      | `issues: []`                                                        |
 
 The first row is the harm the value-channel rule exists for, arriving through the other door. The
 `name` rows are the sharper ones: a **refusal to summarize turned into an affirmation**.
@@ -2693,3 +2693,225 @@ _Provenance: every figure above was produced by running one probe script against
 and then against the head tree, not recalled; the spec clauses are `hl7.org/fhir/R4/json.html`
 §2.6.2, §2.6.2.1 and §2.6.2.3 for the JSON channels and `xml.html` §2.6.1 for the XML one. The two
 corrections above are the conformance gate's pass 1 against `a608731`._
+
+## The array wrapper laundering, closed (2026-08-08)
+
+The residual `#74` ranked first among what it left, and the one that needed a **product call** rather
+than a parser fix: closing it meant deciding what a writer does about cardinality.
+
+### The defect, measured against `8a91d29`
+
+FHIR JSON writes a single-valued element as a name/value pair and reserves the array for a repeating
+one (json.html §2.6.2.2), so `{"status":["entered-in-error"]}` is a shape the spec does not define.
+The safety layer already reported it (`ARRAY_WRAPPED_SCALAR`, error severity) and declined to affirm
+`safeToSummarize` over it, because a single-value read finds no string in it at all.
+
+FHIR XML spells a repeat by **repeating the element** (xml.html) and carries no other mark for one.
+So a wrapper of fewer than two items emitted at most one element and the complaint had nowhere to go:
+
+| in                                                                | reported             | XML out                              | re-read                                      |
+| ----------------------------------------------------------------- | -------------------- | ------------------------------------ | -------------------------------------------- |
+| `{"resourceType":"Observation","status":["entered-in-error"]}`    | `Observation.status` | `<status value="entered-in-error"/>` | `[]`, `valid: true`, `safeToSummarize: true` |
+| `{"resourceType":"Observation","status":[]}`                      | `Observation.status` | element absent                       | `[]`, `valid: true`                          |
+| `{"resourceType":["MedicationStatement"],"status":["not-taken"]}` | both                 | `<Resource>`                         | no negation readable at all                  |
+
+The second row is the one worth keeping in view: an **empty** wrapper leaves nothing behind at all.
+The third is the sharper half, because a wrapped type gate suppresses every type-scoped negation
+behind it, and array-wrapping every element is ordinary generic converter output.
+
+### The cardinality decision, and the alternatives weighed
+
+**A writer cannot decide cardinality in general, and this one does not try.** There is no
+per-resource model here and there must not be one (`SAFETY_SCALAR_ELEMENTS` is the cardinality of a
+closed set, not a model); a name-only, depth-free rule emits a false error on a conformant document,
+because `Questionnaire.code` and `ElementDefinition.code` are `0..*` in R4.
+
+Four routes were on the table:
+
+1. **Refuse every list at a reported location, arity-blind.** Rejected on measurement, not taste: an
+   XML document CAN put a list at a reported location by repeating the element, and
+   `<status value="a"/><status value="b"/>` round-trips **byte-exact today with the finding read on
+   both sides**. Refusing it withdraws a working round trip and buys nothing, which is exactly the
+   cost the unbound-prefix residual was deferred rather than pay.
+2. **Refuse only what XML cannot spell back as a wrapper.** Taken. Fewer than two items, plus **any**
+   wrapper on `resourceType`, where the type is the tag and a tag cannot be repeated. The
+   `resourceType` clause is a fact about XML, not about this writer's branching, and it is measured
+   at arities 0, 1, 2 and 3.
+3. **Report instead of refuse.** Not available: the XML writer returns a string and has no
+   diagnostics channel, the same fork `assertXmlSerializable` reached.
+4. **Invent an XML spelling for a wrapper.** Rejected: it authors markup the sender never wrote,
+   which is the fabrication class two refusals beside it already exist for.
+
+**Where the cardinality comes from is the load-bearing half.** The write path takes it from the one
+window that already has one, the locations `arrayWrappedScalars` reports, by narrowing the safety
+layer's **own walk** (`unspellableXmlWrappers`) rather than adding a second traversal with its own
+element table. A copy would be free to drift from the window this library reports to a caller, and
+the read window and the report window must be the same window. It narrows and never widens, so it
+can never name a location `arrayWrappedScalars` does not.
+
+`SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER`, **raised last** so no case moves onto it.
+
+### Two things the predicate answers that a location-level one would get wrong
+
+- **Per written MEMBER, not per location.** A `Coding` whose `system` is a singleton and whose `code`
+  holds two keeps the location reported after the trip, while the `system` wrapper is gone. The
+  member that vanishes is the question, so the quantifier is `some`.
+- **The two sets de-duplicate independently.** A repeated property name puts two wrappers at one
+  location; sharing the de-duplication would hide `{"status":["b","c"],"status":["a"]}`'s singleton
+  behind the writable wrapper that arrived first. Pinned in both orders.
+
+### What it does NOT cover, measured rather than implied
+
+- **A writable wrapper only a SHADOWED member carried still launders.**
+  `{"status":"final","status":["a","b"]}` reports `Observation.status` and comes back reporting
+  nothing. It is not this class: the wrapper is writable, what drops it is the repeated property
+  name, and `serializeResource` drops it **identically** (`{"resourceType":"Observation",
+"status":"final"}`, `safeToSummarize` `false -> true` on that route too). The repeated name is its
+  own declared-open residual.
+- **`Observation.value[x]`**, a `0..1` choice, is outside the window and its wrapper still launders.
+  Widening means the per-resource model this library does not have.
+
+### The axis of every "0" and every count reported here
+
+- **"0 readings moved of 1,195"** is the XML read differential, over 7 hand-authored XML fixtures
+  plus mutations. It **cannot grade this class**: the refusal fires on wrappers of fewer than two
+  items, and a single XML element reads as a primitive, not a list. That zero is by construction. The
+  harness prints the caveat itself, and `leaf values not compared (head refused to serialize)` is
+  `0`, so no document base serialized is refused at head.
+- **"732 two- and three-item wrappers, 0 laundered"** and **"60 arity-0/1 wrappers, 60 laundered"**
+  are a generated grammar, and the arithmetic is stated in full because the first draft of this line
+  did not reconcile: 6 `(resource type, element)` root pairs x 10 item shapes in **each of two array
+  positions** x arities 2 and 3 gave 1,200 candidates, of which 732 produced a reported wrapper the
+  writer still emits; the same roots x 11 shapes at arities 0 and 1 gave 66 candidates, of which 60
+  were emitted, and all 60 laundered. **6 root pairs is not the whole window**, which is scoped to
+  `SAFETY_RESOURCE_TYPES` at a resource root. Not a corpus.
+- **The 14 `_`-sibling shapes measured 14/14 byte-exact** below is this repo's own probe list.
+
+**None is the FHIR R4 published-examples corpus. Nothing here is corpus-wide.**
+
+### Mutation coverage, both polarities
+
+Ten mutations run against the three suites that own this: dropping the `resourceType` disjunct (2
+red), dropping the arity clause (18), widening arity to `< 3` (9), narrowing to `< 1` (13), sharing
+the de-duplication set (22), `some -> every` on the `Coding` quantifier (1), raising the refusal
+first instead of last (2), removing it entirely (22), the `isList` guard returning `true` (1), and
+the predicate made dead (23). Every clause is load-bearing.
+
+### The falsified "byte-identically" claim beside it, graded per carrier
+
+`#74` recorded the `_`-sibling changeset's "byte-identically" as falsified and owed a deletion.
+**Re-measured before editing, and it is half right, which is why it was measured:**
+
+- `.changeset/tidy-hounds-gather.md` said "so **the shape** round-trips byte-identically", a
+  universal over the shape class, and it is **false**: `{"_status":"Practitioner\/2"}` returns
+  `{"_status":"Practitioner/2"}`, `{"_status":"aAb"}` returns `{"_status":"aAb"}`, and even
+  insignificant whitespace before the value is lost. The preserved text is re-rendered, not sliced.
+  **Deleted, never reworded** (a changeset freezes permanently).
+- `CHANGELOG.md` said "so **every shape above** round-trips byte-identically", scoped to its own
+  enumeration, and **all 14 enumerated shapes measure byte-exact**. It was true as scoped. It was
+  deleted anyway, for a different and stated reason: the same release body carries `#74`'s correction
+  ("value-exact, not byte-exact ... only the value-channel `null` family is byte-identical") ninety
+  lines above it, and the `_`-sibling channel is one of the families that correction names. Two
+  statements that contradict each other in one release body is what a reader acts on.
+- `documentation/agent-notes.md`'s two uses are enumerations too, and both measure true. **Left
+  alone**: deleting a true claim is its own defect.
+
+`src/xml/index.ts`'s summary was stale on both halves and is corrected. Measured: "emits spec-clean
+XML" is false (`<v:x value="1"/>`, `<a&b/>`, `<1abc/>` are all emitted), and "round-tripping
+byte-for-byte" is false unqualified (`<div>x</div>` comes back as
+`<div xmlns="http://hl7.org/fhir">x</div>`).
+
+**The first attempt at that sweep opened the two carriers a consumer cannot see and left the one it
+can**, which is this lineage's own trap reproducing verbatim. `src/index.ts:277` is a `//` comment and
+`src/xml/index.ts`'s `@packageDocumentation` does not render either (`grep -c "Zero-dependency and
+hardened" dist/index.d.ts` is `0`), while `src/xml/write.ts:2` and `:16` carry the identical two
+halves and DO render, at `dist/index.d.ts:4766` and `:4780`. Worse, the corrected
+`src/xml/index.ts` ends "read them there rather than from a summary here", pointing the reader
+straight into the unswept header. Both are corrected now. **Measure reach; never grep for it.**
+
+_Provenance: every figure above was produced by running probe scripts against a clean `8a91d29` and
+then against the head tree, not recalled. Spec clauses: `hl7.org/fhir/R4/json.html` §2.6.2.2 for the
+JSON array rule and `xml.html` for XML's repeated-element spelling._
+
+### The gate, pass 1
+
+`a4c...`/`4487063` **`REFUTED`**, two `INTRODUCED` majors and one `INTRODUCED` minor, **and not one
+of them a defect in the code** -- the ninth consecutive slice in this repo with that shape. An
+independent sweep of 420 element-level and 1,050 `Coding` documents found 0 launderings among the 567
+wrappers the guard lets through, and confirmed every arity-0/1 and every `resourceType` wrapper
+refused, all 180 refusals landing on documents already `valid: false`.
+
+1. **The "sweep" claim was false**, corrected above: it named `src/index.ts` as the second carrier
+   while `src/xml/write.ts` was the one rendering into `dist/index.d.ts`.
+2. **A new universal shipped into `dist/index.d.ts`**: _"a wrapper of two or more items elsewhere is
+   written as repeated elements and re-reads as a list"_, unscoped. The predicate counts **items**
+   while every docblock justifying it reasons about **emitted elements**, and the two part on a
+   hand-built `list([list([]), list([])])`, which holds two items and emits none. The laundering is
+   `PRE-EXISTING`; the universal asserting it cannot happen was this slice's. **Scoped, not fixed by
+   widening the guard**: widening would refuse arity-2 wrappers and withdraw the round trip the arity
+   rule exists to protect.
+3. **The sweep arithmetic did not reconcile** and the docblock said "six resource types" where the
+   window covers seven. Both corrected; the conclusion was unaffected.
+
+Three `PRE-EXISTING` findings are backlog lines, not folded in: the refusal's root segment is
+`Resource.*` where the readout says `MedicationStatement.*` (pinned, deliberate, `typeOf` is the
+strict read); the repo-wide prose says "the six resource types" over a set of **seven**
+(`src/safety/codes.ts`, and it reaches `dist/index.d.ts`); and a single `<resourceType value="…"/>`
+child element is dropped by `serializeResourceXml` under `issues: []`, since only the list form is
+refused.
+
+### The gate, pass 2, and the sentence the remedy itself got wrong
+
+Pass 2 re-checked pass 1's three findings and confirmed all three remedied, then **`REFUTED` on one
+`INTRODUCED` major sitting inside the remedy** -- which is the fail-to-converge signal, and the reason
+the answer was **deletion rather than another paragraph**.
+
+**The remedy answered pass 1's closing worry with a false mechanism.** It said the arity gap is
+unreachable from the wire because `UNSERIALIZABLE_JSON_ONLY_SHAPE` "refuses first, which is
+load-bearing ordering rather than a coincidence", and titled a test after it. **Measured: reversing
+the two guard calls leaves every assertion in that test passing.** The ordering is observable only in
+WHICH code a model tripping both reports, and that is already pinned by the "raised last" block. What
+actually holds the gap shut is that **the JSON reader models a nested array as a marked COMPLEX**, so
+`{"status":[["a"],["b"]]}` is `list([complex, complex])` and the item count this refusal reads is 2
+under any ordering; the guard beside it refusing **at all** is the other half. A maintainer trusting
+the shipped sentence would have preserved an inert line order while the two real protections could be
+narrowed silently.
+
+The claim was deleted from `src/xml/write.ts`'s `@throws`, `src/codec/serialize-guard.ts` and the
+test's own comment, the test retitled to what it asserts, and the model shape it rests on asserted
+directly. Two minors with it: the README said a namespace-less `<div>` "comes back with one inserted"
+where the inserted one is the **FHIR** namespace, not the XHTML one a reader would assume; and this
+slice's own `PRE-EXISTING`, refuter vocabulary with no referent for a consumer, was rendering into
+`dist/index.d.ts`. **One `PRE-EXISTING` occurrence still renders there from base's `emitsOneDivElement`
+docblock; that is a backlog line, not this slice's.**
+
+**The standing lesson, and it is the one this repo keeps paying for: the code survived two passes with
+no defect found, and both refutations were sentences. The pressure that creates is to write a longer
+sentence to survive the gate, and a longer sentence is what produced the false ordering claim. The
+shortest correct remedy is fewer words.**
+
+### The gate, pass 3, the cap, and the pattern worth escalating
+
+**`REFUTED`, and the ADR 0016 cap is spent. There is no pass 4.** The refuter's own instruction was
+to apply the remedy and ship rather than open another round, because it is a grep-verifiable deletion.
+
+**The finding: the false ordering claim survived in two carriers the pass-2 remedy never opened, and
+both reach consumers** -- `CHANGELOG.md` (in `package.json` `files`, so it ships in the tarball) and
+`.changeset/quick-melons-refuse.md`, which freezes into the release body. Deleted in both, never
+reworded. Neither existed at `8a91d29`, so both were this slice's.
+
+One minor with it, and it is the same shape one level down: **"the JSON reader models a nested array
+as a marked COMPLEX" is itself an over-generalization.** Measured: `{"status":[["a"],["b"]]}` is
+`list([complex, complex])`, but `{"status":["a",["b"]]}` and `{"_status":[["x"],["y"]]}` are
+`list([primitive, primitive])` -- the marker lands on a primitive, and which of the two it is depends
+on the spelling. The safety-bearing conclusion is unaffected and is what the prose now says: **every
+list the JSON reader constructs holds primitives or complexes, never lists.**
+
+**▶ ESCALATED RATHER THAN ABSORBED: this slice's gate caught the SAME failure three times** -- pass 1
+finding 1, pass 2's implied scope, and pass 3 -- always "fixed the site it was reported at, missed the
+carriers a consumer sees". Three different carrier classes: `dist/index.d.ts`, then the npm tarball's
+`CHANGELOG.md`, then a pending changeset. **A sweep here is not done until it has enumerated the
+CARRIERS, not the sentences**, and the carrier list is at least: `src/` doc comments that render,
+`README.md`, `CHANGELOG.md`, `.changeset/*`, and `documentation/`. The code itself survived three
+passes with **no defect found at any of them**, which is now the tenth consecutive slice in this repo
+with that shape, and it is the argument for cutting a slice back rather than hardening it further.

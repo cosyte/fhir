@@ -40,8 +40,8 @@ semantics, and validate it against US Core, without reading the FHIR spec.
 - **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.** The full envelope,
   what is built and what is explicitly **not**, is at
   [`#the-shipped-envelope-p1-through-p11`](documentation/agent-notes.md#the-shipped-envelope-p1-through-p11).
-  **▶ IT IS NOT A NO-DATA-LOSS CLAIM OVER THE WHOLE PACKAGE, and its wording is base's own, not a
-  fresh one**: read-path losses remain open and declared, and the one that qualifies "never drops a
+  **▶ IT IS NOT A NO-DATA-LOSS CLAIM OVER THE WHOLE PACKAGE**: read-path losses remain open and
+  declared, and the one that qualifies "never drops a
   modifier, status or negation" is a **status** or a dose number written as XML element text (dropped
   and reported, the writer refuses, but the safety spine reads `negations: []`).
   The rest:
@@ -83,9 +83,7 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   [`#fhir-coding-scalar-wrapper-2026-07-29`](documentation/agent-notes.md#fhir-coding-scalar-wrapper-2026-07-29)
 - **Reporting is additive to diagnostics; preserving is a change to the data model, and only the
   second carries the risk. If your change makes a nested array visible to any walker, you have
-  crossed the line.** Measured at `b2c5ee7`: 57 `.items` sites across 21 files, 3 flattening with no
-  kind check at all and 21 checking the kind then silently dropping what is not it; exactly one fails
-  closed. The combined attempt was refuted twice (it erased a true error and asserted
+  crossed the line.** The combined attempt was refuted twice (it erased a true error and asserted
   `noKnownAllergy`). The inner array is kept as inert **text** (`nestedArraySource`), never modeled
   as an element.
   [`#fhir-nested-array-reporting-2026-07-29`](documentation/agent-notes.md#fhir-nested-array-reporting-2026-07-29) ·
@@ -121,9 +119,8 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   itself.
   [`#the-null-laundering-closed-2026-08-07`](documentation/agent-notes.md#the-null-laundering-closed-2026-08-07) ·
   [`#the-_-sibling-channel-closed-2026-08-07`](documentation/agent-notes.md#the-_-sibling-channel-closed-2026-08-07)
-- **A PHI sweep over leaf values is not a PHI sweep.** `phi-leak.test.ts` swept values only, which is
-  why a 1,000,000-byte property name, which produced a 1,000,011-byte `expression`, survived it.
-  Sentinels must cover names.
+- **A PHI sweep over leaf values is not a PHI sweep.** `phi-leak.test.ts` swept values only, so a
+  megabyte-long property name survived it. Sentinels must cover names.
 
 ### The XML reader
 
@@ -140,11 +137,9 @@ Unless noted:
   what covers the unprefixed half. Every element the reader **models** must be tested by `isForeign`
   exactly once: route new branches through `readNested`.
 - **In this reader, "every element" is never the right subject of a sentence. Name the set the code
-  actually walks.** Three passes of one slice were refuted for a universal written wider than the
-  code, one of them shipped in `.d.ts`.
+  actually walks.** Refuted three times for a universal wider than the code, one shipped in `.d.ts`.
 - **Count the call sites, and the writers, before you write "one" or "everywhere else."** Refuted
-  twice on the reader (`UNEXPECTED_XML_CONTENT` is three lossy sites, not one; the de-dup is one call
-  site of four) and once on the write path (the JSON writer was the worse of the two and was
+  twice on the reader and once on the write path (the JSON writer was the worse of the two and was
   unrecorded). [`#fhir-element-text-recovery-2026-08-03`](documentation/agent-notes.md#fhir-element-text-recovery-2026-08-03)
 - **The root is the one element with its own rule**: a document declaring **no** namespace is still
   read as FHIR and still unflagged. **Do not "tighten" that into a refusal**, and do not "fix" the
@@ -180,9 +175,7 @@ Unless noted:
   `duplicates` mechanism**, so it would be a silent first-wins loss: strictly worse.
 - **That report compares the EXPANDED NAME, not the tag alone** (2026-08-05). **Do not write down how
   many shapes reach it**: that docblock said "two routes" while its own corpus exercised four. The
-  rule is the comparison. Two read as conformant: a prefix rebound between siblings, and a `<div/>`
-  in the FHIR namespace joining `Narrative.div`. The second used to read back with **zero**
-  diagnostics and `valid: true` over a `0..1` slot; it now draws this report, and no other. **Do not
+  rule is the comparison, and this line used to break it with an enumeration of its own. **Do not
   narrow it back to `element.name`**, and **state the predicate, not which documents come out of
   it**: three gate passes running refuted a summary of that set, which depends on the parent's
   namespace. Closed for the READ only: `serializeResourceXml` drops the bindings.
@@ -192,12 +185,10 @@ Unless noted:
   `_`-object's unreadable member,
   the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, the §2.6.1
   value-absent primitive, the foreign-root laundering (`test/xml.test.ts`, "declared residuals,
-  pinned so they cannot move in silence"), and the cross-format singleton-wrapper laundering
-  (`test/array-wrapped-scalar.test.ts`). **Each of those is a characterization test over a gap:
-  CLOSING one MUST red it, in the same change.** Not theoretical: the closures below red three of
-  them on the spot, which is the mechanism working.
-  **"Pinned by a test" is load-bearing prose, so never write it without opening the test**: three
-  such sentences were false for days, and the next reader does not re-check.
+  pinned so they cannot move in silence"). **Each of those is a characterization test over a gap:
+  CLOSING one MUST red it, in the same change.** Not theoretical: every closure below red one.
+  **"Pinned by a test" is load-bearing prose, so never write it without opening the test**: such
+  sentences have been false for days here, and the next reader does not re-check.
   - **CLOSED 2026-08-05:** the scalar beside a nested array, and the prefix rebound between siblings
     **on the read**. The rebound prefix keeps a characterization test over the half still open: the
     report does not survive `serializeResourceXml`, which drops the binding.
@@ -207,8 +198,16 @@ Unless noted:
     (its own control is stale, firing on a clean tree). **DO NOT WIDEN IT** to the namespace or a
     prefix bound in the string: an unbound-prefix root is accepted on purpose, the same residual
     through a value. [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
+  - **CLOSED 2026-08-08: the array-wrapped `0..1` laundering** (`UNSERIALIZABLE_ARRAY_WRAPPER`).
+    **THE WRITE PATH TAKES ITS CARDINALITY FROM `arrayWrappedScalars`' OWN WALK, NEVER A SECOND
+    TABLE**, and refuses only what XML cannot spell back: **fewer than 2 items, plus ANY wrapper on
+    `resourceType`** (the type is the tag). **DO NOT MAKE IT ARITY-BLIND**: two repeated elements
+    re-read as a list, so refusing them withdraws a byte-exact round trip that KEEPS the finding. Per
+    written MEMBER (`some`, not `every`), and the two dedupe sets are INDEPENDENT or a short wrapper
+    hides behind a long one at one location.
+    [`#the-array-wrapper-laundering`](documentation/agent-notes.md#the-array-wrapper-laundering-closed-2026-08-08)
   - **STILL OPEN; deferral RE-MEASURED 2026-08-07 and it HOLDS.** Only ONE of the two remedies
-    withdraws a capability; **"both do" is a mis-transcription.** **Beside it,
+    withdraws a capability. **Beside it,
     `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as
     **different elements** and forged a `status`). **The line is "does OUR round trip survive it",
     NOT the XML `Name` production. DO NOT WIDEN IT:** `p:x`, `a&b`, `1abc` round-trip today.
@@ -292,9 +291,10 @@ strict, dual ESM+CJS via tsup, per-dir coverage >= 90, MIT, RUNTIME DEPS ZERO.**
   there, never from a copy**: this line's copy listed three and had been two short since the `null`
   and `_`-sibling closures. Repairing one means inventing content or dropping it. Hand a value back
   (`FhirComplex.nonObjectSource`); **never model it as a primitive**, which would show it to every
-  walker at a complex position. **Two markup sites, each checked AT the site (XML only): a NAME that
-  breaks its tag, and a `div` VALUE not spelling one element named `div`.** Not a claim over every
-  branch. **A THIRD, for JSON-only shapes: a PRE-PASS raised LAST, never widened past a marker.**
+  walker at a complex position. **Every XML refusal is EITHER checked AT the site that writes the
+  thing (a NAME breaking its tag, a `div` VALUE not spelling one `div`) OR a WHOLE-MODEL PRE-PASS
+  RAISED LAST (a JSON-only marker, an unspellable array wrapper). Read the list off
+  `SERIALIZE_ERROR_CODES`, never a count here.**
   [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
 - Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
   not a claim that a location carries no document content** (a name is echoed when it matches the
