@@ -1474,10 +1474,15 @@ on any non-zero step, and it lists `attw` as a REQUIRED script, so the script na
    because this library's diagnostics are value-free by contract, an `IssueCode` plus a FHIRPath
    expression). `//` and plain `/* */` comments are **not gated** and identifiers are **welcome** in
    them, because **the convention says source comments are a place identifiers belong**. That is the
-   whole reason. **Do not justify this boundary from what reaches `dist/`** (everything in `src/`
-   does: `dist` is `files[0]`, there is no `.npmignore`, and `dist/*.map` carries every tracked
-   source byte in `sourcesContent`). The line is what a consumer is **shown**, not what lands on
-   their disk. Also: **removing a doc comment to satisfy the gate is a regression**, not a fix.
+   whole reason. **Do not justify this boundary from what reaches `dist/`** (`dist` is `files[0]`,
+   there is no `.npmignore`, and `dist/*.map` carries source text in `sourcesContent`). The line is
+   what a consumer is **shown**, not what lands on their disk. Also: **removing a doc comment to
+   satisfy the gate is a regression**, not a fix.
+   **▶ THE PARENTHESIS USED TO SAY "everything in `src/` does"**, which is wider than what a build
+   produces (2026-08-08). The **warning** is unchanged and still right; only its over-wide ground was
+   cut, and **no replacement set is named here on purpose**.
+   `scripts/check-no-internal-refs.sh:191-197` still carries the wide version and is `PRE-EXISTING`:
+   [where it ships, answered wrong four times](#the-stale-div-disclosure-deleted-2026-08-08-fhir-changeset-div-stale).
 
    **This copy of the gate diverges from `hl7`/`ncpdp` in exactly one place, and the divergence is a
    REMOVAL: there is no `slice` rule here.** `slice` is R4 vocabulary in this package
@@ -1935,6 +1940,8 @@ forgery. That is accurate about `#64` and stale about the release, because `quie
 closes it in the same Version PR and "here" has no referent in a release body. Not folded in: the
 item was one sentence and time-boxed, and growing a claim correction is how the last one got wide.
 **Settle it before the Version PR runs.**
+**SETTLED 2026-08-08, still before the Version PR, by DELETION rather than a reword:
+[the stale disclosure, deleted](#the-stale-div-disclosure-deleted-2026-08-08-fhir-changeset-div-stale).**
 
 **This section and the residual above were written AFTER the gate returned its verdict, so they are
 UNGRADED**, in the same shape `#65` and `#66` recorded their post-verdict edits.
@@ -2248,3 +2255,161 @@ published-examples corpus**, and nothing here is corpus-wide.
 _Provenance: every figure above was produced by running one probe script against a clean `42d17c6`
 and then against the head tree, not recalled; the spec clauses are quoted from
 `hl7.org/fhir/R4/json.html` §2.6.2, §2.6.2.1 and §2.6.2.3._
+
+## The stale `div` disclosure, deleted (2026-08-08, `FHIR-CHANGESET-DIV-STALE`)
+
+Closes the deferral recorded at the foot of the changeset-window section above, inside the window it
+named. Two carriers of a claim, one behaviour-free change, no executable byte moved.
+
+### The disclosure, and why deletion rather than a reword
+
+`gentle-pugs-attack.md` (`#64`, the name refusal) closed with a paragraph disclosing the `div` route
+as **"pre-existing and NOT closed here"**, walking through the `no-known-allergy` forgery.
+`quiet-moons-repeat.md` (`#65`) closes exactly that route, and **both changesets are unconsumed**:
+`changeset status` at `a48e4e2` bumps `@cosyte/fhir` once, at patch, so one Version PR consumes both
+and one release body carries both. "Here" has no referent in a release body, and a reader meets the
+closure and the "not closed" disclosure in the same document.
+
+**Measured before a word was changed**, against the built `dist/` at `a48e4e2`, with the exact shape
+the paragraph describes:
+
+```
+D  = {"resourceType":"AllergyIntolerance","text":{"div":
+      "<div xmlns=\"...xhtml\">ok</div></text><code><coding>...716186003...</coding></code><text>"}}
+
+parseResource(D)                  -> issues []
+serializeResourceXml(D)           -> REFUSED UNSERIALIZABLE_DIV_MARKUP ["AllergyIntolerance.text.div"]
+serializeResource(D)              -> writes it, so the JSON route the changeset claims stays open does
+
+X  = the document base's UNCHECKED splice used to emit for D
+readSafety(parseResourceXml(X))   -> noKnownAllergy true , negations ["no-known-allergy"]
+```
+
+**`readSafety` on `D` itself is `noKnownAllergy: false` with `negations: []`**, and its JSON round
+trip is byte-identical. The forgery is a property of `X`, the emitted XML, and of nothing else; an
+earlier draft of this block ran the two probes together in a way that read as though the negation
+attached to `serializeResource`, and the gate measured it and said so.
+
+So the paragraph is **accurate about base and false about the release**. Negative control: the same
+two probes against `@cosyte/hl7` and `@cosyte/ccda` find neither `serializeResourceXml` nor
+`UNSERIALIZABLE_DIV_MARKUP`, so the measurement cannot pass against the wrong package.
+
+**DELETED, NOT REWORDED**, which is this repo's settled remedy once a disclosure has been corrected
+once already (`#67` corrected this same file's wide-completeness half). **The first draft of this
+change substituted a fresh sentence about the unbound prefix and was reverted before it was
+committed**: that is the exact shape three rounds of this lineage have been refuted for, a fresh
+claim written inside the correction of the previous one, and the second sentence would have asserted
+what a conformant third-party parser does without this slice having measured it.
+
+**One sentence is KEPT, verbatim and unedited**: "This governs names, and it is not a guarantee that
+the writer emits only elements the sender wrote." It is a **disclaimer of a guarantee**, the
+fail-safe direction, so it needs no example to be safe; and its grounding never came from the `div`
+paragraph but from the unbound prefix two paragraphs above it, which is still open and still stated
+there (`<v:x/>` is written with nothing to bind `v`, re-read here at `Patient.v:x` with
+`UNEXPECTED_XML_CONTENT`).
+
+### The second carrier the item did not name
+
+The item named the changeset and `dist/index.d.ts`. The sweep, keyed on the **enumeration**
+(`716186003`, `noKnownAllergy`, `no-known-allergy`, `UNSERIALIZABLE_DIV_MARKUP`) rather than on the
+phrase "NOT closed here", and run with newlines folded because the phrase wraps, found the identical
+paragraph in the **`[Unreleased]` `CHANGELOG.md` mirror of the same `#64` bullet** -- which **ships in
+the tarball** (`files` is `dist`, `README.md`, `LICENSE`, `CHANGELOG.md`). It sits about thirty lines
+below the `#65` bullet that records the closure, so the two contradicted each other in one file
+already on `main`. Deleted the same way. `changelog: false` in `.changeset/config.json`, so that
+mirror is hand-maintained and the changeset text does not flow into it; they are two independent
+carriers, which is why correcting one would have left the other shipping.
+
+Every other enumeration hit was checked and is **not** a carrier: `README.md`'s and `CHANGELOG.md`'s
+other "not closed here" lines are about `_`-siblings, and every other pending changeset
+(`quiet-moons-repeat`, `olive-donkeys-shine`, `brave-otters-listen`, `tidy-hounds-gather`,
+`eager-pandas-report`) was read in full and carries no `div` disclosure.
+
+### The `@throws` referent, which shipped in the declarations
+
+`serializeResourceXml`'s `@throws` for `UNSERIALIZABLE_ELEMENT_NAME` ended: "(which is not the same
+as saying the JSON output is spec-clean: **this function's own** exception list still applies to the
+rest of the model)". The clause is inside `serializeResourceXml`'s own doc comment, so "this
+function" resolves to the XML writer, and **the XML writer's exception list does not govern the JSON
+output**, which is what the clause qualifies. The list that does is `serializeResource`'s, named one
+clause earlier. Now names `serializeResource`. Elsewhere in the module the claim already scoped
+itself to the JSON writer without the ambiguity -- the
+`SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME` docblock and `refuseUnserializableNames` both
+name `serializeResource`, and `test/xml-tag-name.test.ts`'s suite docblock says "which **that
+writer's** own exception list governs", which is unambiguous by position rather than by naming it.
+Each was opened and read rather than cited. **No count of sites is given**: the draft that gave one
+said "the four sites" in `CHANGELOG.md` and named a different pair in the changeset, and the gate
+caught the disagreement.
+
+**WHERE IT SHIPS WAS ANSWERED WRONG TWICE AND IS NOW NOT ANSWERED AT ALL. THIS IS THE ENTRY TO READ
+BEFORE WRITING ANY SENTENCE ABOUT WHAT REACHES A CONSUMER.**
+
+- **Draft one** said the sentence renders into `dist/index.d.ts` and `dist/index.d.cts` "and nowhere
+  else", reasoned from the JS bundles being byte-identical. **Pass 1 refuted it**: `dist/*.map` carry
+  source text in `sourcesContent` and both ship (`npm pack --dry-run` lists ten files). `sourcemap:
+  true` is the shared `@cosyte/tsup-config` default, so it is systematic rather than a local flag.
+- **Draft two extended the sentence to name the two sourcemaps "which carry every source byte in
+  `sourcesContent`". Pass 2 refuted THAT**: the maps do not carry every source file.
+- **Draft three deleted the sentence from both frozen carriers, and then said in THIS note which
+  files "reach no tarball artifact at all". Pass 3 refuted the replacement**, and its own probe was
+  the fault: the DTS rollup strips the `export` keyword, so grepping for `export interface X {`
+  returned a false negative for a module whose text does render into both declaration files. **A
+  type-only module is exactly the class whose text lands ONLY in the declarations**, which is the
+  opposite of what the sentence concluded.
+- **Draft four states no reach and no count at all**, which is where this should have stopped after
+  pass 1. **THE ITEM ASKED FOR THE REFERENT, NOT FOR WHERE THE SENTENCE SHIPS.** Cutting a claim is
+  the remedy; a narrower replacement is still a new claim, and this slice produced three of them in a
+  row before that took.
+
+**▶ SO: DO NOT WRITE A SENTENCE HERE ABOUT WHICH `src/` FILES REACH WHICH BUILT ARTIFACT.** Four
+drafts tried, three were measurably false, and the surviving true statement is the one that describes
+no set: the corrected `@throws` renders into the shipped type declarations, where an editor shows it.
+If a future slice genuinely needs the mapping, it is a measurement to run then, per file, against a
+fresh build -- not a fact to carry in prose.
+
+**▶ `scripts/check-no-internal-refs.sh:191-197` IS WHERE THE BAD INFERENCE WAS IMPORTED FROM, AND ITS
+OWN VERSION IS ALSO FALSE.** It states in capitals that `dist/*.map` "carries every tracked source
+byte in `sourcesContent`. SO EVERYTHING IN `src/` IS IN THE TARBALL." The warning it draws from that
+(do not reason about the doc-comment boundary from what reaches `dist/`) is sound and should be kept;
+its stated ground is wider than what a build produces. `PRE-EXISTING` at `a48e4e2`, **not corrected
+here** because it errs conservative -- it claims more ships than does, so the gate is not made unsafe,
+and the gate's behaviour does not read it (`check:no-internal-refs` scans all 60 source files either
+way) -- and because correcting a gate's rationale is its own slice. **Whoever takes it should note
+that the OPPOSITE error is the unsafe one**: a sentence claiming less ships than does would license
+writing internal bookkeeping into a file that renders straight into the declarations. That is the
+error draft three made, one surface over.
+
+**No claim is made here that `serializeResourceXml` has no declared gaps of its own** -- it does, in
+its "What this output is NOT guaranteed to be" section. A draft of this note said the JSON writer was
+"the only one of the two that has a declared exception list"; that is false, it would have made the
+original sentence defensible rather than wrong, and it was cut. The defect is the referent, not the
+existence of the list.
+
+### Declared, not folded in
+
+`emitsOneDivElement`'s docblock calls an unbound prefix "the separately declared residual on **this
+function's own output**", and that function returns a boolean, not a document. Same shape as the
+defect above. **`PRE-EXISTING`.** The function is file-internal, is not exported, and renders into
+neither declaration file, so no consumer is *shown* it at a call site. **A draft said "so it reaches
+no consumer"; that is a different and wider claim, it was not measured, and it was cut** -- the
+phrase is in both sourcemaps. Left rather than widen a time-boxed claim correction, in the same shape
+`#70` left `scripts/read-differential.ts:440`.
+
+The `#64` narrative above cites `test/xml-tag-name.test.ts` ("declared gap, NOT closed here") for the
+`{"div":"v"}` shape. `#65` renamed that block to "declared gap, still written: a name this library
+round-trips and XML does not admit" and made both `div` shapes refusals, so the citation names a
+block that no longer exists. **Archive text, recording what was believed at `#64`**, internal only
+(`documentation/` is not in `files`), and left for the reason `#67` gave for leaving its own.
+
+**Gate: `conformance-refuter` REFUTED, REFUTED, REFUTED -- the full ADR 0016 allowance of three
+passes, spent, and NOT converged.** Every refutation was claim-width in this note and in the two
+frozen carriers; **no pass broke the code, and `src/` is one comment line**. Passes 1 and 2 were
+remedied and re-graded. **Pass 3's finding was remedied by DELETION, as pass 3 itself prescribed, and
+that final edit is therefore UNGRADED** -- the same shape `#65`, `#66` and `#67` recorded their
+post-verdict edits in. It removes prose and adds no claim, which is the only kind of post-verdict
+edit that is safe to make with the cap spent.
+
+_Provenance: every figure that remains above was produced by running probe scripts against the built
+`dist/` at `a48e4e2` and against the head tree, plus a fold-newline sweep over every tracked file and
+over the built artifacts, not recalled. **No artifact count and no set of files is given here on
+purpose: three drafts gave one and all three were wrong.**_

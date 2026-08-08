@@ -328,7 +328,8 @@ function writeElement(
  *   either fail to re-read at all, or re-read as DIFFERENT elements. The second is why this refuses
  *   rather than reports. {@link serializeResource} escapes a member name, so this refusal never
  *   reaches it and that route stays open (which is not the same as saying the JSON output is
- *   spec-clean: this function's own exception list still applies to the rest of the model).
+ *   spec-clean: {@link serializeResource}'s own exception list still applies to the rest of the
+ *   model).
  * @throws {FhirSerializeError} With `UNSERIALIZABLE_DIV_MARKUP` if a `div` property carries a string
  *   that would not be spliced in as the one `div` element the property names. It would carry other
  *   elements into the document, or leave markup that does not re-read. Refused rather than repaired
