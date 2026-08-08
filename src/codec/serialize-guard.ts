@@ -75,13 +75,15 @@ export const SERIALIZE_ERROR_CODES = {
    * The model carries, at one or more locations, a shape the JSON reader marked because FHIR JSON
    * gives that position no meaning: an array inside an array, a scalar or `null` where FHIR JSON has
    * an object (a complex element's own position or a primitive's `_`-sibling), or a `null` in a
-   * primitive's value channel that padded nothing. **XML only**: `serializeResource` writes every one
-   * of them back from the text the reader preserved, so this refusal never reaches it and that route
-   * stays open.
+   * primitive's value channel that padded nothing. **XML only**: this refusal does not reach
+   * `serializeResource`, which writes these back from the text the reader preserved at every position
+   * that writer walks. **It does not walk a member a repeated property name shadowed, and this
+   * refusal does reach one**, so read that as the refusal's own limit rather than as a route the
+   * shape always survives. See {@link assertXmlSerializable}.
    *
    * XML has no array-of-arrays, no `_`-sibling and no `null`, so the XML writer has nowhere to put
    * any of it and emits the element the reader was left holding: an empty one, or none. That output
-   * re-reads clean, so the finding the reader raised is gone after one trip.
+   * re-reads with an empty issue list, so the finding the reader raised is gone after one trip.
    *
    * See {@link assertXmlSerializable} for the exact set of markers and for what it does NOT cover.
    */

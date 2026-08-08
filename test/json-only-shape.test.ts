@@ -27,8 +27,9 @@ import {
  *
  * XML has no array of arrays, no `_`-sibling and no `null`, so `serializeResourceXml` had nothing to
  * hand back and emitted the node the reader was left holding: an empty element, or none at all. That
- * output re-reads **clean**, so the finding was gone after one trip and the non-conformant document
- * came back conformant with the shape erased. `{"value":null,"unit":"mg"}` came back as a `Quantity`
+ * output re-reads with an **empty issue list**, so the finding was gone after one trip and the shape
+ * was erased. Three of the four also re-read `valid: true`; the fourth is the row below whose
+ * `reReadValid` is `false`. `{"value":null,"unit":"mg"}` came back as a `Quantity`
  * carrying a unit and no magnitude; `{"name":[[{"family":"Roe"}]]}` came back with the name gone and
  * `safeToSummarize` flipped from `false` to `true`.
  *
@@ -423,6 +424,21 @@ describe("no case moves onto the new code", () => {
     const { resource } = parseResourceXml(
       '<Observation xmlns="http://hl7.org/fhir"><status>entered-in-error</status></Observation>',
     );
+    expect(refusal(resource)).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT,
+    });
+  });
+
+  it("keeps the dropped-text refusal for a model carrying BOTH markers, which needs a hand-built node", () => {
+    // The row above does NOT pin this ordering: its model comes from `parseResourceXml`, which sets
+    // no JSON-only marker, so moving the new refusal ahead of `assertSerializable` leaves it green.
+    // No document can carry both (one marker is XML's, the others are JSON's), so the ordering is
+    // only reachable by building the node, which is exactly why it was unpinned and is pinned here.
+    const resource = complex([
+      { name: "resourceType", value: primitive("Observation") },
+      { name: "status", value: { ...primitive(undefined), droppedText: true } },
+      { name: "issued", value: { ...primitive(undefined), undefinedNull: true } },
+    ]);
     expect(refusal(resource)).toMatchObject({
       code: SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT,
     });

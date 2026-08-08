@@ -657,7 +657,7 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   that padded nothing. **XML has none of those channels**: no array of arrays, no `_`-sibling (a
   primitive's metadata is co-located as an `id` attribute and child `<extension>` elements), and no
   `null` at all. So this writer used to emit the node the reader was left holding, and that output
-  re-reads clean. `{"value":null,"unit":"mg"}` came back through XML as a `Quantity` carrying a unit
+  re-reads with an empty issue list, and three of the four also `valid: true`. `{"value":null,"unit":"mg"}` came back through XML as a `Quantity` carrying a unit
   and **no magnitude**, with an empty issue list; `{"name":[[{"family":"Roe"}]]}` came back with the
   name gone and `safeToSummarize` flipped from `false` to `true`. Refusing, because there is nothing
   to hand back into and inventing an XML spelling would author markup nobody wrote. **Only a model

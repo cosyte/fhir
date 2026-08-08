@@ -343,10 +343,13 @@ function writeElement(
  *   `_`-sibling), or a `null` in a primitive's value channel that padded nothing. XML has no array of
  *   arrays, no `_`-sibling and no `null`, so this writer emitted the empty element the reader was
  *   left holding and the finding was gone on the next read; `{"value":null,"unit":"mg"}` came back as
- *   a `Quantity` carrying a unit and no magnitude, clean at every layer.
- *   {@link serializeResource} writes each of them back from the text the reader preserved, so this
- *   refusal never reaches it and that route stays open. **Only a model read from JSON reaches this**:
- *   XML cannot write any of those shapes, so a document read from XML carries none of the markers.
+ *   a `Quantity` carrying a unit and no magnitude under an empty issue list. This refusal does not
+ *   reach {@link serializeResource}, which writes these back from the text the reader preserved at
+ *   every position that writer walks; **it does not walk a member a repeated property name shadowed,
+ *   and this refusal does reach one**, so that is the refusal's limit and not a route the shape
+ *   always survives. The text handed back is value-exact, **not byte-exact**. **Only a model read
+ *   from JSON reaches this**: XML cannot write any of those shapes, so a document read from XML
+ *   carries none of the markers.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";

@@ -13,7 +13,11 @@ inside an array, a scalar or `null` where FHIR JSON has an object, that same sha
 XML has none of those channels. No array of arrays, no `_`-sibling (a primitive's metadata is
 co-located as an `id` attribute and child `<extension>` elements), and no `null` at all. So the XML
 writer emitted the node the reader was left holding, an empty element or none, and that output
-re-reads **clean**: the non-conformant document came back conformant with the shape erased. Measured
+re-reads with an **empty issue list**: the finding is gone and the shape is erased. Not always fully
+conformant, and the difference is pinned rather than smoothed over: three of the four emitted
+documents re-read `valid: true`, while the array-inside-an-array one emits `<name/>`, which re-reads
+`issues: []` and `valid: false` because an empty repeating element is invalid on its own terms. The
+finding is gone in all four. Measured
 one shape per marker, each read, written to XML and re-read. `{"value":null,"unit":"mg"}` came back as
 a `Quantity` carrying a unit and **no magnitude** under an empty issue list, which is the harm the
 value-channel rule exists for arriving through the other door. `{"status":"final","_status":null}`

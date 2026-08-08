@@ -953,7 +953,9 @@ describe("what preservation does NOT reach, pinned rather than claimed away", ()
     expect(wasEmitted.issues).toEqual([]);
     expect(readSafety(wasEmitted.resource).safeToSummarize).toBe(true);
 
-    // The JSON route is untouched and still carries both shapes back byte-identically.
+    // The JSON route is untouched and still carries both shapes. Byte-identically for these two
+    // inputs, which carry no JSON escape; the text is value-exact rather than byte-exact in general,
+    // and `json-only-shape.test.ts` pins the failing example.
     expect(serializeResource(scalar)).toBe(
       '{"resourceType":"Patient","name":[{"family":"Roe"},"James"]}',
     );

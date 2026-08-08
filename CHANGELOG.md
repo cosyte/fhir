@@ -15,7 +15,9 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   object, that same shape in a primitive's `_`-sibling, and a `null` in a primitive's value channel
   that padded nothing. XML has no array of arrays, no `_`-sibling and no `null`, so
   `serializeResourceXml` emitted the node the reader was left holding -- an empty element, or none --
-  and **that output re-reads clean**. Measured against `5ced746`, one shape per marker, each read then
+  and **that output re-reads with an empty issue list** (three of the four also `valid: true`; the
+  array-inside-an-array one emits `<name/>`, which re-reads `issues: []` and `valid: false`, an empty
+  repeating element being invalid on its own terms). Measured against `5ced746`, one shape per marker, each read then
   written to XML then re-read: `{"value":null,"unit":"mg"}` came back as a `Quantity` carrying a unit
   and **no magnitude** under an empty issue list, which is the exact harm the value-channel rule
   exists for, arriving through the other door; `{"status":"final","_status":null}` came back with the
