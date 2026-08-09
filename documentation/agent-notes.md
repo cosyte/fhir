@@ -3008,8 +3008,8 @@ ADR 0001 the falsified clause was **deleted, never reworded**.
 enumerated carrier list and was still swept by PHRASE, so the claim survived twice here -- once in
 **§ Deliberate omissions, whose own contract line says it is verbatim from `CLAUDE.md`**, the very
 line the same commit corrected, and once inside the section `CLAUDE.md`'s duplicate-property trap
-points at. Plus a comment in `test/array-wrapped-scalar.test.ts`, and a `CHANGELOG.md` entry ten
-releases down. **A relocated copy is a carrier of
+points at. Plus a comment in `test/array-wrapped-scalar.test.ts`, and a `CHANGELOG.md` entry further
+down the file. **A relocated copy is a carrier of
 the thing it copies**, and correcting the original without it leaves the next agent reading the new
 refusal as a regression against a documented deliberate choice.
 
