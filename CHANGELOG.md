@@ -14,7 +14,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   hand it never guesses a datatype, so `<value value="5"/>` lands as the string `"5"` where the JSON
   reader builds a `FhirDecimal`. **That much is a declared limit and it is not what changed**: the
   text is never routed through a `number`, so precision survives on both paths, and `nodesEquivalent`
-  already defines cross-format equivalence modulo exactly this. What changed is that `readQuantity`
+  already accounts for it. What changed is that `readQuantity`
   accepted only the JSON reader's shape. Measured at the base commit,
   `<MedicationRequest>…<doseQuantity><value value="5"/><code value="mg"/></doseQuantity>…` read back
   as `{ value: undefined, code: "mg" }` under an **empty issue list**, and the same held for
@@ -57,9 +57,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   The scoped statements beside them measure true and were left alone (`nodesEquivalent`'s own
   module doc, which states the modulo; the namespace-spelling sentences, which are about two
   spellings of one document; and the `CHANGELOG` residual naming this leg, which is still accurate).
-  Two weaker sites are **seen and deliberately left**, each self-disclosing in its next clause
-  (`CHANGELOG.md`'s own P8 release note and the notes' phase summary both continue "kept as the exact
-  lexical string").
+  **No count is given for what is LEFT, on purpose, because two counts of it were wrong in two
+  passes.** Weaker, mostly self-disclosing forms of the same universal survive across `src/`,
+  `README.md`, `CHANGELOG.md` and `documentation/`, and cutting them is its own slice: sweep by
+  carrier, never by phrase.
   Every count here carries the caveat this lineage carries: the corpus is 7 hand-authored XML fixtures
   plus mutations and this repo's hand-authored JSON fixtures and probes, **not** the FHIR R4
   published-examples corpus.

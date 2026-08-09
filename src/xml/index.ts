@@ -9,14 +9,14 @@
  * document a finding would not survive, and {@link ./equivalence.js nodesEquivalent} is the JSON↔XML
  * model-equivalence oracle.
  *
- * **The two readers do not build an identical model, and the difference is a primitive's lexical
- * form.** XML carries every primitive as the text of its `value` attribute and this reader is
- * schema-free, so `<active value="true"/>` is the string `"true"` where JSON gives a `boolean`, and
+ * **The two readers do not build an identical model.** `nodesEquivalent` enumerates what equivalence
+ * is defined modulo; read it there rather than from a summary here, because a summary of that set has
+ * been wrong twice. One of those differences is worth naming at this door because a consumer meets it
+ * without going looking: XML carries a primitive as the text of its `value` attribute and this reader
+ * is schema-free, so `<active value="true"/>` is the string `"true"` where JSON gives a `boolean`, and
  * `<value value="1.50"/>` is the string `"1.50"` where JSON gives a `FhirDecimal`. Precision is
- * preserved on both paths (no `number` is involved either way) and the two compare equivalent, but a
- * consumer that keys on the model shape sees the difference: re-serializing to JSON quotes the
- * number, and the datatype validator reads it as a type mismatch. `nodesEquivalent` states the rule;
- * read it there rather than from a summary here.
+ * preserved on both paths (no `number` is involved either way), but re-serializing to JSON quotes the
+ * number and the datatype validator reads it as a type mismatch.
  *
  * **The writer's output is not unconditionally spec-clean and its round trip is not unconditionally
  * byte-for-byte**, and both used to be asserted here without a qualifier. A property name carrying a

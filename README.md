@@ -767,7 +767,7 @@ const fromXml = parseResourceXml(xml).resource;
 const fromJson = parseResource(
   '{"resourceType":"Patient","active":true,"name":[{"given":["Jane"]}]}',
 ).resource;
-nodesEquivalent(fromXml, fromJson); // true: equivalent, modulo a primitive's lexical form
+nodesEquivalent(fromXml, fromJson); // true: equivalent, not identical (see the two moduli above)
 serializeResourceXml(fromXml) === xml; // true: spec-clean round-trip
 
 // Equivalent is not identical, and re-serializing to JSON shows both moduli at once: `active` is

@@ -8,8 +8,7 @@ Split out of `documentation/agent-notes.md` under the meta-repo's `decisions/002
 *"A JSON decimal returns from XML as a string"* is a **declared limit** at the model, not a defect.
 FHIR XML carries every primitive as the text of its `value` attribute and the reader is schema-free
 by design: with no `StructureDefinition` in hand it never guesses a datatype. Precision survives on
-both paths (no `number` is involved either way), and `nodesEquivalent` already defines cross-format
-equivalence modulo exactly this.
+both paths (no `number` is involved either way), and `nodesEquivalent` already accounts for it.
 
 **But `readQuantity` accepted only the JSON reader's shape.** Measured at `b60e720`, an XML
 `MedicationRequest` whose dose is written `<value value="5"/><code value="mg"/>` read back as
@@ -56,9 +55,11 @@ Each is a characterization test over a gap. Closing one MUST red it, in the same
   report: a guarantee is a longer sentence than a measurement.
 - **A phrase sweep is not a carrier sweep, third slice running.** *"Four false 'same model' sites
   cut"* was itself false: `agent-notes.md`'s `#p2-p3-and-what-the-package-does-today` carried the same
-  universal, and `documentation/` is on the written carrier list. **Five.** Two weaker sites are
-  **SEEN AND LEFT** because each self-discloses in its next clause (`CHANGELOG.md:1779`, the npm
-  tarball carrier, and `agent-notes.md:106`); both are followed by "kept as the exact lexical string".
+  universal, and `documentation/` is on the written carrier list. **Five.** **NO COUNT IS GIVEN FOR
+  WHAT IS LEFT**, and that is the pass-2 lesson: the "two weaker sites, seen and left" census written
+  here was itself short, and named a line number already stale. Weaker, mostly self-disclosing forms
+  survive across `src/`, `README.md`, `CHANGELOG.md` and `documentation/`. Cutting them is its own
+  slice. **Sweep by carrier, never by phrase, and do not replace a bad census with a better one.**
 - **`instanceof` bought nothing and lost a magnitude base read.** The base predicate was duck-typed
   (`typeof node.value === "object"`); `instanceof FhirDecimal` fails the brand check for a decimal
   built by a second copy of the module graph, which is the bare-unit shape again. Reverted to the
@@ -70,6 +71,30 @@ Upheld on every measurement: the R4 space and nothing wider (`5`, `-0`, `0.010`,
 `9223372036854775807`, `&#53;` read; `+5`, `05`, `5.`, `.5`, `1_000`, `0x10`, `Infinity`, `NaN`,
 Arabic-Indic digits refused, nothing coerced or normalised); polarity re-derived independently at
 **7 failed / 10 passed of 17**, no `expect(undefined).toBe(undefined)` shape anywhere.
+
+## What the gate caught, pass 2 (`cb28b8b`, `REFUTED`, two `INTRODUCED` majors, both deletion-shaped)
+
+**▶ 🛑 THE HEADLINE, AND IT IS A RULE ABOUT REMEDIES: BOTH FINDINGS WERE THE PASS-1 REMEDY ITSELF,
+RECOMMITTING THE DEFECT IT FIXED, ONE STEP NARROWER EACH TIME.** No pass has refuted the code.
+
+- **A false UNIVERSAL was replaced by a false MODULO.** *"`nodesEquivalent` defines cross-format
+  equivalence modulo exactly this"* and *"the difference is a primitive's lexical form"* name **one**
+  of the **two** irreducible differences `src/xml/equivalence.ts` itself enumerates: the other is the
+  **singleton list** (JSON `name` is a `list` node, XML `name` a `complex` one). Seven carriers.
+  **THE REMEDY IS DELETION, NOT ENUMERATION** -- adding "and singleton lists" would still be short,
+  because `equivalence.ts` names two further corner cases below its numbered pair. What ships asserts
+  **non-identity** and points at the oracle, which is what that file already told a reader to do.
+- **The census of what was LEFT was itself short**, and cited a line number already stale. Hence: no
+  count anywhere, and the rule instead of the number.
+- **A commit message is a carrier that cannot be cut.** `9a6f0dc`'s body still carries the refuted
+  guarantee in weaker words, and `scripts/ship.sh` squash-merges. **So the squash body is written by
+  hand rather than filled from the branch**, and this is the standing reason.
+
+## The pass ledger
+
+`9a6f0dc` `REFUTED` -> `cb28b8b` `REFUTED` -> the pass-2 remedy. **Cumulative: 2 graded passes**, both
+claim-width, **neither touching behaviour**. Any further pass is restricted to the remedy diff, and
+there is no fourth.
 
 ## The axis of every number here
 

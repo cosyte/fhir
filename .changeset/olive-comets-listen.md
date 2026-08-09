@@ -9,7 +9,7 @@ FHIR XML carries every primitive as the text of its `value` attribute, and the r
 by design: with no `StructureDefinition` in hand it never guesses a datatype, so `<value value="5"/>`
 lands as the string `"5"` where the JSON reader builds a `FhirDecimal`. That much is a declared limit
 and it is not what changed. The text is never routed through a `number`, so precision survives on
-both paths, and `nodesEquivalent` already defines cross-format equivalence modulo exactly this.
+both paths, and `nodesEquivalent` already accounts for it.
 
 What changed is that `readQuantity` accepted only the JSON reader's shape. Measured at the base
 commit, a `MedicationRequest` whose dose is written
@@ -53,7 +53,8 @@ JSON form" when it returns `{"resourceType":"Patient","active":"true"}`; the REA
 `nodesEquivalent` as "same model from either wire format"; and this repo's own notes carried the
 universal a fourth time in the section describing the shipped envelope, which a first sweep by phrase
 missed. A phrase sweep is not a carrier sweep. The scoped statements beside them measure true and were
-left alone, as were two weaker sites that each self-disclose in their next clause.
+left alone. No count is given for what is left standing, on purpose: weaker, mostly self-disclosing
+forms of the same universal survive elsewhere in the tree, and cutting them is its own slice.
 
 The corpus is 7 hand-authored XML fixtures plus mutations and this repo's hand-authored JSON fixtures
 and probes, not the FHIR R4 published-examples corpus. Nothing here is corpus-wide.

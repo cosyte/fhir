@@ -1390,7 +1390,8 @@ terminology content vendored), and validates resources against caller-supplied U
 P6, no profile content bundled) and evaluates profile `constraint[]` invariants through a bounded
 in-repo FHIRPath engine, reporting anything outside the subset `INVARIANT_UNCHECKED` rather than
 passing it (P7), and reads & writes **FHIR XML** into the shared model (the two wire formats proven
-equivalent **modulo primitive lexical form**, the reader XXE/billion-laughs-proof by refusal, P8) but with **no** `type`·`profile`
+**equivalent, not identical**, `nodesEquivalent` naming what that is modulo, the reader
+XXE/billion-laughs-proof by refusal, P8) but with **no** `type`·`profile`
 slicing discriminators / reslicing (still `PROFILE_SLICE_UNCHECKED`), no bundled US Core IG corpus or
 `validator_cli.jar` differential (P11), no code-validity / value-set-membership guarantee without a supplied
 terminology service, and no typed per-resource models. The roadmap lives in
