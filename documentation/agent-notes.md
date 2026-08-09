@@ -3182,3 +3182,23 @@ the remedy was a **quantifier**, and the prose shrank around it.
 What the gate could **not** grade, in its own words: every "measured at `63b05fc`" number, because its
 Bash is `git diff`/`log`/`show` only. Those were re-measured by hand against a `63b05fc` worktree
 before the pass and again after the remedy.
+
+## The XML magnitude, read (2026-08-09)
+
+**THE FILED LINE WAS HALF RIGHT.** *"A JSON decimal returns from XML as a string"* is a **declared
+limit**: XML carries every primitive as `value=` text, the reader is schema-free, precision survives
+(no `number`), and `nodesEquivalent` defines equivalence modulo it. **But `readQuantity` accepted only
+the JSON shape**, so an XML dose read back `{ value: undefined, code: "mg" }` under `issues: []`: the
+**bare-unit shape**, `undefined` being this API's word for *no magnitude*. Now read from either
+model, against the R4 `decimal` space. **NO
+DIAGNOSTIC CAN MOVE, MEASURED:** nothing in `validate/` branches on `Quantity.value`; the differential
+reads none. **COLLATERAL: no provenance in the model**, so a JSON magnitude spelled as a string is
+read too.
+
+**▶ 🛑 STILL OPEN, PINNED BY `test/xml-quantity-magnitude.test.ts`:** re-serializing quotes it
+(`"1.50"`); `validatePrimitiveValue` reads the JSON model shape as **the** model shape, so conformant
+`<active value="true"/>` draws `TYPE_MISMATCH` and flips `valid` -- **accepting the lexical form there
+RETIRES A REAL mismatch on `{"active":"true"}`, nothing tells them apart: a decision, not a patch**;
+`matchesFixed` mismatches across formats. **Four false "same model" sites cut, the scoped ones beside
+them left standing** (`#76`). Polarity **7-of-17 red at base**; the other 10 are controls and pins,
+green both states **on purpose**, each on a literal.

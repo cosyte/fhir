@@ -754,6 +754,7 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
 import {
   parseResource,
   parseResourceXml,
+  serializeResource,
   serializeResourceXml,
   nodesEquivalent,
 } from "@cosyte/fhir";
@@ -766,8 +767,15 @@ const fromXml = parseResourceXml(xml).resource;
 const fromJson = parseResource(
   '{"resourceType":"Patient","active":true,"name":[{"given":["Jane"]}]}',
 ).resource;
-nodesEquivalent(fromXml, fromJson); // true: same model from either wire format
+nodesEquivalent(fromXml, fromJson); // true: equivalent, modulo a primitive's lexical form
 serializeResourceXml(fromXml) === xml; // true: spec-clean round-trip
+
+// Equivalent is not identical, and re-serializing to JSON shows both moduli at once: `active` is
+// the string "true" (XML carries every primitive as attribute text and the reader is schema-free,
+// so a decimal is likewise its exact text where JSON gives a FhirDecimal), and `name` / `given` are
+// single nodes rather than arrays. Precision survives either way, and `readQuantity` reads a
+// magnitude in either form, but the datatype validator reads a lexical boolean as a type mismatch.
+serializeResource(fromXml); // → '{"resourceType":"Patient","active":"true","name":{"given":"Jane"}}'
 
 // The reader refuses an XXE / entity-expansion attack loudly, never resolving or expanding it:
 parseResourceXml('<!DOCTYPE x [ <!ENTITY e SYSTEM "file:///etc/passwd"> ]><Patient/>');

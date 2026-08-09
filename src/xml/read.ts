@@ -1,6 +1,6 @@
 /**
- * The XML read path: a raw {@link XmlElement} tree → the immutable {@link FhirNode} model, the same
- * model the JSON reader produces (xml.html).
+ * The XML read path: a raw {@link XmlElement} tree → the immutable {@link FhirNode} model, the model
+ * the JSON reader also builds, **modulo a primitive's lexical form** (the bullet below) (xml.html).
  *
  * FHIR XML encodes the same information model as FHIR JSON through different mechanisms, and this
  * reader translates each back to the shared model so a resource read from XML is **equivalent** to
@@ -745,7 +745,8 @@ function buildSingle(
  * const { resource } = parseResourceXml(
  *   '<Patient xmlns="http://hl7.org/fhir"><active value="true"/></Patient>',
  * );
- * serializeResource(resource); // → the same model as the JSON form, re-emitted as JSON
+ * serializeResource(resource); // → '{"resourceType":"Patient","active":"true"}'
+ * // XML carried `active` as attribute text, so it re-emits as a JSON string rather than `true`.
  * ```
  */
 export function parseResourceXml(input: string | XmlElement): ReadResult {

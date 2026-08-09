@@ -258,3 +258,19 @@ export function decimal(raw: string): FhirDecimal {
   }
   return new FhirDecimal(raw);
 }
+
+/**
+ * A {@link FhirDecimal} from lexical text, or `undefined` when the text is not a FHIR `decimal`
+ * literal. The non-throwing sibling of {@link decimal}, for a caller reading text it did not author.
+ *
+ * A schema-free reader cannot always hand a magnitude over as a `FhirDecimal`: FHIR XML carries every
+ * primitive as the text of its `value` attribute, so a magnitude arrives as a string and has to be
+ * recognised rather than assumed. The recognition is the R4 `decimal` lexical space and nothing
+ * wider, and the text is carried through unchanged, so precision survives exactly as it does on the
+ * JSON path.
+ *
+ * @internal
+ */
+export function decimalFromLexical(raw: string): FhirDecimal | undefined {
+  return JSON_NUMBER.test(raw) ? new FhirDecimal(raw) : undefined;
+}
