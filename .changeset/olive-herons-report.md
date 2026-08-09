@@ -37,6 +37,6 @@ the channel is complete for that layer and for nothing beyond it. `ElementDefini
 FHIRPath `numberOf` are the same class elsewhere, still silent, each pinned and each its own item.
 
 This raises no `ValidationIssue` of its own, for a narrow measured reason rather than a general one:
-`MedicationRequest` has no built-in schema, so the validator is silent about this element unless a
-caller supplies one, and the readout has to hold either way. The safety layer knows the datatype
+`MedicationRequest` has no built-in schema, so the validator is silent about this element's DATATYPE
+unless a caller supplies one, and the readout has to hold either way. The safety layer knows the datatype
 unconditionally, which is why the report lives there.

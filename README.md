@@ -372,8 +372,8 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   conformant document in either wire format.
   **Unlike the five findings above it, this one raises no `ValidationIssue` of its own**, for a narrow
   and measured reason rather than a general one: `MedicationRequest` has no built-in schema, so the
-  validator is silent about this element unless a caller supplies one, and the readout has to hold
-  either way. The safety layer knows the datatype unconditionally, which is why the report lives
+  validator is silent about this element's **datatype** unless a caller supplies one, and the readout
+  has to hold either way. The safety layer knows the datatype unconditionally, which is why the report lives
   there.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is

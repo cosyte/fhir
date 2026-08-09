@@ -134,14 +134,25 @@ schema supplied while `{"doNotPerform":"Y"}` draws `TYPE_MISMATCH`. The package'
 `olive-comets-listen` changeset already said so.
 
 **What survives unscoped is availability, not discrimination.** `MedicationRequest` has **no built-in
-schema** (`BUILTIN_SCHEMAS` is `[Patient]`), so the validator is silent about this element unless a
-caller supplies one, and a readout that has to hold on every document cannot be built on a diagnostic
+schema** (`BUILTIN_SCHEMAS` is `[Patient]`), so the validator is silent about this element's
+**datatype** unless a caller supplies one (the shape channels, `ARRAY_WRAPPED_SCALAR` and
+`DUPLICATE_PROPERTY`, still fire at this element with no schema at all: pass 3's one-word finding), and a readout that has to hold on every document cannot be built on a diagnostic
 that only exists when a caller opts in. The safety layer knows the datatype **unconditionally**, which
 is why the report lives there. Pinned on the default path and with a schema supplied.
 
-**🛑 A CORRECTED CLAIM IS A NEW CLAIM.** Both refutations were the _reason_ reaching further than
-the _measurement_, and both remedies were deletions. Measure both wires before writing a general
-sentence here.
+**🛑 A CORRECTED CLAIM IS A NEW CLAIM, AND THIS PARAGRAPH PRODUCED THREE, EACH STILL A LITTLE WIDE.**
+Pass 3 graded the third **NOT REFUTED** but found it wide by one word (_"silent about this element"_
+where only its **datatype** is silent), which is the narrowing above. Every one of the three was the
+_reason_ reaching further than the _measurement_, and every remedy was a deletion or a narrowing.
+**Measure both wires, and both the datatype channel and the shape channels, before writing a general
+sentence here.**
+
+**Also raised by pass 3, `PRE-EXISTING` and advisory:** `readDoNotPerform` is **root-only**, so a
+`Bundle` whose `entry[0].resource` is a **conformant** `MedicationRequest` with `doNotPerform: true`
+reads `negations: []` and `safeToSummarize: true`, while the _unreadable_ spelling at the same
+location **is** reported by this channel. Identical at `05ecc5a`. Pass 3's disposition, adopted: fold
+it into the `ServiceRequest` item below rather than opening a second one, since both are the spine's
+read scope rather than a report.
 
 **And `FhirSafetyError.message` moves, outside the corpus measurement above**: it now names this
 sixth shape, so the string changes for **every** refusal it raises, including the five that already

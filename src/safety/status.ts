@@ -746,7 +746,10 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
  * `<status value="1"/>` are the same node to the codec. This layer is the first one that knows the
  * datatype **unconditionally**, and that is the narrow, measured reason the finding raises no
  * `ValidationIssue` of its own: `MedicationRequest` has **no built-in schema**, so the validator is
- * silent about this element unless a caller supplies one, and this readout has to hold either way.
+ * silent about this element's **datatype** unless a caller supplies one, and this readout has to
+ * hold either way. (The shape channels above are not scoped that way: an array-wrapped or
+ * duplicated `doNotPerform` still draws `ARRAY_WRAPPED_SCALAR` / `DUPLICATE_PROPERTY` with no schema
+ * at all.)
  * Both paths are pinned in `test/xml-unreadable-boolean.test.ts`.
  */
 function checkUnreadableBooleans(node: FhirComplex, path: string, out: SafetyWalk): void {

@@ -271,10 +271,12 @@ describe("declared residuals of the unreadable-boolean report, pinned", () => {
     //
     // THE REASON IS AVAILABILITY, and two stronger-sounding versions of it were refuted, one per
     // gate pass. The validator is NOT schema-free (`validateResource` takes `{ schemas }` and
-    // decides `boolean` on the resolved datatype), and with a schema supplied it does NOT fail to
-    // separate readable from unreadable either (on the JSON wire a conformant `true` validates
-    // clean). What survives unscoped is that `MedicationRequest` has no BUILT-IN schema, so the
-    // validator is silent about this element unless a caller opts in by supplying one, and a readout
+    // decides `boolean` on the resolved datatype), and "with a schema it cannot separate readable
+    // from unreadable either" was refuted ON THE JSON WIRE, where a conformant `true` validates
+    // clean while `"Y"` draws TYPE_MISMATCH. On the XML wire both spellings do draw TYPE_MISMATCH,
+    // which is why neither sentence may be written without naming its wire. What survives unscoped is that `MedicationRequest` has no BUILT-IN schema, so the
+    // validator is silent about this element's DATATYPE unless a caller opts in by supplying one (the
+    // shape channels still fire with no schema), and a readout
     // that must hold on every document cannot rest on a diagnostic that only exists on request. The
     // safety layer knows the datatype unconditionally, which is where the report belongs. The two
     // rows below pin exactly that: silent by default, available on request.

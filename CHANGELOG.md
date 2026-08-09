@@ -47,9 +47,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **One asymmetry is deliberate: this raises no `ValidationIssue` of its own, so on the default path
   a `safeToSummarize: false` sits beside `valid: true`.** The reason is narrow and measured rather
   than general: `MedicationRequest` has no built-in schema, so the validator is silent about this
-  element unless a caller supplies one, and the readout has to hold either way. The safety layer
-  knows the datatype unconditionally, which is why the report lives there. Both paths are pinned,
-  with the other residuals, in `test/xml-unreadable-boolean.test.ts`.
+  element's **datatype** unless a caller supplies one, and the readout has to hold either way. (The
+  shape channels are not scoped that way: an array-wrapped or duplicated `doNotPerform` still draws
+  `ARRAY_WRAPPED_SCALAR` / `DUPLICATE_PROPERTY` at this element with no schema at all.) The safety
+  layer knows the datatype unconditionally, which is why the report lives there. Both paths are
+  pinned, with the other residuals, in `test/xml-unreadable-boolean.test.ts`.
   **One more public surface moves and it is outside the corpus measurement above:** `FhirSafetyError`
   now names this sixth shape in its message, so the message string changes for **every** refusal it
   raises, including the five that already refused. The `locations` array, the class and the thrown
