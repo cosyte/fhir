@@ -98,21 +98,28 @@ const NESTED: readonly { kind: NegationKind; label: string; resource: string }[]
  * the container the standard defines for carrying resources, read wrong: which is what puts it in
  * the same class as its two predecessors rather than in the residual pile.
  *
- * **What licenses reading a nested resource is FHIR's modifier rule, not the depth.** Every element
- * moved here is one R4 flags `?!`: `status`, `verificationStatus`, `doNotPerform`: and a consumer
+ * **What licenses reading a nested resource is FHIR's modifier rule, not the depth.** The three
+ * element NAMES moved here are ones R4 flags `?!` on the types that define them (`status`,
+ * `verificationStatus`, `doNotPerform`), and a consumer
  * may never process a modifier element as if it were absent. That obligation attaches to the
  * resource carrying it, not to the position the resource occupies in a document: a `Bundle.entry`
  * order and a `contained` order are resources. The direction argument then applies exactly as it
  * does at the entry root: this can only **add** a negation, never retire a finding, never flip
  * `valid`, and never turn a refusal into an affirmation.
  *
- * **The read is not widened past its refusal, and that is pinned rather than argued.** The four
- * channels that record a safety value this layer could **not** read: dropped XML element text, an
- * array inside an array, a shadowed property name, an array-wrapped scalar: already walked the
- * whole document at the base commit, so the refusal window was, and remains, at least as wide as
- * this read. Both halves are pinned at one nested location below: a `<status>not-done</status>`
- * whose text the reader drops is reported there and adds no negation, and a `<status
- * value="not-done"/>` at the same location is read.
+ * **The read is not widened past its refusal, and that is pinned rather than argued.** The channels
+ * that record a safety value this layer could **not** read (dropped XML element text, an array
+ * inside an array, a shadowed property name, an array-wrapped scalar, an unreadable boolean, and an
+ * unhandled `modifierExtension`) already walked the whole document at the base commit, so the refusal
+ * window was, and remains, at least as wide as this read. Both halves are pinned at one nested
+ * location below: a `<status>not-done</status>` whose text the reader drops is reported there and
+ * adds no negation, and a `<status value="not-done"/>` at the same location is read.
+ *
+ * **That is why nothing needed widening, and it is asserted rather than assumed**: the location
+ * channels and the `safeToSummarize` derived from them are document-wide **at both states**, which is
+ * the difference between them and the single-valued fields beside them. A single value cannot say
+ * which resource it came from; a FHIRPath location can, and a `negations` **set** needs no location
+ * at all. That is the line, and it is not depth.
  *
  * **`no-known-allergy` deliberately does not move**, and it is the one negation whose absence is the
  * cautious answer. See the declared-gap section at the foot of this file.
@@ -185,6 +192,33 @@ describe("every negation is read at every resource root, not only the one handed
 
       expect(readSafety(resource).negations).toEqual(["not-done"]);
       expect(readSafety(resource).droppedText).toEqual([]);
+    });
+
+    it("keeps every location channel document-wide, which is why none of them moved", () => {
+      // BOTH-STATES, and the pin behind the scope contract this readout now states. A location
+      // channel can name the resource it came from, so it has always covered a `Bundle`'s entries
+      // and a `contained` resource; a single-valued field cannot, so it stays a root read. This
+      // slice moved `negations`, which needs no location because it is a set. If a later change
+      // narrows any of these to the entry root, the refusal would fall behind the read and this
+      // reds first.
+      const modifier = bundleWith(
+        '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+          '"modifierExtension":[{"url":"http://example.org/unknown"}]}',
+      );
+      const inner = bundleWith(
+        '{"resourceType":"Observation","status":"final","category":[["synthetic"]]}',
+      );
+
+      expect(safetyOf(modifier).unhandledModifierExtensions).toEqual([
+        "Bundle.entry[0].resource.modifierExtension[0]",
+      ]);
+      expect(refuses(modifier)).toBe(true);
+      expect(safetyOf(inner).nestedArrays).toEqual(["Bundle.entry[0].resource.category[0]"]);
+      expect(refuses(inner)).toBe(true);
+      expect(
+        safetyOf(containing('{"resourceType":"Observation","status":["entered-in-error"]}'))
+          .arrayWrappedScalars,
+      ).toEqual(["Patient.contained[0].status"]);
     });
 
     it("keeps reporting a nested value the boolean read cannot read", () => {
@@ -323,10 +357,11 @@ describe("every negation is read at every resource root, not only the one handed
    * **The deliberate both-states pins: these read identically at the base commit and at head**, so
    * they clear nothing about this slice and are here to say what it did not touch. **They are named
    * rather than counted**, so the set is checkable without re-running the base. The five in this
-   * section, plus two marked BOTH-STATES in place above: "reports the unreadable twin at the same
-   * nested location" and "keeps reporting a nested value the boolean read cannot read": plus all
-   * three in the declared-gap section at the foot of this file. Everything else here is red at the
-   * base commit `3fa61aa`.
+   * section, plus three marked BOTH-STATES in place above ("reports the unreadable twin at the same
+   * nested location", "keeps every location channel document-wide, which is why none of them moved"
+   * and "keeps reporting a nested value the boolean read cannot read"), plus all three in the
+   * declared-gap section at the foot of this file. Everything else here is red at the base commit
+   * `3fa61aa`.
    */
   describe("pinned in both states: identical at the base commit", () => {
     it("surfaces a nested do-not-perform, which the predecessor slice already moved", () => {

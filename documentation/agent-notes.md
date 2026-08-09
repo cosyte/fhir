@@ -3136,8 +3136,12 @@ on more nodes, so no document's *reading* moves. **🔴 `no-known-allergy` DELIB
 it is read off an element R4 does **not** flag `?!`, and it is **the one negation whose absence is
 the cautious answer** (surfacing it can make a caller LESS careful; unsurfaced reads as *unknown*),
 so the direction argument argues **against** it. **`retracted` implies `entered-in-error` is on
-`negations`, NEVER the other way round.** Red-at-base **21 of 31**, 10 both-states pins named in the
-test file, **9 of 9 mutations red**, negative control 31/31 failing against `@cosyte/hl7`.
+`negations`, NEVER the other way round.** **🛑 NAME THE SET: a draft shipped "`negations` is the ONLY
+field covering the document" into `dist/index.d.ts`, and PASS 1 CUT IT** - the location channels and
+`safeToSummarize` were ALREADY document-wide (a FHIRPath location names its resource; a single value
+cannot), which is exactly why no refusal needed widening. Red-at-base **21 of 32**, 11 both-states
+pins named in the test file, **9 of 9 mutations red**, negative control 32/32 failing against
+`@cosyte/hl7`.
 `CLAUDE.md` untouched at 28,000/28,000: its existing trap already generalises.
 
 ### The `null` / `_`-sibling laundering: the CLAUDE.md cursor, relocated VERBATIM 2026-08-09

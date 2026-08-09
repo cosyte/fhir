@@ -173,9 +173,13 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   type, because a gate does not merely fail to read the types it omits, it never looks, so nothing is
   reported for them either. Those same reads run at **every resource root**, so a retracted
   `Observation`, a `Procedure` recorded as not performed or an order marked "do not perform" inside a
-  `Bundle` entry or `contained` reaches `negations` too. **`negations` is the read that covers the
-  whole document; every other field on the readout answers about the resource you handed in**, so
-  branch on `negations` whenever a resource may carry others. `no-known-allergy` is the exception and
+  `Bundle` entry or `contained` reaches `negations` too. **The readout's location channels
+  (`unhandledModifierExtensions`, `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`,
+  `droppedText`, `unreadableBooleans`) and `safeToSummarize` were already document-wide; what moved is
+  `negations`.** The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
+  and the rest) answer about the resource you handed in, because one value cannot say which resource
+  it came from, so branch on `negations` whenever a resource may carry others.
+  `no-known-allergy` is the exception and
   stays a root, type-scoped read: it is a _positive_ clinical assertion, read off an element R4 does
   not flag `?!`, and surfacing one from somewhere inside a document could make a caller less careful
   where leaving it unsurfaced reads as _unknown_.

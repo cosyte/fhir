@@ -30,9 +30,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `Bundle.entry` order and a `contained` order are resources. **Only then** does the direction
   argument apply, exactly as it does at the entry root: the read can only **add** a negation, never
   retire a finding, never flip `valid`, and never turn a refusal into an affirmation.
-  **The read is not widened past its refusal.** The four channels that record a safety value this
+  **The read is not widened past its refusal.** The location channels that record a safety value this
   library could **not** read (dropped XML element text, an array inside an array, a shadowed property
-  name, an array-wrapped scalar) already covered at least every location this read moved into, so the
+  name, an array-wrapped scalar, an unreadable boolean, an unhandled `modifierExtension`) already
+  covered at least every location this read moved into, so the
   refusal window was and remains no narrower than the read. Both halves are pinned at one nested
   location: a `<status>not-done</status>` whose character data the reader drops is reported there and
   adds no negation, and a `<status value="not-done"/>` at that same location is read. **The reads
@@ -40,8 +41,12 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   on more nodes rather than rewritten, so no document's _reading_ moves; only the set of nodes the
   reading is applied to. The cardinality report and the negation reads are now reached through one
   function, so "which nodes are resource roots" is decided in one place for both.
-  **Scope, stated as what did not move.** `negations` is the only field that answers about the whole
-  document; `retracted`, `status`, `doNotPerform` and `noKnownAllergy` stay **root** reads, because a
+  **Scope, stated as what did not move.** `negations` is the field that moved; the readout's location
+  channels (`unhandledModifierExtensions`, `shadowedProperties`, `arrayWrappedScalars`,
+  `nestedArrays`, `droppedText`, `unreadableBooleans`) and the `safeToSummarize` derived from them
+  were **already** document-wide and are untouched, which is why the refusal needed no widening. The
+  **single-valued** fields `retracted`, `status`, `doNotPerform` and `noKnownAllergy` stay **root**
+  reads, because one value cannot say which resource it came from and a
   `Bundle` is not retracted because one of its entries is, so `retracted` implies `entered-in-error`
   is on `negations` and never the other way round. The classified list is a **set in a fixed order**,
   so a kind appears once however many resources assert it and entry order does not decide the order.
@@ -56,8 +61,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   the walk, because surfacing a recorded "no known allergy" from somewhere inside a document can make
   a caller **less** careful about a patient, while leaving it unsurfaced reads as _unknown_. It stays
   the root, type-scoped read: declared and pinned in both states rather than claimed.
-  **Measured:** 21 of 31 new test cases red at the base commit in a real detached base worktree (31
-  of 31 at head), and the 10 that pass in **both** states are named in the test file rather than
+  **Measured:** 21 of 32 new test cases red at the base commit in a real detached base worktree (32
+  of 32 at head), and the 11 that pass in **both** states are named in the test file rather than
   counted here. Non-vacuity is by mutation, and is recorded as **what is held down rather than as a
   total**: the four status and coding reads at the walk's window, the walk window itself, `retracted`
   staying the root read, `no-known-allergy` staying off the walk, the fixed kind order, the

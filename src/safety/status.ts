@@ -202,13 +202,22 @@ const NEGATION_ORDER: readonly NegationKind[] = [
  * types can carry has a slot here, present or `undefined`, so a consumer building a summary
  * reads them explicitly rather than forgetting one.
  *
- * **`negations` is the authoritative safety read, and it is the only one that covers the whole
- * document.** It is collected at **every resource root** the document carries, so a retracted
- * `Observation`, a not-performed `Procedure` or an order marked "do not give" inside `contained` or a
- * `Bundle.entry` reaches it. Every other field here answers about **the resource handed in** and
- * nothing nested inside it, `retracted` and `doNotPerform` included; branch on `negations` whenever
- * the resource may carry others. The one negation not collected from the walk is `no-known-allergy`,
- * which stays the root, type-scoped read on its own field for the reasons given there.
+ * **`negations` is the authoritative safety read, and it is collected at every resource root** the
+ * document carries, so a retracted `Observation`, a not-performed `Procedure` or an order marked "do
+ * not give" inside `contained` or a `Bundle.entry` reaches it. The one negation not collected from
+ * the walk is `no-known-allergy`, which stays the root, type-scoped read on its own field for the
+ * reasons given there.
+ *
+ * **Two groups of fields, and the difference is which question they answer.** The location channels
+ * (`unhandledModifierExtensions`, `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`,
+ * `droppedText`, `unreadableBooleans`) and the `safeToSummarize` derived from them are **document-wide
+ * and always were**: they carry FHIRPath locations, so a nested finding has an address to name, and
+ * `assertSafeToSummarize` refuses over a `Bundle`'s entries. The **single-valued** fields
+ * (`resourceType` / `status` / `clinicalStatus` / `verificationStatus` / `doNotPerform` / `retracted`
+ * / `noKnownAllergy`) answer about **the resource handed in** and nothing nested inside it, because
+ * one value cannot say which resource it came from. `negations` is the read that crosses that line:
+ * it is a document-wide **set** with no locations. Branch on it, not on the single-valued fields,
+ * whenever the resource may carry others.
  *
  * The single-code convenience fields (`resourceType` / `status` / `clinicalStatus` /
  * `verificationStatus`) surface one value: the
@@ -833,14 +842,26 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
  * Bundle `entry` is read here and reported here. The two are called from one place
  * ({@link checkResourceRoot}) so that "which nodes are resource roots" is decided once.
  *
- * **What licenses reading these at a nested root is FHIR's modifier rule, not the depth.** Every
- * element read here is one R4 flags `?!`: `status` (the `entered-in-error` retraction and the
- * `not-done` / `not-taken` negations), `verificationStatus` (the retraction and `refuted`), and
- * `doNotPerform`. A consumer may never process a modifier element as if it were absent, and that
- * obligation attaches to the resource that carries it, not to the position the resource happens to
- * occupy in a document: a `contained` order and a `Bundle.entry` order are resources. A readout that
+ * **What licenses reading these at a nested root is FHIR's modifier rule, not the depth.** The three
+ * element names read here are ones R4 flags `?!` on the types that define them: `status` (the
+ * `entered-in-error` retraction and the `not-done` / `not-taken` negations; observation.html,
+ * procedure.html, immunization.html, medicationstatement.html, medicationadministration.html),
+ * `verificationStatus` (the retraction and `refuted`; allergyintolerance.html, condition.html), and
+ * `doNotPerform` (medicationrequest.html, servicerequest.html, communicationrequest.html). A consumer
+ * may never process a modifier element as if it were absent, and that obligation attaches to the
+ * resource that carries it, not to the position the resource happens to occupy in a document: a
+ * `contained` order and a `Bundle.entry` order are resources. A readout that
  * affirms over a nested resource's "do not give" costs a patient a medication, and one that affirms
  * over a nested `entered-in-error` reports a retracted record as data.
+ *
+ * **That is a statement about the three NAMES, not about every node this runs on.** The window below
+ * is a property-name test (`resourceType` is written here), which is not a proof that the node is a
+ * resource: R4 gives `ExampleScenario.instance` a `resourceType` element of its own, so a backbone
+ * element can land in it. The window is inherited from {@link checkArrayWrapping} rather than derived
+ * here, and it is a declared limit in both directions: it reads no deeper than a resource root, and
+ * on a non-conformant document it can reach one node too many. Both are additive - a node that
+ * defines none of the three names contributes nothing, and a node that spells one gets a negation
+ * surfaced rather than a finding retired.
  *
  * The direction argument holds for all of them exactly as it does at the entry root: each read can
  * only **add** a negation, never retire a finding, never flip `valid` (no validator reads
@@ -975,11 +996,12 @@ function descend(node: FhirNode, path: string, out: SafetyWalk): void {
  * modifier-extension check. `noKnownAllergy` is the one negation that stays type-gated, because it
  * asserts something *positive* about a patient.
  *
- * **{@link SafetyReadout.negations} answers about the whole document; every other field answers about
- * the resource handed in.** The un-gated negation reads run at every resource root, so a `contained`
- * or `Bundle.entry` resource's retraction, refutation, `not-done` / `not-taken` status or "do not
- * perform" instruction is classified on `negations` while `status`, `retracted`, `doNotPerform` and
- * `noKnownAllergy` stay root reads. Branch on `negations` when the resource may carry others.
+ * **The un-gated negation reads run at every resource root**, so a `contained` or `Bundle.entry`
+ * resource's retraction, refutation, `not-done` / `not-taken` status or "do not perform" instruction
+ * is classified on {@link SafetyReadout.negations}, while the **single-valued** fields (`status`,
+ * `retracted`, `doNotPerform`, `noKnownAllergy` and the rest) stay root reads. The readout's location
+ * channels and `safeToSummarize` were already document-wide and are unchanged. Branch on `negations`
+ * rather than on a single-valued field when the resource may carry others.
  *
  * @param resource - The resource model (typically from `parseResource`).
  * @returns The complete {@link SafetyReadout}.
