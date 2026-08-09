@@ -41,9 +41,7 @@ What did not move, each pinned at its literal: `SafetyReadout.doNotPerform` stay
 `status` beside it, so a nested resource's instruction reaches `negations` and leaves that field
 `undefined`; the array-wrapper report keeps its cardinality table, so a `ServiceRequest.doNotPerform`
 arriving array-wrapped is read through the wrapper and surfaced while the wrapper itself is not
-reported; the scope stops at resource roots, not backbone elements; and `not-taken` / `not-done` keep
-their own type gates, where `not-done` is also a `Procedure` / `MedicationAdministration` status in R4,
-so the same blindness exists there and is a declared gap rather than part of this change.
+reported; and the scope stops at resource roots, not backbone elements.
 
 A count that was wrong in the same area is cut rather than corrected: `readSafety`, `SafetyReadout`,
 `SAFETY_RESOURCE_TYPES`, the validator's safety layer and the README all said "the six safety resource

@@ -77,11 +77,13 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   [`#fhir-array-wrapped-scalar-2026-07-28`](documentation/agent-notes.md#fhir-array-wrapped-scalar-2026-07-28) ·
   [`#fhir-coding-scalar-wrapper-2026-07-29`](documentation/agent-notes.md#fhir-coding-scalar-wrapper-2026-07-29)
 - **A TYPE GATE ON A NEGATION READ IS ITSELF THE DEFECT: IT NEVER LOOKS, SO IT REPORTS NOTHING
-  EITHER.** Never type-gate the un-gated `isRetracted`/`readSafety` reads: a negation read can only
-  _add_, never retire a finding or flip `valid`. `doNotPerform` **was** gated on `MedicationRequest`,
-  so a **conformant** `ServiceRequest` read `negations: []` under `safeToSummarize: true` (closed
-  2026-08-09). **DROP such a gate, never widen it** (a longer list of remembered types is the same
-  mechanism), licensed by the **direction**, never by a census. **`noKnownAllergy` is the opposite
+  EITHER.** Never re-gate an un-gated read: such a read only _adds_, never retires a finding or
+  flips `valid`. `doNotPerform` gated on `MedicationRequest`, `not-done` on `Immunization`: each read
+  `negations: []`/`safeToSummarize: true` on a **conformant** doc (both closed 2026-08-09). **DROP
+  the gate, never widen it** (a longer list is the same mechanism). **A status CODE IS NOT AN
+  ELEMENT: `doNotPerform` = direction ALONE; `not-done`/`not-taken` = R4 CENSUS FIRST** (only on
+  `status`; the negation in EVERY system defining it) **- read SCOPED to `status`**.
+  **`noKnownAllergy` is the opposite
   and stays gated: it asserts something POSITIVE about a patient.** **A read and its refusal are ONE
   function at ONE window**, or the fix reproduces the previous STOP-THE-LINE on the new types. The
   read runs at **every resource root**; the convenience field stays root-scoped like `status`; and

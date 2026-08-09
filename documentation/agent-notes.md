@@ -2716,7 +2716,7 @@ So a wrapper of fewer than two items emitted at most one element and the complai
 | ----------------------------------------------------------------- | -------------------- | ------------------------------------ | -------------------------------------------- |
 | `{"resourceType":"Observation","status":["entered-in-error"]}`    | `Observation.status` | `<status value="entered-in-error"/>` | `[]`, `valid: true`, `safeToSummarize: true` |
 | `{"resourceType":"Observation","status":[]}`                      | `Observation.status` | element absent                       | `[]`, `valid: true`                          |
-| `{"resourceType":["MedicationStatement"],"status":["not-taken"]}` | both                 | `<Resource>`                         | no negation readable at all                  |
+| `{"resourceType":["MedicationStatement"],"status":["not-taken"]}` | both                 | `<Resource>`                         | the type gone, and with it every type-scoped read (at the time, that included this negation; the status-code gates were dropped 2026-08-09, so today the same launder is graded with a `no-known-allergy`) |
 
 The second row is the one worth keeping in view: an **empty** wrapper leaves nothing behind at all.
 The third is the sharper half, because a wrapped type gate suppresses every type-scoped negation
@@ -3089,6 +3089,31 @@ the two scope sentences on the EXPORTED `unreadableBooleans` docblock and in `RE
 fix itself falsified - the gate found those two, not the sweep.** Derive the sites, never count them
 in prose: this note said "8" and was off by one. Red-at-base **15 of 23**, 8 both-states pins named,
 **7 of 7 mutations red**.
+
+## The `not-done` / `not-taken` type gates, dropped after a CENSUS (2026-08-09)
+
+**Narrative relocated** (cap):
+[`agent-notes/negation-status-codes.md`](agent-notes/negation-status-codes.md). Base `f8d7213`,
+closing the first residual of the section above. Cursors: **plain conformant JSON**
+`{"resourceType":"Procedure","status":"not-done"}` read `negations: []` / `safeToSummarize: true`,
+same for `Communication`, `Media` and `MedicationAdministration` - **four conformant R4 types, and
+only `Immunization` was gated in.** **🛑 THE PREVIOUS SLICE'S DIRECTION ARGUMENT DOES NOT TRANSFER.**
+`doNotPerform` is an ELEMENT no R4 type defines as anything else; `not-done` is a VALUE of `status`,
+whose value set R4 defines PER RESOURCE TYPE, so **"which types carry this code" is a real question
+and it was answered by CENSUS of the published R4 definitions** (`valuesets.json` +
+`profiles-resources.json`, `4.0.1`, sha256s in the note), never by analogy. What the census bought:
+the code is spelled **only** on `status`; **every** R4 code system defining it defines it as the
+negation; and the list is **five types in R4 and a different set in R5**, so a gate is blind by
+construction on a reader with R5 read-tolerance. **Only then** does the direction argument apply.
+**`not-taken` is the NARROWER half and is reported as such**: the census returns ONE R4 element, so
+the old gate was already complete on conformant documents and only the **non-conformant** one moves
+(`MedicationAdministration` + `not-taken`, where R4 spells it `not-done`). **The read is now the one
+`isRetracted` already performed for `entered-in-error`** (`statusSpells`), one function, not three.
+**🛑 TWO EXISTING TESTS WERE RE-KEYED BECAUSE THE FIX MADE THEM VACUOUS** - they proved the fail-safe
+type read with a `not-taken`, which is no longer type-scoped, and now use `no-known-allergy`, which
+is. Red-at-base **11 of 22**, 11 both-states pins named, **8 of 8 mutations red - and mutation 8
+found a hole**: widening the read off `status` onto `code` red nothing until an assertion was added,
+so the element scope was written down and unpinned.
 
 ### The `null` / `_`-sibling laundering: the CLAUDE.md cursor, relocated VERBATIM 2026-08-09
 

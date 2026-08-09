@@ -124,15 +124,24 @@ describe("readSafety: surfacing the modifier / status / negation elements", () =
     );
   });
 
-  it("does not read not-taken / not-done on the wrong resource type", () => {
+  it("reads not-taken / not-done off the status code rather than off the resource type", () => {
     // A completed Observation whose status happens to be a non-negation value carries no negation.
     const obs = readSafety(load("observation-dataabsent-and-value.json"));
     expect(obs.negations).toEqual([]);
-    // 'not-taken' only counts on MedicationStatement, 'not-done' only on Immunization.
-    const notARealNegation = readSafety(
+    // Neither code is type-gated any more. R4 defines each of them only as a `status` value, and
+    // every R4 code system that defines one defines it as the negation, so reading it on a type
+    // nobody enumerated cannot mis-read it: while gating it silently un-read four conformant R4
+    // types that carry `not-done`. The grounding and the boundaries are in
+    // `test/negation-status-codes.test.ts`.
+    const surfaced = readSafety(
       parseResource('{"resourceType":"Observation","status":"not-done"}').resource,
     );
-    expect(notARealNegation.negations).toEqual([]);
+    expect(surfaced.negations).toEqual(["not-done"]);
+    // What is still not a negation is any other status the code does not name.
+    const live = readSafety(
+      parseResource('{"resourceType":"Observation","status":"final"}').resource,
+    );
+    expect(live.negations).toEqual([]);
   });
 
   it("leaves modifier slots undefined for a non-safety resource type", () => {

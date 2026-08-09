@@ -265,15 +265,16 @@ describe("the doNotPerform negation is read wherever it is written", () => {
       ).toEqual(["no-known-allergy"]);
     });
 
-    it("leaves the status-code negations on their own type gates", () => {
-      // `not-done` is also a `Procedure` / `MedicationAdministration` status in R4, so the same
-      // blindness exists there. It is a declared gap and its own slice, not this one: each type gate
-      // needs its own grounding of which types carry that status code, and this slice's argument is
-      // about one element name.
+    it("leaves the status-code negations to their own grounding", () => {
+      // These read the same at this slice's base commit and at its head, which is all this slice
+      // claimed: its argument is about one element name, and a status code is a value of an element
+      // whose value set R4 defines per resource type. The gap they were pinned over: a conformant
+      // `Procedure` whose `status` is `not-done` reading `negations: []`: was closed afterwards, by
+      // a slice that answered that question against the R4 definitions rather than by analogy with
+      // this one. It is pinned at its new value in `test/negation-status-codes.test.ts`.
       expect(safetyOf('{"resourceType":"Immunization","status":"not-done"}').negations).toEqual([
         "not-done",
       ]);
-      expect(safetyOf('{"resourceType":"Procedure","status":"not-done"}').negations).toEqual([]);
       expect(
         safetyOf('{"resourceType":"MedicationStatement","status":"not-taken"}').negations,
       ).toEqual(["not-taken"]);
