@@ -8,6 +8,60 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A `doNotPerform` written in XML was read as absent, so an explicit "do not give this medication"
+  disappeared across this package's own XML round trip (`FHIR-XML-BOOLEAN-NEGATION-LOST`).** FHIR XML
+  carries every primitive as the text of its `value` attribute and the reader is schema-free by
+  design, so `<doNotPerform value="true"/>` lands as the string `"true"` where the JSON reader builds
+  `true`. **That much is a declared limit and it is not what changed.** What changed is the read.
+  Measured at the base commit, a `MedicationRequest` carrying `"doNotPerform":true` went through this
+  package's own `serializeResourceXml` (which emits `<doNotPerform value="true"/>`, correctly) and
+  back through `parseResourceXml`, and `readSafety` returned **`doNotPerform: undefined`,
+  `negations: []`, `issues: []`, `safeToSummarize: true`**, with `assertSafeToSummarize` passing
+  clean, where the JSON original reads `negations: ["do-not-perform"]`. A failed type match read as
+  **absence**, so a summariser would have presented the resource as an active order. Unlike a
+  degraded value, a lost `doNotPerform` **inverts the instruction**.
+  **One read is widened, and only one:** `primitiveBooleans`, the safety-layer read, which
+  `readDoNotPerform` is the sole caller of. **It is not widened in the XML reader**: the model still
+  holds the lexical string, `nodesEquivalent` still accounts for the difference, and no re-emission
+  changes, because a schema-free reader cannot know the datatype and coercing there would author a
+  value the sender did not spell.
+  **The text recognised is exactly `true` and `false`**, the whole of the R4 `boolean` lexical space
+  and nothing beside it: `"TRUE"`, `"True"`, `"1"`, `"yes"`, `"Y"`, `" true"` and `""` still read as
+  no boolean, **silently**, which is a residual rather than a guarantee.
+  **The census is reported rather than acted on, and that is the finding, not a shortfall.** Two more
+  boolean reads have the same defect and are left standing: `ElementDefinition.mustSupport` and
+  `ElementDefinition.slicing.ordered`, both through `primitiveBoolean`, the convenience read. Reading
+  them was drafted and then **measured to retire a diagnostic**: the snapshot merge treats an absent
+  differential flag as "inherit", so an XML `<mustSupport value="false"/>` that previously read
+  `undefined` would begin overwriting an inherited `true` and **remove** a `MUST_SUPPORT_ABSENT` the
+  base emitted. Adding a negation is safe; removing a finding needs its own measurement, so the two
+  sites keep the old read and are pinned. `ElementDefinition.min` (an `unsignedInt` through a
+  `FhirDecimal` match) and FHIRPath's `convertToBoolean` / `toTrit` / `systemTypeOf` are the same
+  root class and are likewise censused and unchanged. **`validatePrimitiveValue` is untouched** and
+  still reads a conformant `<active value="true"/>` as `TYPE_MISMATCH`; that trade is recorded with
+  the residuals of the `Quantity` fix above and is not reopened here.
+  **No diagnostic moves, measured base-vs-head rather than argued:** `collectProfileIssues` over an
+  XML-sourced profile and `validateResource` over the round-tripped `MedicationRequest` are identical
+  on both trees. The only thing that moves is `readSafety`'s `doNotPerform` and `negations`.
+  **One collateral, declared rather than left to be found:** the model records no provenance, so the
+  same lexical read applies to a JSON document that spelled `{"doNotPerform":"true"}`. FHIR JSON says
+  a boolean is a JSON boolean, so that document is non-conformant either way. **`negations` is
+  monotone across the change: this read can only add the `do-not-perform` negation, never retire
+  it.** `SafetyReadout.doNotPerform` itself moves further than that, and the difference is measured
+  rather than glossed: besides `undefined` becoming `true` or `false`, it moves `false` to `true`
+  where a later value spells the negation an earlier JS `boolean` contradicts. That is the
+  documented "a `true` anywhere wins" rule doing its job, and it is pinned.
+  **Residuals stay open and are pinned by `test/xml-lexical-boolean.test.ts` rather than implied**,
+  the two profile reads and the two above among them. `safeToSummarize` is also unmoved in **both**
+  directions: for a value that reads, that is right, because `negations` now carries the instruction
+  and refusing to summarize was never the remedy; for a value that does **not** read (`"1"`, ordinary
+  converter output) the element is present, its value is unread, nothing records that, and the
+  readout still affirms. `SafetyReadout` has location channels for content the codec could not read
+  and none for "value written, not readable", so that shape survives this fix and is pinned rather
+  than absorbed.
+  The corpus is hand-authored XML fixtures, mutations and hand-built probes, **not** the FHIR R4
+  published-examples corpus. Nothing here is corpus-wide.
+
 - **A `Quantity` magnitude written in XML was reported absent, so a dose or a lab value surfaced as a
   unit with no number (`FHIR-XML-WRITE-RESIDUALS`).** FHIR XML carries every primitive as the text of
   its `value` attribute, and the reader is schema-free by design: with no `StructureDefinition` in

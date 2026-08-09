@@ -94,6 +94,11 @@ import {
  * array wrapper. A `true` anywhere wins: the element is an instruction *not* to give a medication, so
  * over-surfacing it is safe and missing it is not. Otherwise the first value written is surfaced
  * unchanged.
+ *
+ * The read goes through `primitiveBooleans`, which takes the boolean off either wire format's model,
+ * so the lexical `true` the schema-free XML reader keeps as text is honored here. Before it did, this
+ * element was lost across this package's own `serializeResourceXml` -> `parseResourceXml` round trip
+ * and the readout affirmed `safeToSummarize` over a resource whose "do not give" had disappeared.
  */
 function readDoNotPerform(resource: FhirComplex): boolean | undefined {
   const values = getAllProperties(resource, "doNotPerform");
@@ -172,7 +177,12 @@ export interface SafetyReadout {
   readonly clinicalStatus: string | undefined;
   /** The `verificationStatus` code, preferred-system-first (AllergyIntolerance / Condition). Convenience only. */
   readonly verificationStatus: string | undefined;
-  /** `MedicationRequest.doNotPerform`, when present. */
+  /**
+   * `MedicationRequest.doNotPerform`, when present, read off either wire format's model: the JSON
+   * codec's `boolean`, or the lexical `true` / `false` the schema-free XML reader keeps as the text
+   * of the `value` attribute. Text outside that two-word lexical space (`"TRUE"`, `"1"`) reads as
+   * `undefined`, silently.
+   */
   readonly doNotPerform: boolean | undefined;
   /** Whether the resource is marked `entered-in-error` (retracted, not data), authoritative. */
   readonly retracted: boolean;
