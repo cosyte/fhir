@@ -263,22 +263,49 @@ describe("what is not an unreadable boolean", () => {
  * Closing any of them MUST red the test beside it, in the same change.
  */
 describe("declared residuals of the unreadable-boolean report, pinned", () => {
-  it("raises no ValidationIssue for an unreadable boolean", () => {
-    // A deliberate asymmetry, and it puts `safeToSummarize: false` beside `valid: true` for the
-    // first time on this readout (the refusal is asserted in the parametrised block above; only the
-    // validator half is pinned here, because only the validator half is unchanged from base). The
-    // five fail-closed rules in the validator are all about shapes FHIR gives no meaning to at ANY
-    // position (a repeated name, an array wrapper, an array inside an array, dropped element text),
-    // decidable with no datatype in hand. This one is decidable only because the safety layer knows
-    // `MedicationRequest.doNotPerform` is a `boolean`, and the structural validator is schema-free.
-    // Putting a datatype-dependent rule in there is the change `#78` measured at
-    // `validatePrimitiveValue` and declined, because in place it RETIRES a real mismatch. Left for
-    // its own measurement rather than folded in here.
-    const { resource } = parseResourceXml(xmlMedicationRequest('<doNotPerform value="Y"/>'));
-    const result = validateResource(resource);
+  it("raises no ValidationIssue of its own, on either validator path", () => {
+    // A deliberate asymmetry, and on the default path it puts `safeToSummarize: false` beside
+    // `valid: true` for the first time on this readout (the refusal itself is asserted in the
+    // parametrised block above; only the validator half is pinned here, because only the validator
+    // half is unchanged from base).
+    //
+    // THE REASON IS NARROW AND MEASURED, AND THE GENERAL VERSION IS FALSE. The validator is NOT
+    // schema-free: `validateResource` takes `{ schemas }` and decides `boolean` on the resolved
+    // datatype. What is true is site-specific: `MedicationRequest` has no BUILT-IN schema, so with
+    // no caller-supplied one there is no datatype for `doNotPerform` and the validator says nothing.
+    // Supply one and it speaks, but it is no substitute, because it draws the same `TYPE_MISMATCH`
+    // on the CONFORMANT `value="true"`: that is the false error recorded with the `Quantity`
+    // residuals, deliberately not reopened here. So it does not separate readable from unreadable,
+    // and the safety layer, which knows the datatype unconditionally, is where the report belongs.
+    const unreadable = parseResourceXml(xmlMedicationRequest('<doNotPerform value="Y"/>')).resource;
+    const conformant = parseResourceXml(
+      xmlMedicationRequest('<doNotPerform value="true"/>'),
+    ).resource;
+    // Every element the fixture writes, so the only issue left is the one under test.
+    const schemas = [
+      {
+        type: "MedicationRequest",
+        elements: {
+          status: { min: 0, max: 1, types: ["code"] },
+          intent: { min: 0, max: 1, types: ["code"] },
+          doNotPerform: { min: 0, max: 1, types: ["boolean"] },
+          medicationCodeableConcept: { min: 0, max: 1, types: ["CodeableConcept"] },
+          subject: { min: 0, max: 1, types: ["Reference"] },
+        },
+      },
+    ];
 
-    expect(result.valid).toBe(true);
-    expect(result.issues.map((issue) => issue.code)).toEqual(["RESOURCE_NOT_MODELED"]);
+    expect(validateResource(unreadable).valid).toBe(true);
+    expect(validateResource(unreadable).issues.map((issue) => issue.code)).toEqual([
+      "RESOURCE_NOT_MODELED",
+    ]);
+    // With a schema, both spellings draw the same code, which is why it cannot stand in for this.
+    expect(validateResource(unreadable, { schemas }).issues.map((issue) => issue.code)).toEqual([
+      "TYPE_MISMATCH",
+    ]);
+    expect(validateResource(conformant, { schemas }).issues.map((issue) => issue.code)).toEqual([
+      "TYPE_MISMATCH",
+    ]);
   });
 
   it("reports nothing for a boolean element written as an object or an empty array", () => {

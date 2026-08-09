@@ -112,17 +112,34 @@ into its docblock rather than left to be discovered.
 `StructureDefinition` is not a safety resource and has no `SafetyReadout`, so reporting them needs a
 home this slice does not build, a second reason on top of `#79`'s measured retirement.
 
-## The one deliberate asymmetry: NO `ValidationIssue`
+## The one deliberate asymmetry: NO `ValidationIssue` OF ITS OWN
 
-**This is the first place on the readout where `safeToSummarize: false` sits beside `valid: true`.**
-Stated rather than glossed, because it is new.
+**On the default path this is the first place on the readout where `safeToSummarize: false` sits
+beside `valid: true`.** Stated rather than glossed, because it is new.
 
-The validator's five fail-closed rules are all about **shapes FHIR gives no meaning to at any
-position** (a repeated name, an array wrapper, an array inside an array, dropped element text) each
-decidable with no datatype in hand. This one is decidable **only** because the safety layer knows
-`MedicationRequest.doNotPerform` is a `boolean`, and the structural validator is schema-free. Putting
-a datatype-dependent rule in there is the change `#78` measured at `validatePrimitiveValue` and
-declined, because in place it **retires a real mismatch**. Left for its own measurement. Pinned.
+**🛑 THE REASON IS NARROW AND MEASURED, AND THE GENERAL VERSION OF IT IS FALSE.** Pass 1 refuted a
+draft of this section that read _"the validator is schema-free and every rule it carries is about a
+shape FHIR gives no meaning to at any position"_. It is not schema-free: `validateResource` takes
+`{ schemas }`, `validate.ts` resolves a datatype from the registry, and
+`validate/primitives.ts` decides `boolean` on it. The true, site-specific fact, measured:
+
+```
+validateResource(<doNotPerform value="1"/>)                 -> RESOURCE_NOT_MODELED   valid: true
+validateResource(<doNotPerform value="1"/>,    { schemas }) -> TYPE_MISMATCH          valid: false
+validateResource(<doNotPerform value="true"/>, { schemas }) -> TYPE_MISMATCH          valid: false
+```
+
+`MedicationRequest` has **no built-in schema**, so with no caller-supplied one the validator has no
+datatype for the element and says nothing. Supply one and it speaks, **but it is no substitute: it
+draws the same `TYPE_MISMATCH` on the CONFORMANT `value="true"`**, which is `#78`'s recorded
+false-error, deliberately not reopened. So it does not separate readable from unreadable. The safety
+layer knows the datatype **unconditionally**, which is why the report lives there. Both paths pinned.
+
+**And `FhirSafetyError.message` moves, outside the corpus measurement above**: it now names this
+sixth shape, so the string changes for **every** refusal it raises, including the five that already
+refused. `locations`, the class and the thrown type are unchanged. Named because the measurement
+enumerates readout fields, parse issues, `ValidationIssue`, `valid`, `negations` and both writers,
+and a public-observable string that moves outside that set has to be said out loud.
 
 ## Measurements
 
@@ -133,17 +150,34 @@ declined, because in place it **retires a real mismatch**. Left for its own meas
   value-less primitive carrying only metadata, the non-MedicationRequest type gate, the conformant
   JSON `MedicationRequest`, this package's own XML round trip, the no-`ValidationIssue` pin, the
   object/empty-array shape, the JSON `null`, the two profile booleans, and the non-boolean datatype.
-- **Non-vacuity by mutation, six of them, each reds at least one pin:** dropping the
+- **Non-vacuity by mutation, seven of them, each reds at least one pin:** dropping the
   `MedicationRequest` type gate reds 1; stopping `hasUnreadableBoolean` reading through the array
   wrapper reds 2; firing it on a value-less primitive reds 2; dropping the new term from
   `safeToSummarize` reds 13; accepting `"1"` in `booleanOf` reds 1; reading only `node.properties`
-  and not the shadowed `duplicates` reds 1.
+  and not the shadowed `duplicates` reds 1; dropping the channel from `assertSafeToSummarize`'s
+  location list reds 1.
 - **Suite 65 files / 1,346 tests** = `#79`'s 1,316 + this file's 30, so **no existing test moved**.
   One existing test was **rewritten rather than added to**: `#79`'s pin _"still affirms
   safeToSummarize over a doNotPerform this reader cannot read"_ looped over `["true", "1"]` and the
   `"1"` arm is what this slice closes, so the pin now covers the `"true"` arm only and names where
   the other half went. That is the pin discipline working, not a test being weakened.
 - Verify green: 11 `==>` step headers, 11 `ran:` entries, zero `(FAIL)`, no unladdered-script warning.
+
+## 🛑 RAISED BY PASS 1, OUTSIDE THIS SLICE: `ServiceRequest.doNotPerform` IS NOT READ AT ALL
+
+`PRE-EXISTING`, identical at `05ecc5a`, so it did not block. **It is a sharper shape than the item
+this slice closed**, and it needs its own item.
+
+R4 marks `ServiceRequest.doNotPerform` (and `CommunicationRequest.doNotPerform`) a `?!` **boolean
+modifier element**, exactly as `MedicationRequest.doNotPerform` is. `readSafety` gates the read on
+`isType("MedicationRequest")` and `ServiceRequest` is not in `SAFETY_RESOURCE_TYPES`, so a
+**conformant JSON** `{"resourceType":"ServiceRequest","doNotPerform":true}` reads `negations: []`,
+`unreadableBooleans: []`, `safeToSummarize: true`, `assertSafeToSummarize` clean. **This one is not
+an unreadable value: the document is conformant and the instruction is simply not looked for.**
+
+**Do not fold it into a channel slice.** The remedy is a question about the spine's type scope
+(`SAFETY_RESOURCE_TYPES` and `NegationKind`), not about a report, and widening the spine touches
+every type-gated read at once.
 
 ## Corpus caveat
 

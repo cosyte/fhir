@@ -44,12 +44,20 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   item: `ElementDefinition.mustSupport` and `slicing.ordered` (the convenience read `#79` measured as
   unsafe to widen, and a `StructureDefinition` has no `SafetyReadout` to report on), `parseMin`, a
   `Quantity` magnitude's `+5` / `05` / `.5` / `5.`, and FHIRPath `numberOf`.
-  **One asymmetry is deliberate: this raises no `ValidationIssue`, so it is the first place a
-  `safeToSummarize: false` sits beside `valid: true`.** The validator's fail-closed rules are all
-  about shapes FHIR gives no meaning to at any position, decidable with no datatype in hand; this one
-  is decidable only because the safety layer knows the element's datatype, and the structural
-  validator is schema-free. Pinned, with the other residuals, in
+  **One asymmetry is deliberate: this raises no `ValidationIssue` of its own, so on the default path
+  a `safeToSummarize: false` sits beside `valid: true`.** The reason is narrow and measured rather
+  than general: `MedicationRequest` has no built-in schema, so with no caller-supplied schema the
+  validator has no datatype for the element and says nothing about it. Supply one and
+  `validatePrimitiveValue` does speak, but it is no substitute, because it draws `TYPE_MISMATCH` on
+  the lexical `"1"` **and on a conformant `<doNotPerform value="true"/>` alike** (the false error
+  recorded with the `Quantity` residuals, deliberately not reopened), so it does not separate
+  readable from unreadable. The safety layer knows the datatype unconditionally, which is why the
+  report lives there. Both paths are pinned, with the other residuals, in
   `test/xml-unreadable-boolean.test.ts`.
+  **One more public surface moves and it is outside the corpus measurement above:** `FhirSafetyError`
+  now names this sixth shape in its message, so the message string changes for **every** refusal it
+  raises, including the five that already refused. The `locations` array, the class and the thrown
+  type are unchanged.
   The corpus is hand-authored XML and JSON fixtures, mutations and hand-built probes, **not** the
   FHIR R4 published-examples corpus. Nothing here is corpus-wide.
 

@@ -485,8 +485,12 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  * **Value-free, like every location on this readout**: the text that failed to read is not carried
  * here or anywhere else, only the FHIRPath of the element that held it.
  *
- * **The set is `MedicationRequest.doNotPerform`**, the only `boolean` this layer reads out of a
- * document, read at any resource root (so a `contained` or Bundle-`entry` MedicationRequest counts).
+ * **The set is `MedicationRequest.doNotPerform`**, the only `boolean` {@link readSafety} takes off a
+ * document. **The window is every resource root** (so a `contained` or Bundle-`entry`
+ * MedicationRequest is reported), which is `arrayWrappedScalars`' window and is deliberately wider
+ * than `readSafety`'s own read, which only visits the resource it is handed. Reporting more than was
+ * read is the fail-safe direction and the only one available: the nested order is real content whose
+ * instruction is unread either way.
  * It is **not** a report of every unreadable value in a document: the profile booleans, the
  * `ElementDefinition.min` integer and a `Quantity` magnitude's lexical forms are read elsewhere and
  * are still lost silently.
@@ -723,22 +727,31 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
  * read could not read.
  *
  * **The set is `MedicationRequest.doNotPerform`, and it is the whole set** because it is the only
- * `boolean` this layer reads out of a document at all: `retracted` and `noKnownAllergy` are derived
- * from codes and codings, not from a `boolean` element. The type gate is the read's own: a
- * `doNotPerform` written on a resource that is not a `MedicationRequest` is never read, so reporting
- * it would name a location no read visited.
+ * `boolean` {@link readSafety} takes off a document at all: `retracted` and `noKnownAllergy` are
+ * derived from codes and codings, not from a `boolean` element. The **element name is type-gated the
+ * way the read is**: `doNotPerform` is a MedicationRequest element, so a `doNotPerform` written on a
+ * `Patient` is neither read nor reported.
+ *
+ * **The WINDOW, though, is wider than the read, and that is not the same thing as the type gate.**
+ * This runs at every resource root, which is {@link checkArrayWrapping}'s window, while
+ * `readDoNotPerform` only visits the resource `readSafety` was handed. So a `MedicationRequest`
+ * inside `contained` or a Bundle `entry` **is** reported at a location no read visited. That is the
+ * fail-safe direction and the same asymmetry `arrayWrappedScalars` already carries: the nested order
+ * is real content whose instruction is unread either way, and declining to affirm over it costs a
+ * caller a refusal where reading past it costs a patient a medication.
  *
  * **Why this is decided here and not in the reader.** FHIR XML carries every primitive as the text of
  * its `value` attribute (xml.html §2.6.1) and this reader is schema-free, so nothing at parse time
  * knows the text spells a `boolean` rather than a `code`: `<doNotPerform value="1"/>` and
  * `<status value="1"/>` are the same node to the codec. This layer is the first one that knows the
- * datatype, so it is the first one that can say the value is outside it. That is also why the finding
- * has no `ValidationIssue`: the fail-closed rules in {@link ../validate/safety.js} are all about
- * shapes FHIR gives no meaning to at *any* position, decidable without a datatype, and this one is
- * not. The asymmetry is pinned in `test/xml-unreadable-boolean.test.ts`.
- *
- * Runs only on a resource root, the same window {@link checkArrayWrapping} uses, so a
- * `MedicationRequest` inside `contained` or a Bundle `entry` is covered on the same terms.
+ * datatype **unconditionally**, and that is the narrow, measured reason the finding raises no
+ * `ValidationIssue` of its own: `MedicationRequest` has **no built-in schema**, so with no
+ * caller-supplied one the validator has no datatype for this element and says nothing about it. It is
+ * no substitute where a schema *is* supplied, either: `validatePrimitiveValue` then draws
+ * `TYPE_MISMATCH` on the lexical `"1"` **and on a conformant `<doNotPerform value="true"/>` alike**,
+ * the false error recorded with the `Quantity` residuals and deliberately not reopened, so it does
+ * not separate readable from unreadable. Both paths are pinned in
+ * `test/xml-unreadable-boolean.test.ts`.
  */
 function checkUnreadableBooleans(node: FhirComplex, path: string, out: SafetyWalk): void {
   if (!typesOf(node).includes("MedicationRequest")) return;

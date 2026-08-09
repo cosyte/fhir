@@ -3062,4 +3062,7 @@ Cursors: `<doNotPerform value="1"/>` and `="Y"` (**ordinary v2/C-CDA converter o
 emits (`#74`). **THE MISSING THING WAS A CHANNEL, NOT A READ**: `unreadableBooleans`, beside
 `nestedArrays` / `droppedText`, feeding `safeToSummarize`. **Additivity holds in its strongest form
 BECAUSE THE SLICE WIDENS NO READ**: 13 of 33 documents move and `safeToSummarize` `true → false` is
-the only field that does. **No `ValidationIssue`, deliberately**: the validator is schema-free.
+the only field that does (plus `FhirSafetyError.message`, which names the sixth shape). **No
+`ValidationIssue` of its own, and the GENERAL reason is FALSE**: the validator is not schema-free, it
+just has no built-in `MedicationRequest` schema, and with one supplied it draws `TYPE_MISMATCH` on
+the conformant `value="true"` too.
