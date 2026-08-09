@@ -709,7 +709,7 @@ export function statusSpells(resource: FhirComplex, code: string): boolean {
 
 /**
  * The whitespace R4's own `code` regex recognises, and nothing else: space, tab, line feed and
- * carriage return. `code` is spelled `[^\s]+([\s][^\s]+)*` (datatypes.html), where `\s` is XML
+ * carriage return. `code` is spelled `[^\s]+(\s[^\s]+)*` (datatypes.html), where `\s` is XML
  * Schema's four-character class, so a value with any of these at either end is **outside the
  * datatype's lexical space** before it is anything else.
  *

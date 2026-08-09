@@ -392,7 +392,7 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   unconditionally, which is why the report lives there.
 - **A code that spells a negation bar its case or its surrounding whitespace is reported, not read as
   one.** A negation is matched by its exact `code`, because FHIR `code` is case-sensitive and the
-  datatype's lexical space has no room for surrounding whitespace (`[^\s]+([\s][^\s]+)*`). So
+  datatype's lexical space has no room for surrounding whitespace (`[^\s]+(\s[^\s]+)*`). So
   `{"resourceType":"Procedure","status":"NOT-DONE"}` (an upper-casing source system) and a `status`
   of `" not-done"` (a padded fixed-width or CSV extract) assert no negation, and **that reading is
   correct and unchanged**: folding them in would accept a non-conformant document as though it were
@@ -403,16 +403,31 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   the raw status string) read a procedure recorded as `"NOT-DONE"` as a procedure with nothing to
   say about it. So the position is named: the locations in `nearMissNegationCodes`,
   `safeToSummarize` is `false`, and `assertSafeToSummarize` throws. **The value is still not
-  coerced, trimmed or case-folded**, and unlike every other channel on the readout nothing is lost either:
-  the raw value is surfaced on `status` / `verificationStatus` exactly as written, and what the
-  library declines is the _classification_. The elements are the `code`-valued ones the negation read
+  coerced, trimmed or case-folded**, and unlike the readout's other location channels nothing is
+  dropped at parse time either: the value is in the model, at the element the location names, and
+  what the library declines is the _classification_. That is **not** a promise the value reaches a
+  convenience field, and the difference bites in two ordinary shapes: `status` /
+  `verificationStatus` are root-scoped and single-valued while this channel is document-wide, so a
+  near miss inside `contained` or a `Bundle.entry` leaves them holding the root's value or
+  `undefined`; and `verificationStatus` surfaces the preferred-system coding, so a near miss in a
+  second coding is not the code it shows. Walk the model at the location.
+  **A near miss is suppressed where the same element also spells that code exactly**, since the
+  negation is then classified: R4 permits translation codings beside the one from a required
+  binding's value set, so a `verificationStatus` carrying `refuted` from the standard system and
+  `REFUTED` from a local one is conformant and draws nothing. Suppressed per code, so a near miss of
+  a _different_ code at that element still reports. The elements are the `code`-valued ones the negation read
   looks at, `status` and `verificationStatus`, at every resource root, which is the negation read's
   own window. The pairs come from the same table the matches are made from, so the report cannot
   cover a pair the read does not. `AllergyIntolerance.code` is deliberately outside it: SNOMED
   `716186003` "no known allergy" is a _positive_ assertion whose read is root- and type-scoped, and
   disclosing a near miss at every root would report the miss where an exact hit is read by nothing.
   Like the boolean channel above, it raises no `ValidationIssue` of its own, so it cannot move
-  `valid` in either direction. Empty on every conformant document, in either wire format.
+  `valid` in either direction. **Empty on every conformant document read from JSON. In XML the
+  whitespace half is a declared limit rather than a claim**: R4 derives `code` from `xs:token`,
+  whose `whiteSpace=collapse` facet strips surrounding whitespace before validation, so
+  `<status value=" not-done"/>` is schema-valid and a schema-validating consumer reads it as the
+  code. This reader is schema-free and does not collapse, so it discloses rather than reads, which is
+  the fail-safe direction.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
   `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding

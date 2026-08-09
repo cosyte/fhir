@@ -55,7 +55,7 @@
  *
  * **One channel on that list is not one of the five, and reads differently.** A negation is matched
  * by its exact `code`, because FHIR `code` is case-sensitive and its lexical space excludes
- * surrounding whitespace (`[^\s]+([\s][^\s]+)*`, datatypes.html). So `{"resourceType":"Procedure",
+ * surrounding whitespace (`[^\s]+(\s[^\s]+)*`, datatypes.html). So `{"resourceType":"Procedure",
  * "status":"NOT-DONE"}` and a `status` of `" not-done"` (an upper-casing source system, a padded
  * fixed-width or CSV extract) assert no negation here, and that is the **correct** reading: folding
  * them in would accept a non-conformant document as though it were conformant and author a negation
@@ -361,18 +361,34 @@ export interface SafetyReadout {
   readonly unreadableBooleans: readonly string[];
   /**
    * FHIRPath locations of a `code`-valued negation element holding a value that differs from a code
-   * this layer classifies **only by letter case, only by surrounding whitespace, or by both**, so
-   * the exact-string match declined it and no negation was classified.
+   * this layer classifies **only by letter case, only by surrounding whitespace, or by both**, where
+   * the exact-string match therefore declined it and **that** negation was not classified.
    *
-   * **Unlike every other location channel here, the value is not lost.** It is read, and surfaced
-   * unchanged on `status` / `verificationStatus`; what did not happen is the *classification*. FHIR
+   * **Nothing is dropped at parse time.** Unlike the channels above it, this one does not mark
+   * content the codec could not keep: the value is in the model, at the element this location names,
+   * and a caller walking the model finds it there. What did not happen is the *classification*. FHIR
    * `code` is case-sensitive and its lexical space excludes surrounding whitespace
-   * (`[^\s]+([\s][^\s]+)*`, datatypes.html), so `"NOT-DONE"` and `" not-done"` are not the code
+   * (`[^\s]+(\s[^\s]+)*`, datatypes.html), so `"NOT-DONE"` and `" not-done"` are not the code
    * `not-done` and this library will not read them as one. **The value is never coerced, trimmed or
    * case-folded into the negation**: that would accept a non-conformant document as though it were
    * conformant and author a negation the sender did not spell. What this channel fixes is that the
    * refusal used to be *silent*: a caller branching on {@link negations}, which is what this
    * readout tells it to do, saw an empty list over a document that plainly spelled a negation.
+   *
+   * **This is NOT a promise that the value appears elsewhere on this readout, and the difference
+   * bites in two ordinary shapes.** `status` / `verificationStatus` are **root-scoped** and
+   * single-valued, and this channel is document-wide, so a near miss inside `contained` or a
+   * `Bundle.entry` leaves them holding the *root's* value or `undefined`; and
+   * `verificationStatus` surfaces the preferred-system coding, so a near miss in a second coding is
+   * not the code it shows. Walk the model at the location; do not read the value off a convenience
+   * field.
+   *
+   * **A near miss is suppressed where the same element also spells that code exactly**, because the
+   * negation is then classified and a caller has it. R4 permits translation codings beside the one
+   * from a required binding's value set (terminologies.html), so a `verificationStatus` carrying
+   * `refuted` from the standard system and `REFUTED` from a local one is **conformant** and draws
+   * nothing here. The suppression is per code, so a near miss of a *different* code at that element
+   * still reports.
    *
    * The elements are the `code`-valued ones the negation read looks at, `status` and
    * `verificationStatus`, at **every resource root**, which is {@link negations}' window and
@@ -384,7 +400,12 @@ export interface SafetyReadout {
    * **Value-free, like every location on this readout**: the text that failed to match is not
    * carried here or anywhere else, and neither is the code it resembles.
    *
-   * Empty for every conformant document, in either wire format.
+   * **Empty for every conformant document read from JSON. In XML the whitespace half is a declared
+   * limit rather than a claim**: R4 derives `code` from `xs:token` (fhir-base.xsd), whose
+   * `whiteSpace=collapse` facet strips surrounding whitespace *before* validation, so
+   * `<status value=" not-done"/>` is schema-valid and a schema-validating consumer reads it as the
+   * code. This reader is schema-free and does not collapse, so it discloses rather than reads. That
+   * is the fail-safe direction, and it is stated here rather than claimed away.
    */
   readonly nearMissNegationCodes: readonly string[];
   /**
@@ -658,18 +679,24 @@ export function unreadableBooleans(resource: FhirComplex, path: string): string[
 /**
  * The locations where a `code`-valued negation element carries a value that differs from a code this
  * layer classifies **only by letter case or by surrounding whitespace**, so the exact-string match
- * declined it and the resource surfaced no negation.
+ * declined it and that negation was not classified.
  *
  * `{"resourceType":"Procedure","status":"NOT-DONE"}` and `{"…","status":" not-done"}` are ordinary
  * output from a system whose codes are upper-cased, or from a fixed-width or CSV feed that padded a
  * field, and both are how a v2 or C-CDA extract reaches a FHIR surface. FHIR `code` is
  * case-sensitive and its lexical space has no room for surrounding whitespace
- * (`[^\s]+([\s][^\s]+)*`, datatypes.html), so neither value **is** the code, and this library does
+ * (`[^\s]+(\s[^\s]+)*`, datatypes.html), so neither value **is** the code, and this library does
  * not read either as one. **Nothing here coerces, trims or case-folds a value into a negation**:
  * that would accept a non-conformant document as though it were conformant and hand a caller an
  * assertion its sender never spelled. This is **the record that the value was there**, which is what
  * the read was missing: without it a procedure recorded as `"NOT-DONE"` returns `negations: []`
  * under `safeToSummarize: true`, indistinguishable from one that was carried out.
+ *
+ * **A near miss is suppressed where the same element also spells that code exactly**, since the
+ * negation is then classified and the caller has it. R4 permits translation codings beside the one
+ * from a required binding's value set (terminologies.html), so a `verificationStatus` carrying
+ * `refuted` from the standard system and `REFUTED` from a local one is **conformant** and draws
+ * nothing. Suppressed per code, so a near miss of a *different* code there still reports.
  *
  * **Value-free**: neither the text nor the code it resembles is carried, only the FHIRPath of the
  * element that held it.
@@ -680,7 +707,10 @@ export function unreadableBooleans(resource: FhirComplex, path: string): string[
  * does not. `AllergyIntolerance.code` is deliberately outside it (see
  * {@link SafetyReadout.nearMissNegationCodes}).
  *
- * Empty for every conformant document, in either wire format.
+ * **Empty for every conformant document read from JSON.** In XML the whitespace half is a declared
+ * limit rather than a claim: R4 derives `code` from `xs:token` (fhir-base.xsd), whose
+ * `whiteSpace=collapse` facet strips surrounding whitespace before validation, and this reader is
+ * schema-free and does not collapse. See {@link SafetyReadout.nearMissNegationCodes}.
  *
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
@@ -933,9 +963,12 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
  * **The two refusals are not the same shape, and the difference is worth stating rather than
  * blurring.** The boolean one is about a value that could not be read *at all*: `doNotPerform`
  * reads `undefined`, which is what an absent element reads too, so without the location the two are
- * indistinguishable. The `code` one is about a value that **is** read and **is** surfaced, on
- * `status` or `verificationStatus`, exactly as written; what fails is the *classification*, because
- * FHIR `code` is case-sensitive (datatypes.html) and `"NOT-DONE"` is simply not the code `not-done`.
+ * indistinguishable. The `code` one is about a value the codec **kept**, at the element the location
+ * names; what fails is the *classification*, not the read. (It is **not** a promise that the value
+ * reaches a convenience field: `status` / `verificationStatus` are root-scoped and
+ * preferred-system-first, so a nested or second-coding near miss is not what they show.) The match
+ * is exact because FHIR `code` is case-sensitive (datatypes.html) and `"NOT-DONE"` is simply not the
+ * code `not-done`.
  * A caller doing what this readout tells it to do, branching on {@link SafetyReadout.negations}
  * rather than on the raw status string, therefore saw an empty list with nothing anywhere to say a
  * negation had been spelled at all. **That silence is the defect; the strictness is not.** The value
@@ -1043,10 +1076,18 @@ function checkNegations(node: FhirComplex, path: string, out: SafetyWalk): void 
   // reported: FHIRPath cannot address an individual member.
   for (const read of NEGATION_CODE_READS) {
     const written = getAllProperties(node, read.element);
-    const near = written.some((value) =>
-      read
-        .values(value)
-        .some((spelled) => read.codes.some((code) => isNearMissCode(spelled, code))),
+    if (written.length === 0) continue;
+    const spelled = written.flatMap((value) => [...read.values(value)]);
+    // Per CODE, and the suppression is what keeps this channel off conformant documents. R4 lets a
+    // `CodeableConcept` under a required binding carry translation codings beside the one from the
+    // value set (terminologies.html), so a `verificationStatus` spelling `refuted` from the standard
+    // system and `REFUTED` from a local one is CONFORMANT and its negation IS classified. Disclosing
+    // there would refuse to summarize a document this library read correctly and completely.
+    // Suppressed per code rather than per element, so a near miss of a DIFFERENT code at the same
+    // element still reports: `refuted` exact beside `ENTERED-IN-ERROR` leaves the retraction
+    // unclassified, which is exactly the case this channel exists for.
+    const near = read.codes.some(
+      (code) => !spelled.includes(code) && spelled.some((value) => isNearMissCode(value, code)),
     );
     if (near) out.nearMissCode.push(childPath(path, read.element));
   }

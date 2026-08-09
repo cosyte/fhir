@@ -17,7 +17,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `entered-in-error`, `not-taken` and `refuted`, on `status` and on a `verificationStatus` coding, at
   every resource root each is read at.
   **The exact match is correct and is unchanged.** FHIR `code` is case-sensitive and the datatype's
-  lexical space excludes surrounding whitespace (`[^\s]+([\s][^\s]+)*`), so `"NOT-DONE"` is not the
+  lexical space excludes surrounding whitespace (`[^\s]+(\s[^\s]+)*`), so `"NOT-DONE"` is not the
   code `not-done`, and coercing it would accept a non-conformant document as though it were
   conformant and author a negation the sender never spelled. **The defect was the silence, not the
   strictness**: a caller doing what this readout instructs (branch on `negations`, not on the raw
@@ -26,8 +26,16 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `nearMissNegationCodes`, `safeToSummarize` is `false`, and `assertSafeToSummarize` throws.
   `nearMissNegationCodes(resource, path)` is exported beside the other collectors.
   **Nothing is coerced, trimmed or case-folded**, and unlike the readout's other location channels
-  nothing is lost either: the raw value is still surfaced on `status` / `verificationStatus` exactly
-  as written, and what the library declines is the classification.
+  nothing is dropped at parse time either: the value is in the model at the element the location
+  names, and what the library declines is the classification. That is **not** a promise the value
+  reaches a convenience field: `status` / `verificationStatus` are root-scoped and
+  preferred-system-first while this channel is document-wide, so a nested or second-coding near miss
+  is not what they show. Walk the model at the location.
+  **A near miss is suppressed where the same element also spells that code exactly**, since the
+  negation is then classified. R4 permits translation codings beside the one from a required
+  binding's value set, so a `verificationStatus` carrying `refuted` from the standard system and
+  `REFUTED` from a local one is **conformant** and draws nothing. Suppressed per code, so a near miss
+  of a different code at that element still reports.
   The elements are the `code`-valued ones the negation read looks at, `status` and
   `verificationStatus`, at every resource root. The pairs are taken from the same table the matches
   themselves are made from, so the report cannot cover a pair the read does not.
@@ -36,7 +44,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   resource root would report the miss where an exact hit is read by nothing.
   Whitespace is R4's own four-character class, not JavaScript's, so a no-break space or a byte-order
   mark inside a conformant `code` is left alone. It raises no `ValidationIssue`, so `valid` does not
-  move in either direction on any document.
+  move in either direction on any document. **Empty on every conformant document read from JSON; in
+  XML the whitespace half is a declared limit**, since R4 derives `code` from `xs:token`, whose
+  `whiteSpace=collapse` facet strips surrounding whitespace before validation, and this reader is
+  schema-free and does not collapse.
   **`do-not-perform`, the one boolean negation, already had this disclosure**: `value="TRUE"` and
   `value=" true"` have landed on `unreadableBooleans` under `safeToSummarize: false` since that
   channel shipped. What had no complement was the `code`-valued half.
@@ -76,9 +87,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   on more nodes rather than rewritten, so no document's _reading_ moves; only the set of nodes the
   reading is applied to. The cardinality report and the negation reads are now reached through one
   function, so "which nodes are resource roots" is decided in one place for both.
-  **Scope, stated as what did not move.** `negations` is the field that moved; the readout's location
-  channels and the `safeToSummarize` derived from them were **already** document-wide, which is why
-  the refusal needed no widening. The
+  **Scope, stated as what did not move.** `negations` is the field that moved. The
   **single-valued** fields `retracted`, `status`, `doNotPerform` and `noKnownAllergy` stay **root**
   reads, because one value cannot say which resource it came from and a
   `Bundle` is not retracted because one of its entries is, so `retracted` implies `entered-in-error`

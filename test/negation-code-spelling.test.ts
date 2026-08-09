@@ -15,7 +15,7 @@ import {
   serializeResource,
   SNOMED_SCT,
 } from "../src/index.js";
-import { NEGATION_CODE_READS } from "../src/safety/codes.js";
+import { isNearMissCode, NEGATION_CODE_READS } from "../src/safety/codes.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
 
@@ -45,7 +45,7 @@ const containing = (resource: string): string =>
 const CONDITION_VERIFICATION = "http://terminology.hl7.org/CodeSystem/condition-ver-status";
 
 /**
- * The whitespace R4's own `code` regex recognises, `[^\s]+([\s][^\s]+)*` (datatypes.html), where
+ * The whitespace R4's own `code` regex recognises, `[^\s]+(\s[^\s]+)*` (datatypes.html), where
  * `\s` is XML Schema's four-character class. Written out here rather than derived from the source so
  * that a change to the source's set reds this file instead of silently agreeing with it.
  */
@@ -105,7 +105,8 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
       // But no longer silent. This is the whole of the change.
       expect(safety.nearMissNegationCodes).toEqual(["Procedure.status"]);
       expect(safety.safeToSummarize).toBe(false);
-      // The value is surfaced exactly as written, never folded toward the code it resembles.
+      // At a resource root with one value, the convenience field shows it unchanged. That is a
+      // fact about THIS document, not a promise of the channel: see the nested cases below.
       expect(safety.status).toBe("NOT-DONE");
     });
 
@@ -291,6 +292,78 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
     });
   });
 
+  describe("what the disclosure does NOT promise, and where it must not fire", () => {
+    it("draws nothing where the same element also spells that code exactly", () => {
+      // A CONFORMANT R4 document. A required binding requires one coding from the value set and
+      // permits translations beside it (terminologies.html), so this carries `refuted` from the
+      // standard system and a local system's upper-cased spelling of the same concept. The negation
+      // IS classified, so the caller has it and there is nothing to disclose; firing here would
+      // refuse to summarize a document this library read correctly and completely.
+      const safety = safetyOf(
+        '{"resourceType":"Condition","verificationStatus":{"coding":[' +
+          `{"system":"${CONDITION_VERIFICATION}","code":"refuted"},` +
+          '{"system":"http://example.org/legacy","code":"REFUTED"}]}}',
+      );
+
+      expect(safety.negations).toEqual([REFUTED]);
+      expect(safety.nearMissNegationCodes).toEqual([]);
+      expect(safety.safeToSummarize).toBe(true);
+    });
+
+    it("suppresses per code, so a near miss of a DIFFERENT code at that element still reports", () => {
+      // The other half of the same rule, and the one that stops the suppression becoming a hole:
+      // `refuted` is classified, but nothing classifies the retraction the second coding spells.
+      const safety = safetyOf(
+        '{"resourceType":"Condition","verificationStatus":{"coding":[' +
+          `{"system":"${CONDITION_VERIFICATION}","code":"refuted"},` +
+          '{"system":"http://example.org/legacy","code":"ENTERED-IN-ERROR"}]}}',
+      );
+
+      expect(safety.negations).toEqual([REFUTED]);
+      expect(safety.nearMissNegationCodes).toEqual(["Condition.verificationStatus"]);
+    });
+
+    it("does not promise the near-missed value reaches a convenience field, nested", () => {
+      // The channel is document-wide; `status` is root-scoped. So the location is the only thing
+      // that finds the value, and a caller must walk the model at it rather than read `status`.
+      const safety = safetyOf(
+        '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+          '"contained":[{"resourceType":"Procedure","status":"NOT-DONE"}]}',
+      );
+
+      expect(safety.nearMissNegationCodes).toEqual(["MedicationRequest.contained[0].status"]);
+      // The convenience field shows the ROOT's value, which is a different value entirely.
+      expect(safety.status).toBe("active");
+    });
+
+    it("does not promise it either when the near miss is in a second coding", () => {
+      // `verificationStatus` surfaces the preferred-system coding, so the code it shows is not the
+      // one that near-missed. `confirmed` is not a negation, so nothing suppresses the disclosure.
+      const safety = safetyOf(
+        '{"resourceType":"Condition","verificationStatus":{"coding":[' +
+          `{"system":"${CONDITION_VERIFICATION}","code":"confirmed"},` +
+          '{"system":"http://example.org/legacy","code":"REFUTED"}]}}',
+      );
+
+      expect(safety.nearMissNegationCodes).toEqual(["Condition.verificationStatus"]);
+      expect(safety.verificationStatus).toBe("confirmed");
+    });
+
+    it("discloses an XML whitespace near miss, a DECLARED limit rather than a conformance claim", () => {
+      // R4 derives `code` from `xs:token` (fhir-base.xsd), whose `whiteSpace=collapse` facet strips
+      // surrounding whitespace BEFORE validation, so this document is schema-valid and a
+      // schema-validating consumer reads it as the code. This reader is schema-free and does not
+      // collapse, so it discloses rather than reads. Fail-safe, and pinned so it cannot be mistaken
+      // for a claim that the channel is empty on every conformant document in either wire format.
+      const safety = readSafety(
+        parseResourceXml(`<Procedure ${FHIR_NS}><status value=" not-done"/></Procedure>`).resource,
+      );
+
+      expect(safety.negations).toEqual([]);
+      expect(safety.nearMissNegationCodes).toEqual(["Procedure.status"]);
+    });
+  });
+
   /**
    * **BOTH-STATES PINS. Every assertion in this block is base-observable and passes at `fa5bfd8`
    * unchanged**, which is what makes it a control rather than a restatement of the fix: each names a
@@ -355,6 +428,19 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
       );
       expect(refutedDoc.negations).toEqual([REFUTED]);
       expect(refutedDoc.safeToSummarize).toBe(true);
+
+      // MULTI-CODING, and it is the shape a single-coding control does not discriminate. A required
+      // binding requires one coding from the value set and PERMITS translations beside it
+      // (terminologies.html), so a standard `refuted` next to a local system's `REFUTED` is a
+      // conformant document whose negation is classified. It read `safeToSummarize: true` at base
+      // and must still, or the channel refuses to summarize a document read correctly.
+      const translated = safetyOf(
+        '{"resourceType":"Condition","verificationStatus":{"coding":[' +
+          `{"system":"${CONDITION_VERIFICATION}","code":"refuted"},` +
+          '{"system":"http://example.org/legacy","code":"REFUTED"}]}}',
+      );
+      expect(translated.negations).toEqual([REFUTED]);
+      expect(translated.safeToSummarize).toBe(true);
     });
 
     it("leaves a `status` on a backbone element read by nothing", () => {
@@ -428,6 +514,21 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
           const varied = doc.replace(`"${code}"`, `"${code.toUpperCase()}"`);
           expect(safetyOf(varied).negations).toEqual([]);
           expect(safetyOf(varied).nearMissNegationCodes.length).toBe(1);
+        }
+      }
+    });
+
+    it("answers `false` for the code itself, which is what makes it a NEAR miss", () => {
+      // The predicate's own contract, pinned directly. At its one call site the per-code suppression
+      // would mask a break here, since a value equal to the code is a value the element spells
+      // exactly and is suppressed anyway. That redundancy is deliberate defence in depth, and this
+      // is what keeps it from rotting into a guard nothing checks.
+      for (const read of NEGATION_CODE_READS) {
+        for (const code of read.codes) {
+          expect(isNearMissCode(code, code)).toBe(false);
+          expect(isNearMissCode(code.toUpperCase(), code)).toBe(true);
+          expect(isNearMissCode(` ${code}`, code)).toBe(true);
+          expect(isNearMissCode(`${code}x`, code)).toBe(false);
         }
       }
     });

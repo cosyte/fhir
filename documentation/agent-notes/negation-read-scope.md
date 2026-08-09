@@ -213,17 +213,80 @@ rather than by a second copy of the condition. A test iterates the table and ass
 that the exact code **is** classified there, so the table cannot drift into describing a read that is
 not there.
 
-**Whitespace is R4's own four-character class (`[^\s]+([\s][^\s]+)*`, XML Schema's `\s`), NOT
+**Whitespace is R4's own four-character class (`[^\s]+(\s[^\s]+)*`, XML Schema's `\s`), NOT
 JavaScript's.** A no-break space and a byte-order mark are ordinary characters inside a conformant
 `code`, so trimming one would call a value non-conformant that R4 accepts. Pinned in both states, and
 widening it to `/\s/` reds a test.
 
+## 🛑 PASS 1 REFUTED IT, and the finding was a FALSE POSITIVE ON A CONFORMANT DOCUMENT
+
+The gate's sharpest finding was **not** a claim defect but a behavioural one, and it is the shape to
+remember: **R4 permits TRANSLATION CODINGS beside the one a required binding's value set supplies**
+(`terminologies.html`: at least one Coding SHALL be from the value set, "text can be provided as
+well", additional codings permitted). So
+
+```json
+{"resourceType":"Condition","verificationStatus":{"coding":[
+  {"system":"http://terminology.hl7.org/CodeSystem/condition-ver-status","code":"refuted"},
+  {"system":"http://acme.example.org/legacy","code":"REFUTED"}]}}
+```
+
+is **conformant**, its negation **is** classified, and the first draft disclosed anyway and set
+`safeToSummarize: false`. **A disclosure channel that fires on a document the library read correctly
+and completely is a false positive, and it falsified the shipped sentence "Empty for every conformant
+document".**
+
+Closed by suppressing a near miss of code C at element E **where E also spells C exactly**. **Per
+CODE, never per element** - `refuted` exact beside `ENTERED-IN-ERROR` must still report, because
+nothing classified the retraction. Both directions are pinned, and both a per-element suppression and
+no suppression at all red a test.
+
+**The control that missed it exercised SINGLE-CODING conformant documents only**, so it discriminated
+a narrower claim than the one shipped - the same shape `#82` pass 1 was refuted for. The both-states
+control now carries the multi-coding document.
+
+## 🛑 THE OTHER TWO PASS-1 MAJORS WERE BOTH CLAIMS IN THE REASSURING DIRECTION
+
+**1. "the value is not lost, it is surfaced on `status` / `verificationStatus` exactly as written"
+was FALSE three ways**, and it was the load-bearing sentence justifying treating this channel
+differently from the loss channels. `status` and `verificationStatus` are **root-scoped and
+preferred-system-first**; this channel is **document-wide**. So a near miss in `contained` leaves
+`status` showing the ROOT's value (measured: `"active"` while the near miss was `"NOT-DONE"` one
+level down), a nested one in a `Bundle.entry` leaves it `undefined`, and a second-coding near miss is
+not the code `verificationStatus` shows. **The true claim is narrower: the codec KEPT the value, at
+the element the location names. Walk the model there. It is not a promise the value reaches a
+convenience field.** Corrected in `status.ts` (x3), `README.md`, `CHANGELOG.md`, the changeset and
+this note.
+
+**2. The `code` lexical-space argument is JSON-ONLY and was stated for "either wire format".** R4
+derives `code` **in XML** from `xs:token` (`fhir-base.xsd`, `code-primitive`), and `xs:token` carries
+`whiteSpace=collapse`, which strips surrounding whitespace **before** validation - so
+`<status value=" not-done"/>` is schema-valid R4 and **is** the code for a schema-validating
+consumer. Independently, XML 1.0 §3.3.3 attribute-value normalization turns a literal tab/LF/CR in
+any attribute value into a space for every conformant processor. **This reader is schema-free and
+does not collapse**, so it discloses rather than reads: fail-safe, and now a **declared limit** in
+every carrier rather than a conformance claim. **Do not "fix" this by collapsing in the XML reader** -
+that is the normalisation the whole slice refuses.
+
+Minor, also corrected: the regex was quoted as `[^\s]+([\s][^\s]+)*` where R4 spells it
+`[^\s]+(\s[^\s]+)*` (equivalent, but it was cited as verbatim, in ~7 carriers including
+`dist/index.d.ts`); and the first remedy for `#83`'s stale channel enumeration **reversed `#83` pass
+1's own fix** (naming the set WAS that fix), so the falsifiable clause was **deleted outright** from
+both `CHANGELOG.md` and the pending changeset instead.
+
+## 🔴 `PRE-EXISTING`, raised by the gate, filed not absorbed
+
+**The XML reader performs no XML 1.0 §3.3.3 attribute-value normalization.**
+`<status value="&#x9;not-done"/>` and a literal tab both reach the model as `"\tnot-done"`.
+Unchanged at base, unchanged here, and its own item.
+
 ## 🛑 Measurement, and the shape of the count that was ALMOST published
 
-**27 of 35 red at base**, in a real detached base worktree at `fa5bfd8`; 35/35 at head. **Of those
-27, five are red only because the symbol they name does not exist at base** (the two table-integrity
-tests and the three head-only channel-name pins), so **22 of 35 are red for a behavioural
-difference.** Reported that way on purpose.
+**32 of 40 red at base**, in a real detached base worktree at `fa5bfd8`; 41/41 at head (the 41st is a
+direct unit pin on the predicate, base-independent). **Of those 32, six are red only because the
+symbol or channel they name does not exist at base** (the two table-integrity tests, the three
+head-only channel-name pins, and the suppression case, whose base behaviour already matched), so
+**26 of 40 are red for a behavioural difference.** Reported that way on purpose.
 
 **The first draft of this test file measured 31 of 35, and that figure was wrong in the flattering
 direction** - the both-states pins were written as `expect(...nearMissNegationCodes).toEqual([])`,
@@ -243,8 +306,15 @@ JavaScript's `\s`; drop the case fold; drop the whitespace strip; drop the exact
 exact code also reports; remove the channel from `safeToSummarize`; remove it from
 `assertSafeToSummarize`'s refusal; narrow the disclosure to the entry root; drop `verificationStatus`
 from the table; narrow the `status` reader to one value so a wrapper and a shadowed member are
-missed; add `AllergyIntolerance.code` to the table. **Every one reddened at least one test; none
-survived.**
+missed; add `AllergyIntolerance.code` to the table; remove the per-code suppression so a conformant
+translated coding fires; widen that suppression to per element so a different code's near miss is
+hidden. **Every one reddened at least one test; none survived.**
+
+**One SURVIVED after the pass-1 remedy and was closed rather than explained away.** The per-code
+suppression made the predicate's own `folded !== value` guard redundant *at its call site*: a value
+equal to the code is a value the element spells exactly, so it is suppressed regardless. The guard
+stays, because it is what the word "near" means, and it is now pinned by a direct unit test on
+`isNearMissCode` instead of by a document. **A guard nothing checks is a guard that rots.**
 
 **Negative control is DEGENERATE here and is reported as such**: `@cosyte/hl7` provides **0 of the 13
 symbols** this file imports, so all 35 assertions fail at import for a reason that discriminates

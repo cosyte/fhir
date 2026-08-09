@@ -38,9 +38,7 @@ rather than rewritten, so no document's reading moves - only the set of nodes th
 to. The cardinality report and the negation reads are now reached through one function, so "which
 nodes are resource roots" is decided in one place for both.
 
-What did not move, each pinned at its literal: the readout's location channels and the
-`safeToSummarize` derived from them were already document-wide, which is why the refusal needed no
-widening. The single-valued
+What did not move, each pinned at its literal: the single-valued
 fields `retracted`, `status`, `doNotPerform` and `noKnownAllergy` stay root reads, because one value
 cannot say which resource it came from and a
 `Bundle` is not retracted because one of its entries is, so `retracted` implies `entered-in-error` is
