@@ -296,11 +296,36 @@ sensitive *unless the code system specifies otherwise*. It bites only for a `Cod
 own case-insensitive `CodeSystem`, and correcting it would push toward the coercion the direction
 forbids.
 
+## Passes 3 and 4: NOT REFUTED, and both found only my own prose
+
+**Pass 3** caught the qualification added for pass 2 being **one notch WIDER than the truth, in the
+cautious direction**: it admitted "a translation whose code *near-misses* a negation" as conformant,
+but a near miss is case **or** surrounding whitespace, and the whitespace half is never conformant
+JSON. **Only the case half can be.** Narrowed at all five carriers. **That is the understating shape
+again** - the third time in this arc a claim erred toward caution and was still false.
+
+It also caught the same edit leaving **unmatched `**` closers**: the rendered `CHANGELOG.md` entry
+carried three stray literal asterisks and **lost the bold on the `do-not-perform` sentence**, and
+`status.ts` carried one that ships verbatim into `dist/index.d.ts` / `.d.cts` and so into a
+consumer's hover. **Prettier had ESCAPED one closer to `disclosure\*\*`, which is exactly why
+`format:check` passed.** 🩺 **Nothing in CI reads rendered markdown, so the next such residue will
+also ship.** Repaired with real openers, never another escape.
+
+**Pass 4** (the cap) confirmed both closed at source **and in the built `dist/index.d.*`**, verified
+the transpile byte-identical across the remedy, and exercised the narrowed claim against the built
+library: every conformant-JSON firing observed is the case-only translation coding, and
+`"refu ted"`, `"not- done"` and an NBSP-padded code are all conformant and all silent. The anchored
+`CODE_WHITESPACE` is what stops internal whitespace manufacturing a second firing shape.
+
 ## 🔴 `PRE-EXISTING`, raised by the gate, filed not absorbed
 
 **The XML reader performs no XML 1.0 §3.3.3 attribute-value normalization.**
 `<status value="&#x9;not-done"/>` and a literal tab both reach the model as `"\tnot-done"`.
 Unchanged at base, unchanged here, and its own item.
+
+**`fhir/CLAUDE.md` still says "Two refuter passes max ... **No fourth** (ADR 0016)"**, which
+contradicts the founder-settled cap of **FOUR** (2026-08-09). Not corrected here: that file is at
+**exactly 28,000 / 28,000** and any edit moves the ratchet. Its own item.
 
 **The BOOLEAN channel carries the identical un-scoped claim this slice just retired for `code`.**
 `unreadableBooleans` says *"Empty for every conformant document, in either wire format"*
