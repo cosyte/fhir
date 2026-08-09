@@ -262,7 +262,7 @@ Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
   nothing** (it counts the roots that DID exist), nor can **`is-inside-work-tree`**, which answers
   for the ENCLOSING repo. Residuals: `phi-scan-overrides.md`
   [`#phi-scan-scope-2026-08-05`](documentation/agent-notes.md#phi-scan-scope-2026-08-05)
-- **Two refuter passes max, then one narrow third against the remedy diff only. No fourth**
+- **Two refuter passes, then up to two narrow ones on the remedy diff. FOUR is the cap**
   (ADR 0016). A sub-problem that fails to converge twice gets **reverted and declared a gap**: a
   pure revert ships no ungraded behaviour, and a declared gap is not a claim.
 - **The gates run on the strongest model**, always (ADR 0009/0024). Never set
