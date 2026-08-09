@@ -91,16 +91,15 @@ refusal channel is for values this library cannot read. Reading it and surfacing
 `validate/validate.ts`, `test/validate-safety.test.ts` and `README.md` all said **"the six safety
 resource types"** over a set holding **seven**, and copies of it rendered into `dist/index.d.ts` and
 `dist/index.d.cts` (**0 at head**). **Cut, not corrected to "seven"** - a number written down here was wrong for days
-and the next reader does not re-check. **And do not write the CARRIER count down either. Three drafts tried and all three
-were wrong**: "8" tracked sites where the grep gives 9 (`README.md`'s copy is line-wrapped), then
-"3" dist occurrences, then the gate's "6" reasoned from the exports. The measured answer is **5 per
-dist file at base, 0 at head**, and it is recorded here only to show why the number does not belong
-in prose. Derive both, every time:
-
-```
-git grep -c "six safety\|six resource types\|six safety types" -- src test README.md
-tr '\n' ' ' < dist/index.d.ts | grep -o "six safety resource types\|six resource types\|six safety types" | wc -l
-```
+and the next reader does not re-check. **And do not write the CARRIER count down either. FOUR attempts, four different
+answers, every one of them defended at the time**: "8" tracked sites, then "3" dist occurrences,
+then the gate's "6" reasoned from the export list, then a measured "5" - and pass 3 showed that last
+one low too, because the grep that produced it could not match a phrase the JSDoc had wrapped.
+**THE COUNT IS NOT WRITTEN HERE, AND THAT IS THE WHOLE FINDING.** The only number that survives is
+**0 at head**, checked wrap-tolerantly in both declaration files. **Grep wrap-tolerantly or do not
+grep**: normalise newlines AND the JSDoc ` * ` continuation before matching, or the phrase that
+wraps mid-sentence reads as absent, which is fail-open and is exactly the defect the count exists to
+catch. That is how `README.md`'s copy hid from the first sweep.
 
 **Four carriers beyond the sites the item named. The sweep found two; THE GATE FOUND THE OTHER TWO,
 AND THEY WERE THE WORSE PAIR.** The sweep found the live `CHANGELOG.md` `[Unreleased]` entry and the
