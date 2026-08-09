@@ -70,21 +70,21 @@ function mergeElement(base: ElementDefinition, diff: ElementDefinition): Element
   // on the instance. It is also what keeps every widening of the `min` READ additive: a newly-read
   // bound can only raise what the snapshot already carried, whatever wire format spelled it.
   //
-  // The clamp against `max` is not tidiness, it is what stops the tightening manufacturing an
-  // UNSATISFIABLE `min >= 1` beside `max 0` where neither definition wrote one. `0..0` is the
-  // ordinary way a profile forbids an element, and `resolveSlices` reads a descendant's cardinality
-  // as an existence expectation: left unclamped, a forbidden descendant beneath a required base one
-  // resolves toward *present*, which silently erased a `PROFILE_SLICE_UNMATCHED` and a
-  // `CARDINALITY_MIN`. Where raising the bound would contradict the element's own `max`, the
-  // narrower `max` wins and the profile's own incoherence is preserved rather than replaced.
+  // DECLARED OPEN, pinned by a test, and deliberately NOT guarded here. Where a profile is
+  // contradictory (the base element required, the differential forbidding it with `0..0`) the
+  // tightening composes the two rules into an UNSATISFIABLE `min 1` beside `max 0`. That is a true
+  // statement about a contradictory profile and every instance draws a finding from it, but
+  // `resolveSlices` reads a descendant's cardinality as an existence expectation and resolves the
+  // contradiction toward *present*, so beneath an `exists` discriminator two slice findings are
+  // lost. A clamp against `max` was tried and REVERTED: it lowered the enforced bound below the
+  // inherited one whenever the differential's own `max` sat under it, which is worse and reaches
+  // ordinary profile mistakes rather than only contradictory ones. The remedy belongs at
+  // `resolveSlices`, which is guessing where its own contract says report `unchecked`, and it is its
+  // own slice.
   //
   // `max` is deliberately NOT given the mirror treatment: no read feeding it moved, so tightening it
   // would be a separate change to the JSON path. It is characterized by a test.
-  const effectiveMax = diff.max ?? base.max;
-  if (diff.min !== undefined) {
-    const tightened = Math.max(base.min ?? 0, diff.min);
-    merged.min = effectiveMax === undefined ? tightened : Math.min(tightened, effectiveMax);
-  }
+  if (diff.min !== undefined) merged.min = Math.max(base.min ?? 0, diff.min);
   if (diff.max !== undefined) merged.max = diff.max;
   if (diff.mustSupport !== undefined) merged.mustSupport = diff.mustSupport;
   if (diff.slicing !== undefined) merged.slicing = diff.slicing;

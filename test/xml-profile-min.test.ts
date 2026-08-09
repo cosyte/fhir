@@ -336,7 +336,7 @@ describe("a differential min can raise the inherited bound and can never lower i
       ],
     },
   };
-  const derived = (min?: unknown): unknown => ({
+  const derived = (min?: unknown, max = "*"): unknown => ({
     resourceType: "StructureDefinition",
     url: "http://example.org/StructureDefinition/derived",
     name: "Derived",
@@ -351,7 +351,7 @@ describe("a differential min can raise the inherited bound and can never lower i
           id: "Observation.performer",
           path: "Observation.performer",
           ...(min === undefined ? {} : { min }),
-          max: "*",
+          max,
         },
       ],
     },
@@ -409,12 +409,75 @@ describe("a differential min can raise the inherited bound and can never lower i
     expect(mergedMin(fromJson)).toBe(3);
   });
 
-  it("never raises a bound above the element's own max, so a 0..0 prohibition survives", () => {
-    // `0..0` is the ordinary way a profile FORBIDS an element, and taking the tighter lower bound
-    // unclamped turned a forbidden descendant beneath a required base one into `min 1 / max 0`, an
-    // unsatisfiable cardinality neither definition wrote. `resolveSlices` reads a descendant's
-    // cardinality as an existence expectation, so that contradiction resolved toward *present* and
-    // silently erased two errors. The clamp keeps the merge identical to the base tree here.
+  it("never lowers the enforced bound, even when the differential's own max sits under it", () => {
+    // The polarity a reverted clamp got wrong. A differential whose `max` is below the inherited
+    // `min` is an invalid profile either way, and the answer must stay the LOUDER of the readings:
+    // the inherited bound is kept and the `CARDINALITY_MIN` still fires. A clamp of the tightened
+    // bound against `max` produced `1..1` here and validated a document both the base tree and the
+    // first remedy rejected, which is why it was reverted rather than tuned.
+    const { fromJson, fromXml } = bothSpellings(derived(3, "1"));
+
+    expect(mergedMin(fromXml)).toBe(3);
+    expect(mergedMin(fromJson)).toBe(3);
+    expect(cardinalityMin(fromXml)).toEqual(["error:CARDINALITY_MIN at Observation.performer"]);
+    expect(cardinalityMin(fromJson)).toEqual(["error:CARDINALITY_MIN at Observation.performer"]);
+  });
+
+  it("leaves an element the differential states no min for exactly as the base had it", () => {
+    // Both-states control: green on the base tree too. It is what makes the rows above a delta of
+    // the newly-read bound rather than of the merge running at all.
+    const { fromXml } = bothSpellings(derived());
+
+    expect(mergedMin(fromXml)).toBe(2);
+    expect(cardinalityMin(fromXml)).toEqual(["error:CARDINALITY_MIN at Observation.performer"]);
+  });
+});
+
+/**
+ * Characterization tests over what this change does NOT close, pinned so they cannot move in
+ * silence. Closing any of them MUST red the test beside it, in the same change.
+ *
+ * They are recorded here because they sit inside or beside the read this change touches, and they
+ * are NOT evidence for it. **Only one of the four is green on the base tree** (the `max` overlay);
+ * the other three are red there, and each says why in its own comment, so the block as a whole must
+ * not be read as a both-states set.
+ */
+describe("declared residuals of the lexical min read, pinned", () => {
+  it("still reads no mustSupport and no slicing.ordered off an XML definition", () => {
+    // RED at base, but only through the co-located `min` assertion at the end: the two residual
+    // assertions above it are green in both states. Deliberately unchanged: they were measured into
+    // a retirement of a `MUST_SUPPORT_ABSENT`, and the `min` remedy does not license them. What makes a widened `min`
+    // safe is that its only consumer that can retire a finding now takes the tighter bound, and a
+    // boolean flag has no tighter-of-the-two: `false` is not "no flag stated".
+    const definition = load(
+      xml(
+        `<StructureDefinition ${FHIR_NS}><url value="http://example.org/StructureDefinition/residual"/>` +
+          '<type value="Observation"/><kind value="resource"/><differential><element>' +
+          '<path value="Observation.subject"/><min value="1"/><mustSupport value="true"/>' +
+          '<slicing><discriminator><type value="value"/><path value="code"/></discriminator>' +
+          '<rules value="closed"/><ordered value="true"/></slicing>' +
+          "</element></differential></StructureDefinition>",
+      ),
+    );
+
+    expect(definition.differential?.[0]?.mustSupport).toBeUndefined();
+    expect(definition.differential?.[0]?.slicing?.ordered).toBeUndefined();
+    // The bound beside them reads, so this is the two flags declining and not the element.
+    expect(definition.differential?.[0]?.min).toBe(1);
+  });
+
+  it("still loses two slice findings when a contradictory profile meets an exists discriminator", () => {
+    // DECLARED OPEN, and this test pins the defect rather than the fix. Where the base element is
+    // required and the differential forbids it with `0..0`, the tightening composes the two rules
+    // into an unsatisfiable `min 1 / max 0`. `resolveSlices` reads a descendant's cardinality as an
+    // existence expectation and resolves that contradiction toward *present*, so beneath an `exists`
+    // discriminator a `PROFILE_SLICE_UNMATCHED` and a slice `CARDINALITY_MIN` are lost: three errors
+    // at the base tree, one here. RED at base, and it is a cost, not a capability.
+    // A clamp of the tightened bound against `max` was tried as the remedy and REVERTED, because it
+    // lowered the enforced bound below the inherited one on ordinary profile mistakes (pinned by
+    // `never lowers the enforced bound…` above), which is the worse of the two. The remedy belongs
+    // at `resolveSlices`, which is guessing where its own contract says report `unchecked`, and it
+    // is its own slice. Closing it MUST red this test.
     const sliceBase = {
       resourceType: "StructureDefinition",
       url: "http://example.org/StructureDefinition/slicebase",
@@ -481,59 +544,12 @@ describe("a differential min can raise the inherited bound and can never lower i
       component: [{ dataAbsentReason: { text: "not collected" }, code: { text: "systolic" } }],
     });
 
-    expect({ min: descendant?.min, max: descendant?.max }).toEqual({ min: 0, max: 0 });
+    expect({ min: descendant?.min, max: descendant?.max }).toEqual({ min: 1, max: 0 });
     expect(
       collectProfileIssues(withComponent, forbidding, { resolve: resolveSliceBase }).map(
         (issue) => `${issue.severity}:${issue.code} at ${issue.expression}`,
       ),
-    ).toEqual([
-      "error:PROFILE_SLICE_UNMATCHED at Observation.component[0]",
-      "error:CARDINALITY_MIN at Observation.component:Missing",
-      "error:CARDINALITY_MAX at Observation.component.dataAbsentReason",
-    ]);
-  });
-
-  it("leaves an element the differential states no min for exactly as the base had it", () => {
-    // Both-states control: green on the base tree too. It is what makes the rows above a delta of
-    // the newly-read bound rather than of the merge running at all.
-    const { fromXml } = bothSpellings(derived());
-
-    expect(mergedMin(fromXml)).toBe(2);
-    expect(cardinalityMin(fromXml)).toEqual(["error:CARDINALITY_MIN at Observation.performer"]);
-  });
-});
-
-/**
- * Characterization tests over what this change does NOT close, pinned so they cannot move in
- * silence. Closing any of them MUST red the test beside it, in the same change.
- *
- * They are recorded here because they sit inside or beside the read this change touches, and they
- * are NOT evidence for it. **Only one of the three is green on the base tree** (the `max` overlay);
- * the other two are red there, and each says why in its own comment, so the block as a whole must
- * not be read as a both-states set.
- */
-describe("declared residuals of the lexical min read, pinned", () => {
-  it("still reads no mustSupport and no slicing.ordered off an XML definition", () => {
-    // RED at base, but only through the co-located `min` assertion at the end: the two residual
-    // assertions above it are green in both states. Deliberately unchanged: they were measured into
-    // a retirement of a `MUST_SUPPORT_ABSENT`, and the `min` remedy does not license them. What makes a widened `min`
-    // safe is that its only consumer that can retire a finding now takes the tighter bound, and a
-    // boolean flag has no tighter-of-the-two: `false` is not "no flag stated".
-    const definition = load(
-      xml(
-        `<StructureDefinition ${FHIR_NS}><url value="http://example.org/StructureDefinition/residual"/>` +
-          '<type value="Observation"/><kind value="resource"/><differential><element>' +
-          '<path value="Observation.subject"/><min value="1"/><mustSupport value="true"/>' +
-          '<slicing><discriminator><type value="value"/><path value="code"/></discriminator>' +
-          '<rules value="closed"/><ordered value="true"/></slicing>' +
-          "</element></differential></StructureDefinition>",
-      ),
-    );
-
-    expect(definition.differential?.[0]?.mustSupport).toBeUndefined();
-    expect(definition.differential?.[0]?.slicing?.ordered).toBeUndefined();
-    // The bound beside them reads, so this is the two flags declining and not the element.
-    expect(definition.differential?.[0]?.min).toBe(1);
+    ).toEqual(["error:CARDINALITY_MAX at Observation.component.dataAbsentReason"]);
   });
 
   it("still overlays a differential max verbatim, so an upper bound CAN be relaxed", () => {

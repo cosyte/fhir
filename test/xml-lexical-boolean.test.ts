@@ -267,8 +267,8 @@ describe("declared residuals of the schema-free boolean read, pinned", () => {
     // NO LONGER A RESIDUAL. This was the pin recording that `min` went unread, so a profile handed
     // over in XML declared its required elements and this library enforced none of them. It is
     // rewritten rather than deleted so the closure is visible from where the gap was declared; the
-    // measurements live in `test/xml-profile-min.test.ts`. `min: 0` is a residual and is pinned
-    // there, not here.
+    // measurements live in `test/xml-profile-min.test.ts`, including `<min value="0"/>`, which reads
+    // faithfully as `0`: the lexical space read is R4's `unsignedInt`, whole.
     const { resource } = parseResourceXml(
       xmlStructureDefinition('<min value="1"/><max value="1"/>'),
     );

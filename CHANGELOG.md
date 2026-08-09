@@ -87,8 +87,18 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `CARDINALITY_MIN` the base element had earned and moved `valid` from `false` to `true`. It now
   takes the tighter of the inherited and the stated bound, so a newly-read `min` can only raise the
   snapshot's bound or leave it alone, whatever wire format spelled it. The malformed profile is not
-  refused, snapshot generation having no channel to report it on; the instance verdict is the
-  fail-safe one.
+  refused, snapshot generation having no channel to report it on; nothing the base element earned is
+  withdrawn.
+  **One consequence is left open rather than guarded, because guarding it measured worse.** Where a
+  profile is contradictory (the base element required, the differential forbidding it with `0..0`),
+  composing the two rules gives an unsatisfiable `min 1` beside `max 0`. Every instance draws a
+  finding from that, but slice resolution reads a descendant's cardinality as an existence
+  expectation and resolves the contradiction toward "present", so beneath an `exists` discriminator
+  two slice findings are lost. Clamping the tightened bound against `max` was tried and reverted: it
+  lowered the enforced bound below the inherited one whenever the differential's own `max` sat under
+  it, reaching ordinary profile mistakes rather than only contradictory ones. The remedy belongs in
+  slice resolution, which is guessing where its own contract says report the slicing unchecked. It
+  is pinned by a test.
   **That closes a defect on the JSON path too, disclosed rather than absorbed quietly:** a JSON
   `{"min": 1}` under an inherited `min` of `2` already removed that finding before this change. The
   direction is `valid: true` to `valid: false`. **The mirror on `max` is deliberately not taken**: a
