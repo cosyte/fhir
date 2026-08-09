@@ -488,9 +488,9 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  * **The set is `MedicationRequest.doNotPerform`**, the only `boolean` {@link readSafety} takes off a
  * document. **The window is every resource root** (so a `contained` or Bundle-`entry`
  * MedicationRequest is reported), which is `arrayWrappedScalars`' window and is deliberately wider
- * than `readSafety`'s own read, which only visits the resource it is handed. Reporting more than was
- * read is the fail-safe direction and the only one available: the nested order is real content whose
- * instruction is unread either way.
+ * than the `doNotPerform` read itself, which only visits the resource {@link readSafety} is handed.
+ * Reporting more than was read is the fail-safe direction and the only one available: the nested
+ * order is real content whose instruction is unread either way.
  * It is **not** a report of every unreadable value in a document: the profile booleans, the
  * `ElementDefinition.min` integer and a `Quantity` magnitude's lexical forms are read elsewhere and
  * are still lost silently.
@@ -745,13 +745,9 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
  * knows the text spells a `boolean` rather than a `code`: `<doNotPerform value="1"/>` and
  * `<status value="1"/>` are the same node to the codec. This layer is the first one that knows the
  * datatype **unconditionally**, and that is the narrow, measured reason the finding raises no
- * `ValidationIssue` of its own: `MedicationRequest` has **no built-in schema**, so with no
- * caller-supplied one the validator has no datatype for this element and says nothing about it. It is
- * no substitute where a schema *is* supplied, either: `validatePrimitiveValue` then draws
- * `TYPE_MISMATCH` on the lexical `"1"` **and on a conformant `<doNotPerform value="true"/>` alike**,
- * the false error recorded with the `Quantity` residuals and deliberately not reopened, so it does
- * not separate readable from unreadable. Both paths are pinned in
- * `test/xml-unreadable-boolean.test.ts`.
+ * `ValidationIssue` of its own: `MedicationRequest` has **no built-in schema**, so the validator is
+ * silent about this element unless a caller supplies one, and this readout has to hold either way.
+ * Both paths are pinned in `test/xml-unreadable-boolean.test.ts`.
  */
 function checkUnreadableBooleans(node: FhirComplex, path: string, out: SafetyWalk): void {
   if (!typesOf(node).includes("MedicationRequest")) return;

@@ -117,23 +117,31 @@ home this slice does not build, a second reason on top of `#79`'s measured retir
 **On the default path this is the first place on the readout where `safeToSummarize: false` sits
 beside `valid: true`.** Stated rather than glossed, because it is new.
 
-**🛑 THE REASON IS NARROW AND MEASURED, AND THE GENERAL VERSION OF IT IS FALSE.** Pass 1 refuted a
-draft of this section that read _"the validator is schema-free and every rule it carries is about a
-shape FHIR gives no meaning to at any position"_. It is not schema-free: `validateResource` takes
-`{ schemas }`, `validate.ts` resolves a datatype from the registry, and
-`validate/primitives.ts` decides `boolean` on it. The true, site-specific fact, measured:
+**🛑 THE REASON IS AVAILABILITY, AND TWO STRONGER-SOUNDING VERSIONS OF IT ARE FALSE. THE GATE
+REFUTED BOTH, ONE PER PASS, IN THIS PARAGRAPH.**
 
-```
-validateResource(<doNotPerform value="1"/>)                 -> RESOURCE_NOT_MODELED   valid: true
-validateResource(<doNotPerform value="1"/>,    { schemas }) -> TYPE_MISMATCH          valid: false
-validateResource(<doNotPerform value="true"/>, { schemas }) -> TYPE_MISMATCH          valid: false
-```
+**Pass 1 killed** _"the validator is schema-free and every rule it carries is about a shape FHIR gives
+no meaning to at any position"_. It is not schema-free: `validateResource` takes `{ schemas }`,
+`validate.ts` resolves a datatype from the registry, and `validate/primitives.ts` decides `boolean`
+on it.
 
-`MedicationRequest` has **no built-in schema**, so with no caller-supplied one the validator has no
-datatype for the element and says nothing. Supply one and it speaks, **but it is no substitute: it
-draws the same `TYPE_MISMATCH` on the CONFORMANT `value="true"`**, which is `#78`'s recorded
-false-error, deliberately not reopened. So it does not separate readable from unreadable. The safety
-layer knows the datatype **unconditionally**, which is why the report lives there. Both paths pinned.
+**Pass 2 killed the replacement**, _"supply a schema and it draws `TYPE_MISMATCH` on the conformant
+`value="true"` too, so it does not separate readable from unreadable"_. The three rows behind that
+were all **XML**, and the conclusion was drawn unscoped over a channel whose own docblock says "in
+either wire format". On the **JSON** wire it is plainly false: `validatePrimitiveValue` shape-checks
+`typeof value === "boolean"`, so a conformant `{"doNotPerform":true}` validates **clean** with a
+schema supplied while `{"doNotPerform":"Y"}` draws `TYPE_MISMATCH`. The package's own pending
+`olive-comets-listen` changeset already said so.
+
+**What survives unscoped is availability, not discrimination.** `MedicationRequest` has **no built-in
+schema** (`BUILTIN_SCHEMAS` is `[Patient]`), so the validator is silent about this element unless a
+caller supplies one, and a readout that has to hold on every document cannot be built on a diagnostic
+that only exists when a caller opts in. The safety layer knows the datatype **unconditionally**, which
+is why the report lives there. Pinned on the default path and with a schema supplied.
+
+**🛑 A CORRECTED CLAIM IS A NEW CLAIM.** Both refutations were the _reason_ reaching further than
+the _measurement_, and both remedies were deletions. Measure both wires before writing a general
+sentence here.
 
 **And `FhirSafetyError.message` moves, outside the corpus measurement above**: it now names this
 sixth shape, so the string changes for **every** refusal it raises, including the five that already

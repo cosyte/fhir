@@ -365,18 +365,16 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `false` that `serializeResource` then emits, laundering an authored value across a format change.
   The channel covers `MedicationRequest.doNotPerform`, the only `boolean` `readSafety` takes off a
   document. Its window is every resource root (so a `contained` or `Bundle.entry` order counts),
-  which is `arrayWrappedScalars`' window and is deliberately wider than `readSafety`'s own read: a
-  nested order is reported at a location the read never visited, the fail-safe direction. A primitive
-  carrying only `id` / `extension` and no value is untouched, since nothing was written there to be
-  unread, so this cannot fire on a conformant document in either wire format.
+  which is `arrayWrappedScalars`' window and is deliberately wider than the `doNotPerform` read,
+  which only visits the resource `readSafety` is handed: a nested order is reported at a location
+  that read never visited, the fail-safe direction. A primitive carrying only `id` / `extension` and
+  no value is untouched, since nothing was written there to be unread, so this cannot fire on a
+  conformant document in either wire format.
   **Unlike the five findings above it, this one raises no `ValidationIssue` of its own**, for a narrow
-  and measured reason rather than a general one: `MedicationRequest` has no built-in schema, so with
-  no caller-supplied schema the validator has no datatype for the element and says nothing about it.
-  Supply one and `validatePrimitiveValue` does speak, but it is no substitute: it draws
-  `TYPE_MISMATCH` on the lexical `"1"` **and on a conformant `<doNotPerform value="true"/>` alike**
-  (the false error recorded with the `Quantity` residuals below, deliberately not reopened), so it
-  does not separate readable from unreadable. The safety layer knows the datatype unconditionally,
-  which is why the report lives there.
+  and measured reason rather than a general one: `MedicationRequest` has no built-in schema, so the
+  validator is silent about this element unless a caller supplies one, and the readout has to hold
+  either way. The safety layer knows the datatype unconditionally, which is why the report lives
+  there.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
   `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding

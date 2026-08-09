@@ -46,14 +46,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `Quantity` magnitude's `+5` / `05` / `.5` / `5.`, and FHIRPath `numberOf`.
   **One asymmetry is deliberate: this raises no `ValidationIssue` of its own, so on the default path
   a `safeToSummarize: false` sits beside `valid: true`.** The reason is narrow and measured rather
-  than general: `MedicationRequest` has no built-in schema, so with no caller-supplied schema the
-  validator has no datatype for the element and says nothing about it. Supply one and
-  `validatePrimitiveValue` does speak, but it is no substitute, because it draws `TYPE_MISMATCH` on
-  the lexical `"1"` **and on a conformant `<doNotPerform value="true"/>` alike** (the false error
-  recorded with the `Quantity` residuals, deliberately not reopened), so it does not separate
-  readable from unreadable. The safety layer knows the datatype unconditionally, which is why the
-  report lives there. Both paths are pinned, with the other residuals, in
-  `test/xml-unreadable-boolean.test.ts`.
+  than general: `MedicationRequest` has no built-in schema, so the validator is silent about this
+  element unless a caller supplies one, and the readout has to hold either way. The safety layer
+  knows the datatype unconditionally, which is why the report lives there. Both paths are pinned,
+  with the other residuals, in `test/xml-unreadable-boolean.test.ts`.
   **One more public surface moves and it is outside the corpus measurement above:** `FhirSafetyError`
   now names this sixth shape in its message, so the message string changes for **every** refusal it
   raises, including the five that already refused. The `locations` array, the class and the thrown
@@ -82,7 +78,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   value the sender did not spell.
   **The text recognised is exactly `true` and `false`**, the whole of the R4 `boolean` lexical space
   and nothing beside it: `"TRUE"`, `"True"`, `"1"`, `"yes"`, `"Y"`, `" true"` and `""` still read as
-  no boolean. That refusal was **silent** as this fix shipped it; the entry below closes that half
+  no boolean. That refusal was **silent** as this fix shipped it; the entry above closes that half
   and reports the element instead.
   **The census is reported rather than acted on, and that is the finding, not a shortfall.** Two more
   boolean reads have the same defect and are left standing: `ElementDefinition.mustSupport` and
@@ -112,7 +108,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   directions by this fix: for a value that reads, that is right, because `negations` now carries the
   instruction and refusing to summarize was never the remedy; for a value that does **not** read
   (`"1"`, ordinary converter output) the element was present, its value unread, nothing recorded it,
-  and the readout still affirmed. **That second direction is closed by the entry below**, which adds
+  and the readout still affirmed. **That second direction is closed by the entry above**, which adds
   the `unreadableBooleans` channel `SafetyReadout` was missing.
   The corpus is hand-authored XML fixtures, mutations and hand-built probes, **not** the FHIR R4
   published-examples corpus. Nothing here is corpus-wide.

@@ -269,18 +269,16 @@ describe("declared residuals of the unreadable-boolean report, pinned", () => {
     // parametrised block above; only the validator half is pinned here, because only the validator
     // half is unchanged from base).
     //
-    // THE REASON IS NARROW AND MEASURED, AND THE GENERAL VERSION IS FALSE. The validator is NOT
-    // schema-free: `validateResource` takes `{ schemas }` and decides `boolean` on the resolved
-    // datatype. What is true is site-specific: `MedicationRequest` has no BUILT-IN schema, so with
-    // no caller-supplied one there is no datatype for `doNotPerform` and the validator says nothing.
-    // Supply one and it speaks, but it is no substitute, because it draws the same `TYPE_MISMATCH`
-    // on the CONFORMANT `value="true"`: that is the false error recorded with the `Quantity`
-    // residuals, deliberately not reopened here. So it does not separate readable from unreadable,
-    // and the safety layer, which knows the datatype unconditionally, is where the report belongs.
+    // THE REASON IS AVAILABILITY, and two stronger-sounding versions of it were refuted, one per
+    // gate pass. The validator is NOT schema-free (`validateResource` takes `{ schemas }` and
+    // decides `boolean` on the resolved datatype), and with a schema supplied it does NOT fail to
+    // separate readable from unreadable either (on the JSON wire a conformant `true` validates
+    // clean). What survives unscoped is that `MedicationRequest` has no BUILT-IN schema, so the
+    // validator is silent about this element unless a caller opts in by supplying one, and a readout
+    // that must hold on every document cannot rest on a diagnostic that only exists on request. The
+    // safety layer knows the datatype unconditionally, which is where the report belongs. The two
+    // rows below pin exactly that: silent by default, available on request.
     const unreadable = parseResourceXml(xmlMedicationRequest('<doNotPerform value="Y"/>')).resource;
-    const conformant = parseResourceXml(
-      xmlMedicationRequest('<doNotPerform value="true"/>'),
-    ).resource;
     // Every element the fixture writes, so the only issue left is the one under test.
     const schemas = [
       {
@@ -299,11 +297,8 @@ describe("declared residuals of the unreadable-boolean report, pinned", () => {
     expect(validateResource(unreadable).issues.map((issue) => issue.code)).toEqual([
       "RESOURCE_NOT_MODELED",
     ]);
-    // With a schema, both spellings draw the same code, which is why it cannot stand in for this.
+    // Available on request, so the silence above is about availability and nothing more.
     expect(validateResource(unreadable, { schemas }).issues.map((issue) => issue.code)).toEqual([
-      "TYPE_MISMATCH",
-    ]);
-    expect(validateResource(conformant, { schemas }).issues.map((issue) => issue.code)).toEqual([
       "TYPE_MISMATCH",
     ]);
   });
