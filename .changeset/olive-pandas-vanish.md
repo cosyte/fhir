@@ -46,9 +46,7 @@ here rather than left to the reader: `{"performer":[{"reference":"Practitioner/1
 comes back spelling the second member `"Practitioner/2"`, the same string in different bytes, and only
 the value-channel `null` family is byte-identical. **That the route stays open is a statement about
 these shapes, not about the whole model**: a model refused here can carry one of that writer's own
-declared exceptions and have it emitted, and a marker inside a member a repeated property name
-shadowed is dropped by that writer as well, which is why the runtime message names only what the
-refusal does not reach instead of promising a route.
+declared exceptions and have it emitted.
 
 Raised **last**, after the name and `div` refusals, so a model that trips two keeps the code it
 already reported and no case moved onto the new one. Pinned by tests on all three orderings, the
@@ -56,8 +54,7 @@ dropped-character-data refusal included.
 
 Deliberately not closed, pinned rather than implied so none of it reads as covered. An array-wrapped
 `0..1` element still launders across this boundary: no node is marked, XML spells a repeating element
-by repeating it, and one occurrence is exactly what comes back. A repeated property name is still
-dropped by **both** writers, so there is no hand-back for XML to be missing. And a JSON decimal comes
+by repeating it, and one occurrence is exactly what comes back. And a JSON decimal comes
 back from XML as a string, because XML carries no JSON type; the lexical value survives byte-exact.
 
 Every count is bounded by the caveat this area carries throughout: the corpus is 7 hand-authored XML

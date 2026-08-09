@@ -9,8 +9,11 @@
  * reason, at its one raw-markup site: JSON carries the string as a string.
  * {@link assertXmlSerializable} and {@link assertXmlArrayWrapper} are XML-only for the mirror-image
  * reason: the shapes they refuse are ones the JSON writer hands back, and XML has no channel to hand
- * them back into. No refusal here recognises anything new, invents a value, or changes a document
- * that reads clean.
+ * them back into. {@link assertNoShadowedProperty} runs in **both** for the first reason again: a
+ * member a repeated property name shadowed falls outside both walks, which visit `properties` only,
+ * and neither format has a spelling that re-reads as the ambiguity the model holds. No refusal here
+ * recognises anything new,
+ * invents a value, or changes a document that reads clean.
  *
  * **This module is a list of the refusals it implements, NOT a closed account of what a writer can
  * author.** Two of the predicates deliberately live somewhere else rather than being copied here,
@@ -42,7 +45,12 @@
 import type { FhirComplex, FhirNode } from "../model/node.js";
 import { rootPath } from "../model/path.js";
 import { typeOf } from "../safety/codes.js";
-import { collectMarked, droppedText, unspellableXmlWrappers } from "../safety/status.js";
+import {
+  collectMarked,
+  droppedText,
+  shadowedProperties,
+  unspellableXmlWrappers,
+} from "../safety/status.js";
 
 /** Every reason a writer refuses to serialize a model. */
 export const SERIALIZE_ERROR_CODES = {
@@ -82,8 +90,10 @@ export const SERIALIZE_ERROR_CODES = {
    * primitive's value channel that padded nothing. **XML only**: this refusal does not reach
    * `serializeResource`, which writes these back from the text the reader preserved at every position
    * that writer walks. **It does not walk a member a repeated property name shadowed, and this
-   * refusal does reach one**, so read that as the refusal's own limit rather than as a route the
-   * shape always survives. See {@link assertXmlSerializable}.
+   * refusal does reach one** -- `serializeResource` refuses that model on
+   * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY} rather than emitting it, so it is
+   * still not a route the shape survives. The XML writer keeps reporting THIS code on such a model,
+   * because this one is raised first. See {@link assertXmlSerializable}.
    *
    * XML has no array-of-arrays, no `_`-sibling and no `null`, so the XML writer has nowhere to put
    * any of it and emits the element the reader was left holding: an empty one, or none. That output
@@ -106,6 +116,15 @@ export const SERIALIZE_ERROR_CODES = {
    * See {@link assertXmlArrayWrapper} for the exact predicate and for what it deliberately leaves.
    */
   UNSERIALIZABLE_ARRAY_WRAPPER: "UNSERIALIZABLE_ARRAY_WRAPPER",
+  /**
+   * The model carries, at one or more object elements, a member a repeated property name shadowed
+   * ({@link ../model/node.js} `duplicates`). **Both writers**, unlike the four refusals above it:
+   * each walks `properties` only, so each wrote one member per name and the second value left the
+   * document with no diagnostic on it.
+   *
+   * See {@link assertNoShadowedProperty} for the window, the two routes weighed, and what it leaves.
+   */
+  UNSERIALIZABLE_SHADOWED_PROPERTY: "UNSERIALIZABLE_SHADOWED_PROPERTY",
 } as const;
 
 /** Discriminant union of every {@link SERIALIZE_ERROR_CODES} value. */
@@ -240,8 +259,8 @@ function carriesJsonOnlyShape(node: FhirNode): boolean {
  *
  * **And "that route stays open" is a statement about these shapes, not about the whole model.** A
  * model refused here can carry one of that writer's own declared exceptions and have it emitted, and
- * a marker sitting in a member a repeated property name shadowed is dropped by that writer too (see
- * the walk, below).
+ * a marker sitting in a member a repeated property name shadowed sends that writer to
+ * {@link assertNoShadowedProperty} instead (see the walk, below).
  *
  * **Raised last**, after the name and `div` refusals, so a model that trips two keeps the code it
  * already reported and no case moves onto this one.
@@ -250,13 +269,12 @@ function carriesJsonOnlyShape(node: FhirNode): boolean {
  * every node at every depth, a primitive's `extension` metadata, and members a repeated property
  * name shadowed. That last one is wider than the XML writer's own walk, which visits `properties`
  * only, so `{"name":[[{"family":"Roe"}]],"name":[{"family":"Roe"}]}` is refused for a marker sitting
- * in a member the writer would never have reached. Wider in the direction that refuses more, and the
- * JSON writer drops that member too, so it is not a loss this refusal invented -- **but it is the one
- * case where neither writer carries the shape, so do not read the message as pointing at a route
- * that keeps it.** The location it reports is the property, and a consumer resolving that location
+ * in a member the writer would never have reached. Wider in the direction that refuses more, and
+ * {@link assertNoShadowedProperty} refuses that same model in the JSON writer -- **so it is the one
+ * case where neither writer carries the shape, and the message must not point at a route that keeps
+ * it.** The location it reports is the property, and a consumer resolving that location
  * reaches the **surviving** member rather than the shadowed one, because FHIRPath cannot address a
  * shadowed member at all: the same reason `collectMarked` de-duplicates two markers at one location.
- * `DUPLICATE_PROPERTY` and the safety refusal are what carry that document.
  *
  * @param node - The model about to be serialized to XML.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE}.
@@ -339,8 +357,9 @@ export function assertXmlSerializable(node: FhirComplex): void {
  * **The window walked includes a member a repeated property name shadowed**, which the XML writer
  * itself never visits, so `{"status":["b","c"],"status":["a"]}` is refused for a wrapper the writer
  * would have dropped either way. Wider in the direction that refuses more, and the same choice
- * {@link assertXmlSerializable} made at the same fork; the shadowed member is dropped by both
- * writers, so do not read this refusal as pointing at a route that keeps it.
+ * {@link assertXmlSerializable} made at the same fork; the shadowed member is refused by both
+ * writers ({@link assertNoShadowedProperty}), so do not read this refusal as pointing at a route
+ * that keeps it.
  *
  * @param node - The model about to be serialized to XML.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER}.
@@ -355,6 +374,72 @@ export function assertXmlArrayWrapper(node: FhirComplex): void {
     // the same test -- with the shadowed-member limit stated in the docblock rather than here.
     `cannot serialize to XML: ${String(locations.length)} location(s) carry an array wrapper around a 0..1 element that XML has no repeated element to spell back; this refusal does not reach serializeResource`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER,
+    locations,
+  );
+}
+
+/**
+ * Refuse to serialize, **in either format**, a model carrying a member a repeated property name
+ * shadowed. Both writers walk `properties` only, so both wrote one member per name and the other
+ * value left the document.
+ *
+ * ## The site, measured at `914c03a`
+ *
+ * `{"resourceType":"Observation","status":"final","status":"entered-in-error"}` reads first-wins with
+ * `DUPLICATE_PROPERTY`, keeps the second value on `duplicates`, and reads `valid: false` with
+ * `safeToSummarize: false` and `entered-in-error` in `negations`. `serializeResource` emitted
+ * `{"resourceType":"Observation","status":"final"}` and `serializeResourceXml` emitted
+ * `<status value="final"/>`; **both re-read with an empty issue list, `valid: true` and
+ * `safeToSummarize: true`, and the retraction is not in the output at all.** Which value is lost
+ * depends on the order the sender wrote them in, not on anything the writer knows.
+ *
+ * ## Refusing rather than handing both back
+ *
+ * Handing both back is the route the four JSON-only shapes take one module over, and here it is the
+ * worse of the two, **measured rather than argued**: FHIR JSON requires unique names (json.html
+ * §2.6.2) and RFC 8259 §4 leaves the winner undefined, and `JSON.parse` resolves such a name
+ * **last-wins** where this library reads **first-wins**. On the mirror spelling
+ * `{"status":"entered-in-error","status":"final"}` the model holds the retraction and `JSON.parse`
+ * returns `"final"`, so emitting both members hands every other consumer the member this one calls
+ * shadowed -- the writer authoring a different clinical answer, which is the fabrication class the
+ * refusals above it exist for. FHIR XML *can* repeat an element, but two repeated elements re-read
+ * as a **list**, a repeating element the sender never wrote. Refusing invents nothing.
+ *
+ * ## The window, which is not a second table
+ *
+ * `shadowedProperties` -- the same call `validateResource` raises its **error**-severity
+ * `DUPLICATE_PROPERTY` from and the same one `readSafety` requires empty before it affirms
+ * `safeToSummarize`. So a model refused here already reads `valid: false` with
+ * `safeToSummarize: false`: the bound every refusal beside it kept, held by construction rather than
+ * by measurement.
+ *
+ * **Raised last** in both writers, after every refusal above it, so a model that trips two keeps the
+ * code it already reported and no case moves onto this one.
+ *
+ * ## What it does not cover, and why that is the same bound rather than an oversight
+ *
+ * A repeated name inside a **primitive's `_`-sibling** is not modeled at all (`./read.js`: an R4
+ * `Element` is `id` and `extension`, and the shadowed member is not carried), so there is nothing
+ * here to refuse. A repeated name inside a complex sitting in a primitive's `extension` **is**
+ * modeled and is still dropped by both writers:
+ * `{"_status":{"extension":[{"url":"u","valueString":"x","valueString":"y"}]}}` loses `"y"` on both
+ * paths. It is left rather than refused because that document reads `valid: true` with
+ * `safeToSummarize: true`, so refusing it would withdraw a round trip from a model this library
+ * reports as clean -- the one cost none of these refusals pays.
+ *
+ * @param node - The model about to be serialized, in either format.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY}.
+ * @internal
+ */
+export function assertNoShadowedProperty(node: FhirComplex): void {
+  const locations = shadowedProperties(node, rootPath(typeOf(node) ?? "Resource"));
+  if (locations.length === 0) return;
+  throw new FhirSerializeError(
+    // Names both writers, because both drop it: there is no route here that keeps the member, and a
+    // message pointing at one would point an operator at a silent drop. That is the wording the four
+    // refusals above were narrowed to, at the one refusal where the answer is "neither".
+    `cannot serialize: ${String(locations.length)} location(s) carry a member a repeated property name shadowed, which neither serializeResource nor serializeResourceXml can write`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY,
     locations,
   );
 }

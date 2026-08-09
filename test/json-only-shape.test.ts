@@ -182,15 +182,16 @@ describe("the four marked shapes are refused rather than emitted as an empty ele
   it("says only what the refusal does not reach, never that the JSON writer keeps the shape", () => {
     // The one input where neither writer carries it: a marker inside a member a repeated property
     // name shadowed. A message promising `serializeResource` writes it back would point an operator
-    // at a route that silently drops it, so the message names the refusal's own limit instead.
+    // at a route that does not keep it, so the message names the refusal's own limit instead.
     const { resource, refused } = fromJson(
       '{"resourceType":"Patient","name":[{"family":"Roe"}],"name":[[{"family":"Roe"}]]}',
     );
     expect(refused?.message).toContain("this refusal does not reach serializeResource");
     expect(refused?.message).not.toContain("writes it back");
-    // And the drop it must not promise against, asserted rather than described.
-    expect(serializeResource(resource)).toBe(
-      '{"resourceType":"Patient","name":[{"family":"Roe"}]}',
+    // The route it must not promise against, asserted rather than described: that writer refuses
+    // the repeated name outright now, where it used to emit the surviving member alone.
+    expect(() => serializeResource(resource)).toThrow(
+      expect.objectContaining({ code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY }),
     );
   });
 
@@ -468,14 +469,15 @@ describe("what is deliberately NOT closed here, pinned so it cannot be read as c
     });
   });
 
-  it("a repeated property name is still dropped, by BOTH writers rather than by this one", () => {
-    // Not this class: the JSON writer drops it too (one member per name, declared), so there is no
-    // hand-back for XML to be missing. `DUPLICATE_PROPERTY` and the safety refusal carry it instead.
+  it("a repeated property name is refused by BOTH writers rather than by this one", () => {
+    // Not this class, and the distinction is why it is still asserted here: no marker is set, and
+    // the JSON writer dropped it too, so there was never a hand-back for XML to be missing. It is
+    // refused on its own code now, in both writers.
     const { resource, refused } = fromJson(
       '{"resourceType":"Observation","status":"final","status":"entered-in-error"}',
     );
-    expect(refused).toBeUndefined();
-    expect(serializeResource(resource)).toBe('{"resourceType":"Observation","status":"final"}');
+    expect(refused?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY);
+    expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
     expect(readSafety(resource).safeToSummarize).toBe(false);
   });
 

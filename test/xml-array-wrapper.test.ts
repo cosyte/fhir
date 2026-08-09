@@ -231,7 +231,9 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
         `{"resourceType":"AllergyIntolerance","code":{"coding":[{"system":"${SCT}",` +
           '"code":["716186003","227493005"],"code":["227493005","716186003"]}]}}',
       );
-      expect(bothLong.refused).toBeUndefined();
+      // Not THIS refusal: both wrappers are writable. The repeated name is refused by the code
+      // raised after it, which is what carries the document instead.
+      expect(bothLong.refused?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY);
     });
   });
 
@@ -262,7 +264,10 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
       const { refused } = fromJson(
         '{"resourceType":"Observation","status":["final","amended"],"status":["entered-in-error","corrected"]}',
       );
-      expect(refused).toBeUndefined();
+      // Both wrappers hold two items, so THIS refusal has nothing to say. The document is still
+      // refused, by the repeated-name code raised after it, and the distinction is the point: this
+      // one must not claim a location it did not decide.
+      expect(refused?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY);
     });
   });
 
@@ -342,24 +347,17 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
 
   describe("what this does NOT cover, measured rather than implied", () => {
     it("does not reach a writable wrapper that only a SHADOWED member carried", () => {
-      // `{"status":"final","status":["a","b"]}` reports `Observation.status` and comes back from XML
-      // reporting nothing, so the location does launder here. It is NOT this class: the wrapper is
-      // writable (two items), what drops it is the repeated property name, and the JSON writer drops
-      // it identically -- `{"resourceType":"Observation","status":"final"}`, with `safeToSummarize`
-      // going `false -> true` on THAT route too. `DUPLICATE_PROPERTY` and the safety refusal are
-      // what carry such a document, and the repeated name is its own declared-open residual.
+      // `{"status":"final","status":["a","b"]}` reports `Observation.status` and used to come back
+      // from BOTH writers reporting nothing. That is not this class: the wrapper is writable (two
+      // items) and what drops it is the repeated property name. So this refusal still says nothing
+      // about it -- the code raised after it does, which is the assertion that keeps the two apart.
       const source = '{"resourceType":"Observation","status":"final","status":["a","b"]}';
       const { resource, refused } = fromJson(source);
-      expect(refused).toBeUndefined();
+      expect(refused?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY);
       expect(readSafety(resource).arrayWrappedScalars).toEqual(["Observation.status"]);
-
-      expect(serializeResource(resource)).toBe('{"resourceType":"Observation","status":"final"}');
-      const viaJson = readSafety(parseResource(serializeResource(resource)).resource);
-      expect(viaJson.arrayWrappedScalars).toEqual([]);
-      expect(viaJson.safeToSummarize).toBe(true);
-
-      const viaXml = parseResourceXml(serializeResourceXml(resource));
-      expect(readSafety(viaXml.resource).arrayWrappedScalars).toEqual([]);
+      // The JSON route is refused on the same code, so neither writer emits the flattened document
+      // this test used to assert.
+      expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
 
       // The same shape on a Coding, which is where a member that is not a wrapper at all reaches
       // the predicate: a bare `code` beside a shadowed two-item one is not a wrapper this can spell
@@ -368,7 +366,7 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
         `{"resourceType":"AllergyIntolerance","code":{"coding":[{"system":"${"http://snomed.info/sct"}",` +
           '"code":"x","code":["a","b"]}]}}',
       );
-      expect(coding.refused).toBeUndefined();
+      expect(coding.refused?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY);
     });
 
     it("counts ITEMS, not emitted elements, and the two part on a hand-built node", () => {

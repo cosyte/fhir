@@ -35,7 +35,6 @@ refused rather than repaired, because inventing an XML spelling would author mar
 Raised last, after the refusals beside it, so no case moves onto the new code. `serializeResource`
 writes the wrapper back and is the route that stays open.
 
-Still open and stated rather than implied: a wrapper that only a **shadowed** member carried is
-dropped by **both** writers, which is the repeated-property-name gap rather than this one; and the
-window does not reach `Observation.value[x]`, a `0..1` choice whose wrapper still launders, because
-widening it means the per-resource model this library deliberately does not have.
+Still open and stated rather than implied: the window does not reach `Observation.value[x]`, a `0..1`
+choice whose wrapper still launders, because widening it means the per-resource model this library
+deliberately does not have.

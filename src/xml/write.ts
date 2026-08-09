@@ -39,6 +39,7 @@ import {
   type PrimitiveValue,
 } from "../model/node.js";
 import {
+  assertNoShadowedProperty,
   assertSerializable,
   assertXmlArrayWrapper,
   assertXmlSerializable,
@@ -377,6 +378,14 @@ function writeElement(
  *   at the item, and which of the two it is depends on the spelling), and XML has no such shape.
  *   {@link serializeResource} writes the wrapper back, so this refusal does not reach
  *   it. See `assertXmlArrayWrapper` for the window this is scoped to and what it does not cover.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_SHADOWED_PROPERTY` if the model carries a member
+ *   a repeated property name shadowed. This writer walks `properties` only, so
+ *   `{"status":"final","status":"entered-in-error"}` came back as `<status value="final"/>`: the
+ *   retraction absent, and `valid` and `safeToSummarize` both moved from `false` to `true`. This
+ *   refusal also reaches {@link serializeResource}, because that writer drops the
+ *   member too and there is no route that keeps it. XML *can* repeat an element, but two repeated
+ *   elements re-read as a list, which is a repeating element the sender never wrote. See
+ *   `assertNoShadowedProperty` for the window and for the two positions it leaves.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -401,5 +410,8 @@ export function serializeResourceXml(node: FhirComplex): string {
   // And this one after that, on the same rule: it is the newest code, so it goes at the end of the
   // chain and no model that already reported one of the three above moves onto it.
   assertXmlArrayWrapper(node);
+  // And this one after that, on the same rule again: it is the newest code, so it goes at the very
+  // end of the chain in both writers and nothing that already reported one of the four moves onto it.
+  assertNoShadowedProperty(node);
   return xml;
 }

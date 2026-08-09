@@ -8,6 +8,44 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A member a repeated property name shadowed was dropped by BOTH writers, so a retraction left the
+  document across one round trip (`FHIR-XML-WRITE-RESIDUALS`).** The reader keeps the shadowed member
+  (`FhirComplex.duplicates`), `validateResource` raises an error-severity `DUPLICATE_PROPERTY` over it
+  and `readSafety` refuses to affirm `safeToSummarize`: **all three are findings about the input**.
+  Each writer walks the surviving members only, so each emitted one member per name and that output
+  was a different document carrying none of them. Measured at the base commit,
+  `{"resourceType":"Observation","status":"final","status":"entered-in-error"}` emitted
+  `{"resourceType":"Observation","status":"final"}` and
+  `<Observation xmlns="http://hl7.org/fhir"><status value="final"/></Observation>`; both re-read with
+  an empty issue list, `valid` and `safeToSummarize` both `false → true`, and
+  `negations: ["entered-in-error"] → []`. **The retraction is in neither output**, and which member is
+  lost depends only on the order the sender wrote them in. That is the duplicate-key retraction defect
+  this library already closed on the read path, re-opened one layer later on the write path.
+  Both writers now raise a new `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY`, value-free
+  and carrying bounded locations, as a whole-model pre-pass. **Refusing rather than handing both
+  members back, and that is measured rather than argued**: FHIR JSON requires unique names
+  (json.html §2.6.2), RFC 8259 §4 leaves the winner undefined, and `JSON.parse` resolves such a name
+  **last-wins** where this library reads **first-wins**. On the mirror spelling
+  `{"status":"entered-in-error","status":"final"}` the model holds the retraction and `JSON.parse`
+  returns `"final"`, so emitting both members would hand every other consumer the member this one
+  calls shadowed. FHIR XML can repeat an element, but two repeated elements re-read as a **list**, a
+  repeating element the sender never wrote. **The window is `shadowedProperties`**, the same call
+  `validateResource` raises its error from and the same one `readSafety` requires empty, so **a model
+  refused here already reads `valid: false` with `safeToSummarize: false`** and nothing that reads
+  clean stops serializing. The location's root SEGMENT is derived per call site and is not shared, a
+  pre-existing, already-declared divergence that is not this window's to close. **Raised last** in both
+  writers, so a model that trips two keeps the code it already reported. Deliberately **not** closed,
+  and measured rather than implied: a repeated name inside a primitive's `_`-sibling is not modeled at
+  all, so there is nothing to refuse; and one inside a complex sitting in a primitive's `extension`
+  **is** modeled and is still dropped by both writers, left because that document reads `valid: true`
+  with `safeToSummarize: true` and refusing it would withdraw a round trip from a model this library
+  reports as clean. The axis of each count, because one is vacuous by construction: **0 of 1,195
+  readings moved** is the XML read differential, which **cannot grade this class at all** (the XML
+  reader has no `duplicates` mechanism, so no document there carries a shadowed member); **0 of 33
+  fixtures newly refused** is this repo's 26 JSON and 7 XML hand-authored fixtures through both
+  writers; and **0 false positives over 2,480 documents** is a generated grammar of 8 root pairs × 10
+  value shapes × 3 placements, which is not the whole window. None is the FHIR R4 published-examples
+  corpus. Measurement, controls and what was left: `documentation/agent-notes.md`.
 - **An array wrapper around a `0..1` element was flattened away by the XML writer, so a document that
   read `valid: false` came back `valid: true` (`FHIR-XML-WRITE-RESIDUALS`).** FHIR JSON writes a
   single-valued element as a name/value pair and reserves the array for a repeating one
@@ -43,8 +81,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   the safety layer's own window rather than a second traversal with its own element table, so it can
   never name a location `arrayWrappedScalars` does not.
   `serializeResource` writes the wrapper back and is the route that stays open. **Not** closed by it,
-  and pinned rather than implied: a wrapper that only a **shadowed** member carried is still dropped,
-  by **both** writers, which is the repeated-property-name residual rather than this one; and the
+  and pinned rather than implied: the
   window does not reach `Observation.value[x]`, a `0..1` choice whose wrapper still launders, because
   widening it means a per-resource model.
 - **`JSON -> XML -> JSON` laundered every shape the JSON reader marks, because XML has no channel for
@@ -76,13 +113,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **Value-exact, not byte-exact**, the limit the preserved text already carried:
   `{"performer":[{"reference":"Practitioner/1"},"Practitioner\/2"]}` comes back spelling the second
   member `"Practitioner/2"`, and only the value-channel `null` family is byte-identical. That the
-  route stays open is a statement about these shapes, not about the whole model; a marker inside a
-  member a repeated property name shadowed is dropped by that writer too, so the runtime message says
-  only what the refusal does not reach rather than promising a route. **Raised last**, after
+  route stays open is a statement about these shapes, not about the whole model. **Raised last**, after
   the name and `div` refusals, so a model that trips two keeps the code it already reported and **no
   case moved onto the new one**. Deliberately **not** closed, and pinned rather than implied: an
   array-wrapped `0..1` element still launders across this boundary (no node is marked, and XML spells
-  a repeating element by repeating it), a repeated property name is dropped by **both** writers, and a
+  a repeating element by repeating it), and a
   JSON decimal comes back from XML as a string because XML carries no JSON type. Every count here is
   bounded by the caveat this lineage carries: the corpus is 7 hand-authored XML fixtures plus
   mutations and this repo's hand-authored JSON fixtures, **not** the FHIR R4 published-examples
@@ -1307,9 +1342,7 @@ true`, 0 `valid true -> false`, 0 `safeToSummarize false -> true`, 0 retractions
   member is not carried on the model there: a primitive's metadata is an R4 `Element`, `id` and
   `extension` only, so nothing in it can make a safety verdict wrong, and `shadowedProperties` says
   so). The JSON/XML equivalence oracle no longer calls a document carrying a shadowed member
-  equivalent to one without it. And the writer continues to emit one member per name, which is now a
-  **deliberate** narrowing rather than a silent one: emitting both would produce invalid FHIR, and
-  emit is the wrong place to resolve an ambiguity the reader already reported.
+  equivalent to one without it.
 
 ### Changed
 
