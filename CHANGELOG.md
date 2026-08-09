@@ -8,6 +8,64 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **Every negation but one was read only at the resource handed in, so a retracted or not-performed
+  record inside a `Bundle` entry left the Bundle's `negations` empty
+  (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit, on **plain conformant
+  JSON**: a collection `Bundle` whose single entry is
+  `{"resourceType":"Observation","status":"entered-in-error"}` returned `negations: []` under
+  `safeToSummarize: true` with `assertSafeToSummarize` clean, and so did the same Bundle carrying a
+  `Procedure` with `status: "not-done"`, a `MedicationStatement` with `status: "not-taken"` or a
+  refuted `AllergyIntolerance`, and so did a `Patient` carrying any of them in `contained`. The
+  identical Bundle carrying an order with `doNotPerform: true` returned the `do-not-perform`
+  negation, that one having been moved onto the walk by the entry below.
+  **A retracted record and a procedure recorded as not performed read as a document with nothing to
+  say about them**, and a `Bundle` is the container the standard defines for carrying resources.
+  **This needs neither a non-conformant value nor a wire-format quirk**: it is conformant JSON, read
+  wrong.
+  **What licenses reading a nested resource is FHIR's modifier rule, not the depth.** Every element
+  moved here is one R4 flags `?!`: `status` (the `entered-in-error` retraction and the `not-done` /
+  `not-taken` negations), `verificationStatus` (the retraction and `refuted`), and `doNotPerform`,
+  and a consumer may never process a modifier element as if it were absent. **That obligation
+  attaches to the resource carrying it, not to the position the resource occupies in a document**: a
+  `Bundle.entry` order and a `contained` order are resources. **Only then** does the direction
+  argument apply, exactly as it does at the entry root: the read can only **add** a negation, never
+  retire a finding, never flip `valid`, and never turn a refusal into an affirmation.
+  **The read is not widened past its refusal.** The four channels that record a safety value this
+  library could **not** read (dropped XML element text, an array inside an array, a shadowed property
+  name, an array-wrapped scalar) already covered at least every location this read moved into, so the
+  refusal window was and remains no narrower than the read. Both halves are pinned at one nested
+  location: a `<status>not-done</status>` whose character data the reader drops is reported there and
+  adds no negation, and a `<status value="not-done"/>` at that same location is read. **The reads
+  themselves are unchanged** and are the ones the readout already performed at the entry root, called
+  on more nodes rather than rewritten, so no document's _reading_ moves; only the set of nodes the
+  reading is applied to. The cardinality report and the negation reads are now reached through one
+  function, so "which nodes are resource roots" is decided in one place for both.
+  **Scope, stated as what did not move.** `negations` is the only field that answers about the whole
+  document; `retracted`, `status`, `doNotPerform` and `noKnownAllergy` stay **root** reads, because a
+  `Bundle` is not retracted because one of its entries is, so `retracted` implies `entered-in-error`
+  is on `negations` and never the other way round. The classified list is a **set in a fixed order**,
+  so a kind appears once however many resources assert it and entry order does not decide the order.
+  The scope stops at resource roots, so a `status` on `Procedure.performer` and a `doNotPerform` on
+  `Dosage` are read by nothing. The array-wrapper report keeps its cardinality table, so a wrapped
+  `status` on a type outside the safety set is read through and surfaced at a nested location while
+  the wrapper draws no `ARRAY_WRAPPED_SCALAR`. Every one of those is pinned at its literal in
+  `test/negation-read-scope-depth.test.ts`.
+  **`no-known-allergy` deliberately does not move, and it is the one negation whose absence is the
+  cautious answer.** It is read off `AllergyIntolerance.code`, an element R4 does **not** flag `?!`
+  at all, so the modifier rule does not reach it; and it runs the other way from every negation on
+  the walk, because surfacing a recorded "no known allergy" from somewhere inside a document can make
+  a caller **less** careful about a patient, while leaving it unsurfaced reads as _unknown_. It stays
+  the root, type-scoped read: declared and pinned in both states rather than claimed.
+  **Measured:** 21 of 31 new test cases red at the base commit in a real detached base worktree (31
+  of 31 at head), and the 10 that pass in **both** states are named in the test file rather than
+  counted here. Non-vacuity is by mutation, and is recorded as **what is held down rather than as a
+  total**: the four status and coding reads at the walk's window, the walk window itself, `retracted`
+  staying the root read, `no-known-allergy` staying off the walk, the fixed kind order, the
+  de-duplication, the resource-root boundary, the absence of a type gate on the nested read, and
+  reading every written member rather than the first. **Two characterization tests over the gap this
+  closes were re-keyed**, and the reason is recorded in each rather than the assertion quietly
+  narrowed. The corpus is hand-authored JSON and XML fixtures and hand-built probes, **not** the FHIR
+  R4 published-examples corpus.
 - **A `status` of `not-done` was read only on an `Immunization`, so four conformant R4 resource types
   recording that something was **not** done read as recording nothing at all.** Measured at the base
   commit, on **plain conformant JSON**: `{"resourceType":"Procedure","status":"not-done"}` returned
@@ -41,9 +99,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   type, in one shared function rather than three copies, so they cannot drift apart over which values
   of `status` they see.
   **Scope, stated as what did not move.** The read stays on `status` and on no other element, and at
-  the **resource root** rather than a backbone element or a nested resource, so a `Procedure` inside a
-  `Bundle` entry still leaves the Bundle's `negations` empty (a declared gap, as it is for the
-  retraction). The array-wrapper report keeps its cardinality table, so a wrapped `status` on a type
+  a **resource root** rather than a backbone element.
+  The array-wrapper report keeps its cardinality table, so a wrapped `status` on a type
   outside the safety set is read through and surfaced while the wrapper draws no
   `ARRAY_WRAPPED_SCALAR`. `noKnownAllergy` stays type-gated, because it asserts something _positive_
   about a patient. Every one of those is pinned at its literal in
@@ -117,8 +174,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   head), and non-vacuity proved by seven mutations of the fix, each reddening at least one. The 8
   assertions that pass in **both** states clear nothing about the fix and are labelled as such in the
   test file rather than counted here: the `MedicationRequest` pair that already worked, the negation
-  ordering, the absent element, `noKnownAllergy`'s gate, the status-code gates, the other negations'
-  root-only scope, and the backbone-element boundary. The corpus is hand-authored JSON and
+  ordering, the absent element, `noKnownAllergy`'s gate, the status-code gates, the root-scoped
+  convenience fields, and the backbone-element boundary. The corpus is hand-authored JSON and
   XML fixtures and hand-built probes, **not** the FHIR R4 published-examples corpus.
 
 ### Added

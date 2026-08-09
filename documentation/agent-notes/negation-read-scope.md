@@ -81,6 +81,9 @@ refusal channel is for values this library cannot read. Reading it and surfacing
   [`negation-status-codes.md`](negation-status-codes.md).
 - **Every negation except `doNotPerform` is still root-only.** A retracted `Observation` inside a
   `Bundle.entry` leaves the Bundle's `negations` empty. Pinned.
+  **CLOSED 2026-08-09** by the slice after next, on FHIR's `?!` modifier rule rather than on this
+  slice's direction argument alone: [`negation-read-scope-depth.md`](negation-read-scope-depth.md).
+  `no-known-allergy` stays root-scoped there, and that is now the declared residual.
 - **The array-wrapper report keeps its cardinality table.** `{"resourceType":"ServiceRequest",
   "doNotPerform":[true]}` is now read through the wrapper and the negation surfaced, but the wrapper
   itself draws no `ARRAY_WRAPPED_SCALAR`, because reporting one is an `error` and that stays where a
@@ -124,8 +127,9 @@ left alone: it *enumerates* its six groups and is true at its own site.
   at head.** The 8 that pass in both states are deliberate pins, named **in the test file itself**,
   five under their own `describe` and three commented in place: the
   `MedicationRequest` pair that already worked (the control that says nothing broke), the negation
-  ordering, the absent element, `noKnownAllergy`'s gate, the status-code gates, the other negations'
-  root-only scope, and the backbone-element boundary.
+  ordering, the absent element, `noKnownAllergy`'s gate, the status-code gates, the root-scoped
+  convenience fields, and the backbone-element boundary. (That sixth pin read "the other negations
+  are root-only" until the slice that closed it re-keyed it; the re-key is recorded in the test.)
 - **Non-vacuity by mutation, 7 of 7 red at least one test:** re-gate the root read (5); re-gate the
   walk (10); gate **only** the report half, i.e. the drift this design forbids (2); undo axis 2 (5);
   negate on a written `false` (1); run the check past resource roots (1); make the convenience field

@@ -285,19 +285,25 @@ describe("the not-done / not-taken negations are read wherever a status spells t
       ]);
     });
 
-    it("leaves the status-code negations root-only", () => {
-      // A declared gap, not a claim, and its own slice: only `doNotPerform` reads at every resource
-      // root. A `Procedure` recorded as not performed inside a Bundle entry still leaves the
-      // Bundle's `negations` empty, exactly as a retraction there does.
-      const bundle =
-        '{"resourceType":"Bundle","type":"collection","entry":[{"resource":' +
-        '{"resourceType":"Procedure","status":"not-done"}}]}';
+    it("keeps the read on a resource's own status through depth", () => {
+      // **Re-keyed, and the reason is recorded rather than the assertion quietly narrowed.** This
+      // pinned "a `Procedure` recorded as not performed inside a Bundle entry still leaves the
+      // Bundle's `negations` empty": a declared gap that a later slice closed, and it is pinned at
+      // its new value in `test/negation-read-scope-depth.test.ts`. That slice widened the set of
+      // NODES the read is applied to and nothing about the read itself, so what survives here, and
+      // reads identically at this slice's base commit and at head, is the element-and-root scope:
+      // a `status` on a backbone element is not a resource's status at any depth.
+      const bundle = (resource: string): string =>
+        `{"resourceType":"Bundle","type":"collection","entry":[{"resource":${resource}}]}`;
 
-      expect(safetyOf(bundle).negations).toEqual([]);
+      expect(
+        safetyOf(bundle('{"resourceType":"Procedure","performer":[{"status":"not-done"}]}'))
+          .negations,
+      ).toEqual([]);
       expect(
         safetyOf(
           '{"resourceType":"Patient","contained":[{"resourceType":"Procedure",' +
-            '"status":"not-done"}]}',
+            '"code":{"coding":[{"code":"not-done"}]}}]}',
         ).negations,
       ).toEqual([]);
     });

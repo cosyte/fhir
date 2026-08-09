@@ -3115,6 +3115,31 @@ is. Red-at-base **11 of 22**, 11 both-states pins named, **8 of 8 mutations red 
 found a hole**: widening the read off `status` onto `code` red nothing until an assertion was added,
 so the element scope was written down and unpinned.
 
+## Every negation reaches every resource root (2026-08-09)
+
+**Narrative relocated** (cap):
+[`agent-notes/negation-read-scope-depth.md`](agent-notes/negation-read-scope-depth.md). Base
+`3fa61aa`, closing the SECOND residual of the scope section above and the FIRST of the census
+section, which were **one gap read from two sides**. Cursor: **plain conformant JSON**, a collection
+`Bundle` whose single entry is `{"resourceType":"Observation","status":"entered-in-error"}` read
+`negations: []` / `safeToSummarize: true` / assert clean, same for a nested `not-done` `Procedure`, a
+`not-taken` `MedicationStatement`, a refuted `AllergyIntolerance`, and each of them in `contained`:
+**a retracted record read as data, in the container the standard defines for carrying resources.**
+**🛑 WHAT LICENSES READING A NESTED RESOURCE IS THE `?!` RULE, NOT THE DEPTH:** every element moved is
+one R4 flags `?!`, and **that obligation attaches to the RESOURCE, not to the position it occupies in
+a document.** Do not restate it as "deeper is always safe". **🛑 CHECK THE DIRECTION BEFORE ASSUMING
+YOU MUST MOVE BOTH HALVES:** here the four unreadable-value channels **already covered every location
+the read moved into**, so nothing needed widening. What was needed was the EVIDENCE, pinned at ONE
+nested location from both sides (`<status>not-done</status>` reported and unread;
+`<status value="not-done"/>` read). **The reads are byte-identical to the entry-root ones**, called
+on more nodes, so no document's *reading* moves. **🔴 `no-known-allergy` DELIBERATELY DOES NOT MOVE**:
+it is read off an element R4 does **not** flag `?!`, and it is **the one negation whose absence is
+the cautious answer** (surfacing it can make a caller LESS careful; unsurfaced reads as *unknown*),
+so the direction argument argues **against** it. **`retracted` implies `entered-in-error` is on
+`negations`, NEVER the other way round.** Red-at-base **21 of 31**, 10 both-states pins named in the
+test file, **9 of 9 mutations red**, negative control 31/31 failing against `@cosyte/hl7`.
+`CLAUDE.md` untouched at 28,000/28,000: its existing trap already generalises.
+
 ### The `null` / `_`-sibling laundering: the CLAUDE.md cursor, relocated VERBATIM 2026-08-09
 
 Moved out of `CLAUDE.md` under its byte budget to make genuine room for the negation-read-scope trap

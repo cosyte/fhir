@@ -171,8 +171,14 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   can only add a finding are not type-scoped at all**: a retraction, a refutation, an instruction
   **not** to perform, and a `status` of `not-done` / `not-taken` are surfaced whatever the resource
   type, because a gate does not merely fail to read the types it omits, it never looks, so nothing is
-  reported for them either. `doNotPerform` goes further and is read at **any resource root**, so one
-  inside a `Bundle` entry or `contained` reaches `negations` too.
+  reported for them either. Those same reads run at **every resource root**, so a retracted
+  `Observation`, a `Procedure` recorded as not performed or an order marked "do not perform" inside a
+  `Bundle` entry or `contained` reaches `negations` too. **`negations` is the read that covers the
+  whole document; every other field on the readout answers about the resource you handed in**, so
+  branch on `negations` whenever a resource may carry others. `no-known-allergy` is the exception and
+  stays a root, type-scoped read: it is a _positive_ clinical assertion, read off an element R4 does
+  not flag `?!`, and surfacing one from somewhere inside a document could make a caller less careful
+  where leaving it unsurfaced reads as _unknown_.
   `assertSafeToSummarize` **refuses** (throws) rather than flatten past an unhandled modifier.
 - **A safety verdict is never asserted over a value the document left ambiguous.** Each negation read
   runs over every coding on a `CodeableConcept` and every value written for the element it reads

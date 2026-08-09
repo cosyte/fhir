@@ -127,7 +127,7 @@ import {
  * {@link unreadableBooleans}, the complement of this read rather than a widening of it. Nothing
  * here changes what is read: `"1"` and `"Y"` are not the R4 lexical space, they mean opposite things
  * on different wires, and reading them would author the instruction rather than surface it. The two
- * halves are decided in one place ({@link checkDoNotPerform}) so they cannot drift apart over which
+ * halves are decided in one place ({@link checkNegations}) so they cannot drift apart over which
  * documents they cover.
  */
 function readDoNotPerform(resource: FhirComplex): boolean | undefined {
@@ -183,12 +183,35 @@ export type NegationKind =
   | "entered-in-error";
 
 /**
+ * The order {@link SafetyReadout.negations} lists the kinds in. Fixed rather than the order the walk
+ * met them, because the walk visits every resource root a document carries and a caller's list must
+ * not depend on which `Bundle.entry` happened to come first. It is the order the readout has always
+ * used, kept so a negation read at a new window cannot reorder the ones already there.
+ */
+const NEGATION_ORDER: readonly NegationKind[] = [
+  "entered-in-error",
+  "refuted",
+  "no-known-allergy",
+  "do-not-perform",
+  "not-taken",
+  "not-done",
+];
+
+/**
  * The complete, value-free safety readout of a resource. Every modifier element the safety resource
  * types can carry has a slot here, present or `undefined`, so a consumer building a summary
  * reads them explicitly rather than forgetting one.
  *
- * **`negations` (and `retracted`) are the authoritative safety reads.** The single-code convenience
- * fields (`resourceType` / `status` / `clinicalStatus` / `verificationStatus`) surface one value: the
+ * **`negations` is the authoritative safety read, and it is the only one that covers the whole
+ * document.** It is collected at **every resource root** the document carries, so a retracted
+ * `Observation`, a not-performed `Procedure` or an order marked "do not give" inside `contained` or a
+ * `Bundle.entry` reaches it. Every other field here answers about **the resource handed in** and
+ * nothing nested inside it, `retracted` and `doNotPerform` included; branch on `negations` whenever
+ * the resource may carry others. The one negation not collected from the walk is `no-known-allergy`,
+ * which stays the root, type-scoped read on its own field for the reasons given there.
+ *
+ * The single-code convenience fields (`resourceType` / `status` / `clinicalStatus` /
+ * `verificationStatus`) surface one value: the
  * *preferred*-system coding of a `CodeableConcept`, falling back to the first coding when the
  * standard one is absent (which may be a local/translation code), and the first member written when a
  * non-conformant document repeated a property name or wrapped the element in an array. The classified
@@ -201,8 +224,8 @@ export type NegationKind =
  * inside a `CodeableConcept`, where the wrapper holds a single array position; a multi-position one is
  * reported rather than read, because pairing a `system` from one position with a `code` from another
  * would assert a coding the sender never wrote (see {@link arrayWrappedScalars}). Read a safety
- * decision off `negations` / `retracted`, not off the raw status string, and check `safeToSummarize`
- * before flattening anything.
+ * decision off `negations`, not off the raw status string, and check `safeToSummarize` before
+ * flattening anything.
  */
 export interface SafetyReadout {
   /**
@@ -237,11 +260,37 @@ export interface SafetyReadout {
    * `negations`, never on this field, when the resource may carry others.
    */
   readonly doNotPerform: boolean | undefined;
-  /** Whether the resource is marked `entered-in-error` (retracted, not data), authoritative. */
+  /**
+   * Whether **the resource handed to {@link readSafety}** is marked `entered-in-error` (retracted,
+   * not data), read off its own `status` or `verificationStatus`.
+   *
+   * **Root-scoped, like `status` beside it.** A retracted resource in `contained` or a `Bundle.entry`
+   * leaves this `false` (a Bundle is not retracted because one of its entries is) and still puts
+   * `entered-in-error` on {@link negations}, which is the read that covers the whole document. So
+   * `retracted` implies `entered-in-error` is on `negations`, never the other way round.
+   */
   readonly retracted: boolean;
-  /** Whether this is a recorded "no known allergy" (SNOMED `716186003`), not an allergy *to* it. */
+  /**
+   * Whether **the resource handed to {@link readSafety}** is a recorded "no known allergy" (SNOMED
+   * `716186003` on an `AllergyIntolerance.code`), not an allergy *to* that code.
+   *
+   * **Root-scoped and type-scoped, and alone among the negations in being both.** Every other
+   * negation is read off an element R4 flags `?!`, where a consumer may not process the element as if
+   * it were absent and surfacing one can only make a caller more careful. This one is a *positive*
+   * clinical assertion read off an element R4 does not flag at all, and surfacing it from somewhere
+   * inside a document could make a caller **less** careful about a patient, while leaving it
+   * unsurfaced reads as *unknown*. So a nested `AllergyIntolerance` recording it reaches neither this
+   * field nor {@link negations}: a declared gap in the fail-safe direction, not an oversight.
+   */
   readonly noKnownAllergy: boolean;
-  /** Every negation the resource asserts (from all codings, any system), the authoritative safety read. */
+  /**
+   * Every negation asserted **anywhere in the document** (from all codings, any system), the
+   * authoritative safety read: at the resource handed in and at every resource root inside it, so a
+   * `contained` or `Bundle.entry` resource's retraction, refutation, `not-done` / `not-taken` status
+   * or "do not perform" instruction is here. Value-free and **unlocated**, so a kind appears once
+   * however many resources assert it, in a fixed order that does not depend on entry order.
+   * `no-known-allergy` is the one exception and is root-scoped; see {@link noKnownAllergy}.
+   */
   readonly negations: readonly NegationKind[];
   /** FHIRPath locations of `modifierExtension`s this library does not understand (fail-closed). */
   readonly unhandledModifierExtensions: readonly string[];
@@ -624,11 +673,12 @@ interface SafetyWalk {
   /** The subset of {@link SafetyWalk.arrayWrapped} FHIR XML has no repetition to spell back. */
   readonly unspellableInXml: string[];
   /**
-   * Resource roots where a `doNotPerform` was **read** as `true`. Internal: what reaches the readout
-   * is the `do-not-perform` negation, which carries no location. It is a list rather than a flag so
-   * that it is built by the same pass, at the same window, as its complement below.
+   * Every negation kind read at **any** resource root the walk visited, the entry node included.
+   * Internal: what reaches the readout is the classified list, which carries no location, so the set
+   * is de-duplicated here rather than at the caller. It is built by the same pass, at the same
+   * window, as the refusal below.
    */
-  readonly doNotPerform: string[];
+  readonly negations: Set<NegationKind>;
   /** Boolean-valued safety elements whose written value the boolean read could not read. */
   readonly unreadableBoolean: string[];
 }
@@ -644,7 +694,7 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     shadowed: [],
     arrayWrapped: [],
     unspellableInXml: [],
-    doNotPerform: [],
+    negations: new Set<NegationKind>(),
     unreadableBoolean: [],
   };
   walkComplex(resource, path, out, true);
@@ -770,34 +820,52 @@ function checkCodingWrapping(
 const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
 
 /**
- * Read the `doNotPerform` written at this resource root, and record the written value the boolean
- * read could not read. **One pass decides both halves**, and that is the point of the function:
- * whatever a document has to be for this to look at it, it is the same for the value that is read
- * and for the value that is refused, so the two can never drift into a window where a sender's
- * instruction is neither surfaced nor reported.
- *
- * **The element name is the whole gate; there is no resource-type gate on either half.** The reasons
- * are on {@link readDoNotPerform}: R4 flags `doNotPerform` `?!` on more than one request resource, a
- * gate silently un-reads every type it omits, and this read can only add a negation. The refusal half
- * inherits the same scope for the same reason, since a `<doNotPerform value="1"/>` this layer
- * declines to read is exactly as invisible on a `ServiceRequest` as it was on a `MedicationRequest`
- * before it was reported at all. A resource type that defines no `doNotPerform` cannot reach either
- * half from a conformant document: the element is not in R4's definition of that type, so the
- * document is already non-conformant, and declining to affirm over it is the fail-safe direction.
+ * Read every negation this resource root asserts, and record the `doNotPerform` value the boolean
+ * read could not read. **One pass decides the reads and the refusal**, and that is the point of the
+ * function: whatever a document has to be for this to look at it, it is the same for the values that
+ * are read and for the value that is refused, so the two can never drift into a window where a
+ * sender's instruction is neither surfaced nor reported. Widening a read without moving its refusal
+ * alongside it is how a value goes from *not looked for* to *looked for and silently dropped*, which
+ * is the same defect wearing the fix's clothes.
  *
  * **The window is every resource root**, which is {@link checkArrayWrapping}'s window: the entry node
  * plus every node carrying its own `resourceType`, so a `MedicationRequest` inside `contained` or a
- * Bundle `entry` is read here and reported here. `readDoNotPerform` visits only the resource
- * {@link readSafety} was handed, which is why the convenience field stays a root read while the
- * `do-not-perform` negation comes from this walk. A nested order's instruction is real content, and a
- * readout that affirms over it costs a patient a medication.
+ * Bundle `entry` is read here and reported here. The two are called from one place
+ * ({@link checkResourceRoot}) so that "which nodes are resource roots" is decided once.
  *
- * **Not a backbone element or a datatype**, and that boundary is a limit rather than a rule this
- * read derives. The direction argument above would license going deeper, since reading more can only
+ * **What licenses reading these at a nested root is FHIR's modifier rule, not the depth.** Every
+ * element read here is one R4 flags `?!`: `status` (the `entered-in-error` retraction and the
+ * `not-done` / `not-taken` negations), `verificationStatus` (the retraction and `refuted`), and
+ * `doNotPerform`. A consumer may never process a modifier element as if it were absent, and that
+ * obligation attaches to the resource that carries it, not to the position the resource happens to
+ * occupy in a document: a `contained` order and a `Bundle.entry` order are resources. A readout that
+ * affirms over a nested resource's "do not give" costs a patient a medication, and one that affirms
+ * over a nested `entered-in-error` reports a retracted record as data.
+ *
+ * The direction argument holds for all of them exactly as it does at the entry root: each read can
+ * only **add** a negation, never retire a finding, never flip `valid` (no validator reads
+ * `negations`), and never turn a refusal into an affirmation.
+ *
+ * **`no-known-allergy` is deliberately not here, and it is the one negation whose absence is the
+ * cautious answer.** It is read off `AllergyIntolerance.code`, which R4 does **not** flag `?!`.
+ * It is not a modifier element at all, but this library's own first-class concept, so the rule above
+ * does not reach it. It also runs the other way from every negation here: surfacing a recorded "no
+ * known allergy" from somewhere inside a document can make a caller *less* careful about a patient,
+ * where an unsurfaced one reads as *unknown*, which is the fail-safe answer. It stays the root,
+ * type-scoped read in {@link readSafety}, declared and pinned rather than claimed.
+ *
+ * **The reads are the very ones {@link readSafety} already performed at the entry root**
+ * ({@link ../safety/codes.js} `isRetracted`, `statusSpells`, `safetyHasCodeAnySystem`), called on
+ * more nodes rather than rewritten. So no document's *reading* changes here; only the set of nodes
+ * the reading is applied to.
+ *
+ * **Not a backbone element or a datatype**, and that boundary is a limit rather than a rule these
+ * reads derive. The direction argument above would license going deeper, since reading more can only
  * add a negation; what stops it is that {@link checkArrayWrapping}'s walk delivers resource roots and
- * this rides it. So `MedicationRequest.dosageInstruction[0].doNotPerform` is read by nothing. R4
- * defines no `doNotPerform` on `Dosage`, so no conformant document sits there, but that is a
- * declared gap and not a claim that none can: it is pinned in `test/negation-read-scope.test.ts`.
+ * this rides it. So `MedicationRequest.dosageInstruction[0].doNotPerform` and a `status` inside
+ * `Procedure.performer` are read by nothing. R4 defines neither element there, so no conformant
+ * document sits at either, but that is a declared gap and not a claim that none can: both are pinned
+ * in `test/negation-read-scope.test.ts` and `test/negation-status-codes.test.ts`.
  *
  * **Why the refusal is decided here and not in the reader.** FHIR XML carries every primitive as the
  * text of its `value` attribute (xml.html §2.6.1) and this reader is schema-free, so nothing at parse
@@ -811,15 +879,38 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
  * Both paths are pinned in `test/xml-unreadable-boolean.test.ts` and
  * `test/negation-read-scope.test.ts`.
  */
-function checkDoNotPerform(node: FhirComplex, path: string, out: SafetyWalk): void {
+function checkNegations(node: FhirComplex, path: string, out: SafetyWalk): void {
   // Across every member a repeated property name left, exactly as `readDoNotPerform` reads them: a
   // value must not become invisible, read or unread, by arriving second under a duplicate key. One
   // location however many members, because FHIRPath cannot address an individual member.
   const written = getAllProperties(node, "doNotPerform");
-  if (written.length === 0) return;
-  const at = childPath(path, "doNotPerform");
-  if (written.some((value) => primitiveBooleans(value).includes(true))) out.doNotPerform.push(at);
-  if (written.some(hasUnreadableBoolean)) out.unreadableBoolean.push(at);
+  if (written.length > 0) {
+    const at = childPath(path, "doNotPerform");
+    if (written.some((value) => primitiveBooleans(value).includes(true))) {
+      out.negations.add("do-not-perform");
+    }
+    if (written.some(hasUnreadableBoolean)) out.unreadableBoolean.push(at);
+  }
+  if (isRetracted(node)) out.negations.add(ENTERED_IN_ERROR);
+  if (
+    getAllProperties(node, "verificationStatus").some((v) => safetyHasCodeAnySystem(v, REFUTED))
+  ) {
+    out.negations.add(REFUTED);
+  }
+  if (statusSpells(node, NOT_TAKEN)) out.negations.add(NOT_TAKEN);
+  if (statusSpells(node, NOT_DONE)) out.negations.add(NOT_DONE);
+}
+
+/**
+ * Everything this layer decides **at a resource root**, called from the one place that decides what a
+ * resource root is. The cardinality report ({@link checkArrayWrapping}) and the negation reads with
+ * their refusal ({@link checkNegations}) share that window by construction rather than by two copies
+ * of the same condition, which is what stops a later change from widening one and leaving the other
+ * behind.
+ */
+function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): void {
+  checkArrayWrapping(node, path, out);
+  checkNegations(node, path, out);
 }
 
 /**
@@ -833,8 +924,7 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
   // A resource root is the entry node, or any nested node that carries its own `resourceType` (a
   // `contained` resource, a Bundle `entry.resource`). Only there does this library know a cardinality.
   if (isRoot || getAllProperties(node, "resourceType").length > 0) {
-    checkArrayWrapping(node, path, out);
-    checkDoNotPerform(node, path, out);
+    checkResourceRoot(node, path, out);
   }
   for (const property of node.properties) visitProperty(property, path, out);
   const reported = new Set<string>();
@@ -885,6 +975,12 @@ function descend(node: FhirNode, path: string, out: SafetyWalk): void {
  * modifier-extension check. `noKnownAllergy` is the one negation that stays type-gated, because it
  * asserts something *positive* about a patient.
  *
+ * **{@link SafetyReadout.negations} answers about the whole document; every other field answers about
+ * the resource handed in.** The un-gated negation reads run at every resource root, so a `contained`
+ * or `Bundle.entry` resource's retraction, refutation, `not-done` / `not-taken` status or "do not
+ * perform" instruction is classified on `negations` while `status`, `retracted`, `doNotPerform` and
+ * `noKnownAllergy` stay root reads. Branch on `negations` when the resource may carry others.
+ *
  * @param resource - The resource model (typically from `parseResource`).
  * @returns The complete {@link SafetyReadout}.
  * @example
@@ -927,38 +1023,30 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   // negation in the member a single-value lookup skips. Reading one of several written values and
   // reporting the record as positive is the exact harm this layer exists to prevent. Over-surfacing
   // a negation is safe; missing one is not.
-  const anyValue = (name: string, match: (node: FhirNode) => boolean): boolean =>
-    getAllProperties(resource, name).some(match);
-
   const prefix = rt === undefined ? "$this" : rootPath(rt);
   const walk = walkSafety(resource, prefix);
 
-  // The convenience field is the root read; the negation below is the walk's, which covers every
-  // resource root the document carries. Un-type-gated: see `readDoNotPerform`.
+  // The two convenience-shaped fields are root reads, exactly as `status` beside them is: they answer
+  // about the resource handed in. The classified `negations` below are the walk's, so they answer
+  // about every resource the document carries.
   const doNotPerform = readDoNotPerform(resource);
+  const retracted = isRetracted(resource);
+  // The one negation that is NOT on the walk. It is read off `AllergyIntolerance.code`, an element
+  // R4 does not flag `?!`, and it is the one negation a caller can act on by being LESS careful, so
+  // neither the modifier rule nor the direction argument licenses reading it from a nested resource.
+  // Its type gate is the same asymmetry seen from the other side. Declared and pinned, not claimed.
   const noKnownAllergy =
     isType("AllergyIntolerance") &&
-    anyValue("code", (node) => safetyHasCoding(node, SNOMED_SCT, NO_KNOWN_ALLERGY));
-  const retracted = isRetracted(resource);
+    getAllProperties(resource, "code").some((node) =>
+      safetyHasCoding(node, SNOMED_SCT, NO_KNOWN_ALLERGY),
+    );
 
-  const negations: NegationKind[] = [];
-  if (retracted) negations.push(ENTERED_IN_ERROR);
-  if (anyValue("verificationStatus", (node) => safetyHasCodeAnySystem(node, REFUTED))) {
-    negations.push(REFUTED);
-  }
-  if (noKnownAllergy) negations.push("no-known-allergy");
-  // From the walk, not from the convenience field above: the walk covers the entry node too, so this
-  // is that read plus every nested resource root's. A `MedicationRequest` in a `Bundle.entry` whose
-  // "do not give" this readout skipped was affirmed `safeToSummarize` while its unreadable twin at
-  // the same location was reported, which is the same blindness read from the other side.
-  if (walk.doNotPerform.length > 0) negations.push("do-not-perform");
-  // Un-type-gated, grounded per code against the published R4 definitions rather than by analogy
-  // with the element-scoped read above: see `statusSpells`. `not-done` was gated on `Immunization`
-  // while R4 carries it on the `status` of four more types, so a conformant `Procedure` recording
-  // that it was not performed read as carrying no negation at all: the gate did not merely fail to
-  // read those types, it never looked, so nothing was reported for them either.
-  if (statusSpells(resource, NOT_TAKEN)) negations.push(NOT_TAKEN);
-  if (statusSpells(resource, NOT_DONE)) negations.push(NOT_DONE);
+  // Classified in a fixed order rather than in the order the walk met them, so that the list a
+  // caller sees does not depend on how a Bundle happened to order its entries. De-duplicated for the
+  // same reason it is unlocated: two resources asserting one negation say the same thing once.
+  const found = new Set(walk.negations);
+  if (noKnownAllergy) found.add("no-known-allergy");
+  const negations = NEGATION_ORDER.filter((kind) => found.has(kind));
 
   const { modifiers, shadowed, arrayWrapped, unreadableBoolean } = walk;
   const nested = nestedArrays(resource, prefix);

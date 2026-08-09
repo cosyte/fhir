@@ -42,7 +42,7 @@ import {
  * - `code`: AllergyIntolerance `0..1`, Condition `0..1`, Observation `1..1`, DiagnosticReport `1..1`.
  *
  * **This is the array-wrapper report's table, not the negation read's window.** The `doNotPerform`
- * negation is read at every resource root of every type ({@link ./status.js} `readDoNotPerform`),
+ * negation is read at every resource root of every type ({@link ./status.js} `checkNegations`),
  * which needs no cardinality because reading a value can only add a negation. Reporting a wrapper is
  * an `error`, so it stays on the cardinalities above; a `ServiceRequest.doNotPerform` arriving
  * array-wrapped is therefore read through the wrapper and surfaced, and the wrapper itself is not
@@ -151,12 +151,13 @@ export const KNOWN_MODIFIER_EXTENSION_URLS: ReadonlySet<string> = new Set<string
  *
  * Several reads are deliberately **not** scoped by it, because they can only add a finding: the
  * `modifierExtension` fail-closed check, the `entered-in-error` retraction, the `refuted`
- * verification status, the `doNotPerform` instruction ({@link ./status.js} `readDoNotPerform`), and
- * the `not-done` / `not-taken` status negations ({@link statusSpells}). `doNotPerform` used to be
+ * verification status, the `doNotPerform` instruction, and the `not-done` / `not-taken` status
+ * negations ({@link statusSpells}). `doNotPerform` used to be
  * gated on `MedicationRequest` alone, and `not-done` on `Immunization` alone; the types each gate
  * left out were neither read nor reported, so a conformant `ServiceRequest` carrying an instruction
  * *not* to perform the service, and a conformant `Procedure` recording that it was **not** done, both
- * read as carrying no negation at all.
+ * read as carrying no negation at all. Those same reads run at **every resource root** the document
+ * carries ({@link ./status.js} `checkNegations`), not only the resource handed in.
  */
 export const SAFETY_RESOURCE_TYPES: ReadonlySet<string> = new Set([
   "AllergyIntolerance",
@@ -690,6 +691,11 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * shape of code on the same element, and it is one function rather than three copies so the three
  * cannot drift apart over which values of `status` they see.
  *
+ * **It answers about the resource it is handed, and the safety walk applies it at every resource
+ * root** ({@link ./status.js} `checkNegations`), so a `Procedure` recorded as not performed inside a
+ * `contained` array or a `Bundle.entry` reaches `SafetyReadout.negations`. `status` on a backbone
+ * element is not a resource's status and is read by nothing.
+ *
  * **`noKnownAllergy` is the opposite direction and stays type-gated**: it asserts something *positive*
  * about a patient, so a wider read would invent an assertion rather than find one.
  *
@@ -720,6 +726,11 @@ export function statusSpells(resource: FhirComplex, code: string): boolean {
  * position, which is the only shape in which the value the sender wrote is recoverable without
  * inventing a `(system, code)` pair; a multi-position wrapper is reported rather than guessed at. See
  * {@link codingsOf}.
+ *
+ * **It answers about the resource it is handed, never about one nested inside it.** A `Bundle` whose
+ * entry is retracted is not itself retracted, so this stays `false` there; the safety walk applies
+ * this same read at every resource root and puts `entered-in-error` on `SafetyReadout.negations`
+ * ({@link ./status.js} `checkNegations`), which is the read that covers a whole document.
  *
  * @param resource - The resource model.
  * @returns `true` when the resource is marked entered-in-error.
