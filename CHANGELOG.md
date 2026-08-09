@@ -52,9 +52,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   those is pinned at its literal in `test/negation-read-scope.test.ts`.
   **A count that was wrong in the same area is cut rather than corrected**: `readSafety`,
   `SafetyReadout`, `SAFETY_RESOURCE_TYPES`, the validator's safety layer and the README all said
-  "the six safety resource types" over a set holding **seven**, and **three** of those copies
-  rendered into each of `dist/index.d.ts` and `dist/index.d.cts` (measured at the base commit; zero
-  at head). Derive it from the set; the number is written down nowhere now.
+  "the six safety resource types" over a set holding **seven**, and copies of it rendered into
+  `dist/index.d.ts` and `dist/index.d.cts` (zero at head). **Neither the set's size nor the number of
+  carriers is written down anywhere now**, including here: two drafts of this entry put a number on
+  the carriers and both were wrong, one high and one low, because the copies wrap across lines
+  differently in source and in the emitted declarations. Count the set, and grep the artifact.
   **Measured:** 15 of 23 new assertions red at the base commit in a real base worktree (23 of 23 at
   head), and non-vacuity proved by seven mutations of the fix, each reddening at least one. The 8
   assertions that pass in **both** states clear nothing about the fix and are labelled as such in the

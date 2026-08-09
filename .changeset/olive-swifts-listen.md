@@ -47,9 +47,11 @@ so the same blindness exists there and is a declared gap rather than part of thi
 
 A count that was wrong in the same area is cut rather than corrected: `readSafety`, `SafetyReadout`,
 `SAFETY_RESOURCE_TYPES`, the validator's safety layer and the README all said "the six safety resource
-types" over a set holding seven, and three of those copies rendered into each of the published type
-declaration files (measured at the base commit; zero at head). Derive it from the set; the number is
-written down nowhere now.
+types" over a set holding seven, and copies of it rendered into the published type declaration files
+(zero at head). Neither the set's size nor the number of carriers is written down anywhere now,
+including here: two drafts put a number on the carriers and both were wrong, one high and one low,
+because the copies wrap across lines differently in source and in the emitted declarations. Count the
+set, and grep the artifact.
 
 Measured: 15 of 23 new assertions red at the base commit in a real base worktree (23 of 23 at head),
 and non-vacuity proved by seven mutations of the fix, each reddening at least one. The 8 assertions

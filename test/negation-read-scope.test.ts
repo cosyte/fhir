@@ -292,8 +292,9 @@ describe("the doNotPerform negation is read wherever it is written", () => {
     });
 
     it("stops the scope at resource roots, not backbone elements", () => {
-      // R4 defines no `doNotPerform` on `Dosage`; a resource root is where this library knows what
-      // an element name means, and it is the same boundary the array-wrapper report draws.
+      // A declared limit, not a rule this read derives: the direction argument would license going
+      // deeper, and what stops it is that the walk delivers resource roots. R4 defines no
+      // `doNotPerform` on `Dosage`, so no conformant document sits here.
       const safety = safetyOf(
         '{"resourceType":"MedicationRequest","dosageInstruction":[{"doNotPerform":true}]}',
       );

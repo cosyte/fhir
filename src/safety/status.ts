@@ -519,8 +519,8 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  * **The element is `doNotPerform`**, the only `boolean` {@link readSafety} takes off a document, and
  * there is no resource-type gate on it. **The window is every resource root** (so a `contained` or
  * Bundle-`entry` resource is covered), which is `arrayWrappedScalars`' window and is **the same
- * window the negation read uses**: the two are decided together, in one pass, so this can never name
- * a location the read did not visit, nor stay silent where it did.
+ * window the negation read uses**: the two are decided together, in one pass, so neither can cover a
+ * document the other does not.
  * It is **not** a report of every unreadable value in a document: the profile booleans, the
  * `ElementDefinition.min` integer and a `Quantity` magnitude's lexical forms are read elsewhere and
  * are still lost silently.

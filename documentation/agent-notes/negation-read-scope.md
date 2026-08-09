@@ -89,11 +89,18 @@ refusal channel is for values this library cannot read. Reading it and surfacing
 
 `status.ts` (x3, not the x2 the item named), `codes.ts`, `validate/safety.ts` (x2),
 `validate/validate.ts`, `test/validate-safety.test.ts` and `README.md` all said **"the six safety
-resource types"** over a set holding **seven**, and **3 of those copies rendered into each of
-`dist/index.d.ts` and `dist/index.d.cts`, measured at base; 0 at head.** **Cut, not corrected to
-"seven"** - a number written down here was wrong for days
-and the next reader does not re-check. Do not write the site count down either: an earlier draft of this
-note said "8" where the same grep gives 9, because `README.md`'s copy is line-wrapped.
+resource types"** over a set holding **seven**, and copies of it rendered into `dist/index.d.ts` and
+`dist/index.d.cts` (**0 at head**). **Cut, not corrected to "seven"** - a number written down here was wrong for days
+and the next reader does not re-check. **And do not write the CARRIER count down either. Three drafts tried and all three
+were wrong**: "8" tracked sites where the grep gives 9 (`README.md`'s copy is line-wrapped), then
+"3" dist occurrences, then the gate's "6" reasoned from the exports. The measured answer is **5 per
+dist file at base, 0 at head**, and it is recorded here only to show why the number does not belong
+in prose. Derive both, every time:
+
+```
+git grep -c "six safety\|six resource types\|six safety types" -- src test README.md
+tr '\n' ' ' < dist/index.d.ts | grep -o "six safety resource types\|six resource types\|six safety types" | wc -l
+```
 
 **Four carriers beyond the sites the item named. The sweep found two; THE GATE FOUND THE OTHER TWO,
 AND THEY WERE THE WORSE PAIR.** The sweep found the live `CHANGELOG.md` `[Unreleased]` entry and the
