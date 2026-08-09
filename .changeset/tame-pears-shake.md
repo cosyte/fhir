@@ -39,8 +39,7 @@ retraction already performed, `entered-in-error` off `status` at any type, in on
 rather than three copies.
 
 What did not move, each pinned at its literal: the read stays on `status` and on no other element,
-and at the resource root rather than a backbone element or a nested resource, so a `Procedure` inside
-a `Bundle` entry still leaves the Bundle's `negations` empty; the array-wrapper report keeps its
+and at a resource root rather than a backbone element; the array-wrapper report keeps its
 cardinality table, so a wrapped `status` on a type outside the safety set is read through and
 surfaced while the wrapper draws no `ARRAY_WRAPPED_SCALAR`; and `noKnownAllergy` stays type-gated,
 because it asserts something positive about a patient.

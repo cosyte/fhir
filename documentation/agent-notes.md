@@ -1118,6 +1118,19 @@ trip; through the XML writer it is still `<name/>` and both the value and the fi
 `_`-sibling discarded whole, a foreign child of a valued primitive, character data at the three
 `flagStrayText` sites, an unbound prefix, and a `<DIV>` wrapper.
 
+**Added 2026-08-09** (raised by the negation-read-scope-depth gate, `PRE-EXISTING`, filed rather than
+absorbed): **a `status` written as a JSON OBJECT is invisible on every safety channel.**
+`{"resourceType":"Observation","status":{"value":"entered-in-error"},"code":{"text":"x"}}` reads
+`retracted: false`, `negations: []`, `safeToSummarize: true` and `valid: true`, at the root and
+nested alike. **Scoped, because gate pass 3 measured the qualifier:** `valid: true` holds **with no
+caller-supplied schema, and none is bundled for `Observation`** (`BUILTIN_SCHEMAS` carries `Patient`,
+which has no `status`); hand `validateResource` a `ResourceSchema` typing `Observation.status` and it
+returns `valid: false` with `TYPE_MISMATCH`, in both modes. The only diagnostic in the default
+configuration is an `information: RESOURCE_NOT_MODELED`, emitted identically for the conformant
+document, so it carries no signal about the loss. It is a sixth member of the five encodings `src/safety/status.ts` enumerates,
+and it is what a generic FHIR-XML to JSON converter makes of `<status value="entered-in-error"/>`,
+the same traffic that docblock cites. Its own item, beside the wrapped-`status` residual.
+
 ### `FHIR-UNBOUND-PREFIX-ROUNDTRIP` (2026-08-07)
 
 **THE DEFERRAL STANDS, AND MEASURING IT FOUND A STRICTLY WORSE DEFECT IN THE SAME FUNCTION.** The
@@ -3114,6 +3127,35 @@ type read with a `not-taken`, which is no longer type-scoped, and now use `no-kn
 is. Red-at-base **11 of 22**, 11 both-states pins named, **8 of 8 mutations red - and mutation 8
 found a hole**: widening the read off `status` onto `code` red nothing until an assertion was added,
 so the element scope was written down and unpinned.
+
+## Every negation reaches every resource root (2026-08-09)
+
+**Narrative relocated** (cap):
+[`agent-notes/negation-read-scope-depth.md`](agent-notes/negation-read-scope-depth.md). Base
+`3fa61aa`, closing the SECOND residual of the scope section above and the FIRST of the census
+section, which were **one gap read from two sides**. Cursor: **plain conformant JSON**, a collection
+`Bundle` whose single entry is `{"resourceType":"Observation","status":"entered-in-error"}` read
+`negations: []` / `safeToSummarize: true` / assert clean, same for a nested `not-done` `Procedure`, a
+`not-taken` `MedicationStatement`, a refuted `AllergyIntolerance`, and each of them in `contained`:
+**a retracted record read as data, in the container the standard defines for carrying resources.**
+**🛑 WHAT LICENSES READING A NESTED RESOURCE IS THE `?!` RULE, NOT THE DEPTH:** every element moved is
+one R4 flags `?!`, and **that obligation attaches to the RESOURCE, not to the position it occupies in
+a document.** Do not restate it as "deeper is always safe". **🛑 CHECK THE DIRECTION BEFORE ASSUMING
+YOU MUST MOVE BOTH HALVES:** here the four unreadable-value channels **already covered every location
+the read moved into**, so nothing needed widening. What was needed was the EVIDENCE, pinned at ONE
+nested location from both sides (`<status>not-done</status>` reported and unread;
+`<status value="not-done"/>` read). **The reads are byte-identical to the entry-root ones**, called
+on more nodes, so no document's *reading* moves. **🔴 `no-known-allergy` DELIBERATELY DOES NOT MOVE**:
+it is read off an element R4 does **not** flag `?!`, and it is **the one negation whose absence is
+the cautious answer** (surfacing it can make a caller LESS careful; unsurfaced reads as *unknown*),
+so the direction argument argues **against** it. **`retracted` implies `entered-in-error` is on
+`negations`, NEVER the other way round.** **🛑 NAME THE SET: a draft shipped "`negations` is the ONLY
+field covering the document" into `dist/index.d.ts`, and PASS 1 CUT IT** - the location channels and
+`safeToSummarize` were ALREADY document-wide (a FHIRPath location names its resource; a single value
+cannot), which is exactly why no refusal needed widening. Red-at-base **21 of 32**, 11 both-states
+pins named in the test file, **9 of 9 mutations red**, negative control 32/32 failing against
+`@cosyte/hl7`.
+`CLAUDE.md` untouched at 28,000/28,000: its existing trap already generalises.
 
 ### The `null` / `_`-sibling laundering: the CLAUDE.md cursor, relocated VERBATIM 2026-08-09
 

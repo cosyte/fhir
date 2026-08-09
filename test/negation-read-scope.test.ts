@@ -280,16 +280,21 @@ describe("the doNotPerform negation is read wherever it is written", () => {
       ).toEqual(["not-taken"]);
     });
 
-    it("leaves the other negations root-only", () => {
-      // Only `doNotPerform` was folded in. A retraction inside a Bundle entry is still not surfaced
-      // at the Bundle, and that is a declared gap rather than a claim.
+    it("leaves the root-scoped fields answering about the resource handed in", () => {
+      // **Re-keyed, and the reason is recorded rather than the assertion quietly narrowed.** This
+      // pinned "only `doNotPerform` was folded in, so a retraction inside a Bundle entry leaves the
+      // Bundle's `negations` empty": a declared gap that a later slice closed, and it is pinned at
+      // its new value in `test/negation-read-scope-depth.test.ts`. Its `negations: []` assertion was
+      // falsified there; what survives is the boundary THIS slice drew and this section is for: the
+      // convenience-shaped fields stay root reads whatever a nested resource says, and both of these
+      // read identically at this slice's base commit and at head.
       const safety = safetyOf(
         '{"resourceType":"Bundle","type":"collection","entry":[{"resource":' +
           '{"resourceType":"Observation","status":"entered-in-error"}}]}',
       );
 
-      expect(safety.negations).toEqual([]);
       expect(safety.retracted).toBe(false);
+      expect(safety.status).toBeUndefined();
     });
 
     it("stops the scope at resource roots, not backbone elements", () => {

@@ -143,6 +143,9 @@ mode this repo has hit from the other direction twice.
 - **Still root-only.** `{"resourceType":"Bundle",…,"entry":[{"resource":{"resourceType":"Procedure",
   "status":"not-done"}}]}` leaves the Bundle's `negations` empty, exactly as a nested retraction
   does. Only `doNotPerform` reads at every resource root. Pinned.
+  **CLOSED 2026-08-09**, together with the retraction and the refutation:
+  [`negation-read-scope-depth.md`](negation-read-scope-depth.md). Its pin here was re-keyed to the
+  element-and-root scope, which is what survives.
 - **The array-wrapper report keeps its cardinality table.** `{"resourceType":"Procedure","status":
   ["not-done"]}` is read through the wrapper and the negation surfaced, but the wrapper draws no
   `ARRAY_WRAPPED_SCALAR` on a type outside `SAFETY_RESOURCE_TYPES`. Strictly better than base, which
