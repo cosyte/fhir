@@ -409,6 +409,90 @@ describe("a differential min can raise the inherited bound and can never lower i
     expect(mergedMin(fromJson)).toBe(3);
   });
 
+  it("never raises a bound above the element's own max, so a 0..0 prohibition survives", () => {
+    // `0..0` is the ordinary way a profile FORBIDS an element, and taking the tighter lower bound
+    // unclamped turned a forbidden descendant beneath a required base one into `min 1 / max 0`, an
+    // unsatisfiable cardinality neither definition wrote. `resolveSlices` reads a descendant's
+    // cardinality as an existence expectation, so that contradiction resolved toward *present* and
+    // silently erased two errors. The clamp keeps the merge identical to the base tree here.
+    const sliceBase = {
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/slicebase",
+      type: "Observation",
+      kind: "resource",
+      derivation: "specialization",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          {
+            id: "Observation.component",
+            path: "Observation.component",
+            slicing: {
+              discriminator: [{ type: "exists", path: "dataAbsentReason" }],
+              rules: "closed",
+            },
+          },
+          {
+            id: "Observation.component:Missing",
+            path: "Observation.component",
+            sliceName: "Missing",
+            min: 1,
+            max: "*",
+          },
+          {
+            id: "Observation.component:Missing.dataAbsentReason",
+            path: "Observation.component.dataAbsentReason",
+            min: 1,
+            max: "1",
+          },
+        ],
+      },
+    };
+    const forbidding = load(
+      json({
+        resourceType: "StructureDefinition",
+        url: "http://example.org/StructureDefinition/forbidding",
+        type: "Observation",
+        kind: "resource",
+        derivation: "constraint",
+        baseDefinition: "http://example.org/StructureDefinition/slicebase",
+        differential: {
+          element: [
+            { id: "Observation", path: "Observation" },
+            {
+              id: "Observation.component:Missing.dataAbsentReason",
+              path: "Observation.component.dataAbsentReason",
+              min: 0,
+              max: "0",
+            },
+          ],
+        },
+      }),
+    );
+    const resolveSliceBase = (url: string): StructureDefinition | undefined =>
+      url === sliceBase.url ? load(json(sliceBase)) : undefined;
+    const descendant = generateSnapshot(forbidding, resolveSliceBase).find(
+      (el) => el.id === "Observation.component:Missing.dataAbsentReason",
+    );
+    const withComponent = json({
+      resourceType: "Observation",
+      status: "final",
+      code: { coding: [{ system: "http://loinc.org", code: "1234-5" }] },
+      component: [{ dataAbsentReason: { text: "not collected" }, code: { text: "systolic" } }],
+    });
+
+    expect({ min: descendant?.min, max: descendant?.max }).toEqual({ min: 0, max: 0 });
+    expect(
+      collectProfileIssues(withComponent, forbidding, { resolve: resolveSliceBase }).map(
+        (issue) => `${issue.severity}:${issue.code} at ${issue.expression}`,
+      ),
+    ).toEqual([
+      "error:PROFILE_SLICE_UNMATCHED at Observation.component[0]",
+      "error:CARDINALITY_MIN at Observation.component:Missing",
+      "error:CARDINALITY_MAX at Observation.component.dataAbsentReason",
+    ]);
+  });
+
   it("leaves an element the differential states no min for exactly as the base had it", () => {
     // Both-states control: green on the base tree too. It is what makes the rows above a delta of
     // the newly-read bound rather than of the merge running at all.
@@ -423,13 +507,16 @@ describe("a differential min can raise the inherited bound and can never lower i
  * Characterization tests over what this change does NOT close, pinned so they cannot move in
  * silence. Closing any of them MUST red the test beside it, in the same change.
  *
- * These hold on the base tree as well - they are `PRE-EXISTING` residuals, recorded here because
- * they sit inside or beside the read this change touches, and they are NOT evidence for it.
+ * They are recorded here because they sit inside or beside the read this change touches, and they
+ * are NOT evidence for it. **Only one of the three is green on the base tree** (the `max` overlay);
+ * the other two are red there, and each says why in its own comment, so the block as a whole must
+ * not be read as a both-states set.
  */
 describe("declared residuals of the lexical min read, pinned", () => {
   it("still reads no mustSupport and no slicing.ordered off an XML definition", () => {
-    // Both-states pin. Deliberately unchanged: they were measured into a retirement of a
-    // `MUST_SUPPORT_ABSENT`, and the `min` remedy does not license them. What makes a widened `min`
+    // RED at base, but only through the co-located `min` assertion at the end: the two residual
+    // assertions above it are green in both states. Deliberately unchanged: they were measured into
+    // a retirement of a `MUST_SUPPORT_ABSENT`, and the `min` remedy does not license them. What makes a widened `min`
     // safe is that its only consumer that can retire a finding now takes the tighter bound, and a
     // boolean flag has no tighter-of-the-two: `false` is not "no flag stated".
     const definition = load(
@@ -494,6 +581,8 @@ describe("declared residuals of the lexical min read, pinned", () => {
   });
 
   it("reads a min a non-conformant JSON document spelled as a string, having no provenance to refuse it", () => {
+    // RED at base: this is INTRODUCED behaviour on the JSON path, not a pre-existing residual, and
+    // it sits in this block because it is a cost rather than a capability.
     // Declared collateral rather than left to be found. FHIR JSON spells `min` as a number, so
     // `{"min": "1"}` is non-conformant - but the model records no provenance, so the lexical read
     // cannot be scoped to XML. The direction is lenient on the read and unchanged on the write: the

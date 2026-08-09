@@ -181,11 +181,13 @@ function parseMax(node: FhirNode | undefined): number | undefined {
  * guessed: `"+1"`, `"01"`, `"1.0"`, `" 1"`, `"1e2"`, `"-1"`, `"one"` and `""` state no bound.
  *
  * **This read cannot lower a bound, and the guarantee lives at the merge rather than here.** A
- * newly-read `min` reaches an instance verdict only through `mergeElement`
- * ({@link ./snapshot.js}), which takes the tighter of the inherited and stated bounds, so a value
- * this function newly returns can only raise the snapshot's bound or leave it alone. That is what
- * makes widening the read additive: the retirement the sibling `mustSupport` read was measured into
- * and declined is unreachable from here, for `0` and for every other value alike.
+ * newly-read `min` reaches an instance verdict either verbatim (a carried snapshot, or a
+ * differential element with no base counterpart, both of which state a bound where the snapshot had
+ * none) or through `mergeElement` ({@link ./snapshot.js}), which is the only route that can replace
+ * a bound already there and which takes the tighter of the two. So a value this function newly
+ * returns can only raise the snapshot's bound or leave it alone. That is what makes widening the
+ * read additive: the retirement the sibling `mustSupport` read was measured into and declined is
+ * unreachable from here, for `0` and for every other value alike.
  */
 function lexicalMin(text: string): number | undefined {
   if (!/^([0]|[1-9][0-9]*)$/u.test(text)) return undefined;

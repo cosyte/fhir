@@ -67,7 +67,9 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `Observation.subject 1..1` and `Observation.performer 2..*`, against an instance carrying neither:
   the JSON spelling returned `valid: false` with a `CARDINALITY_MIN` at each element, and the same
   profile put through this package's own `serializeResourceXml` and read back by its own
-  `parseResourceXml` returned **`valid: true` with no finding at all**. A change of format upgraded
+  `parseResourceXml` returned **`valid: true` with no profile finding of any kind** (both readings
+  carry an unrelated informational `RESOURCE_NOT_MODELED` from the built-in schema). A change of
+  format upgraded
   a document's trustworthiness claim. The asymmetry that hid it is that `max` was fine: FHIR spells
   `max` as a string in both formats, so upper bounds were enforced and lower bounds were not.
   **The read is widened at the profile loader, never in the XML reader.** A schema-free reader

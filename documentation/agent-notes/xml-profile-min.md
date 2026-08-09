@@ -18,7 +18,10 @@ ways:
 snapshot: Observation.subject 1..1, Observation.performer 2..*     instance: neither present
 
   JSON-sourced profile  -> valid: false   CARDINALITY_MIN @Observation.subject, @Observation.performer
-  XML-sourced  profile  -> valid: true    (no finding at all)
+  XML-sourced  profile  -> valid: true    no profile finding of any kind
+
+both readings also carry `information: RESOURCE_NOT_MODELED @Observation`, which is the built-in
+schema speaking and is unrelated; an earlier draft said "no finding at all" and was one finding out.
 ```
 
 **The XML in that run is this package's own `serializeResourceXml` output, read back by its own
@@ -103,6 +106,23 @@ rather than absorbed quietly.** A JSON `{"min": 1}` under an inherited `2` alrea
 bound, so the only place to fix the `INTRODUCED` blocker is the merge, and fixing it there fixes both.
 The direction is `valid: true -> false`, the fail-safe one.
 
+**▶ 🛑 AND THE GUARD ITSELF NEEDED A CLAMP, WHICH GATE PASS 2 FOUND. `0..0` IS HOW A PROFILE
+FORBIDS AN ELEMENT.** The first guard was a bare `Math.max`, and beneath a base element that is
+required it manufactured `min 1` beside `max 0`, an **unsatisfiable** cardinality neither definition
+wrote. `resolveSlices` reads a descendant's cardinality as an existence expectation and resolved that
+contradiction toward *present*, so on the JSON path a `PROFILE_SLICE_UNMATCHED` and a
+`CARDINALITY_MIN` were **silently erased** (3 errors at `72cdee2` and at `0dda6d0`, 1 at the first
+remedy). It is the same "additivity is a property of the CONSUMERS" trap, re-hit at the very consumer
+the census below had singled out and cleared. The guard now clamps: the tighter of the two lower
+bounds, **never above the element's own `max`**, so where raising would contradict it the narrower
+`max` wins and the profile's own incoherence is preserved rather than replaced by a different one.
+Measured back to base-identical (3 errors), pinned, and reddened by a mutation that drops the clamp
+alone.
+
+**▶ Pass 2 rated it `major` rather than `blocker` and said why**: every trigger needs a
+differential whose `min` is below the inherited one, which is an invalid profile, and no *document* is
+mis-read. It was remedied anyway, because it was `INTRODUCED` by the pass-1 remedy.
+
 **▶ 🛑 `max` IS THE MIRROR AND IS DELIBERATELY NOT TAKEN.** `mergeElement` still overlays `max`
 verbatim, so a differential stating a **larger** `max` widens an upper bound and retires a
 `CARDINALITY_MAX`. It is left standing because **no read feeding it moved**: FHIR spells `max` as a
@@ -141,43 +161,48 @@ fail-safe marker whose whole meaning is *"I could not evaluate this"*.
 
 All of these are **post-remedy**, at the head this slice ships.
 
-- **Red-at-base 18 of 30**, in a real `72cdee2` worktree (`git worktree add`, this package's own
+- **Red-at-base 18 of 31**, in a real `72cdee2` worktree (`git worktree add`, this package's own
   `node_modules` symlinked). **0 of the 18 are symbol-only reds**: the change adds no export, so
   every symbol the new file imports already resolves at base. One of the 18 (`still reads no
   mustSupport and no slicing.ordered off an XML definition`) is red **only** through its co-located
   head assertion that `min` reads 1; its two residual assertions are green in both states. So the
   behavioural figure for the closure is **17**. The denominator is the tests this slice adds or
-  rewrites: 29 in `test/xml-profile-min.test.ts` plus the one rewritten in
+  rewrites: 30 in `test/xml-profile-min.test.ts` plus the one rewritten in
   `test/xml-lexical-boolean.test.ts`.
-- **The 12 green-at-base tests are pins, named** so a reader need not re-derive which cleared
+- **The 13 green-at-base tests are pins, named** so a reader need not re-derive which cleared
   nothing: the ten `reads %j as no bound at all` refusal cases (`+1`, `01`, `1.0`, `1.`, ` 1`, `1 `,
-  `one`, ``, `-1`, `1e2`), `leaves an element the differential states no min for exactly as the base
-  had it` (the merge control), and `still overlays a differential max verbatim, so an upper bound CAN
-  be relaxed` (the `max` residual).
-- **Non-vacuity by mutation, eight mutations, each reddening a NAMED list** (never a count):
+  `one`, ``, `-1`, `1e2`), `never raises a bound above the element's own max, so a 0..0 prohibition
+  survives` (the clamp, which pins base-identical behaviour on purpose), `leaves an element the
+  differential states no min for exactly as the base had it` (the merge control), and `still overlays
+  a differential max verbatim, so an upper bound CAN be relaxed` (the `max` residual).
+- **Non-vacuity by mutation, nine mutations, each reddening a NAMED list** (never a count):
   1. drop the merge guard (overlay verbatim) -> `keeps the inherited bound when an XML differential
      states a smaller one`, `…when a JSON differential states a smaller one`, `keeps the inherited
      bound for a min of 0, whichever format spelled it`
   2. over-guard the merge (always inherit when the base states one) -> `still takes a differential
-     bound that tightens, which is the whole point of a profile`
-  3. drop the lexical guard entirely -> the nine refusal cases `+1` `01` `1.0` `1.` ` 1` `1 ` ``
+     bound that tightens, which is the whole point of a profile`, `never raises a bound above the
+     element's own max…`
+  3. drop the clamp against `max`, keeping the tighten -> `never raises a bound above the element's
+     own max, so a 0..0 prohibition survives`
+  4. drop the lexical guard entirely -> the nine refusal cases `+1` `01` `1.0` `1.` ` 1` `1 ` ``
      `-1` `1e2`
-  4. tolerate surrounding whitespace -> ` 1`, `1 `
-  5. tolerate leading zeros -> `01`
-  6. use `positiveInt`'s real space, a leading `+` admitted -> `+1`
-  7. `Number.parseInt` instead of an exact match -> `+1` `01` `1.0` `1.` ` 1` `1 ` `-1` `1e2`
-  8. remove the lexical route (revert the read fix) -> all 17 behavioural reds
-  **Mutations 1 and 2 are the two polarities of the merge guard**, so it cannot pass by refusing
-  every differential `min`. **`"one"` is reddened by none of the eight** and is retained as
-  documentation of the boundary, not as evidence. Said here rather than folded into a total.
+  5. tolerate surrounding whitespace -> ` 1`, `1 `
+  6. tolerate leading zeros -> `01`
+  7. use `positiveInt`'s real space, a leading `+` admitted -> `+1`
+  8. `Number.parseInt` instead of an exact match -> `+1` `01` `1.0` `1.` ` 1` `1 ` `-1` `1e2`
+  9. remove the lexical route (revert the read fix) -> all 17 behavioural reds
+  **Mutations 1, 2 and 3 are the three polarities of the merge guard**, so it cannot pass by refusing
+  every differential `min` and cannot pass with the clamp removed. **`"one"` is reddened by none of
+  the nine** and is retained as documentation of the boundary, not as evidence. Said here rather than
+  folded into a total.
 - **Exactly one existing test moved** across the whole suite: the characterization test that pinned
   this gap, which the repo's own rule requires a closure to red. It is rewritten in place rather than
-  deleted, so the closure is visible from where the gap was declared. Suite **70 files / 1493 tests**
-  from base's **69 / 1464**, and 1464 + 29 = 1493, so nothing else moved.
+  deleted, so the closure is visible from where the gap was declared. Suite **70 files / 1494 tests**
+  from base's **69 / 1464**, and 1464 + 30 = 1494, so nothing else moved.
 - **The `@cosyte/hl7` negative control is DEGENERATE and is reported as such rather than as a zero.**
   `hl7` is not a dependency of this package and has no `StructureDefinition` loader, so 0 of the
   symbols under measurement exist there and the control cannot fail. The controls that CAN fail are
-  the two merge-guard polarities above and the two both-states pins named in the list.
+  the three merge-guard polarities above and the three both-states pins named in the list.
 - **The committed read differential (`pnpm differential:read`) moves 0 of 1,195 readings and 0 of 27
   JSON fixtures, and that zero is VACUOUS BY CONSTRUCTION for this class** rather than evidence:
   checked by hand, **no corpus fixture carries a `min` at all**, and the reading runs no profile

@@ -60,17 +60,31 @@ export class FhirProfileError extends Error {
 /** Overlay a differential element's stated constraints onto a base element (id/path preserved). */
 function mergeElement(base: ElementDefinition, diff: ElementDefinition): ElementDefinition {
   const merged: { -readonly [K in keyof ElementDefinition]: ElementDefinition[K] } = { ...base };
-  // `min` takes the TIGHTER of the two, never simply the differential's. A profile derives by
-  // *constraining* (profiling.html): its `min` may raise the inherited one and may not lower it, so
-  // a differential stating a smaller bound is an invalid profile rather than a relaxation to honour.
-  // Overlaying it verbatim retires a `CARDINALITY_MIN` the base element earned, silently and with
-  // `valid` moving `false` to `true`, which is the one direction this library refuses to move in.
-  // Taking the maximum is lenient on the malformed profile (it is not refused) and fail-safe on the
-  // instance. It is also what keeps every widening of the `min` READ additive: a newly-read bound
-  // can only raise what the snapshot already carried, whatever wire format spelled it.
-  // `max` is deliberately NOT given the mirror treatment here: no read feeding it moved, so
-  // tightening it would be a separate change to the JSON path. It is characterized by a test.
-  if (diff.min !== undefined) merged.min = Math.max(base.min ?? 0, diff.min);
+  // `min` takes the TIGHTER of the two lower bounds, never simply the differential's, and never
+  // above the element's own upper bound. A profile derives by *constraining* (profiling.html): its
+  // `min` may raise the inherited one and may not lower it, so a differential stating a smaller
+  // bound is an invalid profile rather than a relaxation to honour. Overlaying it verbatim retires a
+  // `CARDINALITY_MIN` the base element earned, silently and with `valid` moving `false` to `true`,
+  // which is the one direction this library refuses to move in. Taking the maximum is lenient on the
+  // malformed profile (it is not refused, there being no channel here to report it on) and fail-safe
+  // on the instance. It is also what keeps every widening of the `min` READ additive: a newly-read
+  // bound can only raise what the snapshot already carried, whatever wire format spelled it.
+  //
+  // The clamp against `max` is not tidiness, it is what stops the tightening manufacturing an
+  // UNSATISFIABLE `min >= 1` beside `max 0` where neither definition wrote one. `0..0` is the
+  // ordinary way a profile forbids an element, and `resolveSlices` reads a descendant's cardinality
+  // as an existence expectation: left unclamped, a forbidden descendant beneath a required base one
+  // resolves toward *present*, which silently erased a `PROFILE_SLICE_UNMATCHED` and a
+  // `CARDINALITY_MIN`. Where raising the bound would contradict the element's own `max`, the
+  // narrower `max` wins and the profile's own incoherence is preserved rather than replaced.
+  //
+  // `max` is deliberately NOT given the mirror treatment: no read feeding it moved, so tightening it
+  // would be a separate change to the JSON path. It is characterized by a test.
+  const effectiveMax = diff.max ?? base.max;
+  if (diff.min !== undefined) {
+    const tightened = Math.max(base.min ?? 0, diff.min);
+    merged.min = effectiveMax === undefined ? tightened : Math.min(tightened, effectiveMax);
+  }
   if (diff.max !== undefined) merged.max = diff.max;
   if (diff.mustSupport !== undefined) merged.mustSupport = diff.mustSupport;
   if (diff.slicing !== undefined) merged.slicing = diff.slicing;

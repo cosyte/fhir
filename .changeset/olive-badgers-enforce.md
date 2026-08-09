@@ -15,7 +15,9 @@ What changed is the read. Measured at the base commit against a profile whose sn
 `Observation.subject 1..1` and `Observation.performer 2..*`, and an `Observation` carrying neither:
 the JSON spelling of that profile returned `valid: false` with a `CARDINALITY_MIN` at each element,
 while the same profile put through this package's own `serializeResourceXml` and read back by its
-own `parseResourceXml` returned `valid: true` with no finding at all. `min` was read through a match
+own `parseResourceXml` returned `valid: true` with no profile finding of any kind (both readings
+carry an unrelated informational `RESOURCE_NOT_MODELED` from the built-in schema). `min` was read
+through a match
 on the number alone, and a failed match reads as absence, so a profile handed over in XML declared
 its required elements and this library enforced none of them, with nothing on any diagnostic channel
 to say so. A change of format upgraded a document's trustworthiness claim. The asymmetry that hid it
