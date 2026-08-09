@@ -36,18 +36,17 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   - **Never re-fire a version npm has already traced:** `0.0.2`, `0.0.3`, `0.0.7`, `0.0.8`.
   - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
     hand before ever linking one.
-- **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.** The full envelope,
-  what is built and what is explicitly **not**, is at
-  [`#the-shipped-envelope-p1-through-p11`](documentation/agent-notes.md#the-shipped-envelope-p1-through-p11).
+- **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.**
   **▶ IT IS NOT A NO-DATA-LOSS CLAIM OVER THE WHOLE PACKAGE**: read-path losses remain open and
-  declared, and the one that qualifies "never drops a
-  modifier, status or negation" is a **status** or a dose number written as XML element text (dropped
-  and reported, the writer refuses, but the safety spine reads `negations: []`).
-  The rest:
+  declared, and the one that qualifies "never drops a modifier, status or negation" is a **status**
+  or a dose number written as XML element text (dropped and reported, the writer refuses, but the
+  safety spine reads `negations: []`). The envelope, today's precisely, the losses, what is left open
+  and the per-phase history, all in `agent-notes.md`:
+  [`#the-shipped-envelope-p1-through-p11`](documentation/agent-notes.md#the-shipped-envelope-p1-through-p11) ·
+  [`#p2-p3-and-what-the-package-does-today`](documentation/agent-notes.md#p2-p3-and-what-the-package-does-today) ·
   [`#open-read-path-losses-enumerated`](documentation/agent-notes.md#open-read-path-losses-enumerated) ·
-  [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
-  Per-phase detail: [`#shipped-phase-history-p11-back-to-p1`](documentation/agent-notes.md#shipped-phase-history-p11-back-to-p1).
-  Today's envelope, stated precisely: [`#p2-p3-and-what-the-package-does-today`](documentation/agent-notes.md#p2-p3-and-what-the-package-does-today).
+  [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e) ·
+  [`#shipped-phase-history-p11-back-to-p1`](documentation/agent-notes.md#shipped-phase-history-p11-back-to-p1)
 - Roadmap: the meta-repo's `operations/roadmaps/fhir.md` (P0…P11).
 
 ## Traps
@@ -77,9 +76,18 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   JSON `null` is a real position. Two attempts were refuted for exactly this.
   [`#fhir-array-wrapped-scalar-2026-07-28`](documentation/agent-notes.md#fhir-array-wrapped-scalar-2026-07-28) ·
   [`#fhir-coding-scalar-wrapper-2026-07-29`](documentation/agent-notes.md#fhir-coding-scalar-wrapper-2026-07-29)
-- **Do not "fix" the un-type-gated `isRetracted`/`readSafety` reads by type-gating them**: they can
-  only _add_ a negation, never retire a finding or flip `valid`.
-  [`#fhir-coding-scalar-wrapper-2026-07-29`](documentation/agent-notes.md#fhir-coding-scalar-wrapper-2026-07-29)
+- **A TYPE GATE ON A NEGATION READ IS ITSELF THE DEFECT: IT NEVER LOOKS, SO IT REPORTS NOTHING
+  EITHER.** Never type-gate the un-gated `isRetracted`/`readSafety` reads: a negation read can only
+  _add_, never retire a finding or flip `valid`. `doNotPerform` **was** gated on `MedicationRequest`,
+  so a **conformant** `ServiceRequest` read `negations: []` under `safeToSummarize: true` (closed
+  2026-08-09). **DROP such a gate, never widen it** (a longer list of remembered types is the same
+  mechanism), licensed by the **direction**, never by a census. **`noKnownAllergy` is the opposite
+  and stays gated: it asserts something POSITIVE about a patient.** **A read and its refusal are ONE
+  function at ONE window**, or the fix reproduces the previous STOP-THE-LINE on the new types. The
+  read runs at **every resource root**; the convenience field stays root-scoped like `status`; and
+  **`safeToSummarize` does NOT move for a value that IS read.** What stays gated, and why:
+  [`#fhir-coding-scalar-wrapper-2026-07-29`](documentation/agent-notes.md#fhir-coding-scalar-wrapper-2026-07-29) ·
+  [`agent-notes/negation-read-scope.md`](documentation/agent-notes/negation-read-scope.md)
 - **Reporting is additive to diagnostics; preserving is a change to the data model, and only the
   second carries the risk. If your change makes a nested array visible to any walker, you have
   crossed the line.** The combined attempt was refuted twice (it erased a true error and asserted
@@ -98,26 +106,14 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   add one.** A forgery shaped like a FHIR name is still echoed.
   [`#phi-warning-message-leak-2026-08-02`](documentation/agent-notes.md#phi-warning-message-leak-2026-08-02)
 - **A `null` IS NOT A LOSS, WHICH IS WHY IT WAS INVISIBLE: READ SILENTLY, THEN DELETED ON EMIT, SO A
-  NON-CONFORMANT DOCUMENT CAME BACK CLEAN WITH THE MEMBER GONE.** `{"value":null,"unit":"mg"}` lost
-  the magnitude and **KEPT THE UNIT**, under `issues: []` / `valid: true` / `safeToSummarize: true`.
-  Closed 2026-08-07 by a **diagnostic plus a hand-back, NEVER a refusal** (`UNDEFINED_JSON_NULL`,
-  `isUndefinedNull`, writer hands it back as it **already did one branch over**).
-  **THE §2.6.2.3 EXEMPTION HAS TWO CONDITIONS AND A GATE REFUTED A DRAFT CHECKING ONE: (a) INSIDE a
-  repeating primitive's value ARRAY** (a singleton is NEVER padding, so `{"value":null,"_value":
-{"id":"q1"}}` IS reported) **and (b) an `id` or a NON-EMPTY `extension` in the slot, WHICH MUST
-  MATCH `hasMeta` IN `write.ts`** (`"extension":[]` read as metadata but wrote as none, so the read
-  affirmed and the writer deleted the member: all three headline shapes came back, past the fix).
-  **Do not widen to every `null`** (false-errors on conformant padding). **The complex branch stays
-  `UNKNOWN_PROPERTY` from `nonObjectSource`; do not move it onto the new code. The set walked is what
-  the READER read, not what FHIR types** (`{"subject":null}` is reported).
-  `valid`/`safeToSummarize` are deliberately open and pinned.
-  **THE `_`-SIBLING CHANNEL IS THE SAME LAUNDERING, CLOSED 2026-08-07 ON `UNKNOWN_PROPERTY`: NOT a
-  new code, NOT this one** (it drew NONE before, so nothing moved between codes). Padding is **PER
-  CHANNEL**. **THREE write branches decide it: `emitMeta` (else `{}`), `hasMeta`, AND THE
-  `resourceType` HOIST**, which skipped the property outright, so a `hasMeta`-only fix launders past
-  itself.
-  [`#the-null-laundering-closed-2026-08-07`](documentation/agent-notes.md#the-null-laundering-closed-2026-08-07) ·
-  [`#the-_-sibling-channel-closed-2026-08-07`](documentation/agent-notes.md#the-_-sibling-channel-closed-2026-08-07)
+  NON-CONFORMANT DOCUMENT CAME BACK CLEAN WITH THE MEMBER GONE** (`{"value":null,"unit":"mg"}` lost
+  the magnitude and **KEPT THE UNIT**, under `valid: true` / `safeToSummarize: true`). Closed
+  2026-08-07 by a **diagnostic plus a hand-back, NEVER a refusal**. **THE §2.6.2.3 EXEMPTION HAS TWO
+  CONDITIONS AND A GATE REFUTED A DRAFT CHECKING ONE**, the second of which **MUST MATCH `hasMeta` IN
+  `write.ts`**; **do not widen to every `null`**; the `_`-sibling channel is the same laundering and
+  stays on `UNKNOWN_PROPERTY`, **NOT a new code**; and **THREE write branches decide it**, so a
+  `hasMeta`-only fix launders past itself. **Every clause, verbatim, before you touch any of it:**
+  [`#the-null--_-sibling-laundering-the-claudemd-cursor-relocated-verbatim-2026-08-09`](documentation/agent-notes.md#the-null--_-sibling-laundering-the-claudemd-cursor-relocated-verbatim-2026-08-09)
 - **A PHI sweep over leaf values is not a PHI sweep.** `phi-leak.test.ts` swept values only, so a
   megabyte-long property name survived it. Sentinels must cover names.
 
@@ -274,12 +270,12 @@ Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
 
 **Relocated 2026-08-07:**
 [`#relocated-out-of-claudemd-on-2026-08-07-to-make-genuine-room-for-a-trap`](documentation/agent-notes.md#relocated-out-of-claudemd-on-2026-08-07-to-make-genuine-room-for-a-trap).
-The cursors, so you need not open it: the toolchain is **inherited** from the published `@cosyte/*`
-config packages, never copied, and is **ESLint 10 / Vitest 4 / ES2023 / Node >= 22 / pnpm@10, TS
-strict, dual ESM+CJS via tsup, per-dir coverage >= 90, MIT, RUNTIME DEPS ZERO.** The four ADRs are in
-`documentation/decisions/`, their source of truth: **`0001`** string-backed decimal/`integer64`,
-**`0002`** a bounded in-repo FHIRPath subset (no third-party engine), **`0003`** JSON-first,
-**`0004`** R4-first (`4.0.1` modeled; R5/DSTU2 read-tolerance only).
+The toolchain is **inherited** from the published `@cosyte/*` config packages, never copied: read
+the versions off those, never off a copy here. **RUNTIME DEPS ZERO**, TS strict, dual ESM+CJS via
+tsup, per-dir coverage >= 90, MIT. The four ADRs are in `documentation/decisions/`, their source of
+truth: **`0001`** string-backed decimal/`integer64`, **`0002`** a bounded in-repo FHIRPath subset (no
+third-party engine), **`0003`** JSON-first, **`0004`** R4-first (`4.0.1` modeled; R5/DSTU2
+read-tolerance only).
 
 ## Engineering Guardrails
 

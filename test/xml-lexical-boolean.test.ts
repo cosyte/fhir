@@ -214,14 +214,18 @@ describe("what is still not a boolean", () => {
     });
   }
 
-  it("does not read a doNotPerform written on a resource type that has no such element", () => {
-    // The type gate is unchanged: `doNotPerform` is a MedicationRequest element and nothing else.
+  it("reads a doNotPerform written on a resource type that has no such element", () => {
+    // There is no type gate any more, and this document is the price of dropping it: R4 defines no
+    // `doNotPerform` on Patient, so this is non-conformant and the negation is surfaced anyway. That
+    // is the direction the read is allowed to be wrong in -- it adds a negation a caller can ignore,
+    // where a gate subtracts one nobody ever sees. `test/negation-read-scope.test.ts` holds the
+    // conformant half.
     const { resource } = parseResourceXml(
       `<Patient ${FHIR_NS}><doNotPerform value="true"/></Patient>`,
     );
 
-    expect(readSafety(resource).doNotPerform).toBeUndefined();
-    expect(readSafety(resource).negations).toEqual([]);
+    expect(readSafety(resource).doNotPerform).toBe(true);
+    expect(readSafety(resource).negations).toEqual(["do-not-perform"]);
   });
 
   it("does not read a decimal's lexical form as a boolean", () => {

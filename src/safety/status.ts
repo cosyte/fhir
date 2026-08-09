@@ -5,7 +5,7 @@
  *
  * The fail-safe rule: the library "surfaces status / verification / clinical-status
  * / `doNotPerform` / `not-taken` / `not-done` prominently, any 'flatten/summary' helper carries them
- * or refuses." {@link readSafety} is that carry: given any of the six safety resource types it pulls
+ * or refuses." {@link readSafety} is that carry: it pulls
  * every modifier element into one explicit structure, classifies the **negations** (so a positive
  * summary can never silently swallow a "refuted" / "not-taken" / "not-done" / "do-not-perform" /
  * "no known allergy" / "entered-in-error"), and reports any **unhandled `modifierExtension`** that
@@ -96,10 +96,26 @@ import {
 } from "./codes.js";
 
 /**
- * `MedicationRequest.doNotPerform`, read across every value the document wrote for it and through an
- * array wrapper. A `true` anywhere wins: the element is an instruction *not* to give a medication, so
- * over-surfacing it is safe and missing it is not. Otherwise the first value written is surfaced
- * unchanged.
+ * `doNotPerform` on **this** node, read across every value the document wrote for it and through an
+ * array wrapper. A `true` anywhere wins: the element is an instruction *not* to do the thing the
+ * resource requests, so over-surfacing it is safe and missing it is not. Otherwise the first value
+ * written is surfaced unchanged.
+ *
+ * **There is no resource-type gate, and its absence is the rule rather than an omission.** R4 flags
+ * `doNotPerform` `?!` on more than one request resource (medicationrequest.html,
+ * servicerequest.html, communicationrequest.html), and a modifier element is the one class a
+ * consumer may never process as if it were absent. A type gate is a list of the types someone
+ * remembered: the types it leaves out are not read *and not reported*, so the instruction is simply
+ * never looked for, which is how a conformant `{"resourceType":"ServiceRequest","doNotPerform":
+ * true}` came to read `negations: []` under `safeToSummarize: true`. The gate is dropped instead of
+ * widened, because widening replaces a wrong list with a longer list of the same kind.
+ *
+ * What makes dropping it safe is the direction, not a census: this read can only **add** the
+ * `do-not-perform` negation, never retire a finding, never flip `valid`, and never turn a refusal
+ * into an affirmation. So a type nobody enumerated costs a caller a negation it can ignore, while a
+ * type nobody enumerated under a gate costs a patient an instruction not to give a medication. It is
+ * the same asymmetry that leaves `isRetracted` un-gated, and the opposite of `noKnownAllergy`, which
+ * stays type-gated because it asserts something *positive* about a patient.
  *
  * The read goes through `primitiveBooleans`, which takes the boolean off either wire format's model,
  * so the lexical `true` the schema-free XML reader keeps as text is honored here. Before it did, this
@@ -109,7 +125,9 @@ import {
  * **A value it cannot read leaves the read at `undefined` and is reported instead**, at
  * {@link unreadableBooleans}, the complement of this read rather than a widening of it. Nothing
  * here changes what is read: `"1"` and `"Y"` are not the R4 lexical space, they mean opposite things
- * on different wires, and reading them would author the instruction rather than surface it.
+ * on different wires, and reading them would author the instruction rather than surface it. The two
+ * halves are decided in one place ({@link checkDoNotPerform}) so they cannot drift apart over which
+ * documents they cover.
  */
 function readDoNotPerform(resource: FhirComplex): boolean | undefined {
   const values = getAllProperties(resource, "doNotPerform");
@@ -140,7 +158,12 @@ export type NegationKind =
   | "refuted"
   /** SNOMED CT `716186003` in `AllergyIntolerance.code`, a recorded "no known allergy". */
   | "no-known-allergy"
-  /** `MedicationRequest.doNotPerform = true`, an instruction to **not** give the medication. */
+  /**
+   * `doNotPerform = true`, an instruction to **not** do the thing the resource requests: not to give
+   * the medication, not to perform the service, not to send the communication. R4 flags it `?!` on
+   * each request resource that defines it, and this negation is read wherever it is written rather
+   * than on a list of types (see `readDoNotPerform`).
+   */
   | "do-not-perform"
   /** `MedicationStatement.status = not-taken`, the medication was **not** taken. */
   | "not-taken"
@@ -150,8 +173,8 @@ export type NegationKind =
   | "entered-in-error";
 
 /**
- * The complete, value-free safety readout of a resource. Every modifier element the six safety
- * resource types can carry has a slot here, present or `undefined`, so a consumer building a summary
+ * The complete, value-free safety readout of a resource. Every modifier element the safety resource
+ * types can carry has a slot here, present or `undefined`, so a consumer building a summary
  * reads them explicitly rather than forgetting one.
  *
  * **`negations` (and `retracted`) are the authoritative safety reads.** The single-code convenience
@@ -189,13 +212,19 @@ export interface SafetyReadout {
   /** The `verificationStatus` code, preferred-system-first (AllergyIntolerance / Condition). Convenience only. */
   readonly verificationStatus: string | undefined;
   /**
-   * `MedicationRequest.doNotPerform`, when present, read off either wire format's model: the JSON
-   * codec's `boolean`, or the lexical `true` / `false` the schema-free XML reader keeps as the text
-   * of the `value` attribute. Text outside that two-word lexical space (`"TRUE"`, `"1"`) still reads
-   * as `undefined` (coercing it would author a value the sender did not spell) but no longer
-   * silently: the element's location is on {@link unreadableBooleans} and the resource is not
-   * `safeToSummarize`. So `undefined` here means *either* "no boolean was written" or "one was
-   * written and could not be read", and the two are told apart by that channel, never by this field.
+   * `doNotPerform` **on the resource handed to {@link readSafety}**, whatever its type, read off
+   * either wire format's model: the JSON codec's `boolean`, or the lexical `true` / `false` the
+   * schema-free XML reader keeps as the text of the `value` attribute. Text outside that two-word
+   * lexical space (`"TRUE"`, `"1"`) still reads as `undefined` (coercing it would author a value the
+   * sender did not spell) but no longer silently: the element's location is on
+   * {@link unreadableBooleans} and the resource is not `safeToSummarize`. So `undefined` here means
+   * *either* "no boolean was written" or "one was written and could not be read", and the two are
+   * told apart by that channel, never by this field.
+   *
+   * **Convenience only, and root-scoped like `status` beside it.** A `doNotPerform` written on a
+   * resource *inside* this one, in `contained` or a Bundle `entry`, leaves this field `undefined`
+   * and still puts `do-not-perform` on {@link negations}, which is the authoritative read. Branch on
+   * `negations`, never on this field, when the resource may carry others.
    */
   readonly doNotPerform: boolean | undefined;
   /** Whether the resource is marked `entered-in-error` (retracted, not data), authoritative. */
@@ -243,7 +272,9 @@ export interface SafetyReadout {
    * read exactly like `value="0"`, and a "do not administer" is indistinguishable from its opposite.
    * The channel is the third one on this readout whose content is **not readable**, beside
    * {@link nestedArrays} and {@link droppedText}, and like them it carries locations and no values.
-   * The set is `MedicationRequest.doNotPerform`. Empty on every conformant document.
+   * The element read is `doNotPerform`, at any resource root, on any type; it is the only `boolean`
+   * this readout takes off a document at all, since `retracted` and `noKnownAllergy` come from codes
+   * and codings. Empty on every conformant document.
    */
   readonly unreadableBooleans: readonly string[];
   /**
@@ -485,12 +516,11 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  * **Value-free, like every location on this readout**: the text that failed to read is not carried
  * here or anywhere else, only the FHIRPath of the element that held it.
  *
- * **The set is `MedicationRequest.doNotPerform`**, the only `boolean` {@link readSafety} takes off a
- * document. **The window is every resource root** (so a `contained` or Bundle-`entry`
- * MedicationRequest is reported), which is `arrayWrappedScalars`' window and is deliberately wider
- * than the `doNotPerform` read itself, which only visits the resource {@link readSafety} is handed.
- * Reporting more than was read is the fail-safe direction and the only one available: the nested
- * order is real content whose instruction is unread either way.
+ * **The element is `doNotPerform`**, the only `boolean` {@link readSafety} takes off a document, and
+ * there is no resource-type gate on it. **The window is every resource root** (so a `contained` or
+ * Bundle-`entry` resource is covered), which is `arrayWrappedScalars`' window and is **the same
+ * window the negation read uses**: the two are decided together, in one pass, so neither can cover a
+ * document the other does not.
  * It is **not** a report of every unreadable value in a document: the profile booleans, the
  * `ElementDefinition.min` integer and a `Quantity` magnitude's lexical forms are read elsewhere and
  * are still lost silently.
@@ -583,6 +613,12 @@ interface SafetyWalk {
   readonly arrayWrapped: string[];
   /** The subset of {@link SafetyWalk.arrayWrapped} FHIR XML has no repetition to spell back. */
   readonly unspellableInXml: string[];
+  /**
+   * Resource roots where a `doNotPerform` was **read** as `true`. Internal: what reaches the readout
+   * is the `do-not-perform` negation, which carries no location. It is a list rather than a flag so
+   * that it is built by the same pass, at the same window, as its complement below.
+   */
+  readonly doNotPerform: string[];
   /** Boolean-valued safety elements whose written value the boolean read could not read. */
   readonly unreadableBoolean: string[];
 }
@@ -598,6 +634,7 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     shadowed: [],
     arrayWrapped: [],
     unspellableInXml: [],
+    doNotPerform: [],
     unreadableBoolean: [],
   };
   walkComplex(resource, path, out, true);
@@ -723,43 +760,56 @@ function checkCodingWrapping(
 const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
 
 /**
- * Record the boolean-valued safety elements at this resource root whose written value the boolean
- * read could not read.
+ * Read the `doNotPerform` written at this resource root, and record the written value the boolean
+ * read could not read. **One pass decides both halves**, and that is the point of the function:
+ * whatever a document has to be for this to look at it, it is the same for the value that is read
+ * and for the value that is refused, so the two can never drift into a window where a sender's
+ * instruction is neither surfaced nor reported.
  *
- * **The set is `MedicationRequest.doNotPerform`, and it is the whole set** because it is the only
- * `boolean` {@link readSafety} takes off a document at all: `retracted` and `noKnownAllergy` are
- * derived from codes and codings, not from a `boolean` element. The **element name is type-gated the
- * way the read is**: `doNotPerform` is a MedicationRequest element, so a `doNotPerform` written on a
- * `Patient` is neither read nor reported.
+ * **The element name is the whole gate; there is no resource-type gate on either half.** The reasons
+ * are on {@link readDoNotPerform}: R4 flags `doNotPerform` `?!` on more than one request resource, a
+ * gate silently un-reads every type it omits, and this read can only add a negation. The refusal half
+ * inherits the same scope for the same reason, since a `<doNotPerform value="1"/>` this layer
+ * declines to read is exactly as invisible on a `ServiceRequest` as it was on a `MedicationRequest`
+ * before it was reported at all. A resource type that defines no `doNotPerform` cannot reach either
+ * half from a conformant document: the element is not in R4's definition of that type, so the
+ * document is already non-conformant, and declining to affirm over it is the fail-safe direction.
  *
- * **The WINDOW, though, is wider than the read, and that is not the same thing as the type gate.**
- * This runs at every resource root, which is {@link checkArrayWrapping}'s window, while
- * `readDoNotPerform` only visits the resource `readSafety` was handed. So a `MedicationRequest`
- * inside `contained` or a Bundle `entry` **is** reported at a location no read visited. That is the
- * fail-safe direction and the same asymmetry `arrayWrappedScalars` already carries: the nested order
- * is real content whose instruction is unread either way, and declining to affirm over it costs a
- * caller a refusal where reading past it costs a patient a medication.
+ * **The window is every resource root**, which is {@link checkArrayWrapping}'s window: the entry node
+ * plus every node carrying its own `resourceType`, so a `MedicationRequest` inside `contained` or a
+ * Bundle `entry` is read here and reported here. `readDoNotPerform` visits only the resource
+ * {@link readSafety} was handed, which is why the convenience field stays a root read while the
+ * `do-not-perform` negation comes from this walk. A nested order's instruction is real content, and a
+ * readout that affirms over it costs a patient a medication.
  *
- * **Why this is decided here and not in the reader.** FHIR XML carries every primitive as the text of
- * its `value` attribute (xml.html §2.6.1) and this reader is schema-free, so nothing at parse time
- * knows the text spells a `boolean` rather than a `code`: `<doNotPerform value="1"/>` and
+ * **Not a backbone element or a datatype**, and that boundary is a limit rather than a rule this
+ * read derives. The direction argument above would license going deeper, since reading more can only
+ * add a negation; what stops it is that {@link checkArrayWrapping}'s walk delivers resource roots and
+ * this rides it. So `MedicationRequest.dosageInstruction[0].doNotPerform` is read by nothing. R4
+ * defines no `doNotPerform` on `Dosage`, so no conformant document sits there, but that is a
+ * declared gap and not a claim that none can: it is pinned in `test/negation-read-scope.test.ts`.
+ *
+ * **Why the refusal is decided here and not in the reader.** FHIR XML carries every primitive as the
+ * text of its `value` attribute (xml.html §2.6.1) and this reader is schema-free, so nothing at parse
+ * time knows the text spells a `boolean` rather than a `code`: `<doNotPerform value="1"/>` and
  * `<status value="1"/>` are the same node to the codec. This layer is the first one that knows the
  * datatype **unconditionally**, and that is the narrow, measured reason the finding raises no
- * `ValidationIssue` of its own: `MedicationRequest` has **no built-in schema**, so the validator is
- * silent about this element's **datatype** unless a caller supplies one, and this readout has to
- * hold either way. (The shape channels above are not scoped that way: an array-wrapped or
- * duplicated `doNotPerform` still draws `ARRAY_WRAPPED_SCALAR` / `DUPLICATE_PROPERTY` with no schema
- * at all.)
- * Both paths are pinned in `test/xml-unreadable-boolean.test.ts`.
+ * `ValidationIssue` of its own: these types have **no built-in schema**, so the validator is silent
+ * about this element's **datatype** unless a caller supplies one, and this readout has to hold either
+ * way. (The shape channels above are not scoped that way: an array-wrapped or duplicated
+ * `doNotPerform` still draws `ARRAY_WRAPPED_SCALAR` / `DUPLICATE_PROPERTY` with no schema at all.)
+ * Both paths are pinned in `test/xml-unreadable-boolean.test.ts` and
+ * `test/negation-read-scope.test.ts`.
  */
-function checkUnreadableBooleans(node: FhirComplex, path: string, out: SafetyWalk): void {
-  if (!typesOf(node).includes("MedicationRequest")) return;
-  // Across every member a repeated property name left, exactly as `readDoNotPerform` reads them: an
-  // unreadable value must not become invisible by arriving second under a duplicate key. One
+function checkDoNotPerform(node: FhirComplex, path: string, out: SafetyWalk): void {
+  // Across every member a repeated property name left, exactly as `readDoNotPerform` reads them: a
+  // value must not become invisible, read or unread, by arriving second under a duplicate key. One
   // location however many members, because FHIRPath cannot address an individual member.
-  if (getAllProperties(node, "doNotPerform").some(hasUnreadableBoolean)) {
-    out.unreadableBoolean.push(childPath(path, "doNotPerform"));
-  }
+  const written = getAllProperties(node, "doNotPerform");
+  if (written.length === 0) return;
+  const at = childPath(path, "doNotPerform");
+  if (written.some((value) => primitiveBooleans(value).includes(true))) out.doNotPerform.push(at);
+  if (written.some(hasUnreadableBoolean)) out.unreadableBoolean.push(at);
 }
 
 /**
@@ -774,7 +824,7 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
   // `contained` resource, a Bundle `entry.resource`). Only there does this library know a cardinality.
   if (isRoot || getAllProperties(node, "resourceType").length > 0) {
     checkArrayWrapping(node, path, out);
-    checkUnreadableBooleans(node, path, out);
+    checkDoNotPerform(node, path, out);
   }
   for (const property of node.properties) visitProperty(property, path, out);
   const reported = new Set<string>();
@@ -819,8 +869,9 @@ function descend(node: FhirNode, path: string, out: SafetyWalk): void {
 
 /**
  * Read the safety-critical modifier / status / negation elements out of a resource, never dropping
- * one. Works for the six safety resource types; for any other type the modifier
- * slots are `undefined` and only the universal retraction / modifier-extension reads apply.
+ * one. The type-scoped slots are filled for the types `SAFETY_RESOURCE_TYPES` names; for any other
+ * type they are `undefined` and only the un-gated reads apply, which are the retraction, the
+ * refutation, `doNotPerform` and the modifier-extension check.
  *
  * @param resource - The resource model (typically from `parseResource`).
  * @returns The complete {@link SafetyReadout}.
@@ -867,7 +918,12 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   const anyValue = (name: string, match: (node: FhirNode) => boolean): boolean =>
     getAllProperties(resource, name).some(match);
 
-  const doNotPerform = isType("MedicationRequest") ? readDoNotPerform(resource) : undefined;
+  const prefix = rt === undefined ? "$this" : rootPath(rt);
+  const walk = walkSafety(resource, prefix);
+
+  // The convenience field is the root read; the negation below is the walk's, which covers every
+  // resource root the document carries. Un-type-gated: see `readDoNotPerform`.
+  const doNotPerform = readDoNotPerform(resource);
   const noKnownAllergy =
     isType("AllergyIntolerance") &&
     anyValue("code", (node) => safetyHasCoding(node, SNOMED_SCT, NO_KNOWN_ALLERGY));
@@ -879,7 +935,11 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     negations.push(REFUTED);
   }
   if (noKnownAllergy) negations.push("no-known-allergy");
-  if (doNotPerform === true) negations.push("do-not-perform");
+  // From the walk, not from the convenience field above: the walk covers the entry node too, so this
+  // is that read plus every nested resource root's. A `MedicationRequest` in a `Bundle.entry` whose
+  // "do not give" this readout skipped was affirmed `safeToSummarize` while its unreadable twin at
+  // the same location was reported, which is the same blindness read from the other side.
+  if (walk.doNotPerform.length > 0) negations.push("do-not-perform");
   if (
     isType("MedicationStatement") &&
     anyValue("status", (n) => primitiveStrings(n).includes(NOT_TAKEN))
@@ -890,8 +950,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     negations.push(NOT_DONE);
   }
 
-  const prefix = rt === undefined ? "$this" : rootPath(rt);
-  const { modifiers, shadowed, arrayWrapped, unreadableBoolean } = walkSafety(resource, prefix);
+  const { modifiers, shadowed, arrayWrapped, unreadableBoolean } = walk;
   const nested = nestedArrays(resource, prefix);
   const dropped = droppedText(resource, prefix);
 

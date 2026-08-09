@@ -41,6 +41,13 @@ import {
  * - `doNotPerform`: MedicationRequest `0..1`.
  * - `code`: AllergyIntolerance `0..1`, Condition `0..1`, Observation `1..1`, DiagnosticReport `1..1`.
  *
+ * **This is the array-wrapper report's table, not the negation read's window.** The `doNotPerform`
+ * negation is read at every resource root of every type ({@link ./status.js} `readDoNotPerform`),
+ * which needs no cardinality because reading a value can only add a negation. Reporting a wrapper is
+ * an `error`, so it stays on the cardinalities above; a `ServiceRequest.doNotPerform` arriving
+ * array-wrapped is therefore read through the wrapper and surfaced, and the wrapper itself is not
+ * reported. That residual is declared, not overlooked.
+ *
  * This is deliberately **not** a per-resource model, and it must not grow into one. It is the
  * cardinality of the closed element set {@link ./status.js} already names, and it is scoped to the
  * {@link SAFETY_RESOURCE_TYPES} at a **resource root** for exactly that reason: R4 does define
@@ -125,10 +132,17 @@ export const REFUTED = "refuted";
 export const KNOWN_MODIFIER_EXTENSION_URLS: ReadonlySet<string> = new Set<string>();
 
 /**
- * The six resource types whose modifier/status/negation elements this library surfaces and whose
- * invariants it enforces. `MedicationStatement` rides alongside `MedicationRequest`.
- * Modifier-extension fail-closed is universal (every
- * resource); retraction and the named invariants are scoped to these types.
+ * The resource types whose **type-scoped** modifier/status/negation elements this library surfaces
+ * and whose invariants it enforces. `MedicationStatement` rides alongside `MedicationRequest`.
+ * Count them off the set, never off a sentence: a written-down count here read "six" over a set of
+ * seven for days, and reached `dist/` saying so.
+ *
+ * Several reads are deliberately **not** scoped by it, because they can only add a finding: the
+ * `modifierExtension` fail-closed check, the `entered-in-error` retraction, the `refuted`
+ * verification status, and the `doNotPerform` instruction ({@link ./status.js} `readDoNotPerform`).
+ * `doNotPerform` used to be gated on `MedicationRequest` alone, and the types the gate left out were
+ * neither read nor reported, so a conformant `ServiceRequest` carrying an instruction *not* to
+ * perform the service read as carrying no negation at all.
  */
 export const SAFETY_RESOURCE_TYPES: ReadonlySet<string> = new Set([
   "AllergyIntolerance",

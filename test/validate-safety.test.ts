@@ -42,7 +42,7 @@ describe("fail-closed on an unknown modifierExtension (the FHIR ?! rule)", () =>
     expect(result.valid).toBe(false);
   });
 
-  it("applies to every resource type, not only the six safety resources", () => {
+  it("applies to every resource type, not only the safety resources", () => {
     const result = check(
       '{"resourceType":"Patient","modifierExtension":[{"url":"http://example.org/x"}]}',
     );

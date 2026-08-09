@@ -3066,3 +3066,56 @@ the only field that does (plus `FhirSafetyError.message`, which names the sixth 
 `ValidationIssue` of its own, and the GENERAL reason is FALSE**: the validator is not schema-free, it
 just has no built-in `MedicationRequest` schema, and with one supplied it draws `TYPE_MISMATCH` on
 the conformant `value="true"` too.
+
+## The negation read, blind by SCOPE (2026-08-09): STOP-THE-LINE
+
+**Narrative relocated** (cap): [`agent-notes/negation-read-scope.md`](agent-notes/negation-read-scope.md).
+Cursors: **plain conformant JSON** `{"resourceType":"ServiceRequest","doNotPerform":true}` read
+`negations: []` / `safeToSummarize: true` / assert clean, same for `CommunicationRequest` - **both
+`?!` modifier elements, neither type in `SAFETY_RESOURCE_TYPES`, so the instruction was NEVER LOOKED
+FOR.** **🛑 THE GATE IS DROPPED, NOT WIDENED** - a longer list of remembered types is the same
+mechanism. **What licenses that is the DIRECTION, not a census of R4**: this read can only ADD a
+negation. **The opposite of `noKnownAllergy`, which stays gated because it asserts something POSITIVE
+about a patient.** **THE READ AND ITS REFUSAL ARE NOW ONE FUNCTION AT ONE WINDOW** - widen the read
+alone and `value="1"` on a `ServiceRequest` is exactly as invisible as `value="true"` was, the
+previous STOP-THE-LINE reproduced by the fix to this one. **Axis 2, folded in: the read was
+ROOT-ONLY**, so a `Bundle.entry` `MedicationRequest` affirmed while its unreadable twin at that same
+location was reported; the negation now comes from the WALK, the convenience field stays root-scoped
+like `status`. **`safeToSummarize` does NOT move for a value that IS read.** **The count was CUT, not
+corrected**: "the six safety resource types" over a set of SEVEN, at more tracked sites than the 3
+the item named, **3 of them rendered into `dist/index.d.ts` and `dist/index.d.cts`** (0 at head).
+**Plus FOUR carriers a site-only fix misses: the live `[Unreleased]` entry, a PENDING CHANGESET, and
+the two scope sentences on the EXPORTED `unreadableBooleans` docblock and in `README.md` that the
+fix itself falsified - the gate found those two, not the sweep.** Derive the sites, never count them
+in prose: this note said "8" and was off by one. Red-at-base **15 of 23**, 8 both-states pins named,
+**7 of 7 mutations red**.
+
+### The `null` / `_`-sibling laundering: the CLAUDE.md cursor, relocated VERBATIM 2026-08-09
+
+Moved out of `CLAUDE.md` under its byte budget to make genuine room for the negation-read-scope trap
+(ADR 0023's remedy is relocation, never deletion). Nothing is changed; the short cursor left behind
+points here. See also
+[`#the-null-laundering-closed-2026-08-07`](#the-null-laundering-closed-2026-08-07) and
+[`#the-_-sibling-channel-closed-2026-08-07`](#the-_-sibling-channel-closed-2026-08-07).
+
+- **A `null` IS NOT A LOSS, WHICH IS WHY IT WAS INVISIBLE: READ SILENTLY, THEN DELETED ON EMIT, SO A
+  NON-CONFORMANT DOCUMENT CAME BACK CLEAN WITH THE MEMBER GONE.** `{"value":null,"unit":"mg"}` lost
+  the magnitude and **KEPT THE UNIT**, under `issues: []` / `valid: true` / `safeToSummarize: true`.
+  Closed 2026-08-07 by a **diagnostic plus a hand-back, NEVER a refusal** (`UNDEFINED_JSON_NULL`,
+  `isUndefinedNull`, writer hands it back as it **already did one branch over**).
+  **THE §2.6.2.3 EXEMPTION HAS TWO CONDITIONS AND A GATE REFUTED A DRAFT CHECKING ONE: (a) INSIDE a
+  repeating primitive's value ARRAY** (a singleton is NEVER padding, so `{"value":null,"_value":
+{"id":"q1"}}` IS reported) **and (b) an `id` or a NON-EMPTY `extension` in the slot, WHICH MUST
+  MATCH `hasMeta` IN `write.ts`** (`"extension":[]` read as metadata but wrote as none, so the read
+  affirmed and the writer deleted the member: all three headline shapes came back, past the fix).
+  **Do not widen to every `null`** (false-errors on conformant padding). **The complex branch stays
+  `UNKNOWN_PROPERTY` from `nonObjectSource`; do not move it onto the new code. The set walked is what
+  the READER read, not what FHIR types** (`{"subject":null}` is reported).
+  `valid`/`safeToSummarize` are deliberately open and pinned.
+  **THE `_`-SIBLING CHANNEL IS THE SAME LAUNDERING, CLOSED 2026-08-07 ON `UNKNOWN_PROPERTY`: NOT a
+  new code, NOT this one** (it drew NONE before, so nothing moved between codes). Padding is **PER
+  CHANNEL**. **THREE write branches decide it: `emitMeta` (else `{}`), `hasMeta`, AND THE
+  `resourceType` HOIST**, which skipped the property outright, so a `hasMeta`-only fix launders past
+  itself.
+  [`#the-null-laundering-closed-2026-08-07`](#the-null-laundering-closed-2026-08-07) ·
+  [`#the-_-sibling-channel-closed-2026-08-07`](#the-_-sibling-channel-closed-2026-08-07)

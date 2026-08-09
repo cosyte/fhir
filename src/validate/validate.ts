@@ -281,7 +281,7 @@ export function validateResource(
   }
 
   // Safety layer (Phase 3): fail-closed modifier extensions (every type), retraction, and the named
-  // status/negation invariants (the six safety types). Independent of the structural schema above,
+  // status/negation invariants (the safety types). Independent of the structural schema above,
   // it keys off `resourceType` and the modifier elements directly, so it runs even for types the
   // Phase-2 schema does not model.
   for (const issue of collectSafetyIssues(resource, rt)) ctx.issues.push(issue);

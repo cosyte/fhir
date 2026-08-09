@@ -166,9 +166,11 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
 
 - **Never-droppable status/negation:** `readSafety` carries `status` / `clinicalStatus` /
   `verificationStatus` / `doNotPerform` / retraction and a classified `negations` list (`refuted`,
-  `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`, `entered-in-error`) across the six
-  safety resource types. `assertSafeToSummarize` **refuses** (throws) rather than flatten past an
-  unhandled modifier.
+  `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`, `entered-in-error`) across the
+  safety resource types `SAFETY_RESOURCE_TYPES` names. `doNotPerform` is not among the type-scoped
+  reads: an instruction **not** to perform is surfaced wherever a resource writes it, at any resource
+  root, so one inside a `Bundle` entry or `contained` reaches `negations` too.
+  `assertSafeToSummarize` **refuses** (throws) rather than flatten past an unhandled modifier.
 - **A safety verdict is never asserted over a value the document left ambiguous.** Each negation read
   runs over every coding on a `CodeableConcept` and every value written for the element it reads
   (`resourceType`, `status`, `verificationStatus`, `code`, `doNotPerform`), **including through an
@@ -363,18 +365,18 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `assertSafeToSummarize` throws. **The value is still not read**, deliberately: coercing `"1"` or
   `"Y"` would invent a reading the spec does not license, and it would turn `value="0"` into a JS
   `false` that `serializeResource` then emits, laundering an authored value across a format change.
-  The channel covers `MedicationRequest.doNotPerform`, the only `boolean` `readSafety` takes off a
-  document. Its window is every resource root (so a `contained` or `Bundle.entry` order counts),
-  which is `arrayWrappedScalars`' window and is deliberately wider than the `doNotPerform` read,
-  which only visits the resource `readSafety` is handed: a nested order is reported at a location
-  that read never visited, the fail-safe direction. A primitive carrying only `id` / `extension` and
+  The channel covers `doNotPerform`, the only `boolean` `readSafety` takes off a document, on any
+  resource type. Its window is every resource root (so a `contained` or `Bundle.entry` order counts),
+  which is `arrayWrappedScalars`' window and is **the same window the negation read uses**: the value
+  that is read and the value that cannot be read are decided together, in one pass, so neither can
+  cover a document the other does not. A primitive carrying only `id` / `extension` and
   no value is untouched, since nothing was written there to be unread, so this cannot fire on a
   conformant document in either wire format.
   **Unlike the five findings above it, this one raises no `ValidationIssue` of its own**, for a narrow
-  and measured reason rather than a general one: `MedicationRequest` has no built-in schema, so the
-  validator is silent about this element's **datatype** unless a caller supplies one, and the readout
-  has to hold either way. The safety layer knows the datatype unconditionally, which is why the report lives
-  there.
+  and measured reason rather than a general one: the request resources that define `doNotPerform`
+  have no built-in schema, so the validator is silent about this element's **datatype** unless a
+  caller supplies one, and the readout has to hold either way. The safety layer knows the datatype
+  unconditionally, which is why the report lives there.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
   `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding
