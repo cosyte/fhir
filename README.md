@@ -175,8 +175,8 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `Observation`, a `Procedure` recorded as not performed or an order marked "do not perform" inside a
   `Bundle` entry or `contained` reaches `negations` too. **The readout's location channels
   (`unhandledModifierExtensions`, `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`,
-  `droppedText`, `unreadableBooleans`) and `safeToSummarize` were already document-wide; what moved is
-  `negations`.** The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
+  `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`) and `safeToSummarize` are
+  document-wide.** The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
   and the rest) answer about the resource you handed in, because one value cannot say which resource
   it came from, so branch on `negations` whenever a resource may carry others.
   `no-known-allergy` is the exception and
@@ -390,6 +390,29 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   have no built-in schema, so the validator is silent about this element's **datatype** unless a
   caller supplies one, and the readout has to hold either way. The safety layer knows the datatype
   unconditionally, which is why the report lives there.
+- **A code that spells a negation bar its case or its surrounding whitespace is reported, not read as
+  one.** A negation is matched by its exact `code`, because FHIR `code` is case-sensitive and the
+  datatype's lexical space has no room for surrounding whitespace (`[^\s]+([\s][^\s]+)*`). So
+  `{"resourceType":"Procedure","status":"NOT-DONE"}` (an upper-casing source system) and a `status`
+  of `" not-done"` (a padded fixed-width or CSV extract) assert no negation, and **that reading is
+  correct and unchanged**: folding them in would accept a non-conformant document as though it were
+  conformant and hand you a negation the sender never spelled. **What was wrong was that the refusal
+  was silent.** Measured: every such document returned `negations: []` under
+  `safeToSummarize: true`, with nothing on any channel to say a value had been looked at and
+  declined, so a caller doing exactly what this readout says to do (branch on `negations`, not on
+  the raw status string) read a procedure recorded as `"NOT-DONE"` as a procedure with nothing to
+  say about it. So the position is named: the locations in `nearMissNegationCodes`,
+  `safeToSummarize` is `false`, and `assertSafeToSummarize` throws. **The value is still not
+  coerced, trimmed or case-folded**, and unlike every other channel on the readout nothing is lost either:
+  the raw value is surfaced on `status` / `verificationStatus` exactly as written, and what the
+  library declines is the _classification_. The elements are the `code`-valued ones the negation read
+  looks at, `status` and `verificationStatus`, at every resource root, which is the negation read's
+  own window. The pairs come from the same table the matches are made from, so the report cannot
+  cover a pair the read does not. `AllergyIntolerance.code` is deliberately outside it: SNOMED
+  `716186003` "no known allergy" is a _positive_ assertion whose read is root- and type-scoped, and
+  disclosing a near miss at every root would report the miss where an exact hit is read by nothing.
+  Like the boolean channel above, it raises no `ValidationIssue` of its own, so it cannot move
+  `valid` in either direction. Empty on every conformant document, in either wire format.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
   `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding

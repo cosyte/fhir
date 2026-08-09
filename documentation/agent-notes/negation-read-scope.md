@@ -143,3 +143,120 @@ left alone: it *enumerates* its six groups and is true at its own site.
   `pnpm differential:read`: **0 readings moved, 0 regressions.**
 - Corpus caveat, as on every slice here: hand-authored JSON/XML fixtures, mutations and hand-built
   probes, **not** the R4 published-examples corpus.
+
+---
+
+# The case/whitespace gap: DISCLOSE, DO NOT NORMALISE (2026-08-09)
+
+Base commit `fa5bfd8`. The last residual `#82` filed against this arc, and the one that needed a
+direction call before it could be built at all, because **the behaviour it complains about is
+spec-correct.**
+
+## 🛑 THE TRAP, AND IT IS THE ONE A FUTURE READER WILL WANT TO BREAK
+
+**Never coerce, trim or case-fold a value into a negation code.** `isNearMissCode` decides a
+**diagnostic**, never a reading; it is asked only *after* the exact match has already failed, and
+nothing anywhere turns the value it describes into the code it resembles. Making the read tolerant
+would be the **laundering class this package refuses everywhere else**: a non-conformant document
+accepted as though it were conformant, and a negation handed to a caller that its sender never
+spelled. Fix at the READ, never the reader. The sibling precedents are `x12`, which leaves
+whitespace-only control numbers padded **by design** because "trimming is a normalisation rule and no
+source states one", and `dicom`, which ships **a disclosure, not a bound**.
+
+**The silence was the defect. The strictness is not, and must not be "finished".**
+
+## The census WAS the slice, and the filed line understated the class again
+
+The item named `"NOT-DONE"`, `" not-done"` and `entered-in-error`. Measured over the codes derived
+from `src/`, at every element and every resource root each is read at, every case variant and every
+surrounding-whitespace form was **SILENT** - no negation, `safeToSummarize: true`, nothing on any
+channel. So the class was every `?!`-modifier-element negation code this layer classifies, on
+`status` **and** on a `verificationStatus` coding, at the entry root, in `Bundle.entry` and in
+`contained`, over space / tab / LF / CR / leading / trailing / both / any case.
+
+**One axis does not exist and inventing it would be wrong:** SNOMED `716186003` is digits, so case
+cannot vary it at all. Derive the codes from `src/`; never write the set down.
+
+## 🛑 THE CLAIM THAT WOULD HAVE BEEN FALSE, in `#83`'s "understating" direction
+
+**`do-not-perform`, the one BOOLEAN negation, ALREADY had this disclosure.** `<doNotPerform
+value="TRUE"/>` and `value=" true"` have landed on `unreadableBooleans` under
+`safeToSummarize: false` since that channel shipped. So *"this is the first time the package records
+a negation value it declined"* is **false**, and it is false in the flattering-to-caution direction
+that `#83` pass 1 was refuted for. The true, narrower claim is the one shipped: **the `code`-valued
+reads had no complement; the boolean one did.** Pinned in both states in the test file so the claim
+cannot drift back.
+
+## Why the two halves are not the same shape, stated rather than blurred
+
+The `unreadableBooleans` channel is about a value that could not be read **at all** - `doNotPerform`
+reads `undefined`, which is what an absent element reads too. This one is about a value that **is**
+read and **is** surfaced on `status` / `verificationStatus` unchanged; what fails is the
+**classification**. Nothing is lost. Do not describe it as a data loss, and do not fold it into the
+module docblock's five "shapes FHIR does not define" - it is not one of them.
+
+## ⚖️ `no-known-allergy` is OUTSIDE the disclosure, and the reason is architectural, not timidity
+
+`AllergyIntolerance.code` is deliberately absent from `NEGATION_CODE_READS`. Adding it would put a
+near-miss disclosure at **every resource root** while an *exact* SNOMED `716186003` at a nested root
+is read by **nothing at all** - so the library would **report the miss more loudly than the hit**.
+That is the same boundary that keeps `no-known-allergy` off the walk: it is a *positive* assertion,
+the one negation whose surfacing can make a caller **less** careful, where an absent one reads as
+*unknown*. Pinned in both directions. **Do not "finish the job" by adding it.**
+
+## Read scope and report scope are the same scope BECAUSE THEY ARE THE SAME TABLE
+
+`NEGATION_CODE_READS` holds the element, the codes matched exactly on it, **and the reader** - the
+same `primitiveStrings` / `safetyCodingsOf` the matches themselves go through. The disclosure is
+derived from it, inside `checkNegations`, so it inherits that function's window by construction
+rather than by a second copy of the condition. A test iterates the table and asserts of every entry
+that the exact code **is** classified there, so the table cannot drift into describing a read that is
+not there.
+
+**Whitespace is R4's own four-character class (`[^\s]+([\s][^\s]+)*`, XML Schema's `\s`), NOT
+JavaScript's.** A no-break space and a byte-order mark are ordinary characters inside a conformant
+`code`, so trimming one would call a value non-conformant that R4 accepts. Pinned in both states, and
+widening it to `/\s/` reds a test.
+
+## 🛑 Measurement, and the shape of the count that was ALMOST published
+
+**27 of 35 red at base**, in a real detached base worktree at `fa5bfd8`; 35/35 at head. **Of those
+27, five are red only because the symbol they name does not exist at base** (the two table-integrity
+tests and the three head-only channel-name pins), so **22 of 35 are red for a behavioural
+difference.** Reported that way on purpose.
+
+**The first draft of this test file measured 31 of 35, and that figure was wrong in the flattering
+direction** - the both-states pins were written as `expect(...nearMissNegationCodes).toEqual([])`,
+which goes red at base for the trivial reason that the field reads `undefined`, pinning **nothing**.
+They were rewritten onto `safeToSummarize` and `negations`, which both states have and which are
+`true` / empty only if the channel is empty. **A both-states pin asserted through a field the base
+commit does not have is not a both-states pin.** This is the second time in this arc a count
+overstated what was held down; the remedy both times was to restructure the tests, not the prose.
+
+**8 both-states pins, named in the test file** under their own `describe` with the reason written
+there: the non-negation padded code, the not-quite-a-negation value, the R4-vs-JS whitespace set,
+every conformant document, the backbone-element boundary, `no-known-allergy`'s two directions, the
+boolean negation's existing channel, and `valid` not moving.
+
+**Non-vacuity by mutation - what is held down, named, never a total:** widen the whitespace set to
+JavaScript's `\s`; drop the case fold; drop the whitespace strip; drop the exact-value guard so an
+exact code also reports; remove the channel from `safeToSummarize`; remove it from
+`assertSafeToSummarize`'s refusal; narrow the disclosure to the entry root; drop `verificationStatus`
+from the table; narrow the `status` reader to one value so a wrapper and a shadowed member are
+missed; add `AllergyIntolerance.code` to the table. **Every one reddened at least one test; none
+survived.**
+
+**Negative control is DEGENERATE here and is reported as such**: `@cosyte/hl7` provides **0 of the 13
+symbols** this file imports, so all 35 assertions fail at import for a reason that discriminates
+nothing about behaviour. The red-at-base fraction and the mutations are the real evidence. Do not
+quote an hl7 control on this repo as though it graded anything.
+
+**Corpus caveat:** hand-authored fixtures, mutations and probes - **not** the R4 published-examples
+corpus.
+
+## Residual raised by the work, filed not absorbed
+
+`{"resourceType":"Procedure","status":["NOT-DONE"]}` gets the near-miss location but **no
+`ARRAY_WRAPPED_SCALAR`**, because `arrayWrappedScalars` is scoped to a cardinality table on the
+safety resource types and `Procedure` is not one. Unchanged at both states, already filed against the
+array-wrapper rule by `#82`. Head is **strictly better** than base there, not complete. Pinned.

@@ -123,6 +123,7 @@ export {
   assertSafeToSummarize,
   droppedText,
   FhirSafetyError,
+  nearMissNegationCodes,
   nestedArrays,
   readSafety,
   shadowedProperties,
