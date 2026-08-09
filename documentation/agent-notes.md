@@ -3194,3 +3194,12 @@ only the JSON shape**, so an XML dose surfaced as the **bare-unit shape** under 
 bare-unit shape itself** (`+5`, `05`, `.5` are outside R4's `decimal` space, still silent). **Do not
 write a guarantee where you measured a narrowing** and **a phrase sweep is not a carrier sweep**:
 the gate refuted both, and `#p2-p3` above was the fifth carrier a phrase sweep missed.
+
+## The XML boolean, read (2026-08-09): STOP-THE-LINE
+
+**Narrative relocated** (cap): [`agent-notes/xml-lexical-booleans.md`](agent-notes/xml-lexical-booleans.md).
+Cursors: an XML `<doNotPerform value="true"/>` read as **absence**, so a negation vanished across
+**our own** round trip under `issues: []`. Fixed at `primitiveBooleans`, the **safety** read, never
+the reader. **3 booleans found, 1 changed: widening the CONVENIENCE read RETIRED a
+`MUST_SUPPORT_ABSENT`** (`snapshot.ts` reads `undefined` as *inherit*). **ADDITIVITY IS A PROPERTY
+OF THE CONSUMERS.**

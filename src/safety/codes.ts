@@ -164,7 +164,55 @@ export function primitiveString(node: FhirNode | undefined): string | undefined 
 }
 
 /**
+ * The boolean a primitive value spells, whichever reader built the model, or `undefined` when it
+ * spells none.
+ *
+ * The JSON reader hands over a JS `boolean`; the XML reader is schema-free and hands over the exact
+ * text of the `value` attribute, because FHIR XML carries no datatype for it to key on (a
+ * primitive's value travels in that attribute, `xml.html` §2.6.1). Both spell the same boolean, so
+ * both are read here.
+ *
+ * Reading only the first shape made `undefined` mean two different things: "the document wrote no
+ * boolean here" and "the boolean is right there and I did not read it". The second one lost a
+ * `MedicationRequest.doNotPerform` across this package's own XML round trip, so an instruction *not*
+ * to give a medication read as absent under an empty issue list.
+ *
+ * **The text recognised is exactly `true` and `false`**, the whole of the R4 `boolean` lexical space
+ * (`datatypes.html`) and nothing beside it. `"TRUE"`, `"1"`, `"yes"` and `" true"` read as no
+ * boolean, because coercing them would author a value the sender did not spell. **That refusal is
+ * silent**, with no diagnostic on any channel, which is a residual rather than a guarantee. It is
+ * pinned in `test/xml-lexical-boolean.test.ts`.
+ *
+ * The model records no provenance, so a JSON document that spelled `{"doNotPerform":"true"}` is read
+ * the same way; FHIR JSON says a boolean is a JSON boolean, so that document is non-conformant
+ * either way.
+ *
+ * **Only {@link primitiveBooleans}, the safety read, goes through this.** {@link primitiveBoolean},
+ * the convenience read, deliberately still matches a JS `boolean` alone, and the asymmetry is the
+ * point: a safety read can only *add* a negation with a value it did not have before, while the
+ * convenience read reaches `ElementDefinition.mustSupport`, whose snapshot merge treats `undefined`
+ * as *inherit from the base element*, so reading a value that was previously absent lets a
+ * differential's `false` **remove** a `MUST_SUPPORT_ABSENT` the base raised. That was measured, not
+ * feared. It is the same safety-versus-convenience split that already separates
+ * {@link primitiveStrings} from {@link primitiveString}.
+ */
+function booleanOf(value: PrimitiveValue): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return undefined;
+}
+
+/**
  * The boolean value of a primitive node, or `undefined` when it is not a boolean primitive.
+ *
+ * **The convenience read, and it matches a JS `boolean` alone.** It does *not* read the lexical
+ * `true` / `false` the schema-free XML reader keeps as text; {@link primitiveBooleans}, the safety
+ * read, does. {@link booleanOf} states why the two differ, and it is not an oversight: this read
+ * reaches `ElementDefinition.mustSupport`, where `undefined` means *inherit*, so filling in a value
+ * here can **remove** a finding, the one direction a fail-safe layer must not move in without
+ * measuring it. Two package-private readers of one datatype accepting different text is a hazard in
+ * itself: **if either is ever exported, resolve the split rather than shipping both.**
  *
  * @param node - Any model node, or `undefined`.
  * @returns The boolean value, or `undefined`.
@@ -219,7 +267,10 @@ export function primitiveStrings(node: FhirNode | undefined): readonly string[] 
 
 /**
  * Every boolean value a node holds, reading through an array wrapper. The boolean counterpart to
- * {@link primitiveStrings}.
+ * {@link primitiveStrings}, and **the safety read**: unlike {@link primitiveBoolean} it takes the
+ * boolean off either wire format's model, a JS `boolean` from the JSON codec or the lexical `true` /
+ * `false` the schema-free XML reader keeps as text ({@link booleanOf} states what text is
+ * deliberately *not* recognised, and why the two reads differ).
  *
  * @param node - Any model node, or `undefined`.
  * @returns The boolean values, in document order.
@@ -230,7 +281,10 @@ export function primitiveStrings(node: FhirNode | undefined): readonly string[] 
  * ```
  */
 export function primitiveBooleans(node: FhirNode | undefined): readonly boolean[] {
-  return scalarValues(node).filter((value): value is boolean => typeof value === "boolean");
+  return scalarValues(node).flatMap((value) => {
+    const bool = booleanOf(value);
+    return bool === undefined ? [] : [bool];
+  });
 }
 
 /**
