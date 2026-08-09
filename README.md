@@ -722,6 +722,28 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   metadata is not modeled at all, and one inside a complex in a primitive's `extension` is still
   dropped by both writers, and that document reads `valid: true`, so refusing it would withdraw a round
   trip from a model this library reports as clean.
+- **A `resourceType` with no string in it is refused rather than deleted and the tag substituted**
+  (`UNSERIALIZABLE_RESOURCE_TYPE`). FHIR XML has no `resourceType` element: the type IS the tag
+  (xml.html). So this writer skips that property at every element it walks and takes the tag from the
+  property's string value, and where there is no string to take the root used to fall back to
+  `Resource`. `{"resourceType":{"modifierExtension":[{"url":"http://example.org/x"}]},"status":"final"}`
+  reads `RESOURCE_TYPE_UNKNOWN` at error severity with `valid: false`, and `safeToSummarize: false`
+  for the unhandled modifier extension the type gate carries; it came back as
+  `<Resource xmlns="http://hl7.org/fhir"><status value="final"/></Resource>`, which re-reads with an
+  empty issue list, `valid` and `safeToSummarize` both `true`, and no modifier extension anywhere. The
+  property is gone from the output and the element claims a type nobody wrote. **Neither repair is
+  available**: writing `<Resource>` is what launders, and it authors the type gate every type-scoped
+  safety read runs behind; coercing the value to a string authors a different type out of content the
+  sender wrote at another shape. **Two shapes are deliberately left**: an element that wrote **no**
+  `resourceType` is untouched, because a typeless complex is named `Resource` by documented fallback
+  and nothing is deleted there; and an element that wrote a **string beside** a non-string keeps its
+  tag, so the substitution never happens and what drops there is the repeated-property-name case. The
+  bound is structural rather than a verdict: at the root this costs a round trip only for a model
+  already `valid: false`, but deeper no layer checks a nested element's type and a document read from
+  XML reaches it, so what is withdrawn at every refused location is a **deletion** rather than a round
+  trip. `serializeResource` emits a non-string `resourceType` through its ordinary path and is the
+  route that stays open. **Not** closed by it: a JSON decimal still comes back from XML as a string,
+  and `Observation.value[x]` is still outside the array-wrapper window.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).

@@ -42,6 +42,7 @@ import {
   assertNoShadowedProperty,
   assertSerializable,
   assertXmlArrayWrapper,
+  assertXmlResourceType,
   assertXmlSerializable,
   breaksTag,
   refuseUnserializableDivMarkup,
@@ -386,6 +387,18 @@ function writeElement(
  *   member too and there is no route that keeps it. XML *can* repeat an element, but two repeated
  *   elements re-read as a list, which is a repeating element the sender never wrote. See
  *   `assertNoShadowedProperty` for the window and for the two positions it leaves.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_RESOURCE_TYPE` if an element wrote a
+ *   `resourceType` and none of the values it wrote there is a string. FHIR XML has no `resourceType`
+ *   element -- the type IS the tag -- so this writer skips that property at every element, and with
+ *   no string to name the tag the root fell back to `Resource`:
+ *   `{"resourceType":{"modifierExtension":[{"url":"http://example.org/x"}]},"status":"final"}` came
+ *   back as `<Resource xmlns="http://hl7.org/fhir"><status value="final"/></Resource>`, moving
+ *   `valid` and `safeToSummarize` both from `false` to `true` and taking the modifier extension with
+ *   it. An element with **no** `resourceType` is untouched and still named `Resource` by the fallback
+ *   above, and one that wrote a string beside a non-string keeps its tag and is left to the
+ *   repeated-property-name case. `serializeResource` emits a non-string `resourceType` through its
+ *   ordinary path, so this refusal does not reach it. See `assertXmlResourceType` for the window,
+ *   which reaches every depth, and for the bound that holds only at the root.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -410,8 +423,11 @@ export function serializeResourceXml(node: FhirComplex): string {
   // And this one after that, on the same rule: it is the newest code, so it goes at the end of the
   // chain and no model that already reported one of the three above moves onto it.
   assertXmlArrayWrapper(node);
-  // And this one after that, on the same rule again: it is the newest code, so it goes at the very
-  // end of the chain in both writers and nothing that already reported one of the four moves onto it.
+  // And this one after that, on the same rule again: it goes at the very end of the chain in both
+  // writers and nothing that already reported one of the four moves onto it.
   assertNoShadowedProperty(node);
+  // And this one last of all, on the same rule again: it is the newest code, so nothing that already
+  // reported one of the five moves onto it. An array-wrapped or `null` type gate keeps its own.
+  assertXmlResourceType(node);
   return xml;
 }
