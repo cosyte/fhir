@@ -693,8 +693,10 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  *
  * **It answers about the resource it is handed, and the safety walk applies it at every resource
  * root** ({@link ./status.js} `checkNegations`), so a `Procedure` recorded as not performed inside a
- * `contained` array or a `Bundle.entry` reaches `SafetyReadout.negations`. `status` on a backbone
- * element is not a resource's status and is read by nothing.
+ * `contained` array or a `Bundle.entry` reaches `SafetyReadout.negations`. **What that walk calls a
+ * resource root is stated there and is not restated here**: it is a property-name test, not a proof
+ * that the node is a resource, and writing down a universal over it has been wrong twice in this
+ * slice alone.
  *
  * **`noKnownAllergy` is the opposite direction and stays type-gated**: it asserts something *positive*
  * about a patient, so a wider read would invent an assertion rather than find one.
