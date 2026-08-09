@@ -3186,3 +3186,10 @@ points here. See also
   itself.
   [`#the-null-laundering-closed-2026-08-07`](#the-null-laundering-closed-2026-08-07) ·
   [`#the-_-sibling-channel-closed-2026-08-07`](#the-_-sibling-channel-closed-2026-08-07)
+
+## The XML profile `min`, read (2026-08-09)
+
+[`agent-notes/xml-profile-min.md`](agent-notes/xml-profile-min.md). Cursor: an XML-sourced profile
+declared required elements and this library enforced **none**. Fixed at `parseMin`, not the reader.
+**🛑 SAFE ONLY BECAUSE `mergeElement` NOW TAKES THE TIGHTER `min`**: it overlaid verbatim, retiring
+a `CARDINALITY_MIN`.

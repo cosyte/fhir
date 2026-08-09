@@ -87,10 +87,14 @@ universal.** Say _adds a negation, never retires one_, which is the only form th
   render a string unchanged, so the round trip is byte-exact either way.
 
 **The wider sweep the item asked for, over consumers matching on the JSON reader's TYPE rather than
-just booleans.** `decimalValue` closed by `#78`. **OPEN: `parseMin`** (`structure-definition.ts`),
+just booleans.** `decimalValue` closed by `#78`. **`parseMin`** (`structure-definition.ts`),
 `min` being an `unsignedInt` read through an `instanceof FhirDecimal` match, so **a profile handed
 over in XML declares required elements this library enforces none of**, silently (`max` is fine, FHIR
-spells it a string in both formats). **OPEN: `numberOf`** (`fhirpath/evaluate.ts`), where an
+spells it a string in both formats). **CLOSED 2026-08-09, and the widening is safe ONLY because
+`mergeElement` now takes the TIGHTER of the inherited and stated bound**: it overlaid the
+differential's verbatim, so any newly-read bound below the inherited one retired a `CARDINALITY_MIN`
+under `valid: false -> true`. A gate pass paid for that. `max` is the unguarded mirror:
+[`xml-profile-min.md`](xml-profile-min.md). **OPEN: `numberOf`** (`fhirpath/evaluate.ts`), where an
 XML-sourced number falls through to **string** ordering, so `"9" < "10"` is false. `lexicalOf`
 (`bundle/types.ts`), `resourceTypeOf` (`model/node.ts`) and `lacksTaggableResourceType`
 (`codec/serialize-guard.ts`) read strings and are correct on both paths.
@@ -122,6 +126,8 @@ Closing any of them MUST red its test, in the same change.
 
 1. **The two profile booleans**, above: unread from XML, and the retirement is why.
 2. **`ElementDefinition.min` unread from XML**, silently. Same root class, different datatype.
+   **CLOSED 2026-08-09** ([`xml-profile-min.md`](xml-profile-min.md)); the pin here was rewritten in
+   place rather than deleted. What stays open is the unguarded `max` mirror in `mergeElement`.
 3. **FHIRPath `convertToBoolean` reads an XML `false` as `true`.**
 4. **`safeToSummarize` IS UNMOVED IN BOTH DIRECTIONS, AND THE SECOND DIRECTION IS A REAL GAP.**
    For a value that reads, unmoved is right: `negations` carries the instruction and refusing to

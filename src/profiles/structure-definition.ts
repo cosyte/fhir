@@ -171,14 +171,47 @@ function parseMax(node: FhirNode | undefined): number | undefined {
 }
 
 /**
+ * The lower bound a `min` written as lexical text states, or `undefined` when it states none.
+ *
+ * FHIR XML carries every primitive as the text of its `value` attribute, so `<min value="1"/>`
+ * reaches the model as the string `"1"` where FHIR JSON's `"min": 1` reaches it as a number. The
+ * text recognised here is exactly R4's `unsignedInt` lexical space, `[0]|([1-9][0-9]*)`
+ * (datatypes.html), which is `min`'s own datatype (elementdefinition.html) - no sign, no leading
+ * zero, no surrounding whitespace, no decimal point, no exponent. Nothing is coerced and nothing is
+ * guessed: `"+1"`, `"01"`, `"1.0"`, `" 1"`, `"1e2"`, `"-1"`, `"one"` and `""` state no bound.
+ *
+ * **This read cannot lower a bound, and the guarantee lives at the merge rather than here.** A
+ * newly-read `min` reaches an instance verdict either verbatim (a carried snapshot, or a
+ * differential element with no base counterpart, both of which state a bound where the snapshot had
+ * none) or through `mergeElement` ({@link ./snapshot.js}), which is the only route that can replace
+ * a bound already there and which takes the tighter of the two. So a value this function newly
+ * returns can only raise the snapshot's bound or leave it alone. That is what makes widening the
+ * read additive: the retirement the sibling `mustSupport` read was measured into and declined is
+ * unreachable from here, for `0` and for every other value alike.
+ */
+function lexicalMin(text: string): number | undefined {
+  if (!/^([0]|[1-9][0-9]*)$/u.test(text)) return undefined;
+  return Number(text);
+}
+
+/**
  * Parse a FHIR `min` (an `unsignedInt` primitive) to a number, or `undefined`. The precision-
  * preserving codec models every JSON number as a {@link FhirDecimal}, so a well-formed
  * `min` arrives as an integer-valued decimal; a non-integer or non-numeric `min` (malformed input)
  * degrades to `undefined` rather than throwing.
+ *
+ * A `min` the codec holds as lexical text - which is every `min` in an XML-sourced definition - is
+ * read through {@link lexicalMin}. The read is widened here rather than in the XML reader: a
+ * schema-free reader cannot know that `value` spells an `unsignedInt` rather than a `code`, and
+ * coercing there would turn the text into a number the writer then emits as one, laundering a value
+ * across a format change. The model records no provenance, so the same lexical read applies to a
+ * JSON document that spelled `{"min": "1"}` - non-conformant FHIR JSON, read leniently, never
+ * re-authored.
  */
 function parseMin(node: FhirNode | undefined): number | undefined {
   if (node === undefined || !isPrimitive(node)) return undefined;
   const { value } = node;
+  if (typeof value === "string") return lexicalMin(value);
   if (!(value instanceof FhirDecimal)) return undefined;
   try {
     return Number(value.toBigInt());

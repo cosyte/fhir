@@ -60,7 +60,31 @@ export class FhirProfileError extends Error {
 /** Overlay a differential element's stated constraints onto a base element (id/path preserved). */
 function mergeElement(base: ElementDefinition, diff: ElementDefinition): ElementDefinition {
   const merged: { -readonly [K in keyof ElementDefinition]: ElementDefinition[K] } = { ...base };
-  if (diff.min !== undefined) merged.min = diff.min;
+  // `min` takes the TIGHTER of the two lower bounds, never simply the differential's, and never
+  // above the element's own upper bound. A profile derives by *constraining* (profiling.html): its
+  // `min` may raise the inherited one and may not lower it, so a differential stating a smaller
+  // bound is an invalid profile rather than a relaxation to honour. Overlaying it verbatim retires a
+  // `CARDINALITY_MIN` the base element earned, silently and with `valid` moving `false` to `true`,
+  // which is the one direction this library refuses to move in. Taking the maximum is lenient on the
+  // malformed profile (it is not refused, there being no channel here to report it on) and fail-safe
+  // on the instance. It is also what keeps every widening of the `min` READ additive: a newly-read
+  // bound can only raise what the snapshot already carried, whatever wire format spelled it.
+  //
+  // DECLARED OPEN, pinned by a test, and deliberately NOT guarded here. Where a profile is
+  // contradictory (the base element required, the differential forbidding it with `0..0`) the
+  // tightening composes the two rules into an UNSATISFIABLE `min 1` beside `max 0`. That is a true
+  // statement about a contradictory profile and every instance draws a finding from it, but
+  // `resolveSlices` reads a descendant's cardinality as an existence expectation and resolves the
+  // contradiction toward *present*, so beneath an `exists` discriminator two slice findings are
+  // lost. A clamp against `max` was tried and REVERTED: it lowered the enforced bound below the
+  // inherited one whenever the differential's own `max` sat under it, which is worse and reaches
+  // ordinary profile mistakes rather than only contradictory ones. The remedy belongs at
+  // `resolveSlices`, which is guessing where its own contract says report `unchecked`, and it is its
+  // own slice.
+  //
+  // `max` is deliberately NOT given the mirror treatment: no read feeding it moved, so tightening it
+  // would be a separate change to the JSON path. It is characterized by a test.
+  if (diff.min !== undefined) merged.min = Math.max(base.min ?? 0, diff.min);
   if (diff.max !== undefined) merged.max = diff.max;
   if (diff.mustSupport !== undefined) merged.mustSupport = diff.mustSupport;
   if (diff.slicing !== undefined) merged.slicing = diff.slicing;

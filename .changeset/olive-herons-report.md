@@ -33,7 +33,7 @@ for every refusal it raises, including the five that already refused. Its `locat
 
 `doNotPerform` is the only `boolean` the safety spine reads out of a document, so
 the channel is complete for that layer and for nothing beyond it. `ElementDefinition.mustSupport`,
-`slicing.ordered`, `ElementDefinition.min`, a `Quantity` magnitude's `+5` / `05` / `.5` / `5.` and
+`slicing.ordered`, a `Quantity` magnitude's `+5` / `05` / `.5` / `5.` and
 FHIRPath `numberOf` are the same class elsewhere, still silent, each pinned and each its own item.
 
 This raises no `ValidationIssue` of its own, for a narrow measured reason rather than a general one:

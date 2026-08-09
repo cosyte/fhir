@@ -37,8 +37,7 @@ than a shortfall. Two more boolean reads have the same defect and are left stand
 diagnostic: the snapshot merge treats an absent differential flag as "inherit", so an XML
 `<mustSupport value="false"/>` that previously read `undefined` would begin overwriting an inherited
 `true` and remove a `MUST_SUPPORT_ABSENT` the base emitted. Adding a negation is safe; removing a
-finding needs its own measurement. `ElementDefinition.min` (an `unsignedInt` through a `FhirDecimal`
-match, so an XML-sourced profile's required elements go unenforced, silently) and FHIRPath's
+finding needs its own measurement. FHIRPath's
 `convertToBoolean` / `toTrit` / `systemTypeOf` are the same root class, censused and unchanged.
 `validatePrimitiveValue` is untouched and still reads a conformant `<active value="true"/>` as
 `TYPE_MISMATCH`; that trade is recorded with the `Quantity` residuals and is not reopened here.

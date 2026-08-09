@@ -58,6 +58,65 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **An XML-sourced profile declared its required elements and this library enforced none of them,
+  silently (`FHIR-XML-WRITE-RESIDUALS`).** FHIR XML carries every primitive as the text of its
+  `value` attribute (`xml.html` 2.6.1) and this reader is schema-free by design, so
+  `<min value="1"/>` reaches the model as the string `"1"` where FHIR JSON's `"min": 1` reaches it
+  as a number. `ElementDefinition.min` was read through a match on the number alone, and a failed
+  match reads as absence. Measured at the base commit on a profile whose snapshot states
+  `Observation.subject 1..1` and `Observation.performer 2..*`, against an instance carrying neither:
+  the JSON spelling returned `valid: false` with a `CARDINALITY_MIN` at each element, and the same
+  profile put through this package's own `serializeResourceXml` and read back by its own
+  `parseResourceXml` returned **`valid: true` with no profile finding of any kind** (both readings
+  carry an unrelated informational `RESOURCE_NOT_MODELED` from the built-in schema). A change of
+  format upgraded
+  a document's trustworthiness claim. The asymmetry that hid it is that `max` was fine: FHIR spells
+  `max` as a string in both formats, so upper bounds were enforced and lower bounds were not.
+  **The read is widened at the profile loader, never in the XML reader.** A schema-free reader
+  cannot know that `value` spells an `unsignedInt` rather than a `code`, and coercing there would
+  turn the text into a number the writer then emits as one, authoring a value the sender did not
+  spell and laundering it across a format change. The text recognised is exactly R4's `unsignedInt`
+  lexical space, `[0]|([1-9][0-9]*)` (datatypes.html), the datatype `ElementDefinition.min` declares
+  (elementdefinition.html): `"+1"`, `"01"`, `"1.0"`, `"1."`, `" 1"`, `"1 "`, `"1e2"`, `"-1"`,
+  `"one"` and the empty string state no bound and are unchanged. R4's `positiveInt` is a different
+  space (`+?[1-9][0-9]*`, a leading `+` admitted) and is not the one this read implements.
+  **Snapshot generation is changed alongside it, and that is what makes widening the read safe.** A
+  profile derives by constraining (profiling.html): its `min` may raise the inherited one and may
+  not lower it, so a differential stating a smaller bound is an invalid profile rather than a
+  relaxation to honour. The differential's `min` was overlaid verbatim, which silently removed a
+  `CARDINALITY_MIN` the base element had earned and moved `valid` from `false` to `true`. It now
+  takes the tighter of the inherited and the stated bound, so a newly-read `min` can only raise the
+  snapshot's bound or leave it alone, whatever wire format spelled it. The malformed profile is not
+  refused, snapshot generation having no channel to report it on; nothing the base element earned is
+  withdrawn.
+  **One consequence is left open rather than guarded, because guarding it measured worse.** Where a
+  profile is contradictory (the base element required, the differential forbidding it with `0..0`),
+  composing the two rules gives an unsatisfiable `min 1` beside `max 0`. Every instance draws a
+  finding from that, but slice resolution reads a descendant's cardinality as an existence
+  expectation and resolves the contradiction toward "present", so beneath an `exists` discriminator
+  two slice findings are lost. Clamping the tightened bound against `max` was tried and reverted: it
+  lowered the enforced bound below the inherited one whenever the differential's own `max` sat under
+  it, reaching ordinary profile mistakes rather than only contradictory ones. The remedy belongs in
+  slice resolution, which is guessing where its own contract says report the slicing unchecked. It
+  is pinned by a test.
+  **That closes a defect on the JSON path too, disclosed rather than absorbed quietly:** a JSON
+  `{"min": 1}` under an inherited `min` of `2` already removed that finding before this change. The
+  direction is `valid: true` to `valid: false`. **The mirror on `max` is deliberately not taken**: a
+  differential stating a larger `max` than it inherits still widens the upper bound, because no read
+  feeding `max` moved here. It is characterized by a test rather than changed.
+  **A second consumer moves and is disclosed rather than left to be found.** A descendant `min` of 1
+  or more is what an `exists` slicing discriminator needs, and a discriminator with no expectation
+  makes the whole slicing unevaluable, so at the base commit an XML-sourced sliced profile came back
+  `PROFILE_SLICE_UNCHECKED` and no slice constraint was checked at all. That information-level
+  marker, whose meaning is "this could not be evaluated", is the one finding this change removes.
+  **One collateral, declared:** the model records no provenance, so the same lexical read applies to
+  a non-conformant JSON document that spelled `{"min": "1"}`. Lenient on the read, unchanged on the
+  write. **Still unread and pinned:** `ElementDefinition.mustSupport` and `slicing.ordered`, whose
+  measured retirement stands and which this change does not license: what makes a widened `min` safe
+  is that its one finding-retiring consumer now takes the tighter of two bounds, and a boolean flag
+  has no tighter-of-the-two, since `false` is not "no flag stated". FHIRPath's number reads
+  likewise.
+
 - **Every negation but one was read only at the resource handed in, so a retracted or not-performed
   record inside a `Bundle` entry left the Bundle's `negations` empty
   (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit, on **plain conformant
@@ -266,7 +325,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   (`retracted` and `noKnownAllergy` are derived from codes, not from a boolean element), so the
   channel is complete for its own layer and for nothing beyond it. Still unreported, each its own
   item: `ElementDefinition.mustSupport` and `slicing.ordered` (the convenience read `#79` measured as
-  unsafe to widen, and a `StructureDefinition` has no `SafetyReadout` to report on), `parseMin`, a
+  unsafe to widen, and a `StructureDefinition` has no `SafetyReadout` to report on), a
   `Quantity` magnitude's `+5` / `05` / `.5` / `5.`, and FHIRPath `numberOf`.
   **One asymmetry is deliberate: this raises no `ValidationIssue` of its own, so on the default path
   a `safeToSummarize: false` sits beside `valid: true`.** The reason is narrow and measured rather
@@ -313,8 +372,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   differential flag as "inherit", so an XML `<mustSupport value="false"/>` that previously read
   `undefined` would begin overwriting an inherited `true` and **remove** a `MUST_SUPPORT_ABSENT` the
   base emitted. Adding a negation is safe; removing a finding needs its own measurement, so the two
-  sites keep the old read and are pinned. `ElementDefinition.min` (an `unsignedInt` through a
-  `FhirDecimal` match) and FHIRPath's `convertToBoolean` / `toTrit` / `systemTypeOf` are the same
+  sites keep the old read and are pinned. FHIRPath's `convertToBoolean` / `toTrit` / `systemTypeOf`
+  are the same
   root class and are likewise censused and unchanged. **`validatePrimitiveValue` is untouched** and
   still reads a conformant `<active value="true"/>` as `TYPE_MISMATCH`; that trade is recorded with
   the residuals of the `Quantity` fix above and is not reopened here.

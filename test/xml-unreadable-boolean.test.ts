@@ -354,9 +354,9 @@ describe("declared residuals of the unreadable-boolean report, pinned", () => {
 
   it("reports nothing for an unreadable value at a non-boolean datatype", () => {
     // The class is wider than this channel and the channel does not pretend otherwise. A `Quantity`
-    // magnitude written `+5`, an `ElementDefinition.min` written in XML, and a FHIRPath number are
-    // each "written, not readable" too, and each is its own open item. Only the boolean the safety
-    // spine reads is covered here.
+    // magnitude written `+5`, an `ElementDefinition.min` written outside the lexical space its
+    // loader reads, and a FHIRPath number are each "written, not readable" too, and each is its own
+    // open item. Only the boolean the safety spine reads is covered here.
     const safety = safetyOfXml(
       '<doNotPerform value="true"/><dispenseRequest><quantity><value value="+5"/>' +
         '<code value="mg"/></quantity></dispenseRequest>',
