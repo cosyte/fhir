@@ -49,14 +49,18 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   is known). The scope stops at resource roots, not backbone elements. `not-taken` and `not-done`
   keep their own type gates, and `not-done` is also a `Procedure` / `MedicationAdministration` status
   in R4, so the same blindness exists there and is a declared gap, not this change. Every one of
-  those is pinned in `test/negation-read-scope.test.ts` in **both** states.
+  those is pinned at its literal in `test/negation-read-scope.test.ts`.
   **A count that was wrong in the same area is cut rather than corrected**: `readSafety`,
   `SafetyReadout`, `SAFETY_RESOURCE_TYPES`, the validator's safety layer and the README all said
-  "the six safety resource types" over a set holding **seven**, and one of those reached
-  `dist/index.d.ts`. Derive it from the set; the number is written down nowhere now.
+  "the six safety resource types" over a set holding **seven**, and **three** of those copies
+  rendered into each of `dist/index.d.ts` and `dist/index.d.cts` (measured at the base commit; zero
+  at head). Derive it from the set; the number is written down nowhere now.
   **Measured:** 15 of 23 new assertions red at the base commit in a real base worktree (23 of 23 at
-  head), with the 8 that pass in both states named above as deliberate pins, and non-vacuity proved
-  by seven mutations of the fix, each reddening at least one. The corpus is hand-authored JSON and
+  head), and non-vacuity proved by seven mutations of the fix, each reddening at least one. The 8
+  assertions that pass in **both** states clear nothing about the fix and are labelled as such in the
+  test file rather than counted here: the `MedicationRequest` pair that already worked, the negation
+  ordering, the absent element, `noKnownAllergy`'s gate, the status-code gates, the other negations'
+  root-only scope, and the backbone-element boundary. The corpus is hand-authored JSON and
   XML fixtures and hand-built probes, **not** the FHIR R4 published-examples corpus.
 
 ### Added

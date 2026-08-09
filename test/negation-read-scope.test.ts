@@ -62,6 +62,8 @@ describe("the doNotPerform negation is read wherever it is written", () => {
   describe("axis 1: no resource-type gate", () => {
     for (const resourceType of ["ServiceRequest", "CommunicationRequest", "MedicationRequest"]) {
       it(`surfaces the negation on a conformant ${resourceType}`, () => {
+        // The `MedicationRequest` turn of this loop is a both-states pin: it read this way at the
+        // base commit too, and it is the control that says the fix broke nothing that worked.
         const safety = safetyOf(`{"resourceType":"${resourceType}","doNotPerform":true}`);
 
         expect(safety.negations).toEqual(["do-not-perform"]);
@@ -72,6 +74,7 @@ describe("the doNotPerform negation is read wherever it is written", () => {
       });
 
       it(`reports the unreadable twin on the same ${resourceType}`, () => {
+        // The `MedicationRequest` turn is again a both-states pin, for the same reason.
         // The read window and the report window are one window, decided in one function. If they
         // could drift, widening the read would leave `<doNotPerform value="1"/>` on the new types
         // exactly as invisible as `value="true"` was before this slice.
@@ -170,6 +173,8 @@ describe("the doNotPerform negation is read wherever it is written", () => {
     });
 
     it("keeps the classified negations in their established order", () => {
+      // A both-states pin: the order did not move, and a negation added at a new window must not
+      // reorder the ones already there.
       const safety = safetyOf(
         '{"resourceType":"MedicationRequest","status":"entered-in-error","doNotPerform":true}',
       );
@@ -179,11 +184,14 @@ describe("the doNotPerform negation is read wherever it is written", () => {
   });
 
   /**
-   * What this slice deliberately leaves exactly as it found it. Each is asserted against the literal
-   * it produces, so a later change that moves one has to say so.
+   * The boundaries this slice **does** move, pinned at their new values so they cannot move again in
+   * silence. Each of these is red at the base commit: they are not both-states pins, and grouping
+   * them with the ones that are would let a vacuous assertion hide among real ones.
    */
-  describe("pinned in both states: what this slice does not move", () => {
-    it("adds no negation for a written false", () => {
+  describe("moved, and pinned at the new boundary", () => {
+    it("reads a written false on a type that had no read at all", () => {
+      // At base `ServiceRequest.doNotPerform` was `undefined` whatever the document wrote. What does
+      // NOT move is the negation: only `true` is one, on every type.
       for (const resourceType of ["MedicationRequest", "ServiceRequest"]) {
         const safety = safetyOf(`{"resourceType":"${resourceType}","doNotPerform":false}`);
 
@@ -192,6 +200,44 @@ describe("the doNotPerform negation is read wherever it is written", () => {
       }
     });
 
+    it("leaves the array-wrapper report on its cardinality table", () => {
+      // Declared residual, in the safe direction: on a type outside `SAFETY_RESOURCE_TYPES` the
+      // wrapper is read through and the negation surfaced, but the wrapper itself is not reported.
+      // Reporting one is an `error`, so it stays where a cardinality is known. The `ServiceRequest`
+      // negation is new here; the `MedicationRequest` pair below is the both-states control.
+      const serviceRequest = safetyOf('{"resourceType":"ServiceRequest","doNotPerform":[true]}');
+
+      expect(serviceRequest.negations).toEqual(["do-not-perform"]);
+      expect(serviceRequest.arrayWrappedScalars).toEqual([]);
+
+      const medicationRequest = safetyOf(
+        '{"resourceType":"MedicationRequest","doNotPerform":[true]}',
+      );
+
+      expect(medicationRequest.negations).toEqual(["do-not-perform"]);
+      expect(medicationRequest.arrayWrappedScalars).toEqual(["MedicationRequest.doNotPerform"]);
+    });
+
+    it("reads across a repeated property name on the new types too", () => {
+      const safety = safetyOf(
+        '{"resourceType":"ServiceRequest","doNotPerform":false,"doNotPerform":true}',
+      );
+
+      expect(safety.negations).toEqual(["do-not-perform"]);
+      expect(safety.doNotPerform).toBe(true);
+      expect(safety.shadowedProperties).toEqual(["ServiceRequest.doNotPerform"]);
+    });
+  });
+
+  /**
+   * The deliberate both-states pins: **these five read identically at the base commit and at head**,
+   * so they clear nothing about the fix and are here to say what it did not touch. Three more sit in
+   * the sections above, named so the set is countable without re-running the base: "surfaces the
+   * negation on a conformant MedicationRequest" and "reports the unreadable twin on the same
+   * MedicationRequest" (the type that already worked, the control that says nothing broke), and
+   * "keeps the classified negations in their established order". Eight in total, of twenty-three.
+   */
+  describe("pinned in both states: identical at the base commit", () => {
     it("adds no negation when the element is absent", () => {
       const safety = safetyOf('{"resourceType":"ServiceRequest","status":"active"}');
 
@@ -253,33 +299,6 @@ describe("the doNotPerform negation is read wherever it is written", () => {
       );
 
       expect(safety.negations).toEqual([]);
-    });
-
-    it("leaves the array-wrapper report on its cardinality table", () => {
-      // Declared residual, in the safe direction: on a type outside `SAFETY_RESOURCE_TYPES` the
-      // wrapper is read through and the negation surfaced, but the wrapper itself is not reported.
-      // Reporting one is an `error`, so it stays where a cardinality is known.
-      const serviceRequest = safetyOf('{"resourceType":"ServiceRequest","doNotPerform":[true]}');
-
-      expect(serviceRequest.negations).toEqual(["do-not-perform"]);
-      expect(serviceRequest.arrayWrappedScalars).toEqual([]);
-
-      const medicationRequest = safetyOf(
-        '{"resourceType":"MedicationRequest","doNotPerform":[true]}',
-      );
-
-      expect(medicationRequest.negations).toEqual(["do-not-perform"]);
-      expect(medicationRequest.arrayWrappedScalars).toEqual(["MedicationRequest.doNotPerform"]);
-    });
-
-    it("reads across a repeated property name on the new types too", () => {
-      const safety = safetyOf(
-        '{"resourceType":"ServiceRequest","doNotPerform":false,"doNotPerform":true}',
-      );
-
-      expect(safety.negations).toEqual(["do-not-perform"]);
-      expect(safety.doNotPerform).toBe(true);
-      expect(safety.shadowedProperties).toEqual(["ServiceRequest.doNotPerform"]);
     });
   });
 });

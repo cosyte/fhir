@@ -37,7 +37,7 @@ omission: a refusal is for a value this library cannot read, and a value it can 
 `negations` with nothing lost. Where the value cannot be read the location is on `unreadableBooleans`
 on the new types exactly as it already was on `MedicationRequest`.
 
-What did not move, each pinned in both states: `SafetyReadout.doNotPerform` stays the root read, like
+What did not move, each pinned at its literal: `SafetyReadout.doNotPerform` stays the root read, like
 `status` beside it, so a nested resource's instruction reaches `negations` and leaves that field
 `undefined`; the array-wrapper report keeps its cardinality table, so a `ServiceRequest.doNotPerform`
 arriving array-wrapped is read through the wrapper and surfaced while the wrapper itself is not
@@ -47,10 +47,12 @@ so the same blindness exists there and is a declared gap rather than part of thi
 
 A count that was wrong in the same area is cut rather than corrected: `readSafety`, `SafetyReadout`,
 `SAFETY_RESOURCE_TYPES`, the validator's safety layer and the README all said "the six safety resource
-types" over a set holding seven, and one of those reached the published type declarations. Derive it
-from the set; the number is written down nowhere now.
+types" over a set holding seven, and three of those copies rendered into each of the published type
+declaration files (measured at the base commit; zero at head). Derive it from the set; the number is
+written down nowhere now.
 
 Measured: 15 of 23 new assertions red at the base commit in a real base worktree (23 of 23 at head),
-with the 8 that pass in both states named as deliberate pins, and non-vacuity proved by seven
-mutations of the fix, each reddening at least one. The corpus is hand-authored JSON and XML fixtures
+and non-vacuity proved by seven mutations of the fix, each reddening at least one. The 8 assertions
+that pass in BOTH states clear nothing about the fix and are labelled as such in the test file rather
+than counted here. The corpus is hand-authored JSON and XML fixtures
 and hand-built probes, not the FHIR R4 published-examples corpus.

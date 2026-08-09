@@ -3082,9 +3082,12 @@ previous STOP-THE-LINE reproduced by the fix to this one. **Axis 2, folded in: t
 ROOT-ONLY**, so a `Bundle.entry` `MedicationRequest` affirmed while its unreadable twin at that same
 location was reported; the negation now comes from the WALK, the convenience field stays root-scoped
 like `status`. **`safeToSummarize` does NOT move for a value that IS read.** **The count was CUT, not
-corrected**: "the six safety resource types" over a set of SEVEN, at 8 tracked sites (not the 3 the
-item named) plus `dist/index.d.ts`, **plus two carriers a site-only fix misses - the live
-`[Unreleased]` entry and a PENDING CHANGESET.** Red-at-base **15 of 23**, 8 both-states pins named,
+corrected**: "the six safety resource types" over a set of SEVEN, at more tracked sites than the 3
+the item named, **3 of them rendered into `dist/index.d.ts` and `dist/index.d.cts`** (0 at head).
+**Plus FOUR carriers a site-only fix misses: the live `[Unreleased]` entry, a PENDING CHANGESET, and
+the two scope sentences on the EXPORTED `unreadableBooleans` docblock and in `README.md` that the
+fix itself falsified - the gate found those two, not the sweep.** Derive the sites, never count them
+in prose: this note said "8" and was off by one. Red-at-base **15 of 23**, 8 both-states pins named,
 **7 of 7 mutations red**.
 
 ### The `null` / `_`-sibling laundering: the CLAUDE.md cursor, relocated VERBATIM 2026-08-09
@@ -3114,5 +3117,5 @@ points here. See also
   CHANNEL**. **THREE write branches decide it: `emitMeta` (else `{}`), `hasMeta`, AND THE
   `resourceType` HOIST**, which skipped the property outright, so a `hasMeta`-only fix launders past
   itself.
-  [`#the-null-laundering-closed-2026-08-07`](documentation/agent-notes.md#the-null-laundering-closed-2026-08-07) ·
-  [`#the-_-sibling-channel-closed-2026-08-07`](documentation/agent-notes.md#the-_-sibling-channel-closed-2026-08-07)
+  [`#the-null-laundering-closed-2026-08-07`](#the-null-laundering-closed-2026-08-07) ·
+  [`#the-_-sibling-channel-closed-2026-08-07`](#the-_-sibling-channel-closed-2026-08-07)

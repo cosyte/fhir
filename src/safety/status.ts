@@ -516,12 +516,11 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  * **Value-free, like every location on this readout**: the text that failed to read is not carried
  * here or anywhere else, only the FHIRPath of the element that held it.
  *
- * **The set is `MedicationRequest.doNotPerform`**, the only `boolean` {@link readSafety} takes off a
- * document. **The window is every resource root** (so a `contained` or Bundle-`entry`
- * MedicationRequest is reported), which is `arrayWrappedScalars`' window and is deliberately wider
- * than the `doNotPerform` read itself, which only visits the resource {@link readSafety} is handed.
- * Reporting more than was read is the fail-safe direction and the only one available: the nested
- * order is real content whose instruction is unread either way.
+ * **The element is `doNotPerform`**, the only `boolean` {@link readSafety} takes off a document, and
+ * there is no resource-type gate on it. **The window is every resource root** (so a `contained` or
+ * Bundle-`entry` resource is covered), which is `arrayWrappedScalars`' window and is **the same
+ * window the negation read uses**: the two are decided together, in one pass, so this can never name
+ * a location the read did not visit, nor stay silent where it did.
  * It is **not** a report of every unreadable value in a document: the profile booleans, the
  * `ElementDefinition.min` integer and a `Quantity` magnitude's lexical forms are read elsewhere and
  * are still lost silently.
@@ -783,9 +782,12 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
  * `do-not-perform` negation comes from this walk. A nested order's instruction is real content, and a
  * readout that affirms over it costs a patient a medication.
  *
- * **Not a backbone element or a datatype**: the scope stops at resource roots because that is where
- * this library knows what an element name means at all, the same boundary
- * {@link checkArrayWrapping} draws.
+ * **Not a backbone element or a datatype**, and that boundary is a limit rather than a rule this
+ * read derives. The direction argument above would license going deeper, since reading more can only
+ * add a negation; what stops it is that {@link checkArrayWrapping}'s walk delivers resource roots and
+ * this rides it. So `MedicationRequest.dosageInstruction[0].doNotPerform` is read by nothing. R4
+ * defines no `doNotPerform` on `Dosage`, so no conformant document sits there, but that is a
+ * declared gap and not a claim that none can: it is pinned in `test/negation-read-scope.test.ts`.
  *
  * **Why the refusal is decided here and not in the reader.** FHIR XML carries every primitive as the
  * text of its `value` attribute (xml.html §2.6.1) and this reader is schema-free, so nothing at parse

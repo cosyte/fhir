@@ -89,22 +89,31 @@ refusal channel is for values this library cannot read. Reading it and surfacing
 
 `status.ts` (x3, not the x2 the item named), `codes.ts`, `validate/safety.ts` (x2),
 `validate/validate.ts`, `test/validate-safety.test.ts` and `README.md` all said **"the six safety
-resource types"** over a set holding **seven**, and `codes.ts`'s copy rendered into
-`dist/index.d.ts`. **Cut, not corrected to "seven"** - a number written down here was wrong for days
-and the next reader does not re-check. `dist/index.d.ts` and `dist/index.d.cts` verified at 0
-occurrences after the build.
+resource types"** over a set holding **seven**, and **3 of those copies rendered into each of
+`dist/index.d.ts` and `dist/index.d.cts`, measured at base; 0 at head.** **Cut, not corrected to
+"seven"** - a number written down here was wrong for days
+and the next reader does not re-check. Do not write the site count down either: an earlier draft of this
+note said "8" where the same grep gives 9, because `README.md`'s copy is line-wrapped.
 
-**The sweep also caught two carriers the item did not name and the site-only fix would have missed:**
-the live `CHANGELOG.md` `[Unreleased]` entry and the **pending changeset**
-`.changeset/olive-herons-report.md`, both of which said the read's element is
-`MedicationRequest.doNotPerform`. Both are unreleased prose describing today's behaviour, so both are
-corrected rather than preserved. The historical `CHANGELOG.md` release entry for the Phase-3 layer is
+**Four carriers beyond the sites the item named. The sweep found two; THE GATE FOUND THE OTHER TWO,
+AND THEY WERE THE WORSE PAIR.** The sweep found the live `CHANGELOG.md` `[Unreleased]` entry and the
+**pending changeset** `.changeset/olive-herons-report.md`, both saying the read's element is
+`MedicationRequest.doNotPerform`; both are unreleased prose describing today's behaviour, so both
+were corrected rather than preserved. **What the sweep missed is the pair the fix itself falsified**:
+the JSDoc on the **exported** `unreadableBooleans` (which renders into `dist/index.d.ts`) and the
+same paragraph on `README.md`, the npm front page, each stating that the report window is
+*deliberately wider than the read* - true at base, false the moment the read widened, and a direct
+contradiction of `CLAUDE.md`'s own "the read window and the report window must be the same window".
+**The lesson is sharper than "sweep wider": grep for the sentences your change makes FALSE, not only
+for the sentence the item quoted.** A file being edited by the slice is no protection - `README.md`
+was edited, 200 lines above the stale paragraph. Both were CUT, not qualified. The historical `CHANGELOG.md` release entry for the Phase-3 layer is
 left alone: it *enumerates* its six groups and is true at its own site.
 
 ## Measurement
 
 - **Red at base: 15 of 23** new assertions, in a real detached base worktree at `f0289a2`; **23 of 23
-  at head.** The 8 that pass in both states are deliberate pins, named in the test file: the
+  at head.** The 8 that pass in both states are deliberate pins, named **in the test file itself**,
+  five under their own `describe` and three commented in place: the
   `MedicationRequest` pair that already worked (the control that says nothing broke), the negation
   ordering, the absent element, `noKnownAllergy`'s gate, the status-code gates, the other negations'
   root-only scope, and the backbone-element boundary.
