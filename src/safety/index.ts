@@ -14,6 +14,7 @@ export {
   assertSafeToSummarize,
   FhirSafetyError,
   droppedText,
+  nearMissNegationCodes,
   nestedArrays,
   readSafety,
   shadowedProperties,

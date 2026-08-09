@@ -143,3 +143,246 @@ left alone: it *enumerates* its six groups and is true at its own site.
   `pnpm differential:read`: **0 readings moved, 0 regressions.**
 - Corpus caveat, as on every slice here: hand-authored JSON/XML fixtures, mutations and hand-built
   probes, **not** the R4 published-examples corpus.
+
+---
+
+# The case/whitespace gap: DISCLOSE, DO NOT NORMALISE (2026-08-09)
+
+Base commit `fa5bfd8`. The last residual `#82` filed against this arc, and the one that needed a
+direction call before it could be built at all, because **the behaviour it complains about is
+spec-correct.**
+
+## 🛑 THE TRAP, AND IT IS THE ONE A FUTURE READER WILL WANT TO BREAK
+
+**Never coerce, trim or case-fold a value into a negation code.** `isNearMissCode` decides a
+**diagnostic**, never a reading; it is asked only *after* the exact match has already failed, and
+nothing anywhere turns the value it describes into the code it resembles. Making the read tolerant
+would be the **laundering class this package refuses everywhere else**: a non-conformant document
+accepted as though it were conformant, and a negation handed to a caller that its sender never
+spelled. Fix at the READ, never the reader. The sibling precedents are `x12`, which leaves
+whitespace-only control numbers padded **by design** because "trimming is a normalisation rule and no
+source states one", and `dicom`, which ships **a disclosure, not a bound**.
+
+**The silence was the defect. The strictness is not, and must not be "finished".**
+
+## The census WAS the slice, and the filed line understated the class again
+
+The item named `"NOT-DONE"`, `" not-done"` and `entered-in-error`. Measured over the codes derived
+from `src/`, at every element and every resource root each is read at, every case variant and every
+surrounding-whitespace form was **SILENT** - no negation, `safeToSummarize: true`, nothing on any
+channel. So the class was every `?!`-modifier-element negation code this layer classifies, on
+`status` **and** on a `verificationStatus` coding, at the entry root, in `Bundle.entry` and in
+`contained`, over space / tab / LF / CR / leading / trailing / both / any case.
+
+**One axis does not exist and inventing it would be wrong:** SNOMED `716186003` is digits, so case
+cannot vary it at all. Derive the codes from `src/`; never write the set down.
+
+## 🛑 THE CLAIM THAT WOULD HAVE BEEN FALSE, in `#83`'s "understating" direction
+
+**`do-not-perform`, the one BOOLEAN negation, ALREADY had this disclosure.** `<doNotPerform
+value="TRUE"/>` and `value=" true"` have landed on `unreadableBooleans` under
+`safeToSummarize: false` since that channel shipped. So *"this is the first time the package records
+a negation value it declined"* is **false**, and it is false in the flattering-to-caution direction
+that `#83` pass 1 was refuted for. The true, narrower claim is the one shipped: **the `code`-valued
+reads had no complement; the boolean one did.** Pinned in both states in the test file so the claim
+cannot drift back.
+
+## Why the two halves are not the same shape, stated rather than blurred
+
+The `unreadableBooleans` channel is about a value that could not be read **at all** - `doNotPerform`
+reads `undefined`, which is what an absent element reads too. This one is about a value that **is**
+read and **is** surfaced on `status` / `verificationStatus` unchanged; what fails is the
+**classification**. Nothing is lost. Do not describe it as a data loss, and do not fold it into the
+module docblock's five "shapes FHIR does not define" - it is not one of them.
+
+## ⚖️ `no-known-allergy` is OUTSIDE the disclosure, and the reason is architectural, not timidity
+
+`AllergyIntolerance.code` is deliberately absent from `NEGATION_CODE_READS`. Adding it would put a
+near-miss disclosure at **every resource root** while an *exact* SNOMED `716186003` at a nested root
+is read by **nothing at all** - so the library would **report the miss more loudly than the hit**.
+That is the same boundary that keeps `no-known-allergy` off the walk: it is a *positive* assertion,
+the one negation whose surfacing can make a caller **less** careful, where an absent one reads as
+*unknown*. Pinned in both directions. **Do not "finish the job" by adding it.**
+
+## Read scope and report scope are the same scope BECAUSE THEY ARE THE SAME TABLE
+
+`NEGATION_CODE_READS` holds the element, the codes matched exactly on it, **and the reader** - the
+same `primitiveStrings` / `safetyCodingsOf` the matches themselves go through. The disclosure is
+derived from it, inside `checkNegations`, so it inherits that function's window by construction
+rather than by a second copy of the condition. A test iterates the table and asserts of every entry
+that the exact code **is** classified there, so the table cannot drift into describing a read that is
+not there.
+
+**Whitespace is R4's own four-character class (`[^\s]+(\s[^\s]+)*`, XML Schema's `\s`), NOT
+JavaScript's.** A no-break space and a byte-order mark are ordinary characters inside a conformant
+`code`, so trimming one would call a value non-conformant that R4 accepts. Pinned in both states, and
+widening it to `/\s/` reds a test.
+
+## 🛑 PASS 1 REFUTED IT, and the finding was a FALSE POSITIVE ON A CONFORMANT DOCUMENT
+
+The gate's sharpest finding was **not** a claim defect but a behavioural one, and it is the shape to
+remember: **R4 permits TRANSLATION CODINGS beside the one a required binding's value set supplies**
+(`terminologies.html`: at least one Coding SHALL be from the value set, "text can be provided as
+well", additional codings permitted). So
+
+```json
+{"resourceType":"Condition","verificationStatus":{"coding":[
+  {"system":"http://terminology.hl7.org/CodeSystem/condition-ver-status","code":"refuted"},
+  {"system":"http://acme.example.org/legacy","code":"REFUTED"}]}}
+```
+
+is **conformant**, its negation **is** classified, and the first draft disclosed anyway and set
+`safeToSummarize: false`. **A disclosure channel that fires on a document the library read correctly
+and completely is a false positive, and it falsified the shipped sentence "Empty for every conformant
+document".**
+
+Closed by suppressing a near miss of code C at element E **where E also spells C exactly**. **Per
+CODE, never per element** - `refuted` exact beside `ENTERED-IN-ERROR` must still report, because
+nothing classified the retraction. Both directions are pinned, and both a per-element suppression and
+no suppression at all red a test.
+
+**The control that missed it exercised SINGLE-CODING conformant documents only**, so it discriminated
+a narrower claim than the one shipped - the same shape `#82` pass 1 was refuted for. The both-states
+control now carries the multi-coding document.
+
+## 🛑 THE OTHER TWO PASS-1 MAJORS WERE BOTH CLAIMS IN THE REASSURING DIRECTION
+
+**1. "the value is not lost, it is surfaced on `status` / `verificationStatus` exactly as written"
+was FALSE three ways**, and it was the load-bearing sentence justifying treating this channel
+differently from the loss channels. `status` and `verificationStatus` are **root-scoped and
+preferred-system-first**; this channel is **document-wide**. So a near miss in `contained` leaves
+`status` showing the ROOT's value (measured: `"active"` while the near miss was `"NOT-DONE"` one
+level down), a nested one in a `Bundle.entry` leaves it `undefined`, and a second-coding near miss is
+not the code `verificationStatus` shows. **The true claim is narrower: the codec KEPT the value, at
+the element the location names. Walk the model there. It is not a promise the value reaches a
+convenience field.** Corrected in `status.ts` (x3), `README.md`, `CHANGELOG.md`, the changeset and
+this note.
+
+**2. The `code` lexical-space argument is JSON-ONLY and was stated for "either wire format".** R4
+derives `code` **in XML** from `xs:token` (`fhir-base.xsd`, `code-primitive`), and `xs:token` carries
+`whiteSpace=collapse`, which strips surrounding whitespace **before** validation - so
+`<status value=" not-done"/>` is schema-valid R4 and **is** the code for a schema-validating
+consumer. Independently, XML 1.0 §3.3.3 attribute-value normalization turns a literal tab/LF/CR in
+any attribute value into a space for every conformant processor. **This reader is schema-free and
+does not collapse**, so it discloses rather than reads: fail-safe, and now a **declared limit** in
+every carrier rather than a conformance claim. **Do not "fix" this by collapsing in the XML reader** -
+that is the normalisation the whole slice refuses.
+
+Minor, also corrected: the regex was quoted as `[^\s]+([\s][^\s]+)*` where R4 spells it
+`[^\s]+(\s[^\s]+)*` (equivalent, but it was cited as verbatim, in ~7 carriers including
+`dist/index.d.ts`); and the first remedy for `#83`'s stale channel enumeration **reversed `#83` pass
+1's own fix** (naming the set WAS that fix), so the falsifiable clause was **deleted outright** from
+both `CHANGELOG.md` and the pending changeset instead.
+
+## Pass 2: NOT REFUTED, and the two minors it still found were both mine
+
+Graded the remedy diff only. All six pass-1 findings confirmed closed, the suppression invariant
+`suppressed(C at E) => C in negations` verified by brute force over 1,200 generated documents with
+**0 violations**, and the note's red-at-base figures reproduced to the test.
+
+Its two `INTRODUCED` minors, both corrected here and both the same shape as everything else in this
+arc: **an absolute claim.** *"Empty for every conformant document read from JSON"* shipped in five
+carriers while **the slice's own new test pinned a counterexample** - a `verificationStatus` carrying
+`confirmed` from the standard system beside a local `REFUTED`. That satisfies `terminologies.html`
+§4.1.5.1 (one coding SHALL come from the value set) and is non-conformant only under
+`datatypes.html`'s descriptive "each coding is a representation of the concept", which carries **no
+SHALL**. **The remedy used the permissive reading to justify the suppression and then asserted a
+claim that survives only under the restrictive one.** The sentence is now qualified in all five
+carriers; the guard was **not** grown, because over-disclosure is the fail-safe direction. The other
+minor was a stale count in this file, in a paragraph the remedy itself re-counted.
+
+**"FHIR `code` is case-sensitive" is imprecise and is deliberately left**: R4 says codes are case
+sensitive *unless the code system specifies otherwise*. It bites only for a `Coding` from a caller's
+own case-insensitive `CodeSystem`, and correcting it would push toward the coercion the direction
+forbids.
+
+## Passes 3 and 4: NOT REFUTED, and both found only my own prose
+
+**Pass 3** caught the qualification added for pass 2 being **one notch WIDER than the truth, in the
+cautious direction**: it admitted "a translation whose code *near-misses* a negation" as conformant,
+but a near miss is case **or** surrounding whitespace, and the whitespace half is never conformant
+JSON. **Only the case half can be.** Narrowed at all five carriers. **That is the understating shape
+again** - the third time in this arc a claim erred toward caution and was still false.
+
+It also caught the same edit leaving **unmatched `**` closers**: the rendered `CHANGELOG.md` entry
+carried three stray literal asterisks and **lost the bold on the `do-not-perform` sentence**, and
+`status.ts` carried one that ships verbatim into `dist/index.d.ts` / `.d.cts` and so into a
+consumer's hover. **Prettier had ESCAPED one closer to `disclosure\*\*`, which is exactly why
+`format:check` passed.** 🩺 **Nothing in CI reads rendered markdown, so the next such residue will
+also ship.** Repaired with real openers, never another escape.
+
+**Pass 4** (the cap) confirmed both closed at source **and in the built `dist/index.d.*`**, verified
+the transpile byte-identical across the remedy, and exercised the narrowed claim against the built
+library: every conformant-JSON firing observed is the case-only translation coding, and
+`"refu ted"`, `"not- done"` and an NBSP-padded code are all conformant and all silent. The anchored
+`CODE_WHITESPACE` is what stops internal whitespace manufacturing a second firing shape.
+
+## 🔴 `PRE-EXISTING`, raised by the gate, filed not absorbed
+
+**The XML reader performs no XML 1.0 §3.3.3 attribute-value normalization.**
+`<status value="&#x9;not-done"/>` and a literal tab both reach the model as `"\tnot-done"`.
+Unchanged at base, unchanged here, and its own item.
+
+**`fhir/CLAUDE.md` still says "Two refuter passes max ... **No fourth** (ADR 0016)"**, which
+contradicts the founder-settled cap of **FOUR** (2026-08-09). Not corrected here: that file is at
+**exactly 28,000 / 28,000** and any edit moves the ratchet. Its own item.
+
+**The BOOLEAN channel carries the identical un-scoped claim this slice just retired for `code`.**
+`unreadableBooleans` says *"Empty for every conformant document, in either wire format"*
+(`src/safety/status.ts`, shipped in `dist/index.d.*`) and `README.md` says it *"cannot fire on a
+conformant document in either wire format"*. But `fhir-base.xsd` restricts `boolean-primitive` to
+`xs:boolean`, whose `whiteSpace=collapse` facet is applied **before** the pattern, so
+`<doNotPerform value=" true"/>` is schema-valid R4 XML and lands on `unreadableBooleans` under
+`safeToSummarize: false`. **Verbatim at `fa5bfd8`, so it cannot gate this slice**, and the direction
+is over-disclosure rather than a mis-read. Its own item; **do not fold it in.**
+
+## 🛑 Measurement, and the shape of the count that was ALMOST published
+
+**32 of 40 red at base**, in a real detached base worktree at `fa5bfd8`; 41/41 at head (the 41st is a
+direct unit pin on the predicate, base-independent). **Of those 32, six are red only because the
+symbol or channel they name does not exist at base** (the two table-integrity tests, the three
+head-only channel-name pins, and the suppression case, whose base behaviour already matched), so
+**26 of 40 are red for a behavioural difference.** Reported that way on purpose.
+
+**The first draft of this test file measured 31 of 35, and that figure was wrong in the flattering
+direction** - the both-states pins were written as `expect(...nearMissNegationCodes).toEqual([])`,
+which goes red at base for the trivial reason that the field reads `undefined`, pinning **nothing**.
+They were rewritten onto `safeToSummarize` and `negations`, which both states have and which are
+`true` / empty only if the channel is empty. **A both-states pin asserted through a field the base
+commit does not have is not a both-states pin.** This is the second time in this arc a count
+overstated what was held down; the remedy both times was to restructure the tests, not the prose.
+
+**8 both-states pins, named in the test file** under their own `describe` with the reason written
+there: the non-negation padded code, the not-quite-a-negation value, the R4-vs-JS whitespace set,
+every conformant document, the backbone-element boundary, `no-known-allergy`'s two directions, the
+boolean negation's existing channel, and `valid` not moving.
+
+**Non-vacuity by mutation - what is held down, named, never a total:** widen the whitespace set to
+JavaScript's `\s`; drop the case fold; drop the whitespace strip; drop the exact-value guard so an
+exact code also reports; remove the channel from `safeToSummarize`; remove it from
+`assertSafeToSummarize`'s refusal; narrow the disclosure to the entry root; drop `verificationStatus`
+from the table; narrow the `status` reader to one value so a wrapper and a shadowed member are
+missed; add `AllergyIntolerance.code` to the table; remove the per-code suppression so a conformant
+translated coding fires; widen that suppression to per element so a different code's near miss is
+hidden. **Every one reddened at least one test; none survived.**
+
+**One SURVIVED after the pass-1 remedy and was closed rather than explained away.** The per-code
+suppression made the predicate's own `folded !== value` guard redundant *at its call site*: a value
+equal to the code is a value the element spells exactly, so it is suppressed regardless. The guard
+stays, because it is what the word "near" means, and it is now pinned by a direct unit test on
+`isNearMissCode` instead of by a document. **A guard nothing checks is a guard that rots.**
+
+**Negative control is DEGENERATE here and is reported as such**: `@cosyte/hl7` provides **0 of the 13
+symbols** this file imports, so every assertion in it fails at import for a reason that discriminates
+nothing about behaviour. The red-at-base fraction and the mutations are the real evidence. Do not
+quote an hl7 control on this repo as though it graded anything.
+
+**Corpus caveat:** hand-authored fixtures, mutations and probes - **not** the R4 published-examples
+corpus.
+
+## Residual raised by the work, filed not absorbed
+
+`{"resourceType":"Procedure","status":["NOT-DONE"]}` gets the near-miss location but **no
+`ARRAY_WRAPPED_SCALAR`**, because `arrayWrappedScalars` is scoped to a cardinality table on the
+safety resource types and `Procedure` is not one. Unchanged at both states, already filed against the
+array-wrapper rule by `#82`. Head is **strictly better** than base there, not complete. Pinned.

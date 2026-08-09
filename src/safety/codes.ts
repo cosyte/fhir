@@ -708,6 +708,85 @@ export function statusSpells(resource: FhirComplex, code: string): boolean {
 }
 
 /**
+ * The whitespace R4's own `code` regex recognises, and nothing else: space, tab, line feed and
+ * carriage return. `code` is spelled `[^\s]+(\s[^\s]+)*` (datatypes.html), where `\s` is XML
+ * Schema's four-character class, so a value with any of these at either end is **outside the
+ * datatype's lexical space** before it is anything else.
+ *
+ * Deliberately **not** JavaScript's `\s`, which also matches a no-break space, a byte-order mark and
+ * the Unicode space separators. Those are ordinary characters inside a conformant `code`, so
+ * treating one as padding here would call a value non-conformant that R4 accepts.
+ */
+const CODE_WHITESPACE = /^[ \t\n\r]+|[ \t\n\r]+$/g;
+
+/**
+ * Whether a written value differs from `code` **only** by letter case, by surrounding whitespace, or
+ * by both, so the exact-string match every negation read performs declined it.
+ *
+ * **This decides a diagnostic, never a reading.** It is asked *after* the exact match has already
+ * failed and its answer is a `boolean` that reaches a location channel; nothing anywhere turns the
+ * value it describes into the code it resembles. Coercing would be the opposite move and a much
+ * larger one: FHIR `code` is case-sensitive (datatypes.html), so a reader that folded `"NOT-DONE"`
+ * into `not-done` would accept a non-conformant document **as if it were conformant** and hand a
+ * caller a negation the sender did not spell. The gap this closes is the *silence*, not the
+ * strictness.
+ *
+ * `code` is expected already folded: lower-case, with no surrounding whitespace. Every code
+ * {@link NEGATION_CODE_READS} names is, and that is pinned by a test rather than assumed here.
+ *
+ * @param value - A value the document wrote.
+ * @param code - A negation code this layer matches exactly.
+ * @returns `true` when the two differ only by case or surrounding whitespace.
+ * @internal
+ */
+export function isNearMissCode(value: string, code: string): boolean {
+  const folded = value.replace(CODE_WHITESPACE, "").toLowerCase();
+  return folded !== value && folded === code;
+}
+
+/**
+ * The `code`-valued elements the negation read looks at, the codes it matches on each **exactly**,
+ * and the reader it sees them through. One entry per element, not per code, because the reader is a
+ * property of the element.
+ *
+ * **The near-miss disclosure is derived from this same table**, so it cannot cover a pair the read
+ * does not, nor miss one the read covers: read scope and report scope are the same scope because
+ * they are the same table. The readers are the ones {@link statusSpells} and
+ * {@link safetyHasCodeAnySystem} already use, not copies of them, so the disclosure sees exactly the
+ * values the classification saw, through the same array wrappers and the same shadowed members.
+ *
+ * `test/negation-code-spelling.test.ts` asserts of every entry that the exact code **is** classified
+ * as a negation at that element, so the table cannot drift into describing a read that is not there.
+ *
+ * **`AllergyIntolerance.code` is deliberately absent**, and it is the same boundary that keeps
+ * `no-known-allergy` off the walk ({@link ./status.js} `checkNegations`). Adding it here would put a
+ * near-miss disclosure at every resource root while an *exact* SNOMED `716186003` at a nested root
+ * is read by nothing, so the library would report the miss more loudly than the hit. Stated as a
+ * limit, and pinned in both directions, rather than quietly widened.
+ *
+ * @internal
+ */
+export const NEGATION_CODE_READS: readonly {
+  /** The property name the read looks under. */
+  readonly element: string;
+  /** The codes matched exactly at that element. */
+  readonly codes: readonly string[];
+  /** The values the negation read sees at that element, in document order. */
+  readonly values: (node: FhirNode) => readonly string[];
+}[] = [
+  {
+    element: "status",
+    codes: [ENTERED_IN_ERROR, NOT_TAKEN, NOT_DONE],
+    values: (node) => primitiveStrings(node),
+  },
+  {
+    element: "verificationStatus",
+    codes: [ENTERED_IN_ERROR, REFUTED],
+    values: (node) => safetyCodingsOf(node).flatMap((c) => (c.code === undefined ? [] : [c.code])),
+  },
+];
+
+/**
  * Whether a resource is **retracted**, marked `entered-in-error` and therefore not to be treated as
  * active data. Read fail-safe: a `status` primitive of `entered-in-error` (Observation,
  * Immunization, DiagnosticReport, MedicationRequest/Statement) **or** a `verificationStatus` carrying

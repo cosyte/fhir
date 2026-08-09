@@ -101,7 +101,8 @@ describe("a doNotPerform value outside the boolean lexical space is reported", (
       expect(safetyError.message).toBe(
         "Resource cannot be safely summarized: an unhandled modifierExtension, a repeated property " +
           "name, an array-wrapped single-valued element, an array inside an array, dropped XML " +
-          "element text, or a boolean value this library cannot read leaves an element this " +
+          "element text, a boolean value this library cannot read, or a code that spells a " +
+          "negation bar its case or its surrounding whitespace leaves an element this " +
           "library must not flatten (1 location(s)).",
       );
     }
