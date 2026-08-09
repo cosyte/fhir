@@ -3053,14 +3053,22 @@ document's own trustworthiness claim.
 
 ### The predicate, and why it is element-level rather than property-level
 
-`lacksTaggableResourceType`: the element wrote at least one `resourceType` property, and **none** of
-the values it wrote there is a string primitive. Both halves are load-bearing and the second is the
-one that took two attempts.
+`lacksTaggableResourceType`: the element wrote a `resourceType`, and **the first one it wrote** is not
+a string primitive. Both halves are load-bearing and the second took three attempts.
 
+- **THE QUANTIFIER MUST BE THE WRITER'S OWN, AND `ANY` IS NOT IT. Gate pass 1 refuted the draft that
+  asked whether ANY value written there is a string.** `resourceTypeOf` in `src/xml/write.ts` is a
+  `find`, and `typeOf` goes through `getProperty`, which is first-wins as well. So with a non-string
+  first and a string second the writer read no type, named the element `Resource`, deleted **both**
+  properties and took the modifier extension with the subtree -- and an `any`-quantified predicate
+  answered `false` and refused nothing. **The defect, unrefused, inside the slice that claimed to
+  close it**, and the claim that the shape was safe had reached five carriers. Neither reader emits
+  that order, so it is hand-built and pinned that way; the general rule is that **a guard that answers
+  for a property the writer never consults is not guarding the writer.**
 - **A property-level predicate ("this `resourceType` is not a string") is WRONG, and the counterexample
-  comes from XML rather than from JSON.** The XML reader has no `duplicates` mechanism, so a
-  `resourceType` CHILD element lands as a second property of that name beside the one synthesized from
-  the tag: `<Patient xmlns="http://hl7.org/fhir"><resourceType><a value="1"/></resourceType></Patient>`
+  comes from XML rather than from JSON.** The XML reader has no `duplicates` mechanism and pushes the
+  type synthesized from the tag first, so a `resourceType` CHILD element lands as a second property of
+  that name beside it: `<Patient xmlns="http://hl7.org/fhir"><resourceType><a value="1"/></resourceType></Patient>`
   reads as two `resourceType` properties in one `FhirComplex`, `issues: []`, `valid: true`,
   `safeToSummarize: true`. The tag there is named correctly, so this defect's substitution never
   happens; what drops is the repeated-property-name case, which both writers do and which is declared
@@ -3106,9 +3114,17 @@ property-level predicate it existed for, and the shared walk is unchanged in thi
 
 ### Both polarities, on the test rather than on a harness
 
-`test/xml-resource-type.test.ts` **fails 7 of 23 against the base source tree** (the two `src/` files
-stashed) and passes 23 of 23 at head. A control asserted in one state only clears nothing here; this
+`test/xml-resource-type.test.ts` **fails 13 of 25 against the base source tree** (the two `src/` files
+stashed) and passes 25 of 25 at head. A control asserted in one state only clears nothing here; this
 one is asserted in both.
+
+**IT USED TO READ 7 OF 23, AND THE MISSING SIX WERE VACUOUS GREENS. A GREEN IN BOTH STATES CLEARS
+NOTHING EITHER.** Those cases asserted `viaXml?.code` against
+`SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE`, and against a base tree **both sides are
+`undefined`**, so `expect(undefined).toBe(undefined)` passed and the four scalar spellings the
+CHANGELOG leans on discriminated nothing in the polarity that matters. They now assert a **string
+literal**, with the enum member pinned once on its own. Raised by gate pass 1 as an observation rather
+than a finding, which is why it is written down here.
 
 The out-of-tree harness carried its own negative control: pointed at `@cosyte/hl7` instead of this
 package it exits non-zero on the missing `serializeResourceXml` rather than reporting green.
@@ -3132,3 +3148,30 @@ fixtures plus mutations plus this repo's hand-authored JSON fixtures, plus the h
 `test/xml-resource-type.test.ts`. The read differential cannot grade this class: the substitution is a
 WRITE-path branch, no XML document produces the marker, and its own control is stale on a clean tree.
 No zero of its is quoted as evidence here.
+
+### What the gate found (pass 1, `52472c2`)
+
+`REFUTED`, and **the first `fhir` slice in eleven where the gate found a defect in the code rather
+than only in a sentence.** The escalated process finding above -- ten consecutive slices refuted on
+prose, and the pressure that creates to write a longer sentence -- ends here on the opposite outcome:
+the remedy was a **quantifier**, and the prose shrank around it.
+
+1. **`INTRODUCED` major, and it is the item's own leg.** `some` in the guard against `find` in the
+   writer, above. Remedied in the predicate, not in the claim: aligning it refuses nothing either
+   reader can build, and it makes the root-level bound (`typeOf` is first-wins, so exactly the values
+   refused draw an error-severity `RESOURCE_TYPE_UNKNOWN`) true as written instead of nearly true.
+2. **`INTRODUCED` minor: the thrown message stated a counterfactual false at every depth it reports.**
+   *"...which this writer would delete while naming the element `Resource`"* -- but at depth the tag
+   comes from the property name, and the message is emitted for `Patient.contained[0].resourceType`.
+   **Cut to what is true everywhere: "which this writer would delete."** The `Resource` substitution
+   is a root fact and is stated where it is true.
+3. **`PRE-EXISTING` minor, taken anyway because this slice edits the paragraph and widens it.** The
+   module comment's *"No refusal here recognises anything new, invents a value, or changes a document
+   that reads clean"* was already false at base -- `breaksTag` names a zero-issue document it refuses,
+   and so does the `div` forgery. **Only the false clause is cut**; the two true ones are kept, which
+   is the `#76` rule. One carrier, so cutting it there is the whole sweep: `dist/` is generated, and
+   no pending changeset carries the sentence.
+
+What the gate could **not** grade, in its own words: every "measured at `63b05fc`" number, because its
+Bash is `git diff`/`log`/`show` only. Those were re-measured by hand against a `63b05fc` worktree
+before the pass and again after the remedy.

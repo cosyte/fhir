@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  complex,
   FhirSerializeError,
+  list,
   parseResource,
   parseResourceXml,
+  primitive,
   readSafety,
   SERIALIZE_ERROR_CODES,
   serializeResource,
@@ -32,6 +35,18 @@ import {
  *
  * All values are synthetic.
  */
+
+/**
+ * The new code as a literal, and asserting against it rather than against the enum member is the
+ * point.
+ *
+ * A control red in both states clears nothing, and so does one green in both. Against a base source
+ * tree `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE` is `undefined` and so is
+ * `viaXml?.code`, so `expect(undefined).toBe(undefined)` passes vacuously and those cases
+ * discriminate nothing in the polarity that matters. The enum member itself is pinned once, in
+ * "is a FhirSerializeError with the new code on the public surface".
+ */
+const UNSERIALIZABLE_RESOURCE_TYPE = "UNSERIALIZABLE_RESOURCE_TYPE";
 
 /** Serialize, returning the refusal rather than throwing. */
 function refusal(
@@ -74,7 +89,7 @@ describe("a resourceType XML has no tag to name", () => {
       expect(before.issues.map((issue) => issue.code)).toContain("RESOURCE_TYPE_UNKNOWN");
       expect(readSafety(resource).safeToSummarize).toBe(false);
 
-      expect(viaXml?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE);
+      expect(viaXml?.code).toBe(UNSERIALIZABLE_RESOURCE_TYPE);
       expect(viaXml?.locations).toEqual(["Resource.resourceType"]);
       // The JSON route is the one that stays open, and it is byte-identical here.
       expect(viaJson).toBeUndefined();
@@ -101,7 +116,7 @@ describe("a resourceType XML has no tag to name", () => {
     ])("refuses %s type gate and serializeResource writes it back", (_label, value) => {
       const doc = `{"resourceType":${value},"status":"entered-in-error"}`;
       const { resource, viaXml, viaJson } = fromJson(doc);
-      expect(viaXml?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE);
+      expect(viaXml?.code).toBe(UNSERIALIZABLE_RESOURCE_TYPE);
       expect(viaJson).toBeUndefined();
       expect(serializeResource(resource)).toBe(doc);
     });
@@ -111,9 +126,53 @@ describe("a resourceType XML has no tag to name", () => {
       // no value at all. The writer deleted it and the `id` went with it.
       const doc = '{"_resourceType":{"id":"q"},"status":"final"}';
       const { resource, viaXml } = fromJson(doc);
-      expect(viaXml?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE);
+      expect(viaXml?.code).toBe(UNSERIALIZABLE_RESOURCE_TYPE);
       expect(validateResource(resource).valid).toBe(false);
       expect(serializeResource(resource)).toBe(doc);
+    });
+
+    it("refuses one whose FIRST resourceType is not a string, however many strings follow", () => {
+      // The predicate reads the same property the writer does. `resourceTypeOf` is a `find`, so a
+      // non-string first and a string second left the writer with no type at all: base named the
+      // element `Resource`, deleted BOTH properties, and the modifier extension went with the
+      // subtree. A draft predicate asking whether ANY value written there is a string let exactly
+      // this through, which is the defect unrefused. Hand-built because neither reader emits this
+      // order -- the XML reader pushes the type synthesized from the tag first, and the JSON reader
+      // puts every repeat after the first on `duplicates` -- so the disagreement is only ever
+      // between the two quantifiers, and that is the thing being pinned.
+      const node = complex([
+        {
+          name: "resourceType",
+          value: complex([
+            {
+              name: "modifierExtension",
+              value: list([complex([{ name: "url", value: primitive("http://example.org/x") }])]),
+            },
+          ]),
+        },
+        { name: "resourceType", value: primitive("Patient") },
+        { name: "status", value: primitive("final") },
+      ]);
+
+      expect(validateResource(node).valid).toBe(false);
+      expect(readSafety(node).safeToSummarize).toBe(false);
+      expect(refusal(serializeResourceXml, node)?.code).toBe(UNSERIALIZABLE_RESOURCE_TYPE);
+    });
+
+    it("leaves one whose first IS a string, which keeps its tag and its type gate", () => {
+      // The other side of the same `find`: the writer reads a type here, names the tag with it, and
+      // this defect's substitution never happens. What drops is the second member, which is the
+      // repeated-property-name case and is declared separately.
+      const node = complex([
+        { name: "resourceType", value: primitive("Patient") },
+        { name: "resourceType", value: complex([{ name: "a", value: primitive("1") }]) },
+        { name: "status", value: primitive("final") },
+      ]);
+
+      expect(refusal(serializeResourceXml, node)).toBeUndefined();
+      expect(serializeResourceXml(node)).toBe(
+        '<Patient xmlns="http://hl7.org/fhir"><status value="final"/></Patient>',
+      );
     });
   });
 
@@ -136,7 +195,7 @@ describe("a resourceType XML has no tag to name", () => {
       ],
     ])("refuses one at %s", (_label, doc, location) => {
       const { resource, viaXml, viaJson } = fromJson(doc);
-      expect(viaXml?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE);
+      expect(viaXml?.code).toBe(UNSERIALIZABLE_RESOURCE_TYPE);
       expect(viaXml?.locations).toEqual([location]);
       expect(viaJson).toBeUndefined();
       expect(serializeResource(resource)).toBe(doc);

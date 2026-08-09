@@ -13,8 +13,10 @@
  * first reason again: a
  * member a repeated property name shadowed falls outside both walks, which visit `properties` only,
  * and neither format has a spelling that re-reads as the ambiguity the model holds. No refusal here
- * recognises anything new,
- * invents a value, or changes a document that reads clean.
+ * recognises anything new or invents a value. **It is NOT true that none of them changes a document
+ * that reads clean** -- `breaksTag` and {@link assertXmlResourceType} each name a document of their
+ * own that reads with zero issues and is refused anyway; that clause was carried here as a universal
+ * and is cut rather than reworded.
  *
  * **This module is a list of the refusals it implements, NOT a closed account of what a writer can
  * author.** Two of the predicates deliberately live somewhere else rather than being copied here,
@@ -127,10 +129,10 @@ export const SERIALIZE_ERROR_CODES = {
    */
   UNSERIALIZABLE_SHADOWED_PROPERTY: "UNSERIALIZABLE_SHADOWED_PROPERTY",
   /**
-   * The model carries, at one or more elements, a `resourceType` that is not a string. FHIR XML has
-   * no `resourceType` element at all -- the type IS the tag -- so the XML writer skipped the
-   * property, and with no string to name the tag it wrote `Resource` instead: the member deleted and
-   * the element named something the sender never wrote. **XML only**: `serializeResource` emits a
+   * The model carries, at one or more elements, a first `resourceType` that is not a string. FHIR
+   * XML has no `resourceType` element at all -- the type IS the tag -- so the XML writer skipped the
+   * property, and at the root, with no string to name the tag, it wrote `Resource` instead: the
+   * member deleted and the element named a type nobody wrote. **XML only**: `serializeResource` emits a
    * non-string `resourceType` through its ordinary path, so this refusal never reaches it and that
    * route stays open.
    *
@@ -460,30 +462,35 @@ export function assertNoShadowedProperty(node: FhirComplex): void {
  * Whether this element wrote a `resourceType` and the XML writer has no string in it to name the tag
  * with.
  *
+ * **It reads the FIRST `resourceType` the element wrote, because that is the one the writer names
+ * the tag from.** `resourceTypeOf` in `../xml/write.js` is a `find`, and `typeOf` is `getProperty`,
+ * which is first-wins as well; a quantifier here that disagreed with that one would answer for a
+ * property the writer never consults. A first draft asked whether ANY value written there is a
+ * string, and where a non-string one came first and a string one second the writer still read no
+ * type, still deleted both, and still named the element `Resource` -- the defect, unrefused.
+ *
  * **Both halves are load-bearing, and the second is what keeps a working round trip.** An element
  * with no `resourceType` at all answers `false`: nothing is deleted there and
  * {@link serializeResourceXml} names a typeless complex `Resource` by documented fallback, so
- * refusing would withdraw a route from every model that never had a type. An element with a string
- * one BESIDE a non-string one answers `false` too: the tag is named correctly, so this defect's
- * substitution does not happen, and the drop that does happen there is the repeated-property-name
- * one, which both writers do and which is declared separately. **That shape is reachable, and not
- * from JSON**: the XML reader has no `duplicates` mechanism, so
+ * refusing would withdraw a route from every model that never had a type. An element whose first one
+ * IS a string answers `false` too: the tag is named correctly, so this defect's substitution does not
+ * happen, and the drop that does happen there is the repeated-property-name one, which both writers
+ * do and which is declared separately. **That shape is reachable, and not from JSON**: the XML reader
+ * has no `duplicates` mechanism and pushes the type synthesized from the tag first, so
  * `<Patient xmlns="http://hl7.org/fhir"><resourceType><a value="1"/></resourceType></Patient>` reads
  * as two `resourceType` properties in one element, `valid: true` and `safeToSummarize: true`.
  * Refusing that would be this refusal paying the one cost none of the refusals beside it pays.
  */
 function lacksTaggableResourceType(node: FhirNode): boolean {
   if (node.kind !== "complex") return false;
-  const written = node.properties.filter((property) => property.name === "resourceType");
-  if (written.length === 0) return false;
-  return !written.some(
-    (property) => isPrimitive(property.value) && typeof property.value.value === "string",
-  );
+  const written = node.properties.find((property) => property.name === "resourceType");
+  if (written === undefined) return false;
+  return !(isPrimitive(written.value) && typeof written.value.value === "string");
 }
 
 /**
- * Refuse to serialize **to XML** an element whose `resourceType` is not a string, which the XML
- * writer would delete while naming the element something the sender never wrote.
+ * Refuse to serialize **to XML** an element whose first `resourceType` is not a string, which the
+ * XML writer would delete while reading no type out of it.
  *
  * ## The site, measured at `63b05fc`
  *
@@ -532,9 +539,9 @@ function lacksTaggableResourceType(node: FhirNode): boolean {
  * `<contained><status value="entered-in-error"/></contained>`, which re-reads as a `contained`
  * backbone element rather than as a contained resource; the `name` pair came back as `<name/>`.
  *
- * **Raised last**, after every refusal above it in both writers, so a model that trips two keeps the
- * code it already reported and no case moves onto this one. The array-wrapped and the `null`
- * spellings of an untaggable type each trip an earlier one and keep it.
+ * **Raised last**, after every refusal above it, so a model that trips two keeps the code it already
+ * reported and no case moves onto this one. The array-wrapped and the `null` spellings of an
+ * untaggable type each trip an earlier one and keep it.
  *
  * @param node - The model about to be serialized to XML.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE}.
@@ -549,15 +556,17 @@ export function assertXmlResourceType(node: FhirComplex): void {
   if (elements.length === 0) return;
   // The location names the property rather than the element carrying it, matching how the array
   // wrapper on the same property is already reported. `collectMarked` selects elements because the
-  // question needs the siblings, and `childPath` bounds the segment exactly as every other
-  // write-path location is bounded.
+  // question is which property the writer reads, not whether a property in isolation is a string,
+  // and `childPath` bounds the segment exactly as every other write-path location is bounded.
   const locations = elements.map((element) => childPath(element, "resourceType"));
   throw new FhirSerializeError(
     // Says what this refusal does not reach, in the wording the refusals beside it were narrowed to.
     // `serializeResource` emits a non-string `resourceType` through its ordinary path -- pinned by
     // the JSON half of the same test -- which is a statement about this shape, not about the rest of
     // the model: that writer's own declared exceptions still apply to everything else it carries.
-    `cannot serialize to XML: ${String(locations.length)} location(s) carry a resourceType with no string to name a tag with, which this writer would delete while naming the element Resource; this refusal does not reach serializeResource`,
+    // It does NOT say "while naming the element Resource": that substitution happens at the root,
+    // and this refusal reports depths where the tag comes from the property name instead.
+    `cannot serialize to XML: ${String(locations.length)} location(s) carry a resourceType with no string to name a tag with, which this writer would delete; this refusal does not reach serializeResource`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE,
     locations,
   );

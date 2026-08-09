@@ -734,10 +734,12 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   property is gone from the output and the element claims a type nobody wrote. **Neither repair is
   available**: writing `<Resource>` is what launders, and it authors the type gate every type-scoped
   safety read runs behind; coercing the value to a string authors a different type out of content the
-  sender wrote at another shape. **Two shapes are deliberately left**: an element that wrote **no**
-  `resourceType` is untouched, because a typeless complex is named `Resource` by documented fallback
-  and nothing is deleted there; and an element that wrote a **string beside** a non-string keeps its
-  tag, so the substitution never happens and what drops there is the repeated-property-name case. The
+  sender wrote at another shape. **The predicate reads the FIRST `resourceType` an element wrote**,
+  because that is the one the writer names the tag from. **Two shapes are deliberately left**: an
+  element that wrote **no** `resourceType` is untouched, because a typeless complex is named
+  `Resource` by documented fallback and nothing is deleted there; and an element whose **first** one
+  IS a string keeps its tag, so the substitution never happens and what drops there is the
+  repeated-property-name case. The
   bound is structural rather than a verdict: at the root this costs a round trip only for a model
   already `valid: false`, but deeper no layer checks a nested element's type and a document read from
   XML reaches it, so what is withdrawn at every refused location is a **deletion** rather than a round

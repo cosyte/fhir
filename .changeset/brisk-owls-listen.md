@@ -28,12 +28,17 @@ which is what every type-scoped safety read runs behind; coercing the value to a
 different type out of content the sender wrote at another shape. Refusing recognises nothing and
 invents nothing.
 
+The predicate reads the **first** `resourceType` an element wrote, because that is the one the writer
+names the tag from: `resourceTypeOf` is a `find`, and `typeOf` is first-wins as well. A draft asked
+whether **any** value written there is a string, and where a non-string one came first and a string
+one second the writer still read no type, still deleted both and still named the element `Resource`.
+
 Two shapes are left alone, and each is the line rather than an oversight. An element that wrote **no**
 `resourceType` is untouched, because `serializeResourceXml` accepts any complex and names a typeless
-one `Resource` by documented fallback and nothing is deleted there. And an element that wrote a
-**string beside** a non-string keeps its tag, so this defect's substitution never happens; what drops
-there is the repeated-property-name case, and that shape is reachable only from XML, whose reader has
-no duplicates mechanism.
+one `Resource` by documented fallback and nothing is deleted there. And an element whose **first** one
+IS a string keeps its tag, so this defect's substitution never happens; what drops there is the
+repeated-property-name case, which arrives from XML, whose reader has no duplicates mechanism and
+pushes the type synthesized from the tag first.
 
 The bound is structural rather than a verdict. At the root this costs a round trip only for a model
 already reported `valid: false`, but deeper no layer checks a nested element's type and a document
@@ -43,3 +48,7 @@ dropped a property the sender wrote and emitted no element for it, with no diagn
 
 `serializeResource` emits a non-string `resourceType` through its ordinary path, so this refusal does
 not reach it and that route stays open.
+
+Separately, a false universal is cut from the write-path refusals' own module comment: it said no
+refusal there "changes a document that reads clean", which was never true. The two clauses beside it,
+that no refusal recognises anything new or invents a value, are true and are kept.
