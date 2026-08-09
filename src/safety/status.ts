@@ -16,9 +16,8 @@
  * is "right", never converts, never infers clinical meaning (known limitations).
  *
  * That last sentence is load-bearing wherever a document encodes an element in a shape FHIR does not
- * define, because then the element's value is not something this layer may pick. Four such shapes
- * are handled, three on the JSON wire and one on the XML wire, and they reach the **same** harm by
- * different routes:
+ * define, because then the element's value is not something this layer may pick. Five such
+ * encodings are handled, and they reach the **same** harm by different routes:
  *
  * - **A repeated property name.** FHIR JSON forbids it (json.html §2.6.2) and RFC 8259 §4 leaves the
  *   winner undefined, so the element genuinely holds two values.
@@ -37,15 +36,21 @@
  *   this library may read: the reader drops the character data and the model holds a `status` with
  *   no value. This is the array-inside-an-array harm reached through the XML door, and the same two
  *   shapes are the ones this layer can do nothing about except decline to affirm.
+ * - **A value outside its datatype's lexical space.** R4 spells a `boolean` as `true` or `false`
+ *   (datatypes.html), so `<doNotPerform value="1"/>` (ordinary v2 / C-CDA converter output) is a
+ *   value the sender wrote and this library may not read: `"1"` and `"Y"` mean opposite things on
+ *   different wires, and picking one would author the instruction. Unlike the four above, the
+ *   *shape* here is fine; it is the **value** the reader could not turn into the datatype. Reported
+ *   at `unreadableBooleans`.
  *
- * Two rules follow, and they apply to all four shapes. Each negation read runs over **every** value
+ * Two rules follow, and they apply to all five encodings. Each negation read runs over **every** value
  * written for the element it reads, **including through an array wrapper** and including the type gate
- * itself, because a retraction the sender wrote must not go unreported. (Nothing can read through the
- * last two shapes; there is no value there to read.) And the readout stops claiming the resource is
- * summarizable: `safeToSummarize` is `false` with the locations in `shadowedProperties` /
- * `arrayWrappedScalars` / `nestedArrays` / `droppedText`, so a caller gets a refusal rather than an
- * affirmative verdict computed over one arbitrary reading of the document, or over content it never
- * saw.
+ * itself, because a retraction the sender wrote must not go unreported. (Nothing can be read through
+ * the third and fourth; there is no value there to read. The fifth has a value and this layer
+ * declines it.) And the readout stops claiming the resource is summarizable: `safeToSummarize` is
+ * `false` with the locations in `shadowedProperties` / `arrayWrappedScalars` / `nestedArrays` /
+ * `droppedText` / `unreadableBooleans`, so a caller gets a refusal rather than an affirmative verdict
+ * computed over one arbitrary reading of the document, or over content it never saw.
  *
  * @packageDocumentation
  */
@@ -70,6 +75,7 @@ import {
   CONDITION_CLINICAL_SYSTEM,
   CONDITION_VERIFICATION_SYSTEM,
   ENTERED_IN_ERROR,
+  hasUnreadableBoolean,
   isRetracted,
   KNOWN_MODIFIER_EXTENSION_URLS,
   NO_KNOWN_ALLERGY,
@@ -99,6 +105,11 @@ import {
  * so the lexical `true` the schema-free XML reader keeps as text is honored here. Before it did, this
  * element was lost across this package's own `serializeResourceXml` -> `parseResourceXml` round trip
  * and the readout affirmed `safeToSummarize` over a resource whose "do not give" had disappeared.
+ *
+ * **A value it cannot read leaves the read at `undefined` and is reported instead**, at
+ * {@link unreadableBooleans}, the complement of this read rather than a widening of it. Nothing
+ * here changes what is read: `"1"` and `"Y"` are not the R4 lexical space, they mean opposite things
+ * on different wires, and reading them would author the instruction rather than surface it.
  */
 function readDoNotPerform(resource: FhirComplex): boolean | undefined {
   const values = getAllProperties(resource, "doNotPerform");
@@ -180,8 +191,11 @@ export interface SafetyReadout {
   /**
    * `MedicationRequest.doNotPerform`, when present, read off either wire format's model: the JSON
    * codec's `boolean`, or the lexical `true` / `false` the schema-free XML reader keeps as the text
-   * of the `value` attribute. Text outside that two-word lexical space (`"TRUE"`, `"1"`) reads as
-   * `undefined`, silently.
+   * of the `value` attribute. Text outside that two-word lexical space (`"TRUE"`, `"1"`) still reads
+   * as `undefined` (coercing it would author a value the sender did not spell) but no longer
+   * silently: the element's location is on {@link unreadableBooleans} and the resource is not
+   * `safeToSummarize`. So `undefined` here means *either* "no boolean was written" or "one was
+   * written and could not be read", and the two are told apart by that channel, never by this field.
    */
   readonly doNotPerform: boolean | undefined;
   /** Whether the resource is marked `entered-in-error` (retracted, not data), authoritative. */
@@ -222,11 +236,23 @@ export interface SafetyReadout {
    */
   readonly droppedText: readonly string[];
   /**
+   * FHIRPath locations where a `boolean`-valued safety element carries a **written value outside the
+   * R4 `boolean` lexical space** (`true` / `false`, datatypes.html), so the element is present, the
+   * sender filled it in, and the read still returns `undefined`. `<doNotPerform value="1"/>` and
+   * `value="Y"` are ordinary v2 / C-CDA converter output and land here; without the location they
+   * read exactly like `value="0"`, and a "do not administer" is indistinguishable from its opposite.
+   * The channel is the third one on this readout whose content is **not readable**, beside
+   * {@link nestedArrays} and {@link droppedText}, and like them it carries locations and no values.
+   * The set is `MedicationRequest.doNotPerform`. Empty on every conformant document.
+   */
+  readonly unreadableBooleans: readonly string[];
+  /**
    * `false` when the resource must not be flattened: an unhandled `modifierExtension` is present, a
    * repeated property name left an element with more than one value, a `0..1` safety element
-   * arrived array-wrapped, an array inside an array left content the codec could not read, or XML
-   * character data on an element was dropped. Each is a case where a summary would have to assert
-   * something this library cannot establish, so it declines instead.
+   * arrived array-wrapped, an array inside an array left content the codec could not read, XML
+   * character data on an element was dropped, or a boolean-valued safety element carries a written
+   * value this layer cannot read. Each is a case where a summary would have to assert something this
+   * library cannot establish, so it declines instead.
    */
   readonly safeToSummarize: boolean;
 }
@@ -443,6 +469,51 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
 }
 
 /**
+ * The locations where a `boolean`-valued safety element carries a **written value this layer could
+ * not read as a boolean**, so the element is present, the sender filled it in, and the read returned
+ * `undefined` all the same.
+ *
+ * R4 spells a `boolean` as `true` or `false` and nothing else (datatypes.html), so
+ * `<doNotPerform value="1"/>` and `<doNotPerform value="Y"/>` (ordinary output from a v2 or C-CDA
+ * converter, which is how a great deal of data reaches a FHIR surface) carry no boolean this library
+ * may read. Coercing them would author a value the sender did not spell, and `"1"` and `"Y"` also
+ * appear on the wire meaning the opposite of what a naive reading gives them. So the value stays
+ * unread, and **this is the record that it was there**: without it, `value="1"` and `value="0"` read
+ * identically, and a prescriber's "yes, do not administer" is indistinguishable from "no" with
+ * nothing anywhere to say a choice was made.
+ *
+ * **Value-free, like every location on this readout**: the text that failed to read is not carried
+ * here or anywhere else, only the FHIRPath of the element that held it.
+ *
+ * **The set is `MedicationRequest.doNotPerform`**, the only `boolean` {@link readSafety} takes off a
+ * document. **The window is every resource root** (so a `contained` or Bundle-`entry`
+ * MedicationRequest is reported), which is `arrayWrappedScalars`' window and is deliberately wider
+ * than the `doNotPerform` read itself, which only visits the resource {@link readSafety} is handed.
+ * Reporting more than was read is the fail-safe direction and the only one available: the nested
+ * order is real content whose instruction is unread either way.
+ * It is **not** a report of every unreadable value in a document: the profile booleans, the
+ * `ElementDefinition.min` integer and a `Quantity` magnitude's lexical forms are read elsewhere and
+ * are still lost silently.
+ *
+ * Empty for every conformant document, in either wire format.
+ *
+ * @param resource - The resource model.
+ * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
+ * @returns The locations of the unreadable boolean values, in walk order.
+ * @example
+ * ```ts
+ * import { parseResourceXml, unreadableBooleans } from "@cosyte/fhir";
+ * const { resource } = parseResourceXml(
+ *   '<MedicationRequest xmlns="http://hl7.org/fhir"><doNotPerform value="1"/></MedicationRequest>',
+ * );
+ * unreadableBooleans(resource, "MedicationRequest"); // ["MedicationRequest.doNotPerform"]
+ * ```
+ */
+export function unreadableBooleans(resource: FhirComplex, path: string): string[] {
+  return walkSafety(resource, path).unreadableBoolean;
+}
+
+/**
  * The locations of every node the reader marked with `marked`, de-duplicated.
  *
  * A repeated property name can put two marked nodes at the same FHIRPath location, and FHIRPath
@@ -512,6 +583,8 @@ interface SafetyWalk {
   readonly arrayWrapped: string[];
   /** The subset of {@link SafetyWalk.arrayWrapped} FHIR XML has no repetition to spell back. */
   readonly unspellableInXml: string[];
+  /** Boolean-valued safety elements whose written value the boolean read could not read. */
+  readonly unreadableBoolean: string[];
 }
 
 /**
@@ -520,7 +593,13 @@ interface SafetyWalk {
  * not it carries a readable `resourceType`.
  */
 function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
-  const out: SafetyWalk = { modifiers: [], shadowed: [], arrayWrapped: [], unspellableInXml: [] };
+  const out: SafetyWalk = {
+    modifiers: [],
+    shadowed: [],
+    arrayWrapped: [],
+    unspellableInXml: [],
+    unreadableBoolean: [],
+  };
   walkComplex(resource, path, out, true);
   return out;
 }
@@ -644,6 +723,46 @@ function checkCodingWrapping(
 const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
 
 /**
+ * Record the boolean-valued safety elements at this resource root whose written value the boolean
+ * read could not read.
+ *
+ * **The set is `MedicationRequest.doNotPerform`, and it is the whole set** because it is the only
+ * `boolean` {@link readSafety} takes off a document at all: `retracted` and `noKnownAllergy` are
+ * derived from codes and codings, not from a `boolean` element. The **element name is type-gated the
+ * way the read is**: `doNotPerform` is a MedicationRequest element, so a `doNotPerform` written on a
+ * `Patient` is neither read nor reported.
+ *
+ * **The WINDOW, though, is wider than the read, and that is not the same thing as the type gate.**
+ * This runs at every resource root, which is {@link checkArrayWrapping}'s window, while
+ * `readDoNotPerform` only visits the resource `readSafety` was handed. So a `MedicationRequest`
+ * inside `contained` or a Bundle `entry` **is** reported at a location no read visited. That is the
+ * fail-safe direction and the same asymmetry `arrayWrappedScalars` already carries: the nested order
+ * is real content whose instruction is unread either way, and declining to affirm over it costs a
+ * caller a refusal where reading past it costs a patient a medication.
+ *
+ * **Why this is decided here and not in the reader.** FHIR XML carries every primitive as the text of
+ * its `value` attribute (xml.html §2.6.1) and this reader is schema-free, so nothing at parse time
+ * knows the text spells a `boolean` rather than a `code`: `<doNotPerform value="1"/>` and
+ * `<status value="1"/>` are the same node to the codec. This layer is the first one that knows the
+ * datatype **unconditionally**, and that is the narrow, measured reason the finding raises no
+ * `ValidationIssue` of its own: `MedicationRequest` has **no built-in schema**, so the validator is
+ * silent about this element's **datatype** unless a caller supplies one, and this readout has to
+ * hold either way. (The shape channels above are not scoped that way: an array-wrapped or
+ * duplicated `doNotPerform` still draws `ARRAY_WRAPPED_SCALAR` / `DUPLICATE_PROPERTY` with no schema
+ * at all.)
+ * Both paths are pinned in `test/xml-unreadable-boolean.test.ts`.
+ */
+function checkUnreadableBooleans(node: FhirComplex, path: string, out: SafetyWalk): void {
+  if (!typesOf(node).includes("MedicationRequest")) return;
+  // Across every member a repeated property name left, exactly as `readDoNotPerform` reads them: an
+  // unreadable value must not become invisible by arriving second under a duplicate key. One
+  // location however many members, because FHIRPath cannot address an individual member.
+  if (getAllProperties(node, "doNotPerform").some(hasUnreadableBoolean)) {
+    out.unreadableBoolean.push(childPath(path, "doNotPerform"));
+  }
+}
+
+/**
  * Walk a complex node: check its `modifierExtension` property, then descend into every child.
  *
  * A member shadowed by a repeated property name is walked too. It is part of the document, so a
@@ -655,6 +774,7 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
   // `contained` resource, a Bundle `entry.resource`). Only there does this library know a cardinality.
   if (isRoot || getAllProperties(node, "resourceType").length > 0) {
     checkArrayWrapping(node, path, out);
+    checkUnreadableBooleans(node, path, out);
   }
   for (const property of node.properties) visitProperty(property, path, out);
   const reported = new Set<string>();
@@ -771,7 +891,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   }
 
   const prefix = rt === undefined ? "$this" : rootPath(rt);
-  const { modifiers, shadowed, arrayWrapped } = walkSafety(resource, prefix);
+  const { modifiers, shadowed, arrayWrapped, unreadableBoolean } = walkSafety(resource, prefix);
   const nested = nestedArrays(resource, prefix);
   const dropped = droppedText(resource, prefix);
 
@@ -789,12 +909,14 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     arrayWrappedScalars: arrayWrapped,
     nestedArrays: nested,
     droppedText: dropped,
+    unreadableBooleans: unreadableBoolean,
     safeToSummarize:
       modifiers.length === 0 &&
       shadowed.length === 0 &&
       arrayWrapped.length === 0 &&
       nested.length === 0 &&
-      dropped.length === 0,
+      dropped.length === 0 &&
+      unreadableBoolean.length === 0,
   };
 }
 
@@ -803,8 +925,9 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
  * summarize honestly: it carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
  * ignoring one), a repeated property name left an element holding several values with no rule for
  * choosing between them, a `0..1` safety element arrived wrapped in a JSON array, an array inside
- * an array left content the codec could not read at all, or XML character data written on an element
- * was dropped. Every way the safe move is to **refuse**, value-free, carrying only the locations.
+ * an array left content the codec could not read at all, XML character data written on an element
+ * was dropped, or a boolean-valued safety element carries a written value outside the datatype's
+ * lexical space. Every way the safe move is to **refuse**, value-free, carrying only the locations.
  *
  * @example
  * ```ts
@@ -828,8 +951,8 @@ export class FhirSafetyError extends Error {
   constructor(locations: readonly string[]) {
     super(
       "Resource cannot be safely summarized: an unhandled modifierExtension, a repeated property " +
-        "name, an array-wrapped single-valued element, an array inside an array, or dropped XML " +
-        "element text leaves an " +
+        "name, an array-wrapped single-valued element, an array inside an array, dropped XML " +
+        "element text, or a boolean value this library cannot read leaves an " +
         `element this library must not flatten (${String(locations.length)} location(s)).`,
     );
     this.name = "FhirSafetyError";
@@ -840,13 +963,14 @@ export class FhirSafetyError extends Error {
 /**
  * Assert a resource is safe to flatten/summarize, throwing {@link FhirSafetyError} when it carries an
  * unhandled `modifierExtension`, a repeated property name, an array-wrapped single-valued element, an
- * array inside an array, or dropped XML element text. This is the executable form of "carries status
+ * array inside an array, dropped XML element text, or a boolean-valued safety element holding a
+ * written value outside the datatype's lexical space. This is the executable form of "carries status
  * **or refuses**": a summary helper calls it first, and never silently drops a modifier it cannot
  * honor, nor summarizes an element whose value the document left ambiguous or whose content the codec
  * could not read.
  *
  * @param resource - The resource (or a readout already computed for it).
- * @throws FhirSafetyError when any of those five shapes is present.
+ * @throws FhirSafetyError when any of those six shapes is present.
  * @example
  * ```ts
  * import { assertSafeToSummarize, parseResource } from "@cosyte/fhir";
@@ -862,6 +986,7 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     ...readout.arrayWrappedScalars,
     ...readout.nestedArrays,
     ...readout.droppedText,
+    ...readout.unreadableBooleans,
   ];
   if (locations.length > 0) throw new FhirSafetyError(locations);
 }

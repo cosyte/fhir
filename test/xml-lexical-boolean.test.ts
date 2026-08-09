@@ -239,26 +239,24 @@ describe("what is still not a boolean", () => {
  * Closing any of them MUST red the test beside it, in the same change.
  */
 describe("declared residuals of the schema-free boolean read, pinned", () => {
-  it("still affirms safeToSummarize over a doNotPerform this reader cannot read", () => {
-    // The remedy is that `negations` carries the instruction, NOT that summarizing is refused, and
-    // `safeToSummarize` is unmoved in BOTH directions. For a value that reads (`"true"`) that is
-    // right. For one that does not (`"1"`, ordinary v2/C-CDA converter output) it is the shape the
-    // whole item was filed over, surviving: the element is present, its value is not read, nothing
-    // records that, and the readout affirms. `SafetyReadout` has location channels for content the
-    // codec could not read (`nestedArrays`, `droppedText`) and none for "value written, not
-    // readable". Left standing here rather than widened in silence.
-    for (const spelling of ["true", "1"]) {
-      const resource = parseResourceXml(
-        xmlMedicationRequest(`<doNotPerform value="${spelling}"/>`),
-      ).resource;
-      const safety = readSafety(resource);
+  it("still affirms safeToSummarize over a doNotPerform this reader CAN read", () => {
+    // The half of the original pin that was never a residual, kept as the boundary of the one that
+    // was. This slice's remedy is that `negations` carries the instruction, NOT that summarizing is
+    // refused, so for a value that reads (`"true"`) `safeToSummarize` is unmoved and must stay so:
+    // a lexical `true` is the whole R4 boolean lexical space, the read succeeds, and there is
+    // nothing left over to decline. The `"1"` half moved and now lives in
+    // `test/xml-unreadable-boolean.test.ts`.
+    const resource = parseResourceXml(
+      xmlMedicationRequest('<doNotPerform value="true"/>'),
+    ).resource;
+    const safety = readSafety(resource);
 
-      expect(safety.safeToSummarize).toBe(true);
-      expect(safety.droppedText).toEqual([]);
-      expect(() => {
-        assertSafeToSummarize(resource);
-      }).not.toThrow();
-    }
+    expect(safety.safeToSummarize).toBe(true);
+    expect(safety.droppedText).toEqual([]);
+    expect(safety.unreadableBooleans).toEqual([]);
+    expect(() => {
+      assertSafeToSummarize(resource);
+    }).not.toThrow();
   });
 
   it("reads no ElementDefinition.min off an XML StructureDefinition, silently", () => {

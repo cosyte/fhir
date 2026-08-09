@@ -27,7 +27,8 @@ sender did not spell.
 
 The text recognised is exactly `true` and `false`, the whole of the R4 `boolean` lexical space and
 nothing beside it. `"TRUE"`, `"True"`, `"1"`, `"yes"`, `"Y"`, `" true"` and the empty string still
-read as no boolean, and that refusal is silent, which is a residual rather than a guarantee.
+read as no boolean. That refusal was silent as this change shipped it; the `unreadableBooleans`
+change released alongside it reports the element instead, for the safety read.
 
 The census that turned up the defect is reported rather than acted on, and that is a finding rather
 than a shortfall. Two more boolean reads have the same defect and are left standing:
@@ -55,12 +56,12 @@ value spells the negation a JS `boolean` elsewhere in the element contradicts. T
 documented "a `true` anywhere wins" rule doing its job, and it is pinned.
 
 Residuals stay open and are pinned by a test rather than implied, the two profile reads among them.
-`safeToSummarize` is unmoved in both directions. For a value that reads, that is right: `negations`
-now carries the instruction, and refusing to summarize was never the remedy. For a value that does
-not read (`"1"`, ordinary converter output) the element is present, its value is unread, nothing
-records that, and the readout still affirms. `SafetyReadout` has location channels for content the
-codec could not read and none for "value written, not readable", so that shape survives this fix and
-is pinned rather than absorbed.
+`safeToSummarize` was unmoved in both directions by this change. For a value that reads, that is
+right: `negations` now carries the instruction, and refusing to summarize was never the remedy. For a
+value that does not read (`"1"`, ordinary converter output) the element was present, its value
+unread, nothing recorded it, and the readout still affirmed. That second direction is closed by the
+`unreadableBooleans` change released alongside this one, which adds the channel `SafetyReadout` was
+missing.
 
 The corpus is hand-authored XML fixtures, mutations and hand-built probes, not the FHIR R4
 published-examples corpus. Nothing here is corpus-wide.

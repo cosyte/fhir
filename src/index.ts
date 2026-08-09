@@ -127,6 +127,7 @@ export {
   readSafety,
   shadowedProperties,
   unhandledModifierExtensions,
+  unreadableBooleans,
 } from "./safety/status.js";
 export type { NegationKind, SafetyReadout } from "./safety/status.js";
 export {

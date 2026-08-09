@@ -352,6 +352,29 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `<status value="final">final</status>` refuses as well, even though nothing is missing there. That
   is deliberate. Deciding the document meant no harm would mean reading the text, which is the
   tolerance this half does not take.
+- **A boolean value outside the datatype's lexical space is reported, not read as an absent
+  instruction.** R4 spells a `boolean` as `true` or `false` and nothing else, so
+  `<doNotPerform value="1"/>` and `value="Y"` (ordinary v2 and C-CDA converter output, which is how
+  a great deal of data reaches a FHIR surface) carry no boolean this library may read. They are not
+  `false`; they are **unreadable**, and the difference is the whole point: measured, a `value="1"`
+  read back exactly like `value="0"`, so a prescriber's "yes, do not administer" and another's "no"
+  produced the same answer, with nothing on any channel to say a value had been written and dropped.
+  So the position is named: the locations in `unreadableBooleans`, `safeToSummarize` is `false`, and
+  `assertSafeToSummarize` throws. **The value is still not read**, deliberately: coercing `"1"` or
+  `"Y"` would invent a reading the spec does not license, and it would turn `value="0"` into a JS
+  `false` that `serializeResource` then emits, laundering an authored value across a format change.
+  The channel covers `MedicationRequest.doNotPerform`, the only `boolean` `readSafety` takes off a
+  document. Its window is every resource root (so a `contained` or `Bundle.entry` order counts),
+  which is `arrayWrappedScalars`' window and is deliberately wider than the `doNotPerform` read,
+  which only visits the resource `readSafety` is handed: a nested order is reported at a location
+  that read never visited, the fail-safe direction. A primitive carrying only `id` / `extension` and
+  no value is untouched, since nothing was written there to be unread, so this cannot fire on a
+  conformant document in either wire format.
+  **Unlike the five findings above it, this one raises no `ValidationIssue` of its own**, for a narrow
+  and measured reason rather than a general one: `MedicationRequest` has no built-in schema, so the
+  validator is silent about this element's **datatype** unless a caller supplies one, and the readout
+  has to hold either way. The safety layer knows the datatype unconditionally, which is why the report lives
+  there.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
   `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding

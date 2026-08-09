@@ -6,6 +6,59 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`SafetyReadout.unreadableBooleans`, and with it the channel the readout had no slot for: a value
+  the sender wrote and this library could not read (`FHIR-XML-UNREADABLE-BOOLEAN-IS-SILENT`).** R4
+  spells a `boolean` as `true` or `false` and nothing else, so `<doNotPerform value="1"/>` and
+  `value="Y"` (ordinary v2 and C-CDA converter output) carry no boolean this library may read.
+  Measured at the base commit, all five of `value="true"`, `"1"`, `"Y"`, `"0"` and `"N"` returned
+  `issues: []` and `safeToSummarize: true` with `assertSafeToSummarize` clean, and the last four
+  returned `negations: []`: **an author who wrote "yes, do not administer" got the same answer as one
+  who wrote "no"**, with nothing anywhere recording that a value had been written and dropped.
+  **The remedy is a report, not a wider read, and the difference is the whole change.** Widening the
+  read to accept `"1"` / `"Y"` would invent a reading R4 does not license and would turn `value="0"`
+  into a JS `false` that `serializeResource` then emits, authoring a value and laundering it across
+  a format change. So `booleanOf` is untouched, `doNotPerform` still reads `undefined`, and the
+  element's FHIRPath location now appears in the new `unreadableBooleans`, with `safeToSummarize`
+  `false` and `assertSafeToSummarize` throwing. `unreadableBooleans(resource, path)` is exported
+  beside `nestedArrays` and `droppedText`, the two existing channels for content the codec could not
+  read. The report is **value-free**: the text that failed to read reaches neither the locations nor
+  the error message.
+  **Consumer-side additivity, measured rather than argued**, and the property `#79`'s gate refuted a
+  claim about. **This slice widens no read at all**, so no value that was `undefined` becomes defined
+  anywhere and the "a filled-in value retires a finding" class is unreachable by construction. Over a
+  33-document corpus in a real base worktree, **13 documents move and the only field that moves in
+  any of them is `safeToSummarize`, `true → false`**; the other 20 are identical on every channel. No
+  parse issue, no `ValidationIssue`, no `valid`, no `negations`, and neither writer's output moves on
+  any document. `safeToSummarize` is a conjunction of empty-list tests and this adds a term, so it is
+  monotone toward refusal and can never move `false → true`.
+  **`safeToSummarize` does move, and that is the point rather than a side effect.** Its contract is
+  that the library declines when a summary would have to assert something it cannot establish, and an
+  unreadable negation is exactly that: `value="1"` and `value="0"` are indistinguishable to a reader
+  with no licence to guess, so affirming over either one affirms over a coin flip. Both now refuse.
+  **The census is wider than the fixed site and is reported rather than acted on.**
+  `MedicationRequest.doNotPerform` is the **only** `boolean` the safety spine reads out of a document
+  (`retracted` and `noKnownAllergy` are derived from codes, not from a boolean element), so the
+  channel is complete for its own layer and for nothing beyond it. Still unreported, each its own
+  item: `ElementDefinition.mustSupport` and `slicing.ordered` (the convenience read `#79` measured as
+  unsafe to widen, and a `StructureDefinition` has no `SafetyReadout` to report on), `parseMin`, a
+  `Quantity` magnitude's `+5` / `05` / `.5` / `5.`, and FHIRPath `numberOf`.
+  **One asymmetry is deliberate: this raises no `ValidationIssue` of its own, so on the default path
+  a `safeToSummarize: false` sits beside `valid: true`.** The reason is narrow and measured rather
+  than general: `MedicationRequest` has no built-in schema, so the validator is silent about this
+  element's **datatype** unless a caller supplies one, and the readout has to hold either way. (The
+  shape channels are not scoped that way: an array-wrapped or duplicated `doNotPerform` still draws
+  `ARRAY_WRAPPED_SCALAR` / `DUPLICATE_PROPERTY` at this element with no schema at all.) The safety
+  layer knows the datatype unconditionally, which is why the report lives there. Both paths are
+  pinned, with the other residuals, in `test/xml-unreadable-boolean.test.ts`.
+  **One more public surface moves and it is outside the corpus measurement above:** `FhirSafetyError`
+  now names this sixth shape in its message, so the message string changes for **every** refusal it
+  raises, including the five that already refused. The `locations` array, the class and the thrown
+  type are unchanged.
+  The corpus is hand-authored XML and JSON fixtures, mutations and hand-built probes, **not** the
+  FHIR R4 published-examples corpus. Nothing here is corpus-wide.
+
 ### Fixed
 
 - **A `doNotPerform` written in XML was read as absent, so an explicit "do not give this medication"
@@ -27,7 +80,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   value the sender did not spell.
   **The text recognised is exactly `true` and `false`**, the whole of the R4 `boolean` lexical space
   and nothing beside it: `"TRUE"`, `"True"`, `"1"`, `"yes"`, `"Y"`, `" true"` and `""` still read as
-  no boolean, **silently**, which is a residual rather than a guarantee.
+  no boolean. That refusal was **silent** as this fix shipped it; the entry above closes that half
+  and reports the element instead.
   **The census is reported rather than acted on, and that is the finding, not a shortfall.** Two more
   boolean reads have the same defect and are left standing: `ElementDefinition.mustSupport` and
   `ElementDefinition.slicing.ordered`, both through `primitiveBoolean`, the convenience read. Reading
@@ -52,13 +106,12 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   where any value spells the negation a JS `boolean` elsewhere in the element contradicts. That is
   the documented "a `true` anywhere wins" rule doing its job, and it is pinned.
   **Residuals stay open and are pinned by `test/xml-lexical-boolean.test.ts` rather than implied**,
-  the two profile reads and the two above among them. `safeToSummarize` is also unmoved in **both**
-  directions: for a value that reads, that is right, because `negations` now carries the instruction
-  and refusing to summarize was never the remedy; for a value that does **not** read (`"1"`, ordinary
-  converter output) the element is present, its value is unread, nothing records that, and the
-  readout still affirms. `SafetyReadout` has location channels for content the codec could not read
-  and none for "value written, not readable", so that shape survives this fix and is pinned rather
-  than absorbed.
+  the two profile reads and the two above among them. `safeToSummarize` was also unmoved in **both**
+  directions by this fix: for a value that reads, that is right, because `negations` now carries the
+  instruction and refusing to summarize was never the remedy; for a value that does **not** read
+  (`"1"`, ordinary converter output) the element was present, its value unread, nothing recorded it,
+  and the readout still affirmed. **That second direction is closed by the entry above**, which adds
+  the `unreadableBooleans` channel `SafetyReadout` was missing.
   The corpus is hand-authored XML fixtures, mutations and hand-built probes, **not** the FHIR R4
   published-examples corpus. Nothing here is corpus-wide.
 
