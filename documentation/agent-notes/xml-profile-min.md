@@ -215,7 +215,17 @@ All of these are **post-remedy**, at the head this slice ships.
   7. tolerate leading zeros -> `01`
   8. use `positiveInt`'s real space, a leading `+` admitted -> `+1`
   9. `Number.parseInt` instead of an exact match -> `+1` `01` `1.0` `1.` ` 1` `1 ` `-1` `1e2`
-  10. remove the lexical route (revert the read fix) -> all 18 behavioural reds
+  10. remove the lexical route (revert the read fix) -> 18 tests, and the membership is NOT the 18
+      behavioural reds even though the count coincides. Named, because the count is what a reader
+      would otherwise infer: the seven headline closures, the five `reads N as the bound N` cases
+      (`0` `1` `2` `10` `999`), `keeps the inherited bound when an XML differential states a smaller
+      one`, `keeps the inherited bound for a min of 0, whichever format spelled it`, `still takes a
+      differential bound that tightens…`, `never lowers the enforced bound…`, `still reads no
+      mustSupport and no slicing.ordered off an XML definition`, and `reads a min a non-conformant
+      JSON document spelled as a string…`. It **includes** the `mustSupport` test that this note
+      separates out as not-evidence, and **excludes** `keeps the inherited bound when a JSON
+      differential states a smaller one`, which the merge guard closes rather than the read, so a
+      string-route removal cannot reach it.
   **Mutations 1, 2 and 3 are three polarities of the merge guard**, so it cannot pass by refusing
   every differential `min` and cannot pass with the reverted clamp back in. **`"one"` is reddened by
   none of the ten** and is retained as documentation of the boundary, not as evidence. Said here
@@ -235,6 +245,23 @@ All of these are **post-remedy**, at the head this slice ships.
   reader, the writers and the safety spine are untouched, which is worth having and is all it says.
 - **Corpus caveat on every number here:** hand-authored XML and JSON fixtures, plus mutations and
   probes. **Not the R4 published-examples corpus.** Nothing here is corpus-wide.
+
+## The gate
+
+`conformance-refuter` **`REFUTED` -> `REFUTED` -> `REFUTED` -> `NOT REFUTED`**, four passes, the
+ADR 0016 cap spent and no fifth. Pass 1 found the `INTRODUCED` blocker at `mergeElement`; pass 2
+found the bare guard composes an unsatisfiable pair; pass 3 refuted the clamp that answered pass 2
+with a counterexample worse than the defect; pass 4 graded the cut-back `NOT REFUTED`, finding no
+`INTRODUCED` blocker.
+
+**The last commit on the branch is UNGRADED and says so**: pass 4's one documentation minor, entry
+10 of the mutation ledger above, whose count was right and whose membership was wrong. It changes no
+executable line (`git diff` over `src/` and `test/` is empty). Applied rather than deferred because
+the carrier is this note, which is the record a later slice reads. No sha is named here on purpose:
+the branch squash-merges, so a branch sha would be dead the moment it landed.
+
+**Pass 4 also asked that the declared gap be filed as its own backlog item immediately.** It is a
+`resolveSlices` defect, not a `parseMin` one, and it is outside this item's bar.
 
 ## Declared open, each pinned in `test/xml-profile-min.test.ts`
 
