@@ -1389,8 +1389,9 @@ terminology content vendored), and validates resources against caller-supplied U
 `StructureDefinition`s (snapshot generation, slicing, fixed/pattern, must-support-as-obligation,
 P6, no profile content bundled) and evaluates profile `constraint[]` invariants through a bounded
 in-repo FHIRPath engine, reporting anything outside the subset `INVARIANT_UNCHECKED` rather than
-passing it (P7), and reads & writes **FHIR XML** into the same model as JSON (the two wire formats
-proven equivalent, the reader XXE/billion-laughs-proof by refusal, P8) but with **no** `type`·`profile`
+passing it (P7), and reads & writes **FHIR XML** into the shared model (the two wire formats proven
+**equivalent, not identical**, `nodesEquivalent` naming what that is modulo, the reader
+XXE/billion-laughs-proof by refusal, P8) but with **no** `type`·`profile`
 slicing discriminators / reslicing (still `PROFILE_SLICE_UNCHECKED`), no bundled US Core IG corpus or
 `validator_cli.jar` differential (P11), no code-validity / value-set-membership guarantee without a supplied
 terminology service, and no typed per-resource models. The roadmap lives in
@@ -3182,3 +3183,14 @@ the remedy was a **quantifier**, and the prose shrank around it.
 What the gate could **not** grade, in its own words: every "measured at `63b05fc`" number, because its
 Bash is `git diff`/`log`/`show` only. Those were re-measured by hand against a `63b05fc` worktree
 before the pass and again after the remedy.
+
+## The XML magnitude, read (2026-08-09)
+
+**Narrative relocated** (this file is at its archive cap):
+[`agent-notes/xml-magnitude.md`](agent-notes/xml-magnitude.md). The cursors, so you need not open it:
+*"a JSON decimal returns from XML as a string"* is a **declared limit**, but **`readQuantity` read
+only the JSON shape**, so an XML dose surfaced as the **bare-unit shape** under `issues: []`. Fixed.
+**FOUR residuals pinned by `test/xml-quantity-magnitude.test.ts`**, one of them **the narrowed
+bare-unit shape itself** (`+5`, `05`, `.5` are outside R4's `decimal` space, still silent). **Do not
+write a guarantee where you measured a narrowing** and **a phrase sweep is not a carrier sweep**:
+the gate refuted both, and `#p2-p3` above was the fifth carrier a phrase sweep missed.

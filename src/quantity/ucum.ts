@@ -13,7 +13,7 @@
  * @packageDocumentation
  */
 
-import type { FhirDecimal } from "../model/decimal.js";
+import { decimalFromLexical, type FhirDecimal } from "../model/decimal.js";
 import { getProperty, isPrimitive, type FhirComplex, type FhirNode } from "../model/index.js";
 import { primitiveString } from "../safety/codes.js";
 
@@ -83,10 +83,19 @@ export function requiredVitalSignUnits(loincCode: string): readonly string[] | u
 /**
  * The value-free reading of a FHIR `Quantity` element. `value` is a {@link FhirDecimal}, the exact
  * lexical number, never routed through a JS float, and `code`/`system` are the
- * machine-actionable unit, kept distinct from the human `unit` string.
+ * machine-actionable unit, kept distinct from the human `unit` string. The magnitude is read from
+ * either wire format's model, so an XML-sourced quantity is not a unit with no number. The model
+ * records no provenance, so a JSON document that spelled its magnitude as a string is read the same
+ * way; FHIR JSON says a decimal is a number, so that document is non-conformant either way.
  */
 export interface Quantity {
-  /** `Quantity.value`, the exact decimal, or `undefined` when absent (e.g. a `comparator`-only bound). */
+  /**
+   * `Quantity.value`, the exact decimal, or `undefined` when this reader found no magnitude it can
+   * read: an absent `value`, a `comparator`-only bound, or text outside the R4 `decimal` lexical
+   * space. **That last one is a residual, not a guarantee.** `<value value="+5"/>` reads `undefined`
+   * beside a unit that reads fine, and nothing is raised on any channel to say a magnitude was
+   * written there.
+   */
   readonly value: FhirDecimal | undefined;
   /** `Quantity.comparator` (`<` | `<=` | `>=` | `>`), a bound, not an exact value, when present. */
   readonly comparator: string | undefined;
@@ -98,12 +107,32 @@ export interface Quantity {
   readonly code: string | undefined;
 }
 
-/** The scalar value of a primitive node when it is a {@link FhirDecimal}, else `undefined`. */
+/**
+ * The magnitude of a `Quantity.value` primitive, whichever reader built the model.
+ *
+ * The JSON reader hands over a {@link FhirDecimal}; the XML reader is schema-free and hands over the
+ * exact text of the `value` attribute, because FHIR XML carries no datatype for it to key on. Both
+ * are the same magnitude, so both are read here, the lexical form recognised against the R4 `decimal`
+ * space and carried through unchanged (never a `number`, so precision survives either way).
+ *
+ * Reading only the first shape made `undefined` mean two different things: "this quantity carries no
+ * magnitude" and "the magnitude is right there and I did not read it". The second one surfaced a
+ * dose or a lab result as a unit with no number, under an empty issue list.
+ *
+ * **The second meaning is narrowed, not retired**, and the difference matters to a reader of this
+ * function: text outside the R4 `decimal` space (`+5`, `05`, `.5`, `5.`) still reads `undefined`
+ * beside a unit that reads fine, with no diagnostic on any channel. Refusing to read those is right,
+ * because coercing them would author a magnitude the sender did not spell; the residual is that the
+ * refusal is silent. It is pinned in `test/xml-quantity-magnitude.test.ts`.
+ */
 function decimalValue(node: FhirNode | undefined): FhirDecimal | undefined {
-  if (node !== undefined && isPrimitive(node) && typeof node.value === "object") {
-    return node.value;
-  }
-  return undefined;
+  if (node === undefined || !isPrimitive(node)) return undefined;
+  const { value } = node;
+  // Duck-typed rather than `instanceof`, which base did not use: a `FhirDecimal` built by a second
+  // copy of this module (dual ESM/CJS, or two installs) fails the brand check and would read as no
+  // magnitude at all, which is the bare-unit shape again.
+  if (typeof value === "object") return value;
+  return typeof value === "string" ? decimalFromLexical(value) : undefined;
 }
 
 /**

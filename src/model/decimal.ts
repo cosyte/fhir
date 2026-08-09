@@ -17,8 +17,10 @@
  */
 
 /**
- * The JSON number grammar (ECMA-404 / RFC 8259), which is a strict superset of the FHIR `decimal`
- * lexical space. A value read off the wire has already satisfied this (the raw-JSON reader enforces
+ * The JSON number grammar (ECMA-404 / RFC 8259), which is character-for-character the FHIR R4
+ * `decimal` lexical space (`datatypes.html`), so this one constant serves both: it accepts no
+ * spelling R4 rejects, and rejects none R4 accepts.
+ * A value read off the wire has already satisfied this (the raw-JSON reader enforces
  * it); the public {@link decimal} factory re-checks it so a hand-built value cannot smuggle in
  * non-numeric text.
  *
@@ -257,4 +259,20 @@ export function decimal(raw: string): FhirDecimal {
     throw new TypeError(`Not a valid FHIR decimal literal: ${JSON.stringify(raw)}`);
   }
   return new FhirDecimal(raw);
+}
+
+/**
+ * A {@link FhirDecimal} from lexical text, or `undefined` when the text is not a FHIR `decimal`
+ * literal. The non-throwing sibling of {@link decimal}, for a caller reading text it did not author.
+ *
+ * A schema-free reader cannot always hand a magnitude over as a `FhirDecimal`: FHIR XML carries every
+ * primitive as the text of its `value` attribute, so a magnitude arrives as a string and has to be
+ * recognised rather than assumed. The recognition is the R4 `decimal` lexical space and nothing
+ * wider, and the text is carried through unchanged, so precision survives exactly as it does on the
+ * JSON path.
+ *
+ * @internal
+ */
+export function decimalFromLexical(raw: string): FhirDecimal | undefined {
+  return JSON_NUMBER.test(raw) ? new FhirDecimal(raw) : undefined;
 }

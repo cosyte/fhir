@@ -12,6 +12,15 @@
  * {@link ../model/decimal.js} carrying its exact lexical text. So validation reads the lexical form
  * from the model (a string, or `FhirDecimal.raw`) and tests the datatype's pattern, never a float.
  *
+ * **That is the JSON reader's model, and the shape checks below assume it is the only one.** The XML
+ * reader is schema-free and keeps every primitive as the text of its `value` attribute, so a
+ * conformant `<active value="true"/>` or `<value value="1.50"/>` reaches
+ * {@link validatePrimitiveValue} as a string and draws `type-mismatch`, a false error on a valid
+ * document, and `valid` flips with it. Open, and pinned by `test/xml-quantity-magnitude.test.ts`
+ * rather than left to be rediscovered: accepting the lexical form here would also retire a **real**
+ * mismatch on a JSON document that spelled a boolean or a number as a string, and the model records
+ * no provenance to tell the two apart. That trade is a decision, not a patch.
+ *
  * @packageDocumentation
  */
 

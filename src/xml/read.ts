@@ -1,6 +1,7 @@
 /**
- * The XML read path: a raw {@link XmlElement} tree → the immutable {@link FhirNode} model, the same
- * model the JSON reader produces (xml.html).
+ * The XML read path: a raw {@link XmlElement} tree → the immutable {@link FhirNode} model (xml.html).
+ * It is **not identical** to the model the JSON reader builds; {@link ./equivalence.js nodesEquivalent}
+ * enumerates the differences equivalence is defined modulo, and is the oracle for them.
  *
  * FHIR XML encodes the same information model as FHIR JSON through different mechanisms, and this
  * reader translates each back to the shared model so a resource read from XML is **equivalent** to
@@ -15,10 +16,10 @@
  *   of what JSON splits into the `_`-sibling. The reader is **schema-free** like the JSON reader, so a
  *   primitive value is kept as its exact lexical **string** (`"true"`, `"0.010"`); it never guesses a
  *   FHIR datatype to coerce a boolean or a decimal, and precision is preserved because the text is
- *   never routed through a `number`. Cross-format *equivalence* is therefore defined modulo lexical
- *   form (see {@link ./equivalence.js}).
+ *   never routed through a `number`. Cross-format *equivalence* therefore accounts for it (see
+ *   {@link ./equivalence.js}).
  * - **A repeating element becomes a list**; a single occurrence is a single node (JSON always uses an
- *   array for a repeatable element, the one irreducible schema-free ambiguity, reconciled by the
+ *   array for a repeatable element, an irreducible schema-free ambiguity, reconciled by the
  *   singleton-list rule in {@link ./equivalence.js}).
  * - **`Element.id` is an attribute, `Resource.id` a child element**; both land as an `id` property,
  *   and **`Extension.url` is an attribute** that lands as a `url` property.
@@ -745,7 +746,8 @@ function buildSingle(
  * const { resource } = parseResourceXml(
  *   '<Patient xmlns="http://hl7.org/fhir"><active value="true"/></Patient>',
  * );
- * serializeResource(resource); // → the same model as the JSON form, re-emitted as JSON
+ * serializeResource(resource); // → '{"resourceType":"Patient","active":"true"}'
+ * // XML carried `active` as attribute text, so it re-emits as a JSON string rather than `true`.
  * ```
  */
 export function parseResourceXml(input: string | XmlElement): ReadResult {
