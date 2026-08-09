@@ -17,8 +17,10 @@
  */
 
 /**
- * The JSON number grammar (ECMA-404 / RFC 8259), which is a strict superset of the FHIR `decimal`
- * lexical space. A value read off the wire has already satisfied this (the raw-JSON reader enforces
+ * The JSON number grammar (ECMA-404 / RFC 8259), which is character-for-character the FHIR R4
+ * `decimal` lexical space (`datatypes.html`), so this one constant serves both: it accepts no
+ * spelling R4 rejects, and rejects none R4 accepts.
+ * A value read off the wire has already satisfied this (the raw-JSON reader enforces
  * it); the public {@link decimal} factory re-checks it so a hand-built value cannot smuggle in
  * non-numeric text.
  *

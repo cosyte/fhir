@@ -146,10 +146,8 @@ describe("what is still not a magnitude", () => {
     expect(readQuantity(xmlValueQuantity('<value value=""/>'))?.value).toBeUndefined();
   });
 
-  it("does not read a thousands-separated or padded number", () => {
+  it("does not read a thousands-separated number", () => {
     expect(readQuantity(xmlValueQuantity('<value value="1,5"/>'))?.value).toBeUndefined();
-    expect(readQuantity(xmlValueQuantity('<value value=" 5 "/>'))?.value).toBeUndefined();
-    expect(readQuantity(xmlValueQuantity('<value value="+5"/>'))?.value).toBeUndefined();
   });
 
   it("still reports no magnitude for a quantity that carries only a unit", () => {
@@ -234,5 +232,25 @@ describe("declared residuals of the schema-free primitive read, pinned", () => {
     // mismatch: a profile's `fixed[x]`/`pattern[x]` check false-errors on conformant XML.
     expect(matchesFixed(fromXml, fixed)).toBe(false);
     expect(matchesFixed(fixed, fixed)).toBe(true);
+  });
+
+  it("still surfaces the bare-unit shape, silently, for text outside the R4 decimal space", () => {
+    // NARROWED, NOT RETIRED. `+5`, `05`, `.5`, `5.` and `" 5"` are all outside R4's `decimal`
+    // regex, so a magnitude written that way reads `undefined` beside a unit that reads fine, with
+    // nothing on any diagnostic channel. Refusing to read them is right (coercing would author a
+    // magnitude the sender did not spell); that the refusal is silent is the residual.
+    for (const text of ["+5", "05", "00.5", "5.", ".5", " 5"]) {
+      const xml =
+        `<MedicationRequest ${FHIR_NS}><dosageInstruction><doseAndRate><doseQuantity>` +
+        `<value value="${text}"/><unit value="mg"/><code value="mg"/>` +
+        `</doseQuantity></doseAndRate></dosageInstruction></MedicationRequest>`;
+      const { resource, issues } = parseResourceXml(xml);
+      const [dose] = readMedicationDoses(resource, resourceType(resource));
+
+      expect(issues).toEqual([]);
+      expect(dose?.value).toBeUndefined();
+      expect(dose?.unit).toBe("mg");
+      expect(dose?.code).toBe("mg");
+    }
   });
 });

@@ -24,7 +24,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   arriving through a different door. `readQuantity` now reads the magnitude from either reader's
   model, recognising the R4 `decimal` lexical space and carrying the text through unchanged, so no
   float is involved and `0.010` stays `0.010`. Anything outside that space (`"abc"`, `"true"`, `"1,5"`,
-  `" 5 "`, `"+5"`, `""`) is still `undefined`, which keeps that word meaning only "no magnitude here".
+  `"+5"`, `"05"`, `".5"`, `""`) is still `undefined`, so **the bare-unit shape is narrowed rather than
+  retired**, and that half is listed among the residuals below rather than written up as a guarantee.
   **No diagnostic can move**, and that is measured rather than argued: nothing in the validation layer
   branches on `Quantity.value` (`checkUcumShape` reads `system` and `code`; the vital-signs check
   reads `system` and `code`), and the read differential does not read quantities at all.
@@ -32,23 +33,33 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   same lexical read applies to a JSON document that spelled its magnitude as a string. FHIR JSON says
   a decimal is a number, so that document is non-conformant, and reporting its magnitude absent was
   the worse of the two readings.
-  **Three residuals stay open and are now pinned by `test/xml-quantity-magnitude.test.ts` rather than
+  **Four residuals stay open and are now pinned by `test/xml-quantity-magnitude.test.ts` rather than
   implied.** An XML-sourced decimal still re-serializes to JSON as a **string**, `"1.50"` and not
   `1.50`, the text byte-exact and the JSON type not. `validatePrimitiveValue` still reads the JSON
   reader's model shape as the model shape, so a conformant `<active value="true"/>` or
   `<multipleBirthInteger value="2"/>` draws `TYPE_MISMATCH` and flips `valid` where the JSON twin
   validates clean; accepting the lexical form there would retire a **real** mismatch on a JSON
   document that spelled a boolean as a string, and the model cannot tell the two apart, so that trade
-  is a decision and not a patch. And `matchesFixed` compares model shapes, so a profile's `fixed[x]`
-  decimal never matches the same magnitude read from XML.
-  **Four claims were false at their own sites and are corrected, not reworded around**: the XML
+  is a decision and not a patch. `matchesFixed` compares model shapes, so a profile's `fixed[x]`
+  decimal never matches the same magnitude read from XML. And the **bare-unit shape itself is
+  narrowed, not retired, and is still silent**: `+5`, `05`, `.5`, `5.` and `" 5"` fall outside R4's
+  `decimal` regex, so a magnitude written that way reads `undefined` beside a unit that reads fine,
+  with nothing on any diagnostic channel. Refusing to read them is right, because coercing them would
+  author a magnitude the sender did not spell; that the refusal is silent is the residual.
+  **Five claims were false at their own sites and are corrected, not reworded around**: the XML
   codec's package doc said `parseResourceXml` "produces the same model as the JSON reader"; the read
   module's header said the same; `parseResourceXml`'s own `@example` said `serializeResource` returns
-  "the same model as the JSON form" when it returns `{"resourceType":"Patient","active":"true"}`; and
-  the README's round-trip example annotated `nodesEquivalent` as "same model from either wire format".
+  "the same model as the JSON form" when it returns `{"resourceType":"Patient","active":"true"}`; the
+  README's round-trip example annotated `nodesEquivalent` as "same model from either wire format"; and
+  `documentation/agent-notes.md`'s own envelope section carried the universal a fourth time, which a
+  first sweep by phrase missed and the gate caught. **A phrase sweep is not a carrier sweep**, and
+  `documentation/` is on this repo's written carrier list.
   The scoped statements beside them measure true and were left alone (`nodesEquivalent`'s own
   module doc, which states the modulo; the namespace-spelling sentences, which are about two
   spellings of one document; and the `CHANGELOG` residual naming this leg, which is still accurate).
+  Two weaker sites are **seen and deliberately left**, each self-disclosing in its next clause
+  (`CHANGELOG.md`'s own P8 release note and the notes' phase summary both continue "kept as the exact
+  lexical string").
   Every count here carries the caveat this lineage carries: the corpus is 7 hand-authored XML fixtures
   plus mutations and this repo's hand-authored JSON fixtures and probes, **not** the FHIR R4
   published-examples corpus.
