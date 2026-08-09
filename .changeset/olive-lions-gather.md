@@ -50,9 +50,9 @@ lexical read applies to a JSON document that spelled `{"doNotPerform":"true"}`. 
 boolean is a JSON boolean, so that document is non-conformant either way. `negations` is monotone
 across the change: this read can only add the `do-not-perform` negation, never retire it.
 `SafetyReadout.doNotPerform` itself moves further than that, and the difference is measured rather
-than glossed: besides `undefined` becoming `true` or `false`, it moves `false` to `true` where a
-later value spells the negation an earlier JS `boolean` contradicts. That is the documented "a
-`true` anywhere wins" rule doing its job, and it is pinned.
+than glossed: besides `undefined` becoming `true` or `false`, it moves `false` to `true` where any
+value spells the negation a JS `boolean` elsewhere in the element contradicts. That is the
+documented "a `true` anywhere wins" rule doing its job, and it is pinned.
 
 Residuals stay open and are pinned by a test rather than implied, the two profile reads among them.
 `safeToSummarize` is unmoved in both directions. For a value that reads, that is right: `negations`

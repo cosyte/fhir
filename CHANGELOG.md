@@ -49,8 +49,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   monotone across the change: this read can only add the `do-not-perform` negation, never retire
   it.** `SafetyReadout.doNotPerform` itself moves further than that, and the difference is measured
   rather than glossed: besides `undefined` becoming `true` or `false`, it moves `false` to `true`
-  where a later value spells the negation an earlier JS `boolean` contradicts. That is the
-  documented "a `true` anywhere wins" rule doing its job, and it is pinned.
+  where any value spells the negation a JS `boolean` elsewhere in the element contradicts. That is
+  the documented "a `true` anywhere wins" rule doing its job, and it is pinned.
   **Residuals stay open and are pinned by `test/xml-lexical-boolean.test.ts` rather than implied**,
   the two profile reads and the two above among them. `safeToSummarize` is also unmoved in **both**
   directions: for a value that reads, that is right, because `negations` now carries the instruction

@@ -53,15 +53,18 @@ A SAFETY READ AND A CONVENIENCE READ CANNOT SHARE A WIDENING.** `primitiveBoolea
 interchangeable and the direction of harm is opposite. **Additivity was argued from the helper's
 export status; it is a property of its CONSUMERS.** Check every consumer for an
 `undefined`-means-inherit merge before widening anything. `snapshot.ts` `mergeElement` has eight such
-lines. **The split is left in the tree deliberately**, both helpers being package-private,
-single-consumer and documented at each site; the standing hazard is that **two near-identically-named
+lines. **The split is left in the tree deliberately**, both helpers being package-private, each
+read by exactly one module (`primitiveBoolean` from two call sites in `structure-definition.ts`,
+`primitiveBooleans` from one in `status.ts`) and documented at each site; the standing hazard is that **two near-identically-named
 readers of one datatype now accept different text, so if either is ever exported the split must be
 resolved rather than shipped.**
 
 **`negations` is monotone across the change** (a JS `boolean` `true` still yields `true`, so the
 negation can never be retired), **but `SafetyReadout.doNotPerform` moves further than `undefined` to
-a value**: it also moves `false` to `true` where a later value spells the negation an earlier JS
-`boolean` contradicts, which is the documented "a `true` anywhere wins" rule and is pinned at
+a value**: it also moves `false` to `true` where **any** value spells the negation a JS `boolean`
+**elsewhere in the element** contradicts (the ordering is not the point, and a draft that said
+*later* / *earlier* was falsified by `{"doNotPerform":["true",false]}`), which is the documented
+"a `true` anywhere wins" rule and is pinned at
 `test/xml-lexical-boolean.test.ts`. **Gate pass 2 refuted a sentence saying the read "can only fill
 in a value that was `undefined`" using this slice's own fixture: the third generation of one
 universal.** Say *adds a negation, never retires one*, which is the only form that measures true.
@@ -143,6 +146,15 @@ green in both states on purpose and are named**: seven lexical-space negative co
 profile-census pins, and the three residual pins. Non-vacuity was established by mutation, not
 asserted: a case/whitespace-insensitive `booleanOf` reds 3, dropping the `false` arm reds 1,
 accepting `"1"` reds 1.
+
+**The gate: `conformance-refuter` REFUTED -> REFUTED -> NOT REFUTED, cumulative 3** (`4b67787`,
+`1d9953d`, `27cb42c`; the first two were amended away). **Pass 1's finding was BEHAVIOURAL** (the
+`mustSupport` retirement above), which is why **ADR 0027 is NOT available to this slice** and was not
+invoked: its route requires that no pass refuted the code. The gate converged instead. **One commit
+after `27cb42c` applies pass 3's two advisories and is UNGRADED**, disclosed here, in its own message
+and in the PR: it deletes an over-specified *later* / *earlier* ordering from the `doNotPerform`
+transition sentence at three sites, and corrects "single-consumer" to name the call sites. Both are
+documentation, neither adds a guarantee.
 
 **Suite 64 files / 1,316 tests**, which is `#78`'s 1,294 plus this file's 22 exactly, so **no
 existing test moved**. **Corpus caveat, standing:** hand-authored XML fixtures plus mutations and
