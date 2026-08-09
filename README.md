@@ -422,7 +422,12 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `716186003` "no known allergy" is a _positive_ assertion whose read is root- and type-scoped, and
   disclosing a near miss at every root would report the miss where an exact hit is read by nothing.
   Like the boolean channel above, it raises no `ValidationIssue` of its own, so it cannot move
-  `valid` in either direction. **Empty on every conformant document read from JSON. In XML the
+  `valid` in either direction. **Empty on every conformant document read from JSON, bar one shape
+  admitted rather than claimed away**: a `CodeableConcept` may carry translation codings beside the
+  one a required binding's value set supplies, and R4 asks only that _one_ coding come from that set,
+  so a translation whose code near-misses a negation the document does not otherwise assert is
+  conformant under that reading and is disclosed. Over-disclosure is the fail-safe direction. **In
+  XML the
   whitespace half is a declared limit rather than a claim**: R4 derives `code` from `xs:token`,
   whose `whiteSpace=collapse` facet strips surrounding whitespace before validation, so
   `<status value=" not-done"/>` is schema-valid and a schema-validating consumer reads it as the

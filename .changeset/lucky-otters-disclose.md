@@ -49,7 +49,13 @@ Whitespace is R4's own four-character class rather than JavaScript's, so a no-br
 byte-order mark inside an otherwise conformant `code` is left alone. The channel raises no
 `ValidationIssue`, so `valid` does not move in either direction on any document.
 
-Empty on every conformant document read from JSON. In XML the whitespace half is a declared limit
+Empty on every conformant document read from JSON, bar one shape admitted rather than claimed away: a
+`CodeableConcept` may carry translation codings beside the one a required binding's value set
+supplies, and R4 asks only that one coding come from that set (terminologies.html), so a translation
+whose code near-misses a negation the document does not otherwise assert is conformant under that
+reading and is disclosed. Over-disclosure is the fail-safe direction.
+
+In XML the whitespace half is a further declared limit
 rather than a claim: R4 derives `code` from `xs:token` (fhir-base.xsd), whose `whiteSpace=collapse`
 facet strips surrounding whitespace before validation, so `<status value=" not-done"/>` is
 schema-valid and a schema-validating consumer reads it as the code. This reader is schema-free and

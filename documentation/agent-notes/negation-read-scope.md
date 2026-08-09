@@ -274,11 +274,42 @@ Minor, also corrected: the regex was quoted as `[^\s]+([\s][^\s]+)*` where R4 sp
 1's own fix** (naming the set WAS that fix), so the falsifiable clause was **deleted outright** from
 both `CHANGELOG.md` and the pending changeset instead.
 
+## Pass 2: NOT REFUTED, and the two minors it still found were both mine
+
+Graded the remedy diff only. All six pass-1 findings confirmed closed, the suppression invariant
+`suppressed(C at E) => C in negations` verified by brute force over 1,200 generated documents with
+**0 violations**, and the note's red-at-base figures reproduced to the test.
+
+Its two `INTRODUCED` minors, both corrected here and both the same shape as everything else in this
+arc: **an absolute claim.** *"Empty for every conformant document read from JSON"* shipped in five
+carriers while **the slice's own new test pinned a counterexample** - a `verificationStatus` carrying
+`confirmed` from the standard system beside a local `REFUTED`. That satisfies `terminologies.html`
+§4.1.5.1 (one coding SHALL come from the value set) and is non-conformant only under
+`datatypes.html`'s descriptive "each coding is a representation of the concept", which carries **no
+SHALL**. **The remedy used the permissive reading to justify the suppression and then asserted a
+claim that survives only under the restrictive one.** The sentence is now qualified in all five
+carriers; the guard was **not** grown, because over-disclosure is the fail-safe direction. The other
+minor was a stale count in this file, in a paragraph the remedy itself re-counted.
+
+**"FHIR `code` is case-sensitive" is imprecise and is deliberately left**: R4 says codes are case
+sensitive *unless the code system specifies otherwise*. It bites only for a `Coding` from a caller's
+own case-insensitive `CodeSystem`, and correcting it would push toward the coercion the direction
+forbids.
+
 ## 🔴 `PRE-EXISTING`, raised by the gate, filed not absorbed
 
 **The XML reader performs no XML 1.0 §3.3.3 attribute-value normalization.**
 `<status value="&#x9;not-done"/>` and a literal tab both reach the model as `"\tnot-done"`.
 Unchanged at base, unchanged here, and its own item.
+
+**The BOOLEAN channel carries the identical un-scoped claim this slice just retired for `code`.**
+`unreadableBooleans` says *"Empty for every conformant document, in either wire format"*
+(`src/safety/status.ts`, shipped in `dist/index.d.*`) and `README.md` says it *"cannot fire on a
+conformant document in either wire format"*. But `fhir-base.xsd` restricts `boolean-primitive` to
+`xs:boolean`, whose `whiteSpace=collapse` facet is applied **before** the pattern, so
+`<doNotPerform value=" true"/>` is schema-valid R4 XML and lands on `unreadableBooleans` under
+`safeToSummarize: false`. **Verbatim at `fa5bfd8`, so it cannot gate this slice**, and the direction
+is over-disclosure rather than a mis-read. Its own item; **do not fold it in.**
 
 ## 🛑 Measurement, and the shape of the count that was ALMOST published
 
@@ -317,7 +348,7 @@ stays, because it is what the word "near" means, and it is now pinned by a direc
 `isNearMissCode` instead of by a document. **A guard nothing checks is a guard that rots.**
 
 **Negative control is DEGENERATE here and is reported as such**: `@cosyte/hl7` provides **0 of the 13
-symbols** this file imports, so all 35 assertions fail at import for a reason that discriminates
+symbols** this file imports, so every assertion in it fails at import for a reason that discriminates
 nothing about behaviour. The red-at-base fraction and the mutations are the real evidence. Do not
 quote an hl7 control on this repo as though it graded anything.
 
