@@ -218,17 +218,18 @@ describe("what is not an unreadable boolean", () => {
     expect(safety.safeToSummarize).toBe(true);
   });
 
-  it("reports nothing for a doNotPerform on a resource type that has no such element", () => {
-    // The report follows the read's own type gate. `doNotPerform` is a MedicationRequest element;
-    // `readDoNotPerform` never looks at a Patient, so naming a location there would report a value
-    // no read declined.
+  it("reports a doNotPerform on a resource type that has no such element", () => {
+    // The report still follows the read exactly -- and the read no longer has a type gate, so
+    // neither does this. The value is written, this layer declined to read it, and that is what the
+    // channel is for. R4 defines no `doNotPerform` on Patient, so no conformant document reaches
+    // here; refusing to affirm over a non-conformant one is the fail-safe direction.
     const { resource } = parseResourceXml(
       `<Patient ${FHIR_NS}><doNotPerform value="Y"/></Patient>`,
     );
     const safety = readSafety(resource);
 
-    expect(safety.unreadableBooleans).toEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expect(safety.unreadableBooleans).toEqual(["Patient.doNotPerform"]);
+    expect(safety.safeToSummarize).toBe(false);
   });
 
   it("leaves a conformant JSON MedicationRequest untouched on every channel", () => {

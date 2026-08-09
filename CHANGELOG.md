@@ -6,6 +6,59 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `doNotPerform` was read only on a `MedicationRequest`, and only on the resource handed in, so
+  two `?!` modifier elements were never looked for at all (`FHIR-NEGATION-READ-IS-SCOPE-BLIND`).**
+  Measured at the base commit, on **plain conformant JSON**:
+  `{"resourceType":"ServiceRequest","doNotPerform":true}` and the same document as a
+  `CommunicationRequest` both returned `negations: []`, `doNotPerform: undefined`,
+  `safeToSummarize: true` and `assertSafeToSummarize` clean, while the identical `MedicationRequest`
+  returned `negations: ["do-not-perform"]`. R4 flags `doNotPerform` `?!` on each request resource
+  that defines it (`medicationrequest.html`, `servicerequest.html`, `communicationrequest.html`), and
+  a modifier element is the one class a consumer may never process as if it were absent. **An
+  instruction not to perform a service read as no instruction at all**, and the readout affirmed the
+  record was safe to summarise.
+  **This needed neither an XML round trip nor a value outside the datatype's lexical space**, which
+  is what separates it from the two boolean defects before it: it is conformant JSON, read wrong.
+  **The remedy is at the read, and the type gate is dropped rather than widened.** A longer list of
+  remembered types is the same mechanism, and the mechanism is the defect: a gate does not merely
+  fail to _read_ the types it omits, it never looks, so nothing is reported for them either. What
+  makes dropping it safe is the direction rather than a census of R4 - this read can only **add** the
+  `do-not-perform` negation, never retire a finding, never flip `valid`, and never turn a refusal
+  into an affirmation. It is the same asymmetry that already leaves the `entered-in-error` retraction
+  and the `refuted` verification status un-gated, and the opposite of `noKnownAllergy`, which stays
+  type-gated because it asserts something _positive_ about a patient and is deliberately pinned here.
+  **The second axis is the same blindness through depth, and it is fixed in the same walk.** The read
+  visited only the resource `readSafety` was handed, so a conformant `MedicationRequest` in a
+  `Bundle.entry` returned `negations: []` **while its unreadable twin at that same location was
+  already reported**: the library was strictly more honest about a value it could not read than about
+  one it could. The negation is now read at every resource root the walk visits, which is the window
+  that reports the unreadable half, so a `contained` or `Bundle.entry` resource reaches `negations`.
+  **The read and the refusal are now decided in one function**, at one window, so they cannot drift
+  into a state where a sender's instruction is neither surfaced nor reported.
+  **`safeToSummarize` does not move for a value that is read**, and that is the contract rather than
+  an omission: a refusal is for a value this library cannot read, and a value it _can_ read is
+  surfaced on `negations` with nothing lost. Where the value cannot be read the location is on
+  `unreadableBooleans` on the new types exactly as it already was on `MedicationRequest`.
+  **Scope, stated as what did not move.** `SafetyReadout.doNotPerform` stays the **root** read, like
+  `status` beside it, so a nested resource's instruction reaches `negations` and leaves that field
+  `undefined`; branch on `negations`. The array-wrapper report keeps its cardinality table, so a
+  `ServiceRequest.doNotPerform` arriving array-wrapped is read through the wrapper and surfaced while
+  the wrapper itself is not reported (reporting one is an `error`, and that stays where a cardinality
+  is known). The scope stops at resource roots, not backbone elements. `not-taken` and `not-done`
+  keep their own type gates, and `not-done` is also a `Procedure` / `MedicationAdministration` status
+  in R4, so the same blindness exists there and is a declared gap, not this change. Every one of
+  those is pinned in `test/negation-read-scope.test.ts` in **both** states.
+  **A count that was wrong in the same area is cut rather than corrected**: `readSafety`,
+  `SafetyReadout`, `SAFETY_RESOURCE_TYPES`, the validator's safety layer and the README all said
+  "the six safety resource types" over a set holding **seven**, and one of those reached
+  `dist/index.d.ts`. Derive it from the set; the number is written down nowhere now.
+  **Measured:** 15 of 23 new assertions red at the base commit in a real base worktree (23 of 23 at
+  head), with the 8 that pass in both states named above as deliberate pins, and non-vacuity proved
+  by seven mutations of the fix, each reddening at least one. The corpus is hand-authored JSON and
+  XML fixtures and hand-built probes, **not** the FHIR R4 published-examples corpus.
+
 ### Added
 
 - **`SafetyReadout.unreadableBooleans`, and with it the channel the readout had no slot for: a value
@@ -38,7 +91,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   unreadable negation is exactly that: `value="1"` and `value="0"` are indistinguishable to a reader
   with no licence to guess, so affirming over either one affirms over a coin flip. Both now refuse.
   **The census is wider than the fixed site and is reported rather than acted on.**
-  `MedicationRequest.doNotPerform` is the **only** `boolean` the safety spine reads out of a document
+  `doNotPerform` is the **only** `boolean` the safety spine reads out of a document
   (`retracted` and `noKnownAllergy` are derived from codes, not from a boolean element), so the
   channel is complete for its own layer and for nothing beyond it. Still unreported, each its own
   item: `ElementDefinition.mustSupport` and `slicing.ordered` (the convenience read `#79` measured as
@@ -46,7 +99,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `Quantity` magnitude's `+5` / `05` / `.5` / `5.`, and FHIRPath `numberOf`.
   **One asymmetry is deliberate: this raises no `ValidationIssue` of its own, so on the default path
   a `safeToSummarize: false` sits beside `valid: true`.** The reason is narrow and measured rather
-  than general: `MedicationRequest` has no built-in schema, so the validator is silent about this
+  than general: the request resources that define it have no built-in schema, so the validator is silent about this
   element's **datatype** unless a caller supplies one, and the readout has to hold either way. (The
   shape channels are not scoped that way: an array-wrapped or duplicated `doNotPerform` still draws
   `ARRAY_WRAPPED_SCALAR` / `DUPLICATE_PROPERTY` at this element with no schema at all.) The safety

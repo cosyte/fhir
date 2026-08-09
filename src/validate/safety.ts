@@ -10,7 +10,7 @@
  *    process it as if the modifier were absent. This library understands *no* modifier extensions yet
  *    ({@link ../safety/codes.js} `KNOWN_MODIFIER_EXTENSION_URLS` is empty), so **any** `modifierExtension`
  *    anywhere in the resource is an `error` (`UNHANDLED_MODIFIER_EXTENSION`). This check is universal,
- *    every resource type, not only the six safety types.
+ *    every resource type, not only the safety types.
  * 2. **A repeated property name → fail closed.** FHIR JSON requires unique property names
  *    (json.html §2.6.2: "Property names SHALL be unique") and expresses a repeating element as an array, so
  *    a name written twice violates a `SHALL` and leaves the element holding two values that RFC 8259
@@ -81,7 +81,7 @@ import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issue
 /**
  * Collect every safety finding for a resource: fail-closed modifier extensions and repeated property
  * names (both universal), the `entered-in-error` retraction note, and the named invariants (for the
- * six safety types).
+ * types `SAFETY_RESOURCE_TYPES` names).
  *
  * @param resource - The resource model.
  * @param rt - Its resolved `resourceType` (the caller has already established it is present).

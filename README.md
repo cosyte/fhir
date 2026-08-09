@@ -166,9 +166,11 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
 
 - **Never-droppable status/negation:** `readSafety` carries `status` / `clinicalStatus` /
   `verificationStatus` / `doNotPerform` / retraction and a classified `negations` list (`refuted`,
-  `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`, `entered-in-error`) across the six
-  safety resource types. `assertSafeToSummarize` **refuses** (throws) rather than flatten past an
-  unhandled modifier.
+  `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`, `entered-in-error`) across the
+  safety resource types `SAFETY_RESOURCE_TYPES` names. `doNotPerform` is not among the type-scoped
+  reads: an instruction **not** to perform is surfaced wherever a resource writes it, at any resource
+  root, so one inside a `Bundle` entry or `contained` reaches `negations` too.
+  `assertSafeToSummarize` **refuses** (throws) rather than flatten past an unhandled modifier.
 - **A safety verdict is never asserted over a value the document left ambiguous.** Each negation read
   runs over every coding on a `CodeableConcept` and every value written for the element it reads
   (`resourceType`, `status`, `verificationStatus`, `code`, `doNotPerform`), **including through an

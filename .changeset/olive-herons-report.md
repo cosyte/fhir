@@ -31,12 +31,12 @@ of them is `safeToSummarize`, `true → false`; no parse issue, no `ValidationIs
 measurement: `FhirSafetyError` names this sixth shape in its message, so the message string changes
 for every refusal it raises, including the five that already refused. Its `locations` are unchanged.
 
-`MedicationRequest.doNotPerform` is the only `boolean` the safety spine reads out of a document, so
+`doNotPerform` is the only `boolean` the safety spine reads out of a document, so
 the channel is complete for that layer and for nothing beyond it. `ElementDefinition.mustSupport`,
 `slicing.ordered`, `ElementDefinition.min`, a `Quantity` magnitude's `+5` / `05` / `.5` / `5.` and
 FHIRPath `numberOf` are the same class elsewhere, still silent, each pinned and each its own item.
 
 This raises no `ValidationIssue` of its own, for a narrow measured reason rather than a general one:
-`MedicationRequest` has no built-in schema, so the validator is silent about this element's DATATYPE
+the request resources that define it have no built-in schema, so the validator is silent about this element's DATATYPE
 unless a caller supplies one, and the readout has to hold either way. The safety layer knows the datatype
 unconditionally, which is why the report lives there.
