@@ -28,20 +28,28 @@ the text into a number that the writer then emits as one: authoring a value the 
 and laundering it across a format change. The model still holds the lexical string and nothing about
 re-emission changes.
 
-The text recognised is exactly R4's `positiveInt` lexical space, `[1-9][0-9]*` (datatypes.html), and
-nothing beside it. `"+1"`, `"01"`, `"1.0"`, `"1."`, `" 1"`, `"1 "`, `"1e2"`, `"-1"`, `"one"` and the
-empty string state no bound, exactly as before.
+The text recognised is exactly R4's `unsignedInt` lexical space, `[0]|([1-9][0-9]*)`
+(datatypes.html), which is the datatype `ElementDefinition.min` declares (elementdefinition.html),
+and nothing beside it. `"+1"`, `"01"`, `"1.0"`, `"1."`, `" 1"`, `"1 "`, `"1e2"`, `"-1"`, `"one"` and
+the empty string state no bound, exactly as before. R4's `positiveInt` is a different space
+(`+?[1-9][0-9]*`, a leading `+` admitted) and is not the one this read implements.
 
-A `min` of `0` is deliberately excluded, and that exclusion is what makes the widening safe. R4's
-`unsignedInt` space admits `0`, but a lower bound of `0` imposes no obligation, so every site that
-acts on one tests `min >= 1` and cannot tell `0` from absent. One site can: snapshot generation
-treats an absent differential `min` as inherit and a stated `0` as override, so taking `0` off XML
-would let a differential begin overwriting an inherited `1` and remove a `CARDINALITY_MIN` the base
-emitted. That is the retirement class the sibling `mustSupport` read was measured into and declined.
-Excluding `0` keeps the only transition this change can make from absent to a bound of 1 or more,
-never one bound to another and never absent to `0`. The cost is declared rather than hidden: an XML
-`<min value="0"/>` and an XML element with no `min` load identically, and the loaded model cannot
-tell a caller which the profile wrote.
+Snapshot generation is changed alongside it, and that change is what makes widening the read safe. A
+profile derives by constraining (profiling.html): its `min` may raise the inherited one and may not
+lower it, so a differential stating a smaller bound is an invalid profile rather than a relaxation to
+honour. The differential's `min` was overlaid verbatim, which silently removed a `CARDINALITY_MIN`
+the base element had earned and moved `valid` from `false` to `true`. It now takes the tighter of the
+inherited and the stated bound, so a newly-read `min` can only raise the snapshot's bound or leave it
+alone, whatever wire format spelled it. The malformed profile is not refused, since snapshot
+generation has no channel to report it on; the instance verdict is the fail-safe one.
+
+That closes a defect on the JSON path too, disclosed rather than absorbed quietly: a JSON
+`{"min": 1}` under an inherited `min` of `2` already removed that finding before this change. The
+direction is `valid: true` to `valid: false`.
+
+The mirror on `max` is deliberately not taken. A differential stating a larger `max` than it inherits
+still widens the upper bound, because no read feeding `max` moved here: FHIR spells `max` as a string
+in both formats, so it was read from XML already. It is characterized by a test rather than changed.
 
 A second consumer moves, disclosed rather than left to be found. A descendant `min` of 1 or more is
 what an `exists` slicing discriminator needs, and a discriminator with no expectation makes the whole
@@ -54,10 +62,12 @@ same lexical read applies to a non-conformant JSON document that spelled `{"min"
 spells `min` as a number, so that document is not conformant; the direction is lenient on the read
 and unchanged on the write.
 
-Still unread from XML and pinned: `ElementDefinition.mustSupport` and `ElementDefinition.slicing.ordered`, whose
-measured retirement stands and which the `0` argument above does not license, since `false` is not
-"no flag stated"; and FHIRPath's number reads, where an XML-sourced number still falls through to
-string ordering.
+Still unread from XML and pinned: `ElementDefinition.mustSupport` and
+`ElementDefinition.slicing.ordered`, whose measured retirement stands and which this change does not
+license. What makes a widened `min` safe is that its one finding-retiring consumer now takes the
+tighter of two bounds, and a boolean flag has no tighter-of-the-two, since `false` is not "no flag
+stated". FHIRPath's number reads are likewise unchanged, an XML-sourced number still falling through
+to string ordering.
 
 The numbers here come from hand-authored XML and JSON fixtures plus mutations and probes, not from
 the R4 published-examples corpus.

@@ -73,19 +73,25 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **The read is widened at the profile loader, never in the XML reader.** A schema-free reader
   cannot know that `value` spells an `unsignedInt` rather than a `code`, and coercing there would
   turn the text into a number the writer then emits as one, authoring a value the sender did not
-  spell and laundering it across a format change. The text recognised is exactly R4's `positiveInt`
-  lexical space, `[1-9][0-9]*` (datatypes.html): `"+1"`, `"01"`, `"1.0"`, `"1."`, `" 1"`, `"1 "`,
-  `"1e2"`, `"-1"`, `"one"` and the empty string state no bound and are unchanged.
-  **A `min` of `0` is deliberately excluded, and the reason is measured rather than argued.** R4's
-  `unsignedInt` space admits `0`, but a lower bound of `0` imposes no obligation, so every site that
-  acts on one tests `min >= 1` and cannot tell `0` from absent. One site can: snapshot generation
-  treats an absent differential `min` as _inherit_ and a stated `0` as _override_. Taking `0` off
-  XML would let a differential begin overwriting an inherited `1` and **retire** a `CARDINALITY_MIN`
-  the base emitted, which is the retirement class the sibling `mustSupport` read was measured into
-  and declined. Excluding it keeps the widening additive by construction: the only transition
-  `min` can make is from absent to a bound of 1 or more, never one bound to another and never absent
-  to `0`. The cost is declared: an XML `<min value="0"/>` and an XML element with no `min` load
-  identically, and the loaded model cannot tell a caller which the profile wrote.
+  spell and laundering it across a format change. The text recognised is exactly R4's `unsignedInt`
+  lexical space, `[0]|([1-9][0-9]*)` (datatypes.html), the datatype `ElementDefinition.min` declares
+  (elementdefinition.html): `"+1"`, `"01"`, `"1.0"`, `"1."`, `" 1"`, `"1 "`, `"1e2"`, `"-1"`,
+  `"one"` and the empty string state no bound and are unchanged. R4's `positiveInt` is a different
+  space (`+?[1-9][0-9]*`, a leading `+` admitted) and is not the one this read implements.
+  **Snapshot generation is changed alongside it, and that is what makes widening the read safe.** A
+  profile derives by constraining (profiling.html): its `min` may raise the inherited one and may
+  not lower it, so a differential stating a smaller bound is an invalid profile rather than a
+  relaxation to honour. The differential's `min` was overlaid verbatim, which silently removed a
+  `CARDINALITY_MIN` the base element had earned and moved `valid` from `false` to `true`. It now
+  takes the tighter of the inherited and the stated bound, so a newly-read `min` can only raise the
+  snapshot's bound or leave it alone, whatever wire format spelled it. The malformed profile is not
+  refused, snapshot generation having no channel to report it on; the instance verdict is the
+  fail-safe one.
+  **That closes a defect on the JSON path too, disclosed rather than absorbed quietly:** a JSON
+  `{"min": 1}` under an inherited `min` of `2` already removed that finding before this change. The
+  direction is `valid: true` to `valid: false`. **The mirror on `max` is deliberately not taken**: a
+  differential stating a larger `max` than it inherits still widens the upper bound, because no read
+  feeding `max` moved here. It is characterized by a test rather than changed.
   **A second consumer moves and is disclosed rather than left to be found.** A descendant `min` of 1
   or more is what an `exists` slicing discriminator needs, and a discriminator with no expectation
   makes the whole slicing unevaluable, so at the base commit an XML-sourced sliced profile came back
@@ -94,8 +100,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **One collateral, declared:** the model records no provenance, so the same lexical read applies to
   a non-conformant JSON document that spelled `{"min": "1"}`. Lenient on the read, unchanged on the
   write. **Still unread and pinned:** `ElementDefinition.mustSupport` and `slicing.ordered`, whose
-  measured retirement stands and which the `0` argument does not license, since `false` is not "no
-  flag stated"; and FHIRPath's number reads.
+  measured retirement stands and which this change does not license: what makes a widened `min` safe
+  is that its one finding-retiring consumer now takes the tighter of two bounds, and a boolean flag
+  has no tighter-of-the-two, since `false` is not "no flag stated". FHIRPath's number reads
+  likewise.
 
 - **Every negation but one was read only at the resource handed in, so a retracted or not-performed
   record inside a `Bundle` entry left the Bundle's `negations` empty

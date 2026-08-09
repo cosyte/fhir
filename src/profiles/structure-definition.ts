@@ -171,26 +171,24 @@ function parseMax(node: FhirNode | undefined): number | undefined {
 }
 
 /**
- * The lower bound a `min` written as lexical text states, or `undefined` when it states none this
- * loader may act on.
+ * The lower bound a `min` written as lexical text states, or `undefined` when it states none.
  *
  * FHIR XML carries every primitive as the text of its `value` attribute, so `<min value="1"/>`
  * reaches the model as the string `"1"` where FHIR JSON's `"min": 1` reaches it as a number. The
- * text recognised here is exactly R4's `positiveInt` lexical space, `[1-9][0-9]*` (datatypes.html) -
- * no sign, no leading zero, no surrounding whitespace, no decimal point. Nothing is coerced and
- * nothing is guessed: `"+1"`, `"01"`, `"1.0"`, `" 1"`, `"one"` and `""` state no bound.
+ * text recognised here is exactly R4's `unsignedInt` lexical space, `[0]|([1-9][0-9]*)`
+ * (datatypes.html), which is `min`'s own datatype (elementdefinition.html) - no sign, no leading
+ * zero, no surrounding whitespace, no decimal point, no exponent. Nothing is coerced and nothing is
+ * guessed: `"+1"`, `"01"`, `"1.0"`, `" 1"`, `"1e2"`, `"-1"`, `"one"` and `""` state no bound.
  *
- * **`0` is deliberately excluded, and the reason is measured rather than argued.** R4's `unsignedInt`
- * space also admits `0`, but a lower bound of `0` imposes no obligation, so every site that acts on
- * one tests `min >= 1` and cannot tell `0` from absent. One site can: the snapshot merge treats an
- * absent differential `min` as *inherit* and a stated `0` as *override*. Taking `0` off XML would
- * therefore let a differential begin overwriting an inherited `1` and **retire** a `CARDINALITY_MIN`
- * the base emitted, which is the retirement class the sibling `mustSupport` read was measured into
- * and declined. Reading `0` as "no bound stated" keeps this widening additive by construction: the
- * only transition it can make is `undefined` to a bound of 1 or more.
+ * **This read cannot lower a bound, and the guarantee lives at the merge rather than here.** A
+ * newly-read `min` reaches an instance verdict only through `mergeElement`
+ * ({@link ./snapshot.js}), which takes the tighter of the inherited and stated bounds, so a value
+ * this function newly returns can only raise the snapshot's bound or leave it alone. That is what
+ * makes widening the read additive: the retirement the sibling `mustSupport` read was measured into
+ * and declined is unreachable from here, for `0` and for every other value alike.
  */
 function lexicalMin(text: string): number | undefined {
-  if (!/^[1-9][0-9]*$/u.test(text)) return undefined;
+  if (!/^([0]|[1-9][0-9]*)$/u.test(text)) return undefined;
   return Number(text);
 }
 

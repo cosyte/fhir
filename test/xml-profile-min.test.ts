@@ -254,12 +254,16 @@ describe("a min stated in XML is a lower bound this library enforces", () => {
 });
 
 /**
- * The text recognised is exactly R4's `positiveInt` lexical space, `[1-9][0-9]*` (datatypes.html).
- * Nothing is coerced and nothing is guessed: this is the same exactness the boolean read applies to
- * `true` / `false`, one datatype over.
+ * The text recognised is exactly R4's `unsignedInt` lexical space, `[0]|([1-9][0-9]*)`
+ * (datatypes.html), which is the datatype `ElementDefinition.min` declares
+ * (elementdefinition.html). Nothing is coerced and nothing is guessed: this is the same exactness
+ * the boolean read applies to `true` / `false`, one datatype over. R4's `positiveInt` is a DIFFERENT
+ * space (`+?[1-9][0-9]*`, a leading `+` admitted) and is deliberately not the one cited: `min` is
+ * not a `positiveInt`, and `<min value="+1"/>` states no bound here.
  */
 describe("the lexical space read is R4's, and nothing beside it", () => {
   const stated: readonly [string, number][] = [
+    ["0", 0],
     ["1", 1],
     ["2", 2],
     ["10", 10],
@@ -308,15 +312,16 @@ describe("the lexical space read is R4's, and nothing beside it", () => {
 });
 
 /**
- * The widening is additive by construction, and `0` is where that is bought.
+ * The widening cannot lower a bound, and the guarantee is at the merge rather than at the read.
  *
- * A lower bound of `0` imposes no obligation, so every site that acts on one tests `min >= 1` and
- * cannot tell `0` from absent. One site can: `mergeElement` treats an absent differential `min` as
- * *inherit* and a stated `0` as *override*. Taking `0` off XML would let a differential begin
- * overwriting an inherited `1` and **retire** a `CARDINALITY_MIN` the base emitted, which is exactly
- * the retirement the sibling `mustSupport` read was measured into and declined.
+ * A profile derives by *constraining* (profiling.html): its `min` may raise the inherited one and
+ * may not lower it. `mergeElement` overlaid the differential's `min` verbatim, so a newly-read bound
+ * BELOW the inherited one silently retired a `CARDINALITY_MIN` the base element had earned and moved
+ * `valid` from `false` to `true`. That was reachable for **any** stated bound under the inherited
+ * one, not only for `0`, and it was reachable through JSON as well as XML. The merge now takes the
+ * tighter of the two, so a newly-read `min` can only raise the snapshot's bound or leave it alone.
  */
-describe("the widening can only add a bound, never lower one", () => {
+describe("a differential min can raise the inherited bound and can never lower it", () => {
   const base = {
     resourceType: "StructureDefinition",
     url: "http://example.org/StructureDefinition/base",
@@ -327,11 +332,11 @@ describe("the widening can only add a bound, never lower one", () => {
     snapshot: {
       element: [
         { id: "Observation", path: "Observation" },
-        { id: "Observation.subject", path: "Observation.subject", min: 1, max: "1" },
+        { id: "Observation.performer", path: "Observation.performer", min: 2, max: "*" },
       ],
     },
   };
-  const derived = {
+  const derived = (min?: unknown): unknown => ({
     resourceType: "StructureDefinition",
     url: "http://example.org/StructureDefinition/derived",
     name: "Derived",
@@ -342,31 +347,75 @@ describe("the widening can only add a bound, never lower one", () => {
     differential: {
       element: [
         { id: "Observation", path: "Observation" },
-        { id: "Observation.subject", path: "Observation.subject", min: 0, max: "1" },
+        {
+          id: "Observation.performer",
+          path: "Observation.performer",
+          ...(min === undefined ? {} : { min }),
+          max: "*",
+        },
       ],
     },
-  };
+  });
   const resolveBase = (url: string): StructureDefinition | undefined =>
     url === base.url ? load(json(base)) : undefined;
+  const mergedMin = (definition: StructureDefinition): number | undefined =>
+    generateSnapshot(definition, resolveBase).find((el) => el.path === "Observation.performer")
+      ?.min;
+  /** An `Observation` with ONE performer: conformant under `min 1`, not under the inherited `min 2`. */
+  const onePerformer = (): FhirComplex =>
+    json({
+      resourceType: "Observation",
+      status: "final",
+      code: { coding: [{ system: "http://loinc.org", code: "1234-5" }] },
+      performer: [{ reference: "Practitioner/1" }],
+    });
+  const cardinalityMin = (definition: StructureDefinition): string[] =>
+    collectProfileIssues(onePerformer(), definition, { resolve: resolveBase })
+      .filter((issue) => issue.code === "CARDINALITY_MIN")
+      .map((issue) => `${issue.severity}:${issue.code} at ${issue.expression}`);
 
-  it("reads a min of 0 as no bound stated, so the snapshot merge keeps the inherited bound", () => {
-    const { fromXml } = bothSpellings(derived);
+  it("keeps the inherited bound when an XML differential states a smaller one", () => {
+    const { fromXml } = bothSpellings(derived(1));
 
-    expect(fromXml.differential?.[1]?.min).toBeUndefined();
-    expect(
-      generateSnapshot(fromXml, resolveBase).find((el) => el.path === "Observation.subject")?.min,
-    ).toBe(1);
+    expect(fromXml.differential?.[1]?.min).toBe(1);
+    expect(mergedMin(fromXml)).toBe(2);
+    expect(cardinalityMin(fromXml)).toEqual(["error:CARDINALITY_MIN at Observation.performer"]);
   });
 
-  it("leaves the JSON path's own handling of a stated 0 exactly where it was", () => {
-    // A both-states pin: this holds on the base tree too, and it is here to prove the widening did
-    // NOT reach the JSON route. If it ever reads 1 here, the fix has changed the JSON path.
-    const { fromJson } = bothSpellings(derived);
+  it("keeps the inherited bound when a JSON differential states a smaller one", () => {
+    // The same guarantee on the reference path, and it is a change there: before the merge took the
+    // tighter of the two, a JSON `{"min": 1}` under an inherited `2` already retired this finding.
+    // Named rather than buried, because it is a `valid: true -> false` move on JSON input.
+    expect(mergedMin(load(json(derived(1))))).toBe(2);
+    expect(cardinalityMin(load(json(derived(1))))).toEqual([
+      "error:CARDINALITY_MIN at Observation.performer",
+    ]);
+  });
 
+  it("keeps the inherited bound for a min of 0, whichever format spelled it", () => {
+    const { fromJson, fromXml } = bothSpellings(derived(0));
+
+    expect(fromXml.differential?.[1]?.min).toBe(0);
     expect(fromJson.differential?.[1]?.min).toBe(0);
-    expect(
-      generateSnapshot(fromJson, resolveBase).find((el) => el.path === "Observation.subject")?.min,
-    ).toBe(0);
+    expect(mergedMin(fromXml)).toBe(2);
+    expect(mergedMin(fromJson)).toBe(2);
+  });
+
+  it("still takes a differential bound that tightens, which is the whole point of a profile", () => {
+    // The other polarity, so the guard cannot pass by refusing every differential `min`.
+    const { fromJson, fromXml } = bothSpellings(derived(3));
+
+    expect(mergedMin(fromXml)).toBe(3);
+    expect(mergedMin(fromJson)).toBe(3);
+  });
+
+  it("leaves an element the differential states no min for exactly as the base had it", () => {
+    // Both-states control: green on the base tree too. It is what makes the rows above a delta of
+    // the newly-read bound rather than of the merge running at all.
+    const { fromXml } = bothSpellings(derived());
+
+    expect(mergedMin(fromXml)).toBe(2);
+    expect(cardinalityMin(fromXml)).toEqual(["error:CARDINALITY_MIN at Observation.performer"]);
   });
 });
 
@@ -374,14 +423,15 @@ describe("the widening can only add a bound, never lower one", () => {
  * Characterization tests over what this change does NOT close, pinned so they cannot move in
  * silence. Closing any of them MUST red the test beside it, in the same change.
  *
- * The first two hold on the base tree as well - they are `PRE-EXISTING` residuals, recorded here
- * because they sit inside the read this change touches, and they are NOT evidence for it.
+ * These hold on the base tree as well - they are `PRE-EXISTING` residuals, recorded here because
+ * they sit inside or beside the read this change touches, and they are NOT evidence for it.
  */
 describe("declared residuals of the lexical min read, pinned", () => {
   it("still reads no mustSupport and no slicing.ordered off an XML definition", () => {
     // Both-states pin. Deliberately unchanged: they were measured into a retirement of a
-    // `MUST_SUPPORT_ABSENT`, and the `min` remedy does not license them - the argument that buys
-    // `min` is the `0` exclusion above, which has no counterpart on a boolean flag.
+    // `MUST_SUPPORT_ABSENT`, and the `min` remedy does not license them. What makes a widened `min`
+    // safe is that its only consumer that can retire a finding now takes the tighter bound, and a
+    // boolean flag has no tighter-of-the-two: `false` is not "no flag stated".
     const definition = load(
       xml(
         `<StructureDefinition ${FHIR_NS}><url value="http://example.org/StructureDefinition/residual"/>` +
@@ -399,21 +449,48 @@ describe("declared residuals of the lexical min read, pinned", () => {
     expect(definition.differential?.[0]?.min).toBe(1);
   });
 
-  it("still reads a min of 0 as absent, so the loaded model does not say the profile stated it", () => {
-    // The declared cost of the additivity argument above, stated as its own residual rather than
-    // buried in it: an XML `<min value="0"/>` and an XML element with no `min` at all load
-    // identically, and the public model cannot tell a caller which one the profile wrote. That was
-    // true on the base tree too. It is the fail-safe of the two readings, not a free one.
-    const withZero = load(
-      xml(
-        `<StructureDefinition ${FHIR_NS}><url value="http://example.org/StructureDefinition/zero"/>` +
-          '<type value="Observation"/><kind value="resource"/><differential><element>' +
-          '<path value="Observation.subject"/><min value="0"/><max value="1"/>' +
-          "</element></differential></StructureDefinition>",
-      ),
+  it("still overlays a differential max verbatim, so an upper bound CAN be relaxed", () => {
+    // Both-states pin over the mirror of the defect this slice fixed, deliberately NOT taken here.
+    // `mergeElement` gives `max` no tighter-of-the-two treatment, so a differential stating a larger
+    // `max` than it inherits widens the bound and retires a `CARDINALITY_MAX`. It is left standing
+    // because no read feeding `max` moved in this change: FHIR spells `max` as a string in both
+    // formats, so `parseMax` read it from XML at the base commit too. Tightening it is a change to
+    // the JSON path with no defect in this slice forcing it, which makes it its own decision.
+    const base = json({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/maxbase",
+      type: "Observation",
+      kind: "resource",
+      derivation: "specialization",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          { id: "Observation.performer", path: "Observation.performer", min: 0, max: "1" },
+        ],
+      },
+    });
+    const derived = load(
+      json({
+        resourceType: "StructureDefinition",
+        url: "http://example.org/StructureDefinition/maxderived",
+        type: "Observation",
+        kind: "resource",
+        derivation: "constraint",
+        baseDefinition: "http://example.org/StructureDefinition/maxbase",
+        differential: {
+          element: [
+            { id: "Observation", path: "Observation" },
+            { id: "Observation.performer", path: "Observation.performer", max: "5" },
+          ],
+        },
+      }),
     );
 
-    expect(withZero.differential?.[0]?.min).toBeUndefined();
+    expect(
+      generateSnapshot(derived, (url) =>
+        url === "http://example.org/StructureDefinition/maxbase" ? load(base) : undefined,
+      ).find((el) => el.path === "Observation.performer")?.max,
+    ).toBe(5);
   });
 
   it("reads a min a non-conformant JSON document spelled as a string, having no provenance to refuse it", () => {

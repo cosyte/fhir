@@ -60,7 +60,17 @@ export class FhirProfileError extends Error {
 /** Overlay a differential element's stated constraints onto a base element (id/path preserved). */
 function mergeElement(base: ElementDefinition, diff: ElementDefinition): ElementDefinition {
   const merged: { -readonly [K in keyof ElementDefinition]: ElementDefinition[K] } = { ...base };
-  if (diff.min !== undefined) merged.min = diff.min;
+  // `min` takes the TIGHTER of the two, never simply the differential's. A profile derives by
+  // *constraining* (profiling.html): its `min` may raise the inherited one and may not lower it, so
+  // a differential stating a smaller bound is an invalid profile rather than a relaxation to honour.
+  // Overlaying it verbatim retires a `CARDINALITY_MIN` the base element earned, silently and with
+  // `valid` moving `false` to `true`, which is the one direction this library refuses to move in.
+  // Taking the maximum is lenient on the malformed profile (it is not refused) and fail-safe on the
+  // instance. It is also what keeps every widening of the `min` READ additive: a newly-read bound
+  // can only raise what the snapshot already carried, whatever wire format spelled it.
+  // `max` is deliberately NOT given the mirror treatment here: no read feeding it moved, so
+  // tightening it would be a separate change to the JSON path. It is characterized by a test.
+  if (diff.min !== undefined) merged.min = Math.max(base.min ?? 0, diff.min);
   if (diff.max !== undefined) merged.max = diff.max;
   if (diff.mustSupport !== undefined) merged.mustSupport = diff.mustSupport;
   if (diff.slicing !== undefined) merged.slicing = diff.slicing;

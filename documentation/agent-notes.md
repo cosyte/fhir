@@ -3190,6 +3190,6 @@ points here. See also
 ## The XML profile `min`, read (2026-08-09)
 
 [`agent-notes/xml-profile-min.md`](agent-notes/xml-profile-min.md). Cursor: an XML-sourced profile
-declared required elements and this library enforced **none** (`max` read fine). Fixed at
-`parseMin`, not the reader. **🛑 `0` IS EXCLUDED**: `mergeElement` reads absent as _inherit_, so
-taking it RETIRES a `CARDINALITY_MIN`.
+declared required elements and this library enforced **none**. Fixed at `parseMin`, not the reader.
+**🛑 SAFE ONLY BECAUSE `mergeElement` NOW TAKES THE TIGHTER `min`**: it overlaid verbatim, retiring
+a `CARDINALITY_MIN`.

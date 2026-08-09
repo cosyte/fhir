@@ -39,36 +39,75 @@ a value the sender did not spell and laundering it across a format change**, the
 and `#78`/`#79`/`#80` each declined again. Same level as `#79`'s `booleanOf` and `#78`'s
 `decimalValue`.
 
-The text recognised is exactly R4's `positiveInt` lexical space, `[1-9][0-9]*` (datatypes.html). No
+The text recognised is exactly R4's `unsignedInt` lexical space, `[0]|([1-9][0-9]*)`
+(datatypes.html), which is the datatype `ElementDefinition.min` declares (elementdefinition.html). No
 sign, no leading zero, no whitespace, no decimal point, no exponent: `"+1"`, `"01"`, `"1.0"`, `"1."`,
 `" 1"`, `"1 "`, `"1e2"`, `"-1"`, `"one"` and `""` state no bound.
 
-## 🛑 THE `0` EXCLUSION IS THE WHOLE ADDITIVITY ARGUMENT. DO NOT "FINISH THE JOB" BY TAKING IT.
+**🩺 `positiveInt` IS A DIFFERENT SPACE AND AN EARLIER DRAFT CITED IT WRONGLY.** R4 publishes
+`positiveInt` as `+?[1-9][0-9]*`, a **leading `+` admitted**; gate pass 1 checked it against
+`datatypes.html` and caught the citation. `min` is an `unsignedInt`, `+1` states no bound, and the
+sentence now names the datatype the element actually declares. (`src/validate/primitives.ts` carries
+the same `positiveInt` drift in `PATTERNS`, `PRE-EXISTING` and identical at `72cdee2`; left alone,
+because no read in this slice reaches it.)
 
-R4's `unsignedInt` space also admits `0`, and reading it looks like the obvious completion. It is the
-`#79` retirement, one datatype over, and it was **measured** rather than argued:
+## 🛑 THE ADDITIVITY GUARANTEE IS AT THE MERGE, NOT AT THE READ. A GATE PASS PAID FOR THAT.
 
+**The first attempt (`0dda6d0`) put it at the read** and excluded `0` from the lexical space,
+arguing that a bound of `0` is the only value `mergeElement` could tell from absent. **Gate pass 1
+REFUTED that on a measured behavioural counterexample, and it was right.** `mergeElement` is an
+unconditional override, not a tighten:
+
+```ts
+if (diff.min !== undefined) merged.min = diff.min;   // no comparison against base.min
 ```
-base StructureDefinition (JSON):  Observation.subject min 1
-derived differential:             Observation.subject min 0
 
-  JSON differential -> generateSnapshot merges min = 0     (the obligation is gone)
-  XML  differential -> generateSnapshot merges min = 1     (inherited, at 72cdee2 AND at head)
+so the retirement is reachable for **any** stated bound below the inherited one, not only for `0`.
+Measured in real worktrees, base snapshot `Observation.performer 2..*`, differential stating `min 1`,
+instance carrying **one** performer:
+
+| differential | `72cdee2` | `0dda6d0` (refuted) | remedy |
+|---|---|---|---|
+| XML `<min value="1"/>` | min 2, `CARDINALITY_MIN` | **min 1, no finding** | min 2, `CARDINALITY_MIN` |
+| JSON `{"min":"1"}` | min 2, `CARDINALITY_MIN` | **min 1, no finding** | min 2, `CARDINALITY_MIN` |
+| JSON `{"min":1}` | min 1, no finding | min 1, no finding | min 2, `CARDINALITY_MIN` |
+| XML, no `min` (control) | min 2, `CARDINALITY_MIN` | same | same |
+| XML `<min value="0"/>` (control) | min 2, `CARDINALITY_MIN` | same | same |
+
+**Row 2 is what made it a blocker rather than a claim defect.** `{"min":"1"}` is a JSON document, so
+that row is an in-format regression on the reference path: base called it non-conformant, the refuted
+head called it conformant. The `0` exclusion was not wrong, it was **insufficient**, and six
+artifacts (one of them the tarball's `CHANGELOG.md`) asserted the class was impossible by
+construction.
+
+**The remedy is the predicate, not the claim.** `mergeElement` now takes the **tighter** of the
+inherited and the stated bound:
+
+```ts
+if (diff.min !== undefined) merged.min = Math.max(base.min ?? 0, diff.min);
 ```
 
-A lower bound of `0` imposes no obligation, so **every site that acts on one tests `min >= 1` and
-cannot tell `0` from absent** - `validate-profile.ts` twice (element and slice), `slicing.ts` once.
-**One site can tell them apart:** `mergeElement` in `snapshot.ts` treats an absent differential `min`
-as *inherit* and a stated `0` as *override*. Taking `0` off XML would therefore let a differential
-begin overwriting an inherited `1` and **retire a `CARDINALITY_MIN` the base emitted** - the exact
-class `#79` drafted, measured and declined for `mustSupport`.
+**Grounded, not preferred:** a profile derives by *constraining* (profiling.html), so its `min` may
+raise the inherited one and may not lower it. A differential stating a smaller bound is an **invalid
+profile**, not a relaxation to honour. Taking the maximum is lenient on the malformed profile (it is
+not refused, and `generateSnapshot` has no diagnostics channel to report it on) and fail-safe on the
+instance.
 
-Excluding `0` keeps the widening **additive by construction**: the only transition `el.min` can make
-is `undefined -> n, n >= 1`. Never `n -> m`, never `undefined -> 0`.
+With the guarantee at the merge, **excluding `0` from the read bought nothing and was dropped**: the
+read is now exactly R4's `unsignedInt` space, `[0]|([1-9][0-9]*)`, which is `min`'s own datatype, and
+`<min value="0"/>` loads faithfully as `0`. One mechanism, one place.
 
-**The cost is declared, not hidden:** an XML `<min value="0"/>` and an XML element with no `min` load
-identically, so the public model cannot tell a caller which the profile wrote. That was true at base
-too, and it is pinned in `test/xml-profile-min.test.ts`.
+**▶ Row 3 is a `PRE-EXISTING` defect this remedy closes as a consequence, and that is disclosed
+rather than absorbed quietly.** A JSON `{"min": 1}` under an inherited `2` already retired that
+`CARDINALITY_MIN` at `72cdee2`. It could not be left standing: the read cannot know the inherited
+bound, so the only place to fix the `INTRODUCED` blocker is the merge, and fixing it there fixes both.
+The direction is `valid: true -> false`, the fail-safe one.
+
+**▶ 🛑 `max` IS THE MIRROR AND IS DELIBERATELY NOT TAKEN.** `mergeElement` still overlays `max`
+verbatim, so a differential stating a **larger** `max` widens an upper bound and retires a
+`CARDINALITY_MAX`. It is left standing because **no read feeding it moved**: FHIR spells `max` as a
+string in both formats, so `parseMax` read it from XML at base too, and tightening it would be a
+change to the JSON path with no defect in this slice forcing it. Pinned by a characterization test.
 
 ## The consumer census, done before the widening rather than after
 
@@ -76,13 +115,18 @@ Six sites read `ElementDefinition.min`; `define-profile.ts` is the authoring pat
 caller's JS number, never a node) and `validate/validate.ts:277` reads the built-in Phase-2 schema,
 a different type, so neither is a consumer of this read.
 
-| site | what it does with `min` | can `0` differ from absent? |
+**🛑 THE QUESTION THE FIRST CENSUS ASKED WAS THE WRONG ONE**, and it is the standing "additivity is a
+property of the CONSUMERS" trap hit at the one consumer that matters. It asked *can `0` differ from
+absent?*; what governs additivity is *can any newly-read value differ from absent in a
+finding-retiring direction?*
+
+| site | what it does with `min` | can a newly-read value retire a finding? |
 |---|---|---|
-| `validate-profile.ts:150` | element `CARDINALITY_MIN` | no (`min >= 1`) |
-| `validate-profile.ts:222` | slice `CARDINALITY_MIN` | no (`min >= 1`) |
-| `slicing.ts:108` | builds an `exists` expectation | no (`min >= 1`) |
+| `validate-profile.ts:150` | element `CARDINALITY_MIN` | no (`min >= 1`, and a larger bound only adds) |
+| `validate-profile.ts:222` | slice `CARDINALITY_MIN` | no (same) |
+| `slicing.ts:108` | builds an `exists` expectation | no (`min >= 1`; see below) |
 | `slicing.ts:117` | copies it onto `SliceDefinition` | no (only 222 reads it) |
-| `snapshot.ts:63` | `mergeElement` overlay | **YES** - inherit vs override |
+| `snapshot.ts:63` | `mergeElement` overlay | **YES at `0dda6d0`, for ANY bound below the inherited one. Guarded in the remedy.** |
 | `structure-definition.ts:325` | writes it onto the model | it is the write |
 
 **`slicing.ts:108` is the second consumer and it is worth knowing about.** `discriminatorHolds`
@@ -95,37 +139,50 @@ fail-safe marker whose whole meaning is *"I could not evaluate this"*.
 
 ## Measurements
 
-- **Red-at-base 13 of 26**, in a real `72cdee2` worktree (`git worktree add`, this package's own
-  `node_modules` symlinked). **0 of the 13 are symbol-only reds**: the change adds no export, so
-  every symbol the new file imports already resolves at base. One of the 13 (`still reads no
+All of these are **post-remedy**, at the head this slice ships.
+
+- **Red-at-base 18 of 30**, in a real `72cdee2` worktree (`git worktree add`, this package's own
+  `node_modules` symlinked). **0 of the 18 are symbol-only reds**: the change adds no export, so
+  every symbol the new file imports already resolves at base. One of the 18 (`still reads no
   mustSupport and no slicing.ordered off an XML definition`) is red **only** through its co-located
   head assertion that `min` reads 1; its two residual assertions are green in both states. So the
-  behavioural figure for the closure is **12**.
-- **The 13 green-at-base tests are pins, named** so a reader need not re-derive which cleared
+  behavioural figure for the closure is **17**. The denominator is the tests this slice adds or
+  rewrites: 29 in `test/xml-profile-min.test.ts` plus the one rewritten in
+  `test/xml-lexical-boolean.test.ts`.
+- **The 12 green-at-base tests are pins, named** so a reader need not re-derive which cleared
   nothing: the ten `reads %j as no bound at all` refusal cases (`+1`, `01`, `1.0`, `1.`, ` 1`, `1 `,
-  `one`, ``, `-1`, `1e2`), `reads a min of 0 as no bound stated, so the snapshot merge keeps the
-  inherited bound`, `leaves the JSON path's own handling of a stated 0 exactly where it was`, and
-  `still reads a min of 0 as absent, so the loaded model does not say the profile stated it`.
-- **Non-vacuity by mutation, seven mutations, each reddening a NAMED list** (never a count):
-  1. accept `0` too (the full `unsignedInt` space) -> `reads a min of 0 as no bound stated…`,
-     `still reads a min of 0 as absent…`
-  2. drop the lexical guard entirely -> the nine refusal cases `+1` `01` `1.0` `1.` ` 1` `1 ` ``
-     `-1` `1e2`, plus both `0` pins
-  3. tolerate surrounding whitespace -> ` 1`, `1 `
-  4. tolerate leading zeros -> `01`
-  5. `Number.parseInt` instead of an exact match -> `+1` `01` `1.0` `1.` ` 1` `1 ` `1e2`
-  6. remove the lexical route (revert the fix) -> all 13 behavioural reds
-  7. route the JSON number through the lexical read too -> `leaves the JSON path's own handling of a
-     stated 0 exactly where it was`
-  **`"one"` is reddened by none of the seven** and is retained as documentation of the boundary, not
-  as evidence. Said here rather than folded into a total.
+  `one`, ``, `-1`, `1e2`), `leaves an element the differential states no min for exactly as the base
+  had it` (the merge control), and `still overlays a differential max verbatim, so an upper bound CAN
+  be relaxed` (the `max` residual).
+- **Non-vacuity by mutation, eight mutations, each reddening a NAMED list** (never a count):
+  1. drop the merge guard (overlay verbatim) -> `keeps the inherited bound when an XML differential
+     states a smaller one`, `…when a JSON differential states a smaller one`, `keeps the inherited
+     bound for a min of 0, whichever format spelled it`
+  2. over-guard the merge (always inherit when the base states one) -> `still takes a differential
+     bound that tightens, which is the whole point of a profile`
+  3. drop the lexical guard entirely -> the nine refusal cases `+1` `01` `1.0` `1.` ` 1` `1 ` ``
+     `-1` `1e2`
+  4. tolerate surrounding whitespace -> ` 1`, `1 `
+  5. tolerate leading zeros -> `01`
+  6. use `positiveInt`'s real space, a leading `+` admitted -> `+1`
+  7. `Number.parseInt` instead of an exact match -> `+1` `01` `1.0` `1.` ` 1` `1 ` `-1` `1e2`
+  8. remove the lexical route (revert the read fix) -> all 17 behavioural reds
+  **Mutations 1 and 2 are the two polarities of the merge guard**, so it cannot pass by refusing
+  every differential `min`. **`"one"` is reddened by none of the eight** and is retained as
+  documentation of the boundary, not as evidence. Said here rather than folded into a total.
 - **Exactly one existing test moved** across the whole suite: the characterization test that pinned
   this gap, which the repo's own rule requires a closure to red. It is rewritten in place rather than
-  deleted, so the closure is visible from where the gap was declared.
+  deleted, so the closure is visible from where the gap was declared. Suite **70 files / 1493 tests**
+  from base's **69 / 1464**, and 1464 + 29 = 1493, so nothing else moved.
 - **The `@cosyte/hl7` negative control is DEGENERATE and is reported as such rather than as a zero.**
   `hl7` is not a dependency of this package and has no `StructureDefinition` loader, so 0 of the
-  symbols under measurement exist there and the control cannot fail. The control that can fail is
-  mutation 7 above, which holds the JSON route down from inside.
+  symbols under measurement exist there and the control cannot fail. The controls that CAN fail are
+  the two merge-guard polarities above and the two both-states pins named in the list.
+- **The committed read differential (`pnpm differential:read`) moves 0 of 1,195 readings and 0 of 27
+  JSON fixtures, and that zero is VACUOUS BY CONSTRUCTION for this class** rather than evidence:
+  checked by hand, **no corpus fixture carries a `min` at all**, and the reading runs no profile
+  validation (profiles are caller-supplied and none is supplied). What the zero does say is that the
+  reader, the writers and the safety spine are untouched, which is worth having and is all it says.
 - **Corpus caveat on every number here:** hand-authored XML and JSON fixtures, plus mutations and
   probes. **Not the R4 published-examples corpus.** Nothing here is corpus-wide.
 
@@ -133,11 +190,13 @@ fail-safe marker whose whole meaning is *"I could not evaluate this"*.
 
 Closing any of them MUST red its test, in the same change.
 
-1. **An XML `<min value="0"/>` still reads as absent** - the declared cost of the additivity argument
-   above.
-2. **`ElementDefinition.mustSupport` and `slicing.ordered` are still unread from XML.** The argument
-   that buys `min` is the `0` exclusion, which has **no counterpart on a boolean flag**: `false` is
-   not "no flag stated". `#79`'s measured retirement stands.
+1. **`mergeElement` still overlays a differential `max` verbatim**, so an upper bound can be widened
+   and a `CARDINALITY_MAX` retired. The mirror of what this slice fixed, left standing because no
+   read feeding `max` moved. Both-states pin.
+2. **`ElementDefinition.mustSupport` and `slicing.ordered` are still unread from XML.** What makes a
+   widened `min` safe is that its one finding-retiring consumer now takes the tighter of two bounds;
+   a boolean flag has **no tighter-of-the-two**, since `false` is not "no flag stated". `#79`'s
+   measured retirement stands.
 3. **A non-conformant JSON `{"min": "1"}` is now read**, because the model records no provenance and
    the lexical read cannot be scoped to XML. Lenient on the read, unchanged on the write - the string
    is still what the writer hands back. The same collateral `#79` declared for `booleanOf`.
