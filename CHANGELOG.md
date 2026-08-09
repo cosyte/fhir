@@ -8,6 +8,50 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A `resourceType` with no string in it was deleted by the XML writer, which then named the element
+  `Resource` (`FHIR-XML-WRITE-RESIDUALS`).** FHIR XML has no `resourceType` element: the type IS the
+  tag (xml.html). So the writer skips that property at every element it walks and takes the tag from
+  the property's string value, and where there was no string to take the root fell back to
+  `Resource`. Measured at the base commit,
+  `{"resourceType":{"modifierExtension":[{"url":"http://example.org/x"}]},"status":"final"}` reads
+  `RESOURCE_TYPE_UNKNOWN` at **error** severity with `valid: false`, and `safeToSummarize: false` for
+  the unhandled modifier extension the type gate carries. It came back as
+  `<Resource xmlns="http://hl7.org/fhir"><status value="final"/></Resource>`, which re-reads with an
+  empty issue list, `valid` and `safeToSummarize` both `false → true`, and
+  `unhandledModifierExtensions: []`. The property is gone from the output, the modifier extension went
+  with it, and the element claims a type nobody wrote. `serializeResourceXml` now raises a new
+  `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE`, value-free and carrying bounded locations, as
+  a whole-model pre-pass raised **last**, so no model that already reported one of the five refusals
+  above it moves onto this code; the array-wrapped and `null` spellings of an untaggable type each
+  keep their own. **Neither repair was available**: writing `<Resource>` is what laundered, and it
+  authors a type gate, which is what every type-scoped safety read runs behind; coercing the value to
+  a string authors a different type out of content the sender wrote at another shape.
+  **The predicate reads the FIRST `resourceType` an element wrote**, because that is the one the
+  writer names the tag from (`resourceTypeOf` is a `find`, and `typeOf` is first-wins as well). A
+  draft asked whether **any** value written there is a string, and where a non-string one came first
+  and a string one second the writer still read no type, still deleted both and still named the
+  element `Resource` -- the defect, unrefused. Pinned in both directions.
+  **Two shapes are deliberately left, and each is the line rather than an oversight.** An element that
+  wrote **no** `resourceType` is untouched: `serializeResourceXml` accepts any complex and names a
+  typeless one `Resource` by documented fallback, and nothing is deleted there. And an element whose
+  **first** one IS a string keeps its tag, so this defect's substitution never happens; the drop that
+  does happen there is the repeated-property-name one, and it arrives from XML -- the XML reader has
+  no `duplicates` mechanism and pushes the type synthesized from the tag first, so
+  `<Patient xmlns="http://hl7.org/fhir"><resourceType><a value="1"/></resourceType></Patient>` reads
+  as two `resourceType` properties in one element with `valid: true` and `safeToSummarize: true`.
+  **The bound this holds is structural, not a verdict**: at the root it costs a round trip only for a
+  model already reported `valid: false`, but deeper no layer checks a nested element's type, and a
+  document read from XML reaches it. What is withdrawn at every refused location is a **deletion**
+  rather than a round trip, by construction: the writer's skip is unconditional on the name, so at
+  each of them it dropped a property the sender wrote and emitted no element for it, with no
+  diagnostic at either end. `serializeResource` emits a non-string `resourceType` through its ordinary
+  path, so this refusal does not reach it and that route stays open, byte-identical on every shape
+  pinned. **Not closed by it, and named rather than implied:** a JSON decimal still comes back from
+  XML as a string, and `Observation.value[x]` is still outside the array-wrapper window.
+- **A false universal was cut from the write-path refusals' own module comment.** It said no refusal
+  there _"changes a document that reads clean"_, which was never true: `breaksTag` names a document
+  that reads with zero issues and is refused, and the new refusal above names another. The two clauses
+  beside it -- that no refusal recognises anything new or invents a value -- are true and are kept.
 - **A member a repeated property name shadowed was dropped by BOTH writers, so a retraction left the
   document across one round trip (`FHIR-XML-WRITE-RESIDUALS`).** The reader keeps the shadowed member
   (`FhirComplex.duplicates`), `validateResource` raises an error-severity `DUPLICATE_PROPERTY` over it
