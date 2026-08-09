@@ -662,9 +662,9 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  * Bundle-`entry` resource is covered), which is `arrayWrappedScalars`' window and is **the same
  * window the negation read uses**: the two are decided together, in one pass, so neither can cover a
  * document the other does not.
- * It is **not** a report of every unreadable value in a document: the profile booleans, the
- * `ElementDefinition.min` integer and a `Quantity` magnitude's lexical forms are read elsewhere and
- * are still lost silently.
+ * It is **not** a report of every unreadable value in a document: the profile booleans, an
+ * `ElementDefinition.min` whose text falls outside the lexical space the profile loader reads, and a
+ * `Quantity` magnitude's lexical forms are read elsewhere and are still lost silently.
  *
  * Empty for every conformant document, in either wire format.
  *

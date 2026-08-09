@@ -104,9 +104,14 @@ into its docblock rather than left to be discovered.
 | `MedicationRequest.doNotPerform`              | `primitiveBooleans` (safety)     | **REPORTED**             | **FIXED**                |
 | `ElementDefinition.mustSupport`               | `primitiveBoolean` (convenience) | silent                   | standing, pinned         |
 | `ElementDefinition.slicing.ordered`           | `primitiveBoolean` (convenience) | silent                   | standing, pinned         |
-| `ElementDefinition.min` (`unsignedInt`)       | `parseMin`                       | silent                   | standing, pinned         |
+| `ElementDefinition.min` (`unsignedInt`)       | `parseMin`                       | silent                   | narrowed 2026-08-09      |
 | `Quantity` magnitude (`+5`, `05`, `.5`, `5.`) | `readQuantity`                   | silent                   | standing, `#78`'s pin    |
 | FHIRPath `numberOf`                           | FHIRPath                         | silent                   | standing, `#79`'s census |
+
+**The `min` row narrowed on 2026-08-09 and the row is scoped, not retired.** `parseMin` now reads
+R4's `positiveInt` lexical space off XML, so a stated bound is enforced; a `min` written **outside**
+that space (`+1`, `01`, `1.0`, and the deliberately-excluded `0`) is still unread and still silent,
+which is what this table's column measures. [`xml-profile-min.md`](xml-profile-min.md).
 
 **The two profile booleans are not merely unfixed here, they have nowhere to go.** A
 `StructureDefinition` is not a safety resource and has no `SafetyReadout`, so reporting them needs a

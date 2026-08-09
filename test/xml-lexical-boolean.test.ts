@@ -263,18 +263,18 @@ describe("declared residuals of the schema-free boolean read, pinned", () => {
     }).not.toThrow();
   });
 
-  it("reads no ElementDefinition.min off an XML StructureDefinition, silently", () => {
-    // The same root class one datatype over, and NOT closed here: `min` is an `unsignedInt`, read
-    // through a `FhirDecimal` match that lexical text does not satisfy. So a profile handed over in
-    // XML declares its required elements and this library enforces none of them, with nothing on any
-    // diagnostic channel to say so. Deliberately left standing: `min` is not a boolean, and the
-    // remedy for it is its own measurement.
+  it("reads a stated ElementDefinition.min off an XML StructureDefinition", () => {
+    // NO LONGER A RESIDUAL. This was the pin recording that `min` went unread, so a profile handed
+    // over in XML declared its required elements and this library enforced none of them. It is
+    // rewritten rather than deleted so the closure is visible from where the gap was declared; the
+    // measurements live in `test/xml-profile-min.test.ts`. `min: 0` is a residual and is pinned
+    // there, not here.
     const { resource } = parseResourceXml(
       xmlStructureDefinition('<min value="1"/><max value="1"/>'),
     );
     const definition = loadStructureDefinition(resource);
 
-    expect(definition?.differential?.[0]?.min).toBeUndefined();
+    expect(definition?.differential?.[0]?.min).toBe(1);
     // `max` reads fine, because FHIR spells it as a string in both formats.
     expect(definition?.differential?.[0]?.max).toBe(1);
   });
