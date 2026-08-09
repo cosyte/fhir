@@ -3072,8 +3072,15 @@ a string primitive. Both halves are load-bearing and the second took three attem
   reads as two `resourceType` properties in one `FhirComplex`, `issues: []`, `valid: true`,
   `safeToSummarize: true`. The tag there is named correctly, so this defect's substitution never
   happens; what drops is the repeated-property-name case, which both writers do and which is declared
-  separately. A property-level predicate refused it, and **that is the one cost none of the refusals
-  beside this one pays**: withdrawing serialization from a model this library reports as clean.
+  separately. A property-level predicate refused it, and **the cost of that is withdrawing
+  serialization from a model this library reports as clean.** Do not write it up as "the one cost
+  none of the refusals beside this one pays", which this note did and which is FALSE: `breaksTag`
+  pays it too, on `<a:!x xmlns:a="http://hl7.org/fhir" value="1"/>`. **Rarity was never the argument;
+  the cost is.** Gate pass 2 caught the idiom, tagged it `PRE-EXISTING` because it is verbatim at
+  `63b05fc`, and it is cut here at the three carriers this slice authored. **Two base-owned carriers
+  are LEFT, on purpose and named so the next reader does not have to find them:**
+  `src/codec/serialize-guard.ts` (the `assertNoShadowedProperty` docblock) and
+  `test/shadowed-property-write.test.ts`. They belong to `#76`'s slice, not this one.
 - **An ABSENT `resourceType` is left alone.** `serializeResourceXml` accepts any `FhirComplex` and
   names a typeless one `Resource` by documented fallback, so refusing there would withdraw a route
   from every model that never had a type -- and nothing is deleted in that case. **The line this

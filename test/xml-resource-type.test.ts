@@ -245,7 +245,8 @@ describe("a resourceType XML has no tag to name", () => {
         // second property of that name beside the one synthesized from the tag. The tag is named
         // correctly, so this defect's substitution never happens; the drop that does happen is the
         // one both writers make on a repeated name, declared separately. That document reads clean,
-        // and refusing it would be the one cost none of the refusals beside this one pays.
+        // and refusing it would withdraw serialization from a model this library reports as clean --
+        // a cost `breaksTag` already pays elsewhere, so it is the cost that decides here, not rarity.
         const { resource, issues } = parseResourceXml(
           `<Patient xmlns="http://hl7.org/fhir">${child}</Patient>`,
         );

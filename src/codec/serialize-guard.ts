@@ -479,7 +479,9 @@ export function assertNoShadowedProperty(node: FhirComplex): void {
  * has no `duplicates` mechanism and pushes the type synthesized from the tag first, so
  * `<Patient xmlns="http://hl7.org/fhir"><resourceType><a value="1"/></resourceType></Patient>` reads
  * as two `resourceType` properties in one element, `valid: true` and `safeToSummarize: true`.
- * Refusing that would be this refusal paying the one cost none of the refusals beside it pays.
+ * Refusing that would withdraw serialization from a model this library reports as clean. **It is NOT
+ * "the one cost none of the refusals beside it pays"** -- `breaksTag` pays it, on a document that
+ * reads with zero issues -- so the reason to decline is the cost itself, not its rarity.
  */
 function lacksTaggableResourceType(node: FhirNode): boolean {
   if (node.kind !== "complex") return false;
