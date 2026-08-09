@@ -52,8 +52,9 @@ byte-order mark inside an otherwise conformant `code` is left alone. The channel
 Empty on every conformant document read from JSON, bar one shape admitted rather than claimed away: a
 `CodeableConcept` may carry translation codings beside the one a required binding's value set
 supplies, and R4 asks only that one coding come from that set (terminologies.html), so a translation
-whose code near-misses a negation the document does not otherwise assert is conformant under that
-reading and is disclosed. Over-disclosure is the fail-safe direction.
+whose code differs from a negation code only by case is conformant under that reading and is
+disclosed. Only the case half can be: a surrounding-whitespace value is outside `code`'s lexical
+space whatever coding carries it. Over-disclosure is the fail-safe direction.
 
 In XML the whitespace half is a further declared limit
 rather than a claim: R4 derives `code` from `xs:token` (fhir-base.xsd), whose `whiteSpace=collapse`

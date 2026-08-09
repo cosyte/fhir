@@ -45,13 +45,14 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   Whitespace is R4's own four-character class, not JavaScript's, so a no-break space or a byte-order
   mark inside a conformant `code` is left alone. It raises no `ValidationIssue`, so `valid` does not
   move in either direction on any document. **Empty on every conformant document read from JSON, bar
-  one admitted shape**: a translation coding beside a required binding's own may near-miss a negation
-  the document does not otherwise assert, which R4 permits under the reading that only one coding
-  SHALL come from the value set, and over-disclosure is the fail-safe direction. In
-  XML the whitespace half is a declared limit**, since R4 derives `code` from `xs:token`, whose
-  `whiteSpace=collapse` facet strips surrounding whitespace before validation, and this reader is
-  schema-free and does not collapse.
-  **`do-not-perform`, the one boolean negation, already had this disclosure\*\*: `value="TRUE"` and
+  one admitted shape**: a translation coding beside a required binding's own may differ from a
+  negation code **only by case**, which R4 permits under the reading that only one coding SHALL come
+  from the value set, and over-disclosure is the fail-safe direction. Only the case half can be
+  conformant: a surrounding-whitespace value is outside `code`'s lexical space whatever coding
+  carries it. **In XML the whitespace half is a further declared limit**, since R4 derives `code`
+  from `xs:token`, whose `whiteSpace=collapse` facet strips surrounding whitespace before validation,
+  and this reader is schema-free and does not collapse.
+  **`do-not-perform`, the one boolean negation, already had this disclosure**: `value="TRUE"` and
   `value=" true"` have landed on `unreadableBooleans` under `safeToSummarize: false` since that
   channel shipped. What had no complement was the `code`-valued half.
 

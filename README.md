@@ -403,7 +403,7 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   the raw status string) read a procedure recorded as `"NOT-DONE"` as a procedure with nothing to
   say about it. So the position is named: the locations in `nearMissNegationCodes`,
   `safeToSummarize` is `false`, and `assertSafeToSummarize` throws. **The value is still not
-  coerced, trimmed or case-folded**, and unlike the readout's other location channels nothing is
+  coerced, trimmed or case-folded.** Unlike the readout's other location channels nothing is
   dropped at parse time either: the value is in the model, at the element the location names, and
   what the library declines is the _classification_. That is **not** a promise the value reaches a
   convenience field, and the difference bites in two ordinary shapes: `status` /
@@ -425,8 +425,9 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `valid` in either direction. **Empty on every conformant document read from JSON, bar one shape
   admitted rather than claimed away**: a `CodeableConcept` may carry translation codings beside the
   one a required binding's value set supplies, and R4 asks only that _one_ coding come from that set,
-  so a translation whose code near-misses a negation the document does not otherwise assert is
-  conformant under that reading and is disclosed. Over-disclosure is the fail-safe direction. **In
+  so a translation whose code differs from a negation code **only by case** is conformant under that
+  reading and is disclosed. Only the case half can be: a surrounding-whitespace value is outside
+  `code`'s lexical space whatever coding carries it. Over-disclosure is the fail-safe direction. **In
   XML the
   whitespace half is a declared limit rather than a claim**: R4 derives `code` from `xs:token`,
   whose `whiteSpace=collapse` facet strips surrounding whitespace before validation, so

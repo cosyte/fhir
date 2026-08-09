@@ -404,11 +404,12 @@ export interface SafetyReadout {
    * away**: a `CodeableConcept` may carry translation codings beside the one a required binding's
    * value set supplies, and R4 asks only that *one* coding come from that set (terminologies.html)
    * while `datatypes.html` asks that each coding represent the same concept **without a SHALL**.
-   * Under that permissive reading a document whose translation coding near-misses a negation the
-   * document does not otherwise assert is conformant, and this channel discloses it. Over-disclosure
-   * is the fail-safe direction, and the slice's own tests pin the case. In XML the whitespace half is
-   * a further declared
-   * limit rather than a claim**: R4 derives `code` from `xs:token` (fhir-base.xsd), whose
+   * Under that permissive reading a document whose translation coding differs from a negation code
+   * **only by case** is conformant, and this channel discloses it. (Only the case half can be: a
+   * surrounding-whitespace value is outside `code`'s lexical space whatever coding carries it.)
+   * Over-disclosure is the fail-safe direction, and the slice's own tests pin the case.
+   * **In XML the whitespace half is a further declared limit rather than a
+   * claim**: R4 derives `code` from `xs:token` (fhir-base.xsd), whose
    * `whiteSpace=collapse` facet strips surrounding whitespace *before* validation, so
    * `<status value=" not-done"/>` is schema-valid and a schema-validating consumer reads it as the
    * code. This reader is schema-free and does not collapse, so it discloses rather than reads. That
@@ -715,9 +716,11 @@ export function unreadableBooleans(resource: FhirComplex, path: string): string[
  * {@link SafetyReadout.nearMissNegationCodes}).
  *
  * **Empty for every conformant document read from JSON, bar one admitted shape**: a translation
- * coding beside a required binding's own may near-miss a negation the document does not otherwise
- * assert, which R4 permits under the reading that only *one* coding SHALL come from the value set
- * (terminologies.html). Over-disclosure is the fail-safe direction. In XML the whitespace half is a
+ * coding beside a required binding's own may differ from a negation code **only by case**, which R4
+ * permits under the reading that only *one* coding SHALL come from the value set
+ * (terminologies.html). Only the case half can be conformant, a surrounding-whitespace value being
+ * outside `code`'s lexical space whatever coding carries it. Over-disclosure is the fail-safe
+ * direction. In XML the whitespace half is a
  * further declared limit: R4 derives `code` from `xs:token` (fhir-base.xsd), whose
  * `whiteSpace=collapse` facet strips surrounding whitespace before validation, and this reader is
  * schema-free and does not collapse. See {@link SafetyReadout.nearMissNegationCodes}.
