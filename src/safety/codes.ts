@@ -98,10 +98,22 @@ export const NO_KNOWN_ALLERGY = "716186003";
 /** The `entered-in-error` code, the universal "this record is retracted, not data" value. */
 export const ENTERED_IN_ERROR = "entered-in-error";
 
-/** `MedicationStatement.status = not-taken`, a negation: the medication was **not** taken. */
+/**
+ * The `not-taken` status code, a negation: "the medication was not consumed by the patient". R4
+ * spells it **only** as a `status` value and defines it in **only** the `MedicationStatement.status`
+ * code system (`medication-statement-status`), where that sentence is the code's own definition. Read
+ * off `status` on any resource type, for the reasons on {@link statusSpells}.
+ */
 export const NOT_TAKEN = "not-taken";
 
-/** `Immunization.status = not-done`, a negation: the vaccine was **not** given. */
+/**
+ * The `not-done` status code, a negation: the event did not happen. R4 spells it **only** as a
+ * `status` value and defines it in the `event-status` and `medication-admin-status` code systems,
+ * which define it as "terminated prior to any activity beyond preparation" and "terminated prior to
+ * any impact on the subject". The R4 resources whose `status` binds a value set containing it are
+ * `Procedure`, `Communication`, `Media`, `MedicationAdministration` and `Immunization`. Read off
+ * `status` on any resource type, for the reasons on {@link statusSpells}.
+ */
 export const NOT_DONE = "not-done";
 
 /** AllergyIntolerance `clinicalStatus` code system (`allergyintolerance.html`). */
@@ -139,10 +151,12 @@ export const KNOWN_MODIFIER_EXTENSION_URLS: ReadonlySet<string> = new Set<string
  *
  * Several reads are deliberately **not** scoped by it, because they can only add a finding: the
  * `modifierExtension` fail-closed check, the `entered-in-error` retraction, the `refuted`
- * verification status, and the `doNotPerform` instruction ({@link ./status.js} `readDoNotPerform`).
- * `doNotPerform` used to be gated on `MedicationRequest` alone, and the types the gate left out were
- * neither read nor reported, so a conformant `ServiceRequest` carrying an instruction *not* to
- * perform the service read as carrying no negation at all.
+ * verification status, the `doNotPerform` instruction ({@link ./status.js} `readDoNotPerform`), and
+ * the `not-done` / `not-taken` status negations ({@link statusSpells}). `doNotPerform` used to be
+ * gated on `MedicationRequest` alone, and `not-done` on `Immunization` alone; the types each gate
+ * left out were neither read nor reported, so a conformant `ServiceRequest` carrying an instruction
+ * *not* to perform the service, and a conformant `Procedure` recording that it was **not** done, both
+ * read as carrying no negation at all.
  */
 export const SAFETY_RESOURCE_TYPES: ReadonlySet<string> = new Set([
   "AllergyIntolerance",
@@ -639,6 +653,53 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
 }
 
 /**
+ * Whether the resource's own `status` element spells `code`, across **every** value the document
+ * wrote for it: a member a repeated property name shadowed, and a value inside an array wrapper
+ * ({@link primitiveStrings}): because a negation must not become invisible by arriving second under
+ * a duplicate key or inside a wrapper a single-value read finds no string in.
+ *
+ * **There is no resource-type gate on this read, and its absence is grounded per code rather than
+ * inherited.** The argument that drops a gate on an *element* (`doNotPerform`, which no R4 type
+ * defines as anything but an instruction not to act) does not carry over for free to a *status code*,
+ * because `status` is one element name whose value set is defined per resource type, so "which types
+ * carry this code" is a real question with a real answer. It was answered against the published R4
+ * definitions rather than by analogy, and both codes this layer classifies answer it the same way:
+ *
+ * - **Each code is defined only as a `status` value.** No R4 element outside `status` binds a value
+ *   set containing `not-done` or `not-taken`, so a wider read cannot meet the code doing a different
+ *   job somewhere else.
+ * - **Every R4 code system that defines the code defines it as the negation.** `not-done` is defined
+ *   in `event-status` and `medication-admin-status`, `not-taken` in `medication-statement-status`, and
+ *   each definition says the thing did not happen. So reading the code on a type nobody enumerated
+ *   cannot *mis*-read it; it can only surface it somewhere a census did not predict.
+ * - **A gate would be short, and measurably so.** `not-done` is carried by the `status` of `Procedure`,
+ *   `Communication`, `Media`, `MedicationAdministration` and `Immunization` in R4: this library gated
+ *   it on `Immunization` alone, so four conformant resource types read as carrying no negation at all.
+ * - **A census is a fact about one published version, and this reader tolerates others.** The set is
+ *   not the same in R5 (which carries the code on types R4 has no such resource for, and drops
+ *   `not-taken` from `MedicationStatement.status` entirely), so a list keyed to R4 is blind on a
+ *   document this library will still read.
+ *
+ * The direction argument then applies exactly as it does to the element-scoped reads: this can only
+ * **add** a negation, never retire a finding, never flip `valid` (no validator reads `negations`),
+ * and never turn a refusal into an affirmation. A document spelling the code on a type whose value set
+ * excludes it is already non-conformant, and the fail-safe move over a non-conformant document is to
+ * surface the negation the sender plainly wrote, not to read the record as live.
+ *
+ * **This is the read {@link isRetracted} already performs for `entered-in-error`**, which is the same
+ * shape of code on the same element, and it is one function rather than three copies so the three
+ * cannot drift apart over which values of `status` they see.
+ *
+ * **`noKnownAllergy` is the opposite direction and stays type-gated**: it asserts something *positive*
+ * about a patient, so a wider read would invent an assertion rather than find one.
+ *
+ * @internal
+ */
+export function statusSpells(resource: FhirComplex, code: string): boolean {
+  return getAllProperties(resource, "status").some((node) => primitiveStrings(node).includes(code));
+}
+
+/**
  * Whether a resource is **retracted**, marked `entered-in-error` and therefore not to be treated as
  * active data. Read fail-safe: a `status` primitive of `entered-in-error` (Observation,
  * Immunization, DiagnosticReport, MedicationRequest/Statement) **or** a `verificationStatus` carrying
@@ -670,10 +731,7 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * ```
  */
 export function isRetracted(resource: FhirComplex): boolean {
-  const retractedStatus = getAllProperties(resource, "status").some((node) =>
-    primitiveStrings(node).includes(ENTERED_IN_ERROR),
-  );
-  if (retractedStatus) return true;
+  if (statusSpells(resource, ENTERED_IN_ERROR)) return true;
   return getAllProperties(resource, "verificationStatus").some((node) =>
     safetyHasCodeAnySystem(node, ENTERED_IN_ERROR),
   );
@@ -702,14 +760,14 @@ export function typeOf(resource: FhirComplex): string | undefined {
  * than one only for a document FHIR JSON already forbids.
  *
  * {@link typeOf} is the strict single-value read and stays that way, because a structural verdict
- * should reject an unreadable type rather than guess one. This is the read a **negation** check uses.
- * A type-scoped negation (`MedicationStatement.status = not-taken`, `Immunization.status = not-done`,
- * AllergyIntolerance's "no known allergy") is only looked for once the type gate says the resource is
- * of that type, so a single-value type read makes the gate the narrowest hole in the whole safety
- * claim: `{"resourceType":"Observation","resourceType":"MedicationStatement","status":"not-taken"}`
- * and `{"resourceType":["MedicationStatement"],"status":["not-taken"]}` both report **no negation at
- * all** when the type is read one-value-first-wins. Considering every named type over-surfaces a
- * negation on a document that is already reported non-conformant, which is the safe direction.
+ * should reject an unreadable type rather than guess one. This is the read every **type-scoped**
+ * safety read uses. A type-scoped read (AllergyIntolerance's "no known allergy", and the
+ * type-preferred `clinicalStatus` / `verificationStatus` code systems) is only reached once the type
+ * gate says the resource is of that type, so a single-value type read makes the gate the narrowest
+ * hole left in the safety claim: an `AllergyIntolerance` whose type arrived behind a repeated property
+ * name or inside an array wrapper reports **no "no known allergy" at all** when the type is read
+ * one-value-first-wins. Considering every named type over-surfaces on a document that is already
+ * reported non-conformant, which is the safe direction.
  *
  * @param resource - The resource model.
  * @returns The resource type names the document wrote, in document order.

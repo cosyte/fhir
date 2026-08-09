@@ -8,6 +8,62 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A `status` of `not-done` was read only on an `Immunization`, so four conformant R4 resource types
+  recording that something was **not** done read as recording nothing at all.** Measured at the base
+  commit, on **plain conformant JSON**: `{"resourceType":"Procedure","status":"not-done"}` returned
+  `negations: []` and `safeToSummarize: true`, and so did the same document as a `Communication`, a
+  `Media` and a `MedicationAdministration`, while the identical `Immunization` returned
+  `negations: ["not-done"]`. Each of those four is conformant: `not-done` is in the **required**
+  value set bound to that resource's `status` in R4. **A procedure recorded as not performed read as
+  a procedure with nothing to say about it.**
+  **The gate is dropped rather than widened, and what licenses that is a census rather than the
+  argument that dropped the previous one.** `doNotPerform` is an _element_ no R4 type defines as
+  anything but an instruction not to act, so reading it anywhere cannot mis-read it. `not-done` is a
+  _value_ of `status`, one element name whose value set R4 defines **per resource type**, so "which
+  types carry this code" is a real question and the direction argument answers a different one. It
+  was answered against the published R4 definitions (`valuesets.json` and `profiles-resources.json`,
+  `fhirVersion` `4.0.1`): each code is spelled **only** as a `status` value and appears in no other
+  binding; **every** R4 code system that defines it defines it as the negation (`event-status` and
+  `medication-admin-status` for `not-done`, `medication-statement-status` for `not-taken`); and the
+  R4 list is `Procedure`, `Communication`, `Media`, `MedicationAdministration` and `Immunization`,
+  where this library read one. The same census against R5 returns a different set again and drops
+  `not-taken` entirely, so a list keyed to one published version is blind by construction on a reader
+  that tolerates others. **Only then** does the direction argument apply: the read can only **add** a
+  negation, never retire a finding and never flip `valid`. A document spelling the code on a type
+  whose value set excludes it is already non-conformant, and the fail-safe move over one is to
+  surface the negation the sender plainly wrote rather than read the record as live.
+  **`not-taken` is the narrower half and is reported as such.** The census returns exactly one R4
+  element for it, `MedicationStatement.status`, so the old gate was already complete for every
+  conformant document and dropping it changes nothing on one. What it changes is the
+  **non-conformant** document: `{"resourceType":"MedicationAdministration","status":"not-taken"}`,
+  where R4 spells the negation `not-done`: which is the case this library exists to be honest about.
+  **The read is now the one the retraction already performed**, `entered-in-error` off `status` at any
+  type, in one shared function rather than three copies, so they cannot drift apart over which values
+  of `status` they see.
+  **Scope, stated as what did not move.** The read stays on `status` and on no other element, and at
+  the **resource root** rather than a backbone element or a nested resource, so a `Procedure` inside a
+  `Bundle` entry still leaves the Bundle's `negations` empty (a declared gap, as it is for the
+  retraction). The array-wrapper report keeps its cardinality table, so a wrapped `status` on a type
+  outside the safety set is read through and surfaced while the wrapper draws no
+  `ARRAY_WRAPPED_SCALAR`. `noKnownAllergy` stays type-gated, because it asserts something _positive_
+  about a patient. Every one of those is pinned at its literal in
+  `test/negation-status-codes.test.ts`.
+  **Two existing tests were re-keyed**, both of which proved the fail-safe type read with a
+  `not-taken` behind a wrapped or duplicated `resourceType`, a document that no longer grades that
+  mechanism. The two reasons differ and are recorded as differing: one was **falsified** by this
+  change (it asserted `negations: []` over a laundered `not-taken`), the other stayed green with only
+  its negation assertion hollowed out. Both are keyed to `no-known-allergy` instead, the negation
+  that is still type-scoped, and both red again under a single-value type read.
+  **Measured:** 11 of 22 new assertions red at the base commit in a real base worktree (22 of 22 at
+  head), and 11 both-states pins named in the test file itself. Non-vacuity is by mutation, and is
+  recorded as **what is held down rather than as a count**: each type gate, reading every written
+  member rather than the first, reading through an array wrapper, the order the two negations are
+  pushed in, code equality rather than a prefix match, the retraction's `status` arm, and the element
+  scope. **The count is deliberately not the claim, because it was and it overstated what it
+  measured**: a published "8 of 8" stood while the element-scope assertions used `CodeableConcept`
+  values only, so a widening of the read onto other element names through the same primitive read
+  passed the whole suite. The primitive-shaped assertions were added and the minimal one-token
+  widening now reds.
 - **A `doNotPerform` was read only on a `MedicationRequest`, and only on the resource handed in, so
   two `?!` modifier elements were never looked for at all (`FHIR-NEGATION-READ-IS-SCOPE-BLIND`).**
   Measured at the base commit, on **plain conformant JSON**:
@@ -47,9 +103,9 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `ServiceRequest.doNotPerform` arriving array-wrapped is read through the wrapper and surfaced while
   the wrapper itself is not reported (reporting one is an `error`, and that stays where a cardinality
   is known). The scope stops at resource roots, not backbone elements. `not-taken` and `not-done`
-  keep their own type gates, and `not-done` is also a `Procedure` / `MedicationAdministration` status
-  in R4, so the same blindness exists there and is a declared gap, not this change. Every one of
-  those is pinned at its literal in `test/negation-read-scope.test.ts`.
+  kept their own type gates, and `not-done` is also a `Procedure` / `MedicationAdministration` status
+  in R4, so the same blindness existed there and was a declared gap, not this change: closed by the
+  entry above it. Every one of those is pinned at its literal in `test/negation-read-scope.test.ts`.
   **A count that was wrong in the same area is cut rather than corrected**: `readSafety`,
   `SafetyReadout`, `SAFETY_RESOURCE_TYPES`, the validator's safety layer and the README all said
   "the six safety resource types" over a set holding **seven**, and copies of it rendered into
@@ -1504,8 +1560,9 @@ true`, 0 `valid true -> false`, 0 `safeToSummarize false -> true`, 0 retractions
      convenience fields `SafetyReadout.status` and `SafetyReadout.resourceType` read through it too,
      so they no longer report `undefined` for an element the document plainly carries.
   2. **The type gate is read fail-safe, which also closes the duplicated-`resourceType` sibling.** A
-     type-scoped negation (`not-taken`, `not-done`, `no-known-allergy`) is only looked for once the
-     gate names the type, so a single-value gate was the narrowest hole in the whole safety claim.
+     type-scoped negation was only looked for once the gate named the type, so a single-value gate
+     was the narrowest hole in the whole safety claim. (`not-taken` and `not-done` were type-scoped
+     when this landed; their gates were dropped later. `no-known-allergy` still is.)
      Both non-conformant shapes reached it: `{"resourceType":["MedicationStatement"],"status":
 ["not-taken"]}` and `{"resourceType":"Observation","resourceType":"MedicationStatement",
 "status":"not-taken"}` each reported `negations: []`. `readSafety` now considers **every** type

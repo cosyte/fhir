@@ -76,6 +76,9 @@ refusal channel is for values this library cannot read. Reading it and surfacing
 - **`not-done` is also a `Procedure` / `MedicationAdministration` status in R4**, and both read
   `negations: []` today. Same class, different element; each status gate needs its own grounding of
   which types carry that code. Pinned in both states.
+  **CLOSED 2026-08-09** by the next slice, which did that grounding: an R4 census, not this slice's
+  direction argument, which does not transfer to a status *code*:
+  [`negation-status-codes.md`](negation-status-codes.md).
 - **Every negation except `doNotPerform` is still root-only.** A retracted `Observation` inside a
   `Bundle.entry` leaves the Bundle's `negations` empty. Pinned.
 - **The array-wrapper report keeps its cardinality table.** `{"resourceType":"ServiceRequest",

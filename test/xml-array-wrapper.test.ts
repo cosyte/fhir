@@ -152,14 +152,26 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
     });
 
     it("what base emitted for a wrapped type gate, which is the sharper half", () => {
-      // A wrapped `resourceType` suppresses every type-scoped negation behind it, so the document
-      // that came back was not merely missing a complaint: base wrote `<Resource>` and the re-read
-      // could not have found `not-taken` at all.
-      const laundered = parseResourceXml(
-        '<Resource xmlns="http://hl7.org/fhir"><status value="not-taken"/></Resource>',
-      );
+      // A wrapped `resourceType` suppresses every **type-scoped** read behind it, so the document
+      // that came back was not merely missing a complaint: base wrote `<Resource>`, and a re-read of
+      // that output cannot reach a read the type gate stands in front of. Keyed to the negation that
+      // is still type-scoped, "no known allergy", because that is what makes the assertion say
+      // something. It was keyed to a laundered `<Resource><status value="not-taken"/></Resource>`,
+      // which this assertion outlived: the status-code negations stopped being gated on a type, that
+      // document now reads `["not-taken"]`, and the assertion was **false at head**, not merely
+      // quiet. The claim it was making is true only of a read the type gate still stands in front of.
+      const NKA =
+        '<code><coding><system value="http://snomed.info/sct"/>' +
+        '<code value="716186003"/></coding></code>';
+      const laundered = parseResourceXml(`<Resource xmlns="http://hl7.org/fhir">${NKA}</Resource>`);
       expect(readSafety(laundered.resource).negations).toEqual([]);
       expect(readSafety(laundered.resource).safeToSummarize).toBe(true);
+      // The identical content under the tag the sender's type would have produced, so the assertion
+      // above is a statement about the lost type rather than about the document's content.
+      const kept = parseResourceXml(
+        `<AllergyIntolerance xmlns="http://hl7.org/fhir">${NKA}</AllergyIntolerance>`,
+      );
+      expect(readSafety(kept.resource).negations).toEqual(["no-known-allergy"]);
 
       const { resource, refused } = fromJson(
         '{"resourceType":["MedicationStatement"],"status":["not-taken"]}',

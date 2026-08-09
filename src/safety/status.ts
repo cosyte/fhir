@@ -92,6 +92,7 @@ import {
   SAFETY_RESOURCE_TYPES,
   SAFETY_SCALAR_ELEMENTS,
   SNOMED_SCT,
+  statusSpells,
   typesOf,
 } from "./codes.js";
 
@@ -165,9 +166,18 @@ export type NegationKind =
    * than on a list of types (see `readDoNotPerform`).
    */
   | "do-not-perform"
-  /** `MedicationStatement.status = not-taken`, the medication was **not** taken. */
+  /**
+   * `status = not-taken`, the medication was **not** consumed by the patient. R4 defines the code
+   * only as a `MedicationStatement.status` value; it is read wherever a `status` spells it rather
+   * than on a list of types (see `statusSpells`).
+   */
   | "not-taken"
-  /** `Immunization.status = not-done`, the vaccine was **not** given. */
+  /**
+   * `status = not-done`, the event did **not** happen: the vaccine was not given, the procedure was
+   * not performed, the medication was not administered. R4 carries the code on the `status` of
+   * `Procedure`, `Communication`, `Media`, `MedicationAdministration` and `Immunization`, and it is
+   * read wherever a `status` spells it rather than on a list of types (see `statusSpells`).
+   */
   | "not-done"
   /** `entered-in-error` anywhere, the record is retracted, not data. */
   | "entered-in-error";
@@ -871,7 +881,9 @@ function descend(node: FhirNode, path: string, out: SafetyWalk): void {
  * Read the safety-critical modifier / status / negation elements out of a resource, never dropping
  * one. The type-scoped slots are filled for the types `SAFETY_RESOURCE_TYPES` names; for any other
  * type they are `undefined` and only the un-gated reads apply, which are the retraction, the
- * refutation, `doNotPerform` and the modifier-extension check.
+ * refutation, `doNotPerform`, the `not-done` / `not-taken` status negations, and the
+ * modifier-extension check. `noKnownAllergy` is the one negation that stays type-gated, because it
+ * asserts something *positive* about a patient.
  *
  * @param resource - The resource model (typically from `parseResource`).
  * @returns The complete {@link SafetyReadout}.
@@ -940,15 +952,13 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   // "do not give" this readout skipped was affirmed `safeToSummarize` while its unreadable twin at
   // the same location was reported, which is the same blindness read from the other side.
   if (walk.doNotPerform.length > 0) negations.push("do-not-perform");
-  if (
-    isType("MedicationStatement") &&
-    anyValue("status", (n) => primitiveStrings(n).includes(NOT_TAKEN))
-  ) {
-    negations.push(NOT_TAKEN);
-  }
-  if (isType("Immunization") && anyValue("status", (n) => primitiveStrings(n).includes(NOT_DONE))) {
-    negations.push(NOT_DONE);
-  }
+  // Un-type-gated, grounded per code against the published R4 definitions rather than by analogy
+  // with the element-scoped read above: see `statusSpells`. `not-done` was gated on `Immunization`
+  // while R4 carries it on the `status` of four more types, so a conformant `Procedure` recording
+  // that it was not performed read as carrying no negation at all: the gate did not merely fail to
+  // read those types, it never looked, so nothing was reported for them either.
+  if (statusSpells(resource, NOT_TAKEN)) negations.push(NOT_TAKEN);
+  if (statusSpells(resource, NOT_DONE)) negations.push(NOT_DONE);
 
   const { modifiers, shadowed, arrayWrapped, unreadableBoolean } = walk;
   const nested = nestedArrays(resource, prefix);

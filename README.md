@@ -166,10 +166,13 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
 
 - **Never-droppable status/negation:** `readSafety` carries `status` / `clinicalStatus` /
   `verificationStatus` / `doNotPerform` / retraction and a classified `negations` list (`refuted`,
-  `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`, `entered-in-error`) across the
-  safety resource types `SAFETY_RESOURCE_TYPES` names. `doNotPerform` is not among the type-scoped
-  reads: an instruction **not** to perform is surfaced wherever a resource writes it, at any resource
-  root, so one inside a `Bundle` entry or `contained` reaches `negations` too.
+  `no-known-allergy`, `do-not-perform`, `not-taken`, `not-done`, `entered-in-error`). The
+  type-scoped slots are filled for the types `SAFETY_RESOURCE_TYPES` names; **the negation reads that
+  can only add a finding are not type-scoped at all**: a retraction, a refutation, an instruction
+  **not** to perform, and a `status` of `not-done` / `not-taken` are surfaced whatever the resource
+  type, because a gate does not merely fail to read the types it omits, it never looks, so nothing is
+  reported for them either. `doNotPerform` goes further and is read at **any resource root**, so one
+  inside a `Bundle` entry or `contained` reaches `negations` too.
   `assertSafeToSummarize` **refuses** (throws) rather than flatten past an unhandled modifier.
 - **A safety verdict is never asserted over a value the document left ambiguous.** Each negation read
   runs over every coding on a `CodeableConcept` and every value written for the element it reads
@@ -208,8 +211,8 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   define and hand it back with no diagnostic anywhere, so the read never runs ahead of the report on
   anything that reaches a verdict.
   **One asymmetry is deliberate and worth stating rather than glossing:** the `ARRAY_WRAPPED_SCALAR`
-  location is only emitted on a resource of one of the safety types, while the retraction and
-  refutation reads are not type-gated, so on some other resource type a wrapped
+  location is only emitted on a resource of one of the safety types, while the negation reads that
+  can only add a finding are not type-gated, so on some other resource type a wrapped
   `verificationStatus.coding.code` is read without a location being reported. That is the fail-safe
   direction on purpose: those reads can only ever **add** a retraction or a negation, never withhold
   one, and no type-scoped verdict is reached for such a resource anyway. Narrowing the read to match
@@ -713,9 +716,9 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   XML spells a repeat by **repeating the element** and carries no other mark for one, so a wrapper of
   fewer than two items used to emit at most one element and re-read as an ordinary single-valued
   element: that document came back with `arrayWrappedScalars: []`, `safeToSummarize: true`,
-  `valid: true` and an empty issue list, and
-  `{"resourceType":["MedicationStatement"],"status":["not-taken"]}` came back as `<Resource>` with no
-  negation readable at all. **A writer cannot decide cardinality in general and this one does not
+  `valid: true` and an empty issue list, and a wrapped `resourceType` came back as `<Resource>`, the
+  type gate every type-scoped read stands behind gone with it. **A writer cannot decide cardinality
+  in general and this one does not
   try**: there is no per-resource model here, and a name-only rule would emit a false error on a
   conformant document (`Questionnaire.code` and `ElementDefinition.code` are `0..*` in R4). So this
   takes its cardinality from the one window that already has one, the locations

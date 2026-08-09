@@ -79,33 +79,37 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
   });
 
   describe("the type gate itself", () => {
-    // A wrapped `resourceType` is the worse half of the same defect: every type-scoped negation
-    // (`not-taken`, `not-done`, "no known allergy") is looked for only once the gate names the type,
-    // so a gate that cannot read the type reports no negation at all.
+    // A wrapped `resourceType` is the worse half of the same defect: a type-scoped read is reached
+    // only once the gate names the type, so a gate that cannot read the type reports nothing at all.
+    // **These are keyed to "no known allergy" deliberately.** It is the negation that is still
+    // type-scoped, so the negation assertion fails if the fail-safe type read is removed. They used
+    // a `not-taken`, which is no longer gated on a type at all: the surrounding `resourceType` and
+    // `arrayWrappedScalars` assertions still graded the type read, but the negation beside them had
+    // stopped, and a test half of whose assertions have gone quiet is not the control it reads as.
+    const NO_KNOWN_ALLERGY =
+      '"code":{"coding":[{"system":"http://snomed.info/sct","code":"716186003"}]}';
+
     it("finds a type-scoped negation behind an array-wrapped resourceType", () => {
       const { resource } = parseResource(
-        '{"resourceType":["MedicationStatement"],"status":["not-taken"]}',
+        `{"resourceType":["AllergyIntolerance"],${NO_KNOWN_ALLERGY}}`,
       );
       const safety = readSafety(resource);
 
-      expect(safety.negations).toEqual(["not-taken"]);
-      expect(safety.resourceType).toBe("MedicationStatement");
+      expect(safety.negations).toEqual(["no-known-allergy"]);
+      expect(safety.resourceType).toBe("AllergyIntolerance");
       expect(safety.safeToSummarize).toBe(false);
-      expect(safety.arrayWrappedScalars).toEqual([
-        "MedicationStatement.resourceType",
-        "MedicationStatement.status",
-      ]);
+      expect(safety.arrayWrappedScalars).toEqual(["AllergyIntolerance.resourceType"]);
     });
 
     it("finds a type-scoped negation behind a duplicated resourceType", () => {
       // The sibling route to the same suppression: `resourceType` is first-wins, so the document
-      // reads as an Observation and `MedicationStatement.status = not-taken` is never looked for.
+      // reads as an Observation and AllergyIntolerance's "no known allergy" is never looked for.
       const { resource } = parseResource(
-        '{"resourceType":"Observation","resourceType":"MedicationStatement","status":"not-taken"}',
+        `{"resourceType":"Observation","resourceType":"AllergyIntolerance",${NO_KNOWN_ALLERGY}}`,
       );
       const safety = readSafety(resource);
 
-      expect(safety.negations).toEqual(["not-taken"]);
+      expect(safety.negations).toEqual(["no-known-allergy"]);
       expect(safety.safeToSummarize).toBe(false);
       expect(safety.shadowedProperties).toEqual(["Observation.resourceType"]);
     });
