@@ -57,10 +57,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   The scoped statements beside them measure true and were left alone (`nodesEquivalent`'s own
   module doc, which states the modulo; the namespace-spelling sentences, which are about two
   spellings of one document; and the `CHANGELOG` residual naming this leg, which is still accurate).
-  **No count is given for what is LEFT, on purpose, because two counts of it were wrong in two
-  passes.** Weaker, mostly self-disclosing forms of the same universal survive across `src/`,
-  `README.md`, `CHANGELOG.md` and `documentation/`, and cutting them is its own slice: sweep by
-  carrier, never by phrase.
+  **No count is given for what is LEFT, on purpose:** the first count of what was cut was wrong, and
+  the count of what was left was wrong too. Weaker, mostly self-disclosing forms of the same universal
+  survive, and cutting them is its own slice. Sweep the carrier list `documentation/agent-notes.md`
+  already writes down, never a phrase.
   Every count here carries the caveat this lineage carries: the corpus is 7 hand-authored XML fixtures
   plus mutations and this repo's hand-authored JSON fixtures and probes, **not** the FHIR R4
   published-examples corpus.

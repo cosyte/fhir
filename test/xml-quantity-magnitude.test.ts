@@ -188,7 +188,7 @@ describe("declared residuals of the schema-free primitive read, pinned", () => {
     const fromXml = parseResourceXml(xml).resource;
     const fromJson = parseResource('{"resourceType":"Patient","active":true}').resource;
 
-    // Equivalence is defined modulo lexical form; that is the declared rule, not an accident.
+    // Equivalent is not identical, and `nodesEquivalent` is where the moduli are enumerated.
     expect(nodesEquivalent(fromXml, fromJson)).toBe(true);
     expect(serializeResourceXml(fromXml)).toBe(xml);
   });

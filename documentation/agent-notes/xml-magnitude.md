@@ -55,11 +55,8 @@ Each is a characterization test over a gap. Closing one MUST red it, in the same
   report: a guarantee is a longer sentence than a measurement.
 - **A phrase sweep is not a carrier sweep, third slice running.** *"Four false 'same model' sites
   cut"* was itself false: `agent-notes.md`'s `#p2-p3-and-what-the-package-does-today` carried the same
-  universal, and `documentation/` is on the written carrier list. **Five.** **NO COUNT IS GIVEN FOR
-  WHAT IS LEFT**, and that is the pass-2 lesson: the "two weaker sites, seen and left" census written
-  here was itself short, and named a line number already stale. Weaker, mostly self-disclosing forms
-  survive across `src/`, `README.md`, `CHANGELOG.md` and `documentation/`. Cutting them is its own
-  slice. **Sweep by carrier, never by phrase, and do not replace a bad census with a better one.**
+  universal, and `documentation/` is on the written carrier list. **Five.** **Sweep the carrier list
+  `agent-notes.md` already writes down, never a phrase.**
 - **`instanceof` bought nothing and lost a magnitude base read.** The base predicate was duck-typed
   (`typeof node.value === "object"`); `instanceof FhirDecimal` fails the brand check for a decimal
   built by a second copy of the module graph, which is the bare-unit shape again. Reverted to the
@@ -85,16 +82,30 @@ RECOMMITTING THE DEFECT IT FIXED, ONE STEP NARROWER EACH TIME.** No pass has ref
   because `equivalence.ts` names two further corner cases below its numbered pair. What ships asserts
   **non-identity** and points at the oracle, which is what that file already told a reader to do.
 - **The census of what was LEFT was itself short**, and cited a line number already stale. Hence: no
-  count anywhere, and the rule instead of the number.
+  count anywhere, and the rule instead of the number. Pass 3 then found the deleted census had
+  carried a **second** falsehood: the site it called self-disclosing continues with a **stronger**
+  universal, not a qualifier.
+- **`PRE-EXISTING`, and the reason the two `src/xml/read.ts` edits exist:** that docblock called the
+  singleton case *"**the one** irreducible schema-free ambiguity"* while the bullet above it defined
+  equivalence *"modulo lexical form"*. Two one-sided quantifiers, both since before this slice, both
+  cut with the finding above.
 - **A commit message is a carrier that cannot be cut.** `9a6f0dc`'s body still carries the refuted
   guarantee in weaker words, and `scripts/ship.sh` squash-merges. **So the squash body is written by
   hand rather than filled from the branch**, and this is the standing reason.
 
 ## The pass ledger
 
-`9a6f0dc` `REFUTED` -> `cb28b8b` `REFUTED` -> the pass-2 remedy. **Cumulative: 2 graded passes**, both
-claim-width, **neither touching behaviour**. Any further pass is restricted to the remedy diff, and
-there is no fourth.
+`9a6f0dc` `REFUTED` -> `cb28b8b` `REFUTED` -> `c09dd23` **`NOT REFUTED`**. **Cumulative: 3 graded
+passes, none of which refuted the CODE** -- every finding in all three was claim width.
+
+**▶ ⚠ THE COMMIT AFTER `c09dd23` IS UNGRADED BY THE GATE AND SAYS SO IN ITS OWN MESSAGE AND IN THE
+PR.** It applies pass 3's four `INTRODUCED` **minors**, which are all record-accuracy in this file and
+in `CHANGELOG.md` plus one comment in the test file, and it is deletion-dominant. **It does NOT ride
+on ADR 0027**, whose conditions pass 3 measured as unmet (that route needs a deletion-only remedy, and
+this one adds sentences). It rides on the verdict: no blocker, no major, and no behaviour touched.
+**Do not copy a pass ceiling out of this file.** ADR 0016's last amendment (2026-08-02) says four and
+ADR 0027 says three; they conflict, unresolved, and two agents have already halted a slice early by
+reading only the first number they met. Read the ADR, both of them, top to bottom.
 
 ## The axis of every number here
 
