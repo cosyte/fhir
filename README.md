@@ -352,6 +352,24 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `<status value="final">final</status>` refuses as well, even though nothing is missing there. That
   is deliberate. Deciding the document meant no harm would mean reading the text, which is the
   tolerance this half does not take.
+- **A boolean value outside the datatype's lexical space is reported, not read as an absent
+  instruction.** R4 spells a `boolean` as `true` or `false` and nothing else, so
+  `<doNotPerform value="1"/>` and `value="Y"` (ordinary v2 and C-CDA converter output, which is how
+  a great deal of data reaches a FHIR surface) carry no boolean this library may read. They are not
+  `false`; they are **unreadable**, and the difference is the whole point: measured, a `value="1"`
+  read back exactly like `value="0"`, so a prescriber's "yes, do not administer" and another's "no"
+  produced the same answer, with nothing on any channel to say a value had been written and dropped.
+  So the position is named: the locations in `unreadableBooleans`, `safeToSummarize` is `false`, and
+  `assertSafeToSummarize` throws. **The value is still not read**, deliberately: coercing `"1"` or
+  `"Y"` would invent a reading the spec does not license, and it would turn `value="0"` into a JS
+  `false` that `serializeResource` then emits, laundering an authored value across a format change.
+  The channel covers `MedicationRequest.doNotPerform`, the only `boolean` the safety layer reads out
+  of a document, at every resource root (so a `contained` or `Bundle.entry` order counts). A
+  primitive carrying only `id` / `extension` and no value is untouched, since nothing was written
+  there to be unread, so this cannot fire on a conformant document in either wire format. Unlike the
+  five findings above it, it raises **no** `ValidationIssue`: the validator is schema-free and every
+  rule it carries is about a shape FHIR gives no meaning to at any position, while this one is
+  decidable only because the safety layer knows the element's datatype.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
   `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding

@@ -179,9 +179,11 @@ export function primitiveString(node: FhirNode | undefined): string | undefined 
  *
  * **The text recognised is exactly `true` and `false`**, the whole of the R4 `boolean` lexical space
  * (`datatypes.html`) and nothing beside it. `"TRUE"`, `"1"`, `"yes"` and `" true"` read as no
- * boolean, because coercing them would author a value the sender did not spell. **That refusal is
- * silent**, with no diagnostic on any channel, which is a residual rather than a guarantee. It is
- * pinned in `test/xml-lexical-boolean.test.ts`.
+ * boolean, because coercing them would author a value the sender did not spell, and `"1"` / `"Y"`
+ * arrive on the wire meaning both a boolean's `true` and, elsewhere, its opposite. **That refusal is
+ * no longer silent** where the safety layer makes it: {@link hasUnreadableBoolean} is its exact
+ * complement, and the caller reports the element's location so the value's presence survives the
+ * read that could not use it. The refusal is still silent for {@link primitiveBoolean}'s callers.
  *
  * The model records no provenance, so a JSON document that spelled `{"doNotPerform":"true"}` is read
  * the same way; FHIR JSON says a boolean is a JSON boolean, so that document is non-conformant
@@ -285,6 +287,40 @@ export function primitiveBooleans(node: FhirNode | undefined): readonly boolean[
     const bool = booleanOf(value);
     return bool === undefined ? [] : [bool];
   });
+}
+
+/**
+ * Whether a node holds a **written value** that {@link primitiveBooleans} looked at and could not
+ * read as a boolean.
+ *
+ * The exact complement of the read: it walks the same values through the same array wrapper and asks
+ * of each one the same question, so a `true` here means at least one value the safety read saw is
+ * missing from what it returned. That coupling is the point: the caller reports a location for
+ * precisely the values the read declined, and cannot drift from it by growing a second rule.
+ *
+ * **It is value-free**: the answer is a `boolean`, never the text, so a caller building a diagnostic
+ * out of it has no document content to echo.
+ *
+ * **A value must be written for this to be `true`.** A primitive carrying only `id` / `extension`
+ * metadata has no value (`value` is `undefined`, json.html §2.6.2.3), and a `0..1` element the
+ * sender left out has no node, so neither answers `true`. R4 spells a `boolean` as `true` or `false`
+ * (datatypes.html), so this is `false` for every conformant document.
+ *
+ * **It answers about a value, not about a shape.** A `boolean` element written as an object or as an
+ * empty array holds no value at all, so it is not reported here; those shapes are a separate gap,
+ * pinned in `test/xml-unreadable-boolean.test.ts`.
+ *
+ * @param node - Any model node, or `undefined`.
+ * @returns `true` when at least one written value there is outside the boolean lexical space.
+ * @example
+ * ```ts
+ * import { primitive } from "@cosyte/fhir";
+ * hasUnreadableBoolean(primitive("1"));    // true  (R4 spells a boolean `true` / `false`)
+ * hasUnreadableBoolean(primitive("true")); // false (read, so nothing was left over)
+ * ```
+ */
+export function hasUnreadableBoolean(node: FhirNode | undefined): boolean {
+  return scalarValues(node).some((value) => booleanOf(value) === undefined);
 }
 
 /**

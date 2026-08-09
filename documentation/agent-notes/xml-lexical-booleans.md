@@ -25,19 +25,19 @@ writer is correct**: it emits `<doNotPerform value="true"/>`. The reader yields
 attribute text and this reader is schema-free by design. `readDoNotPerform` read via
 `primitiveBooleans`, which accepted only a JS `boolean`, **and a failed match reads as absence.**
 
-**Why it outranked the other residuals of its class:** `#78`'s Quantity defect degraded a *value*;
+**Why it outranked the other residuals of its class:** `#78`'s Quantity defect degraded a _value_;
 this one **inverts an instruction**.
 
 ## THE CENSUS IS THE LESSON, AND SO IS WHAT IT DID NOT LICENSE
 
-The item said *census every boolean*. The census found three sites. **Only one was changed, and the
+The item said _census every boolean_. The census found three sites. **Only one was changed, and the
 gate is why.**
 
-| Site | Via | Read from XML | Disposition |
-|------|-----|---------------|-------------|
-| `MedicationRequest.doNotPerform` (`safety/status.ts`) | `primitiveBooleans` | LOST | **FIXED** |
-| `ElementDefinition.mustSupport` (`profiles/structure-definition.ts`) | `primitiveBoolean` | LOST | **left standing, pinned** |
-| `ElementDefinition.slicing.ordered` (same file) | `primitiveBoolean` | LOST | **left standing, pinned** |
+| Site                                                                 | Via                 | Read from XML | Disposition               |
+| -------------------------------------------------------------------- | ------------------- | ------------- | ------------------------- |
+| `MedicationRequest.doNotPerform` (`safety/status.ts`)                | `primitiveBooleans` | LOST          | **FIXED**                 |
+| `ElementDefinition.mustSupport` (`profiles/structure-definition.ts`) | `primitiveBoolean`  | LOST          | **left standing, pinned** |
+| `ElementDefinition.slicing.ordered` (same file)                      | `primitiveBoolean`  | LOST          | **left standing, pinned** |
 
 **The first draft widened both helpers, and `conformance-refuter` pass 1 REFUTED it with a measured
 BEHAVIOURAL counterexample.** `src/profiles/snapshot.ts` merges a differential flag only when it is
@@ -63,11 +63,11 @@ resolved rather than shipped.**
 negation can never be retired), **but `SafetyReadout.doNotPerform` moves further than `undefined` to
 a value**: it also moves `false` to `true` where **any** value spells the negation a JS `boolean`
 **elsewhere in the element** contradicts (the ordering is not the point, and a draft that said
-*later* / *earlier* was falsified by `{"doNotPerform":["true",false]}`), which is the documented
+_later_ / _earlier_ was falsified by `{"doNotPerform":["true",false]}`), which is the documented
 "a `true` anywhere wins" rule and is pinned at
 `test/xml-lexical-boolean.test.ts`. **Gate pass 2 refuted a sentence saying the read "can only fill
 in a value that was `undefined`" using this slice's own fixture: the third generation of one
-universal.** Say *adds a negation, never retires one*, which is the only form that measures true.
+universal.** Say _adds a negation, never retires one_, which is the only form that measures true.
 
 **Censused and deliberately unchanged**, each a decision:
 
@@ -83,7 +83,7 @@ universal.** Say *adds a negation, never retires one*, which is the only form th
   surfacing as `INVARIANT_UNCHECKED`. Left as is.
 - **`systemTypeOf`** (same file): an XML-sourced boolean answers `"String"`, so `is Boolean` is
   false. Same trade.
-- **The writers** (`xml/write.ts`, `codec/write.ts`, `xml/equivalence.ts`): they *emit* and already
+- **The writers** (`xml/write.ts`, `codec/write.ts`, `xml/equivalence.ts`): they _emit_ and already
   render a string unchanged, so the round trip is byte-exact either way.
 
 **The wider sweep the item asked for, over consumers matching on the JSON reader's TYPE rather than
@@ -133,10 +133,16 @@ Closing any of them MUST red its test, in the same change.
    location channels for content the codec could not read (`nestedArrays`, `droppedText`) and **none
    for "value written, not readable"**. Base did this for `true` too, so it is strictly improved and
    did not block. **Do not let "declared residual" absorb it: it wants its own item.**
+   **▶ 🟢 IT GOT ONE AND IT IS CLOSED**, `FHIR-XML-UNREADABLE-BOOLEAN-IS-SILENT`:
+   [`xml-unreadable-boolean.md`](xml-unreadable-boolean.md). The remedy was the missing channel
+   (`unreadableBooleans`), **not** a wider read: the read is byte-identical to what this slice left.
+   Its half of the pin above moved out of `test/xml-lexical-boolean.test.ts` accordingly; residuals
+   1-3 stay there, unchanged.
 
 The lexical space itself is the fifth: `"TRUE"`, `"True"`, `"1"`, `"yes"`, `"Y"`, `" true"` and `""`
-read as no boolean **with nothing on any diagnostic channel**. Refusing them is right, because
-coercing would author a value the sender did not spell; the refusal being silent is the gap.
+read as no boolean. Refusing them is right, because coercing would author a value the sender did not
+spell. **The refusal being SILENT was the gap, and it is closed for the safety read only** (above):
+`primitiveBoolean`'s callers still refuse the same text with nothing on any channel.
 
 ## Measurements
 
@@ -152,7 +158,7 @@ accepting `"1"` reds 1.
 `mustSupport` retirement above), which is why **ADR 0027 is NOT available to this slice** and was not
 invoked: its route requires that no pass refuted the code. The gate converged instead. **One commit
 after `27cb42c` applies pass 3's two advisories and is UNGRADED**, disclosed here, in its own message
-and in the PR: it deletes an over-specified *later* / *earlier* ordering from the `doNotPerform`
+and in the PR: it deletes an over-specified _later_ / _earlier_ ordering from the `doNotPerform`
 transition sentence at three sites, and corrects "single-consumer" to name the call sites. Both are
 documentation, neither adds a guarantee.
 
@@ -160,9 +166,9 @@ documentation, neither adds a guarantee.
 existing test moved**. **Corpus caveat, standing:** hand-authored XML fixtures plus mutations and
 hand-built probes, **not** the FHIR R4 published-examples corpus. Nothing here is corpus-wide.
 
-**Claims deliberately left standing, because this slice cannot grade them:** the *"same schema-free
-model"* universals at `README.md` (x2), `src/index.ts` and `src/xml/read.ts`; *"never drops a status,
-modifier, or negation"* at `README.md` and `docs-content/intro.md`, still qualified by a status
+**Claims deliberately left standing, because this slice cannot grade them:** the _"same schema-free
+model"_ universals at `README.md` (x2), `src/index.ts` and `src/xml/read.ts`; _"never drops a status,
+modifier, or negation"_ at `README.md` and `docs-content/intro.md`, still qualified by a status
 written as XML **element text**, a different channel; and the `@example` blocks on `primitiveString`
 / `primitiveBoolean` (`codes.ts`) that `import` them from `@cosyte/fhir` although neither is
 exported, byte-identical at `4eb444f` and reaching no declaration file.
