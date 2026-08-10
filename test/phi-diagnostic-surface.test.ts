@@ -47,9 +47,13 @@ interface Surfaces {
 /**
  * Run the whole JSON pipeline and collect every diagnostic collection it has.
  *
- * `getDiagnostics` has to return them all: read issues, validation findings, the rendered
- * `OperationOutcome`, and the four location lists on the safety readout, which are findings in
- * everything but name.
+ * `getDiagnostics` has to return read issues, validation findings, the rendered `OperationOutcome`,
+ * and the location lists on the safety readout, which are findings in everything but name.
+ *
+ * **It does NOT sweep every location list, and the shortfall is named rather than counted.**
+ * `droppedText`, `unreadableBooleans` and `nearMissNegationCodes` are not collected here, a
+ * `PRE-EXISTING` gap this slice widens by nothing: `unreadableNegationCodes`, the channel it adds,
+ * IS collected below. Closing the other three is its own slice.
  */
 function runJson(text: string, mode: ValidationMode): Surfaces {
   const { resource, issues } = parseResource(text);
@@ -64,6 +68,7 @@ function runJson(text: string, mode: ValidationMode): Surfaces {
       ...safety.shadowedProperties,
       ...safety.arrayWrappedScalars,
       ...safety.nestedArrays,
+      ...safety.unreadableNegationCodes,
     ],
     // The one derived identifier this package's model surfaces. The raw property names on
     // `FhirComplex` are deliberately absent: they are document content the writer reproduces
@@ -86,6 +91,7 @@ function runXml(text: string, mode: ValidationMode): Surfaces {
       ...safety.shadowedProperties,
       ...safety.arrayWrappedScalars,
       ...safety.nestedArrays,
+      ...safety.unreadableNegationCodes,
     ],
     identifiers: [safety.resourceType ?? ""],
   };

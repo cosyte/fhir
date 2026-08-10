@@ -353,6 +353,113 @@ export function hasUnreadableBoolean(node: FhirNode | undefined): boolean {
 }
 
 /**
+ * The members a `CodeableConcept` defines (`coding`, `text`, datatypes.html) beside the two every
+ * element carries (`id`, `extension`). **This is not a datatype model and must not grow into one**:
+ * it is the smallest question that separates a `CodeableConcept` a sender wrote from a shape no
+ * datatype FHIR spells at a `status`.
+ */
+const CODEABLE_CONCEPT_MEMBERS: ReadonlySet<string> = new Set([
+  "coding",
+  "text",
+  "id",
+  "extension",
+]);
+
+/**
+ * Whether an element holds **content at a position no datatype FHIR spells there can hold**: a
+ * primitive whose written value is not a string, or a complex carrying any member outside
+ * `{coding, text, id, extension}` or no member at all. Read through an array wrapper, position by position, exactly as the string read
+ * walks it.
+ *
+ * **Two datatypes reach a root `status`, and the refusal has to clear both.** R4 spells it a `code`
+ * on the overwhelming majority of types, and a **`CodeableConcept`** on
+ * `MedicinalProductAuthorization` and `SubstanceSpecification`; R5 adds `ClinicalUseDefinition`,
+ * `DeviceAssociation` (`1..1`, mandatory), `MedicinalProductDefinition`, `PackagedProductDefinition`,
+ * `RegulatedAuthorization` and `SubstanceDefinition`; DSTU2 spells every one of them a `code`. A rule
+ * keyed on "the string read took nothing" therefore **refuses a conformant document**, because a
+ * conformant `CodeableConcept` yields no string to a `code` read, and a `CodeableConcept` carrying
+ * only `text` yields nothing to a coding read either. That was measured on the published R4
+ * `MedicinalProductAuthorization` example, not feared.
+ *
+ * **So the question asked here is about the SHAPE, not about which reader succeeded.** A complex
+ * **all of whose members** are ones FHIR spells at this position (`coding`, `text`, `id`,
+ * `extension`) is left alone, whether or not any code came out of it. A complex carrying **any**
+ * member outside that set (`{"value":"not-done"}`, the member a generic converter makes of FHIR
+ * XML's `value` attribute, and `{"id":"s1","value":"not-done"}` where it carried the primitive's own
+ * metadata across beside it) is spellable as neither datatype, so no reading of it was declined:
+ * there was nothing there either datatype could hold. **The polarity is load-bearing**: exempting a
+ * shape for carrying *one* legal member would exempt exactly those converter outputs. An empty
+ * complex is reported too, `ele-1` forbidding an element with no value, children or extension.
+ *
+ * **The direction of the scoping is the point.** An unscoped rule flips a conformant document from
+ * summarizable to refused, which is the one direction a fail-safe layer must not move in without
+ * evidence. That is why this is scoped where the negation *read* beside it deliberately is not: a
+ * read can only **add** a negation, so widening it is free, while a refusal raised over a document
+ * this library read correctly and completely costs a caller a summary it was entitled to.
+ *
+ * **A declared limit in the safe direction:** if some version spells a root `status` as a third
+ * datatype whose members are none of these, a conformant document of that type would be reported.
+ * The census above found none in R4, R5 or DSTU2. A shape **all of whose members** are ones FHIR
+ * spells here is conversely never reported, even where the type spells `status` a `code`, so a code
+ * buried
+ * under `{"coding":{...}}` at a `Procedure` stays silent. Both are pinned rather than described.
+ *
+ * **A primitive carrying no value is not reported**, because it is not content the read stepped over:
+ * a `code` whose value is absent while its `_`-sibling carries a `data-absent-reason` extension is
+ * conformant (json.html §2.6.2.3), and both readers model it as a primitive with an `undefined`
+ * value. The XML reader models a `value` attribute beside `id` / `extension` children as a primitive
+ * too, so a conformant `<status value="not-done"><extension …/></status>` is read, not reported.
+ *
+ * **It reports; nothing anywhere reads through it.** Descending into the object to find a string
+ * would author a reading FHIR JSON does not define. `code` is a JSON string (json.html §2.6.0), and
+ * `{"value":"…"}` is the *XML* spelling of a primitive, not a JSON one, so a reader that resolved it
+ * would hand a caller a negation out of an encoding no version of FHIR spells. The gap this closes
+ * is the **silence**, not the strictness, which is the same disposition {@link isNearMissCode} takes
+ * on the case and whitespace near misses.
+ *
+ * @param node - Any model node, or `undefined`.
+ * @returns `true` when at least one position there holds content no datatype FHIR spells can hold.
+ * @example
+ * ```ts
+ * import { complex, primitive } from "@cosyte/fhir";
+ * const written = complex([{ name: "value", value: primitive("not-done") }]);
+ * hasUnreadableCode(written);               // true  (spellable as neither datatype)
+ * hasUnreadableCode(primitive("not-done")); // false (read, so nothing was stepped over)
+ * ```
+ * @internal
+ */
+export function hasUnreadableCode(node: FhirNode | undefined): boolean {
+  if (node === undefined) return false;
+  // Position by position, so a wrapped shape is reached exactly as `scalarValues` reaches a wrapped
+  // primitive. An empty wrapper holds no position and therefore no content, and says `false`.
+  if (isList(node)) return node.items.some((item) => hasUnreadableCode(item));
+  if (isPrimitive(node)) return node.value !== undefined && typeof node.value !== "string";
+  if (isComplex(node)) {
+    // ANY member outside the set, not "none inside it". The other polarity exempts a shape as soon
+    // as it carries one legal member, so `{"id":"s1","value":"not-done"}` and
+    // `{"value":"not-done","extension":[...]}` - the very converter output this reports, with the
+    // primitive's own `id` / `extension` metadata carried across beside the value - would read as
+    // clean. A conformant `CodeableConcept` has NO member outside the set, so this is empty on one
+    // whatever else it carries.
+    //
+    // `properties` alone is the whole document here, so a duplicate key cannot hide a member: a
+    // repeated name keeps its FIRST member in `properties` and puts only the later ones in
+    // `duplicates`, so every name in `duplicates` is present here too. Scanning both was written
+    // first and measured DEAD, so it is not shipped: an unreachable branch is one a mutation cannot
+    // red and a reader cannot check.
+    if (node.properties.some((property) => !CODEABLE_CONCEPT_MEMBERS.has(property.name)))
+      return true;
+    // No member at all is a shape FHIR spells nowhere either: an element present in a resource SHALL
+    // carry a value, children defined for its type, or an extension (ele-1). That grounds THIS arm
+    // only; it is not a general ele-1 check, and `{"id":"s1"}` / `{"coding":[]}` violate ele-1 too
+    // and are deliberately left alone, their members being ones FHIR spells here.
+    return node.properties.length === 0;
+  }
+  // Any shape the model gains later reports rather than reading as clean.
+  return true;
+}
+
+/**
  * The one value a `Coding.system` / `Coding.code` member holds, **reading through a single-position
  * array wrapper** and returning `undefined` for anything else.
  *
@@ -758,6 +865,12 @@ export function isNearMissCode(value: string, code: string): boolean {
  * `test/negation-code-spelling.test.ts` asserts of every entry that the exact code **is** classified
  * as a negation at that element, so the table cannot drift into describing a read that is not there.
  *
+ * **`unread` is the third thing an entry carries and it is the shape complement of `values`**: the
+ * positions at that element from which the entry's own reader can take nothing, so a code sitting in
+ * one is invisible to the classification. It lives in the row beside the reader it complements for
+ * the same reason the reader lives here at all: a read and its refusal that share a table cannot
+ * come to disagree about which elements they cover.
+ *
  * **`AllergyIntolerance.code` is deliberately absent**, and it is the same boundary that keeps
  * `no-known-allergy` off the walk ({@link ./status.js} `checkNegations`). Adding it here would put a
  * near-miss disclosure at every resource root while an *exact* SNOMED `716186003` at a nested root
@@ -773,13 +886,26 @@ export const NEGATION_CODE_READS: readonly {
   readonly codes: readonly string[];
   /** The values the negation read sees at that element, in document order. */
   readonly values: (node: FhirNode) => readonly string[];
+  /**
+   * Whether the element holds content at a position `values` cannot take anything from, so a code
+   * inside it is invisible to the read. Absent where the shape complement is not settled; see the
+   * `verificationStatus` entry.
+   */
+  readonly unread?: (node: FhirNode) => boolean;
 }[] = [
   {
     element: "status",
     codes: [ENTERED_IN_ERROR, NOT_TAKEN, NOT_DONE],
     values: (node) => primitiveStrings(node),
+    unread: hasUnreadableCode,
   },
   {
+    // No `unread` here, and it is a declared limit rather than an oversight. The shape complement of
+    // a `CodeableConcept` read is a *primitive* at the element, and `Condition.verificationStatus`
+    // **is** a `code` in DSTU2, which ADR 0004 says this library reads tolerantly, so the same
+    // predicate that reports a non-conformant R4 document would report a conformant DSTU2 one.
+    // Deciding that needs a version this reader does not have. Filed, and pinned in both directions,
+    // rather than taken here on the strength of the R4 half.
     element: "verificationStatus",
     codes: [ENTERED_IN_ERROR, REFUTED],
     values: (node) => safetyCodingsOf(node).flatMap((c) => (c.code === undefined ? [] : [c.code])),

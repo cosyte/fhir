@@ -16,8 +16,9 @@
  * is "right", never converts, never infers clinical meaning (known limitations).
  *
  * That last sentence is load-bearing wherever a document encodes an element in a shape FHIR does not
- * define, because then the element's value is not something this layer may pick. Five such
- * encodings are handled, and they reach the **same** harm by different routes:
+ * define, because then the element's value is not something this layer may pick. The encodings
+ * below are handled, and they reach the **same** harm by different routes. **Their number is not
+ * written down here**, because every prose count in this module has gone stale at least once:
  *
  * - **A repeated property name.** FHIR JSON forbids it (json.html §2.6.2) and RFC 8259 §4 leaves the
  *   winner undefined, so the element genuinely holds two values.
@@ -42,18 +43,25 @@
  *   different wires, and picking one would author the instruction. Unlike the four above, the
  *   *shape* here is fine; it is the **value** the reader could not turn into the datatype. Reported
  *   at `unreadableBooleans`.
+ * - **Content where FHIR JSON spells a `code`.** A `code` is a JSON string (json.html §2.6.0), so
+ *   `{"status":{"value":"not-done"}}` (a generic converter carrying FHIR XML's `value` attribute
+ *   across as a member) and a `status` written as a number carry no code this library may read.
+ *   Unlike the fifth, no value was written at the position at all, so a question about a written
+ *   value answers "no" about it *truthfully* and the element then reads exactly like one the sender
+ *   left out. Reported at `unreadableNegationCodes`.
  *
- * Two rules follow, and they apply to all five encodings. Each negation read runs over **every** value
+ * Two rules follow, and they apply to every encoding above. Each negation read runs over **every** value
  * written for the element it reads, **including through an array wrapper** and including the type gate
  * itself, because a retraction the sender wrote must not go unreported. (Nothing can be read through
  * the third and fourth; there is no value there to read. The fifth has a value and this layer
  * declines it.) And the readout stops claiming the resource is summarizable: `safeToSummarize` is
  * `false` with the locations in `shadowedProperties` / `arrayWrappedScalars` / `nestedArrays` /
- * `droppedText` / `unreadableBooleans` / `nearMissNegationCodes`, so a caller gets a refusal rather
+ * `droppedText` / `unreadableBooleans` / `nearMissNegationCodes` / `unreadableNegationCodes`, so a
+ * caller gets a refusal rather
  * than an affirmative verdict computed over one arbitrary reading of the document, or over content it
  * never saw.
  *
- * **One channel on that list is not one of the five, and reads differently.** A negation is matched
+ * **One channel on that list is not one of the encodings above, and reads differently.** A negation is matched
  * by its exact `code`, because FHIR `code` is case-sensitive and its lexical space excludes
  * surrounding whitespace (`[^\s]+(\s[^\s]+)*`, datatypes.html). So `{"resourceType":"Procedure",
  * "status":"NOT-DONE"}` and a `status` of `" not-done"` (an upper-casing source system, a padded
@@ -61,7 +69,8 @@
  * them in would accept a non-conformant document as though it were conformant and author a negation
  * the sender did not spell. Nothing about that changes. What changes is that the value is no longer
  * *invisible*: it is surfaced on `status` as always, its location is on `nearMissNegationCodes`, and
- * the readout stops affirming. Unlike the five above, **the value here is read** and nothing is lost;
+ * the readout stops affirming. Unlike every encoding above, **the value here is read** and nothing is
+ * lost;
  * what the library declines is the classification, and the disclosure is the record that it declined.
  *
  * @packageDocumentation
@@ -224,7 +233,8 @@ const NEGATION_ORDER: readonly NegationKind[] = [
  *
  * **Two groups of fields, and the difference is which question they answer.** The location channels
  * (`unhandledModifierExtensions`, `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`,
- * `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`) and the `safeToSummarize` derived
+ * `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`, `unreadableNegationCodes`) and the
+ * `safeToSummarize` derived
  * from them are **document-wide**: they carry FHIRPath locations, so a nested finding has an address to name, and
  * `assertSafeToSummarize` refuses over a `Bundle`'s entries. The **single-valued** fields
  * (`resourceType` / `status` / `clinicalStatus` / `verificationStatus` / `doNotPerform` / `retracted`
@@ -352,8 +362,9 @@ export interface SafetyReadout {
    * sender filled it in, and the read still returns `undefined`. `<doNotPerform value="1"/>` and
    * `value="Y"` are ordinary v2 / C-CDA converter output and land here; without the location they
    * read exactly like `value="0"`, and a "do not administer" is indistinguishable from its opposite.
-   * The channel is the third one on this readout whose content is **not readable**, beside
-   * {@link nestedArrays} and {@link droppedText}, and like them it carries locations and no values.
+   * Its content is **not readable**, as {@link nestedArrays}' and {@link droppedText}' is, and like
+   * them it carries locations and no values. **How many channels share that property is deliberately
+   * not written down**: that census has gone stale here before.
    * The element read is `doNotPerform`, at any resource root, on any type; it is the only `boolean`
    * this readout takes off a document at all, since `retracted` and `noKnownAllergy` come from codes
    * and codings. Empty on every conformant document.
@@ -417,14 +428,76 @@ export interface SafetyReadout {
    */
   readonly nearMissNegationCodes: readonly string[];
   /**
+   * FHIRPath locations of a `code`-valued negation element holding **content at a position no
+   * datatype FHIR spells there can hold**: an object carrying **any member outside**
+   * `{coding, text, id, extension}` (`{"status":{"value":"not-done"}}` and
+   * `{"status":{"id":"s1","value":"not-done"}}`, the members a generic converter makes of FHIR XML's
+   * `value` attribute and the primitive's own metadata beside it), an object carrying **no member at
+   * all** (`ele-1` forbids an element with no value, children or extension), or a written value that
+   * is not a string at all. **`ele-1` grounds that one arm; it is not a rule this channel
+   * enforces**, and `{"status":{"id":"s1"}}` / `{"status":{"coding":[]}}` violate it too and are
+   * deliberately not reported, their members being ones FHIR spells here. The element is present, and the negation read still returned nothing, so `{"resourceType":"Procedure","status":{"value":"not-done"}}` read `negations: []`
+   * under `safeToSummarize: true`, indistinguishable from a procedure that was carried out.
+   *
+   * **The shape complement of {@link nearMissNegationCodes}, and the two do not overlap.** That one
+   * covers a *value* the exact match declined; this one covers a *position* the read could take no
+   * value from at all, which is the case a value-shaped question cannot see. It is the same
+   * distinction that keeps an object at `doNotPerform` off {@link unreadableBooleans}, which asks
+   * only about written values.
+   *
+   * **Nothing reads through this location.** `{"value":"not-done"}` is the *XML* spelling of a
+   * primitive; FHIR JSON spells a `code` as a JSON string (json.html §2.6.0), so descending to find
+   * the code would resolve a negation out of an encoding no version of FHIR defines for JSON. The
+   * value is in the model at the location named here and a caller walking it finds it. **What this
+   * fixes is the silence, not the strictness**, the same disposition
+   * {@link nearMissNegationCodes} takes.
+   *
+   * **Two datatypes reach a root `status`, and this clears both.** R4 spells it a `code` on the
+   * overwhelming majority of types and a **`CodeableConcept`** on `MedicinalProductAuthorization`
+   * and `SubstanceSpecification`; R5 adds several more, including a mandatory
+   * `DeviceAssociation.status`; DSTU2 spells every one a `code`. So the question is about the
+   * **shape**, not about which read succeeded: a complex **all of whose members** are ones FHIR
+   * spells here (`coding`, `text`, `id`, `extension`) is left alone, whether or not a code came out
+   * of it, while **any** member outside that set is reported, as is an object with **no** member at
+   * all (`ele-1`: an element present in a resource SHALL carry a value, children defined for its
+   * type, or an extension). The polarity is load-bearing: exempting a shape for carrying *one* legal
+   * member would read `{"status":{"id":"s1","value":"not-done"}}` as clean, and that is the same
+   * converter output. Keyed on "no string was read" instead, this would refuse the published R4
+   * `MedicinalProductAuthorization` example, which was measured rather than feared.
+   *
+   * **The element is `status`, at every resource root**, which is {@link negations}' window: the
+   * entry node plus every node carrying its own `resourceType`, so a `Bundle.entry` or `contained`
+   * resource is covered. **`verificationStatus` is deliberately absent and it is a declared limit**:
+   * its shape complement is a *primitive* at the element, and `Condition.verificationStatus` **is** a
+   * `code` in DSTU2, a version this reader ingests tolerantly, so the same predicate would report a
+   * conformant DSTU2 document. Both directions are pinned rather than described.
+   *
+   * **Value-free, like every location on this readout**: neither the content at the position nor
+   * anything read out of it is carried here.
+   *
+   * **Empty for every conformant document this library has been measured against, in either wire
+   * format**, and the limit is declared rather than claimed away: a version spelling a root `status`
+   * as a datatype whose members are none of the above would be reported, and the census found none
+   * in R4, R5 or DSTU2. The XML reader models a `value` attribute beside `id` / `extension` children
+   * as a primitive, so a conformant `<status value="not-done"><extension …/></status>` is read. A
+   * primitive whose value is *absent* is not reported either: that is the conformant
+   * `data-absent-reason` shape (json.html §2.6.2.3), and it is content the read never stepped over.
+   * **The converse limit:** a shape **all of whose members** are ones FHIR spells here is never
+   * reported, so a code buried under `{"status":{"coding":{…}}}` at a type whose `status` is a
+   * `code` stays silent. One member outside the set is enough to report, so this covers only a shape
+   * that is wholly a `CodeableConcept`.
+   */
+  readonly unreadableNegationCodes: readonly string[];
+  /**
    * `false` when the resource must not be flattened: an unhandled `modifierExtension` is present, a
    * repeated property name left an element with more than one value, a `0..1` safety element
    * arrived array-wrapped, an array inside an array left content the codec could not read, XML
    * character data on an element was dropped, a boolean-valued safety element carries a written
-   * value this layer cannot read, or a `code`-valued negation element carries a value that spells a
-   * negation code bar its case or its surrounding whitespace. Each is a case where a summary would
-   * have to assert something this library cannot establish (for the last one, that no negation was
-   * asserted), so it declines instead.
+   * value this layer cannot read, a `code`-valued negation element carries a value that spells a
+   * negation code bar its case or its surrounding whitespace, or such an element holds content at a
+   * position no `code` read can reach. Each is a case where a summary would have to assert something
+   * this library cannot establish (for the last two, that no negation was asserted), so it declines
+   * instead.
    */
   readonly safeToSummarize: boolean;
 }
@@ -740,6 +813,52 @@ export function nearMissNegationCodes(resource: FhirComplex, path: string): stri
 }
 
 /**
+ * The locations where a `code`-valued negation element holds **content at a position no datatype
+ * FHIR spells there can hold**, so the negation read stepped over it and returned nothing.
+ *
+ * `{"resourceType":"Procedure","status":{"value":"not-done"}}` is ordinary output from a converter
+ * that carried FHIR XML's `value` attribute across as a JSON member, and
+ * `{"…","status":3}` from a feed whose codes are enumerated numerically. Neither is a `code` (FHIR
+ * JSON spells one as a JSON string, json.html §2.6.0) and neither is a `CodeableConcept`, the other
+ * datatype a root `status` carries. **Nothing here descends into the object or
+ * coerces the number**, which would resolve a negation out of an encoding no version of FHIR defines
+ * for JSON. This is **the record that content was there**, which is what the read was missing:
+ * without it a procedure recorded as not done returns `negations: []` under `safeToSummarize: true`,
+ * indistinguishable from one that was carried out.
+ *
+ * **The shape complement of {@link nearMissNegationCodes}**, which covers a *value* the exact match
+ * declined. A position holding no value at all is invisible to every value-shaped question here,
+ * {@link unreadableBooleans} included, and that is the gap this closes.
+ *
+ * **The element is `status`, at every resource root**, the negation read's own window. A complex
+ * with at least one member, all of them ones FHIR spells there, is left alone, because R4 and R5
+ * both spell some root `status` elements as `CodeableConcept`; one member outside that set is enough
+ * to report, and so is carrying no member at all. `verificationStatus` is deliberately outside it, and `AllergyIntolerance.code` is outside it for
+ * the reason that keeps `no-known-allergy` root-scoped (see
+ * {@link SafetyReadout.unreadableNegationCodes} for both).
+ *
+ * **Value-free**: only the FHIRPath of the element is carried.
+ *
+ * Empty for every conformant document this library has been measured against, in either wire
+ * format. See {@link SafetyReadout.unreadableNegationCodes} for the two declared limits.
+ *
+ * @param resource - The resource model.
+ * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
+ * @returns The locations of the unreadable negation-code positions, in walk order.
+ * @example
+ * ```ts
+ * import { parseResource, unreadableNegationCodes } from "@cosyte/fhir";
+ * const { resource } = parseResource(
+ *   '{"resourceType":"Procedure","status":{"value":"not-done"}}',
+ * );
+ * unreadableNegationCodes(resource, "Procedure"); // ["Procedure.status"]
+ * ```
+ */
+export function unreadableNegationCodes(resource: FhirComplex, path: string): string[] {
+  return walkSafety(resource, path).unreadableCode;
+}
+
+/**
  * The locations of every node the reader marked with `marked`, de-duplicated.
  *
  * A repeated property name can put two marked nodes at the same FHIRPath location, and FHIRPath
@@ -824,6 +943,11 @@ interface SafetyWalk {
    * whose exact match declined it.
    */
   readonly nearMissCode: string[];
+  /**
+   * `code`-valued negation elements holding content at a position the read cannot take a string
+   * from. Built by the same pass, at the same window, as the reads that stepped over it.
+   */
+  readonly unreadableCode: string[];
 }
 
 /**
@@ -840,6 +964,7 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     negations: new Set<NegationKind>(),
     unreadableBoolean: [],
     nearMissCode: [],
+    unreadableCode: [],
   };
   walkComplex(resource, path, out, true);
   return out;
@@ -966,14 +1091,15 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
 /**
  * Read every negation this resource root asserts, record the `doNotPerform` value the boolean read
  * could not read, and record the `code` value a negation match declined over case or surrounding
- * whitespace alone. **One pass decides the reads and the refusals**, and that is the point of the
+ * whitespace alone, and record the position at which content was written where a `code` belongs.
+ * **One pass decides the reads and the refusals**, and that is the point of the
  * function: whatever a document has to be for this to look at it, it is the same for the values that
  * are read and for the values that are refused, so they can never drift into a window where a
  * sender's instruction is neither surfaced nor reported. Widening a read without moving its refusal
  * alongside it is how a value goes from *not looked for* to *looked for and silently dropped*, which
  * is the same defect wearing the fix's clothes.
  *
- * **The two refusals are not the same shape, and the difference is worth stating rather than
+ * **The refusals are not all the same shape, and the difference is worth stating rather than
  * blurring.** The boolean one is about a value that could not be read *at all*: `doNotPerform`
  * reads `undefined`, which is what an absent element reads too, so without the location the two are
  * indistinguishable. The `code` one is about a value the codec **kept**, at the element the location
@@ -981,7 +1107,8 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
  * reaches a convenience field: `status` / `verificationStatus` are root-scoped and
  * preferred-system-first, so a nested or second-coding near miss is not what they show.) The match
  * is exact because FHIR `code` is case-sensitive (datatypes.html) and `"NOT-DONE"` is simply not the
- * code `not-done`.
+ * code `not-done`. The third is about neither: no value was written at the position at all, so the
+ * other two answer "no" about it truthfully and the element reads as one the sender left out.
  * A caller doing what this readout tells it to do, branching on {@link SafetyReadout.negations}
  * rather than on the raw status string, therefore saw an empty list with nothing anywhere to say a
  * negation had been spelled at all. **That silence is the defect; the strictness is not.** The value
@@ -1103,6 +1230,16 @@ function checkNegations(node: FhirComplex, path: string, out: SafetyWalk): void 
       (code) => !spelled.includes(code) && spelled.some((value) => isNearMissCode(value, code)),
     );
     if (near) out.nearMissCode.push(childPath(path, read.element));
+    // The SHAPE complement of the same read, in the same loop over the same table, so it can never
+    // come to cover a different set of elements than the classification does. `spelled` above is the
+    // set of values the read got out; this asks whether it stepped over a POSITION it could get
+    // nothing out of, which is the case no value-shaped question can see: an object at `status`
+    // holds no value at all, so `hasUnreadableBoolean`'s "a written value the read declined" is
+    // `false` there and the element reads exactly like one the sender left out.
+    const unread = read.unread;
+    if (unread !== undefined && written.some((value) => unread(value))) {
+      out.unreadableCode.push(childPath(path, read.element));
+    }
   }
 }
 
@@ -1254,7 +1391,8 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   if (noKnownAllergy) found.add("no-known-allergy");
   const negations = NEGATION_ORDER.filter((kind) => found.has(kind));
 
-  const { modifiers, shadowed, arrayWrapped, unreadableBoolean, nearMissCode } = walk;
+  const { modifiers, shadowed, arrayWrapped, unreadableBoolean, nearMissCode, unreadableCode } =
+    walk;
   const nested = nestedArrays(resource, prefix);
   const dropped = droppedText(resource, prefix);
 
@@ -1274,6 +1412,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     droppedText: dropped,
     unreadableBooleans: unreadableBoolean,
     nearMissNegationCodes: nearMissCode,
+    unreadableNegationCodes: unreadableCode,
     safeToSummarize:
       modifiers.length === 0 &&
       shadowed.length === 0 &&
@@ -1281,7 +1420,8 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
       nested.length === 0 &&
       dropped.length === 0 &&
       unreadableBoolean.length === 0 &&
-      nearMissCode.length === 0,
+      nearMissCode.length === 0 &&
+      unreadableCode.length === 0,
   };
 }
 
@@ -1292,9 +1432,9 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
  * choosing between them, a `0..1` safety element arrived wrapped in a JSON array, an array inside
  * an array left content the codec could not read at all, XML character data written on an element
  * was dropped, a boolean-valued safety element carries a written value outside the datatype's
- * lexical space, or a `code`-valued negation element carries a value that spells a negation code bar
- * its case or its surrounding whitespace. Every way the safe move is to **refuse**, value-free,
- * carrying only the locations.
+ * lexical space, a `code`-valued negation element carries a value that spells a negation code bar
+ * its case or its surrounding whitespace, or such an element holds content at a position no `code`
+ * read can reach. Every way the safe move is to **refuse**, value-free, carrying only the locations.
  *
  * @example
  * ```ts
@@ -1319,8 +1459,8 @@ export class FhirSafetyError extends Error {
     super(
       "Resource cannot be safely summarized: an unhandled modifierExtension, a repeated property " +
         "name, an array-wrapped single-valued element, an array inside an array, dropped XML " +
-        "element text, a boolean value this library cannot read, or a code that spells a negation " +
-        "bar its case or its surrounding whitespace leaves an " +
+        "element text, a boolean value this library cannot read, a code that spells a negation " +
+        "bar its case or its surrounding whitespace, or content where a code belongs leaves an " +
         `element this library must not flatten (${String(locations.length)} location(s)).`,
     );
     this.name = "FhirSafetyError";
@@ -1333,7 +1473,8 @@ export class FhirSafetyError extends Error {
  * unhandled `modifierExtension`, a repeated property name, an array-wrapped single-valued element, an
  * array inside an array, dropped XML element text, a boolean-valued safety element holding a written
  * value outside the datatype's lexical space, or a `code`-valued negation element holding a value
- * that spells a negation code bar its case or its surrounding whitespace. This is the executable
+ * that spells a negation code bar its case or its surrounding whitespace, or content at a position
+ * no `code` read can reach. This is the executable
  * form of "carries status
  * **or refuses**": a summary helper calls it first, and never silently drops a modifier it cannot
  * honor, nor summarizes an element whose value the document left ambiguous or whose content the codec
@@ -1358,6 +1499,7 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     ...readout.droppedText,
     ...readout.unreadableBooleans,
     ...readout.nearMissNegationCodes,
+    ...readout.unreadableNegationCodes,
   ];
   if (locations.length > 0) throw new FhirSafetyError(locations);
 }

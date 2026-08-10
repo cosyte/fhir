@@ -23,9 +23,9 @@ normalised: its element's FHIRPath location now appears in the new
 `SafetyReadout.nearMissNegationCodes`, `safeToSummarize` is `false`, and `assertSafeToSummarize`
 throws. `nearMissNegationCodes(resource, path)` is exported beside the other collectors.
 
-Nothing is coerced, trimmed or case-folded, and unlike the readout's other location channels nothing
-is dropped at parse time either: the value is in the model at the element the location names, and
-what the library declines is the classification. That is not a promise the value reaches a
+Nothing is coerced, trimmed or case-folded, and nothing is dropped at parse time either: the value
+is in the model at the element the location names, and what the library declines is the
+classification. That is not a promise the value reaches a
 convenience field. `status` and `verificationStatus` are root-scoped and preferred-system-first while
 this channel is document-wide, so a near miss inside `contained` or a `Bundle.entry`, or in a second
 coding, is not what they show. Walk the model at the location.
