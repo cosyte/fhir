@@ -402,8 +402,11 @@ export interface SafetyReadout {
    * still reports.
    *
    * The elements are the `code`-valued ones the negation read looks at, `status` and
-   * `verificationStatus`, at **every resource root**, which is {@link negations}' window and
-   * {@link arrayWrappedScalars}'. `AllergyIntolerance.code` is **not** among them: SNOMED
+   * `verificationStatus`, at **every resource root**, which is {@link negations}' window.
+   * {@link arrayWrappedScalars} reaches every root too, but only for the `Coding` members of the
+   * elements that same table marks `codings` (`verificationStatus`, not `status`), and its
+   * element-level half is scoped to the resource types whose cardinality this layer knows, so the
+   * two windows are **not** the same window. `AllergyIntolerance.code` is **not** among them: SNOMED
    * `716186003` is a *positive* assertion whose read is root- and type-scoped (see
    * {@link noKnownAllergy}), and disclosing a near miss at every root would report the miss where
    * an exact hit is read by nothing.
@@ -570,15 +573,27 @@ export function shadowedProperties(resource: FhirComplex, path: string): string[
  * is the second half, the **refusal to affirm** a positive verdict over a document whose safety-bearing
  * element the sender encoded in a shape FHIR does not define.
  *
- * **Scope: a resource root, and the closed element set this layer reads** (`SAFETY_SCALAR_ELEMENTS`,
- * on a {@link ../safety/codes.js} `SAFETY_RESOURCE_TYPES` root) plus `resourceType` on **any** root,
- * **and one level down, `Coding.system` / `Coding.code` inside those of them that are
- * `CodeableConcept`-valued** (`SAFETY_CODEABLE_ELEMENTS`). The element-level scoping is not timidity:
- * R4 defines repeating elements under these names elsewhere (`Questionnaire.code`,
- * `ElementDefinition.code`, both `0..*`), so a name-only rule would emit a false error on a conformant
- * document. The `Coding` level needs no such care, because `Coding` is a datatype whose `system` and
- * `code` are `0..1` wherever it appears. Deciding cardinality anywhere else needs a per-resource
- * model, which this library does not have and this layer must not grow.
+ * **Scope: a resource root, and three windows that are scoped differently because they are grounded
+ * differently.** They are named as three rather than blurred into one, because a sentence that made
+ * them one window was false here for as long as the negation read was wider than the report:
+ *
+ * 1. **The cardinality table**, `SAFETY_SCALAR_ELEMENTS` on a {@link ../safety/codes.js}
+ *    `SAFETY_RESOURCE_TYPES` root, plus `resourceType` on **any** root. The type scoping is not
+ *    timidity: R4 defines repeating elements under these names elsewhere (`Questionnaire.code`,
+ *    `ElementDefinition.code`, both `0..*`), so a name-only rule would emit a false error on a
+ *    conformant document.
+ * 2. **One level down from those of them that are `CodeableConcept`-valued**
+ *    (`SAFETY_CODEABLE_ELEMENTS`), at `Coding.system` / `Coding.code`.
+ * 3. **One level down from every element the negation read resolves through a `Coding`**
+ *    ({@link ../safety/codes.js} `NEGATION_CODE_READS`, the rows marked `codings`), at **every**
+ *    resource root of **any** type -- because those reads are not type-scoped either, and a read
+ *    whose report is narrower than itself resolves a clinical code out of an encoding FHIR JSON does
+ *    not define with no diagnostic anywhere, or declines one in silence.
+ *
+ * The `Coding` level needs no cardinality care in either of its two windows, because `Coding` is a
+ * datatype whose `system` and `code` are `0..1` wherever it appears -- which is exactly why the
+ * un-gated window can exist and the element-level one cannot. Deciding cardinality anywhere else
+ * needs a per-resource model, which this library does not have and this layer must not grow.
  *
  * **Why the `Coding` level is reported even though it is now read:** {@link ../safety/codes.js}
  * `codingsOf` reads through such a wrapper only where it holds a *single array position*, since
@@ -592,7 +607,11 @@ export function shadowedProperties(resource: FhirComplex, path: string): string[
  *
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
- * @returns The locations of the array-wrapped scalar elements, in document order.
+ * @returns The locations of the array-wrapped scalar elements, in **walk order**: each resource root
+ *   as the walk reaches it, and within one root the cardinality table's surviving properties, then
+ *   the members a repeated property name shadowed, then the negation read's `Coding` locations.
+ *   **Walk order is not document order**, and no claim is made that it is: do not sort or diff a
+ *   caller's expectations against the order the document wrote.
  * @example
  * ```ts
  * import { arrayWrappedScalars, parseResource } from "@cosyte/fhir";
@@ -617,7 +636,8 @@ export function arrayWrappedScalars(resource: FhirComplex, path: string): string
  *
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
- * @returns Those locations, in the same document order, each once.
+ * @returns Those locations, each once, in the same **walk order** {@link arrayWrappedScalars} uses
+ *   (which is not document order; see its `@returns`).
  * @internal
  */
 export function unspellableXmlWrappers(resource: FhirComplex, path: string): string[] {
@@ -732,9 +752,14 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  *
  * **The element is `doNotPerform`**, the only `boolean` {@link readSafety} takes off a document, and
  * there is no resource-type gate on it. **The window is every resource root** (so a `contained` or
- * Bundle-`entry` resource is covered), which is `arrayWrappedScalars`' window and is **the same
- * window the negation read uses**: the two are decided together, in one pass, so neither can cover a
- * document the other does not.
+ * Bundle-`entry` resource is covered), which is **the negation read's own window**: the value that is
+ * read and the value that cannot be read are decided together, in one pass, so neither can cover a
+ * document the other does not. It is **not** `arrayWrappedScalars`' whole window, and the difference
+ * is a live residual rather than a nicety: that report's *element-level* half is scoped to the
+ * resource types the cardinality table knows, so `{"resourceType":"ServiceRequest",
+ * "doNotPerform":[true]}` is read here and at {@link SafetyReadout.negations}, while the wrapper it
+ * arrived in draws no `ARRAY_WRAPPED_SCALAR`. Closing that needs a cardinality for the element name
+ * on the types outside the table, which is a per-resource question this layer does not answer.
  * It is **not** a report of every unreadable value in a document: the profile booleans, an
  * `ElementDefinition.min` whose text falls outside the lexical space the profile loader reads, and a
  * `Quantity` magnitude's lexical forms are read elsewhere and are still lost silently.
@@ -783,9 +808,11 @@ export function unreadableBooleans(resource: FhirComplex, path: string): string[
  * element that held it.
  *
  * **The elements are `status` and `verificationStatus`, at every resource root**, which is the
- * negation read's own window and the same window `arrayWrappedScalars` and `unreadableBooleans` use;
- * the pairs come from the table those matches are made from, so this cannot cover a pair the read
- * does not. `AllergyIntolerance.code` is deliberately outside it (see
+ * negation read's own window and the same window `unreadableBooleans` uses; the pairs come from the
+ * table those matches are made from, so this cannot cover a pair the read does not.
+ * `arrayWrappedScalars` reaches every root too, but only for the `Coding` members that same table
+ * marks -- its element-level half stays on the cardinality table, so the two are **not** one window.
+ * `AllergyIntolerance.code` is deliberately outside it (see
  * {@link SafetyReadout.nearMissNegationCodes}).
  *
  * **Empty for every conformant document read from JSON, bar one admitted shape**: a translation
@@ -992,27 +1019,19 @@ function unspellableInXml(name: string, value: FhirNode): boolean {
 }
 
 /**
+ * Report one array-wrapped location, `unwritable` saying whether FHIR XML has no repetition to spell
+ * the wrapper back. Built once per resource root ({@link checkResourceRoot}) and handed to both
+ * halves that decide a wrapper there, so the two can never emit a location twice between them.
+ */
+type WrapperReport = (location: string, unwritable: boolean) => void;
+
+/**
  * Record every `0..1` safety element this node wrote as an array. Runs only on a resource root: a
  * nested backbone element or datatype has its own cardinalities, which this library does not model.
  */
-function checkArrayWrapping(node: FhirComplex, path: string, out: SafetyWalk): void {
+function checkArrayWrapping(node: FhirComplex, path: string, report: WrapperReport): void {
   const types = typesOf(node);
   const isSafetyType = types.some((type) => SAFETY_RESOURCE_TYPES.has(type));
-  const reported = new Set<string>();
-  const unspellable = new Set<string>();
-  // The two sets are de-duplicated INDEPENDENTLY on purpose. A repeated property name puts two
-  // wrappers at one location, and if only the first were considered, `{"status":["b","c"],
-  // "status":["a"]}` would hide the unwritable one behind the writable one that arrived first.
-  const report = (location: string, unwritable: boolean): void => {
-    if (!reported.has(location)) {
-      reported.add(location);
-      out.arrayWrapped.push(location);
-    }
-    if (unwritable && !unspellable.has(location)) {
-      unspellable.add(location);
-      out.unspellableInXml.push(location);
-    }
-  };
   for (const property of [...node.properties, ...(node.duplicates ?? [])]) {
     const clinical = SAFETY_SCALAR_ELEMENTS.has(property.name);
     // `resourceType` is a JSON string on every resource, not an element with a cardinality, so it is
@@ -1190,7 +1209,12 @@ const CODING_SCALAR_ELEMENTS = ["system", "code"] as const;
  * Both paths are pinned in `test/xml-unreadable-boolean.test.ts` and
  * `test/negation-read-scope.test.ts`.
  */
-function checkNegations(node: FhirComplex, path: string, out: SafetyWalk): void {
+function checkNegations(
+  node: FhirComplex,
+  path: string,
+  report: WrapperReport,
+  out: SafetyWalk,
+): void {
   // Across every member a repeated property name left, exactly as `readDoNotPerform` reads them: a
   // value must not become invisible, read or unread, by arriving second under a duplicate key. One
   // location however many members, because FHIRPath cannot address an individual member.
@@ -1217,6 +1241,17 @@ function checkNegations(node: FhirComplex, path: string, out: SafetyWalk): void 
   for (const read of NEGATION_CODE_READS) {
     const written = getAllProperties(node, read.element);
     if (written.length === 0) continue;
+    // The wrapper complement of the read, in the same loop over the same table, so the shape that
+    // decided what `values` returned is reported at exactly the window the read runs at. `Coding` is
+    // a datatype and its `system` / `code` are `0..1` WHEREVER a `Coding` appears (datatypes.html),
+    // so unlike the element names the cardinality table scopes by resource type, this one needs no
+    // type scoping to stay false-positive-free and must not have one: the reads above are not
+    // type-scoped, so a type-scoped report leaves a single-position wrapper read THROUGH with no
+    // diagnostic anywhere and a multi-position one refused in silence.
+    if (read.codings === true) {
+      const at = childPath(path, read.element);
+      for (const value of written) checkCodingWrapping(value, at, report);
+    }
     const spelled = written.flatMap((value) => [...read.values(value)]);
     // Per CODE, and the suppression is what keeps this channel off conformant documents. R4 lets a
     // `CodeableConcept` under a required binding carry translation codings beside the one from the
@@ -1251,8 +1286,26 @@ function checkNegations(node: FhirComplex, path: string, out: SafetyWalk): void 
  * behind.
  */
 function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): void {
-  checkArrayWrapping(node, path, out);
-  checkNegations(node, path, out);
+  const reported = new Set<string>();
+  const unspellable = new Set<string>();
+  // The two sets are de-duplicated INDEPENDENTLY on purpose. A repeated property name puts two
+  // wrappers at one location, and if only the first were considered, `{"status":["b","c"],
+  // "status":["a"]}` would hide the unwritable one behind the writable one that arrived first.
+  // Both are per resource root and shared by the two halves below: the cardinality table and the
+  // negation read overlap on a safety type's `verificationStatus`, and a location a caller can act
+  // on once must not arrive twice because two windows both cover it.
+  const report: WrapperReport = (location, unwritable) => {
+    if (!reported.has(location)) {
+      reported.add(location);
+      out.arrayWrapped.push(location);
+    }
+    if (unwritable && !unspellable.has(location)) {
+      unspellable.add(location);
+      out.unspellableInXml.push(location);
+    }
+  };
+  checkArrayWrapping(node, path, report);
+  checkNegations(node, path, report, out);
 }
 
 /**

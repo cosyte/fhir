@@ -72,10 +72,16 @@ export const SAFETY_SCALAR_ELEMENTS: ReadonlySet<string> = new Set([
  *
  * `status` is a `code` primitive and `doNotPerform` a `boolean`, so neither carries a `Coding`.
  * `clinicalStatus` / `verificationStatus` are `CodeableConcept` on AllergyIntolerance and Condition,
- * and `code` is `CodeableConcept` on all four types that define it here (AllergyIntolerance,
- * Condition, Observation, DiagnosticReport). Unlike the element names themselves, this needs no
- * further scoping to stay false-positive-free: `Coding` is a datatype, and its `system` and `code` are
- * `0..1` in every resource that uses it.
+ * and `code` is `CodeableConcept` on every type that defines it here (AllergyIntolerance, Condition,
+ * Observation, DiagnosticReport -- count them off the set, never off this sentence). Unlike the
+ * element names themselves, this needs no further scoping to stay false-positive-free: `Coding` is a
+ * datatype, and its `system` and `code` are `0..1` in every resource that uses it.
+ *
+ * **It is therefore not the whole of the `Coding`-level report, and must not be read as it.** This
+ * set is the type-scoped half, riding the cardinality table. The un-gated half is
+ * {@link NEGATION_CODE_READS}'s `codings` rows at every resource root of any type, which exists
+ * because the negation reads are not type-scoped either; the same datatype cardinality licenses
+ * both, and only the type-scoped half needs the element names to be scoped at all.
  */
 export const SAFETY_CODEABLE_ELEMENTS: ReadonlySet<string> = new Set([
   "clinicalStatus",
@@ -555,20 +561,39 @@ export function codingsOf(node: FhirNode | undefined): Coded[] {
  * wrapper ({@link codingScalar}).
  *
  * **Module-internal on purpose, and it is not exported from the package.** The unwrap is only sound
- * where the wrapper is also *reported*, and the reporting rule ({@link ./status.js}
- * `arrayWrappedScalars`) covers exactly one window: `clinicalStatus` / `verificationStatus` / `code`
- * ({@link SAFETY_CODEABLE_ELEMENTS}) on a {@link SAFETY_RESOURCE_TYPES} resource root. **Read scope
- * must equal report scope.** A read that unwrapped outside that window would resolve a clinical code
- * out of an encoding FHIR JSON does not define and hand it to a caller with no diagnostic anywhere,
- * which is how an earlier revision of this change **retired a true `VITAL_SIGN_UNIT_NONCONFORMANT`
- * error and flipped a document from `valid: false` to `valid: true`**: `requiredUnitsFor` reads
- * `Observation.component[i].code`, which is a backbone element and outside the window, and the
- * newly-readable first `Coding` won the "first LOINC coding with a units entry" race.
+ * where the wrapper is also *reported*. **Read scope must equal report scope.** A read that unwrapped
+ * where nothing reports would resolve a clinical code out of an encoding FHIR JSON does not define
+ * and hand it to a caller with no diagnostic anywhere, which is how an earlier revision of this
+ * change **retired a true `VITAL_SIGN_UNIT_NONCONFORMANT` error and flipped a document from
+ * `valid: false` to `valid: true`**: `requiredUnitsFor` reads `Observation.component[i].code`, which
+ * is a backbone element that nothing reports, and the newly-readable first `Coding` won the "first
+ * LOINC coding with a units entry" race.
  *
- * So every caller of this must be reading one of the windowed elements off a resource root. Every
- * other coding read in the library stays on {@link codingsOf} and behaves exactly as it did before
- * this rule existed. That under-reads an out-of-window wrapper, which is the safe direction and the
- * pre-existing behaviour; widening it means widening the reporting rule first, in its own change.
+ * **The report is in two halves and they are scoped differently, because they are grounded
+ * differently**, so this is stated as the pair it is rather than as one window:
+ *
+ * - The **type-scoped** half, `clinicalStatus` / `verificationStatus` / `code`
+ *   ({@link SAFETY_CODEABLE_ELEMENTS}) on a {@link SAFETY_RESOURCE_TYPES} resource root, which is
+ *   where the type-gated root reads and the invariant checks look.
+ * - The **un-gated** half, every element {@link NEGATION_CODE_READS} marks `codings`, at **every**
+ *   resource root of **any** type, which is where the negation reads look. Those reads are not
+ *   type-scoped, so their report is not either; what licenses that is `Coding` being a *datatype*,
+ *   with `system` and `code` `0..1` wherever a `Coding` appears, so no cardinality question about
+ *   the enclosing resource arises at all.
+ *
+ * **One caller is still outside both halves, and it is named rather than claimed away:**
+ * {@link ./status.js} `readSafety` fills its `clinicalStatus` convenience field from here on **any**
+ * resource root, because `clinicalSystemFor` chooses a *preferred system* and gates nothing. So a
+ * `clinicalStatus` on a type the cardinality table does not know is unwrapped where nothing reports,
+ * and a multi-position wrapper there is declined where nothing reports either, so the readout still
+ * says `safeToSummarize: true` over a value it declined. It reaches only that one convenience field
+ * otherwise: never {@link ./status.js} `SafetyReadout.negations`, never `valid`, and never
+ * `noKnownAllergy`, whose read *is* type-gated. That is the surviving half of this rule's
+ * original gap and it is an open residual, not a property of the design.
+ *
+ * Every other coding read in the library stays on {@link codingsOf} and behaves exactly as it did
+ * before this rule existed. That under-reads a wrapper nothing reports, which is the safe direction
+ * and the pre-existing behaviour; widening it means widening the report first, in the same change.
  *
  * @param node - A `CodeableConcept` node, a list of them, or `undefined`.
  * @returns The `(system, code)` pairs, in document order.
@@ -871,6 +896,13 @@ export function isNearMissCode(value: string, code: string): boolean {
  * the same reason the reader lives here at all: a read and its refusal that share a table cannot
  * come to disagree about which elements they cover.
  *
+ * **`codings` is the fourth, and it is the wrapper complement of the same reader.** Where `values`
+ * goes through {@link safetyCodingsOf}, an array at `Coding.system` / `Coding.code` is the shape
+ * that decided what came out: a single position is read through, more than one is refused. Marking
+ * it here rather than at the report keeps the wrapper's window and the read's window the same
+ * window by construction, which is the thing the type-scoped cardinality table cannot do for a read
+ * that is not type-scoped.
+ *
  * **`AllergyIntolerance.code` is deliberately absent**, and it is the same boundary that keeps
  * `no-known-allergy` off the walk ({@link ./status.js} `checkNegations`). Adding it here would put a
  * near-miss disclosure at every resource root while an *exact* SNOMED `716186003` at a nested root
@@ -892,6 +924,14 @@ export const NEGATION_CODE_READS: readonly {
    * `verificationStatus` entry.
    */
   readonly unread?: (node: FhirNode) => boolean;
+  /**
+   * Whether `values` resolves the code out of a `Coding` through {@link safetyCodingsOf}, so an
+   * array wrapper at `Coding.system` / `Coding.code` under this element is a shape the read either
+   * went **through** (a single array position) or **refused** (more than one). Either way the
+   * wrapper decided what the read returned, so it is reported at this element's own window
+   * ({@link ./status.js} `checkNegations`) and not only at the type-scoped cardinality table's.
+   */
+  readonly codings?: boolean;
 }[] = [
   {
     element: "status",
@@ -909,6 +949,7 @@ export const NEGATION_CODE_READS: readonly {
     element: "verificationStatus",
     codes: [ENTERED_IN_ERROR, REFUTED],
     values: (node) => safetyCodingsOf(node).flatMap((c) => (c.code === undefined ? [] : [c.code])),
+    codings: true,
   },
 ];
 

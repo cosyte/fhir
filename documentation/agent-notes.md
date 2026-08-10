@@ -298,13 +298,14 @@ unwrap, widen `checkCodingWrapping` first, in the same change.** Pinned in
 `test/array-wrapped-scalar.test.ts` (now 45 tests), including the refuter's exact document.
 **Pass two came back NOT REFUTED**, with two `INTRODUCED` **minors**, both documentation-accuracy and
 both fixed by correcting prose rather than code (the refuter's own call: a code change here would
-reduce fail-safety). (i) The read window is **not** exactly the report window: `checkArrayWrapping`
-gates the coding-level report on `isSafetyType`, but `isRetracted`'s `verificationStatus` scan and
-`readSafety`'s `clinicalStatus`/`verificationStatus` convenience + `REFUTED` reads are **not**
-type-gated, so a `Patient` carrying a wrapped `verificationStatus.coding.code` reads the retraction
-with **no** location. Measured 3/380 in its randomized differential, every one **adding** a negation,
-and `collectSafetyIssues` returns before every type-scoped verdict for a non-safety type, so it can
-never retire a finding or flip `valid`. **Do not "fix" this by type-gating `isRetracted`.** (ii) The
+reduce fail-safety). (i) The read window is **not** the report window: `checkArrayWrapping` gated the
+coding-level report on `isSafetyType` while `isRetracted`'s `verificationStatus` scan and
+`readSafety`'s `clinicalStatus`/`verificationStatus` convenience reads are **not** type-gated. **The
+`verificationStatus` terms are CLOSED 2026-08-10**
+([`negation-coding-wrapper-scope.md`](agent-notes/negation-coding-wrapper-scope.md)). **`clinicalStatus`
+IS STILL OPEN and a gate caught a slice claiming otherwise**: `clinicalSystemFor` picks a preferred
+system, gating nothing, so that field alone unwraps at any root with no location. **Do not "fix" a
+window gap by type-gating `isRetracted`.** (ii) The
 `checkCodingWrapping` JSDoc still claimed a wrapped element is not indexed, which the pass-one
 finding-3 fix had already changed. Pass two measured, and could not break: no `valid: false -> true`
 flip (0/380), no negation lost, no `safeToSummarize` weakened, all 26 fixtures byte-identical to

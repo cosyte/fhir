@@ -218,15 +218,21 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `interpretation`, `referenceRange.type`, a `component`'s own `code`, and anything `codingsOf` is
   pointed at directly) is read exactly as it was before, without the wrapper. Reading a wrapper the
   library does not also report would resolve a clinical code out of an encoding FHIR JSON does not
-  define and hand it back with no diagnostic anywhere, so the read never runs ahead of the report on
-  anything that reaches a verdict.
-  **One asymmetry is deliberate and worth stating rather than glossing:** the `ARRAY_WRAPPED_SCALAR`
-  location is only emitted on a resource of one of the safety types, while the negation reads that
-  can only add a finding are not type-gated, so on some other resource type a wrapped
-  `verificationStatus.coding.code` is read without a location being reported. That is the fail-safe
-  direction on purpose: those reads can only ever **add** a retraction or a negation, never withhold
-  one, and no type-scoped verdict is reached for such a resource anyway. Narrowing the read to match
-  the report would make `isRetracted` miss retractions it currently catches.
+  define and hand it back with no diagnostic anywhere.
+  **The type scoping stops at the element name, and it does not reach the `Coding` inside it.** The
+  negation reads are not type-scoped at all, so a `verificationStatus.coding.system` / `.code`
+  wrapper is reported at **every** resource root of **any** type, including inside `contained` and a
+  `Bundle.entry` -- read through where it holds one position, left unread where it holds more, and
+  reported either way. What makes that safe without a per-resource model is that `Coding` is a
+  _datatype_: its `system` and `code` are `0..1` wherever a `Coding` appears, so no question about
+  the enclosing resource arises. A `code` carrying SNOMED `716186003` is read only on the types the
+  cardinality table knows, so its wrapper is reported wherever it is read.
+  **One read still runs ahead of its report, and it is named rather than smoothed over:** the
+  `clinicalStatus` convenience field is filled off **any** resource root, so on a type the
+  cardinality table does not know, that value is unwrapped (or, for a multi-position wrapper,
+  declined) with no location reported, so `safeToSummarize` stays `true` over a value the library
+  declined to read. Otherwise it reaches that one field and nothing else: never `negations`, never
+  `valid`, never `noKnownAllergy`. A declared residual, pinned in both states, not a design.
 - **An array inside an array is reported, and its contents are kept but never interpreted.** FHIR
   JSON uses an array for a repeating element and for nothing else, so a list of lists has no meaning
   at any position and there is no element for the reader to make of it. Left alone the model then
@@ -380,9 +386,12 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `false` that `serializeResource` then emits, laundering an authored value across a format change.
   The channel covers `doNotPerform`, the only `boolean` `readSafety` takes off a document, on any
   resource type. Its window is every resource root (so a `contained` or `Bundle.entry` order counts),
-  which is `arrayWrappedScalars`' window and is **the same window the negation read uses**: the value
-  that is read and the value that cannot be read are decided together, in one pass, so neither can
-  cover a document the other does not. A primitive carrying only `id` / `extension` and
+  which is **the negation read's own window**: the value that is read and the value that cannot be
+  read are decided together, in one pass, so neither can cover a document the other does not. It is
+  **not** the whole of `arrayWrappedScalars`' window, and the gap is a declared residual rather than
+  a nicety -- that report's _element-level_ half stays on the resource types this library models a
+  cardinality for, so `{"resourceType":"ServiceRequest","doNotPerform":[true]}` is read here and on
+  `negations`, while the array wrapper it arrived in draws no `ARRAY_WRAPPED_SCALAR`. A primitive carrying only `id` / `extension` and
   no value is untouched, since nothing was written there to be unread, so this cannot fire on a
   conformant document in either wire format.
   **Unlike the five findings above it, this one raises no `ValidationIssue` of its own**, for a narrow
