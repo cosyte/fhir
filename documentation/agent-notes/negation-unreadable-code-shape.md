@@ -142,55 +142,76 @@ Filed, not absorbed, and **pinned in both directions**.
 Untouched, on purpose, for the reason `#83` recorded: absence there reads as **UNKNOWN, not NONE**,
 so surfacing it more widely makes a caller **less** careful. This slice does not "finish the job".
 
+## 🛑 Gate pass 2's finding: the remedy's exemption had the WRONG POLARITY
+
+The pass-1 remedy exempted a complex that carried **any** member of a `CodeableConcept`. So
+`{"status":{"id":"s1","value":"not-done"}}` and `{"status":{"value":"not-done","extension":[...]}}`
+read as **clean** - and those are the *same* generic-converter output the whole slice is built on,
+the converter having carried the primitive's own `id` / `extension` metadata across beside the value.
+The item's residual was still open for them, unnamed and unpinned, while `dist/index.d.ts` asserted
+that a complex carrying one of those members "is something FHIR spells here".
+
+**Corrected polarity: report when ANY member is outside the set.** A conformant `CodeableConcept` has
+**no** member outside it, so the channel stays empty on one whatever else it carries; a converter
+output carrying `value` is reported however much legal metadata sits beside it. The empty complex is
+reported by its own arm, `ele-1` forbidding an element with no value, children or extension.
+
+**Both polarities are now pinned**, and the wrong one is a named mutation.
+
 ## Measurement
 
 Every figure below is derived; the named lists are the claim, and no total stands in for one. **All
-of it was re-measured after the pass-1 remedy**, not carried over.
+of it was re-measured after the pass-2 remedy**, not carried over from either earlier cut.
 
-- **Red at base: 12 of 35**, in a real **detached base worktree** at `632f914`; 41 of 41 at head.
+- **Red at base: 13 of 38** for a **behavioural** difference, in a real **detached base worktree** at
+  `632f914`; **43 of 43 at head**.
   - **Five further cases name a symbol the base commit does not have** (`unreadableNegationCodes`,
-    `hasUnreadableCode`, the table's `unread` field). They are **skipped, not counted as red**:
-    a pin asserted through a symbol the base lacks measures the symbol, not the behaviour. That is
-    `#84`'s published self-correction, applied here from the start rather than after a gate found it.
-  - The whole file runs at base by substituting **one accessor** (`disclosed`), which returns the
-    reading a caller had before the channel existed. Every other line is byte-identical, so the
-    comparison is of behaviour.
-- **23 both-states pins, NAMED in the test file itself**, not counted in a total. The conformant
+    `hasUnreadableCode`, the table's `unread` field). They are **skipped, not counted as red**: a pin
+    asserted through a symbol the base lacks measures the symbol, not the behaviour. That is `#84`'s
+    published self-correction.
+  - **The base copy differs from the shipped file in exactly three documented ways** and in nothing
+    else: the `disclosed` accessor returns the reading a caller had before the channel existed, two
+    base-absent imports are dropped, and the five cases above are `.skip`ped. **Nothing is deleted**,
+    and the copy asserts its own case count against the shipped file so the two cannot drift.
+    🩺 **Gate pass 2 caught an earlier copy that had silently lost a case**, which is why the count
+    is now asserted rather than eyeballed.
+- **25 both-states pins, NAMED in the test file itself**, not counted in a total. The conformant
   documents: a plain `status`; a `status` that IS a negation; the value-absent `data-absent-reason`
   sibling; a resource with no `status`; a `CodeableConcept` `verificationStatus`; a
   `verificationStatus` carrying only `text`; a Bundle of conformant entries; **the R4
   `MedicinalProductAuthorization` and `SubstanceSpecification` shapes, whose `status` IS a
   `CodeableConcept`**; a `CodeableConcept` `status` carrying only `text`; one carrying only an
-  `extension`; **the R5 `DeviceAssociation` shape**; a `CodeableConcept` `status` inside a Bundle
-  entry; and two conformant **XML** shapes, one with `id` + `extension` children beside the value and
-  one with no value at all. Plus "reads no deeper than a resource root", "a duplicate key cannot hide
-  a `CodeableConcept` member", and the seven declared limits (bare-string `verificationStatus`;
-  bare-string `AllergyIntolerance.code`; an object at `doNotPerform`; an object at `clinicalStatus`;
+  `extension`; one carrying `coding` beside `id`, `text` and `extension`; **the R5
+  `DeviceAssociation` shape**; a `CodeableConcept` `status` inside a Bundle entry; and two conformant
+  **XML** shapes, one with `id` + `extension` children beside the value and one with no value at all.
+  Plus "reads no deeper than a resource root", "a duplicate key cannot hide a `CodeableConcept`
+  member", and the seven declared limits (bare-string `verificationStatus`; bare-string
+  `AllergyIntolerance.code`; an object at `doNotPerform`; an object at `clinicalStatus`;
   `validateResource` still `valid: true`; an empty array at `status`; and a code buried under a
   `CodeableConcept` member at a `code`-typed `status`).
-- **Non-vacuity by mutation, named rather than totalled.** Each of these reddened at least one case:
-  ignoring a non-string written value; dropping the value-absent guard so the conformant
-  `data-absent-reason` shape reports; not walking the array wrapper; **dropping the
-  `CodeableConcept` scoping, which is the pass-1 blocker and reds seven cases**; reading every
-  complex as clean; **forgetting `text`, so a text-only `CodeableConcept` is refused**; removing the
-  `status` row's `unread`; **giving `verificationStatus` the complement the DSTU2 limit declines**;
-  reporting the resource root instead of the element; `some` becoming `every` so a shadowed member
-  hides the shape; `safeToSummarize` no longer consulting the channel; and `assertSafeToSummarize`
-  no longer consulting it.
-- **🩺 One mutation SURVIVED and was closed by DELETING THE BRANCH, not by adding a test.** Scanning
-  `duplicates` alongside `properties` for a `CodeableConcept` member could not change any answer:
-  a repeated name keeps its **first** member in `properties` and puts only later ones in
-  `duplicates`, so **every name in `duplicates` is present in `properties` too**, measured on a
-  document rather than assumed. The branch was **dead code**, and an unreachable branch is one no
-  mutation can red and no reader can check. The invariant it relied on is now pinned by a test.
-- **Suite 70 files / 1,495 tests -> 71 / 1,536.** **The count alone does not establish that no
+- **Non-vacuity by mutation: NONE SURVIVED, and they are named rather than totalled.** Each reddened
+  at least one case: ignoring a non-string written value; dropping the value-absent guard so the
+  conformant `data-absent-reason` shape reports; not walking the array wrapper; **dropping the
+  datatype scoping, which is pass 1's blocker**; **exempting a shape that carries any one legal
+  member, which is pass 2's polarity defect**; reading every complex as clean; dropping the
+  empty-complex arm; forgetting `text`; forgetting `id` / `extension`; removing the `status` row's
+  `unread`; **giving `verificationStatus` the complement the DSTU2 limit declines**; reporting the
+  resource root instead of the element; `some` becoming `every`; `safeToSummarize` no longer
+  consulting the channel; and `assertSafeToSummarize` no longer consulting it.
+- **🩺 One mutation survived an earlier cut and was closed by DELETING THE BRANCH, not by adding a
+  test.** Scanning `duplicates` alongside `properties` could not change any answer: a repeated name
+  keeps its **first** member in `properties` and puts only later ones in `duplicates`, so every name
+  in `duplicates` is present in `properties` too, measured on a document rather than assumed. **Dead
+  code**, and an unreachable branch is one no mutation can red and no reader can check. The invariant
+  it relied on is now pinned by a test.
+- **Suite 70 files / 1,495 tests -> 71 / 1,538.** **The count alone does not establish that no
   existing test moved, and it is not offered as if it did** (gate pass 1's point, and the same shape
-  as this repo's own "a scanned-file COUNT cannot detect a sweep that opened nothing"). **Four
+  as this repo's own "a scanned-file COUNT cannot detect a sweep that opened nothing"). **Three
   existing test files were edited, named here:** `test/xml-unreadable-boolean.test.ts` (the
-  refusal-message string pin, which this slice legitimately extends and therefore rewrites),
-  `test/derived-names.test.ts` and `test/phi-diagnostic-surface.test.ts` (both had their
-  collected-location lists extended to include the new channel, so it is swept for name echo), and
-  no others. Every other file is untouched.
+  refusal-message string pin, which this slice legitimately extends and therefore rewrites), and
+  `test/derived-names.test.ts` and `test/phi-diagnostic-surface.test.ts`, whose collected-location
+  lists were extended to include the new channel so it is swept for name echo. No other test file is
+  touched, and `git diff 632f914..HEAD -- test/` is the derivation.
 - **`differential:read`: 0 readings moved, 0 regressions - and that 0 is VACUOUS BY CONSTRUCTION.**
   The harness prints its own caveat that it cannot distinguish "nothing moved" from "no document in
   the corpus reaches the changed code", and no corpus fixture carries an unspellable shape at
@@ -200,9 +221,10 @@ of it was re-measured after the pass-1 remedy**, not carried over.
   missing-symbol reason and none for a behavioural one. **A control that cannot fail is not a
   control**, and counting it as a pass would repeat a shape this run has already published twice.
 - **Corpus caveat:** hand-authored fixtures, mutations and probes. **Not** the R4 published-examples
-  corpus - **and gate pass 1 showed that caveat cutting the other way**: the pass-1 defect was
-  visible in the R4 published-examples corpus this slice does not run. The corpus fixtures added
-  after the remedy are hand-authored copies of those shapes, not the published files.
+  corpus - **and pass 1 showed that caveat cutting the other way**: its blocker was visible in the R4
+  published-examples corpus this slice does not run, and pass 2 cleared the remedy against the
+  published R4 and R5 example corpora. The fixtures added afterwards are hand-authored copies of
+  those shapes, not the published files.
 
 ## 🔴 Deferred, filed rather than absorbed
 

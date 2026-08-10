@@ -382,11 +382,14 @@ const CODEABLE_CONCEPT_MEMBERS: ReadonlySet<string> = new Set([
  * `MedicinalProductAuthorization` example, not feared.
  *
  * **So the question asked here is about the SHAPE, not about which reader succeeded.** A complex
- * carrying `coding`, `text`, `id` or `extension` is something FHIR spells at this position and is
- * left alone, whether or not any code came out of it. A complex carrying none of them
- * (`{"value":"not-done"}`, the member a generic converter makes of FHIR XML's `value` attribute) is
- * spellable as neither datatype, so no reading of it was declined: there was nothing there either
- * datatype could hold.
+ * **all of whose members** are ones FHIR spells at this position (`coding`, `text`, `id`,
+ * `extension`) is left alone, whether or not any code came out of it. A complex carrying **any**
+ * member outside that set (`{"value":"not-done"}`, the member a generic converter makes of FHIR
+ * XML's `value` attribute, and `{"id":"s1","value":"not-done"}` where it carried the primitive's own
+ * metadata across beside it) is spellable as neither datatype, so no reading of it was declined:
+ * there was nothing there either datatype could hold. **The polarity is load-bearing**: exempting a
+ * shape for carrying *one* legal member would exempt exactly those converter outputs. An empty
+ * complex is reported too, `ele-1` forbidding an element with no value, children or extension.
  *
  * **The direction of the scoping is the point.** An unscoped rule flips a conformant document from
  * summarizable to refused, which is the one direction a fail-safe layer must not move in without
@@ -431,12 +434,23 @@ export function hasUnreadableCode(node: FhirNode | undefined): boolean {
   if (isList(node)) return node.items.some((item) => hasUnreadableCode(item));
   if (isPrimitive(node)) return node.value !== undefined && typeof node.value !== "string";
   if (isComplex(node)) {
-    // `properties` alone is the whole document here, so a duplicate key cannot hide a
-    // `CodeableConcept` member behind a shadowed one: a repeated name keeps its FIRST member in
-    // `properties` and puts only the later ones in `duplicates`, so every name in `duplicates` is
-    // present here too. Scanning both was written first and measured DEAD, so it is not shipped: an
-    // unreachable branch is one a mutation cannot red and a reader cannot check.
-    return !node.properties.some((property) => CODEABLE_CONCEPT_MEMBERS.has(property.name));
+    // ANY member outside the set, not "none inside it". The other polarity exempts a shape as soon
+    // as it carries one legal member, so `{"id":"s1","value":"not-done"}` and
+    // `{"value":"not-done","extension":[...]}` - the very converter output this reports, with the
+    // primitive's own `id` / `extension` metadata carried across beside the value - would read as
+    // clean. A conformant `CodeableConcept` has NO member outside the set, so this is empty on one
+    // whatever else it carries.
+    //
+    // `properties` alone is the whole document here, so a duplicate key cannot hide a member: a
+    // repeated name keeps its FIRST member in `properties` and puts only the later ones in
+    // `duplicates`, so every name in `duplicates` is present here too. Scanning both was written
+    // first and measured DEAD, so it is not shipped: an unreachable branch is one a mutation cannot
+    // red and a reader cannot check.
+    if (node.properties.some((property) => !CODEABLE_CONCEPT_MEMBERS.has(property.name)))
+      return true;
+    // No member at all is a shape FHIR spells nowhere either: an element present in a resource SHALL
+    // carry a value, children defined for its type, or an extension (ele-1).
+    return node.properties.length === 0;
   }
   // Any shape the model gains later reports rather than reading as clean.
   return true;

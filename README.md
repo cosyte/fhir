@@ -452,9 +452,11 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   about which read succeeded, so that both are cleared**: R4 spells `status` a `code` on the
   overwhelming majority of types and a `CodeableConcept` on `MedicinalProductAuthorization` and
   `SubstanceSpecification`, R5 adds several more including a mandatory `DeviceAssociation.status`,
-  and DSTU2 spells every one a `code`. So a complex carrying `coding`, `text`, `id` or `extension` is
-  left alone, whether or not a code came out of it; keyed instead on "no string was read", this would
-  refuse the published R4 `MedicinalProductAuthorization` example. The converse is a declared limit:
+  and DSTU2 spells every one a `code`. So a complex **all of whose members** FHIR spells here (`coding`,
+  `text`, `id`, `extension`) is left alone, whether or not a code came out of it, while **any**
+  member outside that set is reported: `{"status":{"id":"s1","value":"not-done"}}` is the same
+  converter output and is reported too. Keyed instead on "no string was read", this would refuse the
+  published R4 `MedicinalProductAuthorization` example. The converse is a declared limit:
   a code buried under `{"coding":{…}}` at a type whose `status` is a `code` stays silent.
   **`verificationStatus` is deliberately outside it** for a related reason: its shape complement is a
   _primitive_ at the element, and `Condition.verificationStatus` is a `code` in DSTU2, so the same

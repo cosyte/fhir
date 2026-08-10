@@ -452,9 +452,11 @@ export interface SafetyReadout {
    * overwhelming majority of types and a **`CodeableConcept`** on `MedicinalProductAuthorization`
    * and `SubstanceSpecification`; R5 adds several more, including a mandatory
    * `DeviceAssociation.status`; DSTU2 spells every one a `code`. So the question is about the
-   * **shape**, not about which read succeeded: a complex carrying `coding`, `text`, `id` or
-   * `extension` is something FHIR spells here and is left alone, whether or not a code came out of
-   * it. Keyed on "no string was read" instead, this would refuse the published R4
+   * **shape**, not about which read succeeded: a complex **all of whose members** are ones FHIR
+   * spells here (`coding`, `text`, `id`, `extension`) is left alone, whether or not a code came out
+   * of it, while **any** member outside that set is reported. The polarity is load-bearing:
+   * exempting a shape for carrying *one* legal member would read
+   * `{"status":{"id":"s1","value":"not-done"}}` as clean, and that is the same converter output. Keyed on "no string was read" instead, this would refuse the published R4
    * `MedicinalProductAuthorization` example, which was measured rather than feared.
    *
    * **The element is `status`, at every resource root**, which is {@link negations}' window: the

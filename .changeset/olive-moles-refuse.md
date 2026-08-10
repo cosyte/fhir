@@ -35,8 +35,11 @@ Two datatypes reach a root `status`, and the question asked is about the shape r
 which read succeeded, so that both are cleared. R4 spells `status` a `code` on the overwhelming
 majority of types and a `CodeableConcept` on `MedicinalProductAuthorization` and
 `SubstanceSpecification`; R5 adds several more, including a mandatory `DeviceAssociation.status`;
-DSTU2 spells every one a `code`. A complex carrying `coding`, `text`, `id` or `extension` is
-something FHIR spells at this position and is left alone, whether or not a code came out of it. Keyed
+DSTU2 spells every one a `code`. A complex all of whose members FHIR spells at this position
+(`coding`, `text`, `id`, `extension`) is left alone, whether or not a code came out of it, while any
+member outside that set is reported. The polarity is load-bearing: exempting a shape for carrying one
+legal member would read `{"status":{"id":"s1","value":"not-done"}}` as clean, and that is the same
+converter output this channel exists to report. Keyed
 instead on "the string read took nothing", this would refuse the published R4
 `MedicinalProductAuthorization` example, which was measured rather than feared. The converse is a
 declared limit: a shape carrying a `CodeableConcept` member is never reported, so a code buried under

@@ -122,6 +122,22 @@ describe("content where a code belongs is disclosed, not read through", () => {
       expect(safety.safeToSummarize).toBe(false);
     });
 
+    it("discloses an object carrying the primitive's own metadata beside the value", () => {
+      // The polarity case. A converter that carries `<status id="s1" value="not-done"/>` across as
+      // one object writes `id` BESIDE `value`; exempting a shape for carrying one legal member
+      // would read every one of these as clean, which is the defect this channel exists to close.
+      for (const status of [
+        '{"id":"s1","value":"not-done"}',
+        '{"value":"not-done","extension":[{"url":"http://example.org/x"}]}',
+        '{"text":"not done","value":"not-done"}',
+      ]) {
+        const safety = safetyOf(`{"resourceType":"Procedure","status":${status}}`);
+
+        expect(disclosed(safety)).toEqual(["Procedure.status"]);
+        expect(safety.safeToSummarize).toBe(false);
+      }
+    });
+
     it("discloses a written value that is not a string", () => {
       // The other half of the same predicate: a position the string read reached and could take
       // nothing from. A numerically-enumerated status is ordinary output from a legacy feed.
@@ -295,6 +311,10 @@ describe("content where a code belongs is disclosed, not read through", () => {
       [
         "a CodeableConcept status carrying only an extension",
         '{"resourceType":"MedicinalProductAuthorization","status":{"extension":[{"url":"http://x"}]}}',
+      ],
+      [
+        "a CodeableConcept status carrying coding beside id and extension",
+        '{"resourceType":"MedicinalProductAuthorization","status":{"id":"s1","coding":[{"code":"active"}],"text":"Active","extension":[{"url":"http://x"}]}}',
       ],
       [
         "the R5 DeviceAssociation shape, whose status is a mandatory CodeableConcept",

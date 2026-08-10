@@ -34,9 +34,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   which read succeeded, so that both are cleared**: R4 spells it a `code` on the overwhelming
   majority of types and a `CodeableConcept` on `MedicinalProductAuthorization` and
   `SubstanceSpecification`, R5 adds several more including a mandatory `DeviceAssociation.status`,
-  and DSTU2 spells every one a `code`. A complex carrying `coding`, `text`, `id` or `extension` is
-  left alone, whether or not a code came out of it; keyed instead on "no string was read", this would
-  refuse the published R4 `MedicinalProductAuthorization` example. Converse declared limit: a code
+  and DSTU2 spells every one a `code`. A complex **all of whose members** FHIR spells here (`coding`, `text`,
+  `id`, `extension`) is left alone, whether or not a code came out of it, while **any** member
+  outside that set is reported, so `{"status":{"id":"s1","value":"not-done"}}` is reported too. Keyed
+  instead on "no string was read", this would refuse the published R4
+  `MedicinalProductAuthorization` example. Converse declared limit: a code
   buried under `{"coding":{…}}` at a `code`-typed `status` stays silent.
   **`verificationStatus` is deliberately outside it** for a related reason: its shape complement is a
   _primitive_ at the element, and `Condition.verificationStatus` is a `code` in DSTU2, a version this
