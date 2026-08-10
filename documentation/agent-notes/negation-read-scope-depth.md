@@ -126,8 +126,9 @@ Sentences the fix **falsified**, not just the sites the item quoted:
   nested `{"resourceType":"Procedure","status":["not-done"]}` surfaces the negation and draws no
   `ARRAY_WRAPPED_SCALAR`. Strictly better than base, which surfaced neither. Pinned, with the
   `Observation` half as the both-states control.
-  **Gate pass 1 found the `Coding`-level twin of the same residual**, and it belongs on that item
-  rather than here: a nested `FamilyMemberHistory` with
+  **Gate pass 1 found the `Coding`-level twin of the same residual** -- **CLOSED 2026-08-10, see
+  [`negation-coding-wrapper-scope.md`](negation-coding-wrapper-scope.md); the element-level half
+  above is still open.** As found: a nested `FamilyMemberHistory` with
   `verificationStatus.coding[0].code: ["refuted"]` reads `negations: ["refuted"]` at head (`[]` at
   base) with `arrayWrappedScalars: []`, because `safetyCodingsOf`'s single-position unwrap now fires
   at a resource root whose type is outside `SAFETY_RESOURCE_TYPES`, where `checkCodingWrapping` does

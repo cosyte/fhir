@@ -105,6 +105,66 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A `Coding` array wrapper the negation read decided on was reported only on the resource types
+  the cardinality table knows, so on every other type the read ran ahead of the report
+  (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit, on plain JSON:
+  `{"resourceType":"ServiceRequest","verificationStatus":{"coding":[{"code":["refuted"]}]}}`
+  resolved `refuted` **through** the single-position array wrapper, a shape FHIR JSON does not
+  define, and handed it back under `arrayWrappedScalars: []`, `safeToSummarize: true`, `valid: true`,
+  with no diagnostic anywhere saying the value had come out of one. The multi-position twin is the
+  sharper half and runs the other way:
+  `{"…","verificationStatus":{"coding":[{"code":["entered-in-error","x"]}]}}` is deliberately left
+  **unread**, because `system` and `code` feed a cross-product and taking more than one value on
+  either side would pair values the sender wrote in different positions and assert a coding it never
+  wrote. So the retraction was neither surfaced nor reported, and the readout affirmed
+  `safeToSummarize: true` over a value the library knowingly declined to read. Both held at every
+  resource root, inside `contained` and a `Bundle.entry`, and at an entry root carrying no readable
+  type at all.
+  **The remedy is at the report, not at the read.** Not one value reads differently and nothing is
+  narrowed. The wrapper report for the elements the negation read resolves through a `Coding` now
+  runs at **every** resource root of **any** type, decided in the same loop over the same table the
+  read is made from, so the two cannot come to cover different elements. Both halves that decide a
+  wrapper at a root share one de-duplicating callback, so a location a caller can act on once still
+  arrives once. The locations reach `SafetyReadout.arrayWrappedScalars`, `arrayWrappedScalars()`, an
+  `ARRAY_WRAPPED_SCALAR` error, `safeToSummarize: false`, `assertSafeToSummarize` throwing, and the
+  XML writer's refusal to spell back a wrapper it cannot write.
+  **What licenses dropping the type scoping here is _datatype_ cardinality**, a different argument
+  from the ones that preceded it in this area, none of which transfers: `Coding` is a datatype whose
+  `system` and `code` are `0..1` _wherever a `Coding` appears_ (datatypes.html), so an array at
+  either is non-conformant whatever resource carries it and whatever the enclosing element's own
+  cardinality is. No question about the enclosing resource arises, so no per-resource model is needed
+  and none is grown. That is exactly what is **not** true of the element names one level up, where R4
+  really does define repeating elements under the same names (`Questionnaire.code`,
+  `ElementDefinition.code`, both `0..*`), which is why that half keeps its type scoping.
+  **Scope, stated as what did not move**, each pinned at its literal in both states in
+  `test/negation-coding-wrapper-scope.test.ts`: the element-level wrappers stay on the cardinality
+  table, so `{"resourceType":"ServiceRequest","doNotPerform":[true]}` and
+  `{"resourceType":"Procedure","status":["not-done"]}` are still read through and surfaced while the
+  wrapper draws no `ARRAY_WRAPPED_SCALAR`; a `Coding` wrapper at a `code`-typed `status` draws
+  nothing, because nothing reads through it and a report wider than the read is this defect inverted;
+  `clinicalStatus` and a "no known allergy" `code` on a type outside the table draw nothing, their
+  reads being type-scoped, and `no-known-allergy` stays root- and type-scoped on purpose, being the
+  one negation whose surfacing makes a caller _less_ careful; `Questionnaire.code` is untouched; and
+  a `verificationStatus` below a resource root is untouched. A conformant document reads exactly as
+  before, and **no public API is added or changed**.
+  **Three prose claims the package shipped about itself were false and are corrected rather than
+  qualified**, which is the shape this area keeps producing: `unreadableBooleans` and
+  `nearMissNegationCodes` each stated their window "is `arrayWrappedScalars`' window", which it was
+  not while that report was type-scoped and they were not, and the `Coding` unwrap's own note
+  asserted read scope already equalled report scope. An older entry below claiming the resulting
+  asymmetry "survives on purpose" is cut, not annotated.
+  **Measured:** 11 of 24 new cases red at the base commit in a real detached base worktree, 24 of 24
+  at head; one further case is red at base only because the read table has no `codings` field there,
+  and is reported separately rather than counted as behaviour. 11 both-states pins, **named in the
+  test file** rather than counted in a total. Nine mutations, none surviving, named rather than
+  totalled: dropping the table flag, inverting it, re-gating the report on resource type, giving the
+  negation half its own de-duplication, reporting only single-position wrappers, reporting only
+  multi-position ones, dropping the XML-unwritable half, reading only the first written member, and
+  running the report for every row regardless of the flag. The read differential moved 0 readings
+  with 0 `valid` false-to-true and 0 `safeToSummarize` false-to-true, and that 0 is **vacuous by
+  construction**: no corpus document carries an array-wrapped `Coding` member, so none reaches the
+  changed code. The fixtures are hand-authored, plus mutations and probes, **not** the R4
+  published-examples corpus.
 - **A profile that forbids what it also requires had its prohibition discarded, so a slice admitted
   the very occurrences it excludes (`FHIR-XML-WRITE-RESIDUALS`).** Slice resolution turns a slice
   descendant's cardinality into an existence expectation for an `exists` discriminator, and it read
@@ -1781,12 +1841,7 @@ true`, 0 `valid true -> false`, 0 `safeToSummarize false -> true`, 0 retractions
   to a module-internal read used only for the windowed elements; `codingsOf` and every out-of-window
   coding (`category`, `interpretation`, `referenceRange.type`, `component.code`) keep their previous
   behaviour exactly. Pinned by that document as a regression test.
-  **One asymmetry survives on purpose:** the `ARRAY_WRAPPED_SCALAR` location is emitted only on a
-  resource of a safety type, while `isRetracted` and the refutation read are not type-gated, so on
-  another resource type a wrapped `verificationStatus.coding.code` is read with no location reported.
-  Those reads can only **add** a retraction or a negation and no type-scoped verdict is reached there,
-  so narrowing the read to match the report would only make `isRetracted` miss retractions it catches
-  today. Recorded rather than smoothed over, after the gate measured it. That includes the single-position case that _is_ read, for the same
+  That includes the single-position case that _is_ read, for the same
   reason the element-level wrapper is reported when its value is read: FHIR JSON does not define the
   shape. Without it, a multi-position wrapper would be a negation the library declined to read and
   then affirmed over anyway. Unlike the element level this needs no per-resource cardinality model and
