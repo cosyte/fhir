@@ -70,17 +70,17 @@ function mergeElement(base: ElementDefinition, diff: ElementDefinition): Element
   // on the instance. It is also what keeps every widening of the `min` READ additive: a newly-read
   // bound can only raise what the snapshot already carried, whatever wire format spelled it.
   //
-  // DECLARED OPEN, pinned by a test, and deliberately NOT guarded here. Where a profile is
-  // contradictory (the base element required, the differential forbidding it with `0..0`) the
-  // tightening composes the two rules into an UNSATISFIABLE `min 1` beside `max 0`. That is a true
-  // statement about a contradictory profile and every instance draws a finding from it, but
-  // `resolveSlices` reads a descendant's cardinality as an existence expectation and resolves the
-  // contradiction toward *present*, so beneath an `exists` discriminator two slice findings are
-  // lost. A clamp against `max` was tried and REVERTED: it lowered the enforced bound below the
+  // Deliberately NOT guarded here, and that stays true now the downstream loss is closed. Where a
+  // profile is contradictory (the base element required, the differential forbidding it with
+  // `0..0`) the tightening composes the two rules into an UNSATISFIABLE `min 1` beside `max 0`.
+  // That is a true statement about a contradictory profile and every instance draws a finding from
+  // it. A clamp against `max` was tried HERE and REVERTED: it lowered the enforced bound below the
   // inherited one whenever the differential's own `max` sat under it, which is worse and reaches
-  // ordinary profile mistakes rather than only contradictory ones. The remedy belongs at
-  // `resolveSlices`, which is guessing where its own contract says report `unchecked`, and it is its
-  // own slice.
+  // ordinary profile mistakes rather than only contradictory ones. What was lost was downstream:
+  // `resolveSlices` read the descendant's cardinality as an existence expectation and resolved the
+  // contradiction toward *present*, dropping two slice findings beneath an `exists` discriminator.
+  // That is fixed where it happened, by recording the contradiction as unsatisfiable instead of
+  // picking a side (`unsatisfiableExists` in `./slicing.js`), so this composition is left composing.
   //
   // `max` is deliberately NOT given the mirror treatment: no read feeding it moved, so tightening it
   // would be a separate change to the JSON path. It is characterized by a test.

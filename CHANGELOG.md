@@ -105,6 +105,59 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A profile that forbids what it also requires had its prohibition discarded, so a slice admitted
+  the very occurrences it excludes (`FHIR-XML-WRITE-RESIDUALS`).** Slice resolution turns a slice
+  descendant's cardinality into an existence expectation for an `exists` discriminator, and it read
+  the two bounds as an ordered pair: `min` first, so a descendant stating `min 1` beside `max 0`
+  never reached the prohibition. That pair is not a hypothetical shape. It is what snapshot
+  generation composes when a differential forbids with `0..0` an element the base resource makes
+  required, and snapshot generation is deliberately left composing it, a clamp against `max` having
+  been tried there and reverted for lowering the enforced bound below the inherited one.
+  The result was that every occurrence carrying the forbidden element was assigned to the slice.
+  Beneath a `closed` slicing that retired a `PROFILE_SLICE_UNMATCHED` and the slice's own
+  `CARDINALITY_MIN`. Both are drawn now for that shape.
+  **The contradiction is recorded rather than resolved.** `SliceDefinition` carries a new
+  `unsatisfiableExists` set beside `existsExpectations`, holding the relative paths a slice fixes as
+  present and absent at once, and an `exists` discriminator on such a path assigns no occurrence.
+  Keeping it apart from the boolean map is the point: neither boolean is true of a contradiction,
+  and picking one admits documents the profile forbids.
+  **The answer is "no", not "unevaluable", and the difference is the whole decision.** An
+  unevaluable discriminator reports the slicing `PROFILE_SLICE_UNCHECKED`, which returns before the
+  unmatched-occurrence and slice-cardinality checks and would therefore retire the findings this
+  case exists to draw, while looking like a fail-safe. It is not a guess: no instance has a path
+  both present and absent.
+  **It is scoped to a contradiction at a discriminator path, and to `max 0` alone.** A slice whose
+  descendant is unsatisfiable is not unmatchable in general, since membership is decided by the
+  discriminators and an occurrence may be assigned to a slice it then violates; marking the slice
+  unmatchable would move real violations to "unmatched" and hide them. And `min 2 / max 1` is
+  unsatisfiable by count while still saying something unambiguous about presence, so it is left
+  reading exactly as before, as are a plainly required descendant, a plainly prohibited one, and one
+  stating no bound at all.
+  **It is scoped to the slice's own descendants too.** The walk sweeps every element under the
+  slice's id prefix, and a re-slice of a descendant sits under that prefix and flattens onto the
+  same relative path, so recording its contradiction made the satisfiable outer slice unmatchable
+  and drew two errors on a conformant document, blaming the instance for a statement belonging to a
+  different slice. Re-slicing is a declared deferral here, so a contradiction carried only by a
+  re-slice is left reading as it did before.
+  **Findings are retired as well as drawn, and the classes are named rather than counted**: a
+  slice-level `CARDINALITY_MAX` fired by the wrongful count, and, because the match loop stops at
+  the first matching slice, the findings that the slices after it had earned by being empty, whether
+  they now match or turn out unevaluable. In the unevaluable case every slice arm for that slicing
+  is skipped, so a third slice's `CARDINALITY_MAX` goes too and an evaluated slicing becomes an
+  unevaluated one, reported as `PROFILE_SLICE_UNCHECKED`. Each existed only because of the wrongful
+  admission and no verdict moves to valid through any of them, but they are disclosed rather than
+  left to be found. Where the contradiction sits on the slice's own descendant that descendant is
+  also element-checked and is unsatisfiable for every count, so an error stands on each present
+  parent occurrence whichever way the instance goes; **that is not a general bound and is not
+  offered as one**, since slice elements are skipped by the element-level walk.
+  Deliberately unchanged: snapshot generation still overlays a differential `max` verbatim, which is
+  the mirror of the defect and what composes the pair in the first place;
+  `ElementDefinition.mustSupport` and `slicing.ordered` are still unread from XML; the `type`,
+  `profile` and R5 `position` discriminators still report the slicing unchecked; and re-slicing
+  remains deferred, a re-slice's own constraints reaching neither membership nor the element walk.
+  The figures come from hand-authored JSON and XML fixtures plus mutations and probes, not from the
+  R4 published-examples corpus.
+
 - **An XML-sourced profile declared its required elements and this library enforced none of them,
   silently (`FHIR-XML-WRITE-RESIDUALS`).** FHIR XML carries every primitive as the text of its
   `value` attribute (`xml.html` 2.6.1) and this reader is schema-free by design, so
@@ -136,16 +189,6 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   snapshot's bound or leave it alone, whatever wire format spelled it. The malformed profile is not
   refused, snapshot generation having no channel to report it on; nothing the base element earned is
   withdrawn.
-  **One consequence is left open rather than guarded, because guarding it measured worse.** Where a
-  profile is contradictory (the base element required, the differential forbidding it with `0..0`),
-  composing the two rules gives an unsatisfiable `min 1` beside `max 0`. Every instance draws a
-  finding from that, but slice resolution reads a descendant's cardinality as an existence
-  expectation and resolves the contradiction toward "present", so beneath an `exists` discriminator
-  two slice findings are lost. Clamping the tightened bound against `max` was tried and reverted: it
-  lowered the enforced bound below the inherited one whenever the differential's own `max` sat under
-  it, reaching ordinary profile mistakes rather than only contradictory ones. The remedy belongs in
-  slice resolution, which is guessing where its own contract says report the slicing unchecked. It
-  is pinned by a test.
   **That closes a defect on the JSON path too, disclosed rather than absorbed quietly:** a JSON
   `{"min": 1}` under an inherited `min` of `2` already removed that finding before this change. The
   direction is `valid: true` to `valid: false`. **The mirror on `max` is deliberately not taken**: a
