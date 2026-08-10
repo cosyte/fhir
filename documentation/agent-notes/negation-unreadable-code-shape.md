@@ -105,10 +105,12 @@ hazard: it is a `code` in every version this reader accepts"* into `dist/index.d
 about the element it DECLINED (`verificationStatus`) and asserted without checking about the element
 it SHIPPED.** That asymmetry is the finding worth keeping.
 
-**Remedy: ask about the SHAPE, not about which reader succeeded.** A complex carrying `coding`,
-`text`, `id` or `extension` is something FHIR spells at a root `status` and is left alone, whether or
-not a code came out of it. `{"value":"not-done"}` carries none of them and is spellable as neither
-datatype, so nothing was declined there: there was nothing either datatype could hold.
+**Remedy: ask about the SHAPE, not about which reader succeeded.** `{"value":"not-done"}` is
+spellable as neither datatype, so nothing was declined there: there was nothing either datatype could
+hold. **⚠ The pass-1 remedy phrased that exemption as "a complex carrying `coding`, `text`, `id` or
+`extension` is left alone", and THAT PHRASING IS THE PASS-2 DEFECT below** - recorded here only so
+the two sections are not read as agreeing. The shipped rule is the one in §"Gate pass 2's finding":
+**all** of a complex's members must be ones FHIR spells here for it to be left alone.
 
 **The direction of the scoping is the whole argument, and it does NOT contradict "the type gate was
 DROPPED, not widened".** That rule governs a **read**, which can only *add* a negation, so widening
@@ -227,6 +229,35 @@ of it was re-measured after the pass-2 remedy**, not carried over from either ea
   published-examples corpus this slice does not run, and pass 2 cleared the remedy against the
   published R4 and R5 example corpora. The fixtures added afterwards are hand-authored copies of
   those shapes, not the published files.
+
+## 🛑 Gate pass 4 (the CAP) and the UNGRADED pre-merge edits
+
+**`NOT REFUTED` at pass 4 of 4.** It cleared the behaviour independently: the empty-complex arm is
+real and reachable, the corrected polarity holds, `ele-1` is quoted correctly against the published
+R4 and R5 `StructureDefinition`s, the old phrasings return **zero** hits across `src/`, `test/`,
+`README.md`, `CHANGELOG.md`, all pending changesets and both `dist/index.d.*`, and the pass-3 diff
+was **provably behaviour-neutral** (comment-stripped transpile byte-identical).
+
+It left **three minors and two nits, all prose**, and judged the right disposition to be landing
+them as a residual rather than spending a fifth pass. **They were fixed instead of filed**, because
+each is a sentence the gate itself quoted and gave the true form of, and two of them ship in
+`dist/index.d.ts`:
+
+- the exported `unreadableNegationCodes()` docblock omitted the empty-complex arm, and its universal
+  was **vacuously wrong** for `{"status":{}}` (zero members, so "all of them legal" holds, yet it
+  reports);
+- the readout field's defining sentence said the element is "present **and filled in**", which the
+  no-member arm contradicts;
+- `ele-1` was cited as *the* ground in a way that invites "ele-1 violations at `status` are
+  reported", which is **untrue**: `{"id":"s1"}` and `{"coding":[]}` violate it and are deliberately
+  left alone;
+- this file's own pass-1 narrative still stated the pass-2 wrong polarity as "the Remedy";
+- a test comment carried a hard line reference that goes stale on any insertion above it.
+
+**🛑 THESE EDITS ARE UNGRADED, and that is stated rather than glossed.** ADR 0016's cap is four and
+it is spent. They are prose only and the **comment-stripped transpile of both changed source files
+is byte-identical**, measured, so nothing ungraded is shipping as behaviour. A future reader should
+treat these five sentences, and only these, as never having faced a refuter.
 
 ## 🔴 Deferred, filed rather than absorbed
 

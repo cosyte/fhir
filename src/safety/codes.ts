@@ -450,7 +450,9 @@ export function hasUnreadableCode(node: FhirNode | undefined): boolean {
     if (node.properties.some((property) => !CODEABLE_CONCEPT_MEMBERS.has(property.name)))
       return true;
     // No member at all is a shape FHIR spells nowhere either: an element present in a resource SHALL
-    // carry a value, children defined for its type, or an extension (ele-1).
+    // carry a value, children defined for its type, or an extension (ele-1). That grounds THIS arm
+    // only; it is not a general ele-1 check, and `{"id":"s1"}` / `{"coding":[]}` violate ele-1 too
+    // and are deliberately left alone, their members being ones FHIR spells here.
     return node.properties.length === 0;
   }
   // Any shape the model gains later reports rather than reading as clean.

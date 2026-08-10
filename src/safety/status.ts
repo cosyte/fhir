@@ -434,8 +434,9 @@ export interface SafetyReadout {
    * `{"status":{"id":"s1","value":"not-done"}}`, the members a generic converter makes of FHIR XML's
    * `value` attribute and the primitive's own metadata beside it), an object carrying **no member at
    * all** (`ele-1` forbids an element with no value, children or extension), or a written value that
-   * is not a string at all. The element is present and filled in, and the negation read still returned
-   * nothing, so `{"resourceType":"Procedure","status":{"value":"not-done"}}` read `negations: []`
+   * is not a string at all. **`ele-1` grounds that one arm; it is not a rule this channel
+   * enforces**, and `{"status":{"id":"s1"}}` / `{"status":{"coding":[]}}` violate it too and are
+   * deliberately not reported, their members being ones FHIR spells here. The element is present, and the negation read still returned nothing, so `{"resourceType":"Procedure","status":{"value":"not-done"}}` read `negations: []`
    * under `safeToSummarize: true`, indistinguishable from a procedure that was carried out.
    *
    * **The shape complement of {@link nearMissNegationCodes}, and the two do not overlap.** That one
@@ -830,8 +831,9 @@ export function nearMissNegationCodes(resource: FhirComplex, path: string): stri
  * {@link unreadableBooleans} included, and that is the gap this closes.
  *
  * **The element is `status`, at every resource root**, the negation read's own window. A complex
- * all of whose members are ones FHIR spells there is left alone, because R4 and R5 both spell some
- * root `status` elements as `CodeableConcept`; one member outside that set is enough to report. `verificationStatus` is deliberately outside it, and `AllergyIntolerance.code` is outside it for
+ * with at least one member, all of them ones FHIR spells there, is left alone, because R4 and R5
+ * both spell some root `status` elements as `CodeableConcept`; one member outside that set is enough
+ * to report, and so is carrying no member at all. `verificationStatus` is deliberately outside it, and `AllergyIntolerance.code` is outside it for
  * the reason that keeps `no-known-allergy` root-scoped (see
  * {@link SafetyReadout.unreadableNegationCodes} for both).
  *

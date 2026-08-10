@@ -405,8 +405,8 @@ describe("content where a code belongs is disclosed, not read through", () => {
      *    type spells `status` a `code`**, so a code buried under `{"coding":{...}}` at a `Procedure`
      *    stays silent. That is the price of clearing the `CodeableConcept`-typed roots above, and it
      *    is the safe direction: the shape is one FHIR spells somewhere at this element name. **One
-     *    member outside the set is enough to report**, which is the case above at line 132, so this
-     *    limit is narrower than "carries a `CodeableConcept` member".
+     *    member outside the set is enough to report** (the "carrying the primitive's own metadata"
+     *    case above), so this limit is narrower than "carries a `CodeableConcept` member".
      */
     it("1. leaves a bare-string verificationStatus alone (DSTU2 spells it a code)", () => {
       const safety = safetyOf('{"resourceType":"Condition","verificationStatus":"refuted"}');
