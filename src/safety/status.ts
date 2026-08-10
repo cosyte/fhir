@@ -428,9 +428,10 @@ export interface SafetyReadout {
    */
   readonly nearMissNegationCodes: readonly string[];
   /**
-   * FHIRPath locations of a `code`-valued negation element holding **content at a position no `code`
-   * read can reach**: an object where FHIR JSON spells a string, or a written value that is not a
-   * string at all. The element is present and filled in, and the negation read still returned
+   * FHIRPath locations of a `code`-valued negation element holding **content at a position no
+   * datatype FHIR spells there can hold**: an object carrying no member of a `CodeableConcept`
+   * (`{"status":{"value":"not-done"}}`, the member a generic converter makes of FHIR XML's `value`
+   * attribute), or a written value that is not a string at all. The element is present and filled in, and the negation read still returned
    * nothing, so `{"resourceType":"Procedure","status":{"value":"not-done"}}` read `negations: []`
    * under `safeToSummarize: true`, indistinguishable from a procedure that was carried out.
    *
@@ -447,22 +448,34 @@ export interface SafetyReadout {
    * fixes is the silence, not the strictness**, the same disposition
    * {@link nearMissNegationCodes} takes.
    *
+   * **Two datatypes reach a root `status`, and this clears both.** R4 spells it a `code` on the
+   * overwhelming majority of types and a **`CodeableConcept`** on `MedicinalProductAuthorization`
+   * and `SubstanceSpecification`; R5 adds several more, including a mandatory
+   * `DeviceAssociation.status`; DSTU2 spells every one a `code`. So the question is about the
+   * **shape**, not about which read succeeded: a complex carrying `coding`, `text`, `id` or
+   * `extension` is something FHIR spells here and is left alone, whether or not a code came out of
+   * it. Keyed on "no string was read" instead, this would refuse the published R4
+   * `MedicinalProductAuthorization` example, which was measured rather than feared.
+   *
    * **The element is `status`, at every resource root**, which is {@link negations}' window: the
    * entry node plus every node carrying its own `resourceType`, so a `Bundle.entry` or `contained`
    * resource is covered. **`verificationStatus` is deliberately absent and it is a declared limit**:
    * its shape complement is a *primitive* at the element, and `Condition.verificationStatus` **is** a
    * `code` in DSTU2, a version this reader ingests tolerantly, so the same predicate would report a
-   * conformant DSTU2 document. `status` carries no such hazard: it is a `code` in every version this
-   * reader accepts. Both directions are pinned rather than described.
+   * conformant DSTU2 document. Both directions are pinned rather than described.
    *
    * **Value-free, like every location on this readout**: neither the content at the position nor
    * anything read out of it is carried here.
    *
-   * **Empty for every conformant document, in either wire format.** FHIR JSON gives a `code` no
-   * object form, and the XML reader models a `value` attribute beside `id` / `extension` children as
-   * a primitive, so a conformant `<status value="not-done"><extension …/></status>` is read. A
+   * **Empty for every conformant document this library has been measured against, in either wire
+   * format**, and the limit is declared rather than claimed away: a version spelling a root `status`
+   * as a datatype whose members are none of the above would be reported, and the census found none
+   * in R4, R5 or DSTU2. The XML reader models a `value` attribute beside `id` / `extension` children
+   * as a primitive, so a conformant `<status value="not-done"><extension …/></status>` is read. A
    * primitive whose value is *absent* is not reported either: that is the conformant
    * `data-absent-reason` shape (json.html §2.6.2.3), and it is content the read never stepped over.
+   * **The converse limit:** a shape carrying a `CodeableConcept` member is never reported, so a code
+   * buried under `{"coding":{…}}` at a type whose `status` is a `code` stays silent.
    */
   readonly unreadableNegationCodes: readonly string[];
   /**
@@ -790,13 +803,14 @@ export function nearMissNegationCodes(resource: FhirComplex, path: string): stri
 }
 
 /**
- * The locations where a `code`-valued negation element holds **content at a position no `code` read
- * can reach**, so the negation read stepped over it and returned nothing.
+ * The locations where a `code`-valued negation element holds **content at a position no datatype
+ * FHIR spells there can hold**, so the negation read stepped over it and returned nothing.
  *
  * `{"resourceType":"Procedure","status":{"value":"not-done"}}` is ordinary output from a converter
  * that carried FHIR XML's `value` attribute across as a JSON member, and
- * `{"…","status":3}` from a feed whose codes are enumerated numerically. Neither is a `code`: FHIR
- * JSON spells one as a JSON string (json.html §2.6.0). **Nothing here descends into the object or
+ * `{"…","status":3}` from a feed whose codes are enumerated numerically. Neither is a `code` (FHIR
+ * JSON spells one as a JSON string, json.html §2.6.0) and neither is a `CodeableConcept`, the other
+ * datatype a root `status` carries. **Nothing here descends into the object or
  * coerces the number**, which would resolve a negation out of an encoding no version of FHIR defines
  * for JSON. This is **the record that content was there**, which is what the read was missing:
  * without it a procedure recorded as not done returns `negations: []` under `safeToSummarize: true`,
@@ -806,14 +820,16 @@ export function nearMissNegationCodes(resource: FhirComplex, path: string): stri
  * declined. A position holding no value at all is invisible to every value-shaped question here,
  * {@link unreadableBooleans} included, and that is the gap this closes.
  *
- * **The element is `status`, at every resource root**, the negation read's own window.
- * `verificationStatus` is deliberately outside it, and `AllergyIntolerance.code` is outside it for
+ * **The element is `status`, at every resource root**, the negation read's own window. A complex
+ * carrying a `CodeableConcept` member is left alone there, because R4 and R5 both spell some root
+ * `status` elements as `CodeableConcept`. `verificationStatus` is deliberately outside it, and `AllergyIntolerance.code` is outside it for
  * the reason that keeps `no-known-allergy` root-scoped (see
  * {@link SafetyReadout.unreadableNegationCodes} for both).
  *
  * **Value-free**: only the FHIRPath of the element is carried.
  *
- * Empty for every conformant document, in either wire format.
+ * Empty for every conformant document this library has been measured against, in either wire
+ * format. See {@link SafetyReadout.unreadableNegationCodes} for the two declared limits.
  *
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).

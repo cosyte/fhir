@@ -4,11 +4,13 @@
 and `#84` carried forward: **a `status` written as a JSON object read `negations: []` /
 `safeToSummarize: true` / `valid: true` at both states.**
 
-**This file exists because `documentation/agent-notes.md` is at 249,994 of its 250,000 archive
-budget: six bytes, so the next slice cannot append.** It is the per-slice tier, its own 90,000-byte
-budget. `CLAUDE.md` was **not touched** and stands at 27,997 of its 28,000 ratchet (three bytes). No
-ratchet was raised and no trap was deleted or reworded to buy room. Derive all three figures; never
-write one down as current.
+**This file exists because `documentation/agent-notes.md` had six bytes left of its archive budget
+when this slice started, so it could not be appended to.** This is the per-slice tier, which carries
+its own budget. `CLAUDE.md` was **not touched**, and the one correction this slice made to
+`agent-notes.md` (retracting a now-closed entry) came out **net negative**. No ratchet was raised and
+no trap was deleted or reworded to buy room. **The figures themselves are deliberately not written
+down here**: derive them from the files and from `.claude/hooks/doc-budget.mjs`, because a number
+copied into prose here is the one thing guaranteed to be stale when it is next read.
 
 ## What was wrong
 
@@ -33,12 +35,20 @@ Four slices, four different licences. `#81` dropped a type gate on **direction**
 was a **decided direction** (disclose, do not normalise) over a value.
 
 **This one is licensed by the ENCODING, and by nothing else.** FHIR JSON spells a `code` as a JSON
-string (json.html §2.6.0). There is no version of FHIR in which a JSON `code` is an object, so
-descending into `{"value":"not-done"}` to recover the string would resolve a negation out of an
-encoding **no specification defines**, and hand a caller an assertion its sender never spelled in a
-form the sender could have spelled it. That is the laundering this package refuses everywhere else,
-and it is why the remedy is a **disclosure** rather than a read. **The gap closed is the silence, not
-the strictness** - the same disposition `#84` took on a value, applied to a position.
+string (json.html §2.6.0) and a `CodeableConcept` as an object with `coding` / `text`; those are the
+two datatypes a root `status` carries. A shape spellable as **neither** is one no version of FHIR
+defines at that position, so descending into `{"value":"not-done"}` to recover the string would
+resolve a negation out of an encoding **no specification defines**, and hand a caller an assertion
+its sender never spelled in a form the sender could have spelled it. That is the laundering this
+package refuses everywhere else, and it is why the remedy is a **disclosure** rather than a read.
+**The gap closed is the silence, not the strictness** - the same disposition `#84` took on a value,
+applied to a position.
+
+**🩺 The licence was ARRIVED AT TWICE.** The first cut stated it as *"a `code` is a JSON string, so
+anything the string read cannot take is unreadable"*, which is a statement about a **reader** rather
+than about the **encoding**, and it was wrong for exactly the documents where the encoding is a
+`CodeableConcept`. Gate pass 1 refuted it (below). The correct form is about what FHIR can spell at
+the position, and only that form survives contact with the published R4 examples.
 
 ## The shape / value distinction, which is the whole finding
 
@@ -67,8 +77,47 @@ not, nor miss one it does, **by construction rather than by a second copy of a c
 pinned mechanically (the covered element list is derived from the table in the test, never written
 down) rather than described.
 
+**🛑 But "one window" is a claim about the ELEMENT dimension only, and gate pass 1 named the
+dimension it does not cover.** Report scope is genuinely *wider* than read scope in the
+**resource-type** dimension: the read runs at every root of every type on purpose, and the refusal
+initially did too, which is how it reached a `CodeableConcept`-typed `status`. **A derivation over
+element names is structurally blind to that**, so the element-name pin is not the guarantee it looks
+like. What bounds the refusal now is the datatype-shape question, pinned by conformant fixtures of
+the types that exposed it rather than by a derivation.
+
 The window is **every resource root**, inherited from `checkResourceRoot` exactly as `negations`,
 `arrayWrappedScalars` and `nearMissNegationCodes` are. No new walk was added.
+
+## 🛑 Gate pass 1's BLOCKER, and it is the shape this lineage keeps producing
+
+The first cut asked **"did the string read take anything?"** and refused where it did not. That
+**refuses a conformant document**, because **R4 spells a root `status` a `CodeableConcept` on
+`MedicinalProductAuthorization` and `SubstanceSpecification`**, R5 adds more (including a
+**mandatory** `DeviceAssociation.status`), and a conformant `CodeableConcept` yields no string to a
+`code` read. Reproduced by the gate on the **unmodified HL7-published R4
+`medicinalproductauthorization-example.json`**: clean at base, `safeToSummarize: false` at head, with
+`assertSafeToSummarize` throwing. That is `#84` pass 1's shape exactly, one slice later.
+
+**Worse than the behaviour was the claim.** The slice had published *"`status` carries no such
+hazard: it is a `code` in every version this reader accepts"* into `dist/index.d.ts`, `.d.cts`,
+`README.md`, `CHANGELOG.md`, a pending changeset and this note, and had described the reasoning as
+*"checked rather than assumed"* when nothing in the diff checked it. **The slice reasoned correctly
+about the element it DECLINED (`verificationStatus`) and asserted without checking about the element
+it SHIPPED.** That asymmetry is the finding worth keeping.
+
+**Remedy: ask about the SHAPE, not about which reader succeeded.** A complex carrying `coding`,
+`text`, `id` or `extension` is something FHIR spells at a root `status` and is left alone, whether or
+not a code came out of it. `{"value":"not-done"}` carries none of them and is spellable as neither
+datatype, so nothing was declined there: there was nothing either datatype could hold.
+
+**The direction of the scoping is the whole argument, and it does NOT contradict "the type gate was
+DROPPED, not widened".** That rule governs a **read**, which can only *add* a negation, so widening
+is free. This is a **refusal**, and an ungated refusal flips a conformant document from summarizable
+to refused, which is the one direction a fail-safe layer must not move without evidence. The sibling
+`checkArrayWrapping` is type-scoped for exactly this reason and says so in its own docblock.
+
+**Converse declared limit, taken knowingly:** a shape carrying a `CodeableConcept` member is never
+reported, so a code buried under `{"coding":{...}}` at a `Procedure` stays silent. Pinned.
 
 ## ⚖️ `verificationStatus` is deliberately outside it, and the reason is a VERSION
 
@@ -82,8 +131,9 @@ no version discriminator at the point the predicate runs. **That is the `#84` pa
 disclosure firing on a conformant document, the first behavioural refusal in this lineage), and
 taking it on the strength of the R4 half alone would have walked straight into it.
 
-**`status` carries no such hazard**: it is a `code` in every version this reader accepts, so the
-complement is safe there for a reason that is checked rather than assumed.
+**And unlike the first cut, this is now checked rather than asserted**: DSTU2 `Condition.
+verificationStatus` is `code [1..1]` where R4 and R5 spell it `CodeableConcept [0..1]`, confirmed
+against the published definitions by the gate.
 
 Filed, not absorbed, and **pinned in both directions**.
 
@@ -94,9 +144,10 @@ so surfacing it more widely makes a caller **less** careful. This slice does not
 
 ## Measurement
 
-Every figure below is derived; the named lists are the claim, and no total stands in for one.
+Every figure below is derived; the named lists are the claim, and no total stands in for one. **All
+of it was re-measured after the pass-1 remedy**, not carried over.
 
-- **Red at base: 13 of 29**, in a real **detached base worktree** at `632f914`; 34 of 34 at head.
+- **Red at base: 12 of 35**, in a real **detached base worktree** at `632f914`; 41 of 41 at head.
   - **Five further cases name a symbol the base commit does not have** (`unreadableNegationCodes`,
     `hasUnreadableCode`, the table's `unread` field). They are **skipped, not counted as red**:
     a pin asserted through a symbol the base lacks measures the symbol, not the behaviour. That is
@@ -104,36 +155,54 @@ Every figure below is derived; the named lists are the claim, and no total stand
   - The whole file runs at base by substituting **one accessor** (`disclosed`), which returns the
     reading a caller had before the channel existed. Every other line is byte-identical, so the
     comparison is of behaviour.
-- **16 both-states pins, NAMED in the test file itself**, not counted in a total: the nine conformant
-  documents (plain `status`; a `status` that IS a negation; the value-absent `data-absent-reason`
+- **23 both-states pins, NAMED in the test file itself**, not counted in a total. The conformant
+  documents: a plain `status`; a `status` that IS a negation; the value-absent `data-absent-reason`
   sibling; a resource with no `status`; a `CodeableConcept` `verificationStatus`; a
-  `verificationStatus` carrying only `text`, which R4 permits; a Bundle of conformant entries; and
-  two conformant **XML** shapes, one with `id` + `extension` children beside the value and one with
-  no value at all), "reads no deeper than a resource root", and the six declared limits
-  (bare-string `verificationStatus`; bare-string `AllergyIntolerance.code`; an object at
-  `doNotPerform`; an object at `clinicalStatus`; `validateResource` still `valid: true`; an empty
-  array at `status`).
+  `verificationStatus` carrying only `text`; a Bundle of conformant entries; **the R4
+  `MedicinalProductAuthorization` and `SubstanceSpecification` shapes, whose `status` IS a
+  `CodeableConcept`**; a `CodeableConcept` `status` carrying only `text`; one carrying only an
+  `extension`; **the R5 `DeviceAssociation` shape**; a `CodeableConcept` `status` inside a Bundle
+  entry; and two conformant **XML** shapes, one with `id` + `extension` children beside the value and
+  one with no value at all. Plus "reads no deeper than a resource root", "a duplicate key cannot hide
+  a `CodeableConcept` member", and the seven declared limits (bare-string `verificationStatus`;
+  bare-string `AllergyIntolerance.code`; an object at `doNotPerform`; an object at `clinicalStatus`;
+  `validateResource` still `valid: true`; an empty array at `status`; and a code buried under a
+  `CodeableConcept` member at a `code`-typed `status`).
 - **Non-vacuity by mutation, named rather than totalled.** Each of these reddened at least one case:
   ignoring a non-string written value; dropping the value-absent guard so the conformant
-  `data-absent-reason` shape reports; not walking the array wrapper; reading a complex as clean;
-  removing the `status` row's `unread`; **giving `verificationStatus` the complement the DSTU2 limit
-  declines**; reporting the resource root instead of the element; `some` becoming `every` so a
-  shadowed member hides the shape; `safeToSummarize` no longer consulting the channel; and
-  `assertSafeToSummarize` no longer consulting it.
-- **Suite 70 files / 1,495 tests -> 71 / 1,529**, exactly the new file, so **no existing test moved**
-  except the refusal-message string pin in `test/xml-unreadable-boolean.test.ts`, which this slice
-  legitimately extends and therefore rewrites.
+  `data-absent-reason` shape reports; not walking the array wrapper; **dropping the
+  `CodeableConcept` scoping, which is the pass-1 blocker and reds seven cases**; reading every
+  complex as clean; **forgetting `text`, so a text-only `CodeableConcept` is refused**; removing the
+  `status` row's `unread`; **giving `verificationStatus` the complement the DSTU2 limit declines**;
+  reporting the resource root instead of the element; `some` becoming `every` so a shadowed member
+  hides the shape; `safeToSummarize` no longer consulting the channel; and `assertSafeToSummarize`
+  no longer consulting it.
+- **🩺 One mutation SURVIVED and was closed by DELETING THE BRANCH, not by adding a test.** Scanning
+  `duplicates` alongside `properties` for a `CodeableConcept` member could not change any answer:
+  a repeated name keeps its **first** member in `properties` and puts only later ones in
+  `duplicates`, so **every name in `duplicates` is present in `properties` too**, measured on a
+  document rather than assumed. The branch was **dead code**, and an unreachable branch is one no
+  mutation can red and no reader can check. The invariant it relied on is now pinned by a test.
+- **Suite 70 files / 1,495 tests -> 71 / 1,536.** **The count alone does not establish that no
+  existing test moved, and it is not offered as if it did** (gate pass 1's point, and the same shape
+  as this repo's own "a scanned-file COUNT cannot detect a sweep that opened nothing"). **Four
+  existing test files were edited, named here:** `test/xml-unreadable-boolean.test.ts` (the
+  refusal-message string pin, which this slice legitimately extends and therefore rewrites),
+  `test/derived-names.test.ts` and `test/phi-diagnostic-surface.test.ts` (both had their
+  collected-location lists extended to include the new channel, so it is swept for name echo), and
+  no others. Every other file is untouched.
 - **`differential:read`: 0 readings moved, 0 regressions - and that 0 is VACUOUS BY CONSTRUCTION.**
   The harness prints its own caveat that it cannot distinguish "nothing moved" from "no document in
-  the corpus reaches the changed code", and no corpus fixture carries an object at `status`. Reported
-  as a non-measurement, not as a clean sheet.
+  the corpus reaches the changed code", and no corpus fixture carries an unspellable shape at
+  `status`. Reported as a non-measurement, not as a clean sheet.
 - **🩺 The negative control against `@cosyte/hl7` is DEGENERATE and is reported as such.** **0 of the
   9 symbols** this test file names exist on that package, so every assertion would fail for a
   missing-symbol reason and none for a behavioural one. **A control that cannot fail is not a
-  control**, and counting it as a pass would be the third repeat of a shape this run has already
-  published twice.
+  control**, and counting it as a pass would repeat a shape this run has already published twice.
 - **Corpus caveat:** hand-authored fixtures, mutations and probes. **Not** the R4 published-examples
-  corpus.
+  corpus - **and gate pass 1 showed that caveat cutting the other way**: the pass-1 defect was
+  visible in the R4 published-examples corpus this slice does not run. The corpus fixtures added
+  after the remedy are hand-authored copies of those shapes, not the published files.
 
 ## 🔴 Deferred, filed rather than absorbed
 

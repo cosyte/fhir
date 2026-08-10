@@ -31,19 +31,32 @@ The element is `status`, at every resource root, which is the negation read's ow
 matches themselves are made from and is applied in the same loop, so the report cannot cover an
 element the read does not, nor miss one it does.
 
+Two datatypes reach a root `status`, and the question asked is about the shape rather than about
+which read succeeded, so that both are cleared. R4 spells `status` a `code` on the overwhelming
+majority of types and a `CodeableConcept` on `MedicinalProductAuthorization` and
+`SubstanceSpecification`; R5 adds several more, including a mandatory `DeviceAssociation.status`;
+DSTU2 spells every one a `code`. A complex carrying `coding`, `text`, `id` or `extension` is
+something FHIR spells at this position and is left alone, whether or not a code came out of it. Keyed
+instead on "the string read took nothing", this would refuse the published R4
+`MedicinalProductAuthorization` example, which was measured rather than feared. The converse is a
+declared limit: a shape carrying a `CodeableConcept` member is never reported, so a code buried under
+`{"coding":{...}}` at a type whose `status` is a `code` stays silent.
+
 `verificationStatus` is deliberately outside it, and that is a declared limit rather than an
 oversight. Its shape complement is a *primitive* at the element, and `Condition.verificationStatus`
 is a `code` in DSTU2, a version this reader ingests tolerantly, so the same predicate would report a
-conformant DSTU2 document. `status` carries no such hazard: it is a `code` in every version this
-reader accepts. `AllergyIntolerance.code` is outside it for the reason that keeps "no known allergy"
-root- and type-scoped, its absence being the cautious reading rather than the incomplete one.
+conformant DSTU2 document. `AllergyIntolerance.code` is outside it for the reason that keeps "no
+known allergy" root- and type-scoped, its absence being the cautious reading rather than the
+incomplete one.
 
 Value-free: only the FHIRPath of the element is carried, never the content at the position nor
 anything read out of it. The channel raises no `ValidationIssue`, so `valid` does not move in either
 direction on any document.
 
-Empty on every conformant document, in either wire format. FHIR JSON gives a `code` no object form,
-and the XML reader models a `value` attribute beside `id` and `extension` children as a primitive, so
-a conformant `<status value="not-done"><extension …/></status>` is read rather than reported. A
+Empty on every conformant document this library has been measured against, in either wire format,
+with the limit declared rather than claimed away: a version spelling a root `status` as a datatype
+whose members are none of the above would be reported, and the census found none in R4, R5 or DSTU2.
+The XML reader models a `value` attribute beside `id` and `extension` children as a primitive, so a
+conformant `<status value="not-done"><extension …/></status>` is read rather than reported. A
 primitive whose value is *absent* is not reported either: that is the conformant
 `data-absent-reason` shape (json.html §2.6.2.3), and it is content the read never stepped over.

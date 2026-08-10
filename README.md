@@ -448,17 +448,24 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   negation out of an encoding no version of FHIR defines for JSON. The element is `status`, at every
   resource root, which is the negation read's own window; the complement is carried in the same table
   the matches are made from and applied in the same loop, so it cannot cover an element the read does
-  not. **`verificationStatus` is deliberately outside it**, and that is a declared limit: its shape
-  complement is a _primitive_ at the element, and `Condition.verificationStatus` is a `code` in
-  DSTU2, a version this reader ingests tolerantly, so the same rule would report a conformant DSTU2
-  document. `status` is a `code` in every version this reader accepts, so it carries no such hazard.
-  `AllergyIntolerance.code` is outside it for the reason that keeps "no known allergy" root- and
-  type-scoped. Like the two channels above it this one raises no `ValidationIssue`, so it cannot move
-  `valid` in either direction. **Empty on every conformant document, in either wire format**: the XML
-  reader models a `value` attribute beside `id` and `extension` children as a primitive, so a
-  conformant `<status value="not-done"><extension …/></status>` is read; and a primitive whose value
-  is _absent_ is untouched, that being the conformant `data-absent-reason` shape and content the read
-  never stepped over.
+  not. **Two datatypes reach a root `status`, and the question asked is about the shape rather than
+  about which read succeeded, so that both are cleared**: R4 spells `status` a `code` on the
+  overwhelming majority of types and a `CodeableConcept` on `MedicinalProductAuthorization` and
+  `SubstanceSpecification`, R5 adds several more including a mandatory `DeviceAssociation.status`,
+  and DSTU2 spells every one a `code`. So a complex carrying `coding`, `text`, `id` or `extension` is
+  left alone, whether or not a code came out of it; keyed instead on "no string was read", this would
+  refuse the published R4 `MedicinalProductAuthorization` example. The converse is a declared limit:
+  a code buried under `{"coding":{…}}` at a type whose `status` is a `code` stays silent.
+  **`verificationStatus` is deliberately outside it** for a related reason: its shape complement is a
+  _primitive_ at the element, and `Condition.verificationStatus` is a `code` in DSTU2, so the same
+  rule would report a conformant DSTU2 document. `AllergyIntolerance.code` is outside it for the
+  reason that keeps "no known allergy" root- and type-scoped. Like the two channels above it this one
+  raises no `ValidationIssue`, so it cannot move `valid` in either direction. **Empty on every
+  conformant document this library has been measured against, in either wire format**: the XML reader
+  models a `value` attribute beside `id` and `extension` children as a primitive, so a conformant
+  `<status value="not-done"><extension …/></status>` is read; and a primitive whose value is _absent_
+  is untouched, that being the conformant `data-absent-reason` shape and content the read never
+  stepped over.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
   `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding

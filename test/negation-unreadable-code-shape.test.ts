@@ -122,16 +122,6 @@ describe("content where a code belongs is disclosed, not read through", () => {
       expect(safety.safeToSummarize).toBe(false);
     });
 
-    it("discloses a code buried deeper than any code read looks", () => {
-      const safety = safetyOf(
-        '{"resourceType":"Procedure","status":{"coding":{"code":"not-done"}}}',
-      );
-
-      expect(safety.negations).toEqual([]);
-      expect(disclosed(safety)).toEqual(["Procedure.status"]);
-      expect(safety.safeToSummarize).toBe(false);
-    });
-
     it("discloses a written value that is not a string", () => {
       // The other half of the same predicate: a position the string read reached and could take
       // nothing from. A numerically-enumerated status is ordinary output from a legacy feed.
@@ -288,6 +278,34 @@ describe("content where a code belongs is disclosed, not read through", () => {
         "a Bundle of conformant entries",
         bundleWith('{"resourceType":"Procedure","status":"not-done"}'),
       ],
+      // R4 spells `status` a CodeableConcept on these two. A rule keyed on "the string read took
+      // nothing" refuses them, and the published R4 example for the first is the measured case.
+      [
+        "the R4 MedicinalProductAuthorization shape, whose status IS a CodeableConcept",
+        '{"resourceType":"MedicinalProductAuthorization","status":{"coding":[{"system":"http://x","code":"active"}]}}',
+      ],
+      [
+        "the R4 SubstanceSpecification shape, whose status IS a CodeableConcept",
+        '{"resourceType":"SubstanceSpecification","status":{"coding":[{"code":"active"}]}}',
+      ],
+      [
+        "a CodeableConcept status carrying only text, which yields no coding either",
+        '{"resourceType":"MedicinalProductAuthorization","status":{"text":"active"}}',
+      ],
+      [
+        "a CodeableConcept status carrying only an extension",
+        '{"resourceType":"MedicinalProductAuthorization","status":{"extension":[{"url":"http://x"}]}}',
+      ],
+      [
+        "the R5 DeviceAssociation shape, whose status is a mandatory CodeableConcept",
+        '{"resourceType":"DeviceAssociation","status":{"coding":[{"code":"implanted"}]}}',
+      ],
+      [
+        "a CodeableConcept status inside a Bundle entry",
+        bundleWith(
+          '{"resourceType":"MedicinalProductAuthorization","status":{"coding":[{"code":"active"}]}}',
+        ),
+      ],
     ];
 
     for (const [name, json] of conformant) {
@@ -363,6 +381,10 @@ describe("content where a code belongs is disclosed, not read through", () => {
      * 5. `validateResource` still reports `valid: true`. The safety layer is this slice's window
      *    and no new `ValidationIssue` is raised.
      * 6. An empty array at `status` draws nothing: no position, so no content.
+     * 7. A shape carrying a `CodeableConcept` member draws nothing **even where the type spells
+     *    `status` a `code`**, so a code buried under `{"coding":{...}}` at a `Procedure` stays
+     *    silent. That is the price of clearing the `CodeableConcept`-typed roots above, and it is
+     *    the safe direction: the shape is one FHIR spells somewhere at this element name.
      */
     it("1. leaves a bare-string verificationStatus alone (DSTU2 spells it a code)", () => {
       const safety = safetyOf('{"resourceType":"Condition","verificationStatus":"refuted"}');
@@ -412,6 +434,27 @@ describe("content where a code belongs is disclosed, not read through", () => {
     it("6. leaves an empty array at status alone", () => {
       const safety = safetyOf('{"resourceType":"Procedure","status":[]}');
 
+      expect(disclosed(safety)).toEqual([]);
+      expect(safety.safeToSummarize).toBe(true);
+    });
+
+    it("a duplicate key cannot hide a CodeableConcept member", () => {
+      // The `duplicates` list can never hold a name `properties` lacks (a repeated name keeps its
+      // first member there), so the shape stays recognisable as a `CodeableConcept`. Pinned because
+      // the predicate reads `properties` alone and that equivalence is why it may.
+      const safety = safetyOf(
+        '{"resourceType":"MedicinalProductAuthorization","status":{"coding":[{"code":"a"}],"coding":[{"code":"b"}]}}',
+      );
+
+      expect(disclosed(safety)).toEqual([]);
+    });
+
+    it("7. leaves a code buried under a CodeableConcept member alone, at a code-typed status", () => {
+      const safety = safetyOf(
+        '{"resourceType":"Procedure","status":{"coding":{"code":"not-done"}}}',
+      );
+
+      expect(safety.negations).toEqual([]);
       expect(disclosed(safety)).toEqual([]);
       expect(safety.safeToSummarize).toBe(true);
     });

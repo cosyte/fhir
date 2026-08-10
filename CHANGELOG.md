@@ -30,19 +30,28 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   The element is `status`, at every resource root, which is the negation read's own window. The
   complement is carried in the same table the matches are made from and applied in the same loop, so
   the report cannot cover an element the read does not, nor miss one it does.
-  **`verificationStatus` is deliberately outside it**, a declared limit rather than an oversight: its
-  shape complement is a _primitive_ at the element, and `Condition.verificationStatus` is a `code` in
-  DSTU2, a version this reader ingests tolerantly, so the same predicate would report a conformant
-  DSTU2 document. `status` carries no such hazard, being a `code` in every version this reader
-  accepts. `AllergyIntolerance.code` is outside it for the reason that keeps "no known allergy" root-
-  and type-scoped.
+  **Two datatypes reach a root `status`, and the question asked is about the shape rather than about
+  which read succeeded, so that both are cleared**: R4 spells it a `code` on the overwhelming
+  majority of types and a `CodeableConcept` on `MedicinalProductAuthorization` and
+  `SubstanceSpecification`, R5 adds several more including a mandatory `DeviceAssociation.status`,
+  and DSTU2 spells every one a `code`. A complex carrying `coding`, `text`, `id` or `extension` is
+  left alone, whether or not a code came out of it; keyed instead on "no string was read", this would
+  refuse the published R4 `MedicinalProductAuthorization` example. Converse declared limit: a code
+  buried under `{"coding":{…}}` at a `code`-typed `status` stays silent.
+  **`verificationStatus` is deliberately outside it** for a related reason: its shape complement is a
+  _primitive_ at the element, and `Condition.verificationStatus` is a `code` in DSTU2, a version this
+  reader ingests tolerantly, so the same predicate would report a conformant DSTU2 document.
+  `AllergyIntolerance.code` is outside it for the reason that keeps "no known allergy" root- and
+  type-scoped.
   Value-free: only the FHIRPath of the element is carried. The channel raises no `ValidationIssue`,
   so `valid` does not move in either direction on any document.
-  Empty on every conformant document, in either wire format: FHIR JSON gives a `code` no object form,
-  and the XML reader models a `value` attribute beside `id` and `extension` children as a primitive,
-  so a conformant `<status value="not-done"><extension …/></status>` is read. A primitive whose value
-  is _absent_ is not reported either, that being the conformant `data-absent-reason` shape
-  (json.html §2.6.2.3) and content the read never stepped over.
+  Empty on every conformant document this library has been measured against, in either wire format,
+  with the limit declared rather than claimed away: a version spelling a root `status` as a datatype
+  whose members are none of the above would be reported, and the census found none in R4, R5 or
+  DSTU2. The XML reader models a `value` attribute beside `id` and `extension` children as a
+  primitive, so a conformant `<status value="not-done"><extension …/></status>` is read. A primitive
+  whose value is _absent_ is not reported either, that being the conformant `data-absent-reason`
+  shape (json.html §2.6.2.3) and content the read never stepped over.
 - **`SafetyReadout.nearMissNegationCodes`, and with it the record that a value spelling a negation
   bar its case or its surrounding whitespace was looked at and declined
   (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit:
@@ -60,9 +69,9 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   So the value is disclosed rather than normalised: its element's FHIRPath location appears in
   `nearMissNegationCodes`, `safeToSummarize` is `false`, and `assertSafeToSummarize` throws.
   `nearMissNegationCodes(resource, path)` is exported beside the other collectors.
-  **Nothing is coerced, trimmed or case-folded**, and unlike the readout's other location channels
-  nothing is dropped at parse time either: the value is in the model at the element the location
-  names, and what the library declines is the classification. That is **not** a promise the value
+  **Nothing is coerced, trimmed or case-folded**, and nothing is dropped at parse time either: the
+  value is in the model at the element the location names, and what the library declines is the
+  classification. That is **not** a promise the value
   reaches a convenience field: `status` / `verificationStatus` are root-scoped and
   preferred-system-first while this channel is document-wide, so a nested or second-coding near miss
   is not what they show. Walk the model at the location.
