@@ -37,13 +37,14 @@ majority of types and a `CodeableConcept` on `MedicinalProductAuthorization` and
 `SubstanceSpecification`; R5 adds several more, including a mandatory `DeviceAssociation.status`;
 DSTU2 spells every one a `code`. A complex all of whose members FHIR spells at this position
 (`coding`, `text`, `id`, `extension`) is left alone, whether or not a code came out of it, while any
-member outside that set is reported. The polarity is load-bearing: exempting a shape for carrying one
+member outside that set is reported, as is an object with no member at all (`ele-1` requires an
+element present in a resource to carry a value, children defined for its type, or an extension). The polarity is load-bearing: exempting a shape for carrying one
 legal member would read `{"status":{"id":"s1","value":"not-done"}}` as clean, and that is the same
 converter output this channel exists to report. Keyed
 instead on "the string read took nothing", this would refuse the published R4
 `MedicinalProductAuthorization` example, which was measured rather than feared. The converse is a
-declared limit: a shape carrying a `CodeableConcept` member is never reported, so a code buried under
-`{"coding":{...}}` at a type whose `status` is a `code` stays silent.
+declared limit: a shape all of whose members are ones FHIR spells here is never reported, so a code
+buried under `{"status":{"coding":{...}}}` at a type whose `status` is a `code` stays silent.
 
 `verificationStatus` is deliberately outside it, and that is a declared limit rather than an
 oversight. Its shape complement is a *primitive* at the element, and `Condition.verificationStatus`

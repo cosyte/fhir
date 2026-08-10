@@ -116,8 +116,10 @@ is free. This is a **refusal**, and an ungated refusal flips a conformant docume
 to refused, which is the one direction a fail-safe layer must not move without evidence. The sibling
 `checkArrayWrapping` is type-scoped for exactly this reason and says so in its own docblock.
 
-**Converse declared limit, taken knowingly:** a shape carrying a `CodeableConcept` member is never
-reported, so a code buried under `{"coding":{...}}` at a `Procedure` stays silent. Pinned.
+**Converse declared limit, taken knowingly:** a shape **all of whose members** are ones FHIR spells
+here is never reported, so a code buried under `{"status":{"coding":{...}}}` at a `Procedure` stays
+silent. **One member outside the set is enough to report**, so the limit is narrower than "carries a
+`CodeableConcept` member". Pinned as the exact document above, not as the universal.
 
 ## ⚖️ `verificationStatus` is deliberately outside it, and the reason is a VERSION
 

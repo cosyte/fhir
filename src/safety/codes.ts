@@ -367,8 +367,8 @@ const CODEABLE_CONCEPT_MEMBERS: ReadonlySet<string> = new Set([
 
 /**
  * Whether an element holds **content at a position no datatype FHIR spells there can hold**: a
- * primitive whose written value is not a string, or a complex carrying no member of a
- * `CodeableConcept`. Read through an array wrapper, position by position, exactly as the string read
+ * primitive whose written value is not a string, or a complex carrying any member outside
+ * `{coding, text, id, extension}` or no member at all. Read through an array wrapper, position by position, exactly as the string read
  * walks it.
  *
  * **Two datatypes reach a root `status`, and the refusal has to clear both.** R4 spells it a `code`
@@ -399,8 +399,9 @@ const CODEABLE_CONCEPT_MEMBERS: ReadonlySet<string> = new Set([
  *
  * **A declared limit in the safe direction:** if some version spells a root `status` as a third
  * datatype whose members are none of these, a conformant document of that type would be reported.
- * The census above found none in R4, R5 or DSTU2. A shape carrying a `CodeableConcept` member is
- * conversely never reported here even where the type spells `status` a `code`, so a code buried
+ * The census above found none in R4, R5 or DSTU2. A shape **all of whose members** are ones FHIR
+ * spells here is conversely never reported, even where the type spells `status` a `code`, so a code
+ * buried
  * under `{"coding":{...}}` at a `Procedure` stays silent. Both are pinned rather than described.
  *
  * **A primitive carrying no value is not reported**, because it is not content the read stepped over:

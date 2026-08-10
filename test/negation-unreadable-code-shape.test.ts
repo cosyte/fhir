@@ -401,10 +401,12 @@ describe("content where a code belongs is disclosed, not read through", () => {
      * 5. `validateResource` still reports `valid: true`. The safety layer is this slice's window
      *    and no new `ValidationIssue` is raised.
      * 6. An empty array at `status` draws nothing: no position, so no content.
-     * 7. A shape carrying a `CodeableConcept` member draws nothing **even where the type spells
-     *    `status` a `code`**, so a code buried under `{"coding":{...}}` at a `Procedure` stays
-     *    silent. That is the price of clearing the `CodeableConcept`-typed roots above, and it is
-     *    the safe direction: the shape is one FHIR spells somewhere at this element name.
+     * 7. A shape **all of whose members** are ones FHIR spells here draws nothing **even where the
+     *    type spells `status` a `code`**, so a code buried under `{"coding":{...}}` at a `Procedure`
+     *    stays silent. That is the price of clearing the `CodeableConcept`-typed roots above, and it
+     *    is the safe direction: the shape is one FHIR spells somewhere at this element name. **One
+     *    member outside the set is enough to report**, which is the case above at line 132, so this
+     *    limit is narrower than "carries a `CodeableConcept` member".
      */
     it("1. leaves a bare-string verificationStatus alone (DSTU2 spells it a code)", () => {
       const safety = safetyOf('{"resourceType":"Condition","verificationStatus":"refuted"}');

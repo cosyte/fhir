@@ -429,9 +429,12 @@ export interface SafetyReadout {
   readonly nearMissNegationCodes: readonly string[];
   /**
    * FHIRPath locations of a `code`-valued negation element holding **content at a position no
-   * datatype FHIR spells there can hold**: an object carrying no member of a `CodeableConcept`
-   * (`{"status":{"value":"not-done"}}`, the member a generic converter makes of FHIR XML's `value`
-   * attribute), or a written value that is not a string at all. The element is present and filled in, and the negation read still returned
+   * datatype FHIR spells there can hold**: an object carrying **any member outside**
+   * `{coding, text, id, extension}` (`{"status":{"value":"not-done"}}` and
+   * `{"status":{"id":"s1","value":"not-done"}}`, the members a generic converter makes of FHIR XML's
+   * `value` attribute and the primitive's own metadata beside it), an object carrying **no member at
+   * all** (`ele-1` forbids an element with no value, children or extension), or a written value that
+   * is not a string at all. The element is present and filled in, and the negation read still returned
    * nothing, so `{"resourceType":"Procedure","status":{"value":"not-done"}}` read `negations: []`
    * under `safeToSummarize: true`, indistinguishable from a procedure that was carried out.
    *
@@ -454,9 +457,11 @@ export interface SafetyReadout {
    * `DeviceAssociation.status`; DSTU2 spells every one a `code`. So the question is about the
    * **shape**, not about which read succeeded: a complex **all of whose members** are ones FHIR
    * spells here (`coding`, `text`, `id`, `extension`) is left alone, whether or not a code came out
-   * of it, while **any** member outside that set is reported. The polarity is load-bearing:
-   * exempting a shape for carrying *one* legal member would read
-   * `{"status":{"id":"s1","value":"not-done"}}` as clean, and that is the same converter output. Keyed on "no string was read" instead, this would refuse the published R4
+   * of it, while **any** member outside that set is reported, as is an object with **no** member at
+   * all (`ele-1`: an element present in a resource SHALL carry a value, children defined for its
+   * type, or an extension). The polarity is load-bearing: exempting a shape for carrying *one* legal
+   * member would read `{"status":{"id":"s1","value":"not-done"}}` as clean, and that is the same
+   * converter output. Keyed on "no string was read" instead, this would refuse the published R4
    * `MedicinalProductAuthorization` example, which was measured rather than feared.
    *
    * **The element is `status`, at every resource root**, which is {@link negations}' window: the
@@ -476,8 +481,10 @@ export interface SafetyReadout {
    * as a primitive, so a conformant `<status value="not-done"><extension …/></status>` is read. A
    * primitive whose value is *absent* is not reported either: that is the conformant
    * `data-absent-reason` shape (json.html §2.6.2.3), and it is content the read never stepped over.
-   * **The converse limit:** a shape carrying a `CodeableConcept` member is never reported, so a code
-   * buried under `{"coding":{…}}` at a type whose `status` is a `code` stays silent.
+   * **The converse limit:** a shape **all of whose members** are ones FHIR spells here is never
+   * reported, so a code buried under `{"status":{"coding":{…}}}` at a type whose `status` is a
+   * `code` stays silent. One member outside the set is enough to report, so this covers only a shape
+   * that is wholly a `CodeableConcept`.
    */
   readonly unreadableNegationCodes: readonly string[];
   /**
@@ -823,8 +830,8 @@ export function nearMissNegationCodes(resource: FhirComplex, path: string): stri
  * {@link unreadableBooleans} included, and that is the gap this closes.
  *
  * **The element is `status`, at every resource root**, the negation read's own window. A complex
- * carrying a `CodeableConcept` member is left alone there, because R4 and R5 both spell some root
- * `status` elements as `CodeableConcept`. `verificationStatus` is deliberately outside it, and `AllergyIntolerance.code` is outside it for
+ * all of whose members are ones FHIR spells there is left alone, because R4 and R5 both spell some
+ * root `status` elements as `CodeableConcept`; one member outside that set is enough to report. `verificationStatus` is deliberately outside it, and `AllergyIntolerance.code` is outside it for
  * the reason that keeps `no-known-allergy` root-scoped (see
  * {@link SafetyReadout.unreadableNegationCodes} for both).
  *

@@ -36,7 +36,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `SubstanceSpecification`, R5 adds several more including a mandatory `DeviceAssociation.status`,
   and DSTU2 spells every one a `code`. A complex **all of whose members** FHIR spells here (`coding`, `text`,
   `id`, `extension`) is left alone, whether or not a code came out of it, while **any** member
-  outside that set is reported, so `{"status":{"id":"s1","value":"not-done"}}` is reported too. Keyed
+  outside that set is reported, so `{"status":{"id":"s1","value":"not-done"}}` is reported too, as is
+  an object with **no** member at all (`ele-1`). Keyed
   instead on "no string was read", this would refuse the published R4
   `MedicinalProductAuthorization` example. Converse declared limit: a code
   buried under `{"coding":{…}}` at a `code`-typed `status` stays silent.

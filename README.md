@@ -455,7 +455,8 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   and DSTU2 spells every one a `code`. So a complex **all of whose members** FHIR spells here (`coding`,
   `text`, `id`, `extension`) is left alone, whether or not a code came out of it, while **any**
   member outside that set is reported: `{"status":{"id":"s1","value":"not-done"}}` is the same
-  converter output and is reported too. Keyed instead on "no string was read", this would refuse the
+  converter output and is reported too. An object with **no** member at all is reported as well,
+  `ele-1` requiring an element present in a resource to carry a value, children, or an extension. Keyed instead on "no string was read", this would refuse the
   published R4 `MedicinalProductAuthorization` example. The converse is a declared limit:
   a code buried under `{"coding":{…}}` at a type whose `status` is a `code` stays silent.
   **`verificationStatus` is deliberately outside it** for a related reason: its shape complement is a
