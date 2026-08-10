@@ -230,8 +230,9 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   **One read still runs ahead of its report, and it is named rather than smoothed over:** the
   `clinicalStatus` convenience field is filled off **any** resource root, so on a type the
   cardinality table does not know, that value is unwrapped (or, for a multi-position wrapper,
-  declined) with no location reported. It reaches that one field and nothing else: never `negations`,
-  never `valid`, never `noKnownAllergy`. A declared residual, pinned in both states, not a design.
+  declined) with no location reported, so `safeToSummarize` stays `true` over a value the library
+  declined to read. Otherwise it reaches that one field and nothing else: never `negations`, never
+  `valid`, never `noKnownAllergy`. A declared residual, pinned in both states, not a design.
 - **An array inside an array is reported, and its contents are kept but never interpreted.** FHIR
   JSON uses an array for a repeating element and for nothing else, so a list of lists has no meaning
   at any position and there is no element for the reader to make of it. Left alone the model then

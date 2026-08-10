@@ -608,10 +608,10 @@ export function shadowedProperties(resource: FhirComplex, path: string): string[
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
  * @returns The locations of the array-wrapped scalar elements, in **walk order**: each resource root
- *   in the order the walk reaches it, and within one root the cardinality table's locations in
- *   document order followed by the negation read's `Coding` locations. That is document order for
- *   every document where one root emits from only one of the two, and **not** for the rest, so do
- *   not sort or diff a caller's expectations against document order.
+ *   as the walk reaches it, and within one root the cardinality table's surviving properties, then
+ *   the members a repeated property name shadowed, then the negation read's `Coding` locations.
+ *   **Walk order is not document order**, and no claim is made that it is: do not sort or diff a
+ *   caller's expectations against the order the document wrote.
  * @example
  * ```ts
  * import { arrayWrappedScalars, parseResource } from "@cosyte/fhir";
@@ -636,7 +636,8 @@ export function arrayWrappedScalars(resource: FhirComplex, path: string): string
  *
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
- * @returns Those locations, in the same document order, each once.
+ * @returns Those locations, each once, in the same **walk order** {@link arrayWrappedScalars} uses
+ *   (which is not document order; see its `@returns`).
  * @internal
  */
 export function unspellableXmlWrappers(resource: FhirComplex, path: string): string[] {

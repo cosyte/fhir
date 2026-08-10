@@ -140,6 +140,30 @@ promised **document order**, which the two halves running one after the other ca
 that emits from both. Corrected rather than re-engineered; the ordering of a diagnostic list is not
 load-bearing and sorting it would hide which half emitted what.
 
+## ⚠ Pass 2's two minors were FIXED rather than filed, and are recorded UNGRADED
+
+Pass 2 returned **NOT REFUTED** with two `INTRODUCED` minors, and said in terms that neither should
+open a pass 3. Both are prose, both are fixed, and **the transpile is byte-identical (sha256) to the
+graded sha `1ee0c6e`**, so nothing ungraded ships as behaviour:
+
+1. **The replacement `@returns` on `arrayWrappedScalars` asserted a new universal that is false.**
+   *"That is document order for every document where one root emits from only one of the two"* --
+   not so: `checkArrayWrapping` walks surviving properties then shadowed members, so a document
+   whose later property is unwrapped and whose earlier one is shadowed emits out of document order
+   from the cardinality half alone. **This was the third attempt at that sentence.** It now claims
+   walk order and explicitly disclaims document order, rather than trying to be precise about when
+   the two coincide. `unspellableXmlWrappers`' sibling `@returns` (a `PRE-EXISTING` copy of the same
+   overclaim) is pointed at it rather than left inconsistent.
+2. **The residual's blast-radius enumeration understated it in the reassuring direction.** *"never
+   `negations`, never `valid`, never `noKnownAllergy`"* omitted the thing a consumer actually
+   branches on: **`safeToSummarize` stays `true`** over the value the library declined. The brief and
+   both pins said so; the three consumer-facing carriers did not. Added to all of them.
+
+Two `PRE-EXISTING` minors pass 2 raised are **filed, not absorbed**: `safetyCodeOf` /
+`safetyHasCodeAnySystem` / `safetyHasCoding` still say *"windowed elements only"*, which the
+corrected `safetyCodingsOf` note now contradicts; and `unspellableXmlWrappers`' order claim was
+already false at base. Both identical at `5c575e5`.
+
 ## The claim sweep, and what it caught
 
 Three statements the package shipped **about itself** were false at base, all in the reassuring

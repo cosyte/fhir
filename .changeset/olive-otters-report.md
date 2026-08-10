@@ -58,8 +58,9 @@ The surviving half of the same rule is named rather than smoothed over, and is l
 `readSafety`'s `clinicalStatus` convenience field is filled off **any** resource root
 (`clinicalSystemFor` picks a preferred system and gates nothing), so on a type the cardinality table
 does not know that value is unwrapped, or for a multi-position wrapper declined, with no location
-reported. Identical at the base commit, reaching that one field and nothing else: never `negations`,
-never `valid`, never `noKnownAllergy`, whose read *is* type-gated. Closing it is a change to a
+reported, so `safeToSummarize` stays `true` over a value the library declined to read. Identical at
+the base commit, and otherwise reaching that one field and nothing else: never `negations`, never
+`valid`, never `noKnownAllergy`, whose read *is* type-gated. Closing it is a change to a
 convenience read rather than a widening of this report, so it gets its own change; both directions
 are pinned in both states.
 
