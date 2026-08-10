@@ -137,8 +137,15 @@ gap, because a pure revert ships no ungraded behaviour and a declared gap is not
 pass 3 both rated their finding `major` rather than `blocker`, and only an `INTRODUCED` blocker gates
 a ship. **The remedy belongs at `resolveSlices`**, which resolves a contradictory cardinality toward
 *present* where its own contract says report the slicing `unchecked`, and it is its own slice. Pinned
-by `still loses two slice findings when a contradictory profile meets an exists discriminator`, which
+by `still loses two slice findings when a contradictory profile meets an exists discriminator` (RENAMED AND MOVED: it is now `closes it through a differential and a base, the route the defect was filed at` in `test/profile-slice-contradiction.test.ts`), which
 is RED at base and pins the DEFECT rather than the fix: closing it must red that test.
+
+**▶ 🟢 THAT SLICE WAS TAKEN NEXT AND THE PREDICTION HELD**: the remedy went to `resolveSlices`, the
+merge was left composing the unsatisfiable pair, and the pin red on the first run. The test named
+above no longer exists under that name; it was rewritten as the closure and moved to
+`test/profile-slice-contradiction.test.ts`. Everything above this line is the `#86` record and is
+left as it was written, except that each quote of the retired test name below carries the same
+parenthetical: a reader following the old name would otherwise find nothing.
 
 **▶ 🛑 `max` IS THE MIRROR AND IS DELIBERATELY NOT TAKEN.** `mergeElement` still overlays `max`
 verbatim, so a differential stating a **larger** `max` widens an upper bound and retires a
@@ -188,7 +195,7 @@ All of these are **post-remedy**, at the head this slice ships.
   - `still reads no mustSupport and no slicing.ordered off an XML definition` is red **only** through
     its co-located head assertion that `min` reads 1; its two residual assertions are green in both
     states.
-  - `still loses two slice findings when a contradictory profile meets an exists discriminator` is
+  - `still loses two slice findings when a contradictory profile meets an exists discriminator` (RENAMED AND MOVED: it is now `closes it through a differential and a base, the route the defect was filed at` in `test/profile-slice-contradiction.test.ts`) is
     red because **head is WORSE there than base**. It pins the declared gap, so it is a cost, not a
     capability, and it must not be counted as evidence for the slice.
   - **So the behavioural figure for the closure is 18.**
@@ -200,15 +207,16 @@ All of these are **post-remedy**, at the head this slice ships.
 - **Non-vacuity by mutation, ten mutations, each reddening a NAMED list** (never a count):
   1. drop the merge guard (overlay verbatim) -> `keeps the inherited bound when an XML differential
      states a smaller one`, `…when a JSON differential states a smaller one`, `keeps the inherited
-     bound for a min of 0, whichever format spelled it`, `still loses two slice findings…`
+     bound for a min of 0, whichever format spelled it`, `still loses two slice findings…` (renamed and moved, see above)
   2. over-guard the merge (always inherit when the base states one) -> `still takes a differential
      bound that tightens, which is the whole point of a profile`, `never lowers the enforced bound,
      even when the differential's own max sits under it`
   3. re-add the REVERTED clamp against `max` -> `never lowers the enforced bound…`, `still loses two
-     slice findings…`
+     slice findings…` (renamed and moved, see above)
   4. close the declared gap at `resolveSlices` (refuse to resolve a contradictory cardinality) ->
-     `still loses two slice findings when a contradictory profile meets an exists discriminator`.
-     This is the repo's own rule made executable: closing a declared gap MUST red its pin.
+     `still loses two slice findings when a contradictory profile meets an exists discriminator` (RENAMED AND MOVED: it is now `closes it through a differential and a base, the route the defect was filed at` in `test/profile-slice-contradiction.test.ts`).
+     This is the repo's own rule made executable: closing a declared gap MUST red its pin. (That
+     mutation stopped being hypothetical in the next slice, and the pin red exactly here.)
   5. drop the lexical guard entirely -> the nine refusal cases `+1` `01` `1.0` `1.` ` 1` `1 ` ``
      `-1` `1e2`
   6. tolerate surrounding whitespace -> ` 1`, `1 `
@@ -267,13 +275,14 @@ the branch squash-merges, so a branch sha would be dead the moment it landed.
 
 Closing any of them MUST red its test, in the same change.
 
-1. **A contradictory profile loses two slice findings.** Where the base element is required and the
-   differential forbids it with `0..0`, the merge composes an unsatisfiable `min 1 / max 0` and
-   `resolveSlices` resolves that toward *present*, so beneath an `exists` discriminator a
-   `PROFILE_SLICE_UNMATCHED` and a slice `CARDINALITY_MIN` are lost. RED at base: head is worse
-   there. Raised by gate pass 2, rated `major` not `blocker` by it and by pass 3, and DECLARED rather
-   than remedied after the clamp that answered it was itself refuted. The remedy belongs at
-   `resolveSlices`.
+1. ~~**A contradictory profile loses two slice findings.**~~ **CLOSED by the next slice**, at
+   `resolveSlices` exactly as this entry predicted, and NOT at the merge: the contradiction is
+   recorded as unsatisfiable instead of resolved toward either side, so an `exists` discriminator on
+   such a path assigns no occurrence and both findings are drawn. Its pin red as required and its
+   tests moved to `test/profile-slice-contradiction.test.ts`. The whole record, including the one
+   finding the closure RETIRES and the bound on it:
+   `documentation/agent-notes/profile-slice-contradiction.md`. The merge is unchanged, so entry 2
+   below still composes the pair.
 2. **`mergeElement` still overlays a differential `max` verbatim**, so an upper bound can be widened
    and a `CARDINALITY_MAX` retired. The mirror of what this slice fixed, left standing because no
    read feeding `max` moved. Both-states pin.

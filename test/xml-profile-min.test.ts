@@ -438,9 +438,14 @@ describe("a differential min can raise the inherited bound and can never lower i
  * silence. Closing any of them MUST red the test beside it, in the same change.
  *
  * They are recorded here because they sit inside or beside the read this change touches, and they
- * are NOT evidence for it. **Only one of the four is green on the base tree** (the `max` overlay);
- * the other three are red there, and each says why in its own comment, so the block as a whole must
+ * are NOT evidence for it. **Only one of the three is green on the base tree** (the `max` overlay);
+ * the other two are red there, and each says why in its own comment, so the block as a whole must
  * not be read as a both-states set.
+ *
+ * A fourth residual stood here and is CLOSED: the contradictory-cardinality loss beneath an `exists`
+ * discriminator now draws both slice findings, and its tests moved to
+ * `profile-slice-contradiction.test.ts`. Its neighbour below, the verbatim `max` overlay that
+ * composes the contradiction in the first place, is deliberately still open.
  */
 describe("declared residuals of the lexical min read, pinned", () => {
   it("still reads no mustSupport and no slicing.ordered off an XML definition", () => {
@@ -464,92 +469,6 @@ describe("declared residuals of the lexical min read, pinned", () => {
     expect(definition.differential?.[0]?.slicing?.ordered).toBeUndefined();
     // The bound beside them reads, so this is the two flags declining and not the element.
     expect(definition.differential?.[0]?.min).toBe(1);
-  });
-
-  it("still loses two slice findings when a contradictory profile meets an exists discriminator", () => {
-    // DECLARED OPEN, and this test pins the defect rather than the fix. Where the base element is
-    // required and the differential forbids it with `0..0`, the tightening composes the two rules
-    // into an unsatisfiable `min 1 / max 0`. `resolveSlices` reads a descendant's cardinality as an
-    // existence expectation and resolves that contradiction toward *present*, so beneath an `exists`
-    // discriminator a `PROFILE_SLICE_UNMATCHED` and a slice `CARDINALITY_MIN` are lost: three errors
-    // at the base tree, one here. RED at base, and it is a cost, not a capability.
-    // A clamp of the tightened bound against `max` was tried as the remedy and REVERTED, because it
-    // lowered the enforced bound below the inherited one on ordinary profile mistakes (pinned by
-    // `never lowers the enforced bound…` above), which is the worse of the two. The remedy belongs
-    // at `resolveSlices`, which is guessing where its own contract says report `unchecked`, and it
-    // is its own slice. Closing it MUST red this test.
-    const sliceBase = {
-      resourceType: "StructureDefinition",
-      url: "http://example.org/StructureDefinition/slicebase",
-      type: "Observation",
-      kind: "resource",
-      derivation: "specialization",
-      snapshot: {
-        element: [
-          { id: "Observation", path: "Observation" },
-          {
-            id: "Observation.component",
-            path: "Observation.component",
-            slicing: {
-              discriminator: [{ type: "exists", path: "dataAbsentReason" }],
-              rules: "closed",
-            },
-          },
-          {
-            id: "Observation.component:Missing",
-            path: "Observation.component",
-            sliceName: "Missing",
-            min: 1,
-            max: "*",
-          },
-          {
-            id: "Observation.component:Missing.dataAbsentReason",
-            path: "Observation.component.dataAbsentReason",
-            min: 1,
-            max: "1",
-          },
-        ],
-      },
-    };
-    const forbidding = load(
-      json({
-        resourceType: "StructureDefinition",
-        url: "http://example.org/StructureDefinition/forbidding",
-        type: "Observation",
-        kind: "resource",
-        derivation: "constraint",
-        baseDefinition: "http://example.org/StructureDefinition/slicebase",
-        differential: {
-          element: [
-            { id: "Observation", path: "Observation" },
-            {
-              id: "Observation.component:Missing.dataAbsentReason",
-              path: "Observation.component.dataAbsentReason",
-              min: 0,
-              max: "0",
-            },
-          ],
-        },
-      }),
-    );
-    const resolveSliceBase = (url: string): StructureDefinition | undefined =>
-      url === sliceBase.url ? load(json(sliceBase)) : undefined;
-    const descendant = generateSnapshot(forbidding, resolveSliceBase).find(
-      (el) => el.id === "Observation.component:Missing.dataAbsentReason",
-    );
-    const withComponent = json({
-      resourceType: "Observation",
-      status: "final",
-      code: { coding: [{ system: "http://loinc.org", code: "1234-5" }] },
-      component: [{ dataAbsentReason: { text: "not collected" }, code: { text: "systolic" } }],
-    });
-
-    expect({ min: descendant?.min, max: descendant?.max }).toEqual({ min: 1, max: 0 });
-    expect(
-      collectProfileIssues(withComponent, forbidding, { resolve: resolveSliceBase }).map(
-        (issue) => `${issue.severity}:${issue.code} at ${issue.expression}`,
-      ),
-    ).toEqual(["error:CARDINALITY_MAX at Observation.component.dataAbsentReason"]);
   });
 
   it("still overlays a differential max verbatim, so an upper bound CAN be relaxed", () => {

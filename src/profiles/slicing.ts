@@ -11,7 +11,9 @@
  * engine. This module evaluates the discriminator kinds reachable with
  * the bounded path navigator ({@link ./navigate.js}): **`value`** and **`pattern`** (the instance's
  * value at the discriminator path must match the slice's `fixed[x]` / `pattern[x]` there) and
- * **`exists`** (the element's presence must match the slice's cardinality there). A `type` or
+ * **`exists`** (the element's presence must match the slice's cardinality there; where the slice's
+ * own descendant AT that path is required and prohibited at once, no presence matches it, so it
+ * assigns no occurrence rather than resolving toward one of the two). A `type` or
  * `profile` discriminator, an R5 `position`, an empty discriminator set, or a slice that declares no
  * constraint at a discriminator path is **not guessed**, the whole slicing is reported *unchecked*
  * (`PROFILE_SLICE_UNCHECKED`) so membership is never silently assumed to pass or fail
@@ -51,6 +53,14 @@ export interface SliceDefinition {
   readonly constraints: readonly SliceConstraint[];
   /** Relative paths whose presence/absence the slice fixes (min ≥ 1 → present; max 0 → absent). */
   readonly existsExpectations: ReadonlyMap<string, boolean>;
+  /**
+   * Relative paths the slice fixes as present **and** absent at once (`min ≥ 1` beside `max 0`).
+   * No instance can meet such an expectation, so an `exists` discriminator on one of these paths
+   * assigns no occurrence to this slice. Kept apart from {@link existsExpectations} rather than
+   * resolved into a boolean there: neither boolean is true of a contradiction, and picking one
+   * admits occurrences the profile forbids.
+   */
+  readonly unsatisfiableExists: ReadonlySet<string>;
 }
 
 /** A discriminator, as modeled on {@link ../profiles/structure-definition.js Slicing}. */
@@ -92,6 +102,7 @@ export function resolveSlices(
     if (el.sliceName === undefined || el.path !== slicedElement.path) continue;
     const constraints: SliceConstraint[] = [];
     const existsExpectations = new Map<string, boolean>();
+    const unsatisfiableExists = new Set<string>();
     if (el.fixed !== undefined)
       constraints.push({ path: "$this", kind: "fixed", value: el.fixed.value });
     if (el.pattern !== undefined)
@@ -105,7 +116,31 @@ export function resolveSlices(
         constraints.push({ path: rel, kind: "fixed", value: desc.fixed.value });
       if (desc.pattern !== undefined)
         constraints.push({ path: rel, kind: "pattern", value: desc.pattern.value });
-      if (desc.min !== undefined && desc.min >= 1) existsExpectations.set(rel, true);
+      // A descendant states an existence expectation through its cardinality: required means the
+      // path must be present, prohibited means it must be absent. A descendant stating BOTH at once
+      // (`min ≥ 1` beside `max 0`) is a contradiction no instance can satisfy, and the ordering of
+      // these two branches alone used to decide it: `min` was read first, so the prohibition was
+      // discarded and every occurrence carrying the forbidden element was admitted into the slice.
+      // Beneath a `closed` slicing that silently retired a `PROFILE_SLICE_UNMATCHED` and the slice's
+      // own `CARDINALITY_MIN`. It is recorded as unsatisfiable instead, which assigns no occurrence
+      // to the slice, so the two findings are drawn rather than resolved away.
+      //
+      // Scoped to the `exists` discriminator on purpose. An unsatisfiable descendant does not make
+      // the slice unmatchable in general: membership is decided by the discriminators, and an
+      // occurrence may be assigned to a slice it then violates. Only a contradiction AT a
+      // discriminator path makes membership itself undecidable in the instance's favour.
+      //
+      // Scoped to the slice's OWN descendants (`sliceName === undefined`) as well, which is not
+      // cosmetic. This walk sweeps every element under the slice's id prefix, and a RE-SLICE of a
+      // descendant is under that prefix too and flattens onto the same relative path. Recording a
+      // re-slice's contradiction here made the satisfiable OUTER slice unmatchable and drew a
+      // `PROFILE_SLICE_UNMATCHED` plus a slice `CARDINALITY_MIN` on a CONFORMANT document: it
+      // blamed the instance for a statement belonging to a different slice. Re-slicing is a declared
+      // deferral of this module, so a contradiction carried only by a re-slice is left reading as it
+      // did before rather than guessed at from the outer slice's position.
+      if (desc.sliceName === undefined && desc.min !== undefined && desc.min >= 1 && desc.max === 0)
+        unsatisfiableExists.add(rel);
+      else if (desc.min !== undefined && desc.min >= 1) existsExpectations.set(rel, true);
       else if (desc.max === 0) existsExpectations.set(rel, false);
     }
 
@@ -113,6 +148,7 @@ export function resolveSlices(
       sliceName: el.sliceName,
       constraints,
       existsExpectations,
+      unsatisfiableExists,
     };
     if (el.min !== undefined) def.min = el.min;
     if (el.max !== undefined) def.max = el.max;
@@ -129,6 +165,15 @@ function discriminatorHolds(
 ): "yes" | "no" | "unevaluable" {
   const { type, path } = discriminator;
   if (type === "exists") {
+    // A contradiction is answered `no`, never `unevaluable`. `unevaluable` reports the whole slicing
+    // `unchecked`, which returns before the unmatched-occurrence and slice-cardinality arms and so
+    // would retire every finding this case exists to draw. It is not a guess either: no instance has
+    // a path both present and absent. `no` is not purely additive against the previous behaviour
+    // though: an occurrence no longer admitted stops counting toward the slice, and stops shadowing
+    // later slices in the match loop, so a finding that existed only because of the wrongful
+    // admission goes. That is measured rather than claimed away, in
+    // `documentation/agent-notes/profile-slice-contradiction.md`.
+    if (slice.unsatisfiableExists.has(path)) return "no";
     const expected = slice.existsExpectations.get(path);
     if (expected === undefined) return "unevaluable";
     return pathExists(instance, path) === expected ? "yes" : "no";
