@@ -256,13 +256,31 @@ describe("what does not move, pinned in both states", () => {
     expect(safety.safeToSummarize).toBe(true);
   });
 
-  it("leaves clinicalStatus on a type outside the table alone, because the read there is type-scoped", () => {
-    // `clinicalStatus` is not a negation the walk reads; it reaches only the root convenience field,
-    // which is type-scoped. Report scope follows read scope in both directions.
+  it("leaves clinicalStatus unreported outside the table, and that is this rule's SURVIVING GAP", () => {
+    // 🔴 Do not read this pin as an endorsement. `clinicalStatus` is not a negation, so the walk
+    // does not read it -- but `readSafety`'s convenience field does, off ANY resource root, because
+    // `clinicalSystemFor` picks a preferred system and gates nothing. So the value below IS resolved
+    // through a wrapper nothing reports, exactly the shape this slice closes one element over. The
+    // read is asserted here rather than left out, so the pin measures the gap instead of implying
+    // there is none. Identical at the base commit; an open residual, in its own change, and closing
+    // it is a change to a CONVENIENCE READ, not a widening of this report.
     const safety = safetyOf(
       '{"resourceType":"ServiceRequest","clinicalStatus":{"coding":[{"code":["active"]}]}}',
     );
 
+    expect(safety.clinicalStatus).toBe("active");
+    expect(safety.arrayWrappedScalars).toStrictEqual([]);
+    expect(safety.safeToSummarize).toBe(true);
+  });
+
+  it("declines a multi-position clinicalStatus wrapper without reporting it, the other half of that gap", () => {
+    // The sharper direction of the same residual: the value is knowingly declined and no location
+    // says so. Identical at the base commit. Pinned so closing it must red a test.
+    const safety = safetyOf(
+      '{"resourceType":"ServiceRequest","clinicalStatus":{"coding":[{"code":["active","x"]}]}}',
+    );
+
+    expect(safety.clinicalStatus).toBeUndefined();
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
     expect(safety.safeToSummarize).toBe(true);
   });

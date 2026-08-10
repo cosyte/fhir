@@ -298,11 +298,13 @@ unwrap, widen `checkCodingWrapping` first, in the same change.** Pinned in
 `test/array-wrapped-scalar.test.ts` (now 45 tests), including the refuter's exact document.
 **Pass two came back NOT REFUTED**, with two `INTRODUCED` **minors**, both documentation-accuracy and
 both fixed by correcting prose rather than code (the refuter's own call: a code change here would
-reduce fail-safety). (i) **CLOSED 2026-08-10, at the report, exactly as this said to**
-([`negation-coding-wrapper-scope.md`](agent-notes/negation-coding-wrapper-scope.md)): the read window
-was **not** the report window, `checkArrayWrapping` gating the coding-level report on `isSafetyType`
-while `isRetracted`'s `verificationStatus` scan is **not** type-gated, so a `Patient` carrying a
-wrapped `verificationStatus.coding.code` read the retraction with **no** location. **Do not "fix" a
+reduce fail-safety). (i) The read window is **not** the report window: `checkArrayWrapping` gated the
+coding-level report on `isSafetyType` while `isRetracted`'s `verificationStatus` scan and
+`readSafety`'s `clinicalStatus`/`verificationStatus` convenience reads are **not** type-gated. **The
+`verificationStatus` terms are CLOSED 2026-08-10**
+([`negation-coding-wrapper-scope.md`](agent-notes/negation-coding-wrapper-scope.md)). **`clinicalStatus`
+IS STILL OPEN and a gate caught a slice claiming otherwise**: `clinicalSystemFor` picks a preferred
+system, gating nothing, so that field alone unwraps at any root with no location. **Do not "fix" a
 window gap by type-gating `isRetracted`.** (ii) The
 `checkCodingWrapping` JSDoc still claimed a wrapped element is not indexed, which the pass-one
 finding-3 fix had already changed. Pass two measured, and could not break: no `valid: false -> true`

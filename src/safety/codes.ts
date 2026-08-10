@@ -581,11 +581,18 @@ export function codingsOf(node: FhirNode | undefined): Coded[] {
  *   with `system` and `code` `0..1` wherever a `Coding` appears, so no cardinality question about
  *   the enclosing resource arises at all.
  *
- * So every caller of this must be reading an element one of those two halves covers, at a resource
- * root. Every other coding read in the library stays on {@link codingsOf} and behaves exactly as it
- * did before this rule existed. That under-reads a wrapper nothing reports, which is the safe
- * direction and the pre-existing behaviour; widening it means widening the report first, in the same
- * change.
+ * **One caller is still outside both halves, and it is named rather than claimed away:**
+ * {@link ./status.js} `readSafety` fills its `clinicalStatus` convenience field from here on **any**
+ * resource root, because `clinicalSystemFor` chooses a *preferred system* and gates nothing. So a
+ * `clinicalStatus` on a type the cardinality table does not know is unwrapped where nothing reports,
+ * and a multi-position wrapper there is declined where nothing reports either. It reaches only that
+ * one convenience field: never {@link ./status.js} `SafetyReadout.negations`, never `valid`, and
+ * never `noKnownAllergy`, whose read *is* type-gated. That is the surviving half of this rule's
+ * original gap and it is an open residual, not a property of the design.
+ *
+ * Every other coding read in the library stays on {@link codingsOf} and behaves exactly as it did
+ * before this rule existed. That under-reads a wrapper nothing reports, which is the safe direction
+ * and the pre-existing behaviour; widening it means widening the report first, in the same change.
  *
  * @param node - A `CodeableConcept` node, a list of them, or `undefined`.
  * @returns The `(system, code)` pairs, in document order.

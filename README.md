@@ -218,16 +218,20 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `interpretation`, `referenceRange.type`, a `component`'s own `code`, and anything `codingsOf` is
   pointed at directly) is read exactly as it was before, without the wrapper. Reading a wrapper the
   library does not also report would resolve a clinical code out of an encoding FHIR JSON does not
-  define and hand it back with no diagnostic anywhere, so the read never runs ahead of the report on
-  anything that reaches a verdict.
-  **The type scoping stops at the element name, and it does not reach the `Coding` inside it.**
-  `clinicalStatus` and `code` are read for a verdict only on the resource types this library models a
-  cardinality for, so their wrapper is reported there. The negation reads are not type-scoped at all,
-  so a `verificationStatus.coding.system` / `.code` wrapper is reported at **every** resource root of
-  **any** type, including inside `contained` and a `Bundle.entry` -- read through where it holds one
-  position, left unread where it holds more, and reported either way. What makes that safe without a
-  per-resource model is that `Coding` is a _datatype_: its `system` and `code` are `0..1` wherever a
-  `Coding` appears, so no question about the enclosing resource arises.
+  define and hand it back with no diagnostic anywhere.
+  **The type scoping stops at the element name, and it does not reach the `Coding` inside it.** The
+  negation reads are not type-scoped at all, so a `verificationStatus.coding.system` / `.code`
+  wrapper is reported at **every** resource root of **any** type, including inside `contained` and a
+  `Bundle.entry` -- read through where it holds one position, left unread where it holds more, and
+  reported either way. What makes that safe without a per-resource model is that `Coding` is a
+  _datatype_: its `system` and `code` are `0..1` wherever a `Coding` appears, so no question about
+  the enclosing resource arises. A `code` carrying SNOMED `716186003` is read only on the types the
+  cardinality table knows, so its wrapper is reported wherever it is read.
+  **One read still runs ahead of its report, and it is named rather than smoothed over:** the
+  `clinicalStatus` convenience field is filled off **any** resource root, so on a type the
+  cardinality table does not know, that value is unwrapped (or, for a multi-position wrapper,
+  declined) with no location reported. It reaches that one field and nothing else: never `negations`,
+  never `valid`, never `noKnownAllergy`. A declared residual, pinned in both states, not a design.
 - **An array inside an array is reported, and its contents are kept but never interpreted.** FHIR
   JSON uses an array for a repeating element and for nothing else, so a list of lists has no meaning
   at any position and there is no element for the reader to make of it. Left alone the model then

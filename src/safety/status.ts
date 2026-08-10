@@ -403,9 +403,10 @@ export interface SafetyReadout {
    *
    * The elements are the `code`-valued ones the negation read looks at, `status` and
    * `verificationStatus`, at **every resource root**, which is {@link negations}' window.
-   * {@link arrayWrappedScalars} reaches every root for the `Coding` members of those same elements,
-   * but its element-level half is scoped to the resource types whose cardinality this layer knows,
-   * so the two windows are **not** the same window. `AllergyIntolerance.code` is **not** among them: SNOMED
+   * {@link arrayWrappedScalars} reaches every root too, but only for the `Coding` members of the
+   * elements that same table marks `codings` (`verificationStatus`, not `status`), and its
+   * element-level half is scoped to the resource types whose cardinality this layer knows, so the
+   * two windows are **not** the same window. `AllergyIntolerance.code` is **not** among them: SNOMED
    * `716186003` is a *positive* assertion whose read is root- and type-scoped (see
    * {@link noKnownAllergy}), and disclosing a near miss at every root would report the miss where
    * an exact hit is read by nothing.
@@ -606,7 +607,11 @@ export function shadowedProperties(resource: FhirComplex, path: string): string[
  *
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
- * @returns The locations of the array-wrapped scalar elements, in document order.
+ * @returns The locations of the array-wrapped scalar elements, in **walk order**: each resource root
+ *   in the order the walk reaches it, and within one root the cardinality table's locations in
+ *   document order followed by the negation read's `Coding` locations. That is document order for
+ *   every document where one root emits from only one of the two, and **not** for the rest, so do
+ *   not sort or diff a caller's expectations against document order.
  * @example
  * ```ts
  * import { arrayWrappedScalars, parseResource } from "@cosyte/fhir";

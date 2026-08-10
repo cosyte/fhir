@@ -48,11 +48,20 @@ and `{"resourceType":"Procedure","status":["not-done"]}` are still read through 
 `ARRAY_WRAPPED_SCALAR` -- reporting one is an `error`, and closing it needs a cardinality for those
 element names on the types outside the table, which is a different question and gets its own change.
 A `Coding` wrapper at a `code`-typed `status` draws nothing, because nothing reads through it and a
-report wider than the read is this defect inverted. `clinicalStatus` and a "no known allergy" `code`
-on a type outside the table draw nothing, their reads being type-scoped; `no-known-allergy` stays
-root- and type-scoped on purpose, being the one negation whose surfacing makes a caller *less*
-careful. `Questionnaire.code` is untouched. A `verificationStatus` below a resource root is untouched.
-A conformant document reads exactly as before, and no public API is added or changed.
+report wider than the read is this defect inverted. A "no known allergy" `code` on a type outside the
+table draws nothing, its read being type-scoped; `no-known-allergy` stays root- and type-scoped on
+purpose, being the one negation whose surfacing makes a caller *less* careful. `Questionnaire.code`
+is untouched. A `verificationStatus` below a resource root is untouched. A conformant document reads
+exactly as before, and no public API is added or changed.
+
+The surviving half of the same rule is named rather than smoothed over, and is left open on purpose:
+`readSafety`'s `clinicalStatus` convenience field is filled off **any** resource root
+(`clinicalSystemFor` picks a preferred system and gates nothing), so on a type the cardinality table
+does not know that value is unwrapped, or for a multi-position wrapper declined, with no location
+reported. Identical at the base commit, reaching that one field and nothing else: never `negations`,
+never `valid`, never `noKnownAllergy`, whose read *is* type-gated. Closing it is a change to a
+convenience read rather than a widening of this report, so it gets its own change; both directions
+are pinned in both states.
 
 Three prose claims the package shipped about itself were false and are corrected rather than
 qualified: `unreadableBooleans` and `nearMissNegationCodes` each stated their window "is
@@ -60,9 +69,9 @@ qualified: `unreadableBooleans` and `nearMissNegationCodes` each stated their wi
 and the `Coding` unwrap's own note asserted read scope already equalled report scope. An older entry
 claiming the resulting asymmetry "survives on purpose" is cut, not annotated.
 
-Measured: **11 of 24 new cases red at the base commit** in a real detached base worktree, 24 of 24 at
+Measured: **11 of 25 new cases red at the base commit** in a real detached base worktree, 25 of 25 at
 head; one further case is red at base only because the read table has no `codings` field there, and
-is reported separately rather than counted as behaviour. **11 both-states pins, named in the test
+is reported separately rather than counted as behaviour. **12 both-states pins, named in the test
 file**, not counted in a total. Nine mutations, none surviving, named rather than totalled: dropping
 the table flag, inverting it, re-gating the report on resource type, giving the negation half its own
 de-duplication, reporting only single-position wrappers, reporting only multi-position ones, dropping
