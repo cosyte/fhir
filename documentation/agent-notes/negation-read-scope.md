@@ -193,7 +193,8 @@ The `unreadableBooleans` channel is about a value that could not be read **at al
 reads `undefined`, which is what an absent element reads too. This one is about a value that **is**
 read and **is** surfaced on `status` / `verificationStatus` unchanged; what fails is the
 **classification**. Nothing is lost. Do not describe it as a data loss, and do not fold it into the
-module docblock's five "shapes FHIR does not define" - it is not one of them.
+module docblock's "shapes FHIR does not define" - it is not one of them. (That docblock's count was
+removed 2026-08-10 when a further encoding joined the list; derive the set, never cite a number.)
 
 ## ⚖️ `no-known-allergy` is OUTSIDE the disclosure, and the reason is architectural, not timidity
 

@@ -8,6 +8,41 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **`SafetyReadout.unreadableNegationCodes`, and with it the record that content was written where a
+  `code` belongs (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit:
+  `{"resourceType":"Procedure","status":{"value":"not-done"}}` returned `negations: []` under
+  `safeToSummarize: true`, with `assertSafeToSummarize` clean and nothing on any channel to say the
+  element had been looked at. The same held for an object at `Observation.status` carrying
+  `entered-in-error`, for that object inside an array wrapper, and for a `status` written as a number
+  or a boolean, at every resource root each is read at.
+  **This is a shape, and that is why no existing channel caught it.** Every other question this layer
+  asks is about a _written value_: `unreadableBooleans` reports a value outside the boolean lexical
+  space, and `nearMissNegationCodes` reports one spelling a code bar its case or its whitespace. An
+  object holds no value at all, so both answer "no" about it, truthfully, and the element ends up
+  reading exactly like one the sender left out. A procedure recorded as not done was
+  indistinguishable from one that was carried out.
+  **Nothing is read through.** `{"value":"not-done"}` is FHIR XML's spelling of a primitive (xml.html
+  §2.6.1); FHIR JSON spells a `code` as a JSON string (json.html §2.6.0), so descending into the
+  object would resolve a negation out of an encoding no version of FHIR defines for JSON. The
+  position is disclosed instead: its element's FHIRPath appears in `unreadableNegationCodes`,
+  `safeToSummarize` is `false`, and `assertSafeToSummarize` throws.
+  `unreadableNegationCodes(resource, path)` is exported beside the other collectors.
+  The element is `status`, at every resource root, which is the negation read's own window. The
+  complement is carried in the same table the matches are made from and applied in the same loop, so
+  the report cannot cover an element the read does not, nor miss one it does.
+  **`verificationStatus` is deliberately outside it**, a declared limit rather than an oversight: its
+  shape complement is a _primitive_ at the element, and `Condition.verificationStatus` is a `code` in
+  DSTU2, a version this reader ingests tolerantly, so the same predicate would report a conformant
+  DSTU2 document. `status` carries no such hazard, being a `code` in every version this reader
+  accepts. `AllergyIntolerance.code` is outside it for the reason that keeps "no known allergy" root-
+  and type-scoped.
+  Value-free: only the FHIRPath of the element is carried. The channel raises no `ValidationIssue`,
+  so `valid` does not move in either direction on any document.
+  Empty on every conformant document, in either wire format: FHIR JSON gives a `code` no object form,
+  and the XML reader models a `value` attribute beside `id` and `extension` children as a primitive,
+  so a conformant `<status value="not-done"><extension …/></status>` is read. A primitive whose value
+  is _absent_ is not reported either, that being the conformant `data-absent-reason` shape
+  (json.html §2.6.2.3) and content the read never stepped over.
 - **`SafetyReadout.nearMissNegationCodes`, and with it the record that a value spelling a negation
   bar its case or its surrounding whitespace was looked at and declined
   (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit:

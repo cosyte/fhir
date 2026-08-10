@@ -1119,17 +1119,17 @@ trip; through the XML writer it is still `<name/>` and both the value and the fi
 `flagStrayText` sites, an unbound prefix, and a `<DIV>` wrapper.
 
 **Added 2026-08-09** (raised by the negation-read-scope-depth gate, `PRE-EXISTING`, filed rather than
-absorbed): **a `status` written as a JSON OBJECT is invisible on every safety channel.**
-`{"resourceType":"Observation","status":{"value":"entered-in-error"},"code":{"text":"x"}}` reads
+absorbed): **a `status` written as a JSON OBJECT was invisible on every safety channel.**
+`{"resourceType":"Observation","status":{"value":"entered-in-error"},"code":{"text":"x"}}` read
 `retracted: false`, `negations: []`, `safeToSummarize: true` and `valid: true`, at the root and
 nested alike. **Scoped, because gate pass 3 measured the qualifier:** `valid: true` holds **with no
 caller-supplied schema, and none is bundled for `Observation`** (`BUILTIN_SCHEMAS` carries `Patient`,
 which has no `status`); hand `validateResource` a `ResourceSchema` typing `Observation.status` and it
 returns `valid: false` with `TYPE_MISMATCH`, in both modes. The only diagnostic in the default
 configuration is an `information: RESOURCE_NOT_MODELED`, emitted identically for the conformant
-document, so it carries no signal about the loss. It is a sixth member of the five encodings `src/safety/status.ts` enumerates,
+document, so it carries no signal about the loss. It is another of the encodings `src/safety/status.ts` enumerates,
 and it is what a generic FHIR-XML to JSON converter makes of `<status value="entered-in-error"/>`,
-the same traffic that docblock cites. Its own item, beside the wrapped-`status` residual.
+the same traffic that docblock cites. CLOSED 2026-08-10 bar `valid`; wrapped-`status` residual open.
 
 ### `FHIR-UNBOUND-PREFIX-ROUNDTRIP` (2026-08-07)
 

@@ -139,14 +139,15 @@ Sentences the fix **falsified**, not just the sites the item quoted:
   readout now classifies it. A different layer and a different contract (an issue is a report, not a
   read); untouched here rather than absorbed.
 - `PRE-EXISTING`, raised by gate pass 1 and filed rather than absorbed: **a `status` written as a
-  JSON OBJECT is invisible on every channel.** `{"resourceType":"Observation","status":
-  {"value":"entered-in-error"},"code":{"text":"x"}}` reads `retracted: false`, `negations: []`,
-  `safeToSummarize: true`, `valid: true`, zero diagnostics, **identical at `3fa61aa`**. It is a sixth
-  member of the five encodings `src/safety/status.ts` enumerates, and it is what a generic FHIR-XML to
-  JSON converter makes of `<status value="entered-in-error"/>`, the same traffic that docblock cites.
-  Not `STOP-THE-LINE` (non-conformant input, and the value survives in the model), and it is **not**
-  in `agent-notes.md` §"Open read-path losses, enumerated"; file it beside the wrapped-`status`
-  residual.
+  JSON OBJECT was invisible on every channel.** `{"resourceType":"Observation","status":
+  {"value":"entered-in-error"},"code":{"text":"x"}}` read `retracted: false`, `negations: []`,
+  `safeToSummarize: true`, `valid: true`, zero diagnostics, **identical at `3fa61aa`**. It is another
+  of the encodings `src/safety/status.ts` enumerates, and it is what a generic FHIR-XML to JSON
+  converter makes of `<status value="entered-in-error"/>`, the same traffic that docblock cites.
+  Not `STOP-THE-LINE` (non-conformant input, and the value survives in the model).
+  **🟢 CLOSED 2026-08-10**, `agent-notes/negation-unreadable-code-shape.md`: it draws
+  `unreadableNegationCodes` and `safeToSummarize: false`. **`valid: true` is UNCHANGED and stays
+  open** - the safety layer was that slice's window and it raised no `ValidationIssue`.
 - `PRE-EXISTING`, untouched: `src/safety/codes.ts` still publishes a **set size** into
   `dist/index.d.ts`; and _"the negation read"_ stays **ambiguous** between the walk-scoped `negations`
   and the root-scoped convenience fields wherever it appears unqualified.

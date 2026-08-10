@@ -27,10 +27,8 @@ does at the entry root: the read can only ADD a negation, never retire a finding
 and never turn a refusal into an affirmation.
 
 The read is not widened past its refusal. The location channels that record a safety value this
-library could NOT read - dropped XML element text, an array inside an array, a shadowed property
-name, an array-wrapped scalar, an unreadable boolean, an unhandled `modifierExtension` - already
-covered at least every location this read moved into, so the refusal
-window was and remains no narrower than the read. Both halves are pinned at one nested location: a
+library could NOT read already covered at least every location this read moved into, so the refusal
+window was no narrower than the read. Both halves are pinned at one nested location: a
 `<status>not-done</status>` whose character data the reader drops is reported there and adds no
 negation, and a `<status value="not-done"/>` at that same location is read. The reads themselves are
 unchanged and are the ones the readout already performed at the entry root, called on more nodes

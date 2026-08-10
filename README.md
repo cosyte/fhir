@@ -175,8 +175,8 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `Observation`, a `Procedure` recorded as not performed or an order marked "do not perform" inside a
   `Bundle` entry or `contained` reaches `negations` too. **The readout's location channels
   (`unhandledModifierExtensions`, `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`,
-  `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`) and `safeToSummarize` are
-  document-wide.** The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
+  `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`, `unreadableNegationCodes`) and
+  `safeToSummarize` are document-wide.** The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
   and the rest) answer about the resource you handed in, because one value cannot say which resource
   it came from, so branch on `negations` whenever a resource may carry others.
   `no-known-allergy` is the exception and
@@ -403,7 +403,7 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   the raw status string) read a procedure recorded as `"NOT-DONE"` as a procedure with nothing to
   say about it. So the position is named: the locations in `nearMissNegationCodes`,
   `safeToSummarize` is `false`, and `assertSafeToSummarize` throws. **The value is still not
-  coerced, trimmed or case-folded.** Unlike the readout's other location channels nothing is
+  coerced, trimmed or case-folded.** Unlike the location channels above it nothing is
   dropped at parse time either: the value is in the model, at the element the location names, and
   what the library declines is the _classification_. That is **not** a promise the value reaches a
   convenience field, and the difference bites in two ordinary shapes: `status` /
@@ -434,6 +434,31 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `<status value=" not-done"/>` is schema-valid and a schema-validating consumer reads it as the
   code. This reader is schema-free and does not collapse, so it discloses rather than reads, which is
   the fail-safe direction.
+- **Content written where a `code` belongs is reported, not read as an absent element.** FHIR JSON
+  spells a `code` as a JSON string, so `{"resourceType":"Procedure","status":{"value":"not-done"}}`
+  (a generic converter carrying FHIR XML's `value` attribute across as a member) and a `status`
+  written as a number or a boolean hold no code this library may read. Measured, every one of them
+  returned `negations: []` under `safeToSummarize: true`, so a procedure recorded as not done was
+  indistinguishable from one that was carried out. **This is a shape, which is why the two channels
+  above it did not catch it**: both ask about a written _value_, and an object holds no value at all,
+  so both answered "no" about it truthfully and the element read exactly like one the sender left
+  out. So the position is named: the locations in `unreadableNegationCodes`, `safeToSummarize` is
+  `false`, and `assertSafeToSummarize` throws. **Nothing is read through the position**, deliberately:
+  `{"value":"…"}` is FHIR _XML_'s spelling of a primitive, so descending into it would resolve a
+  negation out of an encoding no version of FHIR defines for JSON. The element is `status`, at every
+  resource root, which is the negation read's own window; the complement is carried in the same table
+  the matches are made from and applied in the same loop, so it cannot cover an element the read does
+  not. **`verificationStatus` is deliberately outside it**, and that is a declared limit: its shape
+  complement is a _primitive_ at the element, and `Condition.verificationStatus` is a `code` in
+  DSTU2, a version this reader ingests tolerantly, so the same rule would report a conformant DSTU2
+  document. `status` is a `code` in every version this reader accepts, so it carries no such hazard.
+  `AllergyIntolerance.code` is outside it for the reason that keeps "no known allergy" root- and
+  type-scoped. Like the two channels above it this one raises no `ValidationIssue`, so it cannot move
+  `valid` in either direction. **Empty on every conformant document, in either wire format**: the XML
+  reader models a `value` attribute beside `id` and `extension` children as a primitive, so a
+  conformant `<status value="not-done"><extension …/></status>` is read; and a primitive whose value
+  is _absent_ is untouched, that being the conformant `data-absent-reason` shape and content the read
+  never stepped over.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
   `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding

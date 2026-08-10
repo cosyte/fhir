@@ -37,7 +37,13 @@ const CONFORMING_FORGERY = "johnsmith";
 /** Longer than the 64 characters a published element name may occupy. */
 const OVERLONG = "a".repeat(65);
 
-/** Every `expression` a document draws, from read, validation, and the safety readout. */
+/**
+ * The `expression`s a document draws, from read, validation, and the safety readout.
+ *
+ * **Not every location list on the readout**, and that is named rather than counted: `droppedText`,
+ * `unreadableBooleans` and `nearMissNegationCodes` are `PRE-EXISTING` omissions and their own slice.
+ * `unreadableNegationCodes` is collected, so this slice adds no new omission.
+ */
 function locationsOfJson(text: string): string[] {
   const { resource, issues } = parseResource(text);
   const result = validateResource(resource);
@@ -50,6 +56,7 @@ function locationsOfJson(text: string): string[] {
     ...safety.shadowedProperties,
     ...safety.arrayWrappedScalars,
     ...safety.nestedArrays,
+    ...safety.unreadableNegationCodes,
   ];
 }
 

@@ -28,8 +28,8 @@ no value that was `undefined` becomes defined and a newly-read value cannot reti
 a 33-document corpus in a real base worktree, 13 documents move and the only field that moves in any
 of them is `safeToSummarize`, `true → false`; no parse issue, no `ValidationIssue`, no `valid`, no
 `negations`, and neither writer's output moves anywhere. One public surface moves outside that
-measurement: `FhirSafetyError` names this sixth shape in its message, so the message string changes
-for every refusal it raises, including the five that already refused. Its `locations` are unchanged.
+measurement: `FhirSafetyError` names this shape in its message, so the message string changes for
+every refusal it raises, including those that already refused. Its `locations` are unchanged.
 
 `doNotPerform` is the only `boolean` the safety spine reads out of a document, so
 the channel is complete for that layer and for nothing beyond it. `ElementDefinition.mustSupport`,

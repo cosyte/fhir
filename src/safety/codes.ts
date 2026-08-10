@@ -353,6 +353,55 @@ export function hasUnreadableBoolean(node: FhirNode | undefined): boolean {
 }
 
 /**
+ * Whether an element holds **content at a position from which {@link primitiveStrings} can take no
+ * string at all**: a complex node where a `code` belongs, or a primitive whose written value is not a
+ * string. Read through an array wrapper, position by position, exactly as the string read walks it.
+ *
+ * This is to {@link primitiveStrings} what {@link hasUnreadableBoolean} is to
+ * {@link primitiveBooleans}, and the two answer *different* questions on purpose.
+ * {@link hasUnreadableBoolean} asks about a **written value** the read declined, so a node holding no
+ * value at all (an object, an empty array), so it is outside that question and was left as a stated
+ * gap. This asks
+ * about the **position**, so an object at `status` is exactly what it reports: `{"status":{"value":
+ * "not-done"}}` puts the code one level below where any `code` read looks, and the negation read
+ * returned an empty list from an element whose content it never entered.
+ *
+ * **It reports; nothing anywhere reads through it.** Descending into the object to find the string
+ * would author a reading FHIR JSON does not define. `code` is a JSON string (json.html §2.6.0), and
+ * `{"value":"…"}` is the *XML* spelling of a primitive, not a JSON one, so a reader that resolved
+ * it would hand a caller a negation out of an encoding no version of FHIR spells. The gap this closes
+ * is the **silence**, not the strictness, which is the same disposition {@link isNearMissCode} takes
+ * on the case and whitespace near misses.
+ *
+ * **A primitive carrying no value is not reported**, because it is not content the read stepped over:
+ * a `code` whose value is absent while its `_`-sibling carries a `data-absent-reason` extension is
+ * conformant (json.html §2.6.2.3), and both readers model it as a primitive with an `undefined`
+ * value. The XML reader models a `value` attribute beside `id` / `extension` children as a primitive
+ * too, so a conformant `<status value="not-done"><extension …/></status>` is read, not reported.
+ *
+ * @param node - Any model node, or `undefined`.
+ * @returns `true` when at least one position there holds content no string read can reach.
+ * @example
+ * ```ts
+ * import { complex, primitive } from "@cosyte/fhir";
+ * const written = complex([{ name: "value", value: primitive("not-done") }]);
+ * hasUnreadableCode(written);               // true  (an object where FHIR JSON spells a string)
+ * hasUnreadableCode(primitive("not-done")); // false (read, so nothing was stepped over)
+ * ```
+ * @internal
+ */
+export function hasUnreadableCode(node: FhirNode | undefined): boolean {
+  if (node === undefined) return false;
+  // Position by position, so a wrapped object is reached exactly as `scalarValues` reaches a wrapped
+  // primitive. An empty wrapper holds no position and therefore no content, and says `false`.
+  if (isList(node)) return node.items.some((item) => hasUnreadableCode(item));
+  if (isPrimitive(node)) return node.value !== undefined && typeof node.value !== "string";
+  // Every remaining shape is one the string read cannot enter. Written as the fallthrough rather than
+  // as `isComplex`, so a node kind added to the model later reports rather than reads as clean.
+  return true;
+}
+
+/**
  * The one value a `Coding.system` / `Coding.code` member holds, **reading through a single-position
  * array wrapper** and returning `undefined` for anything else.
  *
@@ -758,6 +807,12 @@ export function isNearMissCode(value: string, code: string): boolean {
  * `test/negation-code-spelling.test.ts` asserts of every entry that the exact code **is** classified
  * as a negation at that element, so the table cannot drift into describing a read that is not there.
  *
+ * **`unread` is the third thing an entry carries and it is the shape complement of `values`**: the
+ * positions at that element from which the entry's own reader can take nothing, so a code sitting in
+ * one is invisible to the classification. It lives in the row beside the reader it complements for
+ * the same reason the reader lives here at all: a read and its refusal that share a table cannot
+ * come to disagree about which elements they cover.
+ *
  * **`AllergyIntolerance.code` is deliberately absent**, and it is the same boundary that keeps
  * `no-known-allergy` off the walk ({@link ./status.js} `checkNegations`). Adding it here would put a
  * near-miss disclosure at every resource root while an *exact* SNOMED `716186003` at a nested root
@@ -773,13 +828,26 @@ export const NEGATION_CODE_READS: readonly {
   readonly codes: readonly string[];
   /** The values the negation read sees at that element, in document order. */
   readonly values: (node: FhirNode) => readonly string[];
+  /**
+   * Whether the element holds content at a position `values` cannot take anything from, so a code
+   * inside it is invisible to the read. Absent where the shape complement is not settled; see the
+   * `verificationStatus` entry.
+   */
+  readonly unread?: (node: FhirNode) => boolean;
 }[] = [
   {
     element: "status",
     codes: [ENTERED_IN_ERROR, NOT_TAKEN, NOT_DONE],
     values: (node) => primitiveStrings(node),
+    unread: hasUnreadableCode,
   },
   {
+    // No `unread` here, and it is a declared limit rather than an oversight. The shape complement of
+    // a `CodeableConcept` read is a *primitive* at the element, and `Condition.verificationStatus`
+    // **is** a `code` in DSTU2, which ADR 0004 says this library reads tolerantly, so the same
+    // predicate that reports a non-conformant R4 document would report a conformant DSTU2 one.
+    // Deciding that needs a version this reader does not have. Filed, and pinned in both directions,
+    // rather than taken here on the strength of the R4 half.
     element: "verificationStatus",
     codes: [ENTERED_IN_ERROR, REFUTED],
     values: (node) => safetyCodingsOf(node).flatMap((c) => (c.code === undefined ? [] : [c.code])),
