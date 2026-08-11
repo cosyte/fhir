@@ -40,11 +40,11 @@ hits` at exit 0 and both are now pinned by tests. The dispatch lives in one func
 scanner and the dedup key both read, so the key cannot drift from what really runs. A declared path
 contributes nothing to the observed set, is still enumerated by both routes, and its exemption is
 still announced, once. What remains, narrowly: identical bytes at two in-scope paths with the same
-detector, at least one of them read by the walk, are one object, reported at whichever the sweep
+detector, exactly one of them read by the walk, are one object, reported at whichever the sweep
 read first, with the exit code unaffected and the next run naming the other. That last qualifier is
-load-bearing: the observed set is built by the walk and nothing dedups one index entry against
-another, so two tracked paths that both sit outside every walk root with identical bytes are two
-targets and both report.
+load-bearing and it is "exactly", not "at least": the dedup happens once, at the seam between the
+two routes, and nowhere within either, so two paths both read by the walk report twice, two paths
+both read from the index report twice, and only one of each collapses. All three measured.
 
 An unmerged path is keyed on the absence of stage 0, which is not how the `--staged` route spots
 one. `git diff --cached --raw` reports it as status `U` with destination mode `000000`; `git
@@ -97,7 +97,7 @@ before it shipped; its replacement named the files and was short by one for the 
 predicate that followed -- "every tracked markdown file carrying a violator string is documentation
 about this scanner" -- was falsified by the one command it offered as proof, which names a file
 whose only hit is an XML-reader diagnostic form that merely parses as an email. Run
-`tsx scripts/phi-scan.ts $(git ls-files '*.md')`: a command does not go stale, and a sentence about
+`pnpm exec tsx scripts/phi-scan.ts $(git ls-files '*.md')`: a command does not go stale, and a sentence about
 a moving corpus does. Untracked content outside the walk roots remains invisible to both routes. And
 `all` mode is now repo-wide, less that markdown exemption, while `--staged` is
 not, so the hook and CI disagree about the corpus by 33 tracked files: the safe direction, CI

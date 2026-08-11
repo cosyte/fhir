@@ -39,8 +39,10 @@
  *                              phi-scan-overrides.md
  *   <path> [<path>...]       - scan specific paths
  *   (no args)                - scan the UNION of the in-scope working-tree walk
- *                              and every blob the index carries (see below);
- *                              it is not the working tree alone
+ *                              and every IN-SCOPE blob the index carries (see
+ *                              below); it is not the working tree alone, and it
+ *                              is not every blob either -- a `.md` path and a
+ *                              declared sentinel are out of scope on both routes
  *
  * Exit codes: 0 (clean), 1 (hits found), 2 (invocation error).
  *
@@ -53,8 +55,9 @@
  * at all, two of them carrying bytes these recognisers report (measured).
  *
  * So `all` mode enumerates BOTH: the walk, which alone can see UNTRACKED
- * working-tree content, and every blob the index carries, which alone can see
- * what is staged and what lives outside the roots. Neither replaces the other.
+ * working-tree content, and every IN-SCOPE blob the index carries, which alone
+ * can see what is staged and what lives outside the roots. (In scope on that
+ * side means: not a `.md` path, and not a declared sentinel.) Neither replaces the other.
  * Dedup is BY CONTENT under git's own `blob <len>\0` framing, so an ordinary
  * clean checkout SCANS nothing twice; where the two copies of one path DIFFER,
  * BOTH are scanned, which is what makes a CRLF working tree over an LF blob two
@@ -599,7 +602,8 @@ function refuseUnobserved(paths: string[]): void {
 //
 // This route is a UNION, NEVER A REPLACEMENT. The walk keeps its roots and keeps
 // reading UNTRACKED working-tree content under them, which the index cannot see
-// at all; this adds every blob the index carries, wherever it carries it. Each
+// at all; this adds every IN-SCOPE blob the index carries, wherever it carries
+// it -- `.md` paths and declared sentinels excepted, as on the walk. Each
 // route covers what the other structurally cannot, and the superset property is
 // the one being relied on: nothing that was enumerated stops being enumerated.
 //
@@ -644,19 +648,24 @@ function refuseUnobserved(paths: string[]): void {
 // declared file and buys the announcement, which is the point of declaring one.
 //
 // THE CONSEQUENCE THAT REMAINS, stated narrowly: two paths that hold identical
-// bytes AND dispatch to the same detector AND are both in scope AND of which at
-// least one was read BY THE WALK are one object, so a payload at both is
+// bytes AND dispatch to the same detector AND are both in scope AND of which
+// EXACTLY one was read BY THE WALK are one object, so a payload at both is
 // reported at whichever the sweep read first, not at both. The exit code is
 // unaffected, and fixing the reported copy leaves the other one's object
 // unobserved, so the next run names it.
 //
-// THE FOURTH QUALIFIER IS NOT DECORATION AND WAS MISSING UNTIL A GATE MEASURED
-// IT. The observed set is built by the WALK; nothing dedups an index entry
-// against another index entry. So two tracked paths that both sit OUTSIDE every
-// walk root and hold the same bytes are two targets and are BOTH reported
-// (measured: `docs-content/b.ts` and `docs-content/c.ts`, one dashed SSN, "2
-// hit(s) across 2 file(s)"). That direction is the safe one -- more reported,
-// never fewer -- which is exactly why nothing would have caught it.
+// THE FOURTH QUALIFIER IS "EXACTLY", NOT "AT LEAST", AND TWO GATE PASSES WERE
+// SPENT GETTING IT RIGHT. `scanned` is consulted ONLY by `indexTargets`, so the
+// dedup happens once, at the seam between the two routes, and nowhere within
+// either. All three cases measured, one dashed SSN at two paths:
+//
+//   walk  x walk   (`test/aa.ts`, `src/bb.ts`)              -- BOTH reported
+//   index x index  (`docs-content/b.ts`, `docs-content/c.ts`) -- BOTH reported
+//   walk  x index                                            -- ONE reported
+//
+// So the collapse needs exactly one copy on each side of that seam. Every other
+// arrangement reports MORE than the sentence admits, which is the safe
+// direction and exactly why nothing would have caught it.
 
 /** A single `git ls-files -s` record: one path at one stage. */
 interface IndexEntry {

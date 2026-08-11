@@ -31,11 +31,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   PHI-shaped strings -- vouch for an identical copy at a path with no exemption. Both printed
   `OK, no hits` at exit 0 and both are now pinned. A declared path contributes nothing to the
   observed set, is still enumerated by both routes, and its exemption is still announced, once.
-  **What remains, narrowly:** identical bytes at two in-scope paths with the SAME detector, **at
-  least one of them read by the WALK**, are one object, reported at whichever the sweep read first;
-  the exit code is unaffected and the next run names the other. **The fourth qualifier is
-  load-bearing** -- nothing dedups one index entry against another, so two tracked paths both
-  outside every walk root with identical bytes are two targets and BOTH report (measured).
+  **What remains, narrowly:** identical bytes at two in-scope paths with the SAME detector, **EXACTLY
+  one of them read by the WALK**, are one object, reported at whichever the sweep read first; the
+  exit code is unaffected and the next run names the other. **"Exactly", not "at least"** -- the
+  dedup happens once, at the seam between the two routes, and nowhere within either, so walk-x-walk
+  and index-x-index both report BOTH copies and only walk-x-index collapses (all three measured).
   **THE UNMERGED CASE KEYS ON THE ABSENCE OF STAGE 0**, which is not how `--staged` spots one:
   `git diff --cached --raw` gives status `U` and mode `000000`, but **`git ls-files -s` gives stages
   1/2/3 with ORDINARY blob modes and no `U` anywhere**, so taking the first record scans **the merge
@@ -65,7 +65,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes.
   **No count, no list and no predicate is written down for what those files contain** -- all three
   were tried in this slice and all three were falsified, the predicate ("documentation about this
-  scanner") by `tsx scripts/phi-scan.ts $(git ls-files '*.md')`, the command it offered as its own
+  scanner") by `pnpm exec tsx scripts/phi-scan.ts $(git ls-files '*.md')`, the command it offered as its own
   proof. Run that command; some of what it names is a diagnostic form that merely parses as an email.
   Untracked content outside the walk roots stays invisible to both routes; and **`all` mode is now
   repo-wide (less the markdown exemption) while `--staged` is not**, so the hook and CI disagree by

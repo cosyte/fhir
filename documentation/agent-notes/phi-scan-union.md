@@ -99,8 +99,9 @@ while the same entry without the suffix is **exit 2**. **The walk refuses by MOD
 name** -- "a link's name is no evidence at all about what is on the other side" -- so the two routes
 really do differ. Left as it is and **declared**: matching them changes what the gate REFUSES over,
 not what it scans, and it is a sub-case of the `.md` exemption below reached by mode instead of by
-content. **That is the SEVENTH claim-defect-in-a-prose-carrier in this lineage and the code was
-right again.**
+content. **That is one more claim-defect-in-a-prose-carrier in this lineage, and the code was right
+again.** No ordinal is written down: an ordinal is a count, this class's own rule forbids one, and
+the pass that found this finding also found four more.
 
 ## The two hits the wider corpus produced, and why neither was answered with a rule
 
@@ -140,7 +141,7 @@ files that explain it.
 MISTAKE, ALL THREE MADE IN THIS ONE SLICE.** A draft quoted a **count**; its replacement named the
 **files**; the third tried a class-membership **predicate** -- "every tracked markdown file that
 carries a violator string is documentation ABOUT this scanner" -- and a gate falsified that in the
-one command it offered as proof. `tsx scripts/phi-scan.ts $(git ls-files '*.md')` names
+one command it offered as proof. `pnpm exec tsx scripts/phi-scan.ts $(git ls-files '*.md')` names
 `documentation/agent-notes.md`, whose hit is `MIXED_XML_SPELLING@Patient.text.div`: an **XML-reader
 diagnostic form** that merely parses as an email, in a note about something else entirely. **A
 count, a list and a predicate all move with the commit that states them.** Run the command; it is
@@ -154,18 +155,27 @@ replacement named the files instead and was short by one within the same slice, 
 A count or a list that moves with the commit stating it is a claim nobody can keep true; the
 predicate is stable, checkable in one command, and does not go stale.
 
-Identical bytes at two in-scope paths **that dispatch to the same detector**, **at least one of them
+Identical bytes at two in-scope paths **that dispatch to the same detector**, **exactly one of them
 read by the WALK**, are one object, so a payload in both is reported at whichever the sweep read
 first. The exit code is unaffected, and fixing the reported copy leaves the other object unobserved,
 so the next run names it, which is pinned. **The FOUR qualifiers are the whole sentence**: drop any
 one of them and this is the claim a gate falsified, above.
 
-**THIS SENTENCE SAID "THREE QUALIFIERS" AND A SECOND GATE FALSIFIED IT AGAIN, ONE PASS LATER.** The
-observed set is built by the walk, and **nothing dedups one index entry against another**, so two
-tracked paths that both sit outside every walk root with identical bytes are two targets and both
-report -- measured, `docs-content/b.ts` + `docs-content/c.ts`, one dashed SSN, `2 hit(s) across 2
-file(s)`. **The lesson is the one the slice keeps re-learning: a narrowing sentence is a claim, and a
-claim that has already been falsified once is not thereby correct.**
+**THIS SENTENCE SAID "THREE QUALIFIERS", A GATE ADDED A FOURTH, AND THE NEXT PASS FALSIFIED THE
+FOURTH.** The first repair said "at least one read by the walk" and that is still false: `scanned` is
+consulted **only** by `indexTargets`, so the dedup happens once, at the SEAM between the two routes,
+and nowhere within either. All three cases measured with one dashed SSN at two paths:
+
+| the two copies | reported |
+| --- | --- |
+| walk x walk (`test/aa.ts`, `src/bb.ts`) | **both** |
+| index x index (`docs-content/b.ts`, `docs-content/c.ts`) | **both** |
+| walk x index | **one** |
+
+So it is **exactly** one, not at least one. **The lesson is the one this slice keeps re-learning: a
+narrowing sentence is a claim, a claim falsified once is not thereby correct, and the repair needs
+the same measurement the original needed.** Note the supporting paragraph of the first repair was
+itself true and carried the fact that falsified its own qualifier.
 
 **Untracked content outside the walk roots remains invisible to both routes.** The index cannot see
 it because it is untracked, and the walk cannot because it is outside the roots. Unchanged by this

@@ -183,17 +183,20 @@ deduped) rather than performed in silence.
 
 **The consequence that remains, stated narrowly:** two paths that hold identical
 bytes **and** dispatch to the same detector **and** are both in scope **and** of
-which at least one was read **by the walk** are one object, so a payload at both
+which **exactly one** was read **by the walk** are one object, so a payload at both
 is reported at whichever the sweep read first. The exit code is unaffected, and
 fixing the reported copy leaves the other object unobserved, so the next run
 names it. Both halves are pinned by tests.
 
-**THE FOURTH QUALIFIER WAS MISSING AND A GATE MEASURED IT.** The observed set is
-built by the **walk**; nothing dedups one index entry against another. So two
-tracked paths that both sit **outside every walk root** with the same bytes are
-two targets and **both** report (`docs-content/b.ts` and `docs-content/c.ts`,
-one dashed SSN, "2 hit(s) across 2 file(s)"). The direction is safe -- more
-reported, never fewer -- which is precisely why nothing caught it.
+**THE FOURTH QUALIFIER IS "EXACTLY", NOT "AT LEAST", AND TWO GATE PASSES WERE
+SPENT ON IT.** `scanned` is consulted **only** by `indexTargets`, so the dedup
+happens once, at the seam between the two routes, and nowhere within either. All
+three cases measured, one dashed SSN at two paths: **walk x walk**
+(`test/aa.ts`, `src/bb.ts`) **both** report; **index x index**
+(`docs-content/b.ts`, `docs-content/c.ts`) **both** report; **walk x index**
+reports **one**. The collapse needs exactly one copy on each side of that seam.
+Every other arrangement reports MORE than the sentence admits -- safe direction,
+and precisely why nothing caught it.
 
 ## What the enumeration admits, and what refuses the scan
 

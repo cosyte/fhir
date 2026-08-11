@@ -1743,11 +1743,11 @@ describe("phi-scan: the positive control fires on this repository's own corpus s
     // like.
     //
     // NO COUNT IS WRITTEN HERE, DELIBERATELY. This comment carried two ("248
-    // paths", "the other 247") and both were wrong, because the mirror is built
-    // from `git ls-files` at run time and the tracked-path count moves with the
-    // commit that states it -- including with this commit. The assertions below
-    // are count-free for the same reason: they derive the expected set from
-    // `paths` and only floor it.
+    // paths", "the other 247"): the count at the BASE commit, which this slice's
+    // own three added files falsified before it shipped. The mirror is built
+    // from `git ls-files` at run time, so any count here is a claim about a
+    // corpus that moves. The assertions below are count-free for the same
+    // reason: they derive the expected set from `paths` and only floor it.
     const { root, paths } = mirror((rel) => {
       const payload = `${SYNTHETIC_PHI}at ${rel}\n`;
       return rel === ALLOW_LIST_REL ? `${REAL_ALLOW_LIST}\n${payload}` : payload;
