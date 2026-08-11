@@ -105,4 +105,15 @@ stricter than the hook, and left open because widening `--staged` is a hook deci
 commit is blocked on, declined three times across this suite with the cost measured, and not one to
 take as a side effect of a scan widening.
 
+Separately, the gate no longer prints only a prefix of its own findings. The scanner ended with
+`process.exit()`, which discards pending writes to a pipe, and stderr is a pipe: over a 2,000-file
+corpus read by a consumer that does not drain immediately, 379 of 2,000 `HIT:` lines survived, the
+output stopped at 64,724 bytes -- a pipe's 64 KiB buffer -- and the summary line never arrived. It is
+a race, so it read as flaky rather than broken; the positive control added here is what caught it,
+green on one CI runner and 70 paths short on another at the same commit. The exit code was never
+wrong, so this was a report defect and not a false green, but the dropped part is always the tail,
+which sends a developer to fix a subset and stop. The scanner now assigns `process.exitCode` and lets
+node exit once the writes have flushed, and a mutation-tested case pins it: with `process.exit`
+restored it reds at 9,776 bytes of a 130,000-byte report.
+
 No library code changed. The scanner is a repository gate and ships in no published artifact.

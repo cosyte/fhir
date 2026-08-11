@@ -92,7 +92,7 @@ NON-MARKDOWN index.** That is the half covering a link or a gitlink **outside** 
 which no route reached before (measured, exit 0 on base for both).
 
 **IT SAID "REPO-WIDE", AND A GATE FALSIFIED THAT IN THE EXACT WAY THE SCANNER'S OWN BANNER FORBIDS**
-("an entry a route never lists is not reached by the refusal either -- do not restate this as *every*
+("an entry a route never lists is not reached by the refusal either -- do not restate this as _every_
 non-regular entry"). The `.md` filter runs **before** the mode check, so a gitlink at
 `vendor/sub.md` or a link at `docs-content/NOTES.md` pointing outside the repository is **exit 0**,
 while the same entry without the suffix is **exit 2**. **The walk refuses by MODE regardless of
@@ -131,6 +131,41 @@ The mirror sets `core.hooksPath` to a path that does not exist. It reproduces ev
 `.npmrc` among them, and a developer machine or CI image may carry a global pre-commit hook with an
 opinion about such a filename, which is an opinion about the environment, not about this scanner.
 
+## The gate printed a PREFIX of its own findings, and only a second CI runner saw it
+
+**`process.exit()` DISCARDS PENDING WRITES TO A PIPE, AND STDERR IS A PIPE.** The scanner ended with
+`process.exit(exitCode)`, so once the report was larger than what the pipe would take, node dropped
+whatever had not flushed. Measured over a 2,000-file corpus with a reader that does not drain
+immediately: **379 of 2,000 `HIT:` lines survived, the output stopped at 64,724 bytes** (a pipe's
+64 KiB buffer) **and the `N hit(s) across M file(s)` summary never arrived at all.**
+
+**IT IS A RACE, WHICH IS WHY IT READ AS FLAKY RATHER THAN AS BROKEN.** Whatever the pipe accepts
+before the child exits gets through, so an eager reader sees everything. This slice's own positive
+control is what caught it: **green on the Node 22 runner and 70 paths short on the Node 24 runner at
+the same commit**, and green on every local run. The 70 were not random -- they were the _tail_ of
+the report in scan order, which is why the shape read as "the walk stopped" rather than "the write
+stopped".
+
+🛑 **THE EXIT CODE WAS NEVER WRONG, so this was NOT a false green**: hits still exit 1, a refusal
+still exits 2, and CI still blocked. What was lost is the REPORT. That is still worth fixing rather
+than filing, because **a PHI gate that names some of what it found and silently drops the rest sends
+a developer to fix a subset and call it done** -- and the dropped part is not a random sample, it is
+always the end.
+
+The fix is one line: **assign `process.exitCode` and let node exit on its own**, which happens after
+the pending writes flush. Nothing in the scanner keeps the event loop alive; every read and every
+subprocess in it is synchronous. **Do not "simplify" it back.**
+
+**PINNED, AND THE PIN IS MUTATION-TESTED**: a case spawns the scanner over a corpus whose report is
+several times the pipe buffer and keeps the stream PAUSED until after the child has filled it. With
+`process.exit(exitCode)` restored the case reds at **9,776 bytes of a 130,000-byte report**. Note
+`pause()` has to be called **again after** the `data` listener is attached -- attaching one resumes
+the readable, and without the second call the case drains from the start and passes over the very
+defect it exists to catch.
+
+⚖️ **`spawnSync` CANNOT REPRODUCE THIS AND A CONTROL BUILT ON IT WOULD BE VACUOUS.** It drains as it
+goes, so a 513 KB report came back whole every time. The reproduction needs a reader that does not.
+
 ## Declared, not closed
 
 The `.md` exemption still hides a payload at any depth, on **both** routes, and that is the design
@@ -166,11 +201,11 @@ FOURTH.** The first repair said "at least one read by the walk" and that is stil
 consulted **only** by `indexTargets`, so the dedup happens once, at the SEAM between the two routes,
 and nowhere within either. All three cases measured with one dashed SSN at two paths:
 
-| the two copies | reported |
-| --- | --- |
-| walk x walk (`test/aa.ts`, `src/bb.ts`) | **both** |
+| the two copies                                           | reported |
+| -------------------------------------------------------- | -------- |
+| walk x walk (`test/aa.ts`, `src/bb.ts`)                  | **both** |
 | index x index (`docs-content/b.ts`, `docs-content/c.ts`) | **both** |
-| walk x index | **one** |
+| walk x index                                             | **one**  |
 
 So it is **exactly** one, not at least one. **The lesson is the one this slice keeps re-learning: a
 narrowing sentence is a claim, a claim falsified once is not thereby correct, and the repair needs
