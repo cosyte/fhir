@@ -21,12 +21,12 @@ nothing on disk either", and an index route that happened to find blobs would ma
 exactly the case it exists for.
 
 Dedup is by content under git's own `blob <len>\0` framing rather than by path. On a clean checkout
-every index blob hashes to bytes the walk already read, so nothing is scanned twice and `git
-cat-file` is never asked for them (202 in-scope index entries, 169 already observed, 33 fetched).
-Where the two copies of one path differ, both are scanned: with `core.autocrlf` or a
-`.gitattributes` `text` attribute the working file is CRLF and the blob is LF, so they are two byte
-streams and a hit in one is not evidence about the other. Converting one tracked file's working copy
-to CRLF moves the fetch count from 33 to 34. The object-id algorithm is asked for rather than
+an index blob hashing to bytes the sweep already scanned is not fetched, so nothing is scanned twice
+(202 in-scope index entries, 167 already scanned, 35 fetched; `git cat-file` is still invoked, for
+the blobs no walk root covers). Where the two copies of one path differ, both are scanned: with
+`core.autocrlf` or a `.gitattributes` `text` attribute the working file is CRLF and the blob is LF,
+so they are two byte streams and a hit in one is not evidence about the other. Converting one tracked
+file's working copy to CRLF moves the fetch count from 35 to 36. The object-id algorithm is asked for rather than
 assumed, because a SHA-256 repository would match nothing and quietly scan the whole corpus twice.
 
 The dedup key is the object id and the detector the path dispatches to, and neither half is

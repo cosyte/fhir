@@ -44,11 +44,17 @@ the roots**. **WALK_ROOTS did not move**, and no refusal was retired: the floor-
 on the walk, because the state it names is "no repository to ask and nothing on disk either", and an
 index route that happened to find blobs would make it unreachable in exactly the case it exists for.
 
-**Dedup is by CONTENT under git's `blob <len>\0` framing, never by path.** Measured: 202 in-scope
-index entries, 169 already observed by the walk, **33 fetched**, so a clean checkout reads nothing
-twice and never invokes `cat-file`. Convert one tracked file's working copy to CRLF and the fetch
-count goes **33 to 34**, both copies scanned. **That is the EOL axis**, and a path-keyed dedup would
-have picked one of the two byte streams and called it the corpus. The object-id algorithm is **asked
+**Dedup is by CONTENT under git's `blob <len>\0` framing, never by path.** Measured on a clean
+checkout at the commit that closed this: **202** in-scope index entries, **167** already scanned by
+the walk, **35 fetched**, so a clean checkout SCANS nothing twice. Convert one tracked file's working
+copy to CRLF and the fetch count goes **35 to 36**, both copies scanned. **That is the EOL axis**,
+and a path-keyed dedup would have picked one of the two byte streams and called it the corpus.
+**THESE NUMBERS MOVED ONCE ALREADY, INSIDE THIS SLICE, AND THAT IS WHY THEY ARE SPELLED OUT.** The
+first draft measured 169 scanned and 33 fetched; excluding declared paths from the observed set
+(below) drops two files out of "scanned" and adds their blobs to "fetched", and the corrected slice
+left the old pair standing in four carriers until a gate caught it. **Re-derive, never copy.** Note
+also that `cat-file` IS invoked on a clean checkout, for the out-of-root blobs; the property is that
+nothing is scanned twice, not that git is never asked. The object-id algorithm is **asked
 for** (`git rev-parse --show-object-format`), never assumed: a SHA-256 repository would match nothing
 and quietly scan everything twice.
 
@@ -117,16 +123,21 @@ opinion about such a filename, which is an opinion about the environment, not ab
 
 The `.md` exemption still hides a payload at any depth, on **both** routes, and that is the design
 ("docs may legitimately describe violator values"). Grounded rather than assumed: **every tracked
-markdown file that carries a violator string is documentation ABOUT this scanner** -- this file, the
-overrides log, the changelog and the notes it was relocated from. Dropping the exemption would red
-the gate on exactly the files that explain it. **A COUNT IS NOT WRITTEN HERE ON PURPOSE:** a draft
-of this section quoted "46 tracked markdown files, 3 carrying violator strings", which was the BASE
-measurement and was already false at the commit that shipped it, because the slice adds markdown
-files of its own. A count that moves with the commit stating it is a claim nobody can keep true.
+markdown file that carries a violator string is documentation ABOUT this scanner.** Dropping the
+exemption would red the gate on exactly the files that explain it.
 
-Two paths holding identical bytes are one object, so a payload in both is reported at one of them.
-The gate's answer is unaffected (exit 1 either way), and fixing the reported copy leaves the other
-object unobserved, so the next run names it. Convergent and loud, never a silent pass.
+**STATE THAT PREDICATE, NEVER THE LIST OR THE COUNT, AND BOTH MISTAKES WERE MADE HERE IN ONE SLICE.**
+A draft quoted "46 tracked markdown files, 3 carrying violator strings" -- the BASE measurement,
+already false at the commit that shipped it, because the slice adds markdown files of its own. Its
+replacement named the files instead and was short by one within the same slice, for the same reason.
+A count or a list that moves with the commit stating it is a claim nobody can keep true; the
+predicate is stable, checkable in one command, and does not go stale.
+
+Identical bytes at two in-scope paths **that dispatch to the same detector** are one object, so a
+payload in both is reported at whichever the sweep read first. The exit code is unaffected, and
+fixing the reported copy leaves the other object unobserved, so the next run names it, which is
+pinned. **The three qualifiers are the whole sentence**: drop any one of them and this is the claim a
+gate falsified, above.
 
 **Untracked content outside the walk roots remains invisible to both routes.** The index cannot see
 it because it is untracked, and the walk cannot because it is outside the roots. Unchanged by this
@@ -135,7 +146,11 @@ slice, and stated because the union closes the tracked half of that sentence and
 **`all` MODE IS NOW REPO-WIDE AND `--staged` IS NOT, SO THE TWO ROUTES DISAGREE BY 33 TRACKED
 FILES.** Measured: a staged `docs-content/leak.json` carrying a dashed SSN is exit 0 on the hook and
 exit 1 in CI (on base both were 0). The direction is the safe one, CI stricter than the hook, and it
-is the inverse of the shape `buildTargetsForStaged`'s own comment warns about, which was CI blind
-where the hook reported. **It is left open deliberately**: widening `--staged` is a HOOK decision
+is the inverse of the shape that comment was written about, which was CI blind where the hook
+reported. **But do not read that as agreeing with the comment**, which carries a second argument
+that is direction-blind: "keeping the two routes on different scopes would mean the hook and CI
+disagree about what the corpus is, which is the state that let the hole sit unnoticed". By that
+argument this divergence is a real cost, and it is being ACCEPTED rather than argued away.
+**It is left open deliberately**: widening `--staged` is a HOOK decision
 that changes what a commit is BLOCKED on, declined three times across this suite with the cost
 measured, and taking it as a side effect of a scan widening is exactly how it would arrive ungraded.

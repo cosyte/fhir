@@ -627,9 +627,15 @@ function refuseUnobserved(paths: string[]): void {
 //     deduped away on every future run.
 //
 // So the observed set holds `<oid>\0<detector>` for the walked files that were
-// actually SCANNED, and an exempt path contributes nothing to it and is never
-// fetched from the index either. `scanKindOf` below is the ONE dispatch table;
-// `scanTarget` reads it too, so the key cannot drift from what really runs.
+// actually SCANNED, and an exempt path contributes nothing to it. `scanKindOf`
+// below is the ONE dispatch table; `scanTarget` reads it too, so the key cannot
+// drift from what really runs.
+//
+// AN EXEMPT PATH IS STILL FETCHED, AND SAYING OTHERWISE WOULD CONTRADICT THE
+// ENUMERATION. It contributes nothing to the observed set, so its own blob is
+// not deduped away either: `indexTargets` enumerates it, `readBlobs` asks git
+// for it, and `main` drops it before any detector runs. That costs a read of a
+// declared file and buys the announcement, which is the point of declaring one.
 //
 // THE CONSEQUENCE THAT REMAINS, stated narrowly: two paths that hold identical
 // bytes AND dispatch to the same detector AND are both in scope are one object,
@@ -1919,17 +1925,17 @@ function scanXmlText(target: Target, text: string, allow: AllowList, hits: Hit[]
 // ---------------------------------------------------------------------------
 
 /**
- * A file gets the full structured FHIR scan only when it is fixture-like (under
- * `test/__fixtures__/`) with a FHIR wire-format extension. Hand-written `src/`
- * code, even a `.ts` file embedding a `{"resourceType":"Patient",…}` example,
- * gets the conservative dashed-SSN + email pass instead, because a JSDoc
- * `@example` carries synthetic names that must not trip the structured detectors.
- */
-/**
- * WHICH DETECTOR A PATH DISPATCHES TO. The one table, read by `scanTarget` below
- * and by the union route's dedup key. It must not be duplicated: the dedup is
- * only sound if it knows exactly what the sweep would have run, and a second
- * copy of this decision is how that stops being true without a test noticing.
+ * WHICH DETECTOR A PATH DISPATCHES TO. A file gets the full structured FHIR scan
+ * only when it is fixture-like (under `test/__fixtures__/`) with a FHIR
+ * wire-format extension. Hand-written `src/` code, even a `.ts` file embedding a
+ * `{"resourceType":"Patient",…}` example, gets the conservative dashed-SSN +
+ * email pass instead, because a JSDoc `@example` carries synthetic names that
+ * must not trip the structured detectors.
+ *
+ * THE ONE TABLE, read by `scanTarget` below and by the union route's dedup key.
+ * It must not be duplicated: the dedup is only sound if it knows exactly what
+ * the sweep would have run, and a second copy of this decision is how that stops
+ * being true without a test noticing.
  */
 function scanKindOf(path: string): "ndjson" | "xml" | "json" | "source" {
   if (!path.startsWith(FIXTURE_PREFIX)) return "source";

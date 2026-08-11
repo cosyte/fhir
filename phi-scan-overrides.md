@@ -94,13 +94,14 @@ and every refusal it already had; nothing that was enumerated stops being
 enumerated.
 
 **Dedup is by CONTENT, under git's own `blob <len>\0` framing, not by path.** On
-an ordinary clean checkout every index blob hashes to bytes the walk already
-read, so nothing is scanned twice and `git cat-file` is never even asked for them
-(measured: 202 in-scope index entries, 169 already observed, **33 fetched**).
+an ordinary clean checkout an index blob that hashes to bytes the sweep already
+scanned is not fetched, so **nothing is scanned twice** (measured at the commit
+that closed this: 202 in-scope index entries, 167 already scanned, **35
+fetched**). `git cat-file` is still invoked, for the blobs no walk root covers.
 Where the two copies of one path **differ**, **both** are scanned: with
 `core.autocrlf` or a `.gitattributes` `text` attribute the working-tree file is
 CRLF and the blob is LF, so they are two byte streams and a hit in one is not
-evidence about the other (measured: the fetch count goes 33 → 34 when one tracked
+evidence about the other (measured: the fetch count goes 35 → 36 when one tracked
 file's working copy is converted to CRLF). The object-id algorithm is **asked
 for** (`git rev-parse --show-object-format`) rather than assumed, because a
 SHA-256 repository would match nothing and quietly scan the whole corpus twice.
@@ -126,7 +127,11 @@ TWO ROUTES DISAGREE ABOUT THE CORPUS BY 33 TRACKED FILES.** Measured: a staged
 `docs-content/leak.json` carrying a dashed SSN is **exit 0** on the hook and
 **exit 1** in CI (at the base commit both were 0). The direction is the safe one,
 CI stricter than the hook, and it is **not** the shape the paragraph on "in
-scope" above warns about, which was CI blind where the hook reported. It is
+scope" above warns about, which was CI blind where the hook reported. **That
+paragraph's other argument is direction-blind and does apply**: two routes on
+different scopes means the hook and CI disagree about what the corpus is, which
+is the state that let the original hole sit unnoticed. The cost is real and is
+being **accepted**, not argued away. It is
 **not closed here on purpose**: widening `--staged` is a **hook decision** that
 changes what a commit is BLOCKED on, it has been declined three times across this
 suite with the cost measured, and taking it as a side effect of a scan widening

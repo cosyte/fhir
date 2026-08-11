@@ -19,11 +19,11 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   alone sees what is **staged** and what lives **outside the roots**. `WALK_ROOTS` did not move and
   no refusal was retired -- the floor that refuses a sweep which opened nothing stays keyed on the
   walk, because the state it names is "no repository to ask and nothing on disk either".
-  **DEDUP IS BY CONTENT** under git's `blob <len>\0` framing, never by path: 202 in-scope index
-  entries, 169 already observed by the walk, **33 fetched**, so a clean checkout reads nothing twice
-  and never invokes `cat-file`. Where the two copies of one path **differ**, **both** are scanned --
-  a CRLF working tree over an LF blob is two byte streams, and the fetch count goes **33 -> 34**. The
-  object-id algorithm is **asked for**, never assumed.
+  **DEDUP IS BY CONTENT** under git's `blob <len>\0` framing, never by path: **202** in-scope index
+  entries, **167** already scanned by the walk, **35 fetched**, so a clean checkout scans nothing
+  twice. Where the two copies of one path **differ**, **both** are scanned -- a CRLF working tree
+  over an LF blob is two byte streams, and the fetch count goes **35 -> 36**. The object-id algorithm
+  is **asked for**, never assumed.
   **THE KEY IS THE OBJECT ID _AND_ THE DETECTOR THE PATH DISPATCHES TO**, because the detector is a
   property of the PATH and not of the bytes: an oid-only key let `src/decoy.ts` (source pass, which
   deliberately does not read `identifier.value`) vouch for an identical `test/__fixtures__/leak.json`
