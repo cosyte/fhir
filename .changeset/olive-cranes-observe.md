@@ -40,8 +40,11 @@ hits` at exit 0 and both are now pinned by tests. The dispatch lives in one func
 scanner and the dedup key both read, so the key cannot drift from what really runs. A declared path
 contributes nothing to the observed set, is still enumerated by both routes, and its exemption is
 still announced, once. What remains, narrowly: identical bytes at two in-scope paths with the same
-detector are one object, reported at whichever the sweep read first, with the exit code unaffected
-and the next run naming the other.
+detector, at least one of them read by the walk, are one object, reported at whichever the sweep
+read first, with the exit code unaffected and the next run naming the other. That last qualifier is
+load-bearing: the observed set is built by the walk and nothing dedups one index entry against
+another, so two tracked paths that both sit outside every walk root with identical bytes are two
+targets and both report.
 
 An unmerged path is keyed on the absence of stage 0, which is not how the `--staged` route spots
 one. `git diff --cached --raw` reports it as status `U` with destination mode `000000`; `git
@@ -51,10 +54,16 @@ though it were what git carries. Every stage is read and every stage is labelled
 number. The `--staged` route still refuses over such a path, unchanged, because that route has to
 name one blob and there is none.
 
-A mode the index carries that is not a regular blob refuses the scan repo-wide: for mode 120000 the
-object is the link's target path and for 160000 there is no object in this repository at all. That
-covers a link or a gitlink outside the walk roots, which no route reached before (measured, exit 0
-at the base commit for both).
+A mode the index carries that is not a regular blob refuses the scan across the non-markdown index:
+for mode 120000 the object is the link's target path and for 160000 there is no object in this
+repository at all. That covers a link or a gitlink outside the walk roots, which no route reached
+before (measured, exit 0 at the base commit for both). It is not repo-wide, and the scanner's own
+banner forbids saying so: the markdown filter runs before the mode check, so a gitlink at
+`vendor/sub.md` or a link at `docs-content/NOTES.md` pointing outside the repository is exit 0 while
+the same entry without the suffix is exit 2. The walk refuses by mode regardless of name, so the two
+routes differ there. Declared and left open, because making them agree changes what the gate refuses
+over rather than what it scans; it is a sub-case of the markdown exemption below, reached by mode
+instead of by content.
 
 Four escape shapes a sibling scanner reproduced at exit 0 were measured here and were already
 closed: a tracked path occupied by a directory of decoys, a whole walk root swapped for a decoy
@@ -81,11 +90,16 @@ path deliberately: one payload written to every path is a single blob under cont
 once, and the case would then assert nothing about the rest.
 
 Declared and not closed: the markdown exemption still hides a payload at any depth on both routes,
-which is the design, and every tracked markdown file carrying a violator string is documentation
-about this scanner. No count is written down for that, deliberately: a draft quoted one measured at
-the base commit, which the slice's own new markdown files falsified before it shipped, and a count
-that moves with the commit stating it is a claim nobody can keep true. Untracked content outside the
-walk roots remains invisible to both routes. And `all` mode is now repo-wide while `--staged` is
+which is the design. No count, no list and no predicate is written down for what those files
+contain, deliberately: all three were tried inside this slice and all three were falsified. A draft
+quoted a count measured at the base commit, which the slice's own new markdown files falsified
+before it shipped; its replacement named the files and was short by one for the same reason; and the
+predicate that followed -- "every tracked markdown file carrying a violator string is documentation
+about this scanner" -- was falsified by the one command it offered as proof, which names a file
+whose only hit is an XML-reader diagnostic form that merely parses as an email. Run
+`tsx scripts/phi-scan.ts $(git ls-files '*.md')`: a command does not go stale, and a sentence about
+a moving corpus does. Untracked content outside the walk roots remains invisible to both routes. And
+`all` mode is now repo-wide, less that markdown exemption, while `--staged` is
 not, so the hook and CI disagree about the corpus by 33 tracked files: the safe direction, CI
 stricter than the hook, and left open because widening `--staged` is a hook decision about what a
 commit is blocked on, declined three times across this suite with the cost measured, and not one to

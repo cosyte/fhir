@@ -87,9 +87,20 @@ gets **the merge base** and reports on it as what git carries. Every stage is re
 its own number. Pinned by a case whose payload lives **only in stage 3**, and by a second whose
 payload lives only in stage 1 and must be labelled as such.
 
-**A mode the index carries that is not a regular blob refuses the scan (exit 2), repo-wide.** That
-is the half covering a link or a gitlink **outside** the walk roots, which no route reached before
-(measured, exit 0 on base for both).
+**A mode the index carries that is not a regular blob refuses the scan (exit 2), across the
+NON-MARKDOWN index.** That is the half covering a link or a gitlink **outside** the walk roots,
+which no route reached before (measured, exit 0 on base for both).
+
+**IT SAID "REPO-WIDE", AND A GATE FALSIFIED THAT IN THE EXACT WAY THE SCANNER'S OWN BANNER FORBIDS**
+("an entry a route never lists is not reached by the refusal either -- do not restate this as *every*
+non-regular entry"). The `.md` filter runs **before** the mode check, so a gitlink at
+`vendor/sub.md` or a link at `docs-content/NOTES.md` pointing outside the repository is **exit 0**,
+while the same entry without the suffix is **exit 2**. **The walk refuses by MODE regardless of
+name** -- "a link's name is no evidence at all about what is on the other side" -- so the two routes
+really do differ. Left as it is and **declared**: matching them changes what the gate REFUSES over,
+not what it scans, and it is a sub-case of the `.md` exemption below reached by mode instead of by
+content. **That is the SEVENTH claim-defect-in-a-prose-carrier in this lineage and the code was
+right again.**
 
 ## The two hits the wider corpus produced, and why neither was answered with a rule
 
@@ -122,28 +133,46 @@ opinion about such a filename, which is an opinion about the environment, not ab
 ## Declared, not closed
 
 The `.md` exemption still hides a payload at any depth, on **both** routes, and that is the design
-("docs may legitimately describe violator values"). Grounded rather than assumed: **every tracked
-markdown file that carries a violator string is documentation ABOUT this scanner.** Dropping the
-exemption would red the gate on exactly the files that explain it.
+("docs may legitimately describe violator values"). Dropping the exemption would red the gate on the
+files that explain it.
 
-**STATE THAT PREDICATE, NEVER THE LIST OR THE COUNT, AND BOTH MISTAKES WERE MADE HERE IN ONE SLICE.**
-A draft quoted "46 tracked markdown files, 3 carrying violator strings" -- the BASE measurement,
+**NO PREDICATE IS STATED ABOUT WHAT THE EXEMPT FILES CONTAIN, AND THAT IS THE THIRD SHAPE OF THE SAME
+MISTAKE, ALL THREE MADE IN THIS ONE SLICE.** A draft quoted a **count**; its replacement named the
+**files**; the third tried a class-membership **predicate** -- "every tracked markdown file that
+carries a violator string is documentation ABOUT this scanner" -- and a gate falsified that in the
+one command it offered as proof. `tsx scripts/phi-scan.ts $(git ls-files '*.md')` names
+`documentation/agent-notes.md`, whose hit is `MIXED_XML_SPELLING@Patient.text.div`: an **XML-reader
+diagnostic form** that merely parses as an email, in a note about something else entirely. **A
+count, a list and a predicate all move with the commit that states them.** Run the command; it is
+the ground truth precisely because it is a command and not a sentence, and some of what it names is
+not a violator at all.
+
+The two earlier shapes, kept because the sequence is the lesson: a draft quoted "46 tracked markdown
+files, 3 carrying violator strings" -- the BASE measurement,
 already false at the commit that shipped it, because the slice adds markdown files of its own. Its
 replacement named the files instead and was short by one within the same slice, for the same reason.
 A count or a list that moves with the commit stating it is a claim nobody can keep true; the
 predicate is stable, checkable in one command, and does not go stale.
 
-Identical bytes at two in-scope paths **that dispatch to the same detector** are one object, so a
-payload in both is reported at whichever the sweep read first. The exit code is unaffected, and
-fixing the reported copy leaves the other object unobserved, so the next run names it, which is
-pinned. **The three qualifiers are the whole sentence**: drop any one of them and this is the claim a
-gate falsified, above.
+Identical bytes at two in-scope paths **that dispatch to the same detector**, **at least one of them
+read by the WALK**, are one object, so a payload in both is reported at whichever the sweep read
+first. The exit code is unaffected, and fixing the reported copy leaves the other object unobserved,
+so the next run names it, which is pinned. **The FOUR qualifiers are the whole sentence**: drop any
+one of them and this is the claim a gate falsified, above.
+
+**THIS SENTENCE SAID "THREE QUALIFIERS" AND A SECOND GATE FALSIFIED IT AGAIN, ONE PASS LATER.** The
+observed set is built by the walk, and **nothing dedups one index entry against another**, so two
+tracked paths that both sit outside every walk root with identical bytes are two targets and both
+report -- measured, `docs-content/b.ts` + `docs-content/c.ts`, one dashed SSN, `2 hit(s) across 2
+file(s)`. **The lesson is the one the slice keeps re-learning: a narrowing sentence is a claim, and a
+claim that has already been falsified once is not thereby correct.**
 
 **Untracked content outside the walk roots remains invisible to both routes.** The index cannot see
 it because it is untracked, and the walk cannot because it is outside the roots. Unchanged by this
 slice, and stated because the union closes the tracked half of that sentence and not the other.
 
-**`all` MODE IS NOW REPO-WIDE AND `--staged` IS NOT, SO THE TWO ROUTES DISAGREE BY 33 TRACKED
+**`all` MODE IS NOW REPO-WIDE (LESS THE MARKDOWN EXEMPTION) AND `--staged` IS NOT, SO THE TWO
+ROUTES DISAGREE BY 33 TRACKED
 FILES.** Measured: a staged `docs-content/leak.json` carrying a dashed SSN is exit 0 on the hook and
 exit 1 in CI (on base both were 0). The direction is the safe one, CI stricter than the hook, and it
 is the inverse of the shape that comment was written about, which was CI blind where the hook

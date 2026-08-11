@@ -31,16 +31,22 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   PHI-shaped strings -- vouch for an identical copy at a path with no exemption. Both printed
   `OK, no hits` at exit 0 and both are now pinned. A declared path contributes nothing to the
   observed set, is still enumerated by both routes, and its exemption is still announced, once.
-  **What remains, narrowly:** identical bytes at two in-scope paths with the SAME detector are one
-  object, reported at whichever the sweep read first; the exit code is unaffected and the next run
-  names the other.
+  **What remains, narrowly:** identical bytes at two in-scope paths with the SAME detector, **at
+  least one of them read by the WALK**, are one object, reported at whichever the sweep read first;
+  the exit code is unaffected and the next run names the other. **The fourth qualifier is
+  load-bearing** -- nothing dedups one index entry against another, so two tracked paths both
+  outside every walk root with identical bytes are two targets and BOTH report (measured).
   **THE UNMERGED CASE KEYS ON THE ABSENCE OF STAGE 0**, which is not how `--staged` spots one:
   `git diff --cached --raw` gives status `U` and mode `000000`, but **`git ls-files -s` gives stages
   1/2/3 with ORDINARY blob modes and no `U` anywhere**, so taking the first record scans **the merge
   base** and labels it as what git carries. Every stage is read and labelled with its own number;
   `--staged` still refuses, unchanged.
-  **A non-blob mode in the index refuses the scan repo-wide**, which covers a link or a gitlink
-  **outside** the walk roots (measured, exit 0 on base for both).
+  **A non-blob mode in the index refuses the scan across the NON-MARKDOWN index**, which covers a
+  link or a gitlink **outside** the walk roots (measured, exit 0 on base for both). **Not
+  "repo-wide":** the `.md` filter runs before the mode check, so a gitlink at `vendor/sub.md` or a
+  link at `docs-content/NOTES.md` is exit 0 while the same entry without the suffix is exit 2, and
+  the walk (which refuses by mode regardless of name) differs from this route there. Declared and
+  left open -- a sub-case of the `.md` exemption below, reached by mode instead of by content.
   **Four escape shapes a sibling reproduced at exit 0 were ALREADY CLOSED here** -- a tracked path
   occupied by a directory of decoys, a walk root swapped for a decoy directory, most tracked files
   absent from the working tree, and a gitlink whose working tree is absent -- all four refusing with
@@ -56,11 +62,14 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   plants a payload in **every** non-exempt path at once and asserts **every one is named in a single
   run**, markdown and sentinel paths silent. The payload is unique per path on purpose: one payload
   at every path is ONE blob under content-keying.
-  **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes,
-  and every tracked markdown file carrying a violator string is documentation **about** this scanner
-  (no count is written down: a count that moves with the commit stating it cannot be kept true);
-  untracked content outside the walk roots stays invisible to both routes; and **`all` mode is now
-  repo-wide while `--staged` is not**, so the hook and CI disagree by 33 tracked files -- the safe
+  **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes.
+  **No count, no list and no predicate is written down for what those files contain** -- all three
+  were tried in this slice and all three were falsified, the predicate ("documentation about this
+  scanner") by `tsx scripts/phi-scan.ts $(git ls-files '*.md')`, the command it offered as its own
+  proof. Run that command; some of what it names is a diagnostic form that merely parses as an email.
+  Untracked content outside the walk roots stays invisible to both routes; and **`all` mode is now
+  repo-wide (less the markdown exemption) while `--staged` is not**, so the hook and CI disagree by
+  33 tracked files -- the safe
   direction (CI stricter), left open because widening `--staged` is a **hook** decision about what a
   commit is BLOCKED on, declined three times across this suite, and not one to take as a side effect.
   **No library code changed** -- the scanner is a repository gate and ships in no published artifact.

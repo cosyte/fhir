@@ -1736,11 +1736,18 @@ describe("phi-scan: the positive control fires on this repository's own corpus s
 
   it("fires on EVERY tracked path that is not exempt, in one run", () => {
     // THE PAYLOAD IS MADE UNIQUE PER PATH ON PURPOSE. Dedup is by CONTENT under
-    // git's own blob framing, so one payload written to 248 paths is ONE blob,
+    // git's own blob framing, so ONE payload written to EVERY path is ONE blob,
     // scanned once and reported at one path -- correct behaviour, and it would
-    // make this case assert nothing about the other 247. Suffixing the path
+    // make this case assert nothing about any of the others. Suffixing the path
     // gives every file its own object, which is what the corpus really looks
     // like.
+    //
+    // NO COUNT IS WRITTEN HERE, DELIBERATELY. This comment carried two ("248
+    // paths", "the other 247") and both were wrong, because the mirror is built
+    // from `git ls-files` at run time and the tracked-path count moves with the
+    // commit that states it -- including with this commit. The assertions below
+    // are count-free for the same reason: they derive the expected set from
+    // `paths` and only floor it.
     const { root, paths } = mirror((rel) => {
       const payload = `${SYNTHETIC_PHI}at ${rel}\n`;
       return rel === ALLOW_LIST_REL ? `${REAL_ALLOW_LIST}\n${payload}` : payload;

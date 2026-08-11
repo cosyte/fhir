@@ -38,7 +38,9 @@
  *   --allow-fixture <path>   - bypass one path; rejected unless logged in
  *                              phi-scan-overrides.md
  *   <path> [<path>...]       - scan specific paths
- *   (no args)                - scan all in-scope working-tree files
+ *   (no args)                - scan the UNION of the in-scope working-tree walk
+ *                              and every blob the index carries (see below);
+ *                              it is not the working tree alone
  *
  * Exit codes: 0 (clean), 1 (hits found), 2 (invocation error).
  *
@@ -642,10 +644,19 @@ function refuseUnobserved(paths: string[]): void {
 // declared file and buys the announcement, which is the point of declaring one.
 //
 // THE CONSEQUENCE THAT REMAINS, stated narrowly: two paths that hold identical
-// bytes AND dispatch to the same detector AND are both in scope are one object,
-// so a payload at both is reported at whichever the sweep read first, not at
-// both. The exit code is unaffected, and fixing the reported copy leaves the
-// other one's object unobserved, so the next run names it.
+// bytes AND dispatch to the same detector AND are both in scope AND of which at
+// least one was read BY THE WALK are one object, so a payload at both is
+// reported at whichever the sweep read first, not at both. The exit code is
+// unaffected, and fixing the reported copy leaves the other one's object
+// unobserved, so the next run names it.
+//
+// THE FOURTH QUALIFIER IS NOT DECORATION AND WAS MISSING UNTIL A GATE MEASURED
+// IT. The observed set is built by the WALK; nothing dedups an index entry
+// against another index entry. So two tracked paths that both sit OUTSIDE every
+// walk root and hold the same bytes are two targets and are BOTH reported
+// (measured: `docs-content/b.ts` and `docs-content/c.ts`, one dashed SSN, "2
+// hit(s) across 2 file(s)"). That direction is the safe one -- more reported,
+// never fewer -- which is exactly why nothing would have caught it.
 
 /** A single `git ls-files -s` record: one path at one stage. */
 interface IndexEntry {
@@ -817,9 +828,25 @@ function indexTargets(scanned: Set<string>): Target[] {
 
   // A mode the index carries that is not a blob proves nothing when read: for
   // mode 120000 the object IS the link's target path, and for 160000 there is no
-  // object in this repository at all. Refusing here covers the whole index,
-  // including the gitlink and link cases outside the walk roots, which no route
-  // reached before.
+  // object in this repository at all. Refusing here covers the NON-MARKDOWN
+  // index, which is the gitlink and link cases outside the walk roots that no
+  // route reached before.
+  //
+  // IT IS `inScope`, NOT `entries`, AND THAT IS NOT "THE WHOLE INDEX" -- SAYING
+  // SO WOULD BE THE RESTATEMENT THE BANNER AT THE TOP OF THIS FILE FORBIDS. The
+  // `.md` filter runs FIRST, so an index entry whose path ends `.md` is dropped
+  // whatever its mode: a gitlink at `vendor/sub.md`, or a link at
+  // `docs-content/NOTES.md` pointing outside the repository, is exit 0 here
+  // while the same entry without the suffix is exit 2 (measured, both).
+  //
+  // The two routes therefore differ on this, and the difference is DECLARED, not
+  // designed: the walk refuses a non-regular entry by MODE regardless of name
+  // (see `walk`, "a link's name is no evidence at all about what is on the other
+  // side"), and this route lets a name decide first. It is left as it is because
+  // making it match is a change to what the gate REFUSES over -- a `.md` gitlink
+  // reds a repository that never had a scanned byte in it -- and this slice
+  // grades a scan widening. It is a sub-case of the `.md` exemption already
+  // declared-and-not-closed below, reached by mode instead of by content.
   refuseUnscannable(
     inScope
       .filter((e) => !REGULAR_BLOB_MODES.has(e.mode))
