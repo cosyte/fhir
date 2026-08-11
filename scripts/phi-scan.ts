@@ -38,10 +38,32 @@
  *   --allow-fixture <path>   - bypass one path; rejected unless logged in
  *                              phi-scan-overrides.md
  *   <path> [<path>...]       - scan specific paths
- *   (no args)                - scan all in-scope working-tree files
+ *   (no args)                - scan the UNION of the in-scope working-tree walk
+ *                              and every IN-SCOPE blob the index carries (see
+ *                              below); it is not the working tree alone, and it
+ *                              is not every blob either -- a `.md` path and a
+ *                              declared sentinel are out of scope on both routes
  *
  * Exit codes: 0 (clean), 1 (hits found), 2 (invocation error).
  *
+ * ---------------------------------------------------------------------------
+ * THE SWEEP READS THE BYTES GIT CARRIES AS A UNION WITH THE WALK. A walk reads
+ * the WORKING TREE, and that is not what a commit contains: a fixture `git
+ * add`ed and then scrubbed on disk scanned clean at exit 0 while `git commit`
+ * would have committed the staged blob (measured). And the walk has ROOTS, so 33
+ * tracked non-markdown files outside `test/` and `src/` were opened by no route
+ * at all, two of them carrying bytes these recognisers report (measured).
+ *
+ * So `all` mode enumerates BOTH: the walk, which alone can see UNTRACKED
+ * working-tree content, and every IN-SCOPE blob the index carries, which alone
+ * can see what is staged and what lives outside the roots. (In scope on that
+ * side means: not a `.md` path, and not a declared sentinel.) Neither replaces the other.
+ * Dedup is BY CONTENT under git's own `blob <len>\0` framing, so an ordinary
+ * clean checkout SCANS nothing twice; where the two copies of one path DIFFER,
+ * BOTH are scanned, which is what makes a CRLF working tree over an LF blob two
+ * byte streams rather than one. `cat-file` IS invoked on a clean checkout, for
+ * the blobs no walk root covers and for the declared paths below: the property
+ * is that nothing is scanned twice, never that git goes unasked.
  * ---------------------------------------------------------------------------
  * AN ENUMERATED IN-SCOPE ENTRY THAT IS NOT A REGULAR FILE REFUSES THE SCAN
  * (exit 2). "Enumerated" is load-bearing and is not decoration: this narrows
@@ -98,6 +120,7 @@
 
 import { readFileSync, statSync, existsSync, readdirSync, type Dirent } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { join, resolve, relative, sep, isAbsolute } from "node:path";
 
 // ---------------------------------------------------------------------------
@@ -140,7 +163,22 @@ const FIXTURE_PREFIX = "test/__fixtures__/";
 // bypass and needs a flag; CI runs the scan with no flags, so a bypass that only
 // exists on the command line would leave both files unscanned in exactly the
 // route that matters.
-const SENTINEL_FILES = new Set<string>(["test/phi-leak.test.ts", "test/scripts/phi-scan.test.ts"]);
+//
+// `scripts/phi-scan.ts` JOINED THEM WHEN THE INDEX ROUTE BROUGHT IT INTO SCOPE,
+// and the alternative was measurably worse. Its docblocks have to spell out the
+// violator values they explain, and one of them is `JOHN_SMITH@Mercy.org`, the
+// example recording why a shape-based email exclusion was reverted. The
+// token-level remedy would be `EMAILDOMAIN mercy.org`, and an allow-list entry is
+// GLOBAL and ROUTE-BLIND: it would admit that domain in a fixture too, and
+// `Mercy.org` is a plausible real hospital. A literal path is the narrower of the
+// two. It is not a new blind spot -- this file sits outside every walk root and
+// no route opened it at all before -- but it is a declared one, logged in
+// `phi-scan-overrides.md` like the other two.
+const SENTINEL_FILES = new Set<string>([
+  "test/phi-leak.test.ts",
+  "test/scripts/phi-scan.test.ts",
+  "scripts/phi-scan.ts",
+]);
 
 // Name tokens that are honorific / degree / suffix codes, never a person's
 // identifying name, extracted alongside real name tokens and skipped.
@@ -364,7 +402,24 @@ function validateAllowFixtures(allowFixtures: string[]): void {
 // ---------------------------------------------------------------------------
 
 interface Target {
-  path: string; // forward-slash repo-relative path for reporting
+  /**
+   * Forward-slash repo-relative path. THE DISPATCH AND EVERY FILTER KEY ON THIS,
+   * never on `label`: `scanTarget` reads the `test/__fixtures__/` prefix and the
+   * wire-format extension off it, and `SENTINEL_FILES` / `--allow-fixture` match
+   * it exactly. A target read out of the index carries the same `path` as the
+   * walked file at that path, so a declared exemption covers both routes rather
+   * than one, which is the property the markdown exemption already relies on.
+   */
+  path: string;
+  /**
+   * What a hit is REPORTED against. Equal to `path` for a working-tree target,
+   * and annotated for one read out of the index, because "there is PHI in
+   * `test/__fixtures__/patient.json`" and "there is PHI in the blob git has
+   * staged at `test/__fixtures__/patient.json`" are different findings with
+   * different remedies, and a developer who cannot tell them apart looks at the
+   * file, sees nothing, and stops trusting the gate.
+   */
+  label: string;
   read: () => Buffer;
 }
 
@@ -527,6 +582,324 @@ function refuseUnobserved(paths: string[]): void {
   );
 }
 
+// ---------------------------------------------------------------------------
+// The index route: the bytes git carries, as a UNION with the walk
+// ---------------------------------------------------------------------------
+//
+// THE WALK READS THE WORKING TREE AND THAT IS NOT WHAT A COMMIT CONTAINS. Both
+// halves of the gap were measured on this repository before this route existed,
+// and neither is exotic:
+//
+//   - a PHI-bearing fixture `git add`ed and then scrubbed in the working tree
+//     scanned CLEAN and exited 0, while `git commit` would have committed the
+//     staged blob (measured, exit 0);
+//   - 33 tracked non-markdown files sit outside `test/` and `src/` entirely
+//     (`scripts/`, `.github/`, `docs-content/`, `.changeset/`, the root
+//     manifests), so neither the walk nor `refuseUnobserved`'s index
+//     reconciliation, whose pathspec is limited to the walk roots, ever
+//     mentioned them. Two of the 33 carry bytes this scanner's own recognisers
+//     report (measured).
+//
+// This route is a UNION, NEVER A REPLACEMENT. The walk keeps its roots and keeps
+// reading UNTRACKED working-tree content under them, which the index cannot see
+// at all; this adds every IN-SCOPE blob the index carries, wherever it carries
+// it -- `.md` paths and declared sentinels excepted, as on the walk. Each
+// route covers what the other structurally cannot, and the superset property is
+// the one being relied on: nothing that was enumerated stops being enumerated.
+//
+// DEDUP IS BY CONTENT UNDER GIT'S OWN `blob <len>\0` FRAMING, NOT BY PATH. On an
+// ordinary clean checkout an index blob that hashes to bytes the sweep already
+// scanned is not fetched, so NOTHING IS SCANNED TWICE. That is not the same as
+// leaving git unasked, and the difference is measurable: `cat-file` is invoked
+// for the blobs no walk root covers, and for the declared paths excluded below.
+// Where the two copies DIFFER, BOTH are scanned, and that is deliberate: with
+// `core.autocrlf` or a `.gitattributes` `text` attribute the working-tree file
+// is CRLF and the blob is LF, so they are different byte streams and a hit in
+// one is not evidence about the other. A path-keyed dedup would have picked one
+// and called it the corpus.
+//
+// THE DEDUP KEY IS THE OBJECT ID *AND* THE DETECTOR THE PATH DISPATCHES TO, AND
+// NEITHER HALF IS OPTIONAL. Two states were constructed against an oid-only key
+// and BOTH printed `OK, no hits` at exit 0:
+//
+//   - the DETECTOR is a property of the PATH, not of the bytes. `scanTarget`
+//     sends `test/__fixtures__/x.json` to the structured FHIR scan and
+//     `src/x.ts` to the source pass, and the source pass deliberately does not
+//     key `identifier.value` or `telecom.value`. So one payload committed at
+//     both paths was "observed" at the weaker one, and the fixture blob carrying
+//     an SSN-shaped `identifier.value` was never fetched. An oid-only key
+//     silently applies the weakest detector any path holding those bytes gets;
+//   - an EXEMPT path's bytes were never scanned in the first place. A declared
+//     `SENTINEL_FILES` entry is walked, and it is exempt precisely BECAUSE it
+//     carries realistic-PHI-shaped strings, so hashing it into the observed set
+//     let it vouch for a copy at a path with no exemption at all. That one is
+//     not even convergent: the sentinel is never "fixed", so the other copy is
+//     deduped away on every future run.
+//
+// So the observed set holds `<oid>\0<detector>` for the walked files that were
+// actually SCANNED, and an exempt path contributes nothing to it. `scanKindOf`
+// below is the ONE dispatch table; `scanTarget` reads it too, so the key cannot
+// drift from what really runs.
+//
+// AN EXEMPT PATH IS STILL FETCHED, AND SAYING OTHERWISE WOULD CONTRADICT THE
+// ENUMERATION. It contributes nothing to the observed set, so its own blob is
+// not deduped away either: `indexTargets` enumerates it, `readBlobs` asks git
+// for it, and `main` drops it before any detector runs. That costs a read of a
+// declared file and buys the announcement, which is the point of declaring one.
+//
+// THE CONSEQUENCE THAT REMAINS, stated narrowly: two paths that hold identical
+// bytes AND dispatch to the same detector AND are both in scope AND of which
+// EXACTLY one was read BY THE WALK are one object, so a payload at both is
+// reported at whichever the sweep read first, not at both. The exit code is
+// unaffected, and fixing the reported copy leaves the other one's object
+// unobserved, so the next run names it.
+//
+// THE FOURTH QUALIFIER IS "EXACTLY", NOT "AT LEAST", AND TWO GATE PASSES WERE
+// SPENT GETTING IT RIGHT. `scanned` is consulted ONLY by `indexTargets`, so the
+// dedup happens once, at the seam between the two routes, and nowhere within
+// either. All three cases measured, one dashed SSN at two paths:
+//
+//   walk  x walk   (`test/aa.ts`, `src/bb.ts`)              -- BOTH reported
+//   index x index  (`docs-content/b.ts`, `docs-content/c.ts`) -- BOTH reported
+//   walk  x index                                            -- ONE reported
+//
+// So the collapse needs exactly one copy on each side of that seam. Every other
+// arrangement reports MORE than the sentence admits, which is the safe
+// direction and exactly why nothing would have caught it.
+
+/** A single `git ls-files -s` record: one path at one stage. */
+interface IndexEntry {
+  path: string;
+  mode: string;
+  /** `0` for an ordinary entry; `1`/`2`/`3` for the three sides of a conflict. */
+  stage: string;
+  oid: string;
+}
+
+/** `<mode> <oid> <stage>\t<path>`, one `git ls-files -s -z` record. */
+const LS_FILES_RECORD = /^(\d{6}) ([0-9a-f]+) ([0-3])\t([\s\S]+)$/;
+
+/**
+ * git's object-id algorithm for this repository, or `null` when git cannot say.
+ *
+ * ASK, NEVER ASSUME `sha1`. A repository created with `--object-format=sha256`
+ * names its blobs with SHA-256, so hashing the working-tree bytes with SHA-1
+ * would match nothing, every index blob would look different from its file, and
+ * the whole corpus would be scanned twice. That is slow rather than wrong, which
+ * is exactly why it would never be noticed.
+ */
+function objectFormat(): string | null {
+  try {
+    // SECURITY: array-form execFileSync, no shell.
+    const out = execFileSync("git", ["rev-parse", "--show-object-format"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The object id git would give these bytes, under its `blob <len>\0<bytes>`
+ * framing. This is the identity the dedup keys on, and it is a property of the
+ * CONTENT: two paths holding the same bytes have the same id, and one path whose
+ * working-tree and index copies differ by so much as a line ending has two.
+ */
+function blobOid(bytes: Buffer, algo: string): string | null {
+  try {
+    const h = createHash(algo);
+    h.update(Buffer.from(`blob ${String(bytes.length)}\0`, "utf8"));
+    h.update(bytes);
+    return h.digest("hex");
+  } catch {
+    // An algorithm node does not implement. The caller then dedups nothing and
+    // scans both copies, which reads MORE rather than less.
+    return null;
+  }
+}
+
+/**
+ * Every entry the index carries, or `null` when git could not be asked.
+ *
+ * NO PATHSPEC, DELIBERATELY, AND THAT IS THE OPPOSITE OF `trackedInScope`'s
+ * CHOICE ABOVE. That one limits itself to the walk roots because it feeds a
+ * REFUSAL, and refusing over a path no route was ever going to scan would be a
+ * gate nobody can get green. This one feeds a SCAN, so the widest honest scope
+ * is the right one. `git ls-files` is implicitly scoped to the current directory
+ * and below, so a copy vendored inside an enclosing repository still answers
+ * with this copy's own paths rather than the enclosing tree's.
+ */
+function indexEntries(): IndexEntry[] | null {
+  let out: Buffer;
+  try {
+    // SECURITY: array-form execFileSync, no shell.
+    out = execFileSync("git", ["ls-files", "-s", "-z"], {
+      encoding: "buffer",
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    return null;
+  }
+  const entries: IndexEntry[] = [];
+  for (const record of out.toString("utf8").split("\0")) {
+    if (record.length === 0) continue;
+    const m = LS_FILES_RECORD.exec(record);
+    const mode = m?.[1];
+    const oid = m?.[2];
+    const stage = m?.[3];
+    const path = m?.[4];
+    if (mode === undefined || oid === undefined || stage === undefined || path === undefined) {
+      // Refuse rather than skip: a record this route cannot read is a file it
+      // would then report clean over, which is the whole shape being closed.
+      throw new InvocationError(
+        "could not read the output of `git ls-files -s -z`: unrecognized record. " +
+          "Refusing rather than scanning a list that may be short.",
+      );
+    }
+    entries.push({ path, mode, stage, oid });
+  }
+  return entries.length > 0 ? entries : null;
+}
+
+/**
+ * Read the named blobs in ONE `git cat-file --batch`, keyed by object id.
+ *
+ * `--batch` writes `<oid> blob <size>\n<size bytes>\n` per request, so the
+ * payload is taken by LENGTH and never by scanning for a delimiter: a blob is
+ * arbitrary bytes and may contain any newline anywhere.
+ */
+function readBlobs(oids: string[]): Map<string, Buffer> {
+  const out = new Map<string, Buffer>();
+  if (oids.length === 0) return out;
+  let buf: Buffer;
+  try {
+    // SECURITY: array-form execFileSync, no shell. Default (Buffer) encoding,
+    // because `encoding: "buffer"` alongside `input` is rejected by Node --
+    // the same constraint `gitIgnored` above records.
+    buf = execFileSync("git", ["cat-file", "--batch"], {
+      input: oids.join("\n") + "\n",
+      stdio: ["pipe", "pipe", "ignore"],
+      maxBuffer: 512 * 1024 * 1024,
+    });
+  } catch (err) {
+    throw new InvocationError(
+      `could not read the index blobs git carries: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  let at = 0;
+  while (at < buf.length) {
+    const nl = buf.indexOf(0x0a, at);
+    if (nl < 0) break;
+    const header = buf.toString("utf8", at, nl);
+    const m = /^([0-9a-f]+) (\S+) (\d+)$/.exec(header);
+    const oid = m?.[1];
+    const kind = m?.[2];
+    const size = m?.[3];
+    if (oid === undefined || kind === undefined || size === undefined) {
+      throw new InvocationError(
+        `could not read the output of \`git cat-file --batch\`: unrecognized header "${header}". ` +
+          "Refusing rather than scanning a list that may be short.",
+      );
+    }
+    const len = Number(size);
+    const start = nl + 1;
+    if (kind === "blob") out.set(oid, buf.subarray(start, start + len));
+    at = start + len + 1; // trailing newline git writes after each payload
+  }
+  return out;
+}
+
+/**
+ * Turn the index into scan targets, minus whatever the walk already read.
+ *
+ * KEY THE CONFLICT CASE ON THE ABSENCE OF STAGE 0, NOT ON THE FIRST RECORD. An
+ * unmerged path is recorded at stages 1, 2 and 3 with ORDINARY blob modes, so a
+ * reader that takes the first record it sees gets stage 1, THE MERGE BASE, and
+ * would report on it as if it were what git carries. Every stage is read and
+ * every stage is labelled with its own number, so no single one of them can be
+ * silently promoted to "the" index copy. Reading all three is a widening: the
+ * `--staged` route still REFUSES over an unmerged path, because that route has
+ * to name one blob and there is none, and git will not let a conflicted path be
+ * committed anyway.
+ */
+function indexTargets(scanned: Set<string>): Target[] {
+  const entries = indexEntries();
+  if (entries === null) return [];
+
+  // The markdown exemption is a scan-wide rule, not a property of one
+  // enumeration: the walk skips `.md` because documentation may legitimately
+  // describe violator values, and a route that reads it anyway would red on
+  // exactly the files the sweep exempts.
+  const inScope = entries.filter((e) => !e.path.toLowerCase().endsWith(".md"));
+
+  // A mode the index carries that is not a blob proves nothing when read: for
+  // mode 120000 the object IS the link's target path, and for 160000 there is no
+  // object in this repository at all. Refusing here covers the NON-MARKDOWN
+  // index, which is the gitlink and link cases outside the walk roots that no
+  // route reached before.
+  //
+  // IT IS `inScope`, NOT `entries`, AND THAT IS NOT "THE WHOLE INDEX" -- SAYING
+  // SO WOULD BE THE RESTATEMENT THE BANNER AT THE TOP OF THIS FILE FORBIDS. The
+  // `.md` filter runs FIRST, so an index entry whose path ends `.md` is dropped
+  // whatever its mode: a gitlink at `vendor/sub.md`, or a link at
+  // `docs-content/NOTES.md` pointing outside the repository, is exit 0 here
+  // while the same entry without the suffix is exit 2 (measured, both).
+  //
+  // The two routes therefore differ on this, and the difference is DECLARED, not
+  // designed: the walk refuses a non-regular entry by MODE regardless of name
+  // (see `walk`, "a link's name is no evidence at all about what is on the other
+  // side"), and this route lets a name decide first. It is left as it is because
+  // making it match is a change to what the gate REFUSES over -- a `.md` gitlink
+  // reds a repository that never had a scanned byte in it -- and this slice
+  // grades a scan widening. It is a sub-case of the `.md` exemption already
+  // declared-and-not-closed below, reached by mode instead of by content.
+  refuseUnscannable(
+    inScope
+      .filter((e) => !REGULAR_BLOB_MODES.has(e.mode))
+      .map((e) => ({ path: e.path, kind: gitModeKind(e.mode) })),
+    "The object git carries for such an entry is its target path, or is not in this repository " +
+      "at all, so scanning it would prove nothing about what it points at.",
+    "Replace it with a regular file, or remove it from the index.",
+  );
+
+  // A DECLARED PATH IS STILL ENUMERATED HERE, and `main` is what drops it. The
+  // exemption is announced rather than performed in silence, and an exemption
+  // nobody sees is the same blind spot this gate exists to refuse; a route that
+  // dropped it earlier would announce nothing whenever the walk never reached it
+  // (`scripts/phi-scan.ts` sits outside every walk root, so that is the ordinary
+  // case, not an edge one). The ONE thing an exemption does to this enumeration
+  // is decided in `scanned` by the caller: a declared path's bytes are never the
+  // reason another path's identical bytes get skipped.
+  const wanted = inScope.filter(
+    (e) => REGULAR_BLOB_MODES.has(e.mode) && !scanned.has(scanIdentity(e.oid, e.path)),
+  );
+  // Two entries can name one object (the same bytes committed at two paths, or
+  // two sides of a conflict that agree), so ask git for each object once.
+  const blobs = readBlobs([...new Set(wanted.map((e) => e.oid))]);
+
+  return wanted.map((e) => {
+    const missing = !blobs.has(e.oid);
+    return {
+      path: e.path,
+      label:
+        e.stage === "0" ? `${e.path} (as git carries it)` : `${e.path} (index stage ${e.stage})`,
+      read: (): Buffer => {
+        const b = blobs.get(e.oid);
+        if (b === undefined || missing) {
+          throw new InvocationError(
+            `the index names an object at ${e.path} that this repository does not carry, so the ` +
+              "scan cannot read what a commit there would contain.",
+          );
+        }
+        return b;
+      },
+    };
+  });
+}
+
 function buildTargetsForAll(): Target[] {
   const files: string[] = [];
   const unscannable: Unscannable[] = [];
@@ -556,9 +929,37 @@ function buildTargetsForAll(): Target[] {
     refuseUnobserved(tracked.filter((p) => !observed.has(p) && !ignored.has(p)));
   }
 
-  const targets = files
-    .filter((abs) => !ignored.has(normalizePath(abs)))
-    .map((abs) => ({ path: normalizePath(abs), read: () => readFileSync(abs) }));
+  // Read each walked file ONCE, here, and keep the bytes. The read has to happen
+  // before the dedup can ask whether the index carries the same content, and
+  // reading twice would let the two answers come from two different states of
+  // the file.
+  const algo = objectFormat();
+  const scanned = new Set<string>();
+  const targets: Target[] = [];
+  for (const abs of files) {
+    const rel = normalizePath(abs);
+    if (ignored.has(rel)) continue;
+    let bytes: Buffer;
+    try {
+      bytes = readFileSync(abs);
+    } catch (err) {
+      throw new InvocationError(
+        `could not read ${rel}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    // A DECLARED SENTINEL VOUCHES FOR NOTHING. It is walked, but `main` drops it
+    // before any detector runs, and it is exempt precisely BECAUSE it carries
+    // realistic-PHI-shaped strings. Hashing it into the observed set would let
+    // it dedup away an identical copy at a path with no exemption, on every run
+    // forever, since a sentinel is never "fixed". `--allow-fixture` needs no
+    // equivalent here: `parseArgs` turns it into `paths` mode, so it cannot
+    // reach this route at all.
+    if (algo !== null && !SENTINEL_FILES.has(rel)) {
+      const oid = blobOid(bytes, algo);
+      if (oid !== null) scanned.add(scanIdentity(oid, rel));
+    }
+    targets.push({ path: rel, label: rel, read: (): Buffer => bytes });
+  }
 
   // A SWEEP THAT OPENED NOTHING MUST NOT REPORT CLEAN, whatever the index said.
   // The reconciliation above is the sharp instrument and needs git to answer;
@@ -573,6 +974,11 @@ function buildTargetsForAll(): Target[] {
   // With no usable index and only SOME roots emptied, the surviving root still
   // yields targets and this arm does not fire; that state is reported clean and
   // is a declared residual, not a covered case.
+  //
+  // IT STAYS KEYED ON THE WALK, NOT ON THE UNION BELOW. The state it names is "no
+  // repository to ask and nothing on disk either", and an index route that
+  // happened to find blobs would make the arm unreachable in exactly the case it
+  // was built for. The union widens what is SCANNED; it does not retire a refusal.
   if (targets.length === 0) {
     throw new InvocationError(
       "refusing the scan: the sweep observed no files under any scan root. " +
@@ -582,7 +988,7 @@ function buildTargetsForAll(): Target[] {
     );
   }
 
-  return targets;
+  return [...targets, ...indexTargets(scanned)];
 }
 
 function buildTargetsForPaths(paths: string[]): Target[] {
@@ -590,7 +996,8 @@ function buildTargetsForPaths(paths: string[]): Target[] {
     const abs = isAbsolute(p) ? p : resolve(REPO_ROOT, p);
     if (!existsSync(abs)) throw new InvocationError(`File not found: ${p}`);
     if (!statSync(abs).isFile()) throw new InvocationError(`Not a regular file: ${p}`);
-    return { path: normalizePath(abs), read: () => readFileSync(abs) };
+    const rel = normalizePath(abs);
+    return { path: rel, label: rel, read: (): Buffer => readFileSync(abs) };
   });
 }
 
@@ -806,6 +1213,7 @@ function buildTargetsForStaged(): Target[] {
 
   return list.map(({ path: relPath }) => ({
     path: relPath,
+    label: relPath,
     // SECURITY: array-form execFileSync, no shell. `:<path>` is a git pathspec.
     read: (): Buffer =>
       execFileSync("git", ["show", `:${relPath}`], {
@@ -1080,37 +1488,40 @@ function decodeSourceEscapes(raw: string): string {
 }
 
 function decodeSourceEscapesOnce(raw: string): string {
-  return raw.replace(/\\(u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(.))/gs, (...m) => {
-    const [, , braced, u4, x2, other] = m as (string | undefined)[];
-    const hex = braced ?? u4 ?? x2;
-    if (hex !== undefined) {
-      const cp = Number.parseInt(hex, 16);
-      // A lone surrogate is not a scalar value; leave the escape as written
-      // rather than manufacturing U+FFFD, which would change the token.
-      if (cp >= 0xd800 && cp <= 0xdfff) return `\\u${hex}`;
-      try {
-        return String.fromCodePoint(cp);
-      } catch {
-        return `\\u${hex}`;
+  return raw.replace(
+    /\\(u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(.))/gs,
+    (...m) => {
+      const [, , braced, u4, x2, other] = m as (string | undefined)[];
+      const hex = braced ?? u4 ?? x2;
+      if (hex !== undefined) {
+        const cp = Number.parseInt(hex, 16);
+        // A lone surrogate is not a scalar value; leave the escape as written
+        // rather than manufacturing U+FFFD, which would change the token.
+        if (cp >= 0xd800 && cp <= 0xdfff) return `\\u${hex}`;
+        try {
+          return String.fromCodePoint(cp);
+        } catch {
+          return `\\u${hex}`;
+        }
       }
-    }
-    // The single-character escapes. Anything not named here drops to the
-    // character itself, which is what the language does: `\q` is `q`, and `\\`
-    // is one backslash.
-    const single = other ?? "";
-    switch (single) {
-      case "n":
-        return "\n";
-      case "t":
-        return "\t";
-      case "r":
-        return "\r";
-      case "0":
-        return "\0";
-      default:
-        return single;
-    }
-  });
+      // The single-character escapes. Anything not named here drops to the
+      // character itself, which is what the language does: `\q` is `q`, and `\\`
+      // is one backslash.
+      const single = other ?? "";
+      switch (single) {
+        case "n":
+          return "\n";
+        case "t":
+          return "\t";
+        case "r":
+          return "\r";
+        case "0":
+          return "\0";
+        default:
+          return single;
+      }
+    },
+  );
 }
 
 /** How far past a matched key the value reader will look. */
@@ -1480,11 +1891,11 @@ function scanJsonText(target: Target, text: string, allow: AllowList, hits: Hit[
     parsed = JSON.parse(text);
   } catch {
     // A malformed / fragmentary leaked resource still gets the conservative pass.
-    scanCommonShapes(target.path, text, allow, hits);
+    scanCommonShapes(target.label, text, allow, hits);
     return;
   }
-  walkResource(parsed, target.path, rootLabel(parsed), allow, hits);
-  scanCommonShapes(target.path, text, allow, hits);
+  walkResource(parsed, target.label, rootLabel(parsed), allow, hits);
+  scanCommonShapes(target.label, text, allow, hits);
 }
 
 function scanNdjsonText(target: Target, text: string, allow: AllowList, hits: Hit[]): void {
@@ -1496,12 +1907,12 @@ function scanNdjsonText(target: Target, text: string, allow: AllowList, hits: Hi
     try {
       parsed = JSON.parse(line);
     } catch {
-      scanCommonShapes(`${target.path}:${String(i + 1)}`, line, allow, hits);
+      scanCommonShapes(`${target.label}:${String(i + 1)}`, line, allow, hits);
       continue;
     }
-    walkResource(parsed, `${target.path}:${String(i + 1)}`, rootLabel(parsed), allow, hits);
+    walkResource(parsed, `${target.label}:${String(i + 1)}`, rootLabel(parsed), allow, hits);
   }
-  scanCommonShapes(target.path, text, allow, hits);
+  scanCommonShapes(target.label, text, allow, hits);
 }
 
 // ---------------------------------------------------------------------------
@@ -1522,16 +1933,16 @@ function scanXmlText(target: Target, text: string, allow: AllowList, hits: Hit[]
   // FHIR XML represents primitives as `<element value="…"/>`. Inspect only the
   // PHI-bearing element names, mirroring the JSON element map.
   for (const v of xmlValues(text, "family")) {
-    checkNameString(target.path, "name.family", v, allow, hits);
+    checkNameString(target.label, "name.family", v, allow, hits);
   }
   for (const v of xmlValues(text, "given")) {
-    checkNameString(target.path, "name.given", v, allow, hits);
+    checkNameString(target.label, "name.given", v, allow, hits);
   }
   for (const tag of ["birthDate", "deceasedDateTime"]) {
-    for (const v of xmlValues(text, tag)) checkDate(target.path, tag, v, allow, hits);
+    for (const v of xmlValues(text, tag)) checkDate(target.label, tag, v, allow, hits);
   }
   for (const v of xmlValues(text, "line")) {
-    checkAddressLine(target.path, "address.line", v, allow, hits);
+    checkAddressLine(target.label, "address.line", v, allow, hits);
   }
   // ContactPoint.value / Identifier.value serialize as `<value value="…"/>`, but
   // so does the overloaded `Quantity.value` (`<value value="70.0"/>`). Scope the
@@ -1542,11 +1953,11 @@ function scanXmlText(target: Target, text: string, allow: AllowList, hits: Hit[]
     for (const block of text.matchAll(blockRe)) {
       const inner = block[1] ?? "";
       for (const v of xmlValues(inner, "value")) {
-        checkContactValue(target.path, `${tag}.value`, v, allow, hits);
+        checkContactValue(target.label, `${tag}.value`, v, allow, hits);
       }
     }
   }
-  scanCommonShapes(target.path, text, allow, hits);
+  scanCommonShapes(target.label, text, allow, hits);
 }
 
 // ---------------------------------------------------------------------------
@@ -1554,28 +1965,47 @@ function scanXmlText(target: Target, text: string, allow: AllowList, hits: Hit[]
 // ---------------------------------------------------------------------------
 
 /**
- * A file gets the full structured FHIR scan only when it is fixture-like (under
- * `test/__fixtures__/`) with a FHIR wire-format extension. Hand-written `src/`
- * code, even a `.ts` file embedding a `{"resourceType":"Patient",…}` example,
- * gets the conservative dashed-SSN + email pass instead, because a JSDoc
- * `@example` carries synthetic names that must not trip the structured detectors.
+ * WHICH DETECTOR A PATH DISPATCHES TO. A file gets the full structured FHIR scan
+ * only when it is fixture-like (under `test/__fixtures__/`) with a FHIR
+ * wire-format extension. Hand-written `src/` code, even a `.ts` file embedding a
+ * `{"resourceType":"Patient",…}` example, gets the conservative dashed-SSN +
+ * email pass instead, because a JSDoc `@example` carries synthetic names that
+ * must not trip the structured detectors.
+ *
+ * THE ONE TABLE, read by `scanTarget` below and by the union route's dedup key.
+ * It must not be duplicated: the dedup is only sound if it knows exactly what
+ * the sweep would have run, and a second copy of this decision is how that stops
+ * being true without a test noticing.
  */
+function scanKindOf(path: string): "ndjson" | "xml" | "json" | "source" {
+  if (!path.startsWith(FIXTURE_PREFIX)) return "source";
+  if (path.endsWith(".ndjson")) return "ndjson";
+  if (path.endsWith(".xml")) return "xml";
+  if (path.endsWith(".json")) return "json";
+  return "source";
+}
+
+/** The union route's dedup identity: the bytes AND what would be run on them. */
+function scanIdentity(oid: string, path: string): string {
+  return `${oid}\0${scanKindOf(path)}`;
+}
+
 function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   let buf: Buffer;
   try {
     buf = target.read();
   } catch (err) {
     throw new InvocationError(
-      `could not read ${target.path}: ${err instanceof Error ? err.message : String(err)}`,
+      `could not read ${target.label}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
   const text = buf.toString("utf8");
-  const isFixture = target.path.startsWith(FIXTURE_PREFIX);
-  if (isFixture && target.path.endsWith(".ndjson")) {
+  const kind = scanKindOf(target.path);
+  if (kind === "ndjson") {
     scanNdjsonText(target, text, allow, hits);
-  } else if (isFixture && target.path.endsWith(".xml")) {
+  } else if (kind === "xml") {
     scanXmlText(target, text, allow, hits);
-  } else if (isFixture && target.path.endsWith(".json")) {
+  } else if (kind === "json") {
     scanJsonText(target, text, allow, hits);
   } else {
     // Non-fixture target (hand-written source, or a non-FHIR fixture file):
@@ -1583,8 +2013,8 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
     // literal recogniser. BOTH, not either: the shape pass alone is the
     // SSN / email floor, which is what enumerating a source file buys on its
     // own, and a name is neither.
-    scanCommonShapes(target.path, text, allow, hits);
-    scanSourceLiterals(target.path, text, allow, hits);
+    scanCommonShapes(target.label, text, allow, hits);
+    scanSourceLiterals(target.label, text, allow, hits);
   }
 }
 
@@ -1666,7 +2096,12 @@ function main(): number {
   // scanning more. Skipping is announced rather than silent: an exemption
   // nobody sees is the same shape of blind spot this gate exists to refuse.
   if (args.mode !== "paths") {
-    const skipped = targets.filter((t) => SENTINEL_FILES.has(t.path)).map((t) => t.path);
+    // DEDUPED: a declared path can arrive from the walk AND from the index (they
+    // are separate targets by design, since the two copies can differ), and
+    // announcing it twice reads as two exemptions rather than one.
+    const skipped = [
+      ...new Set(targets.filter((t) => SENTINEL_FILES.has(t.path)).map((t) => t.path)),
+    ];
     if (skipped.length > 0) {
       process.stdout.write(
         `[phi-scan] skipping ${String(skipped.length)} declared sentinel file(s): ` +

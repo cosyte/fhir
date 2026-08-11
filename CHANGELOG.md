@@ -8,6 +8,84 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **The PHI commit-gate reads the bytes git carries as a UNION with its working-tree walk
+  (`PHI-SCAN`).** Two states measured at the base commit: a fixture `git add`ed and then scrubbed in
+  the working tree scanned clean at **exit 0** while `git commit` would have committed the staged
+  blob; and **33 tracked non-markdown files sit outside `test/` and `src/`** (`scripts/`, `.github/`,
+  `docs-content/`, `.changeset/`, the root manifests), reached by neither the walk nor the index
+  reconciliation, whose pathspec is limited to the walk roots. **Two of the 33 carried bytes the
+  scanner's own recognisers report.**
+  **UNION, NEVER REPLACEMENT.** The walk alone sees **untracked** working-tree content; the index
+  alone sees what is **staged** and what lives **outside the roots**. `WALK_ROOTS` did not move and
+  no refusal was retired -- the floor that refuses a sweep which opened nothing stays keyed on the
+  walk, because the state it names is "no repository to ask and nothing on disk either".
+  **DEDUP IS BY CONTENT** under git's `blob <len>\0` framing, never by path: **202** in-scope index
+  entries, **167** already scanned by the walk, **35 fetched**, so a clean checkout scans nothing
+  twice. Where the two copies of one path **differ**, **both** are scanned -- a CRLF working tree
+  over an LF blob is two byte streams, and the fetch count goes **35 -> 36**. The object-id algorithm
+  is **asked for**, never assumed.
+  **THE KEY IS THE OBJECT ID _AND_ THE DETECTOR THE PATH DISPATCHES TO**, because the detector is a
+  property of the PATH and not of the bytes: an oid-only key let `src/decoy.ts` (source pass, which
+  deliberately does not read `identifier.value`) vouch for an identical `test/__fixtures__/leak.json`
+  (structured scan), and let a declared **sentinel** -- exempt precisely because it carries
+  PHI-shaped strings -- vouch for an identical copy at a path with no exemption. Both printed
+  `OK, no hits` at exit 0 and both are now pinned. A declared path contributes nothing to the
+  observed set, is still enumerated by both routes, and its exemption is still announced, once.
+  **What remains, narrowly:** identical bytes at two in-scope paths with the SAME detector, **EXACTLY
+  one of them read by the WALK**, are one object, reported at whichever the sweep read first; the
+  exit code is unaffected and the next run names the other. **"Exactly", not "at least"** -- the
+  dedup happens once, at the seam between the two routes, and nowhere within either, so walk-x-walk
+  and index-x-index both report BOTH copies and only walk-x-index collapses (all three measured).
+  **THE UNMERGED CASE KEYS ON THE ABSENCE OF STAGE 0**, which is not how `--staged` spots one:
+  `git diff --cached --raw` gives status `U` and mode `000000`, but **`git ls-files -s` gives stages
+  1/2/3 with ORDINARY blob modes and no `U` anywhere**, so taking the first record scans **the merge
+  base** and labels it as what git carries. Every stage is read and labelled with its own number;
+  `--staged` still refuses, unchanged.
+  **A non-blob mode in the index refuses the scan across the NON-MARKDOWN index**, which covers a
+  link or a gitlink **outside** the walk roots (measured, exit 0 on base for both). **Not
+  "repo-wide":** the `.md` filter runs before the mode check, so a gitlink at `vendor/sub.md` or a
+  link at `docs-content/NOTES.md` is exit 0 while the same entry without the suffix is exit 2, and
+  the walk (which refuses by mode regardless of name) differs from this route there. Declared and
+  left open -- a sub-case of the `.md` exemption below, reached by mode instead of by content.
+  **Four escape shapes a sibling reproduced at exit 0 were ALREADY CLOSED here** -- a tracked path
+  occupied by a directory of decoys, a walk root swapped for a decoy directory, most tracked files
+  absent from the working tree, and a gitlink whose working tree is absent -- all four refusing with
+  exit 2 on base, as was the unmerged axis. **Reproducing the state space and reporting what was
+  already shut is the result**; nothing was widened to manufacture a gap.
+  **The two hits the wider corpus produced were answered with declarations, not rules.**
+  `hello@cosyte.com` in `package.json` is now an allowed email domain (ours, so declarable, blast
+  radius one domain); the scanner's own source is a declared sentinel by **literal path**, because
+  the token-level remedy is **global and route-blind** and would admit a plausible real hospital
+  domain in a fixture. **Exclude a literal path; never infer a class.**
+  **A POSITIVE CONTROL** built from this repository's own tracked path list -- same paths, shapes,
+  extensions and in-root/outside-root split, placeholder bytes -- asserts the mirror **clears**, then
+  plants a payload across **every** non-exempt path and asserts **every one is named**, markdown and
+  sentinel paths payload-bearing and silent. The payload is unique per path on purpose: one payload
+  at every path is ONE blob under content-keying. It sweeps in **bounded batches**, with a ceiling
+  asserted on each run's report: the control reads its answer off a report delivered through a pipe,
+  and a report that outruns its reader loses its **tail**, which is indistinguishable from a sweep
+  that stopped early -- at full corpus width it read **129 of 199 paths named on one CI runner** while
+  the other runner at the same commit, and every local run, were green. **Nothing is sampled and
+  nothing left the expected set.**
+  **Declared, not closed, and this one is the GATE and not the control:** the scanner ends in
+  `process.exit()`, which discards writes still pending on a pipe, so a report read by a consumer that
+  does not drain can be a **prefix** of what the sweep found, and the dropped part is always the tail.
+  **The exit code is unaffected** -- hits exit 1, a refusal exits 2 -- so it blocks either way and
+  nothing is reported clean that was not. The one-line assignment that fixes it also stops swallowing
+  `EPIPE`, which turns a **clean** run into exit 1 for a consumer that closes stdout early, so the
+  assignment and the guard it needs are filed together rather than taken here as a side effect.
+  **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes.
+  **No count, no list and no predicate is written down for what those files contain** -- all three
+  were tried in this slice and all three were falsified, the predicate ("documentation about this
+  scanner") by `pnpm exec tsx scripts/phi-scan.ts $(git ls-files '*.md')`, the command it offered as its own
+  proof. Run that command; some of what it names is a diagnostic form that merely parses as an email.
+  Untracked content outside the walk roots stays invisible to both routes; and **`all` mode is now
+  repo-wide (less the markdown exemption) while `--staged` is not**, so the hook and CI disagree by
+  33 tracked files -- the safe
+  direction (CI stricter), left open because widening `--staged` is a **hook** decision about what a
+  commit is BLOCKED on, declined three times across this suite, and not one to take as a side effect.
+  **No library code changed** -- the scanner is a repository gate and ships in no published artifact.
+
 - **`SafetyReadout.unreadableNegationCodes`, and with it the record that content was written where a
   `code` belongs (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit:
   `{"resourceType":"Procedure","status":{"value":"not-done"}}` returned `negations: []` under

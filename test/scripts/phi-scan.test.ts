@@ -1367,3 +1367,505 @@ describe("phi-scan: a sweep refuses to report clean over what it never opened", 
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The bytes git carries, as a UNION with the walk
+// ---------------------------------------------------------------------------
+//
+// The walk reads the WORKING TREE, and that is not what a commit contains. Both
+// halves were measured on this repository before the index route existed, and
+// neither is exotic: a fixture `git add`ed and then scrubbed in the working tree
+// scanned clean at exit 0 while `git commit` would have committed the staged
+// blob; and 33 tracked non-markdown files sat outside `test/` and `src/`
+// altogether, so neither the walk nor `refuseUnobserved` (whose pathspec is
+// limited to the walk roots) ever mentioned them.
+//
+// UNION, NEVER REPLACEMENT. The walk keeps its roots and keeps reading UNTRACKED
+// content under them, which the index cannot see; the index route adds every
+// blob git carries, wherever it carries it.
+
+describe("phi-scan: the sweep reads the bytes git carries, as a union with the walk", () => {
+  /** A committed corpus with one fixture and one source file, both clean. */
+  function corpus(): string {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "__fixtures__", "patient.json"),
+      '{"resourceType":"Patient","name":[{"family":"Chalmers","given":["Peter"]}]}\n',
+    );
+    git(root, ["add", "src/ordinary.ts", "test/__fixtures__/patient.json"]);
+    commit(root, "corpus");
+    return root;
+  }
+
+  it("reads a staged blob whose working-tree copy has been scrubbed clean (exit 1)", () => {
+    const root = corpus();
+    const rel = "test/__fixtures__/probe.json";
+    writeFileSync(
+      join(root, rel),
+      '{"resourceType":"Patient","name":[{"family":"Rivera","given":["Juanita"]}],"birthDate":"1978-03-14"}\n',
+    );
+    git(root, ["add", rel]);
+    // The working tree now says nothing; the index still carries the names, and
+    // the index is what a commit would contain.
+    writeFileSync(join(root, rel), '{"resourceType":"Patient"}\n');
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(`${rel} (as git carries it)`);
+    expect(r.stderr).toContain("Rivera");
+  });
+
+  it("reads a tracked file that sits outside every walk root (exit 1)", () => {
+    const root = corpus();
+    mkdirSync(join(root, "docs-content"), { recursive: true });
+    writeFileSync(join(root, "docs-content", "leak.json"), "SSN: 123-45-6789\n");
+    git(root, ["add", "docs-content/leak.json"]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("docs-content/leak.json (as git carries it)");
+  });
+
+  it("still reads UNTRACKED working-tree content, which the index cannot see (exit 1)", () => {
+    const root = corpus();
+    // Never `git add`ed: the index has no record of it at all, so only the walk
+    // can reach it. This is the half that makes the two routes a union.
+    writeFileSync(join(root, "test", "__fixtures__", "untracked.json"), "SSN: 123-45-6789\n");
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("HIT: test/__fixtures__/untracked.json\n");
+    expect(r.stderr).not.toContain("test/__fixtures__/untracked.json (as git carries it)");
+  });
+
+  it("reads nothing twice: an unmodified tracked file is reported once, not once per route", () => {
+    const root = corpus();
+    const rel = "test/__fixtures__/probe.json";
+    writeFileSync(join(root, rel), "SSN: 123-45-6789\n");
+    git(root, ["add", rel]);
+    // Working tree and index hold the SAME bytes, so they are one blob under
+    // git's `blob <len>\0` framing and the index copy is never fetched.
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(`HIT: ${rel}\n`);
+    expect(r.stderr).not.toContain(`${rel} (as git carries it)`);
+    expect(r.stderr).toContain("1 hit(s) across 1 file(s)");
+  });
+
+  it("identical bytes at two paths with the SAME detector are one blob, and the gate still reds", () => {
+    // The consequence that REMAINS after the key carries the detector, stated
+    // narrowly: two in-scope paths whose bytes AND detector agree are one
+    // object, so the hit is reported at whichever the sweep read first. The
+    // exit code is unaffected, and fixing the reported copy leaves the other
+    // object unobserved, so the next run names it -- convergent and loud, never
+    // a silent pass.
+    const root = corpus();
+    mkdirSync(join(root, "docs-content"), { recursive: true });
+    writeFileSync(join(root, "test", "a.ts"), "SSN: 123-45-6789\n"); // walked; source pass
+    writeFileSync(join(root, "docs-content", "b.ts"), "SSN: 123-45-6789\n"); // index only; source pass
+    git(root, ["add", "test/a.ts", "docs-content/b.ts"]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("1 hit(s) across 1 file(s)");
+    expect(r.stderr).toContain("HIT: test/a.ts");
+
+    // And it converges: fix the reported copy, and the next run names the other.
+    writeFileSync(join(root, "test", "a.ts"), "clean\n");
+    git(root, ["add", "test/a.ts"]);
+    const again = runIn(root, []);
+    expect(again.code, `stdout: ${again.stdout} stderr: ${again.stderr}`).toBe(1);
+    expect(again.stderr).toContain("docs-content/b.ts (as git carries it)");
+  });
+
+  it("a declared SENTINEL's bytes vouch for nothing: an identical copy is still scanned", () => {
+    // A sentinel is exempt BECAUSE it carries realistic-PHI-shaped strings, and
+    // `main` drops it before any detector runs. Letting it into the observed set
+    // would dedup away an identical copy at a path with no exemption -- and not
+    // convergently either, since a sentinel is never "fixed".
+    const root = corpus();
+    mkdirSync(join(root, "docs-content"), { recursive: true });
+    writeFileSync(join(root, "test", "phi-leak.test.ts"), "SSN: 123-45-6789\n");
+    writeFileSync(join(root, "docs-content", "copy.ts"), "SSN: 123-45-6789\n");
+    git(root, ["add", "test/phi-leak.test.ts", "docs-content/copy.ts"]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stdout).toContain("test/phi-leak.test.ts");
+    expect(r.stderr).toContain("docs-content/copy.ts (as git carries it)");
+    // The exemption is still ANNOUNCED, and exactly once, though the path now
+    // reaches the sweep from two enumerations.
+    expect(r.stdout.match(/test\/phi-leak\.test\.ts/g)?.length).toBe(1);
+  });
+
+  it("the dedup key carries the DETECTOR, so a source file cannot vouch for a fixture blob", () => {
+    // `scanTarget` sends a fixture to the structured FHIR scan and a `.ts` file
+    // to the source pass, and the source pass deliberately does not key
+    // `identifier.value` or `telecom.value`. An oid-only key would apply the
+    // weakest detector any path holding those bytes gets.
+    const root = corpus();
+    const doc =
+      '{"resourceType":"Patient",' +
+      '"identifier":[{"system":"http://hl7.org/fhir/sid/us-ssn","value":"123456789"}],' +
+      '"telecom":[{"system":"phone","value":"617-432-1000"}]}\n';
+    writeFileSync(join(root, "test", "__fixtures__", "leak.json"), doc);
+    writeFileSync(join(root, "src", "decoy.ts"), doc);
+    git(root, ["add", "test/__fixtures__/leak.json", "src/decoy.ts"]);
+    // Only the fixture's working copy is scrubbed, so the fixture blob is
+    // reachable through the index alone -- and `src/decoy.ts` holds those very
+    // bytes on disk, where the source pass reads neither field.
+    writeFileSync(join(root, "test", "__fixtures__", "leak.json"), '{"resourceType":"Patient"}\n');
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/__fixtures__/leak.json (as git carries it)");
+    expect(r.stderr).toContain("Patient.identifier.value");
+    expect(r.stderr).toContain("Patient.telecom.value");
+  });
+
+  it("scans BOTH copies when they differ only by line endings (the EOL axis)", () => {
+    const root = corpus();
+    const rel = "test/__fixtures__/probe.json";
+    const abs = join(root, rel);
+    writeFileSync(abs, '{"resourceType":"Patient","name":[{"family":"Rivera"}]}\n');
+    git(root, ["add", rel]);
+    // The same document, byte-for-byte, except for the line endings and one
+    // name. A path-keyed dedup would pick one of these and call it the corpus.
+    writeFileSync(abs, '{"resourceType":"Patient","name":[{"family":"Okonkwo"}]}\r\n');
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("Okonkwo"); // the CRLF working-tree copy
+    expect(r.stderr).toContain("Rivera"); // the LF blob git carries
+    expect(r.stderr).toContain(`${rel} (as git carries it)`);
+  });
+
+  it("refuses a tracked gitlink OUTSIDE every walk root, naming its kind (exit 2)", () => {
+    const root = corpus();
+    git(root, [
+      "update-index",
+      "--add",
+      "--cacheinfo",
+      "160000,0000000000000000000000000000000000000001,vendor/sub",
+    ]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("vendor/sub");
+    expect(r.stderr).toContain("gitlink");
+    expect(r.stderr).not.toMatch(/HIT:/);
+  });
+
+  it("refuses a tracked symbolic link OUTSIDE every walk root, and echoes no target (exit 2)", () => {
+    const root = corpus();
+    mkdirSync(join(root, "docs-content"), { recursive: true });
+    symlinkSync(join("..", TARGET_NAME), join(root, "docs-content", "link.json"));
+    git(root, ["add", "docs-content/link.json"]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("docs-content/link.json");
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+
+  it("does not read a tracked markdown blob either: the exemption is scan-wide", () => {
+    const root = corpus();
+    writeFileSync(join(root, "NOTES.md"), "describes 123-45-6789 as a violator\n");
+    git(root, ["add", "NOTES.md"]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// An unmerged path in all-mode: key on the ABSENCE OF STAGE 0
+// ---------------------------------------------------------------------------
+//
+// `git diff --cached --raw` reports an unmerged path with status `U` and
+// destination mode `000000`, which is how `--staged` spots it. `git ls-files -s`
+// reports the SAME path at stages 1/2/3 with ORDINARY blob modes and no `U`
+// anywhere, so a reader that takes the first record it sees gets STAGE 1, THE
+// MERGE BASE, and reports on it as though it were what git carries. Every stage
+// is read and every stage is labelled with its own number, so none of them can
+// be silently promoted to "the" index copy.
+
+describe("phi-scan: an unmerged path in all-mode is read at every stage", () => {
+  function conflicted(root: string, rel: string, blobs: [string, string, string]): void {
+    const info = blobs
+      .map((content, i) => {
+        const oid = spawnSync("git", ["hash-object", "-w", "--stdin"], {
+          cwd: root,
+          input: content,
+          encoding: "utf8",
+          shell: false,
+        }).stdout.trim();
+        return `100644 ${oid} ${String(i + 1)}\t${rel}`;
+      })
+      .join("\n");
+    const r = spawnSync("git", ["update-index", "--index-info"], {
+      cwd: root,
+      input: info + "\n",
+      encoding: "utf8",
+      shell: false,
+    });
+    if ((r.status ?? -1) !== 0) throw new Error(`update-index failed: ${r.stderr}`);
+  }
+
+  it("finds a payload living ONLY in stage 3, and names the stage (exit 1)", () => {
+    const root = makeRepo();
+    git(root, ["add", "src/ordinary.ts"]);
+    commit(root, "corpus");
+    const rel = "test/__fixtures__/probe.json";
+    conflicted(root, rel, [
+      '{"resourceType":"Patient","id":"base"}\n',
+      '{"resourceType":"Patient","id":"ours"}\n',
+      '{"resourceType":"Patient","name":[{"family":"Rivera"}]}\n',
+    ]);
+    writeFileSync(join(root, rel), '{"resourceType":"Patient","id":"merged"}\n');
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(`${rel} (index stage 3)`);
+    expect(r.stderr).toContain("Rivera");
+    // The merge base is never labelled as what git carries.
+    expect(r.stderr).not.toContain(`${rel} (as git carries it)`);
+  });
+
+  it("labels the MERGE BASE as stage 1 rather than as what git carries (exit 1)", () => {
+    const root = makeRepo();
+    git(root, ["add", "src/ordinary.ts"]);
+    commit(root, "corpus");
+    const rel = "test/__fixtures__/probe.json";
+    conflicted(root, rel, [
+      '{"resourceType":"Patient","name":[{"family":"Okonkwo"}]}\n',
+      '{"resourceType":"Patient","id":"ours"}\n',
+      '{"resourceType":"Patient","id":"theirs"}\n',
+    ]);
+    writeFileSync(join(root, rel), '{"resourceType":"Patient","id":"merged"}\n');
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(`${rel} (index stage 1)`);
+    expect(r.stderr).not.toContain(`${rel} (as git carries it)`);
+  });
+
+  it("the --staged route still REFUSES over the same index, which is unchanged (exit 2)", () => {
+    const root = makeRepo();
+    git(root, ["add", "src/ordinary.ts"]);
+    commit(root, "corpus");
+    const rel = "test/__fixtures__/probe.json";
+    conflicted(root, rel, [
+      '{"resourceType":"Patient","id":"base"}\n',
+      '{"resourceType":"Patient","id":"ours"}\n',
+      '{"resourceType":"Patient","name":[{"family":"Rivera"}]}\n',
+    ]);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("unmerged");
+    expectNoPhi(r.stderr);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// THE POSITIVE CONTROL
+// ---------------------------------------------------------------------------
+//
+// A gate never seen red is indistinguishable from one that cannot go red, and
+// this class of defect is exactly a gate reporting `OK, no hits` over a corpus
+// it never opened. So the control is built from THIS repository's own tracked
+// path list rather than from a hand-written sample: same paths, same directory
+// shapes, same extensions, same walk-root / outside-walk-root split. It answers
+// the only question that matters about a green run, which is whether the sweep
+// can fire on the corpus it claims to clear.
+//
+// The mirror carries placeholder bytes, not this repository's content, so no
+// fixture is copied anywhere and nothing here can leak the corpus.
+
+describe("phi-scan: the positive control fires on this repository's own corpus shape", () => {
+  const SENTINELS = new Set([
+    "test/phi-leak.test.ts",
+    "test/scripts/phi-scan.test.ts",
+    "scripts/phi-scan.ts",
+  ]);
+  const ALLOW_LIST_REL = "scripts/phi-allow-list.txt";
+
+  /** Every path this repository tracks, forward-slash, in index order. */
+  function realTrackedPaths(): string[] {
+    return gitOut(REPO_ROOT, ["ls-files", "-z"])
+      .split("\0")
+      .filter((p) => p.length > 0);
+  }
+
+  /** A repo with THIS repository's paths and placeholder contents. */
+  function mirror(contentFor: (path: string) => string): { root: string; paths: string[] } {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "fhir-phi-scan-mirror-")));
+    repos.push(root);
+    const paths = realTrackedPaths();
+    for (const rel of paths) {
+      const abs = join(root, ...rel.split("/"));
+      mkdirSync(join(abs, ".."), { recursive: true });
+      writeFileSync(abs, contentFor(rel));
+    }
+    git(root, ["init", "-q", "."]);
+    // A throwaway repo runs no hooks. The mirror reproduces every tracked path,
+    // `.npmrc` among them, and a developer machine or CI image may carry a
+    // global pre-commit hook with an opinion about such a filename. That is an
+    // opinion about the developer's environment, not about this scanner.
+    git(root, ["config", "core.hooksPath", join(root, ".no-hooks")]);
+    git(root, ["add", "-A"]);
+    commit(root, "mirror");
+    return { root, paths };
+  }
+
+  /** The real allow-list, so the scanner can start; placeholder for everything else. */
+  const REAL_ALLOW_LIST = readFileSync(join(REPO_ROOT, ALLOW_LIST_REL), "utf8");
+  const clean = (rel: string): string =>
+    rel === ALLOW_LIST_REL ? REAL_ALLOW_LIST : "placeholder\n";
+
+  it("mirrors a corpus the scanner CLEARS, so a hit below is the payload and not the shape", () => {
+    const { root, paths } = mirror(clean);
+    expect(paths.length).toBeGreaterThan(100);
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("OK, no hits");
+  });
+
+  /**
+   * How many payload-bearing paths ONE run of the control is allowed to report.
+   *
+   * THE CONTROL'S QUESTION IS "DID THE SWEEP OPEN THIS PATH", AND IT READS THE
+   * ANSWER OFF A REPORT DELIVERED THROUGH A PIPE, WHICH IS A SECOND VARIABLE.
+   * The scanner ends in `process.exit(exitCode)`, and `process.exit()` discards
+   * writes still pending on a pipe, so a report large enough to outrun its
+   * reader loses its TAIL -- and a missing tail is indistinguishable here from a
+   * sweep that stopped early. That is measured, not hypothetical: with the
+   * payload at every non-exempt path at once the report runs to tens of
+   * kilobytes, and this case came back with 129 of 199 paths named on Node 24
+   * while the Node 22 runner at the SAME commit, and every local run, were
+   * green. The reading "the walk stopped partway through `src/`" was wrong; the
+   * WRITE stopped.
+   *
+   * So the corpus is swept in BOUNDED BATCHES. Nothing is sampled and nothing
+   * leaves the expected set -- every non-exempt tracked path is still asserted
+   * to be named, and every exempt one is still asserted to be silent WHILE hits
+   * are being reported -- but no single run emits a report big enough for a pipe
+   * to have an opinion about it. `REPORT_CEILING` is asserted per run so the
+   * bound stays real: it is one page, the smallest buffer Linux hands a pipe
+   * when a machine is under pressure.
+   *
+   * THE MARGIN IS THINNER THAN THE CEILING MAKES IT LOOK, AND A GATE CORRECTED
+   * A CLAIM HERE THAT IT WAS "WELL UNDER HALF". The widest batch in the corpus
+   * as it stands measures 2,065 bytes, which is just OVER half of 4,096, and
+   * what makes it the widest is composition rather than width: an `.ndjson`
+   * fixture reports several times what a `.json` one does, so a batch that
+   * happened to hold eight of them would compute close to the ceiling. That
+   * direction is a RED, not a false green, and the message names the lever --
+   * but lower `BATCH_PATHS` rather than raise `REPORT_CEILING` if it ever fires.
+   *
+   * WHAT ONE RUN NO LONGER EXERCISES, STATED SO IT IS NOT DISCOVERED LATER: the
+   * old case pushed the whole corpus through one `report()`, one
+   * `git cat-file --batch` and one pipe. A defect that only appears at that
+   * scale -- a cap on hits reported, a framing slip at a buffer boundary -- is
+   * no longer reachable from here. There is no such cap in `report()` today; if
+   * one is ever added, this case is not what will catch it.
+   *
+   * The wall-clock cost is quadratic in the corpus (`ceil(N / BATCH_PATHS)` runs
+   * each mirroring all N tracked paths), which is why the timeout below is
+   * generous rather than tight: it is ~7s today and is a ceiling on the machine,
+   * not a measurement of the corpus.
+   *
+   * DO NOT CONCLUDE FROM ANY OF THIS THAT `spawnSync` CANNOT SEE THE
+   * TRUNCATION, OR THAT A CONTROL BUILT ON IT WOULD BE VACUOUS. This control is
+   * built on `spawnSync` (`runIn`) and it is precisely what caught the defect.
+   * The truncation is a race, so what a `spawnSync` reader sees is
+   * NON-DETERMINISTIC -- which is a reason to keep the report bounded HERE, and
+   * no reason at all to weaken or abandon the control.
+   */
+  const BATCH_PATHS = 8;
+  const REPORT_CEILING = 4096;
+
+  it("fires on EVERY tracked path that is not exempt", () => {
+    // THE PAYLOAD IS MADE UNIQUE PER PATH ON PURPOSE. Dedup is by CONTENT under
+    // git's own blob framing, so ONE payload written to EVERY path is ONE blob,
+    // scanned once and reported at one path -- correct behaviour, and it would
+    // make this case assert nothing about any of the others. Suffixing the path
+    // gives every file its own object, which is what the corpus really looks
+    // like.
+    //
+    // NO COUNT IS WRITTEN HERE, DELIBERATELY. This comment carried two ("248
+    // paths", "the other 247"): the count at the BASE commit, which this slice's
+    // own three added files falsified before it shipped. The mirror is built
+    // from `git ls-files` at run time, so any count here is a claim about a
+    // corpus that moves. The assertions below are count-free for the same
+    // reason: they derive the expected set from `git ls-files` at run time, and
+    // only floor it.
+    const payloadFor = (rel: string): string => `${SYNTHETIC_PHI}at ${rel}\n`;
+
+    const all = realTrackedPaths();
+    // Markdown is exempt scan-wide and the three sentinel files are declared, so
+    // those are the paths a green run is ALLOWED to say nothing about. Every
+    // other tracked path must appear.
+    const exempt = new Set(all.filter((p) => p.toLowerCase().endsWith(".md") || SENTINELS.has(p)));
+    const expected = all.filter((p) => !exempt.has(p));
+    expect(expected.length).toBeGreaterThan(100);
+
+    const missed: string[] = [];
+    for (let i = 0; i < expected.length; i += BATCH_PATHS) {
+      const batch = new Set(expected.slice(i, i + BATCH_PATHS));
+      // EVERY EXEMPT PATH CARRIES THE PAYLOAD IN EVERY RUN, not just in one of
+      // them: the exempt paths have to be silent WHILE the scanner is reporting,
+      // or "silent" would only mean "silent in a run with nothing to say". They
+      // cost the report nothing, which is what lets them ride along in a batch.
+      const { root } = mirror((rel) => {
+        if (!batch.has(rel) && !exempt.has(rel)) return clean(rel);
+        const payload = payloadFor(rel);
+        return rel === ALLOW_LIST_REL ? `${REAL_ALLOW_LIST}\n${payload}` : payload;
+      });
+
+      const r = runIn(root, []);
+      expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+      // The exempt ones really are silent, which is what makes the list below a
+      // measurement rather than a tautology. Asserted BEFORE the bound: an
+      // exemption that stopped holding blows the report up too, and it should
+      // report as itself rather than as a budget overrun.
+      for (const p of exempt) expect(r.stderr).not.toContain(`HIT: ${p}`);
+      // `HIT: ${p}` rather than a bare substring: a tracked path can be a prefix
+      // of another (`README.md` of `.changeset/README.md`), and a bare
+      // `includes` would then let one path's hit stand in for the other's.
+      for (const p of batch) if (!r.stderr.includes(`HIT: ${p}`)) missed.push(p);
+      expect(
+        Buffer.byteLength(r.stderr),
+        "a run's report outgrew the bound that keeps this case deterministic",
+      ).toBeLessThan(REPORT_CEILING);
+    }
+    expect(missed, `paths the sweep never reported: ${missed.join(", ")}`).toEqual([]);
+  }, 180_000);
+
+  it("fires on a path outside every walk root through the INDEX, not the walk", () => {
+    // The sharp half: with the payload only in the blob, the working tree is
+    // clean everywhere and the walk has nothing to find outside its roots.
+    const { root, paths } = mirror(clean);
+    const outside = paths.filter(
+      (p) =>
+        !p.startsWith("test/") &&
+        !p.startsWith("src/") &&
+        !p.toLowerCase().endsWith(".md") &&
+        !SENTINELS.has(p) &&
+        p !== ALLOW_LIST_REL,
+    );
+    expect(outside.length).toBeGreaterThan(10);
+    const rel = outside[0] ?? "";
+    const abs = join(root, ...rel.split("/"));
+    writeFileSync(abs, SYNTHETIC_PHI);
+    git(root, ["add", rel]);
+    writeFileSync(abs, "placeholder\n"); // scrub the working tree
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(`${rel} (as git carries it)`);
+  });
+});
