@@ -84,10 +84,17 @@ sits outside every walk root, so no route opened it before this change.
 A positive control is added, built from this repository's own tracked path list rather than a
 hand-written sample: same paths, same directory shapes, same extensions, same in-root and
 outside-root split, with placeholder bytes so no fixture is copied anywhere. It asserts the mirror
-clears, then plants a payload in every non-exempt path at once and asserts every one of them is
-named in a single run, with the markdown and sentinel paths silent. The payload is made unique per
+clears, then plants a payload across every non-exempt path and asserts every one of them is named,
+with the markdown and sentinel paths payload-bearing and silent. The payload is made unique per
 path deliberately: one payload written to every path is a single blob under content-keying, scanned
 once, and the case would then assert nothing about the rest.
+
+The control sweeps that corpus in bounded batches rather than in one run, and asserts a ceiling on
+each run's report. It reads its answer off a report delivered through a pipe, and a report large
+enough to outrun its reader loses its tail, which a case asking "is this path named" cannot tell
+from a sweep that stopped early: at full corpus width it came back 129 of 199 paths named on one CI
+runner while the other runner at the same commit, and every local run, were green. Batching bounds
+what any single run has to deliver. Nothing is sampled and nothing left the expected set.
 
 Declared and not closed: the markdown exemption still hides a payload at any depth on both routes,
 which is the design. No count, no list and no predicate is written down for what those files

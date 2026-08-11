@@ -120,9 +120,9 @@ the pass that found this finding also found four more.
 A gate never seen red is indistinguishable from one that cannot go red. So the control is built from
 **this repository's own tracked path list**: same paths, same directory shapes, same extensions,
 same in-root / outside-root split, with placeholder bytes so no fixture is copied anywhere. It
-asserts the mirror **clears** (so a hit is the payload and not the shape), then plants a payload in
-**every** non-exempt path at once and asserts **every one of them is named in a single run**, with
-the markdown and sentinel paths silent. **The payload is made unique per path on purpose**: one
+asserts the mirror **clears** (so a hit is the payload and not the shape), then plants a payload
+across **every** non-exempt path and asserts **every one of them is named**, with the markdown and
+sentinel paths payload-bearing and silent. **The payload is made unique per path on purpose**: one
 payload written to every path is ONE blob under content-keying, scanned once, and the case would then
 assert nothing about the rest. A third arm plants the payload only in an **index blob** at a path
 outside every walk root and scrubs the working copy, so only the new route can find it.
@@ -130,6 +130,48 @@ outside every walk root and scrubs the working copy, so only the new route can f
 The mirror sets `core.hooksPath` to a path that does not exist. It reproduces every tracked path,
 `.npmrc` among them, and a developer machine or CI image may carry a global pre-commit hook with an
 opinion about such a filename, which is an opinion about the environment, not about this scanner.
+
+## The control reads its answer through a PIPE, so it sweeps in BOUNDED BATCHES
+
+**THE REPORT IS A SECOND VARIABLE, AND IT ONCE ANSWERED FOR THE SWEEP.** `process.exit()` discards
+writes still pending on a pipe, and stderr is a pipe, so a report large enough to outrun its reader
+loses its **tail** -- and a missing tail is the same string, to a case asking "is this path named",
+as a sweep that stopped early. Measured: with the payload at every non-exempt path at once the report
+runs to tens of kilobytes, and this control came back **129 of 199 paths named on the Node 24 CI
+runner while the Node 22 runner at the same commit, and every local run, were green**. The shape read
+as "the walk stopped partway through `src/`". The walk had not stopped. The write had.
+
+So the control sweeps the corpus in **bounded batches**. One run plants the payload at a bounded
+number of non-exempt paths, plus **every** exempt path -- those cost the report nothing, and carrying
+them in every run is what keeps "silent" meaning "silent _while_ the scanner is reporting" -- and the
+batches cover the whole non-exempt set. **Nothing is sampled and nothing left the expected set.** A
+**per-run ceiling on the report's byte length is asserted**, so the bound is enforced and not merely
+intended: widen the payload or the per-hit output far enough and the case reds instead of going
+flaky again. The ceiling is one page, the smallest buffer Linux hands a pipe under memory pressure.
+
+⚖️ **DO NOT READ ANY OF THIS AS "`spawnSync` CANNOT SEE THE TRUNCATION" OR AS "A CONTROL BUILT ON IT
+WOULD BE VACUOUS". BOTH ARE FALSE, AND A DRAFT OF THIS FILE ASSERTED THEM.** This control runs on
+`spawnSync` (`runIn`) and it is precisely what caught the defect. What such a reader sees under the
+race is **non-deterministic**, which is a reason to bound the report here and no reason at all to
+weaken the control or to reach for a different spawn.
+
+🛑 **THE TRUNCATION ITSELF IS NOT FIXED HERE, AND `process.exit(exitCode)` STAYS.** Assigning
+`process.exitCode` instead does fix the report, measured (445 of 2,000 hit lines to 2,000 of 2,000),
+but it also drops the `EPIPE` swallowing `process.exit()` was doing for free: with a consumer that
+closes stdout early (`pnpm phi-scan | head -1`) a **clean** run then exits **1**, which is this
+gate's code for HITS FOUND, and prints a stack trace where the report belongs -- measured 5 of 5,
+plain `node` and through `tsx`. The assignment **and** a `process.stdout.on("error", ...)` guard are
+one pair, filed as their own item with their own gate passes. **Do not reintroduce half of it here.**
+
+**Two measured corrections for whoever takes that item.** The pin for it spawns the scanner with a
+reader that stays PAUSED until the pipe has filled, and reds at 9,776 bytes of a 130,000-byte report
+with `process.exit` in place. Its draft justified calling `pause()` a second time, after the `data`
+listener is attached, by claiming that without it the case drains from the start and passes over the
+defect it exists to catch: **that is false, falsified 3 of 3** -- with the second call deleted the
+mutation still reds at the identical 9,776 bytes. The second `pause()` is determinism hardening, not
+what makes the case able to fail. And the fix arrived at the FOURTH pass of a four-pass cap, so its
+own regression had no pass left to grade a repair. **That shape, not the defect, is why this branch
+was cut back.**
 
 ## Declared, not closed
 

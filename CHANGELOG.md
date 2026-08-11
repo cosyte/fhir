@@ -59,9 +59,14 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   domain in a fixture. **Exclude a literal path; never infer a class.**
   **A POSITIVE CONTROL** built from this repository's own tracked path list -- same paths, shapes,
   extensions and in-root/outside-root split, placeholder bytes -- asserts the mirror **clears**, then
-  plants a payload in **every** non-exempt path at once and asserts **every one is named in a single
-  run**, markdown and sentinel paths silent. The payload is unique per path on purpose: one payload
-  at every path is ONE blob under content-keying.
+  plants a payload across **every** non-exempt path and asserts **every one is named**, markdown and
+  sentinel paths payload-bearing and silent. The payload is unique per path on purpose: one payload
+  at every path is ONE blob under content-keying. It sweeps in **bounded batches**, with a ceiling
+  asserted on each run's report: the control reads its answer off a report delivered through a pipe,
+  and a report that outruns its reader loses its **tail**, which is indistinguishable from a sweep
+  that stopped early -- at full corpus width it read **129 of 199 paths named on one CI runner** while
+  the other runner at the same commit, and every local run, were green. **Nothing is sampled and
+  nothing left the expected set.**
   **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes.
   **No count, no list and no predicate is written down for what those files contain** -- all three
   were tried in this slice and all three were falsified, the predicate ("documentation about this

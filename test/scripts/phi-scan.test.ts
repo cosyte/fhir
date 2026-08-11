@@ -1734,7 +1734,42 @@ describe("phi-scan: the positive control fires on this repository's own corpus s
     expect(r.stdout).toContain("OK, no hits");
   });
 
-  it("fires on EVERY tracked path that is not exempt, in one run", () => {
+  /**
+   * How many payload-bearing paths ONE run of the control is allowed to report.
+   *
+   * THE CONTROL'S QUESTION IS "DID THE SWEEP OPEN THIS PATH", AND IT READS THE
+   * ANSWER OFF A REPORT DELIVERED THROUGH A PIPE, WHICH IS A SECOND VARIABLE.
+   * The scanner ends in `process.exit(exitCode)`, and `process.exit()` discards
+   * writes still pending on a pipe, so a report large enough to outrun its
+   * reader loses its TAIL -- and a missing tail is indistinguishable here from a
+   * sweep that stopped early. That is measured, not hypothetical: with the
+   * payload at every non-exempt path at once the report runs to tens of
+   * kilobytes, and this case came back with 129 of 199 paths named on Node 24
+   * while the Node 22 runner at the SAME commit, and every local run, were
+   * green. The reading "the walk stopped partway through `src/`" was wrong; the
+   * WRITE stopped.
+   *
+   * So the corpus is swept in BOUNDED BATCHES. Nothing is sampled and nothing
+   * leaves the expected set -- every non-exempt tracked path is still asserted
+   * to be named, and every exempt one is still asserted to be silent WHILE hits
+   * are being reported -- but no single run emits a report big enough for a pipe
+   * to have an opinion about it. `REPORT_CEILING` is asserted per run so the
+   * bound stays real: it is one page, the smallest buffer Linux hands a pipe
+   * when a machine is under pressure, and a batch's report measures well under
+   * half of it. Widen the payload or the per-hit output far enough and this reds
+   * instead of going flaky again.
+   *
+   * DO NOT CONCLUDE FROM ANY OF THIS THAT `spawnSync` CANNOT SEE THE
+   * TRUNCATION, OR THAT A CONTROL BUILT ON IT WOULD BE VACUOUS. This control is
+   * built on `spawnSync` (`runIn`) and it is precisely what caught the defect.
+   * The truncation is a race, so what a `spawnSync` reader sees is
+   * NON-DETERMINISTIC -- which is a reason to keep the report bounded HERE, and
+   * no reason at all to weaken or abandon the control.
+   */
+  const BATCH_PATHS = 8;
+  const REPORT_CEILING = 4096;
+
+  it("fires on EVERY tracked path that is not exempt", () => {
     // THE PAYLOAD IS MADE UNIQUE PER PATH ON PURPOSE. Dedup is by CONTENT under
     // git's own blob framing, so ONE payload written to EVERY path is ONE blob,
     // scanned once and reported at one path -- correct behaviour, and it would
@@ -1748,32 +1783,47 @@ describe("phi-scan: the positive control fires on this repository's own corpus s
     // from `git ls-files` at run time, so any count here is a claim about a
     // corpus that moves. The assertions below are count-free for the same
     // reason: they derive the expected set from `paths` and only floor it.
-    const { root, paths } = mirror((rel) => {
-      const payload = `${SYNTHETIC_PHI}at ${rel}\n`;
-      return rel === ALLOW_LIST_REL ? `${REAL_ALLOW_LIST}\n${payload}` : payload;
-    });
+    const payloadFor = (rel: string): string => `${SYNTHETIC_PHI}at ${rel}\n`;
 
-    const r = runIn(root, []);
-    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
-
+    const all = realTrackedPaths();
     // Markdown is exempt scan-wide and the three sentinel files are declared, so
     // those are the paths a green run is ALLOWED to say nothing about. Every
     // other tracked path must appear.
-    const expected = paths.filter((p) => !p.toLowerCase().endsWith(".md") && !SENTINELS.has(p));
+    const exempt = new Set(all.filter((p) => p.toLowerCase().endsWith(".md") || SENTINELS.has(p)));
+    const expected = all.filter((p) => !exempt.has(p));
     expect(expected.length).toBeGreaterThan(100);
-    // `HIT: ${p}` rather than a bare substring: a tracked path can be a prefix
-    // of another (`README.md` of `.changeset/README.md`), and a bare `includes`
-    // would then let one path's hit stand in for the other's.
-    const missed = expected.filter((p) => !r.stderr.includes(`HIT: ${p}`));
-    expect(missed, `paths the sweep never reported: ${missed.join(", ")}`).toEqual([]);
 
-    // And the exempt ones really are silent, which is what makes the list above
-    // a measurement rather than a tautology.
-    for (const p of paths.filter((q) => q.toLowerCase().endsWith(".md"))) {
-      expect(r.stderr).not.toContain(`HIT: ${p}`);
+    const missed: string[] = [];
+    for (let i = 0; i < expected.length; i += BATCH_PATHS) {
+      const batch = new Set(expected.slice(i, i + BATCH_PATHS));
+      // EVERY EXEMPT PATH CARRIES THE PAYLOAD IN EVERY RUN, not just in one of
+      // them: the exempt paths have to be silent WHILE the scanner is reporting,
+      // or "silent" would only mean "silent in a run with nothing to say". They
+      // cost the report nothing, which is what lets them ride along in a batch.
+      const { root } = mirror((rel) => {
+        if (!batch.has(rel) && !exempt.has(rel)) return clean(rel);
+        const payload = payloadFor(rel);
+        return rel === ALLOW_LIST_REL ? `${REAL_ALLOW_LIST}\n${payload}` : payload;
+      });
+
+      const r = runIn(root, []);
+      expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+      // The exempt ones really are silent, which is what makes the list below a
+      // measurement rather than a tautology. Asserted BEFORE the bound: an
+      // exemption that stopped holding blows the report up too, and it should
+      // report as itself rather than as a budget overrun.
+      for (const p of exempt) expect(r.stderr).not.toContain(`HIT: ${p}`);
+      // `HIT: ${p}` rather than a bare substring: a tracked path can be a prefix
+      // of another (`README.md` of `.changeset/README.md`), and a bare
+      // `includes` would then let one path's hit stand in for the other's.
+      for (const p of batch) if (!r.stderr.includes(`HIT: ${p}`)) missed.push(p);
+      expect(
+        Buffer.byteLength(r.stderr),
+        "a run's report outgrew the bound that keeps this case deterministic",
+      ).toBeLessThan(REPORT_CEILING);
     }
-    for (const p of SENTINELS) expect(r.stderr).not.toContain(`HIT: ${p}`);
-  });
+    expect(missed, `paths the sweep never reported: ${missed.join(", ")}`).toEqual([]);
+  }, 180_000);
 
   it("fires on a path outside every walk root through the INDEX, not the walk", () => {
     // The sharp half: with the payload only in the blob, the working tree is
