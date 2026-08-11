@@ -149,22 +149,38 @@ batches cover the whole non-exempt set. **Nothing is sampled and nothing left th
 intended: widen the payload or the per-hit output far enough and the case reds instead of going
 flaky again. The ceiling is one page, the smallest buffer Linux hands a pipe under memory pressure.
 
+**THE MARGIN IS THINNER THAN THAT CEILING MAKES IT LOOK, AND A GATE CORRECTED A DRAFT WHICH SAID THE
+WIDEST BATCH WAS "WELL UNDER HALF" OF IT.** It is 2,065 bytes against 4,096, which is just **over**
+half, and what makes a batch the widest is **composition, not width**: an `.ndjson` fixture reports
+several times what a `.json` one does, so eight of them in one batch would compute near the ceiling.
+The direction is a red rather than a false green, and the fix when it fires is to **lower the batch
+width, never to raise the ceiling**. Two things one run no longer exercises, stated here so they are
+not discovered as a surprise: the whole corpus through a single `report()`, and through a single
+`git cat-file --batch`. There is no cap on hits reported today; if one is ever added, this case is
+not what catches it.
+
 ⚖️ **DO NOT READ ANY OF THIS AS "`spawnSync` CANNOT SEE THE TRUNCATION" OR AS "A CONTROL BUILT ON IT
 WOULD BE VACUOUS". BOTH ARE FALSE, AND A DRAFT OF THIS FILE ASSERTED THEM.** This control runs on
 `spawnSync` (`runIn`) and it is precisely what caught the defect. What such a reader sees under the
 race is **non-deterministic**, which is a reason to bound the report here and no reason at all to
 weaken the control or to reach for a different spawn.
 
-🛑 **THE TRUNCATION ITSELF IS NOT FIXED HERE, AND `process.exit(exitCode)` STAYS.** Assigning
-`process.exitCode` instead does fix the report, measured (445 of 2,000 hit lines to 2,000 of 2,000),
-but it also drops the `EPIPE` swallowing `process.exit()` was doing for free: with a consumer that
+🛑 **THE TRUNCATION ITSELF IS NOT FIXED HERE, AND `process.exit(exitCode)` STAYS.** So `pnpm
+phi-scan` read by a consumer that does not drain can still print a **prefix** of its own findings:
+that is an open gap of the shipped gate, not only of this control. **The exit code is unaffected**
+(hits 1, refusal 2), so it blocks either way and no false green follows from it. Assigning
+`process.exitCode` instead does fix the report, measured (445 of 2,000 hit lines to 2,000 of 2,000 --
+a **single sample of a racy quantity**; another run of the same corpus survived 379 of 2,000, and
+neither number is a constant), but it also drops the `EPIPE` swallowing `process.exit()` was doing
+for free: with a consumer that
 closes stdout early (`pnpm phi-scan | head -1`) a **clean** run then exits **1**, which is this
 gate's code for HITS FOUND, and prints a stack trace where the report belongs -- measured 5 of 5,
 plain `node` and through `tsx`. The assignment **and** a `process.stdout.on("error", ...)` guard are
 one pair, filed as their own item with their own gate passes. **Do not reintroduce half of it here.**
 
-**Two measured corrections for whoever takes that item.** The pin for it spawns the scanner with a
-reader that stays PAUSED until the pipe has filled, and reds at 9,776 bytes of a 130,000-byte report
+**Two measured corrections for whoever takes that item.** The pin written for it -- reverted out of
+this tree with the rest of that change, so do not go looking for it here -- spawned the scanner with
+a reader that stays PAUSED until the pipe has filled, and red at 9,776 bytes of a 130,000-byte report
 with `process.exit` in place. Its draft justified calling `pause()` a second time, after the `data`
 listener is attached, by claiming that without it the case drains from the start and passes over the
 defect it exists to catch: **that is false, falsified 3 of 3** -- with the second call deleted the

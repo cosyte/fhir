@@ -67,6 +67,13 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   that stopped early -- at full corpus width it read **129 of 199 paths named on one CI runner** while
   the other runner at the same commit, and every local run, were green. **Nothing is sampled and
   nothing left the expected set.**
+  **Declared, not closed, and this one is the GATE and not the control:** the scanner ends in
+  `process.exit()`, which discards writes still pending on a pipe, so a report read by a consumer that
+  does not drain can be a **prefix** of what the sweep found, and the dropped part is always the tail.
+  **The exit code is unaffected** -- hits exit 1, a refusal exits 2 -- so it blocks either way and
+  nothing is reported clean that was not. The one-line assignment that fixes it also stops swallowing
+  `EPIPE`, which turns a **clean** run into exit 1 for a consumer that closes stdout early, so the
+  assignment and the guard it needs are filed together rather than taken here as a side effect.
   **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes.
   **No count, no list and no predicate is written down for what those files contain** -- all three
   were tried in this slice and all three were falsified, the predicate ("documentation about this

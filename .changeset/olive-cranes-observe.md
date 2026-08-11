@@ -96,6 +96,15 @@ from a sweep that stopped early: at full corpus width it came back 129 of 199 pa
 runner while the other runner at the same commit, and every local run, were green. Batching bounds
 what any single run has to deliver. Nothing is sampled and nothing left the expected set.
 
+Declared and not closed, and this one is the gate itself rather than the control: the scanner ends
+by calling `process.exit()`, which discards writes still pending on a pipe, so a report read by a
+consumer that does not drain can be a prefix of what the sweep actually found. The exit code is
+unaffected -- hits exit 1 and a refusal exits 2 either way, so it blocks either way and no run is
+reported clean that was not -- but the part dropped is always the tail. The one-line assignment that
+fixes it also stops swallowing `EPIPE`, which turns a clean run into exit 1 for a consumer that
+closes stdout early, so the assignment and the guard it needs are filed together rather than taken
+here as a side effect.
+
 Declared and not closed: the markdown exemption still hides a payload at any depth on both routes,
 which is the design. No count, no list and no predicate is written down for what those files
 contain, deliberately: all three were tried inside this slice and all three were falsified. A draft

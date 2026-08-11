@@ -1755,9 +1755,28 @@ describe("phi-scan: the positive control fires on this repository's own corpus s
    * are being reported -- but no single run emits a report big enough for a pipe
    * to have an opinion about it. `REPORT_CEILING` is asserted per run so the
    * bound stays real: it is one page, the smallest buffer Linux hands a pipe
-   * when a machine is under pressure, and a batch's report measures well under
-   * half of it. Widen the payload or the per-hit output far enough and this reds
-   * instead of going flaky again.
+   * when a machine is under pressure.
+   *
+   * THE MARGIN IS THINNER THAN THE CEILING MAKES IT LOOK, AND A GATE CORRECTED
+   * A CLAIM HERE THAT IT WAS "WELL UNDER HALF". The widest batch in the corpus
+   * as it stands measures 2,065 bytes, which is just OVER half of 4,096, and
+   * what makes it the widest is composition rather than width: an `.ndjson`
+   * fixture reports several times what a `.json` one does, so a batch that
+   * happened to hold eight of them would compute close to the ceiling. That
+   * direction is a RED, not a false green, and the message names the lever --
+   * but lower `BATCH_PATHS` rather than raise `REPORT_CEILING` if it ever fires.
+   *
+   * WHAT ONE RUN NO LONGER EXERCISES, STATED SO IT IS NOT DISCOVERED LATER: the
+   * old case pushed the whole corpus through one `report()`, one
+   * `git cat-file --batch` and one pipe. A defect that only appears at that
+   * scale -- a cap on hits reported, a framing slip at a buffer boundary -- is
+   * no longer reachable from here. There is no such cap in `report()` today; if
+   * one is ever added, this case is not what will catch it.
+   *
+   * The wall-clock cost is quadratic in the corpus (`ceil(N / BATCH_PATHS)` runs
+   * each mirroring all N tracked paths), which is why the timeout below is
+   * generous rather than tight: it is ~7s today and is a ceiling on the machine,
+   * not a measurement of the corpus.
    *
    * DO NOT CONCLUDE FROM ANY OF THIS THAT `spawnSync` CANNOT SEE THE
    * TRUNCATION, OR THAT A CONTROL BUILT ON IT WOULD BE VACUOUS. This control is
@@ -1782,7 +1801,8 @@ describe("phi-scan: the positive control fires on this repository's own corpus s
     // own three added files falsified before it shipped. The mirror is built
     // from `git ls-files` at run time, so any count here is a claim about a
     // corpus that moves. The assertions below are count-free for the same
-    // reason: they derive the expected set from `paths` and only floor it.
+    // reason: they derive the expected set from `git ls-files` at run time, and
+    // only floor it.
     const payloadFor = (rel: string): string => `${SYNTHETIC_PHI}at ${rel}\n`;
 
     const all = realTrackedPaths();
