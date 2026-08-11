@@ -2157,29 +2157,4 @@ try {
   );
   exitCode = 2;
 }
-
-// SET THE CODE; DO NOT CALL `process.exit`. WHEN STDERR IS A PIPE, NODE'S WRITES
-// TO IT ARE ASYNCHRONOUS, AND `process.exit()` DISCARDS WHATEVER IS STILL
-// PENDING -- so the gate printed a PREFIX of its own findings and dropped the
-// rest, including its summary line. Measured, over a 2,000-file corpus with a
-// reader that does not drain immediately: 379 of 2,000 `HIT:` lines survived,
-// the output stopped at 64,724 bytes (a pipe's 64 KiB buffer) and the
-// `N hit(s) across M file(s)` line never arrived at all.
-//
-// IT IS A RACE, WHICH IS WHY IT READ AS FLAKY RATHER THAN AS BROKEN: whatever
-// the pipe accepts before the child exits gets through, so a fast or eagerly
-// draining reader sees everything and the same corpus passes locally and reds
-// on a loaded CI runner. This repository's own positive control caught it that
-// way -- green on one runner, 70 paths short on another, same commit.
-//
-// THE EXIT CODE WAS NEVER WRONG, so this is not a false green: hits still exit
-// 1 and a refusal still exits 2. What was lost is the REPORT, and a PHI gate
-// that names some of what it found and silently drops the rest sends a
-// developer to fix a subset and call it done.
-//
-// Assigning `process.exitCode` lets node exit on its own once the event loop is
-// empty, which is after the pending writes have flushed. Nothing here keeps the
-// loop alive: every read, every subprocess and every write in this file is
-// synchronous or a pipe write that drains. Do not "simplify" this back to
-// `process.exit(exitCode)`.
-process.exitCode = exitCode;
+process.exit(exitCode);

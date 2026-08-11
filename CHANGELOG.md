@@ -62,18 +62,6 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   plants a payload in **every** non-exempt path at once and asserts **every one is named in a single
   run**, markdown and sentinel paths silent. The payload is unique per path on purpose: one payload
   at every path is ONE blob under content-keying.
-- **The PHI gate no longer prints a PREFIX of its own findings (`PHI-SCAN`).** The scanner ended with
-  `process.exit()`, which **discards pending writes to a pipe**, and stderr is a pipe. Measured over a
-  2,000-file corpus with a reader that does not drain immediately: **379 of 2,000 `HIT:` lines
-  survived, output stopped at 64,724 bytes (a pipe's 64 KiB buffer), and the `N hit(s) across M
-file(s)` summary never arrived.** It is a **race**, so it read as flaky: this release's own positive
-  control was green on the Node 22 runner and **70 paths short on the Node 24 runner at the same
-  commit**. **The exit code was never wrong** -- hits still exit 1, refusals still exit 2 -- so this
-  was a report defect and never a false green; but the dropped part is always the _tail_, so a
-  developer fixes a subset and stops. Fixed by assigning `process.exitCode` and letting node exit once
-  the writes have flushed. **Pinned by a mutation-tested case** that keeps the reader paused until the
-  pipe is full; restoring `process.exit` reds it at 9,776 bytes of a 130,000-byte report.
-
   **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes.
   **No count, no list and no predicate is written down for what those files contain** -- all three
   were tried in this slice and all three were falsified, the predicate ("documentation about this

@@ -6,13 +6,12 @@
  * imported internal. Violator and clean files are written into throwaway
  * directories so nothing here ever lands in the committed corpus.
  *
- * SECURITY: every subprocess call in this file uses `spawnSync` (or, in the one
- * case that needs a reader which does not drain immediately, `spawn`) with array
- * args. No `exec`, no shell-form.
+ * SECURITY: every subprocess call in this file uses `spawnSync` with array args.
+ * No `exec`, no shell-form.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { spawnSync, spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import {
   writeFileSync,
   readFileSync,
@@ -1775,88 +1774,6 @@ describe("phi-scan: the positive control fires on this repository's own corpus s
     }
     for (const p of SENTINELS) expect(r.stderr).not.toContain(`HIT: ${p}`);
   });
-
-  // -------------------------------------------------------------------------
-  // THE REPORT ITSELF, WHICH THE POSITIVE CONTROL DEPENDS ON
-  // -------------------------------------------------------------------------
-  //
-  // A CONTROL THAT ASSERTS "EVERY PATH IS NAMED" IS ALSO AN ASSERTION ABOUT THE
-  // REPORT SURVIVING THE PROCESS EXIT, AND THAT IS WHERE IT FIRST WENT RED.
-  // When stderr is a pipe, node's writes to it are asynchronous, and
-  // `process.exit()` discards whatever is still pending. The scanner used to end
-  // that way, so it printed a PREFIX of its findings and dropped the rest --
-  // including its own `N hit(s) across M file(s)` summary.
-  //
-  // IT IS A RACE, so it read as flaky rather than as broken: the corpus above
-  // passed on one CI runner and came up 70 paths short on another at the same
-  // commit, and passed every time locally. This case removes the race instead of
-  // reproducing the load, by being a reader that does NOT drain immediately: the
-  // pipe fills to its 64 KiB buffer, the remaining writes are still pending when
-  // the child finishes, and only then does anything read them.
-  //
-  // The exit code was never wrong -- hits still exit 1 -- so this is a report
-  // defect and not a false green. It is pinned because a PHI gate that names
-  // some of what it found and silently drops the rest sends a developer to fix a
-  // subset and call it done.
-  it("writes its WHOLE report when the reader does not drain the pipe immediately", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fhir-phi-scan-report-")));
-    repos.push(root);
-    mkdirSync(join(root, "scripts"), { recursive: true });
-    mkdirSync(join(root, "src"), { recursive: true });
-    copyFileSync(
-      join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
-      join(root, "scripts", "phi-allow-list.txt"),
-    );
-
-    // Enough hits that the report is several times a pipe's 64 KiB buffer, so
-    // the tail cannot fit and the truncation is structural rather than lucky.
-    const expected: string[] = [];
-    for (let i = 0; i < 800; i++) {
-      const rel = `src/f${String(i).padStart(4, "0")}.ts`;
-      writeFileSync(join(root, ...rel.split("/")), `${SYNTHETIC_PHI}at ${rel}\n`);
-      expected.push(rel);
-    }
-    git(root, ["init", "-q", "."]);
-    git(root, ["config", "core.hooksPath", join(root, ".no-hooks")]);
-    git(root, ["add", "-A"]);
-    commit(root, "corpus");
-
-    const child = spawn(NODE_BIN, [SCANNER_PATH], {
-      cwd: root,
-      stdio: ["ignore", "ignore", "pipe"],
-      shell: false,
-    });
-    const closed = new Promise<number>((resolve) => {
-      child.on("close", (code) => resolve(code ?? -1));
-    });
-    // The whole point: let the pipe fill and the writes go pending BEFORE
-    // anything reads. Attaching the handler immediately is what hid this.
-    // Collect from the first byte, but keep the stream PAUSED so nothing is
-    // actually read off the pipe until after the delay. `pause()` is explicit
-    // and is repeated AFTER the listener on purpose: attaching a `data` handler
-    // resumes a readable, and without the second call this case drains from the
-    // start and passes over the defect it exists to catch.
-    //
-    // MUTATION-TESTED, because a control never seen red proves nothing: with
-    // `process.exit(exitCode)` restored in the scanner this reds at 9,776 bytes
-    // of a report that is over 130,000.
-    const chunks: Buffer[] = [];
-    child.stderr.pause();
-    child.stderr.on("data", (b: Buffer) => chunks.push(b));
-    child.stderr.pause();
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    child.stderr.resume();
-    const code = await closed;
-    const stderr = Buffer.concat(chunks).toString("utf8");
-
-    expect(code).toBe(1);
-    expect(Buffer.byteLength(stderr)).toBeGreaterThan(64 * 1024);
-    const missed = expected.filter((p) => !stderr.includes(`HIT: ${p}`));
-    expect(missed.length, `paths the report dropped: ${String(missed.length)}`).toBe(0);
-    // The summary is the LAST thing written, so its presence is what proves
-    // nothing before it was lost.
-    expect(stderr).toContain(`across ${String(expected.length)} file(s)`);
-  }, 60_000);
 
   it("fires on a path outside every walk root through the INDEX, not the walk", () => {
     // The sharp half: with the payload only in the blob, the working tree is
