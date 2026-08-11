@@ -65,3 +65,10 @@ EMAILDOMAIN hospital.example.org
 # by a shape rule in the scanner: a rule keyed on the shape covered every
 # capitalised domain in every source file and lost a hit the scanner already had.
 EMAILDOMAIN patient.name
+# This package's own contact address, `hello@cosyte.com` in `package.json`. Not a
+# reserved domain: it is OURS, which is the reason it is declarable. It is the
+# maintainer's mailbox, so it is not an address a patient is ever recorded at,
+# and the blast radius is the one domain. It became reachable when the sweep
+# started reading the bytes git carries repo-wide; before that no route opened
+# `package.json` at all.
+EMAILDOMAIN cosyte.com

@@ -27,12 +27,9 @@ semantics, and validate it against US Core, without reading the FHIR spec.
     [`#fhir-npm-name-the-evidence-which-was-duplicated`](documentation/agent-notes.md#fhir-npm-name-the-evidence-which-was-duplicated).
   - **It is a HUMAN GATE, not work you can pick up.** The trace npm asked for was hand-checked free
     of credential material and sent 2026-08-05, so it waits on npm. **Leave it blocked.**
-  - **Do not generalise the error code across the three affected packages.** `E403` is `fhir`'s
-    **publish** refusal, at policy, after CI is green and after provenance reaches the transparency
-    log. `transform`'s is an **install** failure (`E404`); `synth`'s is an **install** failure
-    (`ERESOLVE`), and it fails **despite** the peer being declared optional, so never re-derive from
-    `peerDependenciesMeta` that it cannot. `deid` and `cli` are not blocked. **Publish state and
-    installability are independent.**
+  - **Do not generalise the error code across the three affected packages; publish state and
+    installability are independent.** Verbatim:
+    [`#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
   - **Never re-fire a version npm has already traced:** `0.0.2`, `0.0.3`, `0.0.7`, `0.0.8`.
   - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
     hand before ever linking one.
@@ -262,11 +259,15 @@ Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
   nothing** (it counts the roots that DID exist), nor can **`is-inside-work-tree`**, which answers
   for the ENCLOSING repo. Residuals: `phi-scan-overrides.md`
   [`#phi-scan-scope-2026-08-05`](documentation/agent-notes.md#phi-scan-scope-2026-08-05)
-- **Two refuter passes, then up to two narrow ones on the remedy diff. FOUR is the cap**
-  (ADR 0016). A sub-problem that fails to converge twice gets **reverted and declared a gap**: a
-  pure revert ships no ungraded behaviour, and a declared gap is not a claim.
-- **The gates run on the strongest model**, always (ADR 0009/0024). Never set
-  `CLAUDE_CODE_SUBAGENT_MODEL`: it silently overrides every refuter pin.
+- **THE SWEEP READS THE INDEX, NOT JUST THE WORKING TREE, SO RE-RUN IT AFTER `git add`.** **UNION,
+  never replacement**; **dedup BY CONTENT** (`blob <len>\0`: CRLF-vs-LF is two streams, both
+  scanned); **the unmerged case keys on the ABSENCE OF STAGE 0** - `ls-files -s` gives ordinary blob
+  modes at stages 1/2/3, so the 1st record is the merge base.
+  [`phi-scan-union.md`](documentation/agent-notes/phi-scan-union.md)
+- **FOUR refuter passes is the cap; a sub-problem that fails to converge twice is REVERTED and
+  declared a gap. The gates run on the strongest model and you never set
+  `CLAUDE_CODE_SUBAGENT_MODEL`.** Verbatim:
+  [`#gate-discipline`](documentation/agent-notes.md#gate-discipline)
 
 ## Tech stack and the four architecture ADRs
 

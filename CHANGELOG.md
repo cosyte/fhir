@@ -8,6 +8,50 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **The PHI commit-gate reads the bytes git carries as a UNION with its working-tree walk
+  (`PHI-SCAN`).** Two states measured at the base commit: a fixture `git add`ed and then scrubbed in
+  the working tree scanned clean at **exit 0** while `git commit` would have committed the staged
+  blob; and **33 tracked non-markdown files sit outside `test/` and `src/`** (`scripts/`, `.github/`,
+  `docs-content/`, `.changeset/`, the root manifests), reached by neither the walk nor the index
+  reconciliation, whose pathspec is limited to the walk roots. **Two of the 33 carried bytes the
+  scanner's own recognisers report.**
+  **UNION, NEVER REPLACEMENT.** The walk alone sees **untracked** working-tree content; the index
+  alone sees what is **staged** and what lives **outside the roots**. `WALK_ROOTS` did not move and
+  no refusal was retired -- the floor that refuses a sweep which opened nothing stays keyed on the
+  walk, because the state it names is "no repository to ask and nothing on disk either".
+  **DEDUP IS BY CONTENT** under git's `blob <len>\0` framing, never by path: 202 in-scope index
+  entries, 169 already observed by the walk, **33 fetched**, so a clean checkout reads nothing twice
+  and never invokes `cat-file`. Where the two copies of one path **differ**, **both** are scanned --
+  a CRLF working tree over an LF blob is two byte streams, and the fetch count goes **33 -> 34**. The
+  object-id algorithm is **asked for**, never assumed.
+  **THE UNMERGED CASE KEYS ON THE ABSENCE OF STAGE 0**, which is not how `--staged` spots one:
+  `git diff --cached --raw` gives status `U` and mode `000000`, but **`git ls-files -s` gives stages
+  1/2/3 with ORDINARY blob modes and no `U` anywhere**, so taking the first record scans **the merge
+  base** and labels it as what git carries. Every stage is read and labelled with its own number;
+  `--staged` still refuses, unchanged.
+  **A non-blob mode in the index refuses the scan repo-wide**, which covers a link or a gitlink
+  **outside** the walk roots (measured, exit 0 on base for both).
+  **Four escape shapes a sibling reproduced at exit 0 were ALREADY CLOSED here** -- a tracked path
+  occupied by a directory of decoys, a walk root swapped for a decoy directory, most tracked files
+  absent from the working tree, and a gitlink whose working tree is absent -- all four refusing with
+  exit 2 on base, as was the unmerged axis. **Reproducing the state space and reporting what was
+  already shut is the result**; nothing was widened to manufacture a gap.
+  **The two hits the wider corpus produced were answered with declarations, not rules.**
+  `hello@cosyte.com` in `package.json` is now an allowed email domain (ours, so declarable, blast
+  radius one domain); the scanner's own source is a declared sentinel by **literal path**, because
+  the token-level remedy is **global and route-blind** and would admit a plausible real hospital
+  domain in a fixture. **Exclude a literal path; never infer a class.**
+  **A POSITIVE CONTROL** built from this repository's own tracked path list -- same paths, shapes,
+  extensions and in-root/outside-root split, placeholder bytes -- asserts the mirror **clears**, then
+  plants a payload in **every** non-exempt path at once and asserts **every one is named in a single
+  run**, markdown and sentinel paths silent. The payload is unique per path on purpose: one payload
+  at every path is ONE blob under content-keying.
+  **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes
+  (re-measured: 46 tracked markdown files, **3** carrying violator strings, all documentation about
+  this scanner); untracked content outside the walk roots stays invisible to both routes; and two
+  paths holding identical bytes are one object, reported at one of them, convergent and loud.
+  **No library code changed** -- the scanner is a repository gate and ships in no published artifact.
+
 - **`SafetyReadout.unreadableNegationCodes`, and with it the record that content was written where a
   `code` belongs (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit:
   `{"resourceType":"Procedure","status":{"value":"not-done"}}` returned `negations: []` under

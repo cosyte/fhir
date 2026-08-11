@@ -72,6 +72,66 @@ boundary that does not exist in TypeScript source. So the source pass covers
 inline still reaches only the dashed-SSN arm. Put a resource that needs full
 coverage in `test/__fixtures__/`.
 
+## The bytes git carries, as a union with the walk
+
+**A walk reads the working tree, and that is not what a commit contains.** Two
+halves, both measured on this repository before the index route existed:
+
+- a fixture `git add`ed and then **scrubbed in the working tree** scanned clean
+  and exited **0**, while `git commit` would have committed the staged blob;
+- **33 tracked non-markdown files sit outside `test/` and `src/` altogether**
+  (`scripts/`, `.github/`, `docs-content/`, `.changeset/`, the root manifests),
+  so neither the walk nor the index reconciliation above (whose pathspec is
+  limited to the walk roots) ever mentioned them. **Two of the 33 carried bytes
+  these recognisers report** (`hello@cosyte.com` in `package.json`, and this
+  scanner's own `JOHN_SMITH@Mercy.org` docblock example); both are addressed
+  below rather than by widening a rule.
+
+So `all` mode enumerates **both** routes. **Union, never replacement:** the walk
+alone can see **untracked** working-tree content, and the index alone can see
+what is **staged** and what lives **outside the roots**. The walk keeps its roots
+and every refusal it already had; nothing that was enumerated stops being
+enumerated.
+
+**Dedup is by CONTENT, under git's own `blob <len>\0` framing, not by path.** On
+an ordinary clean checkout every index blob hashes to bytes the walk already
+read, so nothing is scanned twice and `git cat-file` is never even asked for them
+(measured: 202 in-scope index entries, 169 already observed, **33 fetched**).
+Where the two copies of one path **differ**, **both** are scanned: with
+`core.autocrlf` or a `.gitattributes` `text` attribute the working-tree file is
+CRLF and the blob is LF, so they are two byte streams and a hit in one is not
+evidence about the other (measured: the fetch count goes 33 → 34 when one tracked
+file's working copy is converted to CRLF). The object-id algorithm is **asked
+for** (`git rev-parse --show-object-format`) rather than assumed, because a
+SHA-256 repository would match nothing and quietly scan the whole corpus twice.
+
+**A mode the index carries that is not a regular blob refuses the scan (exit 2),
+repo-wide.** For mode `120000` the object **is** the link's target path and for
+`160000` there is no object in this repository at all, so reading either proves
+nothing. This is the half that covers a link or a gitlink **outside** the walk
+roots, which no route reached before (measured, exit 0 on base for both).
+
+**An unmerged path is keyed on the ABSENCE OF STAGE 0, and that is not how
+`--staged` spots one.** `git diff --cached --raw` reports it as status `U` with
+destination mode `000000`; **`git ls-files -s` reports the same path at stages
+1/2/3 with ordinary blob modes and no `U` anywhere**, so a reader that takes the
+first record it sees gets **stage 1, the merge base**, and reports on it as
+though it were what git carries. Every stage is read and **every stage is
+labelled with its own number**, so none can be silently promoted to "the" index
+copy. The `--staged` route still **refuses** over such a path, unchanged: that
+route has to name one blob and there is none.
+
+**A hit found in the index is labelled `<path> (as git carries it)`**, or
+`<path> (index stage <n>)` for a conflicted one. The label is for **reporting
+only**: the dispatch, `SENTINEL_FILES` and `--allow-fixture` all key on the plain
+path, so a declared exemption covers both routes rather than one.
+
+**The stated consequence of content-keying:** two **paths** holding identical
+bytes are one object, so a payload written to both is reported at whichever the
+sweep read first, not at both. The gate's answer is unaffected (exit 1 either
+way), and fixing the reported copy leaves the other object unobserved, so the
+next run names it. Convergent and loud, never a silent pass.
+
 ## What the enumeration admits, and what refuses the scan
 
 An **enumerated** in-scope entry that is **not a regular file refuses the scan**
@@ -231,7 +291,11 @@ throwaway git repository rather than this one.
   for the enclosing repository** and returns `true` for a nested copy whose files
   git has never heard of; the pathspec is scoped to the scan roots for the same
   reason, so a nested copy gets `null` and the walk rather than a list belonging
-  to the wrong tree.
+  to the wrong tree. **That scoping is a property of this REFUSAL, not of the
+  scan**: refusing over a path no route would open is a gate nobody can get
+  green, whereas the index route above feeds a SCAN and is therefore
+  deliberately unscoped. Both arms stay keyed on the walk, so the union widens
+  what is scanned without retiring a refusal.
 - **The XML arm reads ONE of the three ways this suite spells an XML value, and
   "reads both spellings" is a claim about FORMATS, not about spellings within the
   XML format.** It covers the DOUBLE-QUOTED ATTRIBUTE, `<family value="…"/>`,
@@ -280,10 +344,17 @@ throwaway git repository rather than this one.
   SAME branch as source, **it also lost a hit this scanner already had**
   (measured: exit 1 on base, exit 0 with the exclusion). A gate that detects less
   than the one it replaces is worse than the defect it was closing. One
-  `EMAILDOMAIN` line has a blast radius of one domain. Enumerated across the
-  scanned corpus: four distinct email-shaped domains, three of them only inside
-  the sentinel-exempt scanner test, and **exactly one live**, so the declaration
-  is both minimal and sufficient. A future one reds loud.
+  `EMAILDOMAIN` line has a blast radius of one domain. **The enumeration that
+  used to be quoted here was scoped to a corpus that no longer is the corpus, so
+  it is re-measured rather than softened:** with the sweep reading the bytes git
+  carries repo-wide, two further email-shaped domains became reachable:
+  `cosyte.com`, this package's own contact address in `package.json`, now
+  declared; and `Mercy.org`, which is the example in the paragraph above and
+  lives in this scanner's own source, now covered by a declared sentinel path
+  rather than by a domain. **A domain would have been the wrong instrument for
+  the second one**: an allow-list entry is global and route-blind, so
+  `EMAILDOMAIN mercy.org` would have admitted a plausible real hospital domain in
+  a fixture. A future one reds loud.
 - **The enumerate-then-read window is not closed.** A file that vanishes between
   enumeration and read makes the scan refuse (exit 2), which is the safe
   direction, so it is an availability question rather than a PHI-safety one. The
@@ -306,8 +377,8 @@ _No `--allow-fixture` bypass has ever been needed. Every fixture is covered by
 token-level `scripts/phi-allow-list.txt` declarations._
 
 **Declared sentinel files, which are a different mechanism and are recorded here
-because they have the same effect.** These two exist to carry realistic-PHI-shaped
-strings, so scanning them would flag the very sentinels that exist to be flagged.
+because they have the same effect.** Each exists to carry realistic-PHI-shaped
+strings, so scanning it would flag the very sentinels that exist to be flagged.
 They are named by exact path in the scanner's `SENTINEL_FILES` and subtracted
 from the **sweeping** routes only; naming one on the command line still scans it,
 and the sweep **announces** the skip rather than performing it in silence.
@@ -321,6 +392,19 @@ never reach a diagnostic, so it spells them out.
 
 This scanner's own test. It must spell out the values the scanner is meant to
 catch, including a dashed SSN, a non-test email domain and a date of birth.
+
+### scripts/phi-scan.ts
+
+This scanner's own source, declared when the index route brought it into scope:
+it sits outside every walk root, so **no route opened it before**, which makes
+this a newly _declared_ blind spot rather than a newly _created_ one. Its
+docblocks have to spell out the violator values they explain, and one of them is
+`JOHN_SMITH@Mercy.org`, the example recording why a shape-based email exclusion
+was measured and reverted. **The token-level remedy would have been worse:**
+`EMAILDOMAIN mercy.org` is global and route-blind, so it would admit a plausible
+real hospital domain in a fixture too. A literal path is the narrower of the two.
+**The cost, stated:** a real value pasted into this file is not swept, so a change
+to it is reviewed by a human and not by the gate it implements.
 
 **Why this is not `--allow-fixture`.** That mechanism is a caller's per-run
 bypass and needs a flag. CI runs the scan with no flags, so a bypass that existed
