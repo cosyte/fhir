@@ -95,7 +95,7 @@ It is **reverted**, and the residual it carried is gone with it: that address no
 `EMAILDOMAIN` line covers the live occurrence with a blast radius of one domain. **The enumeration
 that stood here (four domains, three sentinel-only, exactly one live) was true of the corpus THIS
 slice scanned and is no longer true of the corpus; it is superseded by the re-measurement in
-"The bytes git carries" below, not softened.** **Declare a domain, never a shape rule.**
+[`phi-scan-union.md`](phi-scan-union.md) and in `phi-scan-overrides.md`, not softened.** **Declare a domain, never a shape rule.**
 
 ## Existence is not observation
 

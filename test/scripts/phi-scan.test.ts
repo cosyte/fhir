@@ -1452,22 +1452,75 @@ describe("phi-scan: the sweep reads the bytes git carries, as a union with the w
     expect(r.stderr).toContain("1 hit(s) across 1 file(s)");
   });
 
-  it("two paths holding identical bytes are ONE blob, and the gate still reds", () => {
-    // The stated consequence of deduping by content rather than by path: the
-    // hit is reported at whichever path the sweep read first, not at both. The
-    // gate's answer -- exit 1 -- is unaffected, and fixing the reported copy
-    // makes the other one's blob unobserved, so the next run names it. This is
-    // convergent and loud, never a silent pass, which is the property that
-    // matters here.
+  it("identical bytes at two paths with the SAME detector are one blob, and the gate still reds", () => {
+    // The consequence that REMAINS after the key carries the detector, stated
+    // narrowly: two in-scope paths whose bytes AND detector agree are one
+    // object, so the hit is reported at whichever the sweep read first. The
+    // exit code is unaffected, and fixing the reported copy leaves the other
+    // object unobserved, so the next run names it -- convergent and loud, never
+    // a silent pass.
     const root = corpus();
     mkdirSync(join(root, "docs-content"), { recursive: true });
-    writeFileSync(join(root, "test", "__fixtures__", "a.json"), "SSN: 123-45-6789\n");
-    writeFileSync(join(root, "docs-content", "b.json"), "SSN: 123-45-6789\n");
-    git(root, ["add", "test/__fixtures__/a.json", "docs-content/b.json"]);
+    writeFileSync(join(root, "test", "a.ts"), "SSN: 123-45-6789\n"); // walked; source pass
+    writeFileSync(join(root, "docs-content", "b.ts"), "SSN: 123-45-6789\n"); // index only; source pass
+    git(root, ["add", "test/a.ts", "docs-content/b.ts"]);
 
     const r = runIn(root, []);
     expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("1 hit(s) across 1 file(s)");
+    expect(r.stderr).toContain("HIT: test/a.ts");
+
+    // And it converges: fix the reported copy, and the next run names the other.
+    writeFileSync(join(root, "test", "a.ts"), "clean\n");
+    git(root, ["add", "test/a.ts"]);
+    const again = runIn(root, []);
+    expect(again.code, `stdout: ${again.stdout} stderr: ${again.stderr}`).toBe(1);
+    expect(again.stderr).toContain("docs-content/b.ts (as git carries it)");
+  });
+
+  it("a declared SENTINEL's bytes vouch for nothing: an identical copy is still scanned", () => {
+    // A sentinel is exempt BECAUSE it carries realistic-PHI-shaped strings, and
+    // `main` drops it before any detector runs. Letting it into the observed set
+    // would dedup away an identical copy at a path with no exemption -- and not
+    // convergently either, since a sentinel is never "fixed".
+    const root = corpus();
+    mkdirSync(join(root, "docs-content"), { recursive: true });
+    writeFileSync(join(root, "test", "phi-leak.test.ts"), "SSN: 123-45-6789\n");
+    writeFileSync(join(root, "docs-content", "copy.ts"), "SSN: 123-45-6789\n");
+    git(root, ["add", "test/phi-leak.test.ts", "docs-content/copy.ts"]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stdout).toContain("test/phi-leak.test.ts");
+    expect(r.stderr).toContain("docs-content/copy.ts (as git carries it)");
+    // The exemption is still ANNOUNCED, and exactly once, though the path now
+    // reaches the sweep from two enumerations.
+    expect(r.stdout.match(/test\/phi-leak\.test\.ts/g)?.length).toBe(1);
+  });
+
+  it("the dedup key carries the DETECTOR, so a source file cannot vouch for a fixture blob", () => {
+    // `scanTarget` sends a fixture to the structured FHIR scan and a `.ts` file
+    // to the source pass, and the source pass deliberately does not key
+    // `identifier.value` or `telecom.value`. An oid-only key would apply the
+    // weakest detector any path holding those bytes gets.
+    const root = corpus();
+    const doc =
+      '{"resourceType":"Patient",' +
+      '"identifier":[{"system":"http://hl7.org/fhir/sid/us-ssn","value":"123456789"}],' +
+      '"telecom":[{"system":"phone","value":"617-432-1000"}]}\n';
+    writeFileSync(join(root, "test", "__fixtures__", "leak.json"), doc);
+    writeFileSync(join(root, "src", "decoy.ts"), doc);
+    git(root, ["add", "test/__fixtures__/leak.json", "src/decoy.ts"]);
+    // Only the fixture's working copy is scrubbed, so the fixture blob is
+    // reachable through the index alone -- and `src/decoy.ts` holds those very
+    // bytes on disk, where the source pass reads neither field.
+    writeFileSync(join(root, "test", "__fixtures__", "leak.json"), '{"resourceType":"Patient"}\n');
+
+    const r = runIn(root, []);
+    expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/__fixtures__/leak.json (as git carries it)");
+    expect(r.stderr).toContain("Patient.identifier.value");
+    expect(r.stderr).toContain("Patient.telecom.value");
   });
 
   it("scans BOTH copies when they differ only by line endings (the EOL axis)", () => {
@@ -1701,7 +1754,10 @@ describe("phi-scan: the positive control fires on this repository's own corpus s
     // other tracked path must appear.
     const expected = paths.filter((p) => !p.toLowerCase().endsWith(".md") && !SENTINELS.has(p));
     expect(expected.length).toBeGreaterThan(100);
-    const missed = expected.filter((p) => !r.stderr.includes(p));
+    // `HIT: ${p}` rather than a bare substring: a tracked path can be a prefix
+    // of another (`README.md` of `.changeset/README.md`), and a bare `includes`
+    // would then let one path's hit stand in for the other's.
+    const missed = expected.filter((p) => !r.stderr.includes(`HIT: ${p}`));
     expect(missed, `paths the sweep never reported: ${missed.join(", ")}`).toEqual([]);
 
     // And the exempt ones really are silent, which is what makes the list above

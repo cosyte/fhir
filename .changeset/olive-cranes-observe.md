@@ -29,6 +29,20 @@ streams and a hit in one is not evidence about the other. Converting one tracked
 to CRLF moves the fetch count from 33 to 34. The object-id algorithm is asked for rather than
 assumed, because a SHA-256 repository would match nothing and quietly scan the whole corpus twice.
 
+The dedup key is the object id and the detector the path dispatches to, and neither half is
+optional, because the detector is a property of the path rather than of the bytes. `scanTarget`
+sends a fixture to the structured FHIR scan and a `.ts` file to the source pass, and the source pass
+deliberately does not read `identifier.value` or `telecom.value`; an object-id-only key therefore
+let an identical `src/decoy.ts` vouch for a fixture blob carrying an SSN-shaped identifier, and let
+a declared sentinel file -- exempt precisely because it carries PHI-shaped strings, and never
+"fixed" -- vouch for an identical copy at a path with no exemption. Both states printed `OK, no
+hits` at exit 0 and both are now pinned by tests. The dispatch lives in one function that the
+scanner and the dedup key both read, so the key cannot drift from what really runs. A declared path
+contributes nothing to the observed set, is still enumerated by both routes, and its exemption is
+still announced, once. What remains, narrowly: identical bytes at two in-scope paths with the same
+detector are one object, reported at whichever the sweep read first, with the exit code unaffected
+and the next run naming the other.
+
 An unmerged path is keyed on the absence of stage 0, which is not how the `--staged` route spots
 one. `git diff --cached --raw` reports it as status `U` with destination mode `000000`; `git
 ls-files -s` reports the same path at stages 1, 2 and 3 with ordinary blob modes and no `U`
@@ -67,10 +81,14 @@ path deliberately: one payload written to every path is a single blob under cont
 once, and the case would then assert nothing about the rest.
 
 Declared and not closed: the markdown exemption still hides a payload at any depth on both routes,
-which is the design, and re-measuring it here found 46 tracked markdown files with 3 carrying
-violator strings, all three documentation about this scanner. Untracked content outside the walk
-roots remains invisible to both routes. Two paths holding identical bytes are one object, so a
-payload in both is reported at one of them; the exit code is unaffected and the next run names the
-other.
+which is the design, and every tracked markdown file carrying a violator string is documentation
+about this scanner. No count is written down for that, deliberately: a draft quoted one measured at
+the base commit, which the slice's own new markdown files falsified before it shipped, and a count
+that moves with the commit stating it is a claim nobody can keep true. Untracked content outside the
+walk roots remains invisible to both routes. And `all` mode is now repo-wide while `--staged` is
+not, so the hook and CI disagree about the corpus by 33 tracked files: the safe direction, CI
+stricter than the hook, and left open because widening `--staged` is a hook decision about what a
+commit is blocked on, declined three times across this suite with the cost measured, and not one to
+take as a side effect of a scan widening.
 
 No library code changed. The scanner is a repository gate and ships in no published artifact.

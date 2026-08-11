@@ -608,12 +608,34 @@ function refuseUnobserved(paths: string[]): void {
 // one is not evidence about the other. A path-keyed dedup would have picked one
 // and called it the corpus.
 //
-// THE STATED CONSEQUENCE, because content-keying is not free: two PATHS holding
-// identical bytes are one object, so a payload written to both is reported at
-// whichever the sweep read first and not at both. The gate's answer is
-// unaffected (exit 1 either way), and fixing the reported copy leaves the other
-// one's object unobserved, so the next run names it. Convergent and loud, never
-// a silent pass, which is the property this file is about.
+// THE DEDUP KEY IS THE OBJECT ID *AND* THE DETECTOR THE PATH DISPATCHES TO, AND
+// NEITHER HALF IS OPTIONAL. Two states were constructed against an oid-only key
+// and BOTH printed `OK, no hits` at exit 0:
+//
+//   - the DETECTOR is a property of the PATH, not of the bytes. `scanTarget`
+//     sends `test/__fixtures__/x.json` to the structured FHIR scan and
+//     `src/x.ts` to the source pass, and the source pass deliberately does not
+//     key `identifier.value` or `telecom.value`. So one payload committed at
+//     both paths was "observed" at the weaker one, and the fixture blob carrying
+//     an SSN-shaped `identifier.value` was never fetched. An oid-only key
+//     silently applies the weakest detector any path holding those bytes gets;
+//   - an EXEMPT path's bytes were never scanned in the first place. A declared
+//     `SENTINEL_FILES` entry is walked, and it is exempt precisely BECAUSE it
+//     carries realistic-PHI-shaped strings, so hashing it into the observed set
+//     let it vouch for a copy at a path with no exemption at all. That one is
+//     not even convergent: the sentinel is never "fixed", so the other copy is
+//     deduped away on every future run.
+//
+// So the observed set holds `<oid>\0<detector>` for the walked files that were
+// actually SCANNED, and an exempt path contributes nothing to it and is never
+// fetched from the index either. `scanKindOf` below is the ONE dispatch table;
+// `scanTarget` reads it too, so the key cannot drift from what really runs.
+//
+// THE CONSEQUENCE THAT REMAINS, stated narrowly: two paths that hold identical
+// bytes AND dispatch to the same detector AND are both in scope are one object,
+// so a payload at both is reported at whichever the sweep read first, not at
+// both. The exit code is unaffected, and fixing the reported copy leaves the
+// other one's object unobserved, so the next run names it.
 
 /** A single `git ls-files -s` record: one path at one stage. */
 interface IndexEntry {
@@ -773,7 +795,7 @@ function readBlobs(oids: string[]): Map<string, Buffer> {
  * to name one blob and there is none, and git will not let a conflicted path be
  * committed anyway.
  */
-function indexTargets(observedOids: Set<string>): Target[] {
+function indexTargets(scanned: Set<string>): Target[] {
   const entries = indexEntries();
   if (entries === null) return [];
 
@@ -797,8 +819,16 @@ function indexTargets(observedOids: Set<string>): Target[] {
     "Replace it with a regular file, or remove it from the index.",
   );
 
+  // A DECLARED PATH IS STILL ENUMERATED HERE, and `main` is what drops it. The
+  // exemption is announced rather than performed in silence, and an exemption
+  // nobody sees is the same blind spot this gate exists to refuse; a route that
+  // dropped it earlier would announce nothing whenever the walk never reached it
+  // (`scripts/phi-scan.ts` sits outside every walk root, so that is the ordinary
+  // case, not an edge one). The ONE thing an exemption does to this enumeration
+  // is decided in `scanned` by the caller: a declared path's bytes are never the
+  // reason another path's identical bytes get skipped.
   const wanted = inScope.filter(
-    (e) => REGULAR_BLOB_MODES.has(e.mode) && !observedOids.has(e.oid),
+    (e) => REGULAR_BLOB_MODES.has(e.mode) && !scanned.has(scanIdentity(e.oid, e.path)),
   );
   // Two entries can name one object (the same bytes committed at two paths, or
   // two sides of a conflict that agree), so ask git for each object once.
@@ -808,7 +838,8 @@ function indexTargets(observedOids: Set<string>): Target[] {
     const missing = !blobs.has(e.oid);
     return {
       path: e.path,
-      label: e.stage === "0" ? `${e.path} (as git carries it)` : `${e.path} (index stage ${e.stage})`,
+      label:
+        e.stage === "0" ? `${e.path} (as git carries it)` : `${e.path} (index stage ${e.stage})`,
       read: (): Buffer => {
         const b = blobs.get(e.oid);
         if (b === undefined || missing) {
@@ -857,7 +888,7 @@ function buildTargetsForAll(): Target[] {
   // reading twice would let the two answers come from two different states of
   // the file.
   const algo = objectFormat();
-  const observedOids = new Set<string>();
+  const scanned = new Set<string>();
   const targets: Target[] = [];
   for (const abs of files) {
     const rel = normalizePath(abs);
@@ -870,9 +901,16 @@ function buildTargetsForAll(): Target[] {
         `could not read ${rel}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
-    if (algo !== null) {
+    // A DECLARED SENTINEL VOUCHES FOR NOTHING. It is walked, but `main` drops it
+    // before any detector runs, and it is exempt precisely BECAUSE it carries
+    // realistic-PHI-shaped strings. Hashing it into the observed set would let
+    // it dedup away an identical copy at a path with no exemption, on every run
+    // forever, since a sentinel is never "fixed". `--allow-fixture` needs no
+    // equivalent here: `parseArgs` turns it into `paths` mode, so it cannot
+    // reach this route at all.
+    if (algo !== null && !SENTINEL_FILES.has(rel)) {
       const oid = blobOid(bytes, algo);
-      if (oid !== null) observedOids.add(oid);
+      if (oid !== null) scanned.add(scanIdentity(oid, rel));
     }
     targets.push({ path: rel, label: rel, read: (): Buffer => bytes });
   }
@@ -904,7 +942,7 @@ function buildTargetsForAll(): Target[] {
     );
   }
 
-  return [...targets, ...indexTargets(observedOids)];
+  return [...targets, ...indexTargets(scanned)];
 }
 
 function buildTargetsForPaths(paths: string[]): Target[] {
@@ -1404,37 +1442,40 @@ function decodeSourceEscapes(raw: string): string {
 }
 
 function decodeSourceEscapesOnce(raw: string): string {
-  return raw.replace(/\\(u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(.))/gs, (...m) => {
-    const [, , braced, u4, x2, other] = m as (string | undefined)[];
-    const hex = braced ?? u4 ?? x2;
-    if (hex !== undefined) {
-      const cp = Number.parseInt(hex, 16);
-      // A lone surrogate is not a scalar value; leave the escape as written
-      // rather than manufacturing U+FFFD, which would change the token.
-      if (cp >= 0xd800 && cp <= 0xdfff) return `\\u${hex}`;
-      try {
-        return String.fromCodePoint(cp);
-      } catch {
-        return `\\u${hex}`;
+  return raw.replace(
+    /\\(u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(.))/gs,
+    (...m) => {
+      const [, , braced, u4, x2, other] = m as (string | undefined)[];
+      const hex = braced ?? u4 ?? x2;
+      if (hex !== undefined) {
+        const cp = Number.parseInt(hex, 16);
+        // A lone surrogate is not a scalar value; leave the escape as written
+        // rather than manufacturing U+FFFD, which would change the token.
+        if (cp >= 0xd800 && cp <= 0xdfff) return `\\u${hex}`;
+        try {
+          return String.fromCodePoint(cp);
+        } catch {
+          return `\\u${hex}`;
+        }
       }
-    }
-    // The single-character escapes. Anything not named here drops to the
-    // character itself, which is what the language does: `\q` is `q`, and `\\`
-    // is one backslash.
-    const single = other ?? "";
-    switch (single) {
-      case "n":
-        return "\n";
-      case "t":
-        return "\t";
-      case "r":
-        return "\r";
-      case "0":
-        return "\0";
-      default:
-        return single;
-    }
-  });
+      // The single-character escapes. Anything not named here drops to the
+      // character itself, which is what the language does: `\q` is `q`, and `\\`
+      // is one backslash.
+      const single = other ?? "";
+      switch (single) {
+        case "n":
+          return "\n";
+        case "t":
+          return "\t";
+        case "r":
+          return "\r";
+        case "0":
+          return "\0";
+        default:
+          return single;
+      }
+    },
+  );
 }
 
 /** How far past a matched key the value reader will look. */
@@ -1884,6 +1925,25 @@ function scanXmlText(target: Target, text: string, allow: AllowList, hits: Hit[]
  * gets the conservative dashed-SSN + email pass instead, because a JSDoc
  * `@example` carries synthetic names that must not trip the structured detectors.
  */
+/**
+ * WHICH DETECTOR A PATH DISPATCHES TO. The one table, read by `scanTarget` below
+ * and by the union route's dedup key. It must not be duplicated: the dedup is
+ * only sound if it knows exactly what the sweep would have run, and a second
+ * copy of this decision is how that stops being true without a test noticing.
+ */
+function scanKindOf(path: string): "ndjson" | "xml" | "json" | "source" {
+  if (!path.startsWith(FIXTURE_PREFIX)) return "source";
+  if (path.endsWith(".ndjson")) return "ndjson";
+  if (path.endsWith(".xml")) return "xml";
+  if (path.endsWith(".json")) return "json";
+  return "source";
+}
+
+/** The union route's dedup identity: the bytes AND what would be run on them. */
+function scanIdentity(oid: string, path: string): string {
+  return `${oid}\0${scanKindOf(path)}`;
+}
+
 function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   let buf: Buffer;
   try {
@@ -1894,12 +1954,12 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
     );
   }
   const text = buf.toString("utf8");
-  const isFixture = target.path.startsWith(FIXTURE_PREFIX);
-  if (isFixture && target.path.endsWith(".ndjson")) {
+  const kind = scanKindOf(target.path);
+  if (kind === "ndjson") {
     scanNdjsonText(target, text, allow, hits);
-  } else if (isFixture && target.path.endsWith(".xml")) {
+  } else if (kind === "xml") {
     scanXmlText(target, text, allow, hits);
-  } else if (isFixture && target.path.endsWith(".json")) {
+  } else if (kind === "json") {
     scanJsonText(target, text, allow, hits);
   } else {
     // Non-fixture target (hand-written source, or a non-FHIR fixture file):
@@ -1990,7 +2050,12 @@ function main(): number {
   // scanning more. Skipping is announced rather than silent: an exemption
   // nobody sees is the same shape of blind spot this gate exists to refuse.
   if (args.mode !== "paths") {
-    const skipped = targets.filter((t) => SENTINEL_FILES.has(t.path)).map((t) => t.path);
+    // DEDUPED: a declared path can arrive from the walk AND from the index (they
+    // are separate targets by design, since the two copies can differ), and
+    // announcing it twice reads as two exemptions rather than one.
+    const skipped = [
+      ...new Set(targets.filter((t) => SENTINEL_FILES.has(t.path)).map((t) => t.path)),
+    ];
     if (skipped.length > 0) {
       process.stdout.write(
         `[phi-scan] skipping ${String(skipped.length)} declared sentinel file(s): ` +

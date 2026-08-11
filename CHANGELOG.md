@@ -24,6 +24,16 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   and never invokes `cat-file`. Where the two copies of one path **differ**, **both** are scanned --
   a CRLF working tree over an LF blob is two byte streams, and the fetch count goes **33 -> 34**. The
   object-id algorithm is **asked for**, never assumed.
+  **THE KEY IS THE OBJECT ID _AND_ THE DETECTOR THE PATH DISPATCHES TO**, because the detector is a
+  property of the PATH and not of the bytes: an oid-only key let `src/decoy.ts` (source pass, which
+  deliberately does not read `identifier.value`) vouch for an identical `test/__fixtures__/leak.json`
+  (structured scan), and let a declared **sentinel** -- exempt precisely because it carries
+  PHI-shaped strings -- vouch for an identical copy at a path with no exemption. Both printed
+  `OK, no hits` at exit 0 and both are now pinned. A declared path contributes nothing to the
+  observed set, is still enumerated by both routes, and its exemption is still announced, once.
+  **What remains, narrowly:** identical bytes at two in-scope paths with the SAME detector are one
+  object, reported at whichever the sweep read first; the exit code is unaffected and the next run
+  names the other.
   **THE UNMERGED CASE KEYS ON THE ABSENCE OF STAGE 0**, which is not how `--staged` spots one:
   `git diff --cached --raw` gives status `U` and mode `000000`, but **`git ls-files -s` gives stages
   1/2/3 with ORDINARY blob modes and no `U` anywhere**, so taking the first record scans **the merge
@@ -46,10 +56,13 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   plants a payload in **every** non-exempt path at once and asserts **every one is named in a single
   run**, markdown and sentinel paths silent. The payload is unique per path on purpose: one payload
   at every path is ONE blob under content-keying.
-  **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes
-  (re-measured: 46 tracked markdown files, **3** carrying violator strings, all documentation about
-  this scanner); untracked content outside the walk roots stays invisible to both routes; and two
-  paths holding identical bytes are one object, reported at one of them, convergent and loud.
+  **Declared, not closed:** the markdown exemption still hides a payload at any depth on both routes,
+  and every tracked markdown file carrying a violator string is documentation **about** this scanner
+  (no count is written down: a count that moves with the commit stating it cannot be kept true);
+  untracked content outside the walk roots stays invisible to both routes; and **`all` mode is now
+  repo-wide while `--staged` is not**, so the hook and CI disagree by 33 tracked files -- the safe
+  direction (CI stricter), left open because widening `--staged` is a **hook** decision about what a
+  commit is BLOCKED on, declined three times across this suite, and not one to take as a side effect.
   **No library code changed** -- the scanner is a repository gate and ships in no published artifact.
 
 - **`SafetyReadout.unreadableNegationCodes`, and with it the record that content was written where a

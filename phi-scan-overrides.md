@@ -121,16 +121,53 @@ labelled with its own number**, so none can be silently promoted to "the" index
 copy. The `--staged` route still **refuses** over such a path, unchanged: that
 route has to name one blob and there is none.
 
+**DECLARED RESIDUAL: `all` MODE IS NOW REPO-WIDE AND `--staged` IS NOT, SO THE
+TWO ROUTES DISAGREE ABOUT THE CORPUS BY 33 TRACKED FILES.** Measured: a staged
+`docs-content/leak.json` carrying a dashed SSN is **exit 0** on the hook and
+**exit 1** in CI (at the base commit both were 0). The direction is the safe one,
+CI stricter than the hook, and it is **not** the shape the paragraph on "in
+scope" above warns about, which was CI blind where the hook reported. It is
+**not closed here on purpose**: widening `--staged` is a **hook decision** that
+changes what a commit is BLOCKED on, it has been declined three times across this
+suite with the cost measured, and taking it as a side effect of a scan widening
+is exactly how it would arrive ungraded.
+
 **A hit found in the index is labelled `<path> (as git carries it)`**, or
 `<path> (index stage <n>)` for a conflicted one. The label is for **reporting
 only**: the dispatch, `SENTINEL_FILES` and `--allow-fixture` all key on the plain
 path, so a declared exemption covers both routes rather than one.
 
-**The stated consequence of content-keying:** two **paths** holding identical
-bytes are one object, so a payload written to both is reported at whichever the
-sweep read first, not at both. The gate's answer is unaffected (exit 1 either
-way), and fixing the reported copy leaves the other object unobserved, so the
-next run names it. Convergent and loud, never a silent pass.
+**The dedup key is the object id AND the detector the path dispatches to, and
+neither half is optional.** Two states were constructed against an oid-only key
+and **both printed `OK, no hits` at exit 0**:
+
+- **The detector is a property of the PATH, not of the bytes.** `scanTarget`
+  sends `test/__fixtures__/x.json` to the structured FHIR scan and `src/x.ts` to
+  the source pass, and the source pass **deliberately does not key
+  `identifier.value` or `telecom.value`** (see the two omissions above). So one
+  payload committed at both paths was "observed" at the weaker one, and the
+  fixture blob carrying an SSN-shaped `identifier.value` was never fetched. An
+  oid-only key silently applies the **weakest** detector any path holding those
+  bytes gets.
+- **An exempt path's bytes were never scanned in the first place.** A declared
+  `SENTINEL_FILES` entry is walked, and it is exempt precisely **because** it
+  carries realistic-PHI-shaped strings, so hashing it into the observed set let
+  it vouch for an identical copy at a path with no exemption. That one is **not
+  even convergent**: a sentinel is never "fixed", so the other copy would be
+  deduped away on every future run.
+
+So the observed set holds `<oid>\0<detector>` for the walked files that were
+actually **scanned**, and a declared path contributes nothing to it. `scanKindOf`
+is the **one** dispatch table and `scanTarget` reads it too, so the key cannot
+drift from what really runs. A declared path is still **enumerated** by both
+routes and dropped by `main`, so the exemption is still **announced** (once,
+deduped) rather than performed in silence.
+
+**The consequence that remains, stated narrowly:** two paths that hold identical
+bytes **and** dispatch to the same detector **and** are both in scope are one
+object, so a payload at both is reported at whichever the sweep read first. The
+exit code is unaffected, and fixing the reported copy leaves the other object
+unobserved, so the next run names it. Both halves are pinned by tests.
 
 ## What the enumeration admits, and what refuses the scan
 
@@ -403,8 +440,12 @@ docblocks have to spell out the violator values they explain, and one of them is
 was measured and reverted. **The token-level remedy would have been worse:**
 `EMAILDOMAIN mercy.org` is global and route-blind, so it would admit a plausible
 real hospital domain in a fixture too. A literal path is the narrower of the two.
-**The cost, stated:** a real value pasted into this file is not swept, so a change
-to it is reviewed by a human and not by the gate it implements.
+**The cost, stated twice over:** a real value pasted into this file is not swept,
+so a change to it is reviewed by a human and not by the gate it implements -- and
+the `Mercy.org` token that motivated the declaration now lives in the one file
+the sweep never opens. It is a fabricated local part on a domain nobody here is
+recorded at, so it identifies no one; it is named because a token whose home is
+the gate's blind spot is worth a reader knowing about, not because it is a leak.
 
 **Why this is not `--allow-fixture`.** That mechanism is a caller's per-run
 bypass and needs a flag. CI runs the scan with no flags, so a bypass that existed

@@ -13,14 +13,14 @@ named `trackedInScope` / `refuseUnobserved`. **A text census scores the vocabula
 mechanism.** Measured against the four escape shapes a sibling reproduced at `exit 0`, this copy was
 one of the STRONGEST, not the thinnest:
 
-| shape | base result |
-| --- | --- |
-| a tracked path occupied by a **directory** of decoys | **exit 2**, already closed |
-| a whole walk root swapped for a decoy directory | **exit 2**, already closed |
-| **most** tracked files absent from the working tree | **exit 2**, already closed (no floor-of-one to fool) |
-| a **gitlink** under a walk root whose working tree is absent | **exit 2**, already closed |
-| a path under the walk's skip rule (`.md`) at any depth | **exit 0**, the exemption, applied symmetrically to both routes, by design |
-| `--staged` over an **unmerged** path | **exit 2**, already closed, keyed on status `U` |
+| shape                                                        | base result                                                                |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| a tracked path occupied by a **directory** of decoys         | **exit 2**, already closed                                                 |
+| a whole walk root swapped for a decoy directory              | **exit 2**, already closed                                                 |
+| **most** tracked files absent from the working tree          | **exit 2**, already closed (no floor-of-one to fool)                       |
+| a **gitlink** under a walk root whose working tree is absent | **exit 2**, already closed                                                 |
+| a path under the walk's skip rule (`.md`) at any depth       | **exit 0**, the exemption, applied symmetrically to both routes, by design |
+| `--staged` over an **unmerged** path                         | **exit 2**, already closed, keyed on status `U`                            |
 
 **The unmerged axis, which broke a sibling's draft, was already closed here** and needed no port.
 **Reproducing a state space and reporting "already closed" is the result**; the temptation is to
@@ -52,6 +52,28 @@ have picked one of the two byte streams and called it the corpus. The object-id 
 for** (`git rev-parse --show-object-format`), never assumed: a SHA-256 repository would match nothing
 and quietly scan everything twice.
 
+**THE KEY IS THE OBJECT ID _AND_ THE DETECTOR, AND THE FIRST DRAFT SHIPPED WITHOUT THE SECOND HALF.**
+A gate found two states against an oid-only key, **both at exit 0**, and both are worth carrying:
+
+- **The detector is a property of the PATH, not of the bytes.** `scanTarget` sends a fixture to the
+  structured FHIR scan and a `.ts` file to the source pass, and the source pass deliberately does not
+  key `identifier.value` or `telecom.value`. One payload committed at `test/__fixtures__/leak.json`
+  and at `src/decoy.ts` was "observed" at the weaker path, so the fixture blob carrying an
+  SSN-shaped `identifier.value` was never fetched. **An oid-only key silently applies the WEAKEST
+  detector any path holding those bytes gets.**
+- **An exempt path's bytes were never scanned at all.** A `SENTINEL_FILES` entry is walked but
+  dropped before any detector runs, and it is exempt precisely BECAUSE it carries
+  realistic-PHI-shaped strings. Hashing it into the observed set let it vouch for an identical copy
+  at a path with no exemption, and **that one is not even convergent** -- a sentinel is never fixed.
+
+So the observed set holds `<oid>\0<detector>` for the files that were actually SCANNED, `scanKindOf`
+is the ONE dispatch table (`scanTarget` reads it too, so the key cannot drift from what runs), and a
+declared path contributes nothing. It is still ENUMERATED by both routes and dropped by `main`, so
+the exemption is still announced -- **deduped**, since a declared path can now arrive twice.
+
+**The lesson generalises past this scanner: a dedup is only as sound as its notion of "already
+done", and "already read" is not "already scanned".**
+
 **The unmerged case keys on the ABSENCE OF STAGE 0, and that is not how `--staged` spots one.**
 `git diff --cached --raw` gives status `U` and destination mode `000000`; **`git ls-files -s` gives
 stages 1/2/3 with ORDINARY blob modes and no `U` anywhere**, so a reader that takes the first record
@@ -71,8 +93,8 @@ is the half covering a link or a gitlink **outside** the walk roots, which no ro
   `SENTINEL_FILES`**, by literal path, logged in `phi-scan-overrides.md`. **The token-level remedy
   was measured worse:** an allow-list entry is global and route-blind, so `EMAILDOMAIN mercy.org`
   would admit a plausible real hospital domain in a fixture. **Exclude a literal path; never infer a
-  class.** The file sits outside every walk root, so no route opened it before: a newly *declared*
-  blind spot, not a newly *created* one. Its cost: a change to that file is reviewed by a human and
+  class.** The file sits outside every walk root, so no route opened it before: a newly _declared_
+  blind spot, not a newly _created_ one. Its cost: a change to that file is reviewed by a human and
   not by the gate it implements.
 
 ## The positive control, which is the part worth copying
@@ -94,9 +116,13 @@ opinion about such a filename, which is an opinion about the environment, not ab
 ## Declared, not closed
 
 The `.md` exemption still hides a payload at any depth, on **both** routes, and that is the design
-("docs may legitimately describe violator values"). Re-measured here rather than assumed: **46
-tracked markdown files, 3 of them carrying violator strings**, all three documentation *about* this
-scanner. Dropping the exemption would red the gate on exactly the files that explain it.
+("docs may legitimately describe violator values"). Grounded rather than assumed: **every tracked
+markdown file that carries a violator string is documentation ABOUT this scanner** -- this file, the
+overrides log, the changelog and the notes it was relocated from. Dropping the exemption would red
+the gate on exactly the files that explain it. **A COUNT IS NOT WRITTEN HERE ON PURPOSE:** a draft
+of this section quoted "46 tracked markdown files, 3 carrying violator strings", which was the BASE
+measurement and was already false at the commit that shipped it, because the slice adds markdown
+files of its own. A count that moves with the commit stating it is a claim nobody can keep true.
 
 Two paths holding identical bytes are one object, so a payload in both is reported at one of them.
 The gate's answer is unaffected (exit 1 either way), and fixing the reported copy leaves the other
@@ -105,3 +131,11 @@ object unobserved, so the next run names it. Convergent and loud, never a silent
 **Untracked content outside the walk roots remains invisible to both routes.** The index cannot see
 it because it is untracked, and the walk cannot because it is outside the roots. Unchanged by this
 slice, and stated because the union closes the tracked half of that sentence and not the other.
+
+**`all` MODE IS NOW REPO-WIDE AND `--staged` IS NOT, SO THE TWO ROUTES DISAGREE BY 33 TRACKED
+FILES.** Measured: a staged `docs-content/leak.json` carrying a dashed SSN is exit 0 on the hook and
+exit 1 in CI (on base both were 0). The direction is the safe one, CI stricter than the hook, and it
+is the inverse of the shape `buildTargetsForStaged`'s own comment warns about, which was CI blind
+where the hook reported. **It is left open deliberately**: widening `--staged` is a HOOK decision
+that changes what a commit is BLOCKED on, declined three times across this suite with the cost
+measured, and taking it as a side effect of a scan widening is exactly how it would arrive ungraded.
