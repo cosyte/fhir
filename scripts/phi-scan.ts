@@ -54,9 +54,11 @@
  * working-tree content, and every blob the index carries, which alone can see
  * what is staged and what lives outside the roots. Neither replaces the other.
  * Dedup is BY CONTENT under git's own `blob <len>\0` framing, so an ordinary
- * clean checkout reads nothing twice and never invokes `cat-file`; where the two
- * copies of one path DIFFER, BOTH are scanned, which is what makes a CRLF
- * working tree over an LF blob two byte streams rather than one.
+ * clean checkout SCANS nothing twice; where the two copies of one path DIFFER,
+ * BOTH are scanned, which is what makes a CRLF working tree over an LF blob two
+ * byte streams rather than one. `cat-file` IS invoked on a clean checkout, for
+ * the blobs no walk root covers and for the declared paths below: the property
+ * is that nothing is scanned twice, never that git goes unasked.
  * ---------------------------------------------------------------------------
  * AN ENUMERATED IN-SCOPE ENTRY THAT IS NOT A REGULAR FILE REFUSES THE SCAN
  * (exit 2). "Enumerated" is load-bearing and is not decoration: this narrows
@@ -600,8 +602,10 @@ function refuseUnobserved(paths: string[]): void {
 // the one being relied on: nothing that was enumerated stops being enumerated.
 //
 // DEDUP IS BY CONTENT UNDER GIT'S OWN `blob <len>\0` FRAMING, NOT BY PATH. On an
-// ordinary clean checkout every index blob hashes to the bytes the walk already
-// read, so nothing is scanned twice and `cat-file` is never even asked for them.
+// ordinary clean checkout an index blob that hashes to bytes the sweep already
+// scanned is not fetched, so NOTHING IS SCANNED TWICE. That is not the same as
+// leaving git unasked, and the difference is measurable: `cat-file` is invoked
+// for the blobs no walk root covers, and for the declared paths excluded below.
 // Where the two copies DIFFER, BOTH are scanned, and that is deliberate: with
 // `core.autocrlf` or a `.gitattributes` `text` attribute the working-tree file
 // is CRLF and the blob is LF, so they are different byte streams and a hit in
