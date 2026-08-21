@@ -118,6 +118,12 @@ import {
   statusSpells,
   typesOf,
 } from "./codes.js";
+import {
+  collectModifierElements,
+  dedupeModifierElements,
+  rebaseModifierElements,
+  type ModifierElementReport,
+} from "./modifier-elements.js";
 
 /**
  * `doNotPerform` on **this** node, read across every value the document wrote for it and through an
@@ -328,6 +334,28 @@ export interface SafetyReadout {
   /** FHIRPath locations of `modifierExtension`s this library does not understand (fail-closed). */
   readonly unhandledModifierExtensions: readonly string[];
   /**
+   * The modifier ELEMENTS present in the document, one entry per distinct location, each naming the
+   * element and where it is. R4 flags several ordinary base elements `Is Modifier: true` because
+   * they change how the value beside them must be read, and this is the channel that surfaces them:
+   * `comparator` wherever the walk reaches a node carrying it, `implicitRules` likewise,
+   * `Patient.active`, and `use` on a `Practitioner`'s `identifier` entries. Every one of them
+   * lowers {@link safeToSummarize}, because a bounded quantity summarized as a point value is a
+   * wrong clinical number delivered under a clean verdict.
+   *
+   * **Distinct from {@link unhandledModifierExtensions}, and the two never double-report.** A
+   * modifier EXTENSION stays on that channel and draws nothing here, so one modifier extension is
+   * one report. `implicitRules` is a modifier element and reports here rather than there.
+   *
+   * **Reporting only.** The element is surfaced and never interpreted: no bound, no range, no
+   * inequality is read out of a `comparator`, and no value, code or URI is carried. See
+   * {@link ../safety/modifier-elements.js} for the recognition predicate, for what a location may
+   * carry, and for the resource type names that may root one.
+   *
+   * Empty for a document carrying none of them, where this readout returns exactly what it always
+   * did.
+   */
+  readonly modifierElements: readonly ModifierElementReport[];
+  /**
    * FHIRPath locations where the document wrote a property name more than once, so the element has
    * several values and no rule says which one the sender meant (fail-closed). Empty on every
    * conformant document, since FHIR JSON requires unique property names.
@@ -493,6 +521,7 @@ export interface SafetyReadout {
   readonly unreadableNegationCodes: readonly string[];
   /**
    * `false` when the resource must not be flattened: an unhandled `modifierExtension` is present, a
+   * modifier ELEMENT is present, a
    * repeated property name left an element with more than one value, a `0..1` safety element
    * arrived array-wrapped, an array inside an array left content the codec could not read, XML
    * character data on an element was dropped, a boolean-valued safety element carries a written
@@ -524,6 +553,45 @@ export interface SafetyReadout {
  */
 export function unhandledModifierExtensions(resource: FhirComplex, path: string): string[] {
   return walkSafety(resource, path).modifiers;
+}
+
+/**
+ * Collect the modifier ELEMENTS a resource carries, a deep walk of the whole document, so one
+ * nested in a backbone element, a contained resource or a Bundle entry is caught too. This is the
+ * standalone form of {@link SafetyReadout.modifierElements} and returns exactly what that channel
+ * carries.
+ *
+ * **It takes no `path`, unlike its siblings on this module, and that is deliberate.** A
+ * modifier-element location may root at a resource type name only when the name is one this library
+ * defines, so the root is derived here from the document's own type against that fixed set rather
+ * than supplied by a caller who could root it at anything.
+ *
+ * @param resource - The resource model.
+ * @returns The modifier elements present, in document order, one per distinct location.
+ * @example
+ * ```ts
+ * import { modifierElements, parseResource } from "@cosyte/fhir";
+ * const { resource } = parseResource(
+ *   '{"resourceType":"Observation","valueQuantity":{"value":0.01,"comparator":"<","unit":"mg"}}',
+ * );
+ * modifierElements(resource); // [{ element: "comparator", location: "Observation.valueQuantity.comparator" }]
+ * ```
+ */
+export function modifierElements(resource: FhirComplex): ModifierElementReport[] {
+  const types = typesOf(resource);
+  const prefix = safetyPrefix(types);
+  return rebaseModifierElements(walkSafety(resource, prefix).modifierElements, prefix, types);
+}
+
+/**
+ * The FHIRPath prefix every location on this readout is built from: the document's own
+ * `resourceType`, bounded, or FHIRPath's own `$this` when it names none.
+ *
+ * @internal
+ */
+function safetyPrefix(types: readonly string[]): string {
+  const rt = types[0];
+  return rt === undefined ? "$this" : rootPath(rt);
 }
 
 /**
@@ -951,6 +1019,12 @@ function collectNested(
 /** The fail-closed findings a single walk of the resource collects. */
 interface SafetyWalk {
   readonly modifiers: string[];
+  /**
+   * The modifier ELEMENTS the walk met, at the walk's own paths. Rooted at the walk's prefix here;
+   * the tighter root this channel is allowed to publish is applied by the caller, so that no other
+   * channel's locations pass through the rule.
+   */
+  readonly modifierElements: ModifierElementReport[];
   readonly shadowed: string[];
   readonly arrayWrapped: string[];
   /** The subset of {@link SafetyWalk.arrayWrapped} FHIR XML has no repetition to spell back. */
@@ -985,6 +1059,7 @@ interface SafetyWalk {
 function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
   const out: SafetyWalk = {
     modifiers: [],
+    modifierElements: [],
     shadowed: [],
     arrayWrapped: [],
     unspellableInXml: [],
@@ -994,7 +1069,9 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     unreadableCode: [],
   };
   walkComplex(resource, path, out, true);
-  return out;
+  // One element at one location is one report, however many members a repeated property name or a
+  // `_` sibling left there. Collapsed once, here, so every caller of the walk sees the same list.
+  return { ...out, modifierElements: dedupeModifierElements(out.modifierElements) };
 }
 
 /**
@@ -1321,6 +1398,11 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
   if (isRoot || getAllProperties(node, "resourceType").length > 0) {
     checkResourceRoot(node, path, out);
   }
+  // Every node, not only a resource root: `comparator` modifies the value beside it wherever that
+  // value sits, and the two type-gated rules decide their own gate off this node's `resourceType`.
+  // Reported at the path the walk already built, so the report window IS the read window and the
+  // array indices are the walk's own.
+  collectModifierElements(node, path, out.modifierElements);
   for (const property of node.properties) visitProperty(property, path, out);
   const reported = new Set<string>();
   for (const property of node.duplicates ?? []) {
@@ -1419,7 +1501,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   // negation in the member a single-value lookup skips. Reading one of several written values and
   // reporting the record as positive is the exact harm this layer exists to prevent. Over-surfacing
   // a negation is safe; missing one is not.
-  const prefix = rt === undefined ? "$this" : rootPath(rt);
+  const prefix = safetyPrefix(types);
   const walk = walkSafety(resource, prefix);
 
   // The two convenience-shaped fields are root reads, exactly as `status` beside them is: they answer
@@ -1446,6 +1528,10 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
 
   const { modifiers, shadowed, arrayWrapped, unreadableBoolean, nearMissCode, unreadableCode } =
     walk;
+  // The one channel whose root is not the walk's prefix: a resource type name roots a
+  // modifier-element location only when this library defines the name (see
+  // `./modifier-elements.js`). Applied here, to this channel's locations and to no other's.
+  const modifierElementReports = rebaseModifierElements(walk.modifierElements, prefix, types);
   const nested = nestedArrays(resource, prefix);
   const dropped = droppedText(resource, prefix);
 
@@ -1459,6 +1545,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     noKnownAllergy,
     negations,
     unhandledModifierExtensions: modifiers,
+    modifierElements: modifierElementReports,
     shadowedProperties: shadowed,
     arrayWrappedScalars: arrayWrapped,
     nestedArrays: nested,
@@ -1468,6 +1555,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     unreadableNegationCodes: unreadableCode,
     safeToSummarize:
       modifiers.length === 0 &&
+      modifierElementReports.length === 0 &&
       shadowed.length === 0 &&
       arrayWrapped.length === 0 &&
       nested.length === 0 &&
@@ -1481,7 +1569,8 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
 /**
  * A refusal raised when a caller tries to flatten or summarize a resource this library cannot
  * summarize honestly: it carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
- * ignoring one), a repeated property name left an element holding several values with no rule for
+ * ignoring one), it carries a modifier ELEMENT (an ordinary base element R4 flags `?!`, which the
+ * same rule forbids ignoring), a repeated property name left an element holding several values with no rule for
  * choosing between them, a `0..1` safety element arrived wrapped in a JSON array, an array inside
  * an array left content the codec could not read at all, XML character data written on an element
  * was dropped, a boolean-valued safety element carries a written value outside the datatype's
@@ -1510,11 +1599,11 @@ export class FhirSafetyError extends Error {
    */
   constructor(locations: readonly string[]) {
     super(
-      "Resource cannot be safely summarized: an unhandled modifierExtension, a repeated property " +
-        "name, an array-wrapped single-valued element, an array inside an array, dropped XML " +
-        "element text, a boolean value this library cannot read, a code that spells a negation " +
-        "bar its case or its surrounding whitespace, or content where a code belongs leaves an " +
-        `element this library must not flatten (${String(locations.length)} location(s)).`,
+      "Resource cannot be safely summarized: an unhandled modifierExtension, a modifier element, " +
+        "a repeated property name, an array-wrapped single-valued element, an array inside an " +
+        "array, dropped XML element text, a boolean value this library cannot read, a code that " +
+        "spells a negation bar its case or its surrounding whitespace, or content where a code " +
+        `belongs leaves an element this library must not flatten (${String(locations.length)} location(s)).`,
     );
     this.name = "FhirSafetyError";
     this.locations = locations;
@@ -1523,7 +1612,7 @@ export class FhirSafetyError extends Error {
 
 /**
  * Assert a resource is safe to flatten/summarize, throwing {@link FhirSafetyError} when it carries an
- * unhandled `modifierExtension`, a repeated property name, an array-wrapped single-valued element, an
+ * unhandled `modifierExtension`, a modifier element, a repeated property name, an array-wrapped single-valued element, an
  * array inside an array, dropped XML element text, a boolean-valued safety element holding a written
  * value outside the datatype's lexical space, or a `code`-valued negation element holding a value
  * that spells a negation code bar its case or its surrounding whitespace, or content at a position
@@ -1546,6 +1635,7 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
   const readout = "unhandledModifierExtensions" in resource ? resource : readSafety(resource);
   const locations = [
     ...readout.unhandledModifierExtensions,
+    ...readout.modifierElements.map((report) => report.location),
     ...readout.shadowedProperties,
     ...readout.arrayWrappedScalars,
     ...readout.nestedArrays,

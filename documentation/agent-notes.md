@@ -1151,6 +1151,44 @@ document, so it carries no signal about the loss. It is another of the encodings
 and it is what a generic FHIR-XML to JSON converter makes of `<status value="entered-in-error"/>`,
 the same traffic that docblock cites. CLOSED 2026-08-10 bar `valid`; wrapped-`status` residual open.
 
+**Added 2026-08-21 by the modifier-ELEMENT channel (`SAFETY-MODIFIER-2`), filed rather than
+absorbed, and none of them closed here.** The channel reports the four elements at every node the
+safety walk reaches, so its reach IS that walk's reach and nothing was widened to feed it. Three
+JSON-read-path shapes carry a Scope modifier element the walk does not reach, plus a fourth the codec
+reads as a primitive list, and the first is fail-OPEN, which is why it leads. **Each is pinned by its
+own characterization test in `test/modifier-elements.test.ts` ("declared non-reach residuals on the
+JSON read path"), so closing one MUST red a test in the same change.**
+
+- **A modifier element inside a PRIMITIVE's `_`-sibling extension is not reached, and the document
+  reads `safeToSummarize: true`.** `{"resourceType":"Patient","gender":"male","_gender":
+  {"extension":[{"url":"http://x","valueQuantity":{"value":1,"comparator":"<"}}]}}` reports nothing.
+  The safety walk descends complex nodes and lists; a primitive's own `id`/`extension` metadata is a
+  SEPARATE walk (`collectNested`), kept separate on purpose so a new report cannot reorder or
+  suppress a finding the first walk already makes. R4 puts an extension's value in a `value[x]`, and
+  a `valueQuantity` there can carry a `comparator`, so this is a real shape and not a contrived one.
+  **Fail-open, and the only one of the three that is**, which is what makes it the first candidate if
+  the reach is ever widened.
+- **A modifier element inside an array-inside-an-array is not reached.** The codec models no inner
+  array (the standing `nestedArrays` loss), so there is no node to reach. The document is already
+  refused, by the channel that reports the unreadable content itself, so this one is fail-CLOSED.
+- **A modifier element inside a `_`-sibling misplaced on a COMPLEX element is not reached**, and the
+  document reads `safeToSummarize: true`. The reader discards such a sibling whole (the standing
+  "`_`-sibling discarded whole" loss above), so the modifier never reaches the model at all. Nothing
+  new: this is that residual seen through this channel.
+- **A `use` inside a MIXED array whose first entry is a scalar is not reached.**
+  `{"resourceType":"Practitioner","identifier":["x",{"use":"official"}]}` reads the whole array as a
+  repeating primitive, so the object beside the scalar becomes a value-absent slot and there is no
+  complex node to reach. Unlike the first residual the position IS reported, as
+  `UNKNOWN_PROPERTY` at `Practitioner.identifier[1]`, so the loss is not silent; what does not happen
+  is that this channel reports it, and `safeToSummarize` does not move. The complementary order
+  (object first, scalar second) IS read as a complex list and IS reported, and both directions are
+  pinned.
+
+**The XML read path has NO residual of its own here, which was measured rather than assumed:** all
+four elements reach the safety walk from XML and are reported, including the element-text spelling
+whose VALUE this reader drops (`<comparator>&lt;</comparator>` still reports the modifier, because
+presence of the KEY is the trigger). Pinned per element in `test/modifier-elements-xml.test.ts`.
+
 ### `FHIR-UNBOUND-PREFIX-ROUNDTRIP` (2026-08-07)
 
 **THE DEFERRAL STANDS, AND MEASURING IT FOUND A STRICTLY WORSE DEFECT IN THE SAME FUNCTION.** The

@@ -274,14 +274,18 @@ describe("content where a code belongs is disclosed, not read through", () => {
      * direction that bit `#84` pass 1: a disclosure firing on a conformant document is a behavioural
      * defect, not an over-report.
      */
-    const conformant: readonly [string, string][] = [
+    const conformant: readonly [string, string, boolean?][] = [
       ["a plain status", '{"resourceType":"Procedure","status":"completed"}'],
       ["a status that IS a negation", '{"resourceType":"Procedure","status":"not-done"}'],
       [
         "a value-absent status with a data-absent-reason sibling (json.html 2.6.2.3)",
         '{"resourceType":"Procedure","_status":{"extension":[{"url":"http://hl7.org/fhir/StructureDefinition/data-absent-reason","valueCode":"unknown"}]}}',
       ],
-      ["a resource with no status at all", '{"resourceType":"Patient","active":true}'],
+      // The third field is this row's `safeToSummarize`, and it is `false` here for a reason that
+      // has nothing to do with the channel under test: `Patient.active` is a modifier ELEMENT, so
+      // it is reported and the readout declines to affirm. The channel this suite is about still
+      // draws nothing, which is what the assertion above it checks.
+      ["a resource with no status at all", '{"resourceType":"Patient","active":true}', false],
       [
         "a CodeableConcept verificationStatus",
         '{"resourceType":"Condition","verificationStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-ver-status","code":"refuted"}]}}',
@@ -328,12 +332,12 @@ describe("content where a code belongs is disclosed, not read through", () => {
       ],
     ];
 
-    for (const [name, json] of conformant) {
+    for (const [name, json, summarizable = true] of conformant) {
       it(`draws nothing for ${name}`, () => {
         const safety = safetyOf(json);
 
         expect(disclosed(safety)).toEqual([]);
-        expect(safety.safeToSummarize).toBe(true);
+        expect(safety.safeToSummarize).toBe(summarizable);
       });
     }
 

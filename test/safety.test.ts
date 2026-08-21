@@ -150,7 +150,9 @@ describe("readSafety: surfacing the modifier / status / negation elements", () =
     expect(safety.status).toBeUndefined();
     expect(safety.clinicalStatus).toBeUndefined();
     expect(safety.negations).toEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    // `Patient.active` is a modifier ELEMENT, reported on its own channel, so this document is not
+    // summarizable. The type-scoped slots above are still the subject of this test and still empty.
+    expect(safety.safeToSummarize).toBe(false);
   });
 });
 

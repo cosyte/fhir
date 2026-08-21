@@ -123,6 +123,7 @@ export {
   assertSafeToSummarize,
   droppedText,
   FhirSafetyError,
+  modifierElements,
   nearMissNegationCodes,
   nestedArrays,
   readSafety,
@@ -132,6 +133,8 @@ export {
   unreadableNegationCodes,
 } from "./safety/status.js";
 export type { NegationKind, SafetyReadout } from "./safety/status.js";
+export { MODIFIER_ELEMENT_ROOT_TYPES } from "./safety/modifier-elements.js";
+export type { ModifierElementName, ModifierElementReport } from "./safety/modifier-elements.js";
 export {
   codeOf,
   codingsOf,

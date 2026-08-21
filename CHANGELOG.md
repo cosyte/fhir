@@ -8,6 +8,54 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Modifier ELEMENTS reach the safety readout (`SAFETY-MODIFIER-2`), on a new
+  `SafetyReadout.modifierElements` channel carrying `{ element, location }` per location.** A
+  modifier is not only a `modifierExtension`: R4 flags several ordinary base elements
+  `Is Modifier: true`, and at the previous release the safety spine was blind to every one of them,
+  so `{"resourceType":"Observation","valueQuantity":{"value":0.01,"comparator":"<","unit":"mg"}}`
+  came back `safeToSummarize: true` and a caller doing exactly what the readout tells it to do was
+  handed `0.01 mg` for a value the sender wrote as `< 0.01 mg`. Four elements are reported:
+  `comparator` and `implicitRules` wherever a node the walk reaches carries one, `active` on a
+  `Patient` root, and `use` on a `Practitioner`'s `identifier` entries. Each sets `safeToSummarize`
+  to `false` and makes `assertSafeToSummarize` throw. `modifierElements(resource)` is the standalone
+  collector.
+  **REPORTING ONLY, and the boundary is the point:** nothing is interpreted (no bound, no range, no
+  inequality, no unit logic), no finding is retired, re-severitied or relocated, `valid` never moves,
+  and `unhandledModifierExtensions` is byte-identical to what it was, its locations included. A
+  modifier EXTENSION stays on that channel and draws nothing here, so one of them is still one
+  report; `implicitRules` is a modifier ELEMENT and lands on the new channel.
+  **RECOGNITION IS BY KEY NAME**, plus literal `resourceType` equality for the two path-gated
+  elements, consulting no element table, no StructureDefinition and no sibling-key shape. It
+  OVER-reports by construction: any object carrying a `comparator` member is an occurrence, a vendor
+  payload reusing the name included, and `{"comparator":"<"}` standing alone is one too. The trade is
+  deliberate and stated rather than discovered: a false positive costs a caller a refusal, a false
+  negative costs a patient a wrong clinical value, and the type-directed alternative needs an element
+  table this package does not have (`BUILTIN_SCHEMAS` holds one entry).
+  **PRESENCE OF THE KEY IS THE TRIGGER, NEVER READABILITY OF THE VALUE.** A value outside its R4
+  value set, a value of the wrong JSON type, a JSON `null`, and the primitive-extension `_` form with
+  no value sibling all report; `{"active":null,"_active":{…}}` read as "absent" would have returned a
+  clean verdict over a document that carries the modifier. A value and its `_` sibling at one element
+  are ONE occurrence and yield ONE report.
+  **A LOCATION CARRIES NO DOCUMENT TEXT, AND THIS CHANNEL IS STRICTER THAN THE REST OF THE PACKAGE
+  ABOUT ITS ROOT.** Every segment goes through the bound this package already ships, so a key that is
+  not shaped like an element name is withheld; and a location roots at a resource type name ONLY when
+  the name is one this library defines (`MODIFIER_ELEMENT_ROOT_TYPES`, the seven
+  `SAFETY_RESOURCE_TYPES` plus `Patient`, `Practitioner` and `Bundle`), so two unmodeled types emit
+  EQUAL locations carrying neither type string. The set is source constants and is never derived from
+  the input. The existing `RESOURCE_NOT_MODELED` issue still names the type exactly as it did, so
+  nothing a caller can read today is lost.
+  **BOTH WIRE FORMATS**, one characterization test per element per read path, and a base-versus-head
+  read differential over the fixture corpus (`test/base-vs-head-readout.test.ts`, captured by
+  `pnpm capture:base-readouts`) that passes only when the sole differences are the added reports and
+  `safeToSummarize` moving true to false. Three JSON-read-path shapes carry a modifier element the
+  safety walk does not reach and are pinned as characterization tests and recorded with this repo's
+  declared read-path losses rather than closed here; the XML read path has no such residual, which
+  was measured and not assumed.
+  **What a caller sees change:** an ordinary `Patient` carrying `active`, or a `Practitioner`
+  carrying `identifier.use`, is no longer `safeToSummarize`. That is chosen and fail-closed: deciding
+  that `active: true` is benign while `active: false` is not is a per-value judgement, which is the
+  general per-element table this package does not yet have. Each report names its element and its
+  location, so a caller can act on the reason rather than on the flag alone.
 - **The PHI commit-gate reads the bytes git carries as a UNION with its working-tree walk
   (`PHI-SCAN`).** Two states measured at the base commit: a fixture `git add`ed and then scrubbed in
   the working tree scanned clean at **exit 0** while `git commit` would have committed the staged
