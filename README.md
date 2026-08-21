@@ -174,8 +174,9 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   reported for them either. Those same reads run at **every resource root**, so a retracted
   `Observation`, a `Procedure` recorded as not performed or an order marked "do not perform" inside a
   `Bundle` entry or `contained` reaches `negations` too. **The readout's location channels
-  (`unhandledModifierExtensions`, `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`,
-  `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`, `unreadableNegationCodes`) and
+  (`unhandledModifierExtensions`, `modifierElements`, `shadowedProperties`, `arrayWrappedScalars`,
+  `nestedArrays`, `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`,
+  `unreadableNegationCodes`) and
   `safeToSummarize` are document-wide.** The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
   and the rest) answer about the resource you handed in, because one value cannot say which resource
   it came from, so branch on `negations` whenever a resource may carry others.
@@ -184,6 +185,23 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   not flag `?!`, and surfacing one from somewhere inside a document could make a caller less careful
   where leaving it unsurfaced reads as _unknown_.
   `assertSafeToSummarize` **refuses** (throws) rather than flatten past an unhandled modifier.
+- **A modifier is not only a `modifierExtension`, and the ordinary base elements R4 flags `?!` reach
+  the readout too.** `modifierElements` carries one entry per location, each
+  `{ element, location }`: `comparator` wherever a node the walk reaches carries it, `implicitRules`
+  likewise, `active` on a `Patient` root, and `use` on a `Practitioner`'s `identifier` entries. Each
+  sets `safeToSummarize` to `false` and makes `assertSafeToSummarize` throw, because
+  `{"valueQuantity":{"value":0.01,"comparator":"<","unit":"mg"}}` summarized as a point value is
+  `0.01 mg` reported for a result the sender wrote as `< 0.01 mg`. **Reporting only:** the element is
+  surfaced and never interpreted, so no bound, range or inequality is read out of a `comparator` and
+  no unit is ever converted. Recognition is by KEY NAME (and, for the two path-gated elements, by
+  literal `resourceType` equality), which OVER-reports by construction: any object carrying a
+  `comparator` member is an occurrence, a vendor payload that reuses the name included. That trade is
+  deliberate, since a false positive costs a refusal and a false negative costs a wrong clinical
+  value. A report carries the element and the location and nothing from the document: no value, no
+  unit, no code, no URI; and a location roots at a resource type name only when the name is one this
+  library defines (`MODIFIER_ELEMENT_ROOT_TYPES`), so an unmodeled type reads as a constant token.
+  `modifierElements(resource)` is the standalone collector, and a modifier EXTENSION stays on
+  `unhandledModifierExtensions` and draws nothing here, so one of those is still one report.
 - **A safety verdict is never asserted over a value the document left ambiguous.** Each negation read
   runs over every coding on a `CodeableConcept` and every value written for the element it reads
   (`resourceType`, `status`, `verificationStatus`, `code`, `doNotPerform`), **including through an
