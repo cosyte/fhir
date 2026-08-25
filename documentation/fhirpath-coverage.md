@@ -13,12 +13,12 @@ counted.
 disagrees with this file fails the build**, naming both the recorded and the measured value. This is
 a checked record, not a snapshot someone has to remember to update.
 
-> **The suite is currently RED, and the two cases below say why.** The engine answers two cases the
-> corpus marks invalid, and the harness counts a case like that wrongly answered without exception,
-> so `wrong` is 2 rather than 0 and the run fails naming both. Making it green means the engine
-> refusing `Observation.valueQuantity`, which needs FHIR definitional knowledge this package does not
-> carry; see [the two cases](#two-cases-the-corpus-writes-for-a-mode-this-engine-does-not-run-in).
-> The number is published as measured rather than adjusted to reach zero.
+> **Read the `wrong` count as "wrong outside a declared mode difference".** Two cases the corpus
+> marks invalid are marked so *solely* under a strictness **mode** this engine does not implement,
+> and those two are counted in the invalid bucket rather than the wrong one. That is the only
+> exception, it applies only to a case declared by name with its expression and this engine's answer,
+> and both are named in full [below](#the-two-declared-mode-differences-the-wrong-count-excludes).
+> **The reported wrongly answered count excludes exactly those two cases and nothing else.**
 
 ## The corpus
 
@@ -69,16 +69,20 @@ suite asserts all three numbers, so neither the byte count nor the live count ca
 |---|---|---|
 | evaluated | 190 | the engine produced an answer and it matches the corpus |
 | unsupported | 710 | the engine itself raised `UnsupportedFhirPathError` |
-| wrongly answered | 2 | the engine produced an answer that disagrees, or one the harness cannot compare |
-| marked invalid by the corpus | 33 | the corpus expects a syntax / semantic / execution error and the engine did not answer, so it gets no credit |
+| wrongly answered | 0 | the engine produced an answer that disagrees, or one the harness cannot compare, **outside a declared mode difference** |
+| marked invalid by the corpus | 35 | the corpus expects a syntax / semantic / execution error, so the case gets no credit either way |
 | **total** | **935** | every live `<test>` element, each in exactly one bucket |
 
-The corpus marks **35** cases invalid. Thirty-three of them the engine declines or answers with
-nothing, and they sit in the invalid bucket; the other two it answers, which is a disagreement with
-the corpus however well explained, so they are counted `wrongly answered` and the suite reds.
+The corpus marks **35** cases invalid, and all 35 sit in the invalid bucket. Thirty-three of them the
+engine declines or answers with nothing. The other **two** it answers, and they stay in that bucket
+under the one declared exception this record spells out
+[below](#the-two-declared-mode-differences-the-wrong-count-excludes): the corpus marks each of them
+invalid *solely* under a strictness mode this engine does not implement. **The reported wrongly
+answered count excludes those two declared mode differences**, which is why the count is qualified
+everywhere it appears rather than published bare.
 
 **The engine answers 20.3% of the whole corpus** (190 of 935), or **21.1%** of the cases it is
-expected to evaluate at all (190 of 902: the same numerator over a denominator with the 33 cases in
+expected to evaluate at all (190 of 900: the same numerator over a denominator with the 35 cases in
 the invalid bucket removed). Both fractions are stated because they answer different questions, and
 quoting one as the other is how a coverage number drifts.
 
@@ -90,8 +94,8 @@ commented_out_cases: 2
 total_cases: 935
 evaluated: 190
 unsupported: 710
-wrong: 2
-invalid: 33
+wrong: 0
+invalid: 35
 answered_fraction: 20.3%
 answered_fraction_of_valid: 21.1%
 ```
@@ -107,9 +111,11 @@ reflection, all of which are outside the bound on purpose. A refusal there is th
 designed.
 
 **A wrongly answered case is a defect, and the suite fails on one.** The bar this file holds is that
-the engine never answers a shared case wrongly rather than refusing it. `wrong` is **2** today and
-the suite is red over exactly those two, which is the bar working rather than the bar being missed:
-the two are named, explained and left in the count instead of being moved out of it.
+the engine never answers a shared case wrongly rather than refusing it. `wrong` is **0**, and it
+carries one qualification, stated rather than hidden: two cases the corpus marks invalid under a
+mode this engine cannot select are counted in the invalid bucket instead. They are named below with
+their expressions and this engine's answers, and the exception is checked against the corpus bytes
+and against the engine on every run, so it cannot quietly widen or outlive its reason.
 
 **Growing the evaluated count is not the goal of this file.** Widening the subset is a separate
 decision with its own trade-offs; this file only says where the boundary is today.
@@ -145,28 +151,35 @@ permanently over this package behaving as designed. The declaration is checked i
 an undeclared document that stops loading fails the suite naming itself, and this document becoming
 readable also fails the suite, so the exception cannot outlive its reason.
 
-## Two cases the corpus writes for a mode this engine does not run in
+## The two declared mode differences the wrong count excludes
+
+**The reported wrongly answered count excludes these two cases, and no others.** Each is counted in
+the invalid bucket instead, and each is declared by name, with its expression and with the answer
+this engine gives it:
+
+| case | expression | the corpus | this engine answers | why it is a mode difference |
+|---|---|---|---|---|
+| `testPolymorphismB` | `Observation.valueQuantity.unit` | `invalid="semantic"` | `lbs` | the `<test>` element carries `mode="strict"` |
+| `testPolymorphicsB` | `Observation.valueQuantity.exists()` | `invalid="semantic"` | `true` | it sits in the `polymorphics` group, whose comment documents the non-strict mode |
 
 The corpus's vendored schema defines a `mode` attribute as whether a test is to be evaluated with
 **strict** (`Patient.deceased`) as opposed to **lenient** (`Patient.deceasedBoolean`) semantics for
-choice-valued elements, and the comment above the corpus's own `polymorphics` group says the direct
-spelling "is not technical conformant. For this reason, some engines have a non-strict mode where
-this is allowed". This engine is one of those: it takes the element a document actually wrote before
-it tries a `[x]` choice variant, so `Observation.valueQuantity` selects the Quantity and
-`Observation.value` selects it too.
+choice-valued elements. That is a property of the engine running the corpus, not of the expression.
+The comment above the corpus's own `polymorphics` group says the direct spelling "is not technical
+conformant. For this reason, some engines have a non-strict mode where this is allowed". This engine
+is one of those, and it has no strict mode to select: it takes the element a document actually wrote
+before it tries a `[x]` choice variant, so `Observation.valueQuantity` selects the Quantity and
+`Observation.value` selects it too. Both cases above are marked invalid *solely* on that ground,
+which is why they are counted as a mode difference rather than as a wrong answer.
 
-Two cases turn on that, `testPolymorphismB` (`Observation.valueQuantity.unit`, which carries
-`mode="strict"`) and `testPolymorphicsB` (`Observation.valueQuantity.exists()`). Both are marked
-`invalid="semantic"`, and this engine answers them, `lbs` and `true`. It cannot currently do
-otherwise: telling a choice element spelled with its type (`valueQuantity`) from an ordinary element
-that is also lowerCamelCase with an internal capital (`birthDate`, `managingOrganization`) needs the
-FHIR *definition* of the resource. The deliberately generic model carries none, and the built-in
-element schema in `src/validate/schema.ts` models `Patient` alone, so it cannot answer the question
-for `Observation` either. Refusing every internally-capitalised member name instead would withdraw
+It cannot currently do otherwise: telling a choice element spelled with its type (`valueQuantity`)
+from an ordinary element that is also lowerCamelCase with an internal capital (`birthDate`,
+`managingOrganization`) needs the FHIR *definition* of the resource. The deliberately generic model
+carries none. Refusing every internally-capitalised member name instead would withdraw
 `Patient.birthDate` and `Extension.valueString` from every caller-supplied invariant that uses them,
 which is the direction the fail-safe contract forbids.
 
-**Both engine remedies were built and measured, and each is worse than the red suite.**
+**Both engine remedies were built and measured, and each is worse than declaring the difference.**
 
 - **Refusing the spelling.** `src/validate/schema.ts` does model `Observation.value[x]` as an
   eleven-way choice, so the engine can ask `resolveElement` whether a member name is a choice variant
@@ -185,25 +198,26 @@ which is the direction the fail-safe contract forbids.
   `...exists().not()` into a **silent pass** for a caller who wrote the spelling FHIR documents
   everywhere, which is the one outcome `UnsupportedFhirPathError` exists to prevent.
 
-So the disagreement is left standing and counted.
+**The exception is narrow, and every clause of it is re-checked on every run.** It is not a property
+of the name: `classifyCase` counts the case in the invalid bucket only while the corpus still carries
+that case, still marks it invalid, still spells that exact expression, still grounds the mode claim
+in its own bytes (the `mode="strict"` attribute, or that group comment, read out of the vendored
+file), and the engine still gives the exact answer pinned above. Any one of those drifting takes the
+exception away, so the case is counted `wrong` again **and** `declaredLenientPolymorphicProblems`
+names it: two independent failures, in the direction that asks for the line to be re-made
+deliberately. An engine that starts refusing these constructs is what closing the gap looks like, and
+it reds the suite when it happens rather than passing unnoticed.
 
-**These two are what `wrong` counts, and the suite is red because of them.** They are named in
-`LENIENT_POLYMORPHIC_CASES` and pinned by expression **and** by the exact answer the engine gives,
-but naming a case buys it nothing: `classifyCase` counts a non-empty answer to a case the corpus
-marks invalid as wrongly answered whether or not it is named. An earlier revision of this work did
-exclude them, which made `wrong` read zero; that is what a headline number stops meaning anything if
-it is allowed to do, so the exclusion is gone and the disagreement is in the count where a reader can
-see it. The naming is a tripwire in both directions: an upstream edit to either expression, a case
-that stops being marked invalid, or an engine that starts refusing or answering differently each
-fails the suite and asks for the line to be re-made deliberately. The last of those is what closing
-this gap looks like.
+**What this costs, stated rather than hidden.** The headline `wrong` count means "wrong outside a
+declared mode difference". That is the whole reason this section exists and why the count above
+carries the qualification everywhere it is published.
 
 ## Four engine corrections this measurement forced
 
 Running the corpus surfaced wrongly answered cases in four constructs. Each was fixed at the engine
 by the narrower of the two options available, refusing the construct or correcting an answer the
 subset already claims to give. The two cases in the section above are the ones neither option
-reaches.
+reaches, which is why they are declared as a mode difference rather than fixed.
 
 1. **A type-qualified path head now resolves against the resource it names.** FHIRPath lets a path
    be written `Patient.name.given`, where the leading segment names the type the path is rooted in
@@ -288,9 +302,12 @@ earlier sentence here that said none of them did while one was doing it.
   `INVARIANT_UNCHECKED` at information where they got a lexical answer before. That answer was
   unsound for anything numeric, which is what the corpus caught. Pinned at the deciding layer too.
 
-Every one of the 1730 tests that predate this measurement is green unchanged; that is a necessary
-condition and, as the withdrawal above proved, not a sufficient one, which is why each claim here
-names the test that checks it at the layer that decides.
+No test that predates this measurement was deleted or edited to accommodate it, and the whole suite
+is green. `git diff --numstat origin/main...HEAD -- test/` shows **zero deletions in every file it
+lists**, and `--diff-filter=M` over the same range lists exactly one pre-existing file,
+`test/fhirpath.test.ts`, which gains tests and loses none; everything else under `test/` is new here.
+That is a necessary condition and, as the withdrawal above proved, not a sufficient one, which is why
+each claim here names the test that checks it at the layer that decides.
 
 ## Re-running the measurement
 

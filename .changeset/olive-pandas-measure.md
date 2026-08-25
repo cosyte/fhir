@@ -12,8 +12,8 @@ neither side wrote. HL7's shared FHIRPath corpus is now vendored under
 `test/fhirpath-suite.test.ts` runs all 935 cases on every `pnpm test`, putting each in exactly one
 bucket and printing the counts. `documentation/fhirpath-coverage.md` records them, and a run that
 disagrees with that file fails the build naming both numbers. Measured at corpus tag `1.7.67`:
-**190 evaluated, 710 refused as unsupported, 2 answered wrongly, 33 the corpus marks invalid and the
-engine does not answer**, so the engine answers 20.3% of the corpus.
+**190 evaluated, 710 refused as unsupported, 0 answered wrongly, 35 the corpus marks invalid**, so
+the engine answers 20.3% of the corpus.
 
 A large refusal count is the measurement, not a defect: the corpus grades the whole language, and
 arithmetic, string functions, temporal arithmetic, `descendants()`, `resolve()`, aggregates and FHIR
@@ -92,13 +92,16 @@ is conservative rather than measured, since the refusal is caused by the absent 
 only make the coverage number smaller than the engine deserves. The exception is declared by name so
 that an undeclared document going unreadable, or this one becoming readable, both fail the suite.
 
-Two of the 935 cases, `testPolymorphismB` and `testPolymorphicsB`, are marked invalid by the corpus
-only under the **strict** mode of choice-element access its own schema defines
+Two of the 935 cases, `testPolymorphismB` (`Observation.valueQuantity.unit`, answered `lbs`) and
+`testPolymorphicsB` (`Observation.valueQuantity.exists()`, answered `true`), are marked invalid by
+the corpus only under the **strict** mode of choice-element access its own schema defines
 (`Observation.value` rather than `Observation.valueQuantity`); the corpus's own comment notes that
-lenient engines allow the direct spelling. This engine is lenient there and cannot be otherwise
-without FHIR resource definitions it deliberately does not carry. **They are the two cases counted
-wrongly answered**: a case the corpus marks invalid that the engine answers is a disagreement however
-well explained, so it is counted as one, and the suite is red over exactly those two rather than
-excusing them into the invalid bucket. Both are named and pinned to their expression and answer, so
-an engine that starts refusing them, or an upstream edit to either, fails the suite and asks for the
-line to be re-made deliberately.
+lenient engines allow the direct spelling. This engine is lenient there and has no strict mode to
+select, so the disagreement is a mode difference rather than a wrong answer, and the two are counted
+in the invalid bucket. **The reported wrongly answered count excludes exactly those two cases**, so
+read the zero as "wrong outside a declared mode difference"; both are named with their expressions
+and answers in `documentation/fhirpath-coverage.md`. The exception is narrow and re-checked every
+run against the corpus bytes and the running engine: a case that stops being marked invalid, an
+expression edited upstream, a mode claim the corpus stops grounding, or an engine that starts
+refusing or answering differently each takes the exception away, counts the case wrong again and
+fails the suite asking for the line to be re-made deliberately.

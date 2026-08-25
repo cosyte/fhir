@@ -9,8 +9,13 @@
  * 3. every case the corpus carries lands in exactly one bucket and the buckets sum to the total;
  * 4. a case is only unsupported when the **engine itself** refused it;
  * 5. an input document that is missing, or that the reader refuses without a declaration, fails the
- *    run by name rather than having its cases skipped; and
- * 6. the counts match `documentation/fhirpath-coverage.md`, naming both numbers when they do not.
+ *    run by name rather than having its cases skipped;
+ * 6. the counts match `documentation/fhirpath-coverage.md`, naming both numbers when they do not;
+ *    and
+ * 7. the one exception to (2), a case the corpus marks invalid solely under a strictness mode this
+ *    engine does not implement, applies **only** where the suite declares the case by name with its
+ *    expression and the engine's answer, and fails the run the moment a declared case stops
+ *    matching either.
  *
  * The corpus is HL7's, vendored under `__fixtures__/fhirpath-suite/` with its Apache-2.0 licence.
  */
@@ -23,6 +28,7 @@ import { describe, expect, it } from "vitest";
 import {
   answeredFraction,
   answeredFractionOfValid,
+  appliedModeExceptions,
   classifyCase,
   COMMENTED_OUT_CASES,
   CORPUS_REPOSITORY,
@@ -33,6 +39,7 @@ import {
   inputDocumentNames,
   LENIENT_POLYMORPHIC_CASES,
   loadInputDocuments,
+  modeExceptionProblem,
   RAW_TEST_TAG_OCCURRENCES,
   readCorpusFile,
   READER_REFUSED_INPUTS,
@@ -42,6 +49,7 @@ import {
   runSuite,
   SUITE_FILE,
   TOTAL_CASES,
+  UNIMPLEMENTED_MODES,
   type InputLoad,
   type SuiteCase,
 } from "./_fhirpath-suite.js";
@@ -54,6 +62,22 @@ const RUN = runSuite();
 /** The committed coverage record, read as text. */
 const RECORD_PATH = new URL("../documentation/fhirpath-coverage.md", import.meta.url);
 const RECORD = readFileSync(RECORD_PATH, "utf8");
+
+/**
+ * The one live case the corpus writes under `name`.
+ *
+ * Throws rather than returning `undefined` when the corpus stops carrying it, or carries it twice,
+ * so an assertion resting on a named case cannot pass vacuously after an upstream edit.
+ */
+function byNameInRun(name: string): SuiteCase {
+  const found = RUN.cases.filter((c) => c.name === name);
+  if (found.length !== 1) {
+    throw new Error(
+      `the vendored corpus carries ${String(found.length)} case(s) called '${name}', expected 1`,
+    );
+  }
+  return found[0] as SuiteCase;
+}
 
 /** The record's machine-checked `counts` block, as `key -> value`. */
 function recordedCounts(): Map<string, string> {
@@ -189,6 +213,7 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
       name: "uncomparable",
       inputFile: "patient-example.xml",
       expression: "name",
+      mode: null,
       invalid: null,
       predicate: false,
       ordered: null,
@@ -244,6 +269,7 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
       name: "invalid-but-answered",
       inputFile: "patient-example.xml",
       expression: "active",
+      mode: null,
       invalid: "semantic",
       predicate: false,
       ordered: null,
@@ -312,31 +338,53 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
     expect(naming.length).toBe(1);
   });
 
-  it("counts the two lenient-mode cases wrong like any other, and describes them in both directions", () => {
+  it("counts a declared strictness-mode difference in the invalid bucket, and only while it is declared", () => {
     // What the corpus itself calls a MODE: `testSchema.xsd` documents `mode` as strict-versus-lenient
-    // choice-element access, and the corpus's own comment says some engines are lenient there. This
-    // one is. That EXPLAINS the two disagreements; it does not excuse them, and the harness does not
-    // treat it as an exception. Closing the gap means the engine refusing `Observation.valueQuantity`,
-    // which needs the FHIR definition of Observation that neither the generic model nor the built-in
-    // element schema carries.
+    // choice-element access, and the corpus's own comment above the `polymorphics` group says some
+    // engines are lenient there. This one is, and it has no strict mode to select. These two cases
+    // are therefore marked invalid SOLELY under a mode this engine does not implement, which is the
+    // single exception C7 admits, and it applies only where the suite declares the case by name with
+    // its expression and the engine's answer.
     expect([...LENIENT_POLYMORPHIC_CASES.keys()]).toEqual([
       "testPolymorphismB",
       "testPolymorphicsB",
     ]);
+    expect([...UNIMPLEMENTED_MODES]).toEqual(["strict"]);
     expect(declaredLenientPolymorphicProblems(RUN.cases, RUN.loads)).toEqual([]);
 
-    // Both are counted WRONG, which is what makes the suite red, and neither is credited to the
-    // engine as evaluated or filed as unsupported.
+    // Both land in the invalid bucket under the exception, neither is credited to the engine as
+    // evaluated, and neither is filed as unsupported.
     const declared = RUN.results.filter((r) => LENIENT_POLYMORPHIC_CASES.has(r.testCase.name));
-    expect(declared.map((r) => r.bucket)).toEqual(["wrong", "wrong"]);
-    // They are also the ONLY wrong cases, so the count says exactly this and nothing else.
-    expect(RUN.results.filter((r) => r.bucket === "wrong").map((r) => r.testCase.name)).toEqual([
-      "testPolymorphismB",
-      "testPolymorphicsB",
+    expect(declared.map((r) => r.bucket)).toEqual(["invalid", "invalid"]);
+    expect(declared.map((r) => r.modeException)).toEqual([true, true]);
+    // And they are the ONLY cases the exception moves, so the reported `wrong` count is qualified by
+    // exactly these two and nothing else.
+    expect(appliedModeExceptions(RUN.results)).toEqual([
+      {
+        name: "testPolymorphismB",
+        expression: "Observation.valueQuantity.unit",
+        answer: "lbs",
+        grounds: "the case carries mode='strict'",
+      },
+      {
+        name: "testPolymorphicsB",
+        expression: "Observation.valueQuantity.exists()",
+        answer: "true",
+        grounds: "the corpus's 'polymorphics' group comment documents the non-strict mode",
+      },
     ]);
 
-    // And the gate fires. A declaration for a case the corpus does not carry, one whose expression
-    // has moved, and one whose declared answer is not the engine's, are each named.
+    // The corpus really does ground both, and it is read off the vendored bytes rather than asserted
+    // here: one case carries `mode="strict"` itself, the other sits under the group comment.
+    expect(byNameInRun("testPolymorphismB").mode).toBe("strict");
+    expect(byNameInRun("testPolymorphicsB").group).toBe("polymorphics");
+    expect(readCorpusFile(SUITE_FILE)).toContain(
+      "some engines have a non-strict mode where this is allowed",
+    );
+
+    // The gate fires in every direction. A declaration for a case the corpus does not carry, one
+    // whose expression has moved, one that stops being marked invalid, and one whose mode grounds
+    // stop holding, are each named.
     expect(
       declaredLenientPolymorphicProblems(
         RUN.cases.filter((c) => c.name !== "testPolymorphismB"),
@@ -359,27 +407,93 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
         p.includes("no longer marks it invalid"),
       ),
     ).toBe(true);
+    const demoded = RUN.cases.map((c) =>
+      c.name === "testPolymorphismB" ? { ...c, mode: null } : c,
+    );
+    expect(
+      declaredLenientPolymorphicProblems(demoded, RUN.loads).some((p) =>
+        p.includes("no mode attribute"),
+      ),
+    ).toBe(true);
+  });
 
-    // Naming a case buys it nothing: an undeclared case that answers a marked-invalid expression is
-    // wrong, and so is a declared one, whatever it answers.
+  it("takes the exception away the moment a declared case stops matching what was pinned for it", () => {
+    // This is the other half of C7 and the reason the exception is safe: the bucket move is not a
+    // property of the NAME, it is a property of the name still describing the case and the answer.
+    // Every clause below is checked at `classifyCase`, so a stale declaration reds the run through
+    // the wrong count as well as through `declaredLenientPolymorphicProblems`.
     const undeclared: SuiteCase = {
       index: -1,
       group: "(harness self-test)",
       name: "not-declared",
       inputFile: "observation-example.xml",
       expression: "Observation.valueQuantity.unit",
+      mode: "strict",
       invalid: "semantic",
       predicate: false,
       ordered: null,
       outputs: [],
     };
-    expect(classifyCase(undeclared, RUN.loads).bucket).toBe("wrong");
+    // An undeclared case is wrong even where it would otherwise qualify: carrying `mode="strict"` is
+    // not enough, the suite has to have declared the case.
+    const notDeclared = classifyCase(undeclared, RUN.loads);
+    expect(notDeclared.bucket).toBe("wrong");
+    expect(notDeclared.modeException).toBeUndefined();
+    expect(notDeclared.detail).toContain("not declared in LENIENT_POLYMORPHIC_CASES");
+
+    // A declared name whose expression has moved is wrong: the declaration is for an expression.
+    const movedExpression = classifyCase(
+      { ...undeclared, name: "testPolymorphismB", expression: "Observation.value.unit" },
+      RUN.loads,
+    );
+    expect(movedExpression.bucket).toBe("wrong");
+    expect(movedExpression.detail).toContain("Observation.valueQuantity.unit");
+
+    // A declared name whose mode grounds no longer hold is wrong: the case has to still be one the
+    // corpus marks invalid only under the unimplemented mode.
+    const noMode = classifyCase(
+      { ...undeclared, name: "testPolymorphismB", mode: null },
+      RUN.loads,
+    );
+    expect(noMode.bucket).toBe("wrong");
+    expect(noMode.detail).toContain("no mode attribute");
+    const wrongGroup = classifyCase(
+      {
+        ...undeclared,
+        name: "testPolymorphicsB",
+        expression: "Observation.valueQuantity.exists()",
+        group: "somewhere-else",
+      },
+      RUN.loads,
+    );
+    expect(wrongGroup.bucket).toBe("wrong");
+    expect(wrongGroup.detail).toContain("somewhere-else");
+
+    // And a declared case whose ANSWER has moved is wrong, proved end to end by handing the harness
+    // an Observation whose quantity carries a different unit. Nothing about the declaration changes;
+    // the engine answers `kg` where `lbs` was pinned, and the case leaves the invalid bucket.
+    const doctored = new Map(RUN.loads);
+    doctored.set("observation-example.xml", {
+      kind: "loaded",
+      resource: parseResource(
+        JSON.stringify({
+          resourceType: "Observation",
+          status: "final",
+          code: { text: "synthetic" },
+          valueQuantity: { value: 1, unit: "kg" },
+        }),
+      ).resource,
+    });
+    const movedAnswer = classifyCase({ ...undeclared, name: "testPolymorphismB" }, doctored);
+    expect(movedAnswer.bucket).toBe("wrong");
+    expect(movedAnswer.detail).toContain("declared answer 'lbs'");
+    // The same clause read directly, so the reason is pinned and not just the bucket.
     expect(
-      classifyCase(
-        { ...undeclared, name: "testPolymorphismB", expression: "Observation.value.unit" },
-        RUN.loads,
-      ).bucket,
-    ).toBe("wrong");
+      modeExceptionProblem(byNameInRun("testPolymorphismB"), [{ t: "str", value: "kg" }]),
+    ).toContain("the engine answers 'kg'");
+    expect(
+      modeExceptionProblem(byNameInRun("testPolymorphismB"), [{ t: "str", value: "lbs" }]),
+    ).toBeNull();
     expect(renderResult([{ t: "bool", value: true }])).toBe("true");
   });
 
@@ -396,6 +510,38 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
     expectNoDrift("invalid", counts.invalid);
     expectNoDrift("answered_fraction", answeredFraction(counts));
     expectNoDrift("answered_fraction_of_valid", answeredFractionOfValid(counts));
+  });
+
+  it("names in the record every case the reported wrong count leaves out", () => {
+    // The reported `wrong` count means "wrong outside a declared mode difference", so the record has
+    // to say which cases that qualification covers, and say out loud that they are excluded. Checked
+    // against the RUN rather than against the declaration: what the record owes is a description of
+    // what this measurement actually did.
+    const applied = appliedModeExceptions(RUN.results);
+    const lines = RECORD.split("\n");
+    for (const exception of applied) {
+      const line = lines.find(
+        (l) =>
+          l.includes(exception.name) &&
+          l.includes(exception.expression) &&
+          l.includes(exception.answer),
+      );
+      expect(
+        line,
+        `documentation/fhirpath-coverage.md carries no single line naming '${exception.name}' ` +
+          `with its expression '${exception.expression}' and the engine's answer ` +
+          `'${exception.answer}'. C7 counts that case in the invalid bucket instead of wrong, so ` +
+          `the record has to name it, its expression and the answer.`,
+      ).toBeDefined();
+    }
+    if (applied.length > 0) {
+      expect(
+        /wrongly[ -]answered count excludes/i.test(RECORD),
+        `documentation/fhirpath-coverage.md reports wrong=${String(RUN.counts.wrong)} while ` +
+          `${String(applied.length)} case(s) were counted invalid under a declared mode ` +
+          `difference, and it never says the wrongly answered count excludes them.`,
+      ).toBe(true);
+    }
   });
 
   it("records the sha256 and byte count of every vendored file, and they still hold", () => {

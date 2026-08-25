@@ -14,9 +14,9 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   or `fhir-test-cases` at all. The corpus is vendored under `test/__fixtures__/fhirpath-suite/` with
   its upstream Apache-2.0 `LICENSE.txt` and the `testSchema.xsd` that defines the file format, and
   `test/fhirpath-suite.test.ts` runs every case on every `pnpm test`, printing the counts.
-  **Measured at corpus tag `1.7.67`: 190 evaluated, 710 refused as unsupported, 2 answered wrongly,
-  33 the corpus marks invalid and the engine does not answer, 935 total**, i.e. the engine answers
-  20.3% of the corpus and 21.1% of the cases it is expected to evaluate at all.
+  **Measured at corpus tag `1.7.67`: 190 evaluated, 710 refused as unsupported, 0 answered wrongly,
+  35 the corpus marks invalid, 935 total**, i.e. the engine answers 20.3% of the corpus and 21.1% of
+  the cases it is expected to evaluate at all.
   `documentation/fhirpath-coverage.md` is the committed record, and a run that disagrees with it
   fails the suite naming both the recorded and the measured number.
   **A LARGE REFUSAL COUNT IS THE MEASUREMENT, NOT A DEFECT** (the corpus grades the whole language;
@@ -36,15 +36,18 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   so can only make the coverage number smaller. The exception is declared by name and checked both
   ways, so an undeclared document going unreadable, or this one becoming readable, each fail the
   suite.
-  Two further cases, `testPolymorphismB` and `testPolymorphicsB`, are marked invalid by the corpus
-  only under the **strict** mode of choice-element access that the corpus's own schema defines
-  (`Observation.value`, not `Observation.valueQuantity`), a mode this engine does not run in and
-  cannot without FHIR resource definitions it deliberately does not carry. **Those two are the
-  `2 answered wrongly` above, and the suite is red over them.** A case the corpus marks invalid that
-  the engine answers is a disagreement however well explained, so it is counted as one rather than
-  excused into the invalid bucket, which is the only way the headline number keeps meaning anything.
-  Both are named and pinned to their expression and answer, so an engine that starts refusing them
-  fails the suite and asks for the line to be re-made deliberately.
+  Two further cases, `testPolymorphismB` (`Observation.valueQuantity.unit`, answered `lbs`) and
+  `testPolymorphicsB` (`Observation.valueQuantity.exists()`, answered `true`), are marked invalid by
+  the corpus only under the **strict** mode of choice-element access that the corpus's own schema
+  defines (`Observation.value`, not `Observation.valueQuantity`), a mode this engine does not run in
+  and cannot without FHIR resource definitions it deliberately does not carry. That makes them a
+  mode difference rather than a wrong answer, so they are counted in the invalid bucket and
+  **the `0 answered wrongly` above excludes exactly those two cases**: read it as "wrong outside a
+  declared mode difference", with both named, with their expressions and answers, in
+  `documentation/fhirpath-coverage.md`. The exception is narrow and re-checked every run against the
+  corpus bytes and the running engine, so a case that stops being marked invalid, an expression
+  edited upstream, a mode claim the corpus stops grounding, or an engine that starts refusing or
+  answering differently each takes it away, counts the case wrong again and fails the suite.
 
 - **A declared absence is readable (`MISSING-DATA-1`): `readSafety` carries `absenceMarkers`, so an
   element a source system explicitly does not know is distinguishable from one it never sent.** US

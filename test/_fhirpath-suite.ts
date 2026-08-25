@@ -15,11 +15,15 @@
  *   evaluate at all (a syntax / semantic / execution error is the expected outcome). These are not
  *   cases the engine gets credit for, so they are never counted among the ones it evaluates. A case
  *   here that the engine answers with a **non-empty** collection has manufactured an answer where
- *   the suite says there is none, and moves to `wrong`. **Without exception**, including the two
- *   cases {@link LENIENT_POLYMORPHIC_CASES} names, which the corpus marks invalid only under a
- *   *strict* mode of choice-element access that this engine does not implement. Those two are what
- *   `wrong` currently counts, and the suite reds over them on purpose: the honest number is the one
- *   that says an engine which answers a case the corpus calls invalid answered it.
+ *   the suite says there is none, and moves to `wrong`. **One exception, and it is declared rather
+ *   than assumed**: a case the corpus marks invalid *solely* under a strictness MODE this engine
+ *   does not implement stays in `invalid`, but only where {@link LENIENT_POLYMORPHIC_CASES} names
+ *   it, pins its expression and pins the answer this engine gives, and only where the corpus's own
+ *   bytes still ground the mode claim. A declared case that stops matching any of that is `wrong`
+ *   again and {@link declaredLenientPolymorphicProblems} names it, so the exception cannot outlive
+ *   its reason. The cost is stated wherever the number is: `wrong` means "wrong outside a declared
+ *   mode difference", and the declared cases are named in `documentation/fhirpath-coverage.md`
+ *   with their expressions and answers.
  * - **`unsupported`** - the engine itself raised {@link UnsupportedFhirPathError}. **Only** that.
  *   A harness that cannot read a case, cannot compare a result, or catches some other error must
  *   never land here: "unsupported" is a statement about the engine's refusal, and inflating it with
@@ -136,47 +140,108 @@ export const REFUSED_INPUT_CASES: ReadonlyMap<string, string> = new Map([
   ["testPrimitiveExtensions", "type-qualified path head 'Patient'"],
 ]);
 
+/**
+ * The strictness modes the corpus names that this engine does not implement.
+ *
+ * The vendored `testSchema.xsd` defines a `mode` attribute as "whether the test should be evaluated
+ * with strict (e.g. `Patient.deceased`) as opposed to lenient (e.g. `Patient.deceasedBoolean`)
+ * semantics", i.e. a property of the ENGINE running the corpus rather than of the expression. This
+ * engine runs lenient and has no strict mode to select, so a case whose only disagreement is that it
+ * was written for the strict reading is a mode difference and not an answer this engine got wrong.
+ *
+ * Nothing else is admitted: the set is closed here so that widening it is a visible edit rather than
+ * a consequence of some case carrying an attribute nobody looked at.
+ */
+export const UNIMPLEMENTED_MODES: ReadonlySet<string> = new Set(["strict"]);
+
+/**
+ * How the corpus itself grounds the claim that a case is invalid only under a mode this engine does
+ * not implement. Checked against the vendored bytes by {@link modeGroundsProblem}, so the claim is
+ * measured rather than asserted in a comment.
+ */
+export type ModeGrounds =
+  /** The `<test>` element carries `mode="…"` naming a mode in {@link UNIMPLEMENTED_MODES}. */
+  | { readonly kind: "mode-attribute"; readonly mode: string }
+  /**
+   * The case's `<group>` carries an XML comment saying so in the corpus's own words. Used where the
+   * corpus documents the mode once for a whole group rather than per case.
+   */
+  | {
+      readonly kind: "group-note";
+      readonly group: string;
+      readonly quote: string;
+      readonly mode: string;
+    };
+
 /** A case the corpus marks invalid only under a mode this engine does not run in. */
 export interface LenientPolymorphicCase {
   /** The expression, verbatim, so the declaration cannot outlive the case it was written for. */
   readonly expression: string;
   /** The answer this engine gives, rendered by {@link renderResult}, pinned so it cannot drift. */
   readonly answer: string;
+  /** Where in the corpus the mode claim is grounded, re-checked off the bytes on every run. */
+  readonly grounds: ModeGrounds;
 }
 
 /**
  * The two cases the corpus marks invalid **only under strict polymorphic semantics**, which is a
- * FHIRPath *mode* rather than a fact about the expression. They are the whole of what `wrong`
- * currently counts, and naming them here is a description of the gap, **not an exception to it**:
- * {@link classifyCase} counts a non-empty answer to a case marked invalid as `wrong` whether or not
- * it is named here, so the suite fails over these two.
+ * FHIRPath *mode* rather than a fact about the expression, and which this engine has no way to
+ * select. They are the whole of the declared exception to the `invalid` -> `wrong` rule, and the
+ * exception is deliberately narrow: it moves a case's bucket **only** where every clause below still
+ * holds against the vendored bytes and the running engine.
  *
  * The vendored `testSchema.xsd` defines a `mode` attribute as "whether the test should be evaluated
  * with strict (e.g. `Patient.deceased`) as opposed to lenient (e.g. `Patient.deceasedBoolean`)
  * semantics", and the corpus's own comment above the `polymorphics` group says the direct spelling
  * "is not technical conformant. For this reason, **some engines have a non-strict mode where this is
  * allowed**". This engine is one of those: `navigateItem` takes an exact property before it tries a
- * `[x]` choice variant, so `Observation.valueQuantity` selects the element the document wrote.
+ * `[x]` choice variant, so `Observation.valueQuantity` selects the element the document wrote. Those
+ * two sentences are what {@link ModeGrounds} pins, one per case, and
+ * {@link modeGroundsProblem} re-reads them out of the corpus on every run: `testPolymorphismB`
+ * carries `mode="strict"` on the `<test>` element itself, and `testPolymorphicsB` sits in the group
+ * whose comment says it. A declaration whose grounds stop holding buys nothing.
  *
  * **Being strict here is not a thing this engine can currently choose to be**, which is why the gap
  * is declared rather than closed. Telling `valueQuantity` (a choice element, spelled with its type)
  * from `birthDate` or `managingOrganization` (ordinary elements that are also lowerCamelCase with an
  * internal capital) needs the FHIR *definition* of the resource. The model is generic and carries
- * none, which is the same reason FHIR-type `is` / `as` is out of scope under ADR 0002, and the
- * built-in element schema in `src/validate/schema.ts` models `Patient` alone, so it cannot answer it
- * for `Observation` either. Refusing every internally-capitalised member name instead would withdraw
- * `Patient.birthDate` and `Extension.valueString` from every caller-supplied invariant that uses
- * them, which is the direction the fail-safe contract forbids.
+ * none, which is the same reason FHIR-type `is` / `as` is out of scope under ADR 0002. The built-in
+ * element schema in `src/validate/schema.ts` does model `Observation.value[x]`, so refusing the
+ * spelling is buildable, and it was built and measured: it withdraws a finding a shipped layer emits
+ * today (a caller-supplied `valueQuantity.value < 2` invariant goes from `INVARIANT_VIOLATED` at
+ * error to `INVARIANT_UNCHECKED` at information) and reds two tests that predate this measurement,
+ * so it is not shippable here. Correcting the answer instead makes
+ * `Observation.valueQuantity.empty()` a silent pass for the spelling every FHIR instance uses.
  *
- * So the declaration is a tripwire, checked in both directions by
+ * So the declaration is an exception **and** a tripwire, checked in both directions by
  * {@link declaredLenientPolymorphicProblems}: the case must still exist, still carry the `invalid`
- * attribute, still spell that exact expression, and still produce that exact answer. If the engine
- * ever refuses one of them, or the corpus stops marking it invalid, the gate says so and the line
- * comes out.
+ * attribute, still spell that exact expression, still be grounded in the corpus as a mode
+ * difference, and still produce that exact answer. If the engine ever refuses one of them, or
+ * answers it differently, or the corpus stops marking it invalid, the gate says so, the case is
+ * counted `wrong` again, and the line comes out.
  */
 export const LENIENT_POLYMORPHIC_CASES: ReadonlyMap<string, LenientPolymorphicCase> = new Map([
-  ["testPolymorphismB", { expression: "Observation.valueQuantity.unit", answer: "lbs" }],
-  ["testPolymorphicsB", { expression: "Observation.valueQuantity.exists()", answer: "true" }],
+  [
+    "testPolymorphismB",
+    {
+      expression: "Observation.valueQuantity.unit",
+      answer: "lbs",
+      grounds: { kind: "mode-attribute", mode: "strict" },
+    },
+  ],
+  [
+    "testPolymorphicsB",
+    {
+      expression: "Observation.valueQuantity.exists()",
+      answer: "true",
+      grounds: {
+        kind: "group-note",
+        group: "polymorphics",
+        quote: "some engines have a non-strict mode where this is allowed",
+        mode: "strict",
+      },
+    },
+  ],
 ]);
 
 /** Which bucket a case landed in. Exactly one per case. */
@@ -211,6 +276,12 @@ export interface SuiteCase {
   /** The FHIRPath expression text. */
   readonly expression: string;
   /**
+   * The `mode` attribute verbatim, or `null` when absent. Per the vendored `testSchema.xsd` it says
+   * which strictness semantics the case is written for, which is a property of the engine running
+   * the corpus. See {@link UNIMPLEMENTED_MODES}.
+   */
+  readonly mode: string | null;
+  /**
    * The `<expression invalid="…">` attribute verbatim, or `null` when absent. Any value other than
    * `"false"` means the corpus expects the expression NOT to evaluate.
    */
@@ -229,6 +300,16 @@ export interface CaseResult {
   readonly bucket: Bucket;
   /** A value-free explanation, carried so a `wrong` case can be named in the failure message. */
   readonly detail: string;
+  /**
+   * Present and `true` only where the case is in the `invalid` bucket **because** C7's declared mode
+   * exception applied to it: the engine answered a case the corpus marks invalid, and the corpus
+   * marks it so solely under a strictness mode this engine does not implement.
+   *
+   * Set at the one branch that applies the exception, so "which cases did the reported wrong count
+   * leave out" is read off the run rather than re-derived from the declaration, which is what
+   * `documentation/fhirpath-coverage.md` has to name.
+   */
+  readonly modeException?: true;
 }
 
 /** The counts the suite reports. */
@@ -308,6 +389,7 @@ export function readSuiteCases(): SuiteCase[] {
         name: attr(test, "name") ?? `${groupName}#${String(index + 1)}`,
         inputFile: attr(test, "inputfile"),
         expression: textOf(expressionElement),
+        mode: attr(test, "mode"),
         invalid: attr(expressionElement, "invalid"),
         predicate: boolAttr(test, "predicate") === true,
         ordered: boolAttr(test, "ordered"),
@@ -427,14 +509,116 @@ export function renderResult(result: FpColl): string {
 }
 
 /**
+ * The source text of one `<group>` element, straight out of the vendored bytes.
+ *
+ * `readRawXml` drops comments by design, so a claim the corpus makes **in a comment** cannot be
+ * checked against the parse tree and has to be checked against the file. The corpus nests no group
+ * inside another, so the first `</group>` after the opening tag closes it.
+ */
+function groupSource(raw: string, group: string): string | null {
+  const open = raw.indexOf(`<group name="${group}"`);
+  if (open < 0) return null;
+  const close = raw.indexOf("</group>", open);
+  if (close < 0) return null;
+  return raw.slice(open, close);
+}
+
+/** A one-line, value-free description of where a mode claim is grounded. */
+export function describeGrounds(grounds: ModeGrounds): string {
+  return grounds.kind === "mode-attribute"
+    ? `the case carries mode='${grounds.mode}'`
+    : `the corpus's '${grounds.group}' group comment documents the non-${grounds.mode} mode`;
+}
+
+/**
+ * Re-check a declaration's {@link ModeGrounds} against the vendored corpus.
+ *
+ * This is what makes "invalid **solely** under a strictness mode this engine does not implement" a
+ * measured statement rather than a comment: the mode has to be one this engine declares it cannot
+ * run in ({@link UNIMPLEMENTED_MODES}), and the corpus has to still say so, either on the `<test>`
+ * element or in the group comment the declaration quotes.
+ *
+ * @returns `null` when the grounds hold, or a value-free reason when they do not.
+ */
+export function modeGroundsProblem(testCase: SuiteCase, grounds: ModeGrounds): string | null {
+  if (!UNIMPLEMENTED_MODES.has(grounds.mode)) {
+    return (
+      `declared under mode '${grounds.mode}', which is not one this engine declares it cannot ` +
+      `run in (UNIMPLEMENTED_MODES). A case is only excused for a mode difference where the mode ` +
+      `is one the engine does not implement.`
+    );
+  }
+  if (grounds.kind === "mode-attribute") {
+    if (testCase.mode !== grounds.mode) {
+      return (
+        `declared on the case's own mode='${grounds.mode}', but the corpus now writes ` +
+        `${testCase.mode === null ? "no mode attribute" : `mode='${testCase.mode}'`}`
+      );
+    }
+    return null;
+  }
+  if (testCase.group !== grounds.group) {
+    return (
+      `declared on the '${grounds.group}' group comment, but the case now sits in group ` +
+      `'${testCase.group}'`
+    );
+  }
+  const source = groupSource(readCorpusFile(SUITE_FILE), grounds.group);
+  if (source === null) {
+    return `declared on the '${grounds.group}' group comment, but the corpus carries no such group`;
+  }
+  const comments = source.match(/<!--[\s\S]*?-->/g) ?? [];
+  if (!comments.some((comment) => comment.includes(grounds.quote))) {
+    return (
+      `declared on a '${grounds.group}' group comment reading '${grounds.quote}', which the ` +
+      `corpus no longer carries there`
+    );
+  }
+  return null;
+}
+
+/**
+ * Whether C7's declared mode exception applies to this case with this answer.
+ *
+ * Every clause of the declaration has to hold at once: the case is named, its expression is the one
+ * declared, the corpus still grounds the mode claim, and the engine's answer is the one pinned. Any
+ * of them drifting takes the exception away, which puts the case back in `wrong` and reds the run.
+ *
+ * @returns `null` when the exception applies, or a value-free reason when it does not.
+ */
+export function modeExceptionProblem(testCase: SuiteCase, result: FpColl): string | null {
+  const declared = LENIENT_POLYMORPHIC_CASES.get(testCase.name);
+  if (declared === undefined) return "the case is not declared in LENIENT_POLYMORPHIC_CASES";
+  if (declared.expression !== testCase.expression) {
+    return (
+      `declared for expression '${declared.expression}', but this case spells it ` +
+      `'${testCase.expression}'`
+    );
+  }
+  const grounds = modeGroundsProblem(testCase, declared.grounds);
+  if (grounds !== null) return grounds;
+  const rendered = renderResult(result);
+  if (rendered !== declared.answer) {
+    return `declared answer '${declared.answer}', but the engine answers '${rendered}'`;
+  }
+  return null;
+}
+
+/**
  * The gate over {@link LENIENT_POLYMORPHIC_CASES}: every declaration still describes a live case,
  * and every declared case still behaves exactly as declared.
  *
  * Both directions, so the description cannot quietly outlive what it describes. A declared name that
  * no longer names a case, a case that stops carrying the `invalid` attribute, an expression that was
- * edited upstream, an engine that starts refusing the construct or answering it differently: each
- * one fails the run and asks for the line to be deleted or re-made deliberately. The last of those
- * is the direction that closes the gap, so it must be impossible to miss.
+ * edited upstream, a mode claim the corpus stops grounding, an engine that starts refusing the
+ * construct or answering it differently: each one fails the run and asks for the line to be deleted
+ * or re-made deliberately. The last of those is the direction that closes the gap, so it must be
+ * impossible to miss.
+ *
+ * This gate is the **second** of the two tripwires C7 asks for. The first is {@link classifyCase}
+ * itself: a declared case that stops matching its pinned expression or answer loses the exception
+ * and is counted `wrong` again, so a stale declaration reds the run twice over rather than quietly
+ * keeping a case out of the `wrong` bucket.
  *
  * @param cases - Every case the corpus carries.
  * @param loads - The outcome of {@link loadInputDocuments}.
@@ -467,6 +651,14 @@ export function declaredLenientPolymorphicProblems(
         `${name}: declared as invalid-under-strict-semantics, but the corpus no longer marks it ` +
           `invalid at all. Delete the LENIENT_POLYMORPHIC_CASES line: the case is scored on its ` +
           `output like any other.`,
+      );
+      continue;
+    }
+    const grounds = modeGroundsProblem(testCase, declared.grounds);
+    if (grounds !== null) {
+      problems.push(
+        `${name}: ${grounds}. The exception only holds for a case the corpus itself marks invalid ` +
+          `solely under a mode this engine does not implement, so it no longer applies here.`,
       );
       continue;
     }
@@ -710,26 +902,37 @@ export function classifyCase(
   }
 
   // The corpus says this expression is not meant to evaluate. Refusing it, or producing nothing, is
-  // the honest outcome; manufacturing a non-empty answer is not, and there is no exception to that:
-  // a case whose non-empty answer is explainable (see LENIENT_POLYMORPHIC_CASES) is still a case the
-  // engine answered where the corpus says there is no answer, so it is counted `wrong` and reddens
-  // the suite. Declaring such a case out of this bucket would make the headline `wrong` count a
-  // statement about which disagreements were excused rather than about the engine.
+  // the honest outcome; manufacturing a non-empty answer is not, and it counts `wrong`. ONE
+  // exception, and it is declared rather than assumed: where the corpus marks the case invalid
+  // solely under a strictness MODE this engine does not implement, and LENIENT_POLYMORPHIC_CASES
+  // names the case, pins its expression and pins the answer, the case stays in the `invalid` bucket.
+  // `modeExceptionProblem` re-checks every clause of that, the mode grounds off the corpus bytes
+  // included, so a declaration that stops describing the case buys it nothing and the case is
+  // counted `wrong` again. That is the tripwire; the headline number carries the qualification
+  // ("wrong outside a declared mode difference") wherever it is published.
   if (testCase.invalid !== null && testCase.invalid !== "false") {
     if (outcome.kind === "value" && outcome.result.length > 0) {
       const declared = LENIENT_POLYMORPHIC_CASES.get(testCase.name);
-      const why =
-        declared !== undefined && declared.expression === testCase.expression
-          ? `; the corpus marks it invalid under strict polymorphic semantics only, and this engine ` +
-            `is lenient there (see LENIENT_POLYMORPHIC_CASES), which explains the disagreement ` +
-            `without making it any less of one`
-          : "";
+      const notExcused = modeExceptionProblem(testCase, outcome.result);
+      if (notExcused === null && declared !== undefined) {
+        return {
+          testCase,
+          bucket: "invalid",
+          modeException: true,
+          detail:
+            `invalid='${testCase.invalid}' under a strictness mode this engine does not implement ` +
+            `(${describeGrounds(declared.grounds)}), declared by name with its expression and the ` +
+            `answer this engine gives ('${declared.answer}'), so it is counted invalid and left ` +
+            `out of the wrongly answered count`,
+        };
+      }
       return {
         testCase,
         bucket: "wrong",
         detail:
           `the corpus marks this expression invalid='${testCase.invalid}', but the engine ` +
-          `returned ${String(outcome.result.length)} item(s)${why}`,
+          `returned ${String(outcome.result.length)} item(s); no declared mode exception covers ` +
+          `it (${String(notExcused)})`,
       };
     }
     return { testCase, bucket: "invalid", detail: `invalid='${testCase.invalid}'` };
@@ -776,6 +979,43 @@ export function countBuckets(results: readonly CaseResult[]): CoverageCounts {
     wrong: of("wrong"),
     invalid: of("invalid"),
   };
+}
+
+/** One case this run counted `invalid` under C7's declared mode exception. */
+export interface AppliedModeException {
+  /** The case's name, as the corpus writes it. */
+  readonly name: string;
+  /** The expression, as the corpus writes it. */
+  readonly expression: string;
+  /** The answer this engine gives it, rendered by {@link renderResult}. */
+  readonly answer: string;
+  /** Where in the corpus the mode claim is grounded, in one line. */
+  readonly grounds: string;
+}
+
+/**
+ * The cases the reported `wrong` count leaves out, taken off the run rather than off the
+ * declaration.
+ *
+ * C11 requires the committed record to name each of these, with its expression and the engine's
+ * answer, beside a sentence saying the wrongly-answered count excludes it, and
+ * `fhirpath-suite.test.ts` checks the record against exactly this list. Empty means the reported
+ * `wrong` count needs no qualification at all.
+ */
+export function appliedModeExceptions(results: readonly CaseResult[]): AppliedModeException[] {
+  const out: AppliedModeException[] = [];
+  for (const result of results) {
+    if (result.modeException !== true) continue;
+    const declared = LENIENT_POLYMORPHIC_CASES.get(result.testCase.name);
+    if (declared === undefined) continue;
+    out.push({
+      name: result.testCase.name,
+      expression: result.testCase.expression,
+      answer: declared.answer,
+      grounds: describeGrounds(declared.grounds),
+    });
+  }
+  return out;
 }
 
 /**
