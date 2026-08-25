@@ -127,7 +127,10 @@ describe("CI obtains the oracle at a fixed release identifier, and the two canno
   it("is the release the workflow downloads, and the workflow declares a time bound", () => {
     const workflow = readFileSync(join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
     expect(workflow).toContain(`ORACLE_RELEASE: "${ORACLE_RELEASE}"`);
-    expect(workflow).toContain("/releases/download/${ORACLE_RELEASE}/validator_cli.jar");
+    // A regex, not a string: the workflow spells the shell expansion of its own job-level env var,
+    // and a string literal containing that shape reads to a linter as a template literal someone
+    // forgot to back-tick.
+    expect(workflow).toMatch(/releases\/download\/\$\{ORACLE_RELEASE\}\/validator_cli\.jar/);
     expect(workflow).not.toContain("releases/latest/download");
     // "WHEN the differential job is run by CI THE SYSTEM SHALL be bounded by a declared time limit"
     expect(workflow).toMatch(/timeout-minutes:\s*\d+/);
@@ -212,9 +215,35 @@ describe("the oracle's output is read, or it is not obtained", () => {
     expect(result.ok).toBe(true);
     if (result.ok !== true) return;
     expect(result.byName.get("0001-a.json")).toEqual([
-      { severity: "error", location: "Patient.gender" },
+      { severity: "error", location: "Patient.gender", code: "" },
     ]);
     expect(result.byName.get("0002-b.json")).toEqual([]);
+  });
+
+  it("carries the issue CODE and the validator's message id, and never the diagnostic text", () => {
+    const withCode = {
+      resourceType: "OperationOutcome",
+      issue: [
+        {
+          severity: "error",
+          code: "code-invalid",
+          expression: ["Appointment.serviceCategory[0].coding[0].system"],
+          details: {
+            coding: [
+              { system: "http://hl7.org/fhir/tools/CodeSystem/tx-issue-type", code: "not-found" },
+            ],
+            text: "A code with a value the log must not echo",
+          },
+        },
+      ],
+    };
+    const result = parseOracleOutput(JSON.stringify(withCode), ["one.json"]);
+    expect(result.ok).toBe(true);
+    if (result.ok !== true) return;
+    const issue = result.byName.get("one.json")?.[0];
+    expect(issue?.code).toBe("code-invalid");
+    expect(issue?.messageId).toBe("not-found");
+    expect(JSON.stringify(issue)).not.toContain("must not echo");
   });
 
   it("does not invent an entry for a document the oracle never answered about", () => {

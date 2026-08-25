@@ -5,6 +5,8 @@ import type { Exclusion } from "./corpus.d.mts";
 export interface Finding {
   readonly severity: string;
   readonly location: string;
+  readonly code?: string;
+  readonly messageId?: string;
 }
 
 export type OracleAnswer =

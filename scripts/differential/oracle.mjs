@@ -27,7 +27,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 
 /**
@@ -67,6 +67,13 @@ export class OracleError extends Error {
  * `release` is what the configuration SAYS. `sha256` and `bytes` are what is actually there, so a
  * substituted jar changes the record even when `release` does not. Refuses rather than recording a
  * guess: no path, no file, not a file, or an empty file are all "identity not established".
+ *
+ * **THE FILE IS READ ONCE AND EVERY ANSWER COMES OFF THAT READ.** An earlier draft asked `statSync`
+ * whether the path was a regular file and how big it was, then read it: two looks at one path, and
+ * the identity would then describe the bytes of the SECOND look while the refusals described the
+ * first. Reading first collapses that window, and it loses nothing: `readFileSync` raises `EISDIR`
+ * on a directory, so "not a regular file" is still distinguished, and emptiness is a property of the
+ * buffer that was actually hashed.
  */
 export function oracleIdentity(jarPath, options = {}) {
   const release = options.release ?? ORACLE_RELEASE;
@@ -75,23 +82,19 @@ export function oracleIdentity(jarPath, options = {}) {
       "the oracle jar path is empty, so the artifact about to be used cannot be identified.",
     );
   }
-  let stat;
-  try {
-    stat = statSync(jarPath);
-  } catch (err) {
-    throw new OracleError(`the oracle jar at ${jarPath} could not be examined: ${String(err)}`);
-  }
-  if (!stat.isFile()) {
-    throw new OracleError(`the oracle jar at ${jarPath} is not a regular file, so it has no identity.`);
-  }
-  if (stat.size === 0) {
-    throw new OracleError(`the oracle jar at ${jarPath} is empty, so it has no identity.`);
-  }
   let buf;
   try {
     buf = readFileSync(jarPath);
   } catch (err) {
-    throw new OracleError(`the oracle jar at ${jarPath} could not be read: ${String(err)}`);
+    if (err?.code === "EISDIR") {
+      throw new OracleError(
+        `the oracle jar at ${jarPath} is not a regular file, so it has no identity.`,
+      );
+    }
+    throw new OracleError(`the oracle jar at ${jarPath} could not be examined: ${String(err)}`);
+  }
+  if (buf.length === 0) {
+    throw new OracleError(`the oracle jar at ${jarPath} is empty, so it has no identity.`);
   }
   return {
     release,
@@ -110,10 +113,24 @@ export function formatOracleIdentity(identity) {
   );
 }
 
+/**
+ * One oracle finding, reduced to what may be compared and what may be printed.
+ *
+ * `severity` and `location` are what the comparison keys on; text is deliberately dropped, because
+ * we diverge on it on purpose (ours is value-free by contract, the oracle echoes document values).
+ * `code` and `messageId` are CODES, not text: `OperationOutcome.issue.code` is the bounded R4
+ * `IssueType`, and `details.coding[].code` is the validator's own message identifier. Carrying them
+ * costs nothing at the comparison, echoes no document content, and is the difference between a gate
+ * failure a reader can classify and one that says only "somewhere under `Questionnaire.item`".
+ */
 function issueShape(issue) {
+  const detailCodings = Array.isArray(issue.details?.coding) ? issue.details.coding : [];
+  const messageId = detailCodings.find((c) => typeof c?.code === "string")?.code;
   return {
     severity: String(issue.severity ?? "information"),
     location: String(issue.expression?.[0] ?? issue.location?.[0] ?? ""),
+    code: String(issue.code ?? ""),
+    ...(messageId === undefined ? {} : { messageId: String(messageId) }),
   };
 }
 

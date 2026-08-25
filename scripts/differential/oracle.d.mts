@@ -3,6 +3,8 @@
 export interface OracleIssue {
   readonly severity: string;
   readonly location: string;
+  readonly code?: string;
+  readonly messageId?: string;
 }
 
 export interface OracleIdentity {

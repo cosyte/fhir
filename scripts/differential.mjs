@@ -256,7 +256,12 @@ function main() {
     if (record.violation) {
       console.error(line);
       const findings = record.oracleFindings ?? record.ourFindings ?? [];
-      for (const f of findings) console.error(`    ${f.severity} @ ${f.location || "(root)"}`);
+      for (const f of findings) {
+        // Severity, location and CODES. Never the diagnostic text: the oracle echoes document
+        // values and this log is public. The codes are what make a violation classifiable.
+        const kind = [f.code, f.messageId].filter(Boolean).join("/");
+        console.error(`    ${f.severity} @ ${f.location || "(root)"}${kind ? ` [${kind}]` : ""}`);
+      }
     } else {
       console.log(line);
     }

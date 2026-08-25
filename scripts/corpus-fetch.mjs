@@ -39,7 +39,39 @@ import { extractNamed } from "./differential/zip.mjs";
 const RETRIES = 3;
 const CONCURRENCY = 8;
 
-async function getBytes(url) {
+/**
+ * The only hosts this script will talk to, and the only scheme.
+ *
+ * The URL a request is built from comes out of `corpus/corpus.json`, which is a committed file
+ * rather than user input, so this is not a trust boundary in the usual sense. It is a REACH bound:
+ * a typo, a bad merge or a mis-edited declaration should fail loudly instead of pointing this
+ * script's credentials-free-but-real network access at an arbitrary host. Adding a corpus means
+ * adding its host here, in review, on purpose.
+ */
+const ALLOWED_HOSTS = new Set(["raw.githubusercontent.com", "hl7.org"]);
+
+/** The URL, parsed and bounded, or a refusal. Never returns something unchecked. */
+function allowedUrl(candidate) {
+  let url;
+  try {
+    url = new URL(candidate);
+  } catch {
+    throw new CorpusError(`the corpus declares an unreadable URL: ${String(candidate)}`);
+  }
+  if (url.protocol !== "https:") {
+    throw new CorpusError(`refusing ${url.href}: the corpus is fetched over https only.`);
+  }
+  if (!ALLOWED_HOSTS.has(url.hostname)) {
+    throw new CorpusError(
+      `refusing ${url.href}: ${url.hostname} is not one of this corpus's declared hosts ` +
+        `(${[...ALLOWED_HOSTS].join(", ")}). Add it here, in review, or fix the declaration.`,
+    );
+  }
+  return url;
+}
+
+async function getBytes(candidate) {
+  const url = allowedUrl(candidate);
   let lastError;
   for (let attempt = 1; attempt <= RETRIES; attempt += 1) {
     try {
@@ -47,6 +79,9 @@ async function getBytes(url) {
         headers: { "user-agent": "cosyte-fhir-differential-corpus/1.0" },
       });
       if (!response.ok) throw new Error(`HTTP ${String(response.status)}`);
+      // A redirect is followed, and then the host it landed on is bounded too. Neither of these
+      // corpora redirects today (measured), so this is a guard rather than a code path.
+      if (response.url !== "" && response.url !== undefined) allowedUrl(response.url);
       return Buffer.from(await response.arrayBuffer());
     } catch (err) {
       lastError = err;
@@ -55,7 +90,7 @@ async function getBytes(url) {
       }
     }
   }
-  throw new CorpusError(`could not retrieve ${url}: ${String(lastError)}`);
+  throw new CorpusError(`could not retrieve ${url.href}: ${String(lastError)}`);
 }
 
 function onDiskWithDeclaredDigest(file, document) {
