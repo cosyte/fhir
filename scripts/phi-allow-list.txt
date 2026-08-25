@@ -40,6 +40,57 @@ NAME SYNTHMIDDLE
 NAME ROE
 NAME DOE
 
+# --- HL7's published R4 example documents, vendored under
+# --- test/__fixtures__/fhirpath-suite/ from FHIR/fhir-test-cases at tag 1.7.67
+# The vendored corpus is HL7's own published example data, redistributed under
+# Apache-2.0 beside its LICENSE.txt. Nothing below is a real person: every token
+# is one HL7 itself prints in the R4 specification's example documents. FOUR of
+# the eleven vendored inputs (patient-example.xml, patient-example-period.xml,
+# patient-name-extensions.json, patient-container-example.json) carry the tokens
+# the scanner names; the remaining seven carry none.
+#
+# The canonical patient-example person is Peter James Chalmers, already declared
+# above. These are the tokens that person's OTHER names add: the "maiden" name
+# Windsor, the "usual" given name Jim, and the "old" French spelling
+# "Bénédicte du Marché".
+NAME WINDSOR
+NAME JIM
+NAME DU
+# SCANNER-VISIBLE FRAGMENTS, NOT WORDS. The two accented tokens are written in
+# the vendored XML with numeric character references (`du March&#xE9;`,
+# `B&#xE9;n&#xE9;dicte`), and the XML scanner reads the `value="…"` attribute as
+# raw bytes, so it tokenizes on non-letters and sees `March` + `xE`, and `xE` +
+# `dicte`. Declaring the fragments is the token-level remedy the overrides file
+# asks for; declaring the whole file would not be. Do not "tidy" these into
+# `MARCHÉ` / `BÉNÉDICTE`: those forms never reach the comparison.
+NAME MARCH
+NAME XE
+NAME DICTE
+# patient-container-example.json writes `name.text` as the literal placeholder
+# "some-name", which tokenizes to two ordinary English words. Neither is a
+# surname anyone here carries; both are declared because the scanner cannot tell
+# a placeholder from a name and must not be taught to guess.
+# THESE TWO ARE THE BROADEST ENTRIES IN THIS FILE AND THE COST IS PERMANENT.
+# `SOME` and `NAME` are ordinary words, so a FUTURE fixture carrying either as a
+# real surname would clear the gate on these lines rather than on its own merit.
+# That is the price of a token-level declaration over a whole-file bypass and it
+# is the cheaper of the two, but it is a price: if a later change can retire the
+# `some-name` placeholder from the vendored bytes, delete both lines with it.
+# Both are load-bearing, measured rather than assumed: misspell either and
+# `pnpm run phi-scan` reports `element=Patient.name.text value="some"` /
+# `value="name"` and exits 1.
+# THE NARROWER REMEDY, AND WHY IT IS NOT TAKEN HERE. What this wants is an
+# exact-PHRASE row for a `name.text` placeholder, the way `ADDR` already matches
+# a whole street line instead of its tokens. That is not an allow-list edit: it
+# needs a new tag parsed by `loadAllowList` and consulted by `checkNameString`,
+# i.e. a change to the RECOGNISER in scripts/phi-scan.ts. Moving the recogniser
+# on its own is the failure this repo has already paid for once, so it belongs
+# to its own change with its own tests, not to a corpus-vendoring one. Until
+# then these two rows are the declared residual and they are the widest thing
+# this file admits.
+NAME SOME
+NAME NAME
+
 # --- Synthetic dates of birth (birthDate) ---
 DOB 1974-12-25
 DOB 1970-01-01
@@ -50,8 +101,23 @@ DOB 1980-01-01
 # date arrives as.
 DOB 2020
 
+# --- Synthetic street addresses (Address.line / Address.text) ---
+# The one street line the canonical R4 patient-example prints, in both
+# patient-example.xml and patient-example-period.xml. "Erewhon" is Samuel
+# Butler's anagram of "nowhere", which is the point: HL7 chose a street in a
+# place that does not exist.
+ADDR 534 Erewhon St
+
 # --- Synthetic identifiers (identifier.value / telecom.value) ---
 ID SYN-0001
+# The two ContactPoint.value numbers the canonical R4 patient-example prints,
+# spelled here as the scanner compares them: digits only, punctuation stripped.
+# `(03) 3410 5613` is an Australian number whose 03 area code plus 3410 exchange
+# HL7 uses across the R4 examples, and `+33 (237) 998327` is its French
+# counterpart. Neither uses the 555 fake-exchange convention the scanner keys
+# on, which is why each needs a line of its own rather than a shape rule.
+ID 0334105613
+ID 33237998327
 
 # --- Reserved / test email domains (RFC 2606 + FHIR example host) ---
 EMAILDOMAIN example.com

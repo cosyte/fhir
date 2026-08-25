@@ -14,9 +14,17 @@
  * - **type tests** on the System primitive types (`is` / `as` / `ofType` for `Boolean` / `String` /
  *   `Integer` / `Decimal`).
  *
- * Everything else, arithmetic, string functions, `descendants()`, `resolve()`, FHIR-type `is`/`as`
- * (a generic model carries no datatype name), raises {@link ./errors.js UnsupportedFhirPathError}.
- * That is the whole safety contract: the engine **never guesses**. `where`/`select`/`all`
+ * A **type-qualified path head** (`Patient.name`) resolves only where the focus is a resource root
+ * whose `resourceType` the qualifier names, which is the one place a generic model can check it; see
+ * {@link resolveTypeQualifier}. Everything else, arithmetic, string functions, `descendants()`,
+ * `resolve()`, FHIR-type `is`/`as` (a generic model carries no datatype name), and a type qualifier
+ * that cannot be checked, raises {@link ./errors.js UnsupportedFhirPathError}.
+ * That is the whole safety contract: the engine **never guesses**. Refusing is not the only way not
+ * to guess, and it is the expensive one, because a refusal makes a constraint *unchecked* and takes
+ * a diagnostic away: an ordering comparison the generic model cannot decide (see {@link compare})
+ * therefore yields the empty collection, FHIRPath's own spelling of "no determination", which
+ * coerces exactly as `false` does and so leaves every finding where it was.
+ * `where`/`select`/`all`
  * evaluate their criteria *lazily per item*, so an unsupported sub-term inside a filter over an empty
  * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires,
  * exactly the common case that lets base constraints like `dom-3` pass without implementing their full
@@ -35,6 +43,7 @@ import {
   isComplex,
   isList,
   isPrimitive,
+  resourceType,
   type FhirComplex,
   type FhirNode,
   type PrimitiveValue,
@@ -171,6 +180,70 @@ function navigate(focus: FpColl, name: string): FpItem[] {
   return focus.flatMap((item) => (item.t === "node" ? navigateItem(item.node, name) : []));
 }
 
+/**
+ * Whether a **head-of-path** name is FHIR's spelling of a *type*, not of an element.
+ *
+ * FHIRPath lets a path be written type-qualified, `Patient.name.given`, where the leading segment
+ * names the type the path is rooted in rather than a member to navigate. FHIR's naming rules make
+ * the two spellings disjoint: element names are lowerCamelCase (json.html), type names, resources
+ * and datatypes alike, are UpperCamelCase. So an upper-case first letter at the head of a path is a
+ * type qualifier and nothing else.
+ *
+ * Recognising it is not the same as resolving it: {@link resolveTypeQualifier} decides that, and
+ * refuses wherever the match cannot be checked.
+ *
+ * Scoped to the head of a path on purpose. `ofType(Boolean)` and `x is System.String` never reach
+ * here: a type-name argument is read off the AST by {@link typeNameOf} / the `typeop` node and is
+ * never evaluated as a member.
+ */
+function isTypeQualifier(name: string): boolean {
+  const first = name.charAt(0);
+  return first >= "A" && first <= "Z";
+}
+
+/**
+ * Resolve a **head-of-path** type qualifier ({@link isTypeQualifier}) against the focus, or refuse.
+ *
+ * A type qualifier is not a member: it asserts what the path is rooted in, and when the assertion
+ * holds the path continues from the focus unchanged. This engine checks the assertion in the one
+ * place its generic model can: a **resource root** carries `resourceType`, so `Patient.name` over a
+ * focus whose {@link ../model/node.js resourceType} reads `Patient` resolves to that focus without
+ * guessing and without widening the subset. Every other shape is refused, because the model carries
+ * no datatype name for an element focus (the same reason FHIR-type `is` / `as` is out of scope) and
+ * an empty focus has nothing to check the qualifier against at all.
+ *
+ * The two options this must never take, both of which the corpus caught:
+ *
+ * - **Navigating it as an ordinary member.** No resource has a property called `Patient`, so
+ *   `Patient.name.exists()` answered `false` on a Patient that HAS a name: a wrong answer with no
+ *   diagnostic, exactly what {@link ./errors.js UnsupportedFhirPathError} exists to prevent.
+ * - **Refusing it unconditionally.** That is safe-looking and is not safe: an invariant written the
+ *   type-qualified way (the spelling most published constraints use) becomes *unchecked*, so a
+ *   resource that genuinely violates it stops being reported and `validateResource(...).valid`
+ *   flips from `false` to `true`. `test/profile-invariant-type-qualified.test.ts` pins both
+ *   directions of the matching case.
+ *
+ * **WHAT THE NARROW REFUSAL STILL COSTS, stated here because the code cannot say it and an earlier
+ * revision of this comment claimed the opposite.** Where the qualifier does NOT match the focus this
+ * still withdraws a finding: pre-change the head was navigated as an ordinary member and selected
+ * nothing, so `Encounter.name.exists()` over a Patient answered `false` and the profile layer
+ * reported `INVARIANT_VIOLATED` at *error* with `valid: false`; it now reports `INVARIANT_UNCHECKED`
+ * at *information* with `valid: true`. That answer was correct, so this is a withdrawal and not a
+ * correction. It ships because the previous engine reached it by accident rather than by deciding
+ * it, and because a diagnostic a caller can see beats a silent `false`. The full set is tabled in
+ * `documentation/fhirpath-coverage.md` and pinned in
+ * `test/profile-invariant-withdrawn-findings.test.ts`.
+ */
+function resolveTypeQualifier(name: string, focus: FpColl): FpColl {
+  const matchesFocus =
+    focus.length > 0 &&
+    focus.every(
+      (item) => item.t === "node" && isComplex(item.node) && resourceType(item.node) === name,
+    );
+  if (matchesFocus) return focus;
+  throw new UnsupportedFhirPathError(`type-qualified path head '${name}'`);
+}
+
 /** The immediate child nodes of an item (used by `children()`, resourceType is type info, not a child). */
 function childrenOf(item: FpItem): FpItem[] {
   if (item.t !== "node") return [];
@@ -250,7 +323,160 @@ function stringOf(item: FpItem): string | undefined {
   return undefined;
 }
 
-/** Evaluate an ordering comparison (`<`, `>`, `<=`, `>=`) over two singleton collections. */
+/**
+ * A FHIR temporal value as the **range of instants** its lexical form denotes.
+ *
+ * A lexical form is not an instant, it is an interval: `2001-05-06` denotes the whole of that day and
+ * `2001-05-06T10:00Z` the whole of that minute. Carrying the interval rather than the components is
+ * what lets one function express both of FHIRPath's rules at once, the precision rule (two values
+ * whose intervals overlap without being the same interval do not order) and the offset rule (two
+ * values written in different timezone designators are the same instant when their intervals
+ * coincide). `lo` is inclusive, `hi` exclusive, both in milliseconds, both already read at the
+ * value's own offset. For `form: "time"` they are milliseconds since midnight, FHIR `time` carrying
+ * no offset at all.
+ *
+ * **The one reading here, declared once for the whole engine rather than guessed per value.** A
+ * `dateTime` written with no designator is read at the evaluation context's timezone, which FHIRPath
+ * leaves to the engine; this engine's is UTC. That is the frame the pre-change lexical comparison
+ * used implicitly on every value, so declaring it moves no answer that was being given.
+ */
+interface TemporalValue {
+  readonly form: "date" | "time";
+  readonly lo: number;
+  readonly hi: number;
+}
+
+/** `YYYY[-MM[-DD]][THH[:MM[:SS[.fff]]]][Z|(+|-)HH:MM]`, the FHIR `date` / `dateTime` lexical form. */
+const DATE_LEXICAL =
+  /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2})(?::(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?(Z|[+-]\d{2}:\d{2})?)?)?)?$/;
+
+/** `HH[:MM[:SS[.fff]]]`, the FHIR `time` lexical form (no timezone in FHIR `time`). */
+const TIME_LEXICAL = /^(\d{2})(?::(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?$/;
+
+/** Milliseconds east of UTC a designator names (`Z` and an absent designator alike are `0`). */
+function zoneOffsetMillis(zone: string): number {
+  if (zone === "" || zone === "Z") return 0;
+  const sign = zone.charAt(0) === "-" ? -1 : 1;
+  return sign * (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(4, 6))) * 60_000;
+}
+
+/**
+ * UTC milliseconds for a year-first component tuple, missing components defaulting to their first
+ * value. Out-of-range components carry (month `13` is January of the next year), which is what makes
+ * {@link bumpLast} a one-liner.
+ */
+function utcMillis(parts: readonly number[]): number {
+  const [year, month = 1, day = 1, hour = 0, minute = 0, second = 0] = parts;
+  const at = new Date(0);
+  // Not `Date.UTC`, which maps a two-digit year onto the 1900s and would order `0085` as `1985`.
+  at.setUTCFullYear(year as number, month - 1, day);
+  at.setUTCHours(hour, minute, second, 0);
+  return at.getTime();
+}
+
+/** The same tuple with one added to its least significant component: the width of that precision. */
+function bumpLast(parts: readonly number[]): number[] {
+  const bumped = [...parts];
+  bumped[bumped.length - 1] = (bumped[bumped.length - 1] as number) + 1;
+  return bumped;
+}
+
+/**
+ * Read a FHIR temporal lexical form as the interval it denotes, or `undefined` when the text is not
+ * one.
+ *
+ * This is a **lexical** reading, not a semantic one: it says how the text is written, which is all a
+ * generic model carries. The written precision becomes the interval's width, so `2001-05-06` is a
+ * day wide and `2001-05-06T10:10:10Z` one second, and a fractional second narrows it further
+ * (`.5` → 100ms of width, `.500` → 1ms).
+ */
+function readTemporal(text: string): TemporalValue | undefined {
+  const date = DATE_LEXICAL.exec(text);
+  if (date !== null) {
+    const parts: number[] = [];
+    for (const part of [date[1], date[2], date[3], date[4], date[5], date[6]]) {
+      if (part === undefined) break;
+      parts.push(Number(part));
+    }
+    const offset = zoneOffsetMillis(date[8] ?? "");
+    const start = utcMillis(parts) - offset;
+    const fraction = date[7];
+    if (fraction === undefined) {
+      return { form: "date", lo: start, hi: utcMillis(bumpLast(parts)) - offset };
+    }
+    const lo = start + Number(`0.${fraction}`) * 1000;
+    return { form: "date", lo, hi: lo + 10 ** (3 - fraction.length) };
+  }
+  const time = TIME_LEXICAL.exec(text);
+  if (time === null) return undefined;
+  const units = [3_600_000, 60_000, 1000];
+  let lo = 0;
+  let width = 0;
+  for (const [i, part] of [time[1], time[2], time[3]].entries()) {
+    if (part === undefined) break;
+    lo += Number(part) * (units[i] as number);
+    width = units[i] as number;
+  }
+  const fraction = time[4];
+  if (fraction === undefined) return { form: "time", lo, hi: lo + width };
+  const withFraction = lo + Number(`0.${fraction}`) * 1000;
+  return { form: "time", lo: withFraction, hi: withFraction + 10 ** (3 - fraction.length) };
+}
+
+/**
+ * Order two temporal values the way FHIRPath does, or say the comparison cannot be made.
+ *
+ * Two values order when the interval one denotes lies wholly outside the other's, and are equal when
+ * the two intervals coincide, which is FHIRPath's precision rule stated once: `2001-05-06` and
+ * `2001-05-06T10:10:10Z` overlap without coinciding, so whether the day is before or after an
+ * instant inside it is *indeterminate* and the expression's value is the empty collection rather
+ * than a boolean. Two designators for the same instant (`10:00:00Z`, `12:00:00+02:00`) coincide, and
+ * so compare **equal**, which is the correction this engine owes a caller: refusing them instead
+ * withdrew the `per-1` violation the validator reported for a period whose start really is after its
+ * end, and that direction is the one the fail-safe contract forbids.
+ *
+ * @returns `-1` / `0` / `1` when they order, or `"undetermined"` when FHIRPath says `{}`: two
+ *   overlapping precisions, and a date against a time of day, which is not a comparison FHIRPath
+ *   defines over values whose types this model does not carry.
+ */
+function compareTemporal(a: TemporalValue, b: TemporalValue): -1 | 0 | 1 | "undetermined" {
+  if (a.form !== b.form) return "undetermined";
+  if (a.hi <= b.lo) return -1;
+  if (b.hi <= a.lo) return 1;
+  if (a.lo === b.lo && a.hi === b.hi) return 0;
+  return "undetermined";
+}
+
+/**
+ * Evaluate an ordering comparison (`<`, `>`, `<=`, `>=`) over two singleton collections.
+ *
+ * Numbers order as numbers, and two values the **engine itself computed** as strings order as
+ * System Strings. A **model** primitive is the case that needs care: the model is generic, so a
+ * string-valued primitive is the FHIR *lexical form* of an element whose type the model does not
+ * carry, and it may be a `string`, a `code`, a `date`, a `dateTime`, a `time`, or (read from XML,
+ * which is untyped) a `decimal`. Ordering it lexically answers a question the engine has not asked:
+ * the shared corpus caught both directions of that, `Observation.value.value < 'test'` (a decimal
+ * against a string, which FHIRPath makes an execution error) answered `true`, and `per-1`'s
+ * `start <= end` over a day-precision date and a second-precision dateTime answered `true` where
+ * FHIRPath says `{}`.
+ *
+ * So where either side is a model primitive, {@link compareTemporal} answers whenever both read as
+ * temporal lexical forms of the same family, with FHIRPath's own precision and offset rules; every
+ * other pair is **undetermined** and the expression's value is the empty collection.
+ *
+ * **`{}`, never a refusal, and that distinction is the whole point.** An
+ * {@link ./errors.js UnsupportedFhirPathError} here reaches
+ * {@link ../fhirpath/index.js evaluateInvariant} as `unchecked`, so the profile layer downgrades a
+ * constraint it used to report to `INVARIANT_UNCHECKED` at *information* with
+ * `validateResource(...).valid` flipping to `true`: a diagnostic withdrawn and re-severitied, which
+ * is the one direction this package's fail-safe contract forbids. `{}` coerces through
+ * {@link convertToBoolean} exactly as `false` did, so a constraint whose ordering the engine cannot
+ * determine stays **reported**, at the same code, the same severity and the same location as before.
+ * What the empty collection can do, and a lexical guess could not, is *add*: an ordering that used
+ * to come back `true` on a guess now leaves its constraint unsatisfied, which surfaces the
+ * undetermined comparison instead of hiding it behind an answer.
+ * `test/profile-invariant-ordering.test.ts` pins both halves.
+ */
 function compare(op: string, left: FpColl, right: FpColl): FpColl {
   if (left.length === 0 || right.length === 0) return [];
   if (left.length !== 1 || right.length !== 1) {
@@ -269,7 +495,19 @@ function compare(op: string, left: FpColl, right: FpColl): FpColl {
     if (as === undefined || bs === undefined) {
       throw new UnsupportedFhirPathError("comparison of non-orderable values");
     }
-    cmp = as < bs ? -1 : as > bs ? 1 : 0;
+    if (a.t === "str" && b.t === "str") {
+      cmp = as < bs ? -1 : as > bs ? 1 : 0;
+    } else {
+      const at = readTemporal(as);
+      const bt = readTemporal(bs);
+      // Two temporal lexical forms of the same family are the one pair a generic model can order.
+      // Everything else, a value whose type the model does not carry against anything at all, is
+      // undetermined rather than unsupported, and FHIRPath spells an undetermined ordering `{}`.
+      if (at === undefined || bt === undefined) return [];
+      const ordered = compareTemporal(at, bt);
+      if (ordered === "undetermined") return [];
+      cmp = ordered;
+    }
   }
   const result = op === "<" ? cmp < 0 : op === ">" ? cmp > 0 : op === "<=" ? cmp <= 0 : cmp >= 0;
   return [{ t: "bool", value: result }];
@@ -297,9 +535,39 @@ function systemTypeOf(item: FpItem): string | undefined {
   return undefined;
 }
 
-/** Whether an item is of a given (System-primitive) type; FHIR complex types are not determinable. */
+/**
+ * The System primitive types this subset can test for. The list is the whole of it: FHIR-type
+ * `is` / `as` is out of scope by design, because the model is generic and carries no datatype name,
+ * so `code`, `instant`, `HumanName` and every other FHIR type name is a question this engine cannot
+ * answer, only refuse.
+ */
+const SYSTEM_TYPE_NAMES: ReadonlySet<string> = new Set(["Boolean", "String", "Integer", "Decimal"]);
+
+/**
+ * Whether an item is of a given System-primitive type.
+ *
+ * Both halves of the question have to be answerable. An item whose System type the model cannot
+ * determine (a complex element, a list, a value-absent primitive) is refused, and so is a **type
+ * name outside {@link SYSTEM_TYPE_NAMES}**: `Observation.issued is instant` and
+ * `Patient.gender.ofType(code)` are asking about the FHIR type of an element, which a generic model
+ * does not carry. Answering `false` there looks like a determination and is not one, which is the
+ * wrong-answer-with-no-diagnostic the fail-safe contract exists to prevent (the shared corpus
+ * expects `{}` from the first and `male` from the second, and `false` / `{}` is neither).
+ *
+ * **The cost, which is real and is not hidden:** a caller-supplied constraint that IS such a type
+ * test loses the verdict it used to get. `gender is Quantity` over `gender: "male"` reduced to
+ * `systemTypeOf(item) === "String"` against `"Quantity"`, answered `false`, and was reported
+ * `INVARIANT_VIOLATED` at *error* with `valid: false`; it is now `INVARIANT_UNCHECKED` at
+ * *information* with `valid: true`. Tabled in `documentation/fhirpath-coverage.md`, pinned in
+ * `test/profile-invariant-withdrawn-findings.test.ts`.
+ */
 function itemIsType(item: FpItem, typeName: string): boolean {
-  const normalized = typeName.replace(/^System\./, "").replace(/^FHIR\./, "");
+  const normalized = typeName.replace(/^System\./, "");
+  if (!SYSTEM_TYPE_NAMES.has(normalized)) {
+    throw new UnsupportedFhirPathError(
+      `type test '${typeName}' outside the System primitive types`,
+    );
+  }
   const actual = systemTypeOf(item);
   if (actual === undefined) {
     throw new UnsupportedFhirPathError(`type test '${typeName}' on a non-System value`);
@@ -509,6 +777,9 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
       if (expr.name === "this") return focus;
       throw new UnsupportedFhirPathError(`unsupported variable $${expr.name}`);
     case "member":
+      if (expr.target === null && isTypeQualifier(expr.name)) {
+        return resolveTypeQualifier(expr.name, focus);
+      }
       return navigate(expr.target === null ? focus : evaluate(expr.target, focus, ctx), expr.name);
     case "call": {
       const input = expr.target === null ? focus : evaluate(expr.target, focus, ctx);
@@ -537,6 +808,18 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
       // `operand is/as Type`.
       const operand = evaluate(expr.operand, focus, ctx);
       if (expr.op === "is") {
+        // `{} is T` is `{}`, not `false`: FHIRPath propagates the empty collection through a type
+        // test rather than deciding one, and the shared corpus reads that collection directly
+        // (`Observation.issued is instant` over a document with no `issued` expects `{}`; answering
+        // `false` makes that case wrongly answered, measured).
+        //
+        // Taken ALONE the two coerce alike through convertToBoolean, so a constraint that IS the
+        // type test keeps its verdict. They do not COMPOSE alike: `not()` over an empty input is
+        // `[]` rather than `true`, and `{} implies false` is `{}` rather than `true`, so a
+        // constraint wrapping the test in either can go from satisfied to violated. That is an
+        // ADDED finding, never a withdrawn one, and `test/profile-invariant-ordering.test.ts` pins
+        // both directions rather than leaving the blast radius asserted.
+        if (operand.length === 0) return [];
         if (operand.length !== 1) return [{ t: "bool", value: false }];
         return [{ t: "bool", value: itemIsType(operand[0] as FpItem, expr.type) }];
       }
