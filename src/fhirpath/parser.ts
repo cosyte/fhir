@@ -3,10 +3,12 @@
  * builds a typed {@link Expr} AST (the bounded invariant engine).
  *
  * It implements the full FHIRPath **operator precedence** (implies < or/xor < and < in/contains <
- * equality < is/as < inequality < union < additive < multiplicative < unary < invocation/indexer), so
+ * equality < inequality < union < is/as < additive < multiplicative < unary < invocation/indexer), so
  * every expression the subset accepts is parsed with the *correct* structure, mis-parsing a
  * precedence level would let a wrong tree evaluate to a wrong boolean, the one failure mode worse than
- * "unchecked". Anything the grammar does not recognise (an unexpected token, a trailing token, a
+ * "unchecked". That order is the published table's, read left to right loosest-first; the shared
+ * corpus (`test/fhirpath-suite.test.ts`) is what pins it, and it caught this parser placing `is`/`as`
+ * one level too loose. Anything the grammar does not recognise (an unexpected token, a trailing token, a
  * malformed call) raises {@link ./errors.js UnsupportedFhirPathError}: the evaluator's fail-safe
  * treats a parse failure exactly like an unsupported evaluation, the invariant is reported
  * *unchecked*, never silently passed.
@@ -144,16 +146,24 @@ class Parser {
   }
 
   private parseEquality(): Expr {
-    let left = this.parseType();
+    let left = this.parseInequality();
     while (this.isSymbol("=") || this.isSymbol("!=") || this.isSymbol("~") || this.isSymbol("!~")) {
       const op = this.next().value;
-      left = { kind: "binary", op, left, right: this.parseType() };
+      left = { kind: "binary", op, left, right: this.parseInequality() };
     }
     return left;
   }
 
+  /**
+   * `is` / `as`, which bind **tighter than `|` and looser than `+`**, per the FHIRPath operator
+   * precedence table. Getting this level's position wrong is not cosmetic: it re-associates
+   * `1 | 1 is Integer` into `(1 | 1) is Integer`, which is a different collection, and
+   * `1 > 2 is Boolean` into `(1 > 2) is Boolean`, which answers `true` where the language says the
+   * expression compares an Integer with a Boolean and errors. Both are wrong booleans out of a
+   * well-formed parse, the one failure mode this parser's contract says is worse than "unchecked".
+   */
   private parseType(): Expr {
-    let left = this.parseInequality();
+    let left = this.parseAdditive();
     while (this.isKeyword("is") || this.isKeyword("as")) {
       const op = this.next().value;
       left = { kind: "typeop", op, operand: left, type: this.parseTypeSpecifier() };
@@ -185,10 +195,10 @@ class Parser {
   }
 
   private parseUnion(): Expr {
-    let left = this.parseAdditive();
+    let left = this.parseType();
     while (this.isSymbol("|")) {
       this.pos += 1;
-      left = { kind: "binary", op: "|", left, right: this.parseAdditive() };
+      left = { kind: "binary", op: "|", left, right: this.parseType() };
     }
     return left;
   }

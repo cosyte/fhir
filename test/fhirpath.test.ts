@@ -8,7 +8,9 @@ import {
   tokenize,
   UnsupportedFhirPathError,
   type FhirComplex,
+  type FpColl,
 } from "../src/index.js";
+import { evaluate, focusCollection } from "../src/fhirpath/evaluate.js";
 
 function parse(obj: unknown): FhirComplex {
   return parseResource(JSON.stringify(obj)).resource;
@@ -521,5 +523,91 @@ describe("evaluateInvariant: boolean-node coercion in logic operators", () => {
   });
   it("propagates empty through 'or' when both sides are empty", () => {
     expect(evalOn("missing.first() or missing.first()", r).satisfied).toBe(false);
+  });
+});
+
+describe("evaluate: a type-qualified path head is refused, never navigated", () => {
+  const patient = { resourceType: "Patient", name: [{ given: ["Synthgiven"] }] };
+
+  /** Evaluate against the resource, returning the raw collection so a refusal is visible. */
+  function run(expression: string): FpColl {
+    const resource = parse(patient);
+    return evaluate(parseFhirPath(expression), focusCollection(resource), {
+      resource,
+      context: focusCollection(resource),
+    });
+  }
+
+  it("refuses a leading resource-type qualifier instead of answering false", () => {
+    // Navigated as a member this is `false` on a Patient that HAS a name: a wrong answer with no
+    // diagnostic. Refusing is what turns it into INVARIANT_UNCHECKED at the caller.
+    expect(() => run("Patient.name.exists()")).toThrow(UnsupportedFhirPathError);
+    expect(() => run("Patient.name.exists()")).toThrow(/type-qualified path head 'Patient'/);
+    expect(evalOn("Patient.name.exists()", patient)).toEqual({
+      unchecked: true,
+      satisfied: false,
+    });
+  });
+
+  it("refuses the delimited spelling and a qualifier that does not match the resource", () => {
+    expect(() => run("`Patient`.name")).toThrow(UnsupportedFhirPathError);
+    expect(() => run("Encounter.name.given")).toThrow(UnsupportedFhirPathError);
+  });
+
+  it("refuses a type-qualified head inside a filter criteria, evaluated per item", () => {
+    expect(() => run("name.where(Patient.given.exists())")).toThrow(UnsupportedFhirPathError);
+  });
+
+  it("leaves lowerCamelCase element navigation, and every type-name argument, untouched", () => {
+    // FHIR element names are lowerCamelCase, so the two spellings are disjoint and nothing an
+    // ordinary path navigates is caught by the rule.
+    expect(run("name.given").length).toBe(1);
+    expect(evalOn("name.given.exists()", patient).satisfied).toBe(true);
+    // A type name reaches `ofType` / `is` / `as` off the AST and is never evaluated as a member, so
+    // the System-primitive type tests the subset supports keep working.
+    expect(evalOn("active.ofType(Boolean).exists()", { ...patient, active: true }).satisfied).toBe(
+      true,
+    );
+    expect(evalOn("name.given.first() is String", patient).satisfied).toBe(true);
+    expect(evalOn("name.given.first() as String", patient).satisfied).toBe(true);
+  });
+});
+
+describe("parseFhirPath: 'is'/'as' bind tighter than union and looser than additive", () => {
+  it("associates a union to the right of 'is', not around it", () => {
+    // `1 | 1 is Integer` is `1 | (1 is Integer)`, two items, not `(1 | 1) is Integer`, one boolean.
+    const ast = parseFhirPath("1 | 1 is Integer");
+    expect(ast.kind).toBe("binary");
+    if (ast.kind !== "binary") throw new Error("expected binary");
+    expect(ast.op).toBe("|");
+    expect(ast.right.kind).toBe("typeop");
+  });
+
+  it("associates a comparison outside 'is', so the operand is the right-hand side alone", () => {
+    // `1 > 2 is Boolean` compares an Integer with a Boolean, which the language calls an error;
+    // parsed the other way it answers `true`, a wrong boolean out of a well-formed parse.
+    const ast = parseFhirPath("1 > 2 is Boolean");
+    expect(ast.kind).toBe("binary");
+    if (ast.kind !== "binary") throw new Error("expected binary");
+    expect(ast.op).toBe(">");
+    expect(ast.right.kind).toBe("typeop");
+    expect(
+      evaluateInvariant("1 > 2 is Boolean", parse({ resourceType: "Patient" }), parse({})),
+    ).toEqual({ unchecked: true, satisfied: false });
+  });
+
+  it("keeps 'is' tighter than additive, so the left operand is the whole sum", () => {
+    const ast = parseFhirPath("1 + 2 is Integer");
+    expect(ast.kind).toBe("typeop");
+    if (ast.kind !== "typeop") throw new Error("expected typeop");
+    expect(ast.operand.kind === "binary" && ast.operand.op).toBe("+");
+  });
+
+  it("leaves equality looser than 'is', which it already was", () => {
+    const ast = parseFhirPath("a = b is Boolean");
+    expect(ast.kind).toBe("binary");
+    if (ast.kind !== "binary") throw new Error("expected binary");
+    expect(ast.op).toBe("=");
+    expect(ast.right.kind).toBe("typeop");
   });
 });

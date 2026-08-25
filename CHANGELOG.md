@@ -8,6 +8,32 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **The bounded FHIRPath engine has a MEASURED coverage number (`FHIRPATH-SUITE-1`), taken from
+  HL7's shared R4 conformance suite, and a wrongly answered case now fails the build.** The subset's
+  size had only ever been asserted in prose: nothing in the checkout referenced `tests-fhir-r4.xml`
+  or `fhir-test-cases` at all. The corpus is vendored under `test/__fixtures__/fhirpath-suite/` with
+  its upstream Apache-2.0 `LICENSE.txt` and the `testSchema.xsd` that defines the file format, and
+  `test/fhirpath-suite.test.ts` runs every case on every `pnpm test`, printing the counts.
+  **Measured at corpus tag `1.7.67`: 148 evaluated, 752 refused as unsupported, 0 answered wrongly,
+  35 the corpus itself marks invalid, 935 total**, i.e. the engine answers 15.8% of the corpus and
+  16.4% of the cases the corpus expects to evaluate at all.
+  `documentation/fhirpath-coverage.md` is the committed record, and a run that disagrees with it
+  fails the suite naming both the recorded and the measured number.
+  **A LARGE REFUSAL COUNT IS THE MEASUREMENT, NOT A DEFECT** (the corpus grades the whole language;
+  arithmetic, string functions, temporal arithmetic, `descendants()`, `resolve()`, aggregates and
+  FHIR type reflection are outside the cap on purpose), **but a WRONG answer is a defect and the
+  suite reds on one.** A case counts as unsupported only where `UnsupportedFhirPathError` was
+  actually raised, and a result the harness cannot compare counts as wrong, so the number can never
+  be inflated by the harness's own gaps. `grep -c '<test '` over the suite file says 937; two of
+  those sit inside XML comments, so the corpus carries 935 cases and the suite asserts all three
+  numbers.
+  One of the eleven input documents, `r4/patient-name-extensions.json`, is refused by this package's
+  JSON reader with `PRIMITIVE_EXTENSION_MISALIGNED` (the published example writes a two-slot value
+  array beside a one-slot `_`-sibling array, which json.html §2.6.2.3 does not allow). The single
+  case naming it is **not skipped**: it is asked with no document and refused at the head of its
+  path before any focus item is read. The exception is declared by name and checked both ways, so an
+  undeclared document going unreadable, or this one becoming readable, each fail the suite.
+
 - **Modifier ELEMENTS reach the safety readout (`SAFETY-MODIFIER-2`), on a new
   `SafetyReadout.modifierElements` channel carrying `{ element, location }` per location.** A
   modifier is not only a `modifierExtension`: R4 flags several ordinary base elements
@@ -231,6 +257,28 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A type-qualified path head was silently navigated to nothing instead of refused
+  (`FHIRPATH-SUITE-1`).** FHIRPath lets a path be written `Patient.name.given`, where the leading
+  segment names the type the path is rooted in. The engine was navigating it as an ordinary member,
+  and no resource has a property called `Patient`, so `Patient.name.exists()` evaluated to `false`
+  on a Patient that HAS a name: **a wrong answer with no diagnostic**, which is the one outcome the
+  engine's fail-safe contract exists to prevent. FHIR's naming rules make the two spellings disjoint
+  (element names are lowerCamelCase, type names UpperCamelCase), so an upper-case first letter at
+  the head of a path is a type qualifier and now raises `UnsupportedFhirPathError`, which the
+  validator reports as `INVARIANT_UNCHECKED`. The generic model carries no datatype name, the same
+  reason FHIR type `is` / `as` is out of scope, so refusing is the only honest option. **SCOPED TO
+  THE HEAD OF A PATH:** `ofType(Boolean)` and `x is System.String` read their type name off the
+  parse tree and never reach the member branch, so the System-primitive type tests the subset
+  supports are untouched.
+- **`is` / `as` sat one precedence level too loose (`FHIRPATH-SUITE-1`).** The published FHIRPath
+  precedence table binds them tighter than `|` and looser than `+`; this parser had them between
+  equality and inequality. That re-associated `1 | 1 is Integer` into `(1 | 1) is Integer`, a
+  different collection, and `1 > 2 is Boolean` into `(1 > 2) is Boolean`, which answers `true` where
+  the language says the expression compares an Integer with a Boolean and errors. Both are wrong
+  booleans out of a well-formed parse, the failure mode the parser's own contract calls worse than
+  "unchecked". Neither fix removes, re-severities or relocates a finding an already-shipped layer
+  emits: the existing suite is green on both, and the only behaviour that moves is an expression the
+  engine was previously mis-evaluating in silence.
 - **A `Coding` array wrapper the negation read decided on was reported only on the resource types
   the cardinality table knows, so on every other type the read ran ahead of the report
   (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit, on plain JSON:

@@ -15,7 +15,9 @@
  *   `Integer` / `Decimal`).
  *
  * Everything else, arithmetic, string functions, `descendants()`, `resolve()`, FHIR-type `is`/`as`
- * (a generic model carries no datatype name), raises {@link ./errors.js UnsupportedFhirPathError}.
+ * (a generic model carries no datatype name), and a **type-qualified path head** (`Patient.name`,
+ * see {@link isTypeQualifier}, out for the same reason), raises
+ * {@link ./errors.js UnsupportedFhirPathError}.
  * That is the whole safety contract: the engine **never guesses**. `where`/`select`/`all`
  * evaluate their criteria *lazily per item*, so an unsupported sub-term inside a filter over an empty
  * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires,
@@ -169,6 +171,33 @@ function navigateItem(node: FhirNode, name: string): FpItem[] {
 /** Navigate `name` from every node item in a collection (computed items have no members). */
 function navigate(focus: FpColl, name: string): FpItem[] {
   return focus.flatMap((item) => (item.t === "node" ? navigateItem(item.node, name) : []));
+}
+
+/**
+ * Whether a **head-of-path** name is FHIR's spelling of a *type*, not of an element.
+ *
+ * FHIRPath lets a path be written type-qualified, `Patient.name.given`, where the leading segment
+ * names the type the path is rooted in rather than a member to navigate. FHIR's naming rules make
+ * the two spellings disjoint: element names are lowerCamelCase (json.html), type names, resources
+ * and datatypes alike, are UpperCamelCase. So an upper-case first letter at the head of a path is a
+ * type qualifier and nothing else.
+ *
+ * The bounded subset does **not** implement type qualification: the model is generic and carries no
+ * datatype name (which is the same reason FHIR-type `is` / `as` is out of scope), so the engine
+ * cannot tell whether the qualifier matches the focus. Navigating it as an ordinary member is the
+ * one option that must not be taken, because a resource has no property called `Patient`, so
+ * `Patient.name.exists()` would silently evaluate to `false` on a Patient that HAS a name: a wrong
+ * answer with no diagnostic, which is exactly what {@link ./errors.js UnsupportedFhirPathError}
+ * exists to prevent. Refusing is the conservative direction, and the one this engine already takes
+ * everywhere else it cannot answer properly.
+ *
+ * Scoped to the head of a path on purpose. `ofType(Boolean)` and `x is System.String` never reach
+ * here: a type-name argument is read off the AST by {@link typeNameOf} / the `typeop` node and is
+ * never evaluated as a member.
+ */
+function isTypeQualifier(name: string): boolean {
+  const first = name.charAt(0);
+  return first >= "A" && first <= "Z";
 }
 
 /** The immediate child nodes of an item (used by `children()`, resourceType is type info, not a child). */
@@ -509,6 +538,9 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
       if (expr.name === "this") return focus;
       throw new UnsupportedFhirPathError(`unsupported variable $${expr.name}`);
     case "member":
+      if (expr.target === null && isTypeQualifier(expr.name)) {
+        throw new UnsupportedFhirPathError(`type-qualified path head '${expr.name}'`);
+      }
       return navigate(expr.target === null ? focus : evaluate(expr.target, focus, ctx), expr.name);
     case "call": {
       const input = expr.target === null ? focus : evaluate(expr.target, focus, ctx);
