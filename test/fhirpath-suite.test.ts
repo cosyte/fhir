@@ -49,6 +49,8 @@ import {
   runSuite,
   SUITE_FILE,
   TOTAL_CASES,
+  typeQualifiedHeadCases,
+  typeQualifiedHeadNames,
   UNIMPLEMENTED_MODES,
   type InputLoad,
   type SuiteCase,
@@ -510,6 +512,11 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
     expectNoDrift("invalid", counts.invalid);
     expectNoDrift("answered_fraction", answeredFraction(counts));
     expectNoDrift("answered_fraction_of_valid", answeredFractionOfValid(counts));
+    // The record states how many cases are written type-qualified, and its own opening line promises
+    // every number in it is re-derived here. It is, and so is the list of heads that makes "the
+    // leading segment names a type" checkable rather than asserted.
+    expectNoDrift("type_qualified_head_cases", typeQualifiedHeadCases(RUN.cases));
+    expectNoDrift("type_qualified_head_names", typeQualifiedHeadNames(RUN.cases));
   });
 
   it("names in the record every case the reported wrong count leaves out", () => {

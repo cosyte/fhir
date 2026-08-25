@@ -346,9 +346,12 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   **REFUSING IT UNCONDITIONALLY IS NOT THE SAFE DEFAULT AND WAS WITHDRAWN**: on a Patient with no
   name, a caller-supplied `Patient.name.exists()` constraint went from `INVARIANT_VIOLATED` at
   **error** to `INVARIANT_UNCHECKED` at **information**, and `validateResource(...).valid` went from
-  `false` to `true` on a resource that genuinely violates it. Withdrawing a true finding is the
-  direction this package does not go. `test/profile-invariant-type-qualified.test.ts` pins the issue
-  code, the severity and `valid` in both directions. **SCOPED TO THE HEAD OF A PATH:**
+  `false` to `true` on a resource that genuinely violates it, for the spelling most published
+  constraints use. **THE NARROW REFUSAL THAT SHIPPED STILL WITHDRAWS A FINDING** where the qualifier
+  does not match the focus, which is a cost and is enumerated under "what these four move" below
+  rather than rounded to nothing. `test/profile-invariant-type-qualified.test.ts` pins the issue
+  code, the severity and `valid` in both directions of a matching qualifier, and the non-matching one
+  beside them. **SCOPED TO THE HEAD OF A PATH:**
   `ofType(Boolean)` and `x is System.String` read their type name off the parse tree and never reach
   the member branch.
 - **`is` / `as` sat one precedence level too loose (`FHIRPATH-SUITE-1`).** The published FHIRPath
@@ -363,10 +366,12 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   decided from the System type of the value, which is not the question being asked: a generic model
   carries no FHIR datatype name, so `code` and `instant` cannot be tested for and `false` only
   looked like a determination. Any type name outside `Boolean` / `String` / `Integer` / `Decimal`
-  now raises `UnsupportedFhirPathError`. Separately, `{} is T` is now the empty collection rather
-  than `false`, as FHIRPath specifies. **THE TWO COERCE ALIKE TAKEN ALONE AND DO NOT COMPOSE
-  ALIKE**, so a constraint that _is_ the type test keeps its verdict while one that wraps it in
-  `not()` or a three-valued `implies` can gain a finding; see "what these four move" below.
+  now raises `UnsupportedFhirPathError`, which a caller sees as `INVARIANT_UNCHECKED`: a constraint
+  that _is_ such a type test therefore **loses** the verdict it used to get, which is a withdrawal
+  and is enumerated under "what these four move" below. Separately, `{} is T` is now the empty
+  collection rather than `false`, as FHIRPath specifies. **THOSE TWO COERCE ALIKE TAKEN ALONE AND DO
+  NOT COMPOSE ALIKE**, so a constraint that is an empty type test keeps its verdict while one that
+  wraps it in `not()` or a three-valued `implies` can gain a finding; same section.
 - **An ordering comparison guessed a model value's type from its text (`FHIRPATH-SUITE-1`).** A string-valued
   primitive is the FHIR lexical form of an element whose type this model does not carry: a `string`,
   a `code`, a `date`, or, read from XML, a `decimal`. Comparing it with `<` answered
@@ -390,16 +395,31 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   a FHIR `string` and String-against-String is a comparison FHIRPath defines, so a caller-supplied
   `name.all(family < 'A')` lost its `INVARIANT_VIOLATED` the same way. `{}` coerces exactly as the
   old lexical `false` did, so the constraint stays reported at its own code, severity and location.
-  What these four move: **nothing is removed, re-severitied or relocated**, pinned at the layer that
-  decides an issue code, a severity and `valid` by `test/profile-invariant-type-qualified.test.ts`
-  and `test/profile-invariant-ordering.test.ts`, not inferred from a green suite; **a false positive
-  is removed** (a conformant Patient reported `INVARIANT_VIOLATED` because the type-qualified head
-  selected nothing); and **three of the four ADD a finding**, since an undetermined comparison and an
-  empty type test both reach `evaluateInvariant`, which has always coerced empty to "not satisfied".
-  The added shapes are a period whose two ends are written at different precisions, an ordering over
-  a model value that is not temporal where the lexical guess used to answer `true`, and a type test
-  over an empty operand wrapped in `not()` or in an `implies` with a false consequent. Every test
-  that predates this measurement is green unchanged.
+  What these four move, pinned at the layer that decides an issue code, a severity and `valid` and
+  not inferred from a green suite. **A finding is WITHDRAWN and re-severitied in four shapes**, all
+  from the two remedies that refuse: `Encounter.name.exists()` over a Patient with no `name`,
+  `name.all(HumanName.given.exists())` over a `HumanName` carrying no `given`, `gender is Quantity`
+  and `gender.ofType(Quantity).exists()` over `gender: "male"` each move from `INVARIANT_VIOLATED` at
+  **error** with `valid: false` to `INVARIANT_UNCHECKED` at **information** with `valid: true`. Each
+  pre-change answer was `false` and each `false` was correct FHIRPath, so these are withdrawals of
+  correct findings; they ship because the previous engine reached those answers by accident rather
+  than by deciding them, and a determination a generic model has not made is the
+  wrong-answer-with-no-diagnostic that `UnsupportedFhirPathError` exists to prevent. **A false
+  positive is removed** (a conformant Patient reported `INVARIANT_VIOLATED` because the
+  type-qualified head selected nothing). **Three of the four ADD a finding**, since an undetermined
+  comparison and an empty type test both reach `evaluateInvariant`, which has always coerced empty to
+  "not satisfied"; the added shapes are a period whose two ends are written at different precisions,
+  an ordering over a model value that is not temporal where the lexical guess used to answer `true`,
+  a type test over an empty operand wrapped in `not()` or in an `implies` with a false consequent,
+  and, from the type-qualifier refusal, an `INVARIANT_UNCHECKED` at **information** where the
+  accidental navigation used to satisfy the constraint in silence (`Encounter.name.empty()` and
+  `Encounter.exists().not()` over a Patient each go from no issue to one, `valid` staying `true`).
+  **Nothing is relocated.** `test/profile-invariant-withdrawn-findings.test.ts` pins the
+  four withdrawals with their pre-change controls, and
+  `test/profile-invariant-type-qualified.test.ts` and `test/profile-invariant-ordering.test.ts` pin
+  the rest. Every test that predates this measurement is green unchanged, which is why the
+  withdrawals are enumerated rather than inferred from that: a green suite says only that nothing the
+  suite pins moved.
 - **A `Coding` array wrapper the negation read decided on was reported only on the resource types
   the cardinality table knows, so on every other type the read ran ahead of the report
   (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit, on plain JSON:

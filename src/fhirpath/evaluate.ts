@@ -220,9 +220,19 @@ function isTypeQualifier(name: string): boolean {
  * - **Refusing it unconditionally.** That is safe-looking and is not safe: an invariant written the
  *   type-qualified way (the spelling most published constraints use) becomes *unchecked*, so a
  *   resource that genuinely violates it stops being reported and `validateResource(...).valid`
- *   flips from `false` to `true`. Withdrawing a true finding from a non-conformant document is the
- *   one direction this package's fail-safe contract forbids, and the refusal has to be narrow
- *   enough not to do it. `test/profile-invariant-type-qualified.test.ts` pins both directions.
+ *   flips from `false` to `true`. `test/profile-invariant-type-qualified.test.ts` pins both
+ *   directions of the matching case.
+ *
+ * **WHAT THE NARROW REFUSAL STILL COSTS, stated here because the code cannot say it and an earlier
+ * revision of this comment claimed the opposite.** Where the qualifier does NOT match the focus this
+ * still withdraws a finding: pre-change the head was navigated as an ordinary member and selected
+ * nothing, so `Encounter.name.exists()` over a Patient answered `false` and the profile layer
+ * reported `INVARIANT_VIOLATED` at *error* with `valid: false`; it now reports `INVARIANT_UNCHECKED`
+ * at *information* with `valid: true`. That answer was correct, so this is a withdrawal and not a
+ * correction. It ships because the previous engine reached it by accident rather than by deciding
+ * it, and because a diagnostic a caller can see beats a silent `false`. The full set is tabled in
+ * `documentation/fhirpath-coverage.md` and pinned in
+ * `test/profile-invariant-withdrawn-findings.test.ts`.
  */
 function resolveTypeQualifier(name: string, focus: FpColl): FpColl {
   const matchesFocus =
@@ -543,6 +553,13 @@ const SYSTEM_TYPE_NAMES: ReadonlySet<string> = new Set(["Boolean", "String", "In
  * does not carry. Answering `false` there looks like a determination and is not one, which is the
  * wrong-answer-with-no-diagnostic the fail-safe contract exists to prevent (the shared corpus
  * expects `{}` from the first and `male` from the second, and `false` / `{}` is neither).
+ *
+ * **The cost, which is real and is not hidden:** a caller-supplied constraint that IS such a type
+ * test loses the verdict it used to get. `gender is Quantity` over `gender: "male"` reduced to
+ * `systemTypeOf(item) === "String"` against `"Quantity"`, answered `false`, and was reported
+ * `INVARIANT_VIOLATED` at *error* with `valid: false`; it is now `INVARIANT_UNCHECKED` at
+ * *information* with `valid: true`. Tabled in `documentation/fhirpath-coverage.md`, pinned in
+ * `test/profile-invariant-withdrawn-findings.test.ts`.
  */
 function itemIsType(item: FpItem, typeName: string): boolean {
   const normalized = typeName.replace(/^System\./, "");

@@ -86,6 +86,15 @@ expected to evaluate at all (190 of 900: the same numerator over a denominator w
 the invalid bucket removed). Both fractions are stated because they answer different questions, and
 quoting one as the other is how a coverage number drifts.
 
+One further count is re-derived here because the prose below turns on it.
+`type_qualified_head_cases` is how many of the 935 are written **type-qualified**, the
+`Patient.name.given` spelling in which the leading segment names the type the path is rooted in. The
+predicate is exact and stated so it can be checked: the expression, trimmed, begins with an
+identifier whose first character is upper case, followed by a `.`. FHIR's naming rules make that
+spelling disjoint from an element name (elements are lowerCamelCase, types UpperCamelCase), and
+`type_qualified_head_names` lists every head the corpus actually uses, re-derived beside the count,
+so "the leading segment names a type" is checked rather than asserted.
+
 ```counts
 corpus_repository: https://github.com/FHIR/fhir-test-cases
 corpus_tag: 1.7.67
@@ -98,6 +107,8 @@ wrong: 0
 invalid: 35
 answered_fraction: 20.3%
 answered_fraction_of_valid: 21.1%
+type_qualified_head_cases: 154
+type_qualified_head_names: Appointment, Encounter, Observation, Parameters, Patient, Questionnaire, ValueSet
 ```
 
 ## How to read the number
@@ -221,7 +232,8 @@ reaches, which is why they are declared as a mode difference rather than fixed.
 
 1. **A type-qualified path head now resolves against the resource it names.** FHIRPath lets a path
    be written `Patient.name.given`, where the leading segment names the type the path is rooted in
-   (127 of the 935 cases are written that way, and so is most published FHIR constraint text). The
+   (`type_qualified_head_cases` in the counts block above: **154** of the 935, re-derived every run,
+   and so is most published FHIR constraint text). The
    engine was navigating that head as an ordinary member, and since no resource has a property
    called `Patient`, `Patient.name.exists()` evaluated to `false` on a Patient that has a name: a
    wrong answer with no diagnostic. It now resolves where the model can check it, at a **resource
@@ -229,9 +241,12 @@ reaches, which is why they are declared as a mode difference rather than fixed.
    the generic model carries no type for. Refusing it *unconditionally* was tried and withdrawn: on
    a Patient with no name, a caller-supplied `Patient.name.exists()` invariant went from
    `INVARIANT_VIOLATED` at error to `INVARIANT_UNCHECKED` at information and `validateResource`
-   returned `valid: true` for a document it rejects today. Withdrawing a true finding is not a safe
-   default. `test/profile-invariant-type-qualified.test.ts` pins both directions at the layer that
-   decides an issue code, a severity and `valid`.
+   returned `valid: true` for a document it rejects today. The narrow refusal that shipped is
+   narrower and still withdraws a finding where the qualifier does not match the focus: the shapes
+   are enumerated in full [below](#what-these-four-move-and-what-they-do-not), which is where this
+   remedy's cost is stated rather than in a summary that rounds it to nothing.
+   `test/profile-invariant-type-qualified.test.ts` pins the matching qualifier in both directions,
+   and the non-matching one, at the layer that decides an issue code, a severity and `valid`.
 
 2. **`is` / `as` sat one precedence level too loose.** The published FHIRPath precedence table binds
    `is` / `as` tighter than `|` and looser than `+`; this parser had it between equality and
@@ -291,29 +306,73 @@ reaches, which is why they are declared as a mode difference rather than fixed.
 
 ### What these four move, and what they do not
 
-**Three of the four ADD a finding somewhere, and none of them removes, re-severities or relocates
-one.** That is the whole claim, it is the direction that matters, and it is stated this way because
-two earlier revisions of this section said "nothing moves" while something was moving. Every bullet
-below names the test that decides it at the layer that decides it.
+**Three of the four ADD a finding somewhere, and two of them also WITHDRAW one, in four shapes named
+below.** Earlier revisions of this section said "nothing moves" and then "nothing is removed,
+re-severitied or relocated" while something was moving both times, so the movements are enumerated
+here rather than summarised. Every bullet names the test that decides it at the layer that decides
+it.
 
-- **Nothing is removed, re-severitied or relocated**, and those three words are meant literally: no
-  constraint this package reported before is reported at a different code, at a different severity,
-  at a different location, or not at all. Both directions of remedy 1
-  are pinned in `test/profile-invariant-type-qualified.test.ts` (4 tests over
-  `collectInvariantIssues` / `validateResource` with a caller-supplied profile). Remedies 3 and 4 are
-  pinned the same way in `test/profile-invariant-ordering.test.ts` (15 tests over the same two entry
-  points, using R4's `per-1` expression verbatim): an inverted period written with two different
-  offsets, with one, and with none is reported `INVARIANT_VIOLATED` at error with `valid: false` in
-  every spelling; a conformant one reports nothing; and an ordering over a non-temporal model value
-  (`gender > 'test'`, `name.all(family < 'A')`) keeps its `INVARIANT_VIOLATED` at error with
-  `valid: false`, because `{}` and the lexical `false` coerce alike. Remedy 2 moves no verdict,
-  because the re-associations it fixes were parse errors rather than answers.
+- **Remedies 1 and 3 withdraw a finding, in four shapes, and the earlier claim that nothing was
+  removed, re-severitied or relocated was wrong.** Both remedies refuse a construct the previous
+  engine reduced to `false`, and a refusal is not neutral at this package's invariant layer: it
+  reaches `evaluateInvariant` as `unchecked`, so the constraint moves from `INVARIANT_VIOLATED` at
+  **error** with `validateResource(...).valid` of `false` to `INVARIANT_UNCHECKED` at
+  **information** with `valid: true`. All four, measured at `collectInvariantIssues` /
+  `validateResource` with a caller-supplied profile, and pinned there by
+  `test/profile-invariant-withdrawn-findings.test.ts` (8 tests), which carries each row's
+  pre-change reduction as a live control so the "before" column is measured rather than recalled:
+
+  | remedy | constraint expression | over | before | now |
+  |---|---|---|---|---|
+  | 1 | `Encounter.name.exists()` | a Patient with no `name` | `INVARIANT_VIOLATED` / error / `valid: false` | `INVARIANT_UNCHECKED` / information / `valid: true` |
+  | 1 | `name.all(HumanName.given.exists())` | a `HumanName` carrying no `given` | `INVARIANT_VIOLATED` / error / `valid: false` | `INVARIANT_UNCHECKED` / information / `valid: true` |
+  | 3 | `gender is Quantity` | `gender: "male"` | `INVARIANT_VIOLATED` / error / `valid: false` | `INVARIANT_UNCHECKED` / information / `valid: true` |
+  | 3 | `gender.ofType(Quantity).exists()` | `gender: "male"` | `INVARIANT_VIOLATED` / error / `valid: false` | `INVARIANT_UNCHECKED` / information / `valid: true` |
+
+  **Each withdrawn finding was a correct one**, which is what makes this a withdrawal rather than the
+  false-positive correction the next bullet describes. A qualifier that does not match its focus
+  selects nothing in FHIRPath, so `Encounter.name.exists()` over a Patient really is `false`; the
+  `HumanName` really carries no `given`; a FHIR `code` really is not a `Quantity`. The previous
+  engine reached each of those answers by accident rather than by deciding them (it navigated
+  `Encounter` as an ordinary member, and it compared `systemTypeOf(item)` of `"String"` against
+  `"Quantity"`), and that is why the refusal ships anyway: answering `false` where the generic model
+  has not established the type is a determination the model has not made, which is the
+  wrong-answer-with-no-diagnostic shape `UnsupportedFhirPathError` exists to prevent. `unchecked` is
+  visible in the `OperationOutcome`; a silent `false` is not.
+
+  **The same refusal also adds a finding, which is remedy 1's other face.** Where the accidental
+  navigation happened to *satisfy* a constraint, the package reported nothing at all; it now reports
+  `INVARIANT_UNCHECKED` at information. Measured over a Patient: `Encounter.name.empty()` and
+  `Encounter.exists().not()` each went from no issue to one, with `valid` staying `true` in both.
+  That is the third of the three remedies that add, and it is pinned in the same test file.
+
+  **None of the four withdrawals is pinned by the existing suite**, which is the ground on which they
+  ship: `git diff --numstat origin/main...HEAD -- test/` shows **zero deletions in every file it
+  lists**, and the one pre-existing file the change modifies, `test/fhirpath.test.ts`, gains tests
+  and loses none, so every test that predates this measurement passes unchanged over all four
+  movements. The four are pinned deliberately on this branch, by the test file named above and by
+  `test/profile-invariant-type-qualified.test.ts`, whose third block asserts `INVARIANT_UNCHECKED` at
+  information with `valid: true` for `Encounter.name.exists()` over a Patient: those files pin the
+  cost, and are cited here for that and not as evidence that nothing moved. What a **suite-pinned**
+  withdrawal looks like is recorded above, under the choice-spelling remedy this record measured and
+  refused: two tests that predate this measurement red on it, and that is why it is not shipped.
+
+  Remedies 2 and 4 withdraw nothing. Remedy 2's re-associations were parse errors rather than
+  answers. Remedy 4 answers `{}` where an earlier revision of it refused, and `{}` coerces through
+  `convertToBoolean` exactly as the lexical `false` it replaces, so the constraint stays reported at
+  its own code, severity and location: `test/profile-invariant-ordering.test.ts` (15 tests over the
+  same two entry points, using R4's `per-1` expression verbatim) pins an inverted period written with
+  two different offsets, with one and with none as `INVARIANT_VIOLATED` at error with `valid: false`
+  in every spelling, a conformant one as reporting nothing, and an ordering over a non-temporal model
+  value (`gender > 'test'`, `name.all(family < 'A')`) as keeping its `INVARIANT_VIOLATED` at error
+  with `valid: false`.
 - **Remedy 1 removes a false positive**, which is the permitted correction, not a withdrawal: a
   conformant Patient was reported `INVARIANT_VIOLATED` for `Patient.name.exists()` because the head
   selected nothing. The same test file pins that it now reports nothing.
-- **Remedy 3 adds a finding**, and the earlier claim that it could not was wrong. `{}` and `false`
-  coerce alike through `convertToBoolean` **taken alone**, so a constraint that *is* the type test
-  keeps its verdict; they do not COMPOSE alike. `not()` over an empty input is `[]` rather than
+- **Remedy 3 adds a finding too**, in its other half, and the earlier claim that it could not was
+  wrong. This half is the `{} is T` rule, not the refusal tabled above. `{}` and `false`
+  coerce alike through `convertToBoolean` **taken alone**, so a constraint that *is* an empty type
+  test keeps its verdict; they do not COMPOSE alike. `not()` over an empty input is `[]` rather than
   `true` and `{} implies false` is `{}` rather than `true`, so `(gender is String).not()` and
   `(gender is String) implies active` over a Patient with no `gender` are now `INVARIANT_VIOLATED` at
   error with `valid: false`, where the package reported nothing before. The new behaviour is what
@@ -329,18 +388,27 @@ below names the test that decides it at the layer that decides it.
   first shape: `testPeriodInvariantOld` grades `per-1` over exactly this document and expects
   `false`. `test/profile-invariant-ordering.test.ts` pins the added error, and its severity, at the
   deciding layer rather than leaving it to be discovered.
-- **An added finding is the cost, and it is the safe direction.** A caller who ordered a
-  `string`-valued element against a literal and got a satisfied constraint out of a lexical guess now
-  gets that constraint reported instead. The guess was unsound for anything numeric, which is what
-  the corpus caught. What no remedy here does is hand back `valid: true` for a document this package
-  used to reject.
+- **An added finding is the cost of remedies 3 and 4, and it is the safe direction.** A caller who
+  ordered a `string`-valued element against a literal and got a satisfied constraint out of a lexical
+  guess now gets that constraint reported instead. The guess was unsound for anything numeric, which
+  is what the corpus caught.
+- **The cost of remedies 1 and 3 runs the other way, and it is the direction that needs stating.**
+  In the four shapes tabled above, `validateResource` hands back `valid: true` for a document this
+  package used to reject. That is a real loss of a diagnostic and it is not softened here. What
+  replaces it is an `INVARIANT_UNCHECKED` at information naming the constraint, so the caller is told
+  the constraint was not evaluated rather than told it passed: the whole of the difference between a
+  refusal and a wrong answer, and the reason ADR 0002 makes refusal this engine's declared fallback.
+  A reader who needs those constraints decided needs an engine that carries FHIR type information,
+  which is a wider subset than this package has chosen to ship.
 
 No test that predates this measurement was deleted or edited to accommodate it, and the whole suite
 is green. `git diff --numstat origin/main...HEAD -- test/` shows **zero deletions in every file it
 lists**, and `--diff-filter=M` over the same range lists exactly one pre-existing file,
 `test/fhirpath.test.ts`, which gains tests and loses none; everything else under `test/` is new here.
-That is a necessary condition and, as the withdrawal above proved, not a sufficient one, which is why
-each claim here names the test that checks it at the layer that decides.
+That is a necessary condition and, as the four withdrawals above prove, nowhere near a sufficient
+one: a green suite says only that nothing the suite pins moved, which is why each claim here names
+the test that checks it at the layer that decides, and why what the suite does not pin is tabled
+rather than left to be inferred from the green.
 
 ## What vendoring the corpus cost the PHI gate
 

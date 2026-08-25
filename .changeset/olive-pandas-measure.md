@@ -34,7 +34,9 @@ The run surfaced wrongly answered cases in four constructs, all now fixed at the
   check, which a caller sees as `INVARIANT_UNCHECKED`. Refusing it unconditionally was tried and
   withdrawn: it turned a violated `Patient.name.exists()` invariant from `INVARIANT_VIOLATED` at
   error into `INVARIANT_UNCHECKED` at information, and `validateResource` returned `valid: true` for
-  a resource it rejects today. Scoped to the head of a path: `ofType(Boolean)` and
+  a resource it rejects today. The narrow refusal that shipped still does that where the qualifier
+  does not match the focus, which is a cost and is enumerated below rather than rounded to nothing.
+  Scoped to the head of a path: `ofType(Boolean)` and
   `x is System.String` read their type name off the parse tree and are untouched.
 - **`is` / `as` bound one precedence level too loose.** The published precedence table puts them
   tighter than `|` and looser than `+`; this parser had them between equality and inequality. That
@@ -67,16 +69,38 @@ The run surfaced wrongly answered cases in four constructs, all now fixed at the
   and a JSON-read decimal still orders as a number.
 
 What the four move, precisely, and each claim checked at the layer where a finding is decided rather
-than inferred from a green suite. **Three of the four add a finding somewhere; none removes,
-re-severities or relocates one.**
+than inferred from a green suite. **Three of the four add a finding somewhere, and two of them also
+withdraw one, in four shapes named below.**
 
-- **Nothing is removed, re-severitied or relocated.** `test/profile-invariant-type-qualified.test.ts`
-  pins the issue code, the severity and `valid` for a type-qualified constraint in both the satisfied
-  and the violated direction, and `test/profile-invariant-ordering.test.ts` does the same for `per-1`
-  over an inverted period written with two different timezone offsets, with one, and with none, plus
-  the conformant orderings, plus an ordering over a non-temporal model value (`gender > 'test'`,
-  `name.all(family < 'A')`), which keeps its `INVARIANT_VIOLATED` at error with `valid: false`.
-  Every test that predates this measurement is green unchanged.
+- **A finding is withdrawn and re-severitied in four shapes, and an earlier draft of this note
+  claiming none was is wrong.** Remedies 1 and 3 refuse a construct the previous engine reduced to
+  `false`, and a refusal reaches the invariant layer as `unchecked`, so the constraint moves from
+  `INVARIANT_VIOLATED` at **error** with `validateResource(...).valid` of `false` to
+  `INVARIANT_UNCHECKED` at **information** with `valid: true`. The four are
+  `Encounter.name.exists()` over a Patient with no `name`,
+  `name.all(HumanName.given.exists())` over a `HumanName` carrying no `given`,
+  `gender is Quantity` and `gender.ofType(Quantity).exists()` over `gender: "male"`. Each pre-change
+  answer was `false` and each `false` was correct FHIRPath, so these are withdrawals of correct
+  findings rather than the false-positive correction below. They ship because the previous engine
+  reached those answers by accident rather than by deciding them, and answering `false` where a
+  generic model has not established the type is a determination the model has not made: `unchecked`
+  is visible in the `OperationOutcome`, a silent `false` is not.
+  `test/profile-invariant-withdrawn-findings.test.ts` pins all four with their pre-change controls,
+  and `documentation/fhirpath-coverage.md` tables them in full. The same refusal also **adds** a
+  finding in the opposite case: where the accidental navigation happened to satisfy a constraint the
+  package reported nothing, and now reports `INVARIANT_UNCHECKED` at information
+  (`Encounter.name.empty()`, `Encounter.exists().not()`), with `valid` unchanged.
+- **Nothing else is removed, re-severitied or relocated.** Remedy 2's re-associations were parse
+  errors rather than answers, and remedy 4 answers `{}` where an earlier revision refused, which
+  coerces exactly as the lexical `false` it replaces.
+  `test/profile-invariant-type-qualified.test.ts` pins the issue code, the severity and `valid` for a
+  type-qualified constraint in both the satisfied and the violated direction, and
+  `test/profile-invariant-ordering.test.ts` does the same for `per-1` over an inverted period written
+  with two different timezone offsets, with one, and with none, plus the conformant orderings, plus
+  an ordering over a non-temporal model value (`gender > 'test'`, `name.all(family < 'A')`), which
+  keeps its `INVARIANT_VIOLATED` at error with `valid: false`. Every test that predates this
+  measurement is green unchanged, which is why the four withdrawals above are tabled rather than left
+  to be inferred from that: a green suite says only that nothing the suite pins moved.
 - **A false positive is removed**, which is the correction the first fix exists for: a conformant
   Patient was reported `INVARIANT_VIOLATED` because the type-qualified head selected nothing.
 - **A finding is added**, in two shapes, both from an undetermined ordering: two period ends written

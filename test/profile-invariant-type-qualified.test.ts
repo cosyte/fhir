@@ -10,12 +10,22 @@
  * path moves a document between those two outcomes, and nothing under `test/fhirpath*.test.ts` can
  * see it happen.
  *
- * The spelling matters: published FHIR constraints are written type-qualified, and 127 of the 935
- * cases in the shared R4 corpus (`test/fhirpath-suite.test.ts`) are too. An engine that refuses the
- * spelling outright reports a genuinely non-conformant resource as *unchecked* and hands the caller
- * `valid: true`, which is the one direction this package's fail-safe contract forbids: withdrawing a
- * true finding is not a safe default, it is a silent pass. Both directions are asserted below, so
- * the movement cannot happen again without reddening a test.
+ * The spelling matters: published FHIR constraints are written type-qualified, and so is a
+ * substantial share of the shared R4 corpus (the count is re-derived on every run by
+ * `test/fhirpath-suite.test.ts` and recorded in `documentation/fhirpath-coverage.md`'s counts block
+ * as `type_qualified_head_cases`; it is deliberately not restated here, because a number written
+ * twice drifts). An engine that refuses the spelling outright reports a genuinely non-conformant
+ * resource as *unchecked* and hands the caller `valid: true`, so the qualifier is resolved wherever
+ * the model can check it. The first two blocks below assert both directions of that.
+ *
+ * **The third block pins a cost, not a guarantee.** Where the qualifier does NOT match the focus the
+ * engine refuses, and that refusal withdraws a finding this package used to report: `valid` goes
+ * `false` to `true` and the constraint is reported at `INVARIANT_UNCHECKED` / information instead of
+ * `INVARIANT_VIOLATED` / error. It ships because a generic model that has not established the type
+ * has not decided the constraint either, and an unchecked constraint is visible in the
+ * `OperationOutcome` where a silent `false` is not. Do not cite this file as evidence that nothing
+ * moved: it is the file that pins what moved. The movement is enumerated in
+ * `documentation/fhirpath-coverage.md`, under "What these four move, and what they do not".
  */
 import { describe, expect, it } from "vitest";
 
@@ -89,6 +99,11 @@ describe("a qualifier the resource does not match stays unchecked, never guessed
     // `Encounter.name.exists()` against a Patient: the engine cannot say whether the qualifier
     // holds, so it refuses and the fail-safe surfaces it. Unchecked is never an error, and never a
     // silent pass either.
+    //
+    // THIS IS A COST, AND IT IS ROW 1 OF THE RECORD'S WITHDRAWAL TABLE. Pre-change the head was
+    // navigated as an ordinary member, selected nothing, `exists()` answered `false`, and this layer
+    // reported INVARIANT_VIOLATED at error with valid=false. The full set of four, each with its
+    // pre-change control, is `test/profile-invariant-withdrawn-findings.test.ts`.
     const profile = profileWith("Patient", "Encounter.name.exists()");
     const issues = collectInvariantIssues(parse(namelessPatient), profile);
     expect(issues.map((i) => [i.code, i.severity])).toEqual([

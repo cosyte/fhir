@@ -408,6 +408,41 @@ export function inputDocumentNames(cases: readonly SuiteCase[]): string[] {
   return [...new Set(cases.map((c) => c.inputFile).filter((n): n is string => n !== null))].sort();
 }
 
+/**
+ * The head of a **type-qualified** expression, or `null`.
+ *
+ * FHIRPath lets a path be written `Patient.name.given`, where the leading segment names the type the
+ * path is rooted in rather than a member to navigate, and that spelling is what
+ * {@link ../src/fhirpath/evaluate.ts resolveTypeQualifier} resolves or refuses. FHIR's naming rules
+ * make the two disjoint: element names are lowerCamelCase (json.html), type names UpperCamelCase, so
+ * an upper-case first letter at the head of a path is a type qualifier and nothing else.
+ *
+ * The predicate is deliberately narrow and syntactic, because
+ * `documentation/fhirpath-coverage.md` states its result as a number and every number in that file
+ * is re-derived here: an identifier at position 0 whose first character is upper case, followed by a
+ * `.`. It does not look inside a parenthesised or function-rooted expression, and it does not
+ * consult a list of FHIR type names, which is why {@link typeQualifiedHeadNames} publishes the heads
+ * the corpus actually uses so a reader can check the claim rather than take it.
+ */
+function typeQualifiedHead(expression: string): string | null {
+  return /^([A-Z][A-Za-z0-9]*)\./.exec(expression.trim())?.[1] ?? null;
+}
+
+/** How many of the corpus's cases are written type-qualified ({@link typeQualifiedHead}). */
+export function typeQualifiedHeadCases(cases: readonly SuiteCase[]): number {
+  return cases.filter((c) => typeQualifiedHead(c.expression) !== null).length;
+}
+
+/** Every distinct type-qualifier head the corpus uses, sorted, as the record spells the list. */
+export function typeQualifiedHeadNames(cases: readonly SuiteCase[]): string {
+  const heads = new Set<string>();
+  for (const c of cases) {
+    const head = typeQualifiedHead(c.expression);
+    if (head !== null) heads.add(head);
+  }
+  return [...heads].sort().join(", ");
+}
+
 /** What happened when the harness tried to load one input document. */
 export type InputLoad =
   | { readonly kind: "loaded"; readonly resource: FhirComplex }
