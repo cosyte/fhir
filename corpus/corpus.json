@@ -50,12 +50,12 @@
   ],
   "documents": [
     {
-      "id": "cosyte-fhir-fixtures/patient.json",
+      "id": "cosyte-fhir-fixtures/medicationrequest-dose.json",
       "corpus": "cosyte-fhir-fixtures",
-      "path": "patient.json",
-      "bytes": 335,
-      "sha256": "e3ae1ac3bec1a5fa1e57ec6aa6028195a4ce88428c5093cc66f825621e81bab9",
-      "note": "spec-clean tier: a base Patient carrying every element the base spec requires"
+      "path": "medicationrequest-dose.json",
+      "bytes": 608,
+      "sha256": "eb0839d0f8b4d174957c8e0fc259cdfd97949f1b7cae073d46916e64fff53e77",
+      "note": "spec-clean tier: MedicationRequest with its 1..1 subject"
     },
     {
       "id": "cosyte-fhir-fixtures/observation-decimals.json",
@@ -82,12 +82,20 @@
       "note": "spec-clean tier: the vital-signs profile's mandatory elements"
     },
     {
-      "id": "cosyte-fhir-fixtures/medicationrequest-dose.json",
+      "id": "cosyte-fhir-fixtures/patient.json",
       "corpus": "cosyte-fhir-fixtures",
-      "path": "medicationrequest-dose.json",
-      "bytes": 608,
-      "sha256": "eb0839d0f8b4d174957c8e0fc259cdfd97949f1b7cae073d46916e64fff53e77",
-      "note": "spec-clean tier: MedicationRequest with its 1..1 subject"
+      "path": "patient.json",
+      "bytes": 335,
+      "sha256": "e3ae1ac3bec1a5fa1e57ec6aa6028195a4ce88428c5093cc66f825621e81bab9",
+      "note": "spec-clean tier: a base Patient carrying every element the base spec requires"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/quirk-primitive-extension-misaligned.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "quirk-primitive-extension-misaligned.json",
+      "bytes": 176,
+      "sha256": "a23955df371666f945bb9b7aaf1cfbe7e46e4eb0477e9fb058079b205423e54b",
+      "note": "quirk tier: misaligned primitive-extension sibling, the reader fails closed"
     },
     {
       "id": "cosyte-fhir-fixtures/quirk-resourcetype-last.json",
@@ -122,14 +130,6 @@
       "note": "quirk tier: US Core race + birthsex on a base Patient"
     },
     {
-      "id": "cosyte-fhir-fixtures/quirk-primitive-extension-misaligned.json",
-      "corpus": "cosyte-fhir-fixtures",
-      "path": "quirk-primitive-extension-misaligned.json",
-      "bytes": 176,
-      "sha256": "a23955df371666f945bb9b7aaf1cfbe7e46e4eb0477e9fb058079b205423e54b",
-      "note": "quirk tier: misaligned primitive-extension sibling, the reader fails closed"
-    },
-    {
       "id": "fhir-test-cases/r4/bundle-with-no-type.json",
       "corpus": "fhir-test-cases",
       "path": "r4/bundle-with-no-type.json",
@@ -149,14 +149,16 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/allergyintolerance-example.json",
       "bytes": 4944,
-      "sha256": "a0ebbb772b403904faa0f8cc8024ff337bf6270e07acd276b8ab6fef62b45249"
+      "sha256": "a0ebbb772b403904faa0f8cc8024ff337bf6270e07acd276b8ab6fef62b45249",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at AllergyIntolerance.identifier[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/appointment-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/appointment-example.json",
       "bytes": 2265,
-      "sha256": "5bb8ab43044c648178d401852d53125d92f04c608f969754eeeb67ae59986905"
+      "sha256": "5bb8ab43044c648178d401852d53125d92f04c608f969754eeeb67ae59986905",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Appointment.serviceCategory[].coding[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/appointmentresponse-example.json",
@@ -199,14 +201,16 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/bundle-questionnaire.json",
       "bytes": 69722,
-      "sha256": "8f4aa93a2143389ce456e295c5695305492cb72d5af04130dd3a644d14526fe7"
+      "sha256": "8f4aa93a2143389ce456e295c5695305492cb72d5af04130dd3a644d14526fe7",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 50 error(s) this library does not - 50x structure (a structural finding under a resource type this library has no built-in schema for); first at Questionnaire.item[].item[], Questionnaire.item[].item[].item[]. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/capabilitystatement-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/capabilitystatement-example.json",
       "bytes": 5820,
-      "sha256": "ef16b529a14ceeef75d0337c8e26486166f20d0a3f00a5d2cc9c578d6428df91"
+      "sha256": "ef16b529a14ceeef75d0337c8e26486166f20d0a3f00a5d2cc9c578d6428df91",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 3 error(s) this library does not - 3x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at CapabilityStatement.url, CapabilityStatement.jurisdiction[].coding[].display. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/careteam-example.json",
@@ -227,14 +231,16 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/codesystem-example.json",
       "bytes": 3425,
-      "sha256": "ff0a6db2c9a29721abf40ff73ff68d5cd7abb555b7efb67acccfea6067f75d75"
+      "sha256": "ff0a6db2c9a29721abf40ff73ff68d5cd7abb555b7efb67acccfea6067f75d75",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 6 error(s) this library does not - 4x invalid (a URL or canonical reference the reference validator resolves and this library does not); 1x invariant (a FHIRPath invariant the reference validator evaluates and this library reports as unchecked); 1x business-rule (a business rule the reference validator applies to conformance resources); first at CodeSystem.identifier[].system, CodeSystem.concept[].designation[].use.system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/communication-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/communication-example.json",
       "bytes": 1517,
-      "sha256": "61157b599163f8ff63a081366f0e719ded429b35d796ee931e300e2519d0c095"
+      "sha256": "61157b599163f8ff63a081366f0e719ded429b35d796ee931e300e2519d0c095",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Communication.instantiatesUri[]. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/compartmentdefinition-example.json",
@@ -248,7 +254,8 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/composition-example.json",
       "bytes": 4749,
-      "sha256": "8f37f766fac662d00cb9ea769fb5417abe3b82a0573c55f42bcbdb505753da88"
+      "sha256": "8f37f766fac662d00cb9ea769fb5417abe3b82a0573c55f42bcbdb505753da88",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 3 error(s) this library does not - 3x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Composition.relatesTo[].target.ofType(Identifier).system, Composition.section[].code.coding[].display. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/conceptmap-example.json",
@@ -304,14 +311,16 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/diagnosticreport-example.json",
       "bytes": 132785,
-      "sha256": "ea53e6871a30543a058325c3ca598c69de47c87ecd0714ce3fbdfa04c634d4d2"
+      "sha256": "ea53e6871a30543a058325c3ca598c69de47c87ecd0714ce3fbdfa04c634d4d2",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 10 error(s) this library does not - 10x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Bundle.entry[].resource/*DiagnosticReport/101*/.meta.tag[].system, Bundle.entry[].resource/*DiagnosticReport/101*/.identifier[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/documentreference-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/documentreference-example.json",
       "bytes": 5986,
-      "sha256": "63e3fb3aacff16f95b2d0ba313935fb8ec7345296992481bfdbbe0a322f1b9c0"
+      "sha256": "63e3fb3aacff16f95b2d0ba313935fb8ec7345296992481bfdbbe0a322f1b9c0",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at DocumentReference.content[].attachment.url. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/encounter-example.json",
@@ -325,28 +334,32 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/endpoint-example.json",
       "bytes": 1166,
-      "sha256": "306444ead9bec427de9c0b894465a83ae455b07a0e965aa066f9b9336fd15f8d"
+      "sha256": "306444ead9bec427de9c0b894465a83ae455b07a0e965aa066f9b9336fd15f8d",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Endpoint.identifier[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/episodeofcare-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/episodeofcare-example.json",
       "bytes": 2110,
-      "sha256": "6166ff34e19b135aefab5e5978a90c2f9c566ff5c6c1b0e4f8ce8cb74a48ad0e"
+      "sha256": "6166ff34e19b135aefab5e5978a90c2f9c566ff5c6c1b0e4f8ce8cb74a48ad0e",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at EpisodeOfCare.identifier[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/familymemberhistory-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/familymemberhistory-example.json",
       "bytes": 1418,
-      "sha256": "f669002715274275427990e6cab5a137dba151dbea1f3b16bdd6ce8442db04e1"
+      "sha256": "f669002715274275427990e6cab5a137dba151dbea1f3b16bdd6ce8442db04e1",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at FamilyMemberHistory.instantiatesUri[], FamilyMemberHistory.condition[].code.coding[].display. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/flag-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/flag-example.json",
       "bytes": 1033,
-      "sha256": "6f4c00ab1f056c0025c66acf300e46bc0e51ac6e3a2dd4e41b247ea76fa95231"
+      "sha256": "6f4c00ab1f056c0025c66acf300e46bc0e51ac6e3a2dd4e41b247ea76fa95231",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Flag.code.coding[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/goal-example.json",
@@ -374,7 +387,8 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/healthcareservice-example.json",
       "bytes": 4515,
-      "sha256": "955e86134762482e727504fb6b8d8628c0405fdb2b3b6f5e160c0fc6b3f33344"
+      "sha256": "955e86134762482e727504fb6b8d8628c0405fdb2b3b6f5e160c0fc6b3f33344",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at HealthcareService.identifier[].system, HealthcareService.type[].coding[].display. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/immunization-example.json",
@@ -388,7 +402,8 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/implementationguide-example.json",
       "bytes": 5815,
-      "sha256": "e87891c6dd81323f6b714e8d5fca342d8b4e4ae775e14c52c96ca4065c89158f"
+      "sha256": "e87891c6dd81323f6b714e8d5fca342d8b4e4ae775e14c52c96ca4065c89158f",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x business-rule (a business rule the reference validator applies to conformance resources); first at ImplementationGuide. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/linkage-example.json",
@@ -416,14 +431,16 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/medicationadministration0301.json",
       "bytes": 4542,
-      "sha256": "ab9da82af6084ec661986c21a63fbfdc16eab52cb62e3ab515e3eeef8a6235e5"
+      "sha256": "ab9da82af6084ec661986c21a63fbfdc16eab52cb62e3ab515e3eeef8a6235e5",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at MedicationAdministration.contained[]/*Medication/med0301*/.code.coding[].display. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/medicationdispense0301.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/medicationdispense0301.json",
       "bytes": 4193,
-      "sha256": "e1ac1855c02cec1993c08d4d49c5a480f9f625823e3b8bd776af85da15f6a082"
+      "sha256": "e1ac1855c02cec1993c08d4d49c5a480f9f625823e3b8bd776af85da15f6a082",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); 1x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at MedicationDispense.contained[]/*Medication/med0301*/.code.coding[].display, MedicationDispense.quantity.code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/medicationrequest0301.json",
@@ -437,21 +454,24 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/medicationstatementexample1.json",
       "bytes": 5874,
-      "sha256": "bb35e017117871d4205ab3b5fe9ae4812b814aa82b8a437a7b3206477fea363c"
+      "sha256": "bb35e017117871d4205ab3b5fe9ae4812b814aa82b8a437a7b3206477fea363c",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 3 error(s) this library does not - 2x code-invalid (a code the reference validator checks against terminology content this library does not vendor); 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at MedicationStatement.contained[]/*Medication/med0309*/.code.coding[].display, MedicationStatement.contained[]/*Medication/med0309*/.ingredient[].strength.denominator.code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/messagedefinition-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/messagedefinition-example.json",
       "bytes": 794,
-      "sha256": "eaf31e60261f0744a212eb15198b6cb0a559db1e5bf68620320464609f01d70b"
+      "sha256": "eaf31e60261f0744a212eb15198b6cb0a559db1e5bf68620320464609f01d70b",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at MessageDefinition.event.ofType(Coding).system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/messageheader-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/messageheader-example.json",
       "bytes": 1523,
-      "sha256": "724c18b76f4824b2db9341089be5b722b02b70716e8b8ab7eac7b0518ef022bf"
+      "sha256": "724c18b76f4824b2db9341089be5b722b02b70716e8b8ab7eac7b0518ef022bf",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at MessageHeader.event.ofType(Coding).system, MessageHeader.definition. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/molecularsequence-example.json",
@@ -486,7 +506,8 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/operationdefinition-example.json",
       "bytes": 5174,
-      "sha256": "a6f5c5a1a5bb9ad77a8059b3355494f69ecdf7879d71f1b84619c65ba6dcba4c"
+      "sha256": "a6f5c5a1a5bb9ad77a8059b3355494f69ecdf7879d71f1b84619c65ba6dcba4c",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at OperationDefinition.jurisdiction[].coding[].display, OperationDefinition.base. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/operationoutcome-example.json",
@@ -542,7 +563,8 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/practitioner-example.json",
       "bytes": 1290,
-      "sha256": "f7bdedca23fe131d62bbf7efae8c4dca6c691fe1ab78aa55e81b5fea43a88655"
+      "sha256": "f7bdedca23fe131d62bbf7efae8c4dca6c691fe1ab78aa55e81b5fea43a88655",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Practitioner.qualification[].identifier[].system, Practitioner.qualification[].code.coding[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/practitionerrole-example.json",
@@ -556,7 +578,8 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/questionnaire-example.json",
       "bytes": 4958,
-      "sha256": "5c8adb2de88ad6e54bc1e923821b3f57aceae98465fc33f7954ca43f3431badc"
+      "sha256": "5c8adb2de88ad6e54bc1e923821b3f57aceae98465fc33f7954ca43f3431badc",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 9 error(s) this library does not - 9x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Questionnaire.item[].code[].system, Questionnaire.item[].item[].code[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/questionnaireresponse-example-bluebook.json",
@@ -577,14 +600,16 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/schedule-example.json",
       "bytes": 1157,
-      "sha256": "4596b474f1f95d03a111915d78d86f6aa13b8e742d5d261e0930bd4262478d0a"
+      "sha256": "4596b474f1f95d03a111915d78d86f6aa13b8e742d5d261e0930bd4262478d0a",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Schedule.identifier[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/searchparameter-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/searchparameter-example.json",
       "bytes": 2814,
-      "sha256": "4467dd3d668de57c3b8c4e7674a8ba721c1a2f381c1a1650362634becfee2a6e"
+      "sha256": "4467dd3d668de57c3b8c4e7674a8ba721c1a2f381c1a1650362634becfee2a6e",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at SearchParameter.jurisdiction[].coding[].display. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/slot-example.json",
@@ -605,14 +630,16 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/structuredefinition-example-composition.json",
       "bytes": 3905,
-      "sha256": "31745207f1aa781878a8e7a86c97e0e3816cbac88499a5729027fd36f4a1df59"
+      "sha256": "31745207f1aa781878a8e7a86c97e0e3816cbac88499a5729027fd36f4a1df59",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x not-found (a definition the reference validator could not resolve in its own loaded packages); first at StructureDefinition. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/structuremap-example.json",
       "corpus": "fhir-test-cases",
       "path": "r4/examples/structuremap-example.json",
       "bytes": 3032,
-      "sha256": "5dac2a79f83218fd41470b7d803fdfaa841baa153486604d9564c0607ed061fe"
+      "sha256": "5dac2a79f83218fd41470b7d803fdfaa841baa153486604d9564c0607ed061fe",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x unknown (a finding the reference validator classifies as unknown); first at StructureMap.group[].rule[].source[], StructureMap.group[].rule[].target[]. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "fhir-test-cases/r4/examples/subscription-example.json",
@@ -640,28 +667,123 @@
       "corpus": "fhir-test-cases",
       "path": "r4/examples/valueset-example.json",
       "bytes": 3243,
-      "sha256": "ec4718a971b5f763cb2d89b21bc16b90e0271cf85e6b6c91ce760f479c33e1f9"
+      "sha256": "ec4718a971b5f763cb2d89b21bc16b90e0271cf85e6b6c91ce760f479c33e1f9",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at ValueSet.identifier[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/account-example-with-guarantor.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "account-example-with-guarantor.json",
+      "bytes": 1592,
+      "sha256": "5f8cdafd3685cd87e2cb0cba9e1aa99a4d7145bebb04663ed1a0114d931876f6"
     },
     {
       "id": "hl7-fhir-r4-examples/activitydefinition-administer-zika-virus-exposure-assessment.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "activitydefinition-administer-zika-virus-exposure-assessment.json",
       "bytes": 5136,
-      "sha256": "3559bec510cf93f3b1889d0b615cd7fd6ed4138fc59cec670cec6e9f4c955cba"
+      "sha256": "3559bec510cf93f3b1889d0b615cd7fd6ed4138fc59cec670cec6e9f4c955cba",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 3 error(s) this library does not - 3x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at ActivityDefinition.relatedArtifact[].resource, ActivityDefinition.library[]. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/activitydefinition-order-serum-dengue-virus-igm.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "activitydefinition-order-serum-dengue-virus-igm.json",
+      "bytes": 5124,
+      "sha256": "f20094ea54c311867c99503683c583e96ddc4984b8eb7bddefeb9a0688686d4b"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/activitydefinition-order-serum-zika-dengue-virus-igm.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "activitydefinition-order-serum-zika-dengue-virus-igm.json",
+      "bytes": 5671,
+      "sha256": "6e9fca530c996a09040779d0e3b3289df15f2ec8e5b827642cae70553aded13d"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/activitydefinition-provide-mosquito-prevention-advice.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "activitydefinition-provide-mosquito-prevention-advice.json",
+      "bytes": 7070,
+      "sha256": "f3c621c10790c2b4b49ff821d17b1d42f1df8758f6f05c556bfc77e291474ec3"
     },
     {
       "id": "hl7-fhir-r4-examples/adverseevent-example.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "adverseevent-example.json",
       "bytes": 3652,
-      "sha256": "e0e04b733bc641cda198ab2d339e6fe5080cb6a2c73be01f54007956cb7a200f"
+      "sha256": "e0e04b733bc641cda198ab2d339e6fe5080cb6a2c73be01f54007956cb7a200f",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 3 error(s) this library does not - 2x code-invalid (a code the reference validator checks against terminology content this library does not vendor); 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at AdverseEvent.identifier.system, AdverseEvent.category[].coding[].code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/allergyintolerance-fishallergy.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "allergyintolerance-fishallergy.json",
+      "bytes": 1591,
+      "sha256": "c97265fb6fbe1cb54d7771fba1274f1bc5042d33c128cc1552e2403359b83277"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/allergyintolerance-medication.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "allergyintolerance-medication.json",
+      "bytes": 3261,
+      "sha256": "0421d966eb6531901143a7a512d528b47ec5d1efdd7ae4747d45340e8df999a0"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/allergyintolerance-nka.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "allergyintolerance-nka.json",
+      "bytes": 1274,
+      "sha256": "69a6b0b7cb769229b84e8ab0ae850e613b50bfa4efec552368433cd051db658c"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/appointment-example-request.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "appointment-example-request.json",
+      "bytes": 2450,
+      "sha256": "065cd913479fd5fdac5cfdedf42d4b2f850c82dd35c560d6021ffd12b512023f"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/appointment-example2doctors.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "appointment-example2doctors.json",
+      "bytes": 2217,
+      "sha256": "0b147e6367719bb9572fb5668c8d9a72255edd3886772177029a3bc615d3001e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/appointmentresponse-example-req.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "appointmentresponse-example-req.json",
+      "bytes": 1134,
+      "sha256": "44d9702152d4767a04d19196b023ab7ce5a563e4a7bc1825a77e065084404c82"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/audit-event-example-login.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "audit-event-example-login.json",
+      "bytes": 5371,
+      "sha256": "caa7451b3e3a97be00b1bdf20732a8d3c18fcffcd8216bc76c68c8f153dab46b"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/audit-event-example-logout.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "audit-event-example-logout.json",
+      "bytes": 5377,
+      "sha256": "7c9a4bd2fc2d32e5fd02b5a5de6892257a42ee3f182b185ae14961599f5f0f19"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/audit-event-example-media.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "audit-event-example-media.json",
+      "bytes": 7840,
+      "sha256": "02ff7c0d4df4ecfdbaa016b1233a39aef9431e76a257d7519593ffd8d774c1cf"
     },
     {
       "id": "hl7-fhir-r4-examples/basic-example2.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "basic-example2.json",
       "bytes": 1729,
-      "sha256": "f314c5537a8a6da83e8c72ca301627a1bca27320c911e26ba1c9ffffabde12e6"
+      "sha256": "f314c5537a8a6da83e8c72ca301627a1bca27320c911e26ba1c9ffffabde12e6",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 3 error(s) this library does not - 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); 1x structure (a structural finding under a resource type this library has no built-in schema for); first at Basic.extension[], Basic.extension[].url. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/biologicallyderivedproduct-example.json",
@@ -671,11 +793,88 @@
       "sha256": "22a4a0e8d30891bfc036f0573898e1ea295af9b1f9ed0524321e431424a5c365"
     },
     {
+      "id": "hl7-fhir-r4-examples/bodystructure-example-skin-patch.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "bodystructure-example-skin-patch.json",
+      "bytes": 2499,
+      "sha256": "26c19449d17c8bb58f1f7e8aa398a7132f2cfa2c81796c7dfa018269bc79957d"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/bodystructure-example-tumor.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "bodystructure-example-tumor.json",
+      "bytes": 2131,
+      "sha256": "ae65899fdfb475e4d75c58552e64850fd32133dfb5329acc2d2278962eefd3d8"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/bundle-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "bundle-example.json",
+      "bytes": 2364,
+      "sha256": "edc0367afb9fb0a2dc7699b3b75f0160fbf41313861772153a2f7f4a8547174b"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/bundle-request-medsallergies.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "bundle-request-medsallergies.json",
+      "bytes": 1011,
+      "sha256": "994e80be9847e4a0faace8d092f509bfb03a0cee11435f3356b1788e5c68d526"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/bundle-request-simplesummary.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "bundle-request-simplesummary.json",
+      "bytes": 814,
+      "sha256": "008b2c4deb581db82ccd203ff5f336dfbb1a6e9df0245335465fa3a043d158b9"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/capabilitystatement-base2.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "capabilitystatement-base2.json",
+      "bytes": 3963,
+      "sha256": "974b5e5c574813d6b25c118dea011e95ea41f97da69d994221bf25db278cabc8"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/capabilitystatement-measure-processor.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "capabilitystatement-measure-processor.json",
+      "bytes": 4884,
+      "sha256": "1f1019d330b66a62b57569780e5d47dfc802e0992caa3597d32212ad312fe974"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/capabilitystatement-messagedefinition.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "capabilitystatement-messagedefinition.json",
+      "bytes": 1708,
+      "sha256": "4486399f10a2a410fd62d29d0218996cbc4b8dd106ab430bae13f1f01fe0173d"
+    },
+    {
       "id": "hl7-fhir-r4-examples/careplan-example-f001-heart.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "careplan-example-f001-heart.json",
       "bytes": 4793,
       "sha256": "3e18a8d299a85a67980a73232d613f9cc96a43e40f4ff07bec83e0143348bec0"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/careplan-example-f002-lung.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "careplan-example-f002-lung.json",
+      "bytes": 4843,
+      "sha256": "32ec1497d511ae9f757614cfd2da836bf1020c683e4de9d6faabdf9c08463179"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/careplan-example-f003-pharynx.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "careplan-example-f003-pharynx.json",
+      "bytes": 4925,
+      "sha256": "93baff1e6a781948b3f486050cb864e075e1f664e4786778931e5a6d9e93419b"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/careplan-example-f201-renal.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "careplan-example-f201-renal.json",
+      "bytes": 6723,
+      "sha256": "aaf5b04a4e45c40a68be4931115f8997cbb616dbd068bd3f187eb9d82d4c1da6"
     },
     {
       "id": "hl7-fhir-r4-examples/catalogentry-example.json",
@@ -689,7 +888,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "chargeitem-example.json",
       "bytes": 2862,
-      "sha256": "c1be648cd9081d263d07391dd571328758fef660a6978e1044be4d4bcc0a0f92"
+      "sha256": "c1be648cd9081d263d07391dd571328758fef660a6978e1044be4d4bcc0a0f92",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at ChargeItem.reason[].coding[].code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/chargeitemdefinition-device-example.json",
@@ -699,11 +899,40 @@
       "sha256": "0b9c3686ebb23660536edc010e9feac59fd97da14f9ad3c563b301160b84bb18"
     },
     {
+      "id": "hl7-fhir-r4-examples/chargeitemdefinition-ebm-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "chargeitemdefinition-ebm-example.json",
+      "bytes": 4733,
+      "sha256": "2b6f1ba1b8585503d0ffbaf78b586ec969c4e69a59b9b9f9d726f29aa8925fc7"
+    },
+    {
       "id": "hl7-fhir-r4-examples/claim-example-cms1500-medical.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "claim-example-cms1500-medical.json",
       "bytes": 6947,
-      "sha256": "ca488c1473ebd8d5263688f06eab49782bf1a41fa14da94aabd88a637f25537a"
+      "sha256": "ca488c1473ebd8d5263688f06eab49782bf1a41fa14da94aabd88a637f25537a",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 5 error(s) this library does not - 3x code-invalid (a code the reference validator checks against terminology content this library does not vendor); 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Claim.diagnosis[].diagnosis.ofType(CodeableConcept).coding[].display, Claim.diagnosis[].diagnosis.ofType(CodeableConcept).coding[].code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/claim-example-institutional-rich.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "claim-example-institutional-rich.json",
+      "bytes": 4497,
+      "sha256": "e21358ad83a9a9acd5e4ef9e35e401efb458f93cca5e952a72f178fe5ebd45c3"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/claim-example-institutional.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "claim-example-institutional.json",
+      "bytes": 3081,
+      "sha256": "31e657676d66bd93c9066dfc87cb81ca9dbcde5dc3a6a81f41ec91240137396f"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/claim-example-oral-average.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "claim-example-oral-average.json",
+      "bytes": 5561,
+      "sha256": "941d5a2ab494d204b2093230ffc990241a0221a95e46adbb143089f7b69c8dad"
     },
     {
       "id": "hl7-fhir-r4-examples/claimresponse-example-2.json",
@@ -713,11 +942,158 @@
       "sha256": "df87f114e59a80ffda8cfcd95660c822f0341b6401eb9c25eaf8d18c4206e990"
     },
     {
+      "id": "hl7-fhir-r4-examples/claimresponse-example-unsolicited-preauth.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "claimresponse-example-unsolicited-preauth.json",
+      "bytes": 5014,
+      "sha256": "99762d797414a270e0296f0355d841b5cc138947f0337179ace378d9b46eed60"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/claimresponse-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "claimresponse-example.json",
+      "bytes": 3631,
+      "sha256": "99deb33655a4f78a4f49c1b661a7e98a08e29ea36552f1787a1edeb919dc767a"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/cm-address-type-v3.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "cm-address-type-v3.json",
+      "bytes": 2588,
+      "sha256": "e985972fe1ce5c04c42c3550c30f5f2dc168535f4fbbf558e2a9797ece37185e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/cm-address-use-v2.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "cm-address-use-v2.json",
+      "bytes": 3783,
+      "sha256": "ed99dec480c8c1f3e887d77b7c36e4236dfc35ac3ee5e5c3b08d7d9a456648b7"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/cm-address-use-v3.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "cm-address-use-v3.json",
+      "bytes": 4778,
+      "sha256": "882eae899ec9f5f256a7b14ec29fbc33a7f9487871219aa9c9cbf9eabda8fe82"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/codesystem-abstract-types.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "codesystem-abstract-types.json",
+      "bytes": 3308,
+      "sha256": "575e852c8990beb8c4cc117363fbe18a68cce2584c68bf221fa155fdd94d4780"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/codesystem-account-status.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "codesystem-account-status.json",
+      "bytes": 4173,
+      "sha256": "f0bc1bfb7670e676ce72276cb3cbc373e85def4cfa4c467c5bda961c79d4a7cb"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/codesystem-action-cardinality-behavior.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "codesystem-action-cardinality-behavior.json",
+      "bytes": 3021,
+      "sha256": "579f5e6d63548ef2df357df7d92fd58a9e337d4b0943f510220582e31b6710e0"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/codesystem-extensions-CodeSystem-author.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "codesystem-extensions-CodeSystem-author.json",
+      "bytes": 512,
+      "sha256": "98f4c68bb320831aa525a1678048bc2bf018a55621979a77e0663d3c3e264cb0"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/codesystem-extensions-CodeSystem-effective.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "codesystem-extensions-CodeSystem-effective.json",
+      "bytes": 536,
+      "sha256": "29c022a9216de26abd4443c2cb1cfda9fdedae50fceb4acf7d518163158f45cc"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/codesystem-extensions-CodeSystem-end.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "codesystem-extensions-CodeSystem-end.json",
+      "bytes": 514,
+      "sha256": "61cb4db0dc833ecd04d7b87028f511d999073b6ce137d1c723d6ee99d960872a"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/communication-example-fm-attachment.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "communication-example-fm-attachment.json",
+      "bytes": 1856,
+      "sha256": "44a7d71247c243063781d2f86a244aca16b33bd6a4dc9b03dceef6741073d102"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/communication-example-fm-solicited-attachment.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "communication-example-fm-solicited-attachment.json",
+      "bytes": 2252,
+      "sha256": "4ec047c34ff5b70e91838bcb1a7d104b8694f720791746e2e76865f2d18dcac0"
+    },
+    {
       "id": "hl7-fhir-r4-examples/communicationrequest-example-fm-solicit-attachment.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "communicationrequest-example-fm-solicit-attachment.json",
       "bytes": 2272,
       "sha256": "e83495cdfed076d563f3e805e2654b23d071502ce3daf243bad7356aff943c79"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/communicationrequest-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "communicationrequest-example.json",
+      "bytes": 551,
+      "sha256": "60934bac4bddf1e2a2506fc631d98caef8af195c3f19b6432f207cdb5672025d"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/composition-example-mixed.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "composition-example-mixed.json",
+      "bytes": 4062,
+      "sha256": "e3453b4dc5b871150da7243f05cd7ee60fef6160445951ba7a1a9a41aec30732"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/condition-example-f001-heart.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "condition-example-f001-heart.json",
+      "bytes": 4459,
+      "sha256": "18d117423ed75878141193f403caa890d8784ee0fe0cbdce7cbbefc410133bf7"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/condition-example-f002-lung.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "condition-example-f002-lung.json",
+      "bytes": 5606,
+      "sha256": "b1021277f835d11521f2531f203cb4a7d7325eb7e3634e8c17115a4e548f18fd"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/condition-example-f003-abscess.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "condition-example-f003-abscess.json",
+      "bytes": 4502,
+      "sha256": "a3f74247a91ecfeeda4c0e3944cb080726e257a33b08d43f02cd4dd357b6bc88"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/consent-example-Emergency.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "consent-example-Emergency.json",
+      "bytes": 2697,
+      "sha256": "0514565e9c1249d4992d0d4b1b8e622b0b4e62d7954b2b848eba0ea3e4692061"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/consent-example-grantor.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "consent-example-grantor.json",
+      "bytes": 2671,
+      "sha256": "4e5fd34ac390c840e0c372d2820ff287daf8ae834a1f98b4c69506956e52945e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/consent-example-notAuthor.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "consent-example-notAuthor.json",
+      "bytes": 2434,
+      "sha256": "0d951c4a4b9c03aeeb947c565cad3278243087f972c55b4bc0f0ad8a4312e47e"
     },
     {
       "id": "hl7-fhir-r4-examples/contract-example-42cfr-part2.json",
@@ -727,11 +1103,60 @@
       "sha256": "e324da5defdaf82b4452f6e90aba59f05c7c332a5d784140d6e87488b963e8c3"
     },
     {
+      "id": "hl7-fhir-r4-examples/contract-example-ins-policy.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "contract-example-ins-policy.json",
+      "bytes": 4307,
+      "sha256": "c9095038d822d22aab93862bc5a0494f6452182301698cbaae474a0092127823"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/contract-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "contract-example.json",
+      "bytes": 2085,
+      "sha256": "3d1f7e6213530bed405b401ba7a0568302a2b09d1f01fba33bc3508234bd575f"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coord-0base-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coord-0base-example.json",
+      "bytes": 3253,
+      "sha256": "a3b4c9384a2baf03b6874d15e3d72f0e8beaf16a0d8f6404d034a31458916047"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coord-1base-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coord-1base-example.json",
+      "bytes": 3253,
+      "sha256": "750af33cfd162e49dfc9a32fd627ea67324097c879d1d7d70452eaf746f7c9e6"
+    },
+    {
       "id": "hl7-fhir-r4-examples/coverage-example-2.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "coverage-example-2.json",
       "bytes": 2730,
       "sha256": "739c4c80d002f17bb37d13c03b6e8847f309dd5273933827daabb31a9c32340e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coverage-example-ehic.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coverage-example-ehic.json",
+      "bytes": 1138,
+      "sha256": "f4200ebc3830fdef61416f140b7be0d398b1c22cd11dde8ce6617e19ce4f44df"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coverage-example-selfpay.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coverage-example-selfpay.json",
+      "bytes": 1037,
+      "sha256": "59225d1406b912f85454e540b7836bec60665bc4d7d32fb2ac54ce55773e34af"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coverage-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coverage-example.json",
+      "bytes": 4163,
+      "sha256": "917d5af2dd4dcd3e9e23d0d137e12895e9b589fc2c8e23ece6122b1095f9656a"
     },
     {
       "id": "hl7-fhir-r4-examples/coverageeligibilityrequest-example-2.json",
@@ -741,11 +1166,60 @@
       "sha256": "cdc2c1b6ad8de52ca15279e983a723be73bb72bbd0293f2d290df3fca15c359f"
     },
     {
+      "id": "hl7-fhir-r4-examples/coverageeligibilityrequest-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coverageeligibilityrequest-example.json",
+      "bytes": 1027,
+      "sha256": "c09bc797fcfa8234ab56b1aa6dda848ea2fa7f0736eb839f7d641e8bc2180653"
+    },
+    {
       "id": "hl7-fhir-r4-examples/coverageeligibilityresponse-example-benefits-2.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "coverageeligibilityresponse-example-benefits-2.json",
       "bytes": 8144,
       "sha256": "61a7adddaab1bc35bc96f5e9e28596af1f86c1c1d7996c75a8be1a454fdde41c"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coverageeligibilityresponse-example-error.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coverageeligibilityresponse-example-error.json",
+      "bytes": 1487,
+      "sha256": "32bab4e71ee8cc7ccdcdcc591eac676653df4efd44d64ae0be5dfa2af6403608"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coverageeligibilityresponse-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coverageeligibilityresponse-example.json",
+      "bytes": 1090,
+      "sha256": "1416b11420d5001514668b713c9331f4d5c53e476a0a43e7be1e32f69cfdf00d"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/detectedissue-example-allergy.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "detectedissue-example-allergy.json",
+      "bytes": 417,
+      "sha256": "a75437870ed4ff9c36d3660d5004d41381b69ff4dfc38877415416202f8b1542"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/detectedissue-example-dup.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "detectedissue-example-dup.json",
+      "bytes": 1870,
+      "sha256": "96a1b698e496378d08d292380eb7e6173bc88f9ced6a5e6bb7ac84994fbcbca2"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/detectedissue-example-lab.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "detectedissue-example-lab.json",
+      "bytes": 413,
+      "sha256": "e8c3ac1910f9db8f68c8e880a21f12e56a1229cf8d486050515f92e839fc3fa3"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/device-example-f001-feedingtube.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "device-example-f001-feedingtube.json",
+      "bytes": 796,
+      "sha256": "3b7a7a311fee385f02f6bb59630ecb004e3c2d10512d4eeba33b96949b6b7fd7"
     },
     {
       "id": "hl7-fhir-r4-examples/devicedefinition-example.json",
@@ -762,6 +1236,27 @@
       "sha256": "564cb5682651c4fac5f58c8269867dadda924d2729f471666b2a6eafe63b9fec"
     },
     {
+      "id": "hl7-fhir-r4-examples/devicerequest-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "devicerequest-example.json",
+      "bytes": 1050,
+      "sha256": "632c7f038f289cfd033877d8f806fd2732c1812718ba184c81c62f32ff0a6034"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/devicerequest-left-lens.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "devicerequest-left-lens.json",
+      "bytes": 4927,
+      "sha256": "988e8c667d9f2f9dc0695ca74f960ed06d42b24ebe8a6fd1519cce583706553d"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/devicerequest-right-lens.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "devicerequest-right-lens.json",
+      "bytes": 4887,
+      "sha256": "8ccc9bcc08a7ff8595aa05ebad3c327a8bca20c6df4b2a63627841583e97c77a"
+    },
+    {
       "id": "hl7-fhir-r4-examples/diagnosticreport-example-dxa.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "diagnosticreport-example-dxa.json",
@@ -769,11 +1264,40 @@
       "sha256": "0ef062caa5dadffbd224480e7e5b20b89827f4cd5aac873a7b19c8a8b51a4d10"
     },
     {
+      "id": "hl7-fhir-r4-examples/diagnosticreport-example-f201-brainct.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "diagnosticreport-example-f201-brainct.json",
+      "bytes": 3289,
+      "sha256": "464041ffe81c09dd021e2d6ea648ce9741c58aadb58fb9b8fc52db3f28c924b3"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/diagnosticreport-example-papsmear.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "diagnosticreport-example-papsmear.json",
+      "bytes": 2820,
+      "sha256": "891c88009ee078327f52eabc67f0e65b50f23ffa88a2c6250e06896938b745e1"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/diagnosticreport-example-pgx.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "diagnosticreport-example-pgx.json",
+      "bytes": 2483,
+      "sha256": "e89f4ad15345fe95cd1aef9d6306e79d3831d622323210295c416d032a54b82b"
+    },
+    {
       "id": "hl7-fhir-r4-examples/documentmanifest-example.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "documentmanifest-example.json",
       "bytes": 1640,
-      "sha256": "047a87d26e5d70065fdb1d02848228a5e7436df1235a485e96b25951461a64a9"
+      "sha256": "047a87d26e5d70065fdb1d02848228a5e7436df1235a485e96b25951461a64a9",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 3 error(s) this library does not - 3x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at DocumentManifest.masterIdentifier.system, DocumentManifest.identifier[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/documentmanifest-fm-attachment.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "documentmanifest-fm-attachment.json",
+      "bytes": 2171,
+      "sha256": "e62ed4b2a4af5fedce7e2c3fe960f441446e3a3edcb5adf37c6009e21ce9899b"
     },
     {
       "id": "hl7-fhir-r4-examples/effectevidencesynthesis-example.json",
@@ -781,6 +1305,48 @@
       "path": "effectevidencesynthesis-example.json",
       "bytes": 699,
       "sha256": "a1b1d6b0cb2e82f4d69aab8d214f163fc035659a6e54f31ca65ec86af8ba477c"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/encounter-example-emerg.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "encounter-example-emerg.json",
+      "bytes": 3383,
+      "sha256": "253a5108eab4873cf923acf56e93a05cf82b50a938b03cfbff18dc036913267b"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/encounter-example-f001-heart.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "encounter-example-f001-heart.json",
+      "bytes": 5243,
+      "sha256": "bed9d640f9fbc604b126b3480cbab0ad0c50cfb047dd35932c4def64c45fde7d"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/encounter-example-f002-lung.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "encounter-example-f002-lung.json",
+      "bytes": 5102,
+      "sha256": "670a2d1d5825d01395d4f52c6d2e4f2cd2ff2d67f4205b7a060d7fca68a5387e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/endpoint-example-direct.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "endpoint-example-direct.json",
+      "bytes": 1841,
+      "sha256": "47495de55cbb17b58857cef3ec198fbc36b8c586078be54e6d79861c27b1c731"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/endpoint-example-iid.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "endpoint-example-iid.json",
+      "bytes": 762,
+      "sha256": "4e286511f97b08af64195dbec48256c241cf96f576b99a3c6d1c782c8804b155"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/endpoint-example-wadors.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "endpoint-example-wadors.json",
+      "bytes": 816,
+      "sha256": "e02f71b53783e3cc6ef89b421f94aff7b4eba1409b2b824034eee465a7f24def"
     },
     {
       "id": "hl7-fhir-r4-examples/enrollmentrequest-example.json",
@@ -801,7 +1367,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "eventdefinition-example.json",
       "bytes": 991,
-      "sha256": "33603c65040b9563db928109581d095325f2c3d2bb8356aa742c137f763bdea1"
+      "sha256": "33603c65040b9563db928109581d095325f2c3d2bb8356aa742c137f763bdea1",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invariant (a FHIRPath invariant the reference validator evaluates and this library reports as unchecked); first at EventDefinition.text.div. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/evidence-example.json",
@@ -825,32 +1392,148 @@
       "sha256": "3d20f29182d3d4f88a109ca0fcc491e83408d4f11c7f7532586de24cc58868b5"
     },
     {
+      "id": "hl7-fhir-r4-examples/explanationofbenefit-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "explanationofbenefit-example.json",
+      "bytes": 6629,
+      "sha256": "f146f72055f530100672d9968a2e9d46321170e72b67b470d1e1d2466fbf928c"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/extension-codesystem-warning.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "extension-codesystem-warning.json",
+      "bytes": 7975,
+      "sha256": "8746cf266f5d62e32c020d617d0057a8bed4dde105d1c14dc6273174011cb1b8"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/extension-cqf-encountertype.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "extension-cqf-encountertype.json",
+      "bytes": 7958,
+      "sha256": "005e68ef5ee6939ceb61d878e48dace1791ee74cd9db864dae38736145cffaca"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/extension-patient-adoptioninfo.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "extension-patient-adoptioninfo.json",
+      "bytes": 7943,
+      "sha256": "a85a4ad86926ee9f266f7db3b8126583bb5b83ae94e04ed6aff0044bee9d8a24"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/familymemberhistory-example-mother.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "familymemberhistory-example-mother.json",
+      "bytes": 1103,
+      "sha256": "1058abf9fb533c4e3c6abdad856feab4123ffff111c04bf7d286709f2513c66e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/flag-example-encounter.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "flag-example-encounter.json",
+      "bytes": 963,
+      "sha256": "701a2f3ee12f77a098e8631d7863e4a5ad4de05231d6e47525f8ad45da695484"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/goal-example-stop-smoking.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "goal-example-stop-smoking.json",
+      "bytes": 1185,
+      "sha256": "76b1dbb8a80c19e4bda3f5853046b026ba5b051c259f0322fe74dd3f364bab99"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/group-example-herd1.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "group-example-herd1.json",
+      "bytes": 2757,
+      "sha256": "5d5318ed748e98af3dc2611ce1a1413711b88b9d4ca44f9ed61edfa1d8cda0cd"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/group-example-member.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "group-example-member.json",
+      "bytes": 1502,
+      "sha256": "e79117fb5a2e8d5bb5eb06d44aa4d9aa274fd214148e25887a988e263e770ea9"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/group-example-patientlist.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "group-example-patientlist.json",
+      "bytes": 861,
+      "sha256": "c468097c3b3c8a5982408d04182b679c67c8921db8d1c34ac5d24b9629bd8bab"
+    },
+    {
       "id": "hl7-fhir-r4-examples/guidanceresponse-example.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "guidanceresponse-example.json",
       "bytes": 3182,
-      "sha256": "523fe5fd3f8af293dff76fd6d87f902f6ba919afa3a826269c6c22dcdcddcd51"
+      "sha256": "523fe5fd3f8af293dff76fd6d87f902f6ba919afa3a826269c6c22dcdcddcd51",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 3 error(s) this library does not - 3x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at GuidanceResponse.contained[]/*Parameters/outputParameters1*/.parameter[].value.ofType(CodeableConcept).coding[].display, GuidanceResponse.requestIdentifier.system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/imagingstudy-example-xr.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "imagingstudy-example-xr.json",
       "bytes": 4045,
-      "sha256": "f110253aa436fd66fb3f4b7e05f32436f08973528ba2a5553bc5850acf4ad238"
+      "sha256": "f110253aa436fd66fb3f4b7e05f32436f08973528ba2a5553bc5850acf4ad238",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at ImagingStudy.series[].bodySite.code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/imagingstudy-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "imagingstudy-example.json",
+      "bytes": 1523,
+      "sha256": "733b523c12839ebc0a394f578d3e3de8d51456bb3cff9d3be71b2151e43e5691"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/immunization-example-historical.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "immunization-example-historical.json",
+      "bytes": 2383,
+      "sha256": "2a1d791067289359f80884375aff0d91d2599f6fb96e4b5694e74044c2743073"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/immunization-example-protocol.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "immunization-example-protocol.json",
+      "bytes": 7390,
+      "sha256": "0b1768d1e110abc95be21036033db852bcb1b96b641092ef4574815905e5f6dd"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/immunization-example-refused.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "immunization-example-refused.json",
+      "bytes": 1856,
+      "sha256": "a5fd341486f6a23e323b133b5402add0ac2f0bca1a1d5f43eea719b11f0606a3"
     },
     {
       "id": "hl7-fhir-r4-examples/immunizationevaluation-example-notvalid.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "immunizationevaluation-example-notvalid.json",
       "bytes": 3330,
-      "sha256": "cff2d2b203dcc4266b83e70ad70c9ace1c24bf51ae4ac9610666873b77bad329"
+      "sha256": "cff2d2b203dcc4266b83e70ad70c9ace1c24bf51ae4ac9610666873b77bad329",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at ImmunizationEvaluation.doseStatusReason[].coding[].code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/immunizationevaluation-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "immunizationevaluation-example.json",
+      "bytes": 2620,
+      "sha256": "65f5cfbc0c584170e9815febf0c93ba1ff118a811a817502d3565df7e3a04d1f"
     },
     {
       "id": "hl7-fhir-r4-examples/immunizationrecommendation-example-target-disease.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "immunizationrecommendation-example-target-disease.json",
       "bytes": 2404,
-      "sha256": "7ecde8a17c1c494a199d4422031a64889d4bfc5cc75f94b63269d2c03c0cf405"
+      "sha256": "7ecde8a17c1c494a199d4422031a64889d4bfc5cc75f94b63269d2c03c0cf405",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at ImmunizationRecommendation.recommendation[].dateCriterion[].code.coding[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/immunizationrecommendation-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "immunizationrecommendation-example.json",
+      "bytes": 2536,
+      "sha256": "a148cb9bec8f0a33528fef6a67ac126da384347ad679b3eea65510d8d9ba794e"
     },
     {
       "id": "hl7-fhir-r4-examples/insuranceplan-example.json",
@@ -871,7 +1554,57 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "library-composition-example.json",
       "bytes": 1738,
-      "sha256": "40c713113fa4f534efa1a79a3a52d181446fad3adced1d9b8de974395dd63021"
+      "sha256": "40c713113fa4f534efa1a79a3a52d181446fad3adced1d9b8de974395dd63021",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 7 error(s) this library does not - 7x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Library.identifier[].system, Library.relatedArtifact[].resource. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/library-quick-model-definition.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "library-quick-model-definition.json",
+      "bytes": 6226,
+      "sha256": "3b2160ef452ddb4148cf0dd1bfa3c1746a949e604ee9f017e6425ebcd1d39180"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/list-example-allergies.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "list-example-allergies.json",
+      "bytes": 1510,
+      "sha256": "466e5de30fd8e7cc248de3a422486b36544ffe58471c6b938b5a22237560fbd8"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/list-example-empty.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "list-example-empty.json",
+      "bytes": 1043,
+      "sha256": "9dff9c91f5ec120f3273fd2c6523f025e955d062f1b5b2ca1e9c5ae65b138b4b"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/list-example-familyhistory-f201-roel.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "list-example-familyhistory-f201-roel.json",
+      "bytes": 4135,
+      "sha256": "5461adf37cf896a19f859bcd598d940006bac04ceae32f4227709a68bbee9ba3"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/location-example-ambulance.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "location-example-ambulance.json",
+      "bytes": 1098,
+      "sha256": "03549360629199cedc1a02e277ed24a2bbc748eeadb02d0f1567994439c07a55"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/location-example-hl7hq.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "location-example-hl7hq.json",
+      "bytes": 1765,
+      "sha256": "5e6eefe4340c513f51dae8b2801c0deb85d5d9553240f3da754e9ed01949bafb"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/location-example-patients-home.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "location-example-patients-home.json",
+      "bytes": 985,
+      "sha256": "1deb737a96f1182ea36455b86130d5f5778421bc5a4e4ef3c1880bedb4ef78e1"
     },
     {
       "id": "hl7-fhir-r4-examples/measure-component-a-example.json",
@@ -881,25 +1614,140 @@
       "sha256": "df4e5c0f57cfd9dac75681045d3b7cbafb4edae0b090bc832c9a9eec2d9262a6"
     },
     {
+      "id": "hl7-fhir-r4-examples/measure-component-b-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "measure-component-b-example.json",
+      "bytes": 1641,
+      "sha256": "b23b4e89e82163b92b626fe355eb90447371462f56b000db65c47fccae295f34"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/measure-composite-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "measure-composite-example.json",
+      "bytes": 1117,
+      "sha256": "0d33088c0a11599bbd68b245d915bdc000c69592dd6510812e04d4f9cd688e66"
+    },
+    {
       "id": "hl7-fhir-r4-examples/media-example-dicom.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "media-example-dicom.json",
       "bytes": 2613,
-      "sha256": "1e8764406d9921e7060b48f7cda3736c9ee668630da888ae7c3ad5c15e3d0f23"
+      "sha256": "1e8764406d9921e7060b48f7cda3736c9ee668630da888ae7c3ad5c15e3d0f23",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Media.content.url. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/media-example-sound.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "media-example-sound.json",
+      "bytes": 794,
+      "sha256": "53a0b6e1fbc501bc96c04a52db0cf6ca94213f09d7caa3e9dd18fa185d499400"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/media-example-xray.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "media-example-xray.json",
+      "bytes": 1412,
+      "sha256": "9120b105343f75f96d6215d38a9e7d24a615c61e6935480a2a405e09401b1ae8"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/media-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "media-example.json",
+      "bytes": 6590,
+      "sha256": "44922ef9794d6b5b6f7792a91b039bfe01b852c0c5c5ff334224c48a5b348794"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationadministration0302.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationadministration0302.json",
+      "bytes": 7698,
+      "sha256": "27664b19f847e41967e2c2ec0d2daeda6f021570d2ec911ebef613d4ae48c3da"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationadministration0303.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationadministration0303.json",
+      "bytes": 4517,
+      "sha256": "93d852360e1af0af3c5c58fa62f9a2f469b35d64471e59ff159ae796f3da2c16"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationadministration0304.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationadministration0304.json",
+      "bytes": 4920,
+      "sha256": "a28b15e5aedf5322bf86de6ef272ad021a34724d8bdf1484c0065b55347caaa4"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationdispense0302.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationdispense0302.json",
+      "bytes": 7756,
+      "sha256": "c08b663d8cc2d5a540ffbf1b1436e329e44dce8604cb4391d812354636b41b38"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationdispense0303.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationdispense0303.json",
+      "bytes": 6074,
+      "sha256": "4ae85fbf018ae89c99d52fc14dce35578fadf76484e03f73e7049d8fb09d3bc7"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationdispense0304.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationdispense0304.json",
+      "bytes": 5214,
+      "sha256": "df5e1b76f950583945d15f1b420334fc286799c452a04dd9db7cd832f2b58357"
     },
     {
       "id": "hl7-fhir-r4-examples/medicationexample0301.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "medicationexample0301.json",
       "bytes": 3881,
-      "sha256": "99a19c3e442ee4b0f7db099420647aa5326a055cf38f8a514edcc8201b1fb92c"
+      "sha256": "99a19c3e442ee4b0f7db099420647aa5326a055cf38f8a514edcc8201b1fb92c",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Medication.code.coding[].display. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationexample0302.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationexample0302.json",
+      "bytes": 4100,
+      "sha256": "83605d25bc0872a56c80b01be088b7a33e11b50e21cda77ae97e3240530c116c"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationexample0303.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationexample0303.json",
+      "bytes": 3543,
+      "sha256": "9d5a6052809ca5ec24b53e894a47fc16c591fb307b11a03c0a649b280ab4ef3c"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationexample0304.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationexample0304.json",
+      "bytes": 3622,
+      "sha256": "04da3ebc785f72592ff2afe7274871ae7dec47ba3ee26fb2656ade232ee4bc4d"
     },
     {
       "id": "hl7-fhir-r4-examples/medicationknowledge-example.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "medicationknowledge-example.json",
       "bytes": 2310,
-      "sha256": "efcbdc53f3fbc228d260b44625329c69d2a97e3b0713b4e6870990500e1fed1b"
+      "sha256": "efcbdc53f3fbc228d260b44625329c69d2a97e3b0713b4e6870990500e1fed1b",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at MedicationKnowledge.code.coding[].display. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationrequest0304.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationrequest0304.json",
+      "bytes": 4407,
+      "sha256": "a1043233d459fa4f66acb5086fb1cfa8eee33f012930dd453da7f057e732647e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationrequest0305.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationrequest0305.json",
+      "bytes": 6558,
+      "sha256": "fe7e182c73a56f04fa899cff179dab876264b5e0be0fb6e76a2a3f8660c63e0d"
     },
     {
       "id": "hl7-fhir-r4-examples/medicinalproduct-example.json",
@@ -990,7 +1838,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "organizationaffiliation-example.json",
       "bytes": 1748,
-      "sha256": "d28a081019baaab0712cbd58dc9ea2b9413949a7dfa70846e02baf76bcf5ff5d"
+      "sha256": "d28a081019baaab0712cbd58dc9ea2b9413949a7dfa70846e02baf76bcf5ff5d",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at OrganizationAffiliation.code[].coding[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/paymentreconciliation-example.json",
@@ -1004,14 +1853,16 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "plandefinition-chlamydia-screening-intervention.json",
       "bytes": 6416,
-      "sha256": "6ac75b3935045b67beac2d476721f804f637aa8b1792bd51aba2e5b3b35b778e"
+      "sha256": "6ac75b3935045b67beac2d476721f804f637aa8b1792bd51aba2e5b3b35b778e",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at PlanDefinition.library[]. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/procedure-example-ambulation.json",
       "corpus": "hl7-fhir-r4-examples",
       "path": "procedure-example-ambulation.json",
       "bytes": 1677,
-      "sha256": "50de8f588fedfb359d80b0f863dcb99a9402ab200e4514d15c8b612f700881a4"
+      "sha256": "50de8f588fedfb359d80b0f863dcb99a9402ab200e4514d15c8b612f700881a4",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Procedure.instantiatesUri[], Procedure.statusReason.coding[].display. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/provenance-consent-signature.json",
@@ -1032,7 +1883,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "requestgroup-example.json",
       "bytes": 3201,
-      "sha256": "23503e1908ca46f25e06dc0e334ce9b9ef5809ff6b63d4f5a018975616106d3a"
+      "sha256": "23503e1908ca46f25e06dc0e334ce9b9ef5809ff6b63d4f5a018975616106d3a",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at RequestGroup.groupIdentifier.system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/researchdefinition-example.json",
@@ -1060,7 +1912,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "researchsubject-example.json",
       "bytes": 704,
-      "sha256": "ef109e3f64c25a84766da6f7abf71ad56de9289bdb78f3cab1a8b5515f598beb"
+      "sha256": "ef109e3f64c25a84766da6f7abf71ad56de9289bdb78f3cab1a8b5515f598beb",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at ResearchSubject.identifier[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/riskevidencesynthesis-example.json",
@@ -1102,7 +1955,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "terminologycapabilities-example.json",
       "bytes": 1572,
-      "sha256": "09a6404721d2f9edb997bf7f469196cdee5d370f6a18ccc701f18dde9add23c5"
+      "sha256": "09a6404721d2f9edb997bf7f469196cdee5d370f6a18ccc701f18dde9add23c5",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at TerminologyCapabilities.url, TerminologyCapabilities.implementation.url. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/verificationresult-example.json",
@@ -1116,7 +1970,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "visionprescription-example-1.json",
       "bytes": 2172,
-      "sha256": "0263e6229888c21c57ecdf1ce04daba4fb56ab7b78b6828ac918a4397b3d25e6"
+      "sha256": "0263e6229888c21c57ecdf1ce04daba4fb56ab7b78b6828ac918a4397b3d25e6",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at VisionPrescription.lensSpecification[].duration.code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     }
   ]
 }
