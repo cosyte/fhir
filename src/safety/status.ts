@@ -73,6 +73,16 @@
  * lost;
  * what the library declines is the classification, and the disclosure is the record that it declined.
  *
+ * **One more channel here is not an encoding failure at all, and reads differently again.** A
+ * DataAbsentReason extension is a sender's deliberate declaration that an element it could not omit
+ * has no value, and reading it is how "we asked and nobody knows" stops being the same answer as "we
+ * never sent this" ({@link SafetyReadout.absenceMarkers}, and {@link ../safety/absence.js} for the
+ * predicate). A readable, non-conflicting one is a **disclosure**, so it is the one location-bearing
+ * channel that leaves `safeToSummarize` standing. Its two neighbours behave like everything above:
+ * a reason outside the extension's closed value set is refused rather than folded into `unknown`
+ * ({@link SafetyReadout.unreadableAbsenceMarkers}), and a marker beside a value on one element is a
+ * contradiction this layer will not resolve ({@link SafetyReadout.conflictingAbsenceMarkers}).
+ *
  * @packageDocumentation
  */
 
@@ -124,6 +134,7 @@ import {
   rebaseModifierElements,
   type ModifierElementReport,
 } from "./modifier-elements.js";
+import { collectAbsence, type AbsenceMarker } from "./absence.js";
 
 /**
  * `doNotPerform` on **this** node, read across every value the document wrote for it and through an
@@ -239,9 +250,10 @@ const NEGATION_ORDER: readonly NegationKind[] = [
  *
  * **Two groups of fields, and the difference is which question they answer.** The location channels
  * (`unhandledModifierExtensions`, `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`,
- * `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`, `unreadableNegationCodes`) and the
- * `safeToSummarize` derived
- * from them are **document-wide**: they carry FHIRPath locations, so a nested finding has an address to name, and
+ * `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`, `unreadableNegationCodes`,
+ * `absenceMarkers`, `unreadableAbsenceMarkers`, `conflictingAbsenceMarkers`) and the
+ * `safeToSummarize` derived from them (from all but `absenceMarkers`, which discloses rather than
+ * refuses) are **document-wide**: they carry FHIRPath locations, so a nested finding has an address to name, and
  * `assertSafeToSummarize` refuses over a `Bundle`'s entries. The **single-valued** fields
  * (`resourceType` / `status` / `clinicalStatus` / `verificationStatus` / `doNotPerform` / `retracted`
  * / `noKnownAllergy`) answer about **the resource handed in** and nothing nested inside it, because
@@ -520,16 +532,86 @@ export interface SafetyReadout {
    */
   readonly unreadableNegationCodes: readonly string[];
   /**
+   * Every element the document declares an absence for, with the reason the sender spelled and the
+   * FHIRPath location of the element it sits on. This is the read that separates "we asked and
+   * nobody knows" from "we never sent this": both leave the element value-absent, and before this
+   * channel the two were the same answer to a caller.
+   *
+   * The marker is the R4 DataAbsentReason **extension**, on a complex element or on a primitive's
+   * extension metadata, in either wire format. See {@link ../safety/absence.js} for the recognition
+   * predicate, for the closed value set a `code` is drawn from, and for the two neighbouring shapes
+   * that are deliberately NOT markers (the same code system used as a `Coding` inside a coded
+   * element, and the `Observation.dataAbsentReason` ELEMENT with its own `obs-6` invariant).
+   *
+   * **This channel does NOT lower {@link SafetyReadout.safeToSummarize}**, and it is the only
+   * location-bearing channel here that does not. Every other one marks something the library could
+   * not read or could not rank; a readable, non-conflicting marker is the opposite, a disclosure the
+   * sender made deliberately and the caller can now read. Refusing to summarize over it would
+   * withdraw an affirmation from a conformant document, which is the one direction this layer's
+   * contract forbids. The two channels beside it, {@link SafetyReadout.unreadableAbsenceMarkers} and
+   * {@link SafetyReadout.conflictingAbsenceMarkers}, do lower it, and for the ordinary reason.
+   *
+   * **Document-wide**, like the location channels beside it: a marker inside `contained` or a
+   * `Bundle.entry` is here, with a location that names where it sits.
+   *
+   * Empty for every document that carries no DataAbsentReason extension, which is where a document
+   * carrying none reads exactly as it did before this channel existed.
+   */
+  readonly absenceMarkers: readonly AbsenceMarker[];
+  /**
+   * FHIRPath locations of elements carrying an absence marker whose reason this library could not
+   * read: no `valueCode`, a `valueCode` holding no readable string, an empty one, one written twice,
+   * or a code outside the closed fifteen-concept value set the extension's required binding names.
+   *
+   * **Nothing is read as `unknown` and nothing is read as populated.** Coercing an unreadable code
+   * into the value set's most common member would author a reason the sender did not spell, and
+   * treating the element as populated would erase the declaration entirely. The element stays
+   * value-absent, the marker stays unread, and this location is the record that a declaration was
+   * made and could not be honoured. It is the same disposition
+   * {@link SafetyReadout.nearMissNegationCodes} takes for the same reason.
+   *
+   * **Value-free**: neither the code that failed to match nor anything else from the element is
+   * carried, only the location.
+   *
+   * Empty for every conformant document, in either wire format: the extension's `value[x]` binds to
+   * that value set at required strength, so a member of it is what a conformant document writes.
+   */
+  readonly unreadableAbsenceMarkers: readonly string[];
+  /**
+   * FHIRPath locations of elements that carry an absence marker **and** a value of their own, so the
+   * document says both "here is the value" and "there is no value" about one element.
+   *
+   * Nothing here resolves the contradiction. The value stays in the model where a caller walking it
+   * finds it, the marker stays on {@link SafetyReadout.absenceMarkers} when its reason is readable,
+   * and this location is what stops a caller silently preferring whichever of the two its own read
+   * happened to reach first.
+   *
+   * A complex element "carries a value" when it holds any member beyond `id`, `url`, `extension`,
+   * `modifierExtension` and the JSON encoding's `resourceType`, none of which is the value a marker
+   * denies; a primitive carries one when its value channel is filled.
+   *
+   * Empty for every conformant document: an element the sender has data for is written with the
+   * data and no marker.
+   */
+  readonly conflictingAbsenceMarkers: readonly string[];
+  /**
    * `false` when the resource must not be flattened: an unhandled `modifierExtension` is present, a
    * modifier ELEMENT is present, a
    * repeated property name left an element with more than one value, a `0..1` safety element
    * arrived array-wrapped, an array inside an array left content the codec could not read, XML
    * character data on an element was dropped, a boolean-valued safety element carries a written
    * value this layer cannot read, a `code`-valued negation element carries a value that spells a
-   * negation code bar its case or its surrounding whitespace, or such an element holds content at a
-   * position no `code` read can reach. Each is a case where a summary would have to assert something
-   * this library cannot establish (for the last two, that no negation was asserted), so it declines
-   * instead.
+   * negation code bar its case or its surrounding whitespace, such an element holds content at a
+   * position no `code` read can reach, an element declares an absence in a reason this library
+   * cannot read, or an element declares an absence and carries a value. Each is a case where a
+   * summary would have to assert something this library cannot establish (for the negation pair,
+   * that no negation was asserted; for the absence pair, which of two contradictory answers the
+   * element holds), so it declines instead.
+   *
+   * **A readable, non-conflicting absence marker does NOT move this**, and that exception is the
+   * point of the channel rather than a hole in the rule: the declaration is read, carried and
+   * addressable, so nothing about the document is unestablished. See
+   * {@link SafetyReadout.absenceMarkers}.
    */
   readonly safeToSummarize: boolean;
 }
@@ -951,6 +1033,88 @@ export function nearMissNegationCodes(resource: FhirComplex, path: string): stri
  */
 export function unreadableNegationCodes(resource: FhirComplex, path: string): string[] {
   return walkSafety(resource, path).unreadableCode;
+}
+
+/**
+ * Every element the document declares an absence for, with the reason the sender spelled: the
+ * standalone form of {@link SafetyReadout.absenceMarkers}, returning exactly what that channel
+ * carries.
+ *
+ * A source system with no data for a mandatory element cannot omit it, so it writes the element
+ * present and value-absent, carrying the R4 DataAbsentReason extension. Without this read that
+ * element is indistinguishable from one the sender never wrote: both are present-and-empty to every
+ * value reader in the package. This is the read that tells them apart, and it carries the reason, so
+ * `unknown` is distinguishable from `masked` and from `not-performed` too.
+ *
+ * A deep walk of the whole document, so a marker inside `contained` or a Bundle entry is caught with
+ * a location that names where it sits, and both wire formats are read by one predicate.
+ *
+ * @param resource - The resource model.
+ * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
+ * @returns The readable markers, in walk order, one entry per distinct reason at a location.
+ * @example
+ * ```ts
+ * import { absenceMarkers, parseResource } from "@cosyte/fhir";
+ * const { resource } = parseResource(
+ *   '{"resourceType":"Observation","_status":{"extension":[{"url":' +
+ *     '"http://hl7.org/fhir/StructureDefinition/data-absent-reason","valueCode":"unknown"}]}}',
+ * );
+ * absenceMarkers(resource, "Observation"); // [{ code: "unknown", location: "Observation.status" }]
+ * ```
+ */
+export function absenceMarkers(resource: FhirComplex, path: string): AbsenceMarker[] {
+  return [...collectAbsence(resource, path).markers];
+}
+
+/**
+ * The locations where an absence marker is present and its reason is not readable: the standalone
+ * form of {@link SafetyReadout.unreadableAbsenceMarkers}.
+ *
+ * Neither `unknown` nor "populated" is inferred at such an element. The extension's `value[x]` binds
+ * to a closed fifteen-concept value set at required strength, so a code outside it is a code this
+ * library will not read and will not author, and an element with no readable reason is still an
+ * element the sender declared absent. Disclosing the refusal is the whole remedy.
+ *
+ * @param resource - The resource model.
+ * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
+ * @returns The locations, in walk order, each once however many unreadable markers sit there.
+ * @example
+ * ```ts
+ * import { parseResource, unreadableAbsenceMarkers } from "@cosyte/fhir";
+ * const { resource } = parseResource(
+ *   '{"resourceType":"Observation","_status":{"extension":[{"url":' +
+ *     '"http://hl7.org/fhir/StructureDefinition/data-absent-reason","valueCode":"UNKNOWN"}]}}',
+ * );
+ * unreadableAbsenceMarkers(resource, "Observation"); // ["Observation.status"]
+ * ```
+ */
+export function unreadableAbsenceMarkers(resource: FhirComplex, path: string): string[] {
+  return [...collectAbsence(resource, path).unreadable];
+}
+
+/**
+ * The locations where an element carries an absence marker and a value of its own: the standalone
+ * form of {@link SafetyReadout.conflictingAbsenceMarkers}.
+ *
+ * The document says two contradictory things about one element and this library ranks neither. Both
+ * survive on the readout, and this location is what stops a caller preferring whichever its own read
+ * reached first.
+ *
+ * @param resource - The resource model.
+ * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).
+ * @returns The locations, in walk order, each once however many markers sit there.
+ * @example
+ * ```ts
+ * import { conflictingAbsenceMarkers, parseResource } from "@cosyte/fhir";
+ * const { resource } = parseResource(
+ *   '{"resourceType":"Observation","status":"final","_status":{"extension":[{"url":' +
+ *     '"http://hl7.org/fhir/StructureDefinition/data-absent-reason","valueCode":"unknown"}]}}',
+ * );
+ * conflictingAbsenceMarkers(resource, "Observation"); // ["Observation.status"]
+ * ```
+ */
+export function conflictingAbsenceMarkers(resource: FhirComplex, path: string): string[] {
+  return [...collectAbsence(resource, path).conflicting];
 }
 
 /**
@@ -1534,6 +1698,10 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   const modifierElementReports = rebaseModifierElements(walk.modifierElements, prefix, types);
   const nested = nestedArrays(resource, prefix);
   const dropped = droppedText(resource, prefix);
+  // One walk feeds all three absence channels, so a marker cannot be recognised by one of them and
+  // not by another. Only two of the three lower the verdict; see `absenceMarkers` for why the
+  // readable one does not.
+  const absence = collectAbsence(resource, prefix);
 
   return {
     resourceType: rt === undefined ? undefined : rootPath(rt),
@@ -1553,6 +1721,9 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     unreadableBooleans: unreadableBoolean,
     nearMissNegationCodes: nearMissCode,
     unreadableNegationCodes: unreadableCode,
+    absenceMarkers: absence.markers,
+    unreadableAbsenceMarkers: absence.unreadable,
+    conflictingAbsenceMarkers: absence.conflicting,
     safeToSummarize:
       modifiers.length === 0 &&
       modifierElementReports.length === 0 &&
@@ -1562,7 +1733,9 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
       dropped.length === 0 &&
       unreadableBoolean.length === 0 &&
       nearMissCode.length === 0 &&
-      unreadableCode.length === 0,
+      unreadableCode.length === 0 &&
+      absence.unreadable.length === 0 &&
+      absence.conflicting.length === 0,
   };
 }
 
@@ -1575,8 +1748,12 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
  * an array left content the codec could not read at all, XML character data written on an element
  * was dropped, a boolean-valued safety element carries a written value outside the datatype's
  * lexical space, a `code`-valued negation element carries a value that spells a negation code bar
- * its case or its surrounding whitespace, or such an element holds content at a position no `code`
- * read can reach. Every way the safe move is to **refuse**, value-free, carrying only the locations.
+ * its case or its surrounding whitespace, such an element holds content at a position no `code`
+ * read can reach, an element declares an absence in a reason this library cannot read, or an element
+ * declares an absence and carries a value. Every way the safe move is to **refuse**, value-free,
+ * carrying only the locations. A **readable, non-conflicting** absence marker is not on that list
+ * and never refuses: it is a declaration the caller can now read, so summarizing over it asserts
+ * nothing this library cannot establish.
  *
  * @example
  * ```ts
@@ -1602,8 +1779,10 @@ export class FhirSafetyError extends Error {
       "Resource cannot be safely summarized: an unhandled modifierExtension, a modifier element, " +
         "a repeated property name, an array-wrapped single-valued element, an array inside an " +
         "array, dropped XML element text, a boolean value this library cannot read, a code that " +
-        "spells a negation bar its case or its surrounding whitespace, or content where a code " +
-        `belongs leaves an element this library must not flatten (${String(locations.length)} location(s)).`,
+        "spells a negation bar its case or its surrounding whitespace, content where a code " +
+        "belongs, a declared absence whose reason this library cannot read, or a declared absence " +
+        "beside a value leaves an element this library must not flatten " +
+        `(${String(locations.length)} location(s)).`,
     );
     this.name = "FhirSafetyError";
     this.locations = locations;
@@ -1616,7 +1795,9 @@ export class FhirSafetyError extends Error {
  * array inside an array, dropped XML element text, a boolean-valued safety element holding a written
  * value outside the datatype's lexical space, or a `code`-valued negation element holding a value
  * that spells a negation code bar its case or its surrounding whitespace, or content at a position
- * no `code` read can reach. This is the executable
+ * no `code` read can reach, or an element declaring an absence in a reason this library cannot read,
+ * or an element declaring an absence beside a value of its own. A readable, non-conflicting declared
+ * absence throws nothing. This is the executable
  * form of "carries status
  * **or refuses**": a summary helper calls it first, and never silently drops a modifier it cannot
  * honor, nor summarizes an element whose value the document left ambiguous or whose content the codec
@@ -1643,6 +1824,11 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     ...readout.unreadableBooleans,
     ...readout.nearMissNegationCodes,
     ...readout.unreadableNegationCodes,
+    // The two absence channels that withdraw the affirmation. `absenceMarkers` is deliberately
+    // absent from this list, exactly as it is absent from `safeToSummarize`'s conjunction: a
+    // declaration the caller can read is a disclosure, not a loss.
+    ...readout.unreadableAbsenceMarkers,
+    ...readout.conflictingAbsenceMarkers,
   ];
   if (locations.length > 0) throw new FhirSafetyError(locations);
 }

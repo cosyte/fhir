@@ -52,8 +52,10 @@ interface Surfaces {
  *
  * **It does NOT sweep every location list, and the shortfall is named rather than counted.**
  * `droppedText`, `unreadableBooleans` and `nearMissNegationCodes` are not collected here, a
- * `PRE-EXISTING` gap this slice widens by nothing: `unreadableNegationCodes`, the channel it adds,
- * IS collected below. Closing the other three is its own slice.
+ * `PRE-EXISTING` gap this slice widens by nothing: `unreadableNegationCodes` IS collected below, and
+ * so are the three absence channels, whose locations are swept here and whose `code` half is a
+ * literal from a closed set this package spells rather than anything a document supplies. Closing
+ * the other three is its own slice.
  */
 function runJson(text: string, mode: ValidationMode): Surfaces {
   const { resource, issues } = parseResource(text);
@@ -69,6 +71,9 @@ function runJson(text: string, mode: ValidationMode): Surfaces {
       ...safety.arrayWrappedScalars,
       ...safety.nestedArrays,
       ...safety.unreadableNegationCodes,
+      ...safety.absenceMarkers.map((report) => `${report.code} ${report.location}`),
+      ...safety.unreadableAbsenceMarkers,
+      ...safety.conflictingAbsenceMarkers,
     ],
     // The one derived identifier this package's model surfaces. The raw property names on
     // `FhirComplex` are deliberately absent: they are document content the writer reproduces
@@ -92,6 +97,9 @@ function runXml(text: string, mode: ValidationMode): Surfaces {
       ...safety.arrayWrappedScalars,
       ...safety.nestedArrays,
       ...safety.unreadableNegationCodes,
+      ...safety.absenceMarkers.map((report) => `${report.code} ${report.location}`),
+      ...safety.unreadableAbsenceMarkers,
+      ...safety.conflictingAbsenceMarkers,
     ],
     identifiers: [safety.resourceType ?? ""],
   };
@@ -103,6 +111,9 @@ function patientWith(extra: string): string {
 }
 
 const FHIR_NS = "http://hl7.org/fhir";
+
+/** The DataAbsentReason extension's canonical URL, spelled here so a slot can plant one. */
+const DAR = "http://hl7.org/fhir/StructureDefinition/data-absent-reason";
 
 /**
  * The slots are declared as a table and run **one per test** on purpose. The runner aborts on the
@@ -176,6 +187,26 @@ const JSON_SLOTS: readonly DiagnosticSlot<string>[] = [
       `{"resourceType":"Observation","status":"final",${JSON.stringify(m)}:` +
       `{"modifierExtension":[{"url":"http://example.org/unknown"}]}}`,
     expectCode: "UNHANDLED_MODIFIER_EXTENSION",
+  },
+  {
+    // A document-named element carrying a declared absence whose reason is outside the value set,
+    // so the name is a segment of a location built by the absence walk, which is neither the
+    // reader's walk nor the validator's.
+    name: "Patient.<property name> (declared absence with an unreadable reason)",
+    plant: (m) =>
+      patientWith(
+        `${JSON.stringify(m)}:{"extension":[{"url":"${DAR}","valueCode":"no-such-reason"}]}`,
+      ),
+    expectCode: "ABSENCE_MARKER_UNREADABLE",
+  },
+  {
+    // The same walk, its other finding: a declared absence beside a value on one element.
+    name: "Patient.<property name> (declared absence beside a value)",
+    plant: (m) =>
+      patientWith(
+        `${JSON.stringify(m)}:{"extension":[{"url":"${DAR}","valueCode":"unknown"}],"text":"x"}`,
+      ),
+    expectCode: "ABSENCE_MARKER_CONFLICT",
   },
 ];
 
