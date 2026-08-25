@@ -128,10 +128,15 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
 
   it("puts every case the corpus carries in exactly one bucket, and the buckets sum to the total", () => {
     const { counts, results } = RUN;
-    // The byte count and the live count reconciled, so neither can drift in silence.
+    // The byte count and the live count reconciled, so neither can drift in silence. Both halves are
+    // MEASURED off the bytes: the total `<test` occurrences, and how many of them sit inside a
+    // comment. Counting the commented ones directly, rather than stripping the comments and
+    // re-counting, keeps this a measurement of the corpus and not a rewrite of it.
     const raw = readCorpusFile(SUITE_FILE);
-    expect(raw.match(/<test[\s]/g)?.length ?? 0).toBe(RAW_TEST_TAG_OCCURRENCES);
-    expect(raw.replace(/<!--[\s\S]*?-->/g, "").match(/<test[\s]/g)?.length ?? 0).toBe(TOTAL_CASES);
+    const tagsIn = (text: string): number => (text.match(/<test[\s]/g) ?? []).length;
+    const commented = (raw.match(/<!--[\s\S]*?-->/g) ?? []).reduce((n, c) => n + tagsIn(c), 0);
+    expect(tagsIn(raw)).toBe(RAW_TEST_TAG_OCCURRENCES);
+    expect(commented).toBe(COMMENTED_OUT_CASES);
     expect(RAW_TEST_TAG_OCCURRENCES - COMMENTED_OUT_CASES).toBe(TOTAL_CASES);
 
     expect(results.length).toBe(TOTAL_CASES);
