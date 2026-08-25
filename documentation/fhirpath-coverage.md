@@ -166,6 +166,27 @@ for `Observation` either. Refusing every internally-capitalised member name inst
 `Patient.birthDate` and `Extension.valueString` from every caller-supplied invariant that uses them,
 which is the direction the fail-safe contract forbids.
 
+**Both engine remedies were built and measured, and each is worse than the red suite.**
+
+- **Refusing the spelling.** `src/validate/schema.ts` does model `Observation.value[x]` as an
+  eleven-way choice, so the engine can ask `resolveElement` whether a member name is a choice variant
+  and refuse where it is, with no name-shape guessing. Built, it makes both cases refuse and the
+  corpus reads `190 / 710 / 0 / 35` with nothing moving out of `evaluated`. It also **withdraws a
+  finding a shipped layer emits today**: on
+  `{"resourceType":"Observation","valueQuantity":{"value":9,"unit":"mg"}}`, a caller-supplied
+  invariant `valueQuantity.value < 2` goes from `INVARIANT_VIOLATED` at **error** with
+  `validateResource(...).valid === false` to `INVARIANT_UNCHECKED` at **information** with
+  `valid === true`. Two tests that predate this measurement red on it
+  (`test/fhirpath.test.ts`, "compares a decimal element to a numeric literal precisely" and
+  "!= operator, decimal comparison, and Decimal type of a decimal element"), which is the existing
+  suite doing its job: it is the tripwire for exactly this movement, and it fired.
+- **Correcting the answer**, i.e. selecting nothing for the non-conformant spelling, matches both
+  corpus expectations, and is worse still: it turns `Observation.valueQuantity.empty()` and
+  `...exists().not()` into a **silent pass** for a caller who wrote the spelling FHIR documents
+  everywhere, which is the one outcome `UnsupportedFhirPathError` exists to prevent.
+
+So the disagreement is left standing and counted.
+
 **These two are what `wrong` counts, and the suite is red because of them.** They are named in
 `LENIENT_POLYMORPHIC_CASES` and pinned by expression **and** by the exact answer the engine gives,
 but naming a case buys it nothing: `classifyCase` counts a non-empty answer to a case the corpus
