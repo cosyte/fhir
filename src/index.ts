@@ -119,8 +119,10 @@ export { collectSafetyIssues } from "./validate/safety.js";
 
 // Phase 3, the safety spine: never-droppable status/negation surfacing + fail-closed modifiers.
 export {
+  absenceMarkers,
   arrayWrappedScalars,
   assertSafeToSummarize,
+  conflictingAbsenceMarkers,
   droppedText,
   FhirSafetyError,
   modifierElements,
@@ -129,12 +131,17 @@ export {
   readSafety,
   shadowedProperties,
   unhandledModifierExtensions,
+  unreadableAbsenceMarkers,
   unreadableBooleans,
   unreadableNegationCodes,
 } from "./safety/status.js";
 export type { NegationKind, SafetyReadout } from "./safety/status.js";
 export { MODIFIER_ELEMENT_ROOT_TYPES } from "./safety/modifier-elements.js";
 export type { ModifierElementName, ModifierElementReport } from "./safety/modifier-elements.js";
+// Declared absence: the DataAbsentReason extension read as a first-class answer, so an element a
+// sender explicitly does not know is distinguishable from one it simply did not send.
+export { isAbsenceCode, ABSENCE_CODES, DATA_ABSENT_REASON_URL } from "./safety/absence.js";
+export type { AbsenceCode, AbsenceMarker } from "./safety/absence.js";
 export {
   codeOf,
   codingsOf,

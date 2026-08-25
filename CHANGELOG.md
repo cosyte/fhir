@@ -8,6 +8,41 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **A declared absence is readable (`MISSING-DATA-1`): `readSafety` carries `absenceMarkers`, so an
+  element a source system explicitly does not know is distinguishable from one it never sent.** US
+  Core's Missing Data rule forbids omitting an element whose minimum cardinality is greater than
+  zero, so a system with no data for one writes it present, with no value, carrying the R4
+  DataAbsentReason EXTENSION and a reason code. At the previous release this package read that into a
+  value-absent primitive: the element counted as present so no `CARDINALITY_MIN` fired, and every
+  value reader returned the same `undefined` an element nobody wrote returns. The two were one answer
+  to a caller, and the difference was recoverable only by re-reading the wire document.
+  `absenceMarkers` carries one `{ code, location }` per declared absence, on a complex element or on
+  a primitive's extension metadata, from either wire format, on any resource type, at every depth
+  (`contained` and `Bundle.entry` included), and it carries the reason the sender spelled so
+  `unknown` is distinguishable from `masked`, `not-applicable` and `not-performed` on otherwise
+  identical instances. `absenceMarkers(resource, path)` is the standalone collector.
+  **It is the one location-bearing channel on that readout that leaves `safeToSummarize` standing**,
+  because a declaration the caller can now read is a disclosure and not a loss, and refusing over it
+  would withdraw an affirmation from a conformant document.
+  **Two neighbouring channels do refuse.** A reason outside the closed fifteen-concept value set the
+  extension's `value[x]` binds to at required strength, or one that is absent, empty, unreadable or
+  written twice, lands on `unreadableAbsenceMarkers` with the new `ABSENCE_MARKER_UNREADABLE` (error,
+  `code-invalid`): the reason is never folded into `unknown` and the element is never read as
+  populated, since FHIR `code` is case-sensitive and excludes surrounding whitespace. A marker beside
+  a value on one element lands on `conflictingAbsenceMarkers` with the new `ABSENCE_MARKER_CONFLICT`
+  (error, `structure`): both survive on the model and on the readout, and the finding is what stops a
+  consumer preferring whichever of the two its own read reached first.
+  **Deliberately NOT this, and pinned in both directions:** the same concepts used as a `Coding`
+  inside a coded element are a present, conformant coded VALUE; and the
+  `Observation.dataAbsentReason` ELEMENT is an ordinary `CodeableConcept` whose `obs-6` invariant is
+  unchanged and never arrives alongside an absence finding, because the element is not the extension.
+  Recognition is by the extension definition's own canonical `url` and nothing that resembles it.
+  New exports: `absenceMarkers`, `unreadableAbsenceMarkers`, `conflictingAbsenceMarkers`,
+  `isAbsenceCode`, `ABSENCE_CODES`, `DATA_ABSENT_REASON_URL`, and the `AbsenceCode` / `AbsenceMarker`
+  types. **Nothing a document without the extension draws has changed:** required-element reporting
+  moves in neither direction, no runtime dependency was added, no terminology or profile content is
+  bundled, the profiles surface is untouched, and the base-versus-head readout differential over the
+  JSON corpus is unchanged on every channel it compares.
 - **`Observation` is modeled (`MODEL-OBSERVATION-1`): `validateResource` checks its own elements
   instead of reporting that it has none.** The built-in schema set held exactly one resource type
   (`Patient`), so an `Observation` degraded to a single informational `RESOURCE_NOT_MODELED` at the

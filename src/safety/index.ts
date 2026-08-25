@@ -10,8 +10,10 @@
  */
 
 export {
+  absenceMarkers,
   arrayWrappedScalars,
   assertSafeToSummarize,
+  conflictingAbsenceMarkers,
   FhirSafetyError,
   droppedText,
   modifierElements,
@@ -20,12 +22,15 @@ export {
   readSafety,
   shadowedProperties,
   unhandledModifierExtensions,
+  unreadableAbsenceMarkers,
   unreadableBooleans,
   unreadableNegationCodes,
 } from "./status.js";
 export type { NegationKind, SafetyReadout } from "./status.js";
 export { MODIFIER_ELEMENT_ROOT_TYPES } from "./modifier-elements.js";
 export type { ModifierElementName, ModifierElementReport } from "./modifier-elements.js";
+export { isAbsenceCode, ABSENCE_CODES, DATA_ABSENT_REASON_URL } from "./absence.js";
+export type { AbsenceCode, AbsenceMarker } from "./absence.js";
 export {
   codeOf,
   codingsOf,

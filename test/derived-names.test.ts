@@ -42,7 +42,8 @@ const OVERLONG = "a".repeat(65);
  *
  * **Not every location list on the readout**, and that is named rather than counted: `droppedText`,
  * `unreadableBooleans` and `nearMissNegationCodes` are `PRE-EXISTING` omissions and their own slice.
- * `unreadableNegationCodes` is collected, so this slice adds no new omission. `modifierElements` is
+ * `unreadableNegationCodes` is collected, and so are the three declared-absence channels, so nothing
+ * here adds a new omission. `modifierElements` is
  * collected too, and it is the one channel here whose ROOT is bounded more tightly than the shape
  * test below: a type name roots one of its locations only when this library defines the name, so
  * the "still echoes a forgery shaped like a resource type name" residue does not apply to it. That
@@ -62,6 +63,9 @@ function locationsOfJson(text: string): string[] {
     ...safety.arrayWrappedScalars,
     ...safety.nestedArrays,
     ...safety.unreadableNegationCodes,
+    ...safety.absenceMarkers.map((report) => report.location),
+    ...safety.unreadableAbsenceMarkers,
+    ...safety.conflictingAbsenceMarkers,
   ];
 }
 

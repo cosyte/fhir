@@ -147,6 +147,35 @@ export const VALIDATION_CODES = {
    */
   DROPPED_ELEMENT_TEXT: "DROPPED_ELEMENT_TEXT",
   /**
+   * Safety, an element carries a DataAbsentReason extension **and a value of its own**, so the
+   * document asserts both that the element holds that value and that it holds none. An `error`
+   * (`structure`): the two cannot both be true, nothing here ranks them, and a consumer that
+   * happened to read one of the two would report the record as though the other had not been
+   * written. Both survive on the model and on the safety readout; this reports that they disagree.
+   * Value-free, the location of the element, never the value and never the reason.
+   *
+   * Cannot fire on a conformant document: an element the sender has data for is written with the
+   * data and no marker. It is **not** the `Observation.dataAbsentReason` ELEMENT beside a `value[x]`,
+   * which is the `obs-6` invariant and reports as {@link VALIDATION_CODES.INVARIANT_VIOLATED}; the
+   * element is not the extension, and the two never report about one another's shape.
+   */
+  ABSENCE_MARKER_CONFLICT: "ABSENCE_MARKER_CONFLICT",
+  /**
+   * Safety, an element carries a DataAbsentReason extension whose reason this library could not
+   * read: no `valueCode`, one holding no readable string, an empty one, one written twice, or a code
+   * outside the closed fifteen-concept value set the extension's `value[x]` binds to at **required**
+   * strength. An `error` (`code-invalid`), on the same footing as any other required-binding miss:
+   * the set is closed and published, so membership is decided from the set itself with no
+   * terminology service involved and no value-set expansion.
+   *
+   * **Nothing is coerced.** The code is not trimmed, case-folded or substituted, and the element is
+   * not read as `unknown` and not read as populated: doing either would author a reason the sender
+   * did not spell, or erase a declaration the sender did make. The element stays value-absent and
+   * this is the record that a declaration was made and could not be honoured. Value-free, the
+   * location of the element, never the code that failed to match.
+   */
+  ABSENCE_MARKER_UNREADABLE: "ABSENCE_MARKER_UNREADABLE",
+  /**
    * Safety, the resource is marked `entered-in-error` and is therefore **retracted, not
    * data**. Surfaced as `information` (it is not itself a defect) so a consumer cannot miss it.
    */
@@ -333,6 +362,8 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   ARRAY_WRAPPED_SCALAR: ISSUE_TYPES.STRUCTURE,
   NESTED_ARRAY: ISSUE_TYPES.STRUCTURE,
   DROPPED_ELEMENT_TEXT: ISSUE_TYPES.STRUCTURE,
+  ABSENCE_MARKER_CONFLICT: ISSUE_TYPES.STRUCTURE,
+  ABSENCE_MARKER_UNREADABLE: ISSUE_TYPES.CODE_INVALID,
   RETRACTED_RESOURCE: ISSUE_TYPES.INFORMATIONAL,
   INVARIANT_VIOLATED: ISSUE_TYPES.INVARIANT,
   INVARIANT_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
@@ -386,6 +417,14 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
     "Character data was written directly on this element; FHIR XML carries a primitive's value in " +
     "the value attribute, so an element has no slot for text and it was not read. Content the " +
     "sender wrote is missing from the model at this position.",
+  ABSENCE_MARKER_CONFLICT:
+    "Element carries a data-absent-reason extension and a value of its own; the document asserts " +
+    "both that the element holds that value and that it holds none, and neither is preferred " +
+    "here. Both are preserved.",
+  ABSENCE_MARKER_UNREADABLE:
+    "Element carries a data-absent-reason extension whose reason could not be read: it is absent, " +
+    "empty, written more than once, or outside the value set the extension requires. The reason " +
+    "is not guessed and the element is not read as populated.",
   RETRACTED_RESOURCE:
     "Resource is marked entered-in-error; it is retracted and must not be treated as active data.",
   INVARIANT_VIOLATED: "A resource invariant (content-validation constraint) was violated.",
