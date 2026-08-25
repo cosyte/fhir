@@ -8,6 +8,32 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **`Observation` is modeled (`MODEL-OBSERVATION-1`): `validateResource` checks its own elements
+  instead of reporting that it has none.** The built-in schema set held exactly one resource type
+  (`Patient`), so an `Observation` degraded to a single informational `RESOURCE_NOT_MODELED` at the
+  resource root with its own elements left unchecked. It now ships the full R4 4.0.1 DIRECT element
+  table, twenty-four elements verified row by row against `observation.html`, which turns the
+  existing generic checks on for it: `status` at `1..1` carrying the required-strength
+  `ObservationStatus` binding over the eight codes the published value set expands to (a code
+  outside that set is a `CODE_INVALID` error **with no terminology service supplied**), `code` at
+  `1..1`, `value[x]` as a choice over its eleven variants and `effective[x]` over its four (more
+  than one variant of either is one `CHOICE_AMBIGUOUS` at the `[x]` path, never a spurious
+  cardinality error), and an element name R4 does not define reported as a warning when reading
+  leniently and an error when reading strictly.
+  **NOTHING IS RETIRED, RE-SEVERITIED OR RELOCATED.** The safety, quantity, bundle and terminology
+  layers key off the resource model directly and were never gated on the structural schema, so every
+  finding they emitted for an `Observation` before, they emit now, at the same severity and the same
+  location. The one finding that disappears is the informational `RESOURCE_NOT_MODELED` note at an
+  `Observation` root, whose removal is the point; `valid` may move `true` to `false` where the table
+  catches something real and never the other way. The base-versus-head readout differential is
+  re-derived and its declared allowance narrowed to exactly those two shapes.
+  **Deliberately still unmodeled:** `component` and `referenceRange` are backbone elements checked
+  for cardinality and node shape only, exactly as `Patient.contact` and `Patient.link` are, so
+  `component.value[x]` and everything else inside one draws nothing; the weaker bindings on
+  `category`, `code`, `interpretation`, `dataAbsentReason`, `bodySite` and `method` stay with the
+  terminology layer, since this layer enforces `required` strength only; and every other resource
+  type still degrades to `RESOURCE_NOT_MODELED` with its own elements unchecked, until each gets a
+  table verified the same way. No public export, option or issue code changed.
 - **Modifier ELEMENTS reach the safety readout (`SAFETY-MODIFIER-2`), on a new
   `SafetyReadout.modifierElements` channel carrying `{ element, location }` per location.** A
   modifier is not only a `modifierExtension`: R4 flags several ordinary base elements

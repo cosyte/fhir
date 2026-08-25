@@ -67,6 +67,26 @@ describe("validateResource: layer 1 (structure)", () => {
     expect(result.valid).toBe(true);
   });
 
+  it("keeps that safe degrade for every type outside the built-in set, not just one", () => {
+    // The built-in set has more than one entry, so "unmodeled" is no longer "anything but Patient".
+    // Each type below carries an element the built-in types DO define, which is exactly the shape
+    // that would leak a false unknown-element finding if the registry ever resolved by accident.
+    const unmodeled = [
+      '{"resourceType":"Encounter","status":"in-progress","class":{"code":"AMB"},"period":{"start":"2026-01-01"}}',
+      '{"resourceType":"DiagnosticReport","status":"registered","code":{"text":"panel"},"result":[{"reference":"Observation/1"}]}',
+      '{"resourceType":"Specimen","status":"available","type":{"text":"serum"},"collection":{"method":{"text":"x"}}}',
+    ];
+    for (const json of unmodeled) {
+      const result = check(json, { mode: "strict" });
+      expect(codes(result), json).toEqual(["RESOURCE_NOT_MODELED"]);
+      expect(result.issues[0]?.severity).toBe("information");
+      expect(result.issues[0]?.expression).toBe(
+        (JSON.parse(json) as { resourceType: string }).resourceType,
+      );
+      expect(result.valid, json).toBe(true);
+    }
+  });
+
   it("still validates the universal base elements on an unmodeled resource", () => {
     const result = check('{"resourceType":"Device","id":"bad id with spaces"}');
     // id is a base element on every resource; its lexical form is checked even when unmodeled.

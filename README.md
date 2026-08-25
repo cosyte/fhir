@@ -141,7 +141,10 @@ serializeResource(validateResource(resource).toOperationOutcome());
 - **Lenient vs strict:** an unknown element is a `warning` on read and an `error` under `mode: "strict"`.
 - **Fail-safe:** never a false error: a resource type with no schema degrades to one informational
   `RESOURCE_NOT_MODELED`, not a wall of false unknowns. Built-in schemas: base-resource elements +
-  `Patient`; supply your own via `validateResource(resource, { schemas: [...] })`.
+  `Patient` + `Observation`, and that list is the whole set; supply your own via
+  `validateResource(resource, { schemas: [...] })`. The set grows one fully-verified element table at
+  a time, because a table missing a row R4 defines would turn a conformant document into a wall of
+  false unknowns, which is the failure the degrade above exists to avoid.
 
 And the safety spine: FHIR's modifier (`?!`) elements, surfaced so they can never be silently dropped
 or inverted, and the invariants that harm a patient when read wrong:

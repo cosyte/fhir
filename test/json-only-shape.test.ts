@@ -28,10 +28,15 @@ import {
  * XML has no array of arrays, no `_`-sibling and no `null`, so `serializeResourceXml` had nothing to
  * hand back and emitted the node the reader was left holding: an empty element, or none at all. That
  * output re-reads with an **empty issue list**, so the finding was gone after one trip and the shape
- * was erased. Three of the four also re-read `valid: true`; the fourth is the row below whose
- * `reReadValid` is `false`. `{"value":null,"unit":"mg"}` came back as a `Quantity`
+ * was erased. `{"value":null,"unit":"mg"}` came back as a `Quantity`
  * carrying a unit and no magnitude; `{"name":[[{"family":"Roe"}]]}` came back with the name gone and
  * `safeToSummarize` flipped from `false` to `true`.
+ *
+ * `reReadValid` records whether the emitted document ALSO re-reads valid, and it is not the channel
+ * that closes any of this: the empty issue list is. Three of the four rows now re-read
+ * `valid: false`, each for a reason of its own and NONE of them the marked shape: the two
+ * `Observation` rows draw the mandatory `Observation.code` a two-property document never carried,
+ * and the `Patient` row draws a `TYPE_MISMATCH` over an emptied `<name/>`. Each row says which.
  *
  * Both halves are asserted in every case here, because neither closes it alone: the refusal, **and**
  * the document base used to emit re-read to show what the refusal is instead of. The bytes base
@@ -88,7 +93,9 @@ describe("the four marked shapes are refused rather than emitted as an empty ele
       // The magnitude is gone and the unit survives: a quantity that reads as a bare unit rather
       // than as missing, which is the shape the value-channel rule exists for.
       reReadJson: '{"resourceType":"Observation","status":"final","valueQuantity":{"unit":"mg"}}',
-      reReadValid: true,
+      // `false` only because this two-property document never carried the mandatory
+      // `Observation.code`. Nothing about the emptied value channel is reported: that is the erasure.
+      reReadValid: false,
     },
     {
       what: "a scalar in a primitive's `_`-sibling",
@@ -97,7 +104,8 @@ describe("the four marked shapes are refused rather than emitted as an empty ele
       at: "Observation.status",
       base: '<Observation xmlns="http://hl7.org/fhir"><status value="final"/></Observation>',
       reReadJson: '{"resourceType":"Observation","status":"final"}',
-      reReadValid: true,
+      // As above: the mandatory `Observation.code` alone. The `_`-sibling is simply gone.
+      reReadValid: false,
     },
     {
       what: "a scalar where FHIR JSON has an object",
@@ -116,11 +124,10 @@ describe("the four marked shapes are refused rather than emitted as an empty ele
       at: "Patient.name[0]",
       base: '<Patient xmlns="http://hl7.org/fhir"><name/></Patient>',
       reReadJson: '{"resourceType":"Patient"}',
-      // The one row whose emitted document does not re-read fully clean, and NOT because it is
-      // empty or because it repeats: `<coding/>` in the row above is both and re-reads `valid: true`.
-      // `<name/>` re-reads as a value-absent primitive where the schema types a complex datatype, so
-      // the validator draws TYPE_MISMATCH. `issues` is still empty and `safeToSummarize` still flips,
-      // so the finding is still gone either way.
+      // Not because it is empty and not because it repeats: `<coding/>` in the row above is both
+      // and re-reads `valid: true`. `<name/>` re-reads as a value-absent primitive where the schema
+      // types a complex datatype, so the validator draws TYPE_MISMATCH. `issues` is still empty and
+      // `safeToSummarize` still flips, so the finding is still gone either way.
       reReadValid: false,
     },
   ] as const;
