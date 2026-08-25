@@ -47,8 +47,15 @@ profiles you supply, and evaluates their FHIRPath invariants** (failing safe to 
 on any unsupported expression); it does **not** yet do `type`·`profile` slicing discriminator or
 reslicing validation (still `PROFILE_SLICE_UNCHECKED`), and it bundles **no** US Core
 IG corpus. The `validator_cli.jar` **differential is authored but CI-only** (a JVM oracle job: there is
-no Java in the dev container, so it has not been observed green there) and now runs over **both** the
-synthetic spec-clean corpus **and** the real-world quirk corpus. The built-in structural schema set is the base-resource elements plus
+no Java in the dev container, so it has not been observed green there) and runs over **149 declared
+documents from three corpora**, only one of which was written here: the synthetic spec-clean and
+real-world quirk fixtures, `FHIR/fhir-test-cases` at tag `1.7.67` (Apache-2.0), and the FHIR R4
+`4.0.1` specification's own published examples (CC0-1.0). The third-party documents are fetched and
+digest-verified rather than vendored, and the compared count and the oracle's own identity are
+printed on every run, so a silent shrink of either is visible in the log. **What that number buys is
+bounded**: over resource types with no built-in structural schema the library emits an informational
+`RESOURCE_NOT_MODELED` and no error, so agreement at scale mostly means "no error was invented on a
+real document the reference implementation finds clean". The built-in structural schema set is the base-resource elements plus
 `Patient` as a worked demonstrator; other resource types validate only against a caller-supplied schema
 or profile. Without a supplied terminology service there is **no code-validity / value-set-membership**
 guarantee beyond `system` + strength (no terminology content is bundled: licensing). Its XML codec is
@@ -708,7 +715,8 @@ validateResource(resource, { profiles: [...STARTER_PROFILES] });
   preserved byte-exact (Synthea #675), a primitive-extension `_`-sibling misalignment that **fails
   closed** (HAPI #5738), a searchset Bundle `link[next]` that survives the round-trip
   (bundle-example.json), and US Core race + birthsex extensions preserved on a base Patient. The
-  `validator_cli.jar` differential (CI-only) runs over this corpus too. **Values are synthetic;** a
+  `validator_cli.jar` differential (CI-only) runs over this corpus too, alongside the two public
+  corpora described above. **Values are synthetic;** a
   genuinely vendor-**proprietary** deviation absent from every public sample stays grounded-only. It is
   never invented. Missing-must-support and version-drift quirks are covered by the profile suite.
 

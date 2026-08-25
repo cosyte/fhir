@@ -34,6 +34,15 @@ pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Differential corpus documents (`pnpm corpus:fetch`).
+# NEVER COMMITTED, AND THAT IS A SAFETY DECISION, NOT A SIZE ONE. These are third-party clinical
+# examples carrying real-looking names, dates of birth and street addresses. Content committed into
+# git history is not undone by a revert, and this repository's PHI scanner treats what git carries
+# as self-authored synthetic fixtures, so vendoring them would force its allow-lists (a declaration
+# about OUR fixtures) to swallow someone else's document content. `corpus/corpus.json` declares
+# them with a digest each; `scripts/corpus-fetch.mjs` retrieves them.
+corpus/documents/
+
 # Local
 .cache/
 .turbo/

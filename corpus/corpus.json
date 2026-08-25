@@ -1,0 +1,1122 @@
+{
+  "schemaVersion": 1,
+  "comparedFloor": 100,
+  "corpora": [
+    {
+      "id": "cosyte-fhir-fixtures",
+      "title": "@cosyte/fhir synthetic spec-clean and Tier-2 quirk fixtures",
+      "version": "in-tree at the commit under test",
+      "licence": "MIT",
+      "authored": "self",
+      "origin": "https://github.com/cosyte/fhir",
+      "acquisition": {
+        "kind": "in-tree",
+        "root": "test/__fixtures__"
+      },
+      "licenceText": null,
+      "notice": null
+    },
+    {
+      "id": "fhir-test-cases",
+      "title": "FHIR/fhir-test-cases, the shared cross-implementation FHIR test corpus",
+      "version": "1.7.67 (commit 0d7196d75a85626383d697d34825bcd33f541b87)",
+      "licence": "Apache-2.0",
+      "authored": "third-party",
+      "origin": "https://github.com/FHIR/fhir-test-cases",
+      "acquisition": {
+        "kind": "files",
+        "baseUrl": "https://raw.githubusercontent.com/FHIR/fhir-test-cases/0d7196d75a85626383d697d34825bcd33f541b87/"
+      },
+      "licenceText": "licences/fhir-test-cases-LICENSE.txt",
+      "notice": "licences/fhir-test-cases-NOTICE.txt"
+    },
+    {
+      "id": "hl7-fhir-r4-examples",
+      "title": "HL7 FHIR R4 (4.0.1) published examples",
+      "version": "4.0.1",
+      "licence": "CC0-1.0",
+      "authored": "third-party",
+      "origin": "https://hl7.org/fhir/R4/downloads.html",
+      "acquisition": {
+        "kind": "archive",
+        "format": "zip",
+        "url": "https://hl7.org/fhir/R4/examples-json.zip",
+        "sha256": "5b3da7fe910fcd20470d63365317bde3b230118844b8adf77e629fc55ebe2f28",
+        "bytes": 20314270
+      },
+      "licenceText": "licences/hl7-fhir-r4-examples-LICENSE.txt",
+      "notice": "licences/hl7-fhir-r4-examples-NOTICE.txt"
+    }
+  ],
+  "documents": [
+    {
+      "id": "cosyte-fhir-fixtures/patient.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "patient.json",
+      "bytes": 335,
+      "sha256": "e3ae1ac3bec1a5fa1e57ec6aa6028195a4ce88428c5093cc66f825621e81bab9",
+      "note": "spec-clean tier: a base Patient carrying every element the base spec requires"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/observation-decimals.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "observation-decimals.json",
+      "bytes": 513,
+      "sha256": "2a812e45124231c0762664059693c095b883eea9aff7ad8661f1b5f7c9482871",
+      "note": "spec-clean tier: decimal precision on a non-vital-sign lab LOINC"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/observation-lab-refrange.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "observation-lab-refrange.json",
+      "bytes": 1114,
+      "sha256": "bcb36d2212fbdd32ea4128996e49247e526e971a2d4d5ee01afd474ea7526621",
+      "note": "spec-clean tier: a lab Observation with a reference range"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/observation-vitals-bp.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "observation-vitals-bp.json",
+      "bytes": 953,
+      "sha256": "f92e26fc64493be8388202721aaf819f92422a84839e888067a9027f209dce4d",
+      "note": "spec-clean tier: the vital-signs profile's mandatory elements"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/medicationrequest-dose.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "medicationrequest-dose.json",
+      "bytes": 608,
+      "sha256": "eb0839d0f8b4d174957c8e0fc259cdfd97949f1b7cae073d46916e64fff53e77",
+      "note": "spec-clean tier: MedicationRequest with its 1..1 subject"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/quirk-resourcetype-last.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "quirk-resourcetype-last.json",
+      "bytes": 184,
+      "sha256": "2e830fbe07024f31e6e480b8815669ec82f2873b6e60d845514b5fc2cfda61b7",
+      "note": "quirk tier: resourceType is not the first property"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/quirk-scientific-decimal.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "quirk-scientific-decimal.json",
+      "bytes": 577,
+      "sha256": "8b8ff2e7935bcb8096455588f3c7f1708c189f87d1103b7fcc83593353265848",
+      "note": "quirk tier: exponent-notation decimal, precision preserved"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/quirk-searchset-paging.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "quirk-searchset-paging.json",
+      "bytes": 1202,
+      "sha256": "8ca2bebfe3cacb2413cc376553b277c2f66b77e43684e88620cf9ce1dd0c97b1",
+      "note": "quirk tier: searchset Bundle with link[relation=next]"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/quirk-uscore-extensions.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "quirk-uscore-extensions.json",
+      "bytes": 801,
+      "sha256": "d63c19cbc2801a11c77a1dacfc657148644ed250ed32fe6f0393a8eb387d6627",
+      "note": "quirk tier: US Core race + birthsex on a base Patient"
+    },
+    {
+      "id": "cosyte-fhir-fixtures/quirk-primitive-extension-misaligned.json",
+      "corpus": "cosyte-fhir-fixtures",
+      "path": "quirk-primitive-extension-misaligned.json",
+      "bytes": 176,
+      "sha256": "a23955df371666f945bb9b7aaf1cfbe7e46e4eb0477e9fb058079b205423e54b",
+      "note": "quirk tier: misaligned primitive-extension sibling, the reader fails closed"
+    },
+    {
+      "id": "fhir-test-cases/r4/bundle-with-no-type.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/bundle-with-no-type.json",
+      "bytes": 1623,
+      "sha256": "42eff10931bbb96bc6a80a025f25c51dfc9c95f58037d1bd5b71371d0ff0b6ca",
+      "exclude": "deliberately invalid corpus fixture: the corpus ships it as a negative case and it omits Bundle.type, which R4 makes 1..1 (bundle.html). The oracle errors on it by construction, so it is evidence about the corpus rather than about agreement."
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/account-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/account-example.json",
+      "bytes": 1004,
+      "sha256": "d367a10ff365dca2c1ae1ae1023c7f0e0e47dcda3efc394229e141a5644d0eca"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/allergyintolerance-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/allergyintolerance-example.json",
+      "bytes": 4944,
+      "sha256": "a0ebbb772b403904faa0f8cc8024ff337bf6270e07acd276b8ab6fef62b45249"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/appointment-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/appointment-example.json",
+      "bytes": 2265,
+      "sha256": "5bb8ab43044c648178d401852d53125d92f04c608f969754eeeb67ae59986905"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/appointmentresponse-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/appointmentresponse-example.json",
+      "bytes": 442,
+      "sha256": "93ffd551dc85782faa03b3d53462d3174e355c525b2daf31c7616bc31233e268"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/auditevent-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/auditevent-example.json",
+      "bytes": 2843,
+      "sha256": "1711fbea2b10c712adc086e0adaa98ce1fc18b194b54468f674ffd522fe9484e"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/basic-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/basic-example.json",
+      "bytes": 2175,
+      "sha256": "c896f26ecb818918b26b85f93e5f260181a3ce72f0db7d0e97ac12e040dfa2b3",
+      "exclude": "real disagreement this library cannot currently resolve: it carries a modifierExtension this library does not understand, so validateResource emits UNHANDLED_MODIFIER_EXTENSION (error) where the oracle resolves the definition and is clean. Refusing to affirm is the conservative direction and is deliberately NOT relaxed to make the corpus agree."
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/binary-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/binary-example.json",
+      "bytes": 175877,
+      "sha256": "a8ab3f4e6f57b04abb28e4f30fff10b929adce2b3c2fa55e1441898f5043ecdf"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/bodystructure-example-fetus.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/bodystructure-example-fetus.json",
+      "bytes": 936,
+      "sha256": "3077ef9e2b0508fab2ffab4455447d092125221ad188c74653def3751328e55d"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/bundle-questionnaire.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/bundle-questionnaire.json",
+      "bytes": 69722,
+      "sha256": "8f4aa93a2143389ce456e295c5695305492cb72d5af04130dd3a644d14526fe7"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/capabilitystatement-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/capabilitystatement-example.json",
+      "bytes": 5820,
+      "sha256": "ef16b529a14ceeef75d0337c8e26486166f20d0a3f00a5d2cc9c578d6428df91"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/careteam-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/careteam-example.json",
+      "bytes": 1555,
+      "sha256": "05c8a265eb4d7b99319cf3287f32e6b737d28fc89f5f873f89d94d819541e6df"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/clinicalimpression-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/clinicalimpression-example.json",
+      "bytes": 2537,
+      "sha256": "9c1f93f8e5a1d405c9b084bf0823d054bb5ac1769ffd8bb2c1b5c0278166d06a"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/codesystem-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/codesystem-example.json",
+      "bytes": 3425,
+      "sha256": "ff0a6db2c9a29721abf40ff73ff68d5cd7abb555b7efb67acccfea6067f75d75"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/communication-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/communication-example.json",
+      "bytes": 1517,
+      "sha256": "61157b599163f8ff63a081366f0e719ded429b35d796ee931e300e2519d0c095"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/compartmentdefinition-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/compartmentdefinition-example.json",
+      "bytes": 2709,
+      "sha256": "234cebf6e5315bb1970b1123c6a8d76902b35f7c02cf8dc9f1c191736e15623c"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/composition-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/composition-example.json",
+      "bytes": 4749,
+      "sha256": "8f37f766fac662d00cb9ea769fb5417abe3b82a0573c55f42bcbdb505753da88"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/conceptmap-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/conceptmap-example.json",
+      "bytes": 4582,
+      "sha256": "4f58fe621c4884726b72ce491fb3f19b22e2009fc9daccd758e594bd2bdc755c"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/condition-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/condition-example.json",
+      "bytes": 1586,
+      "sha256": "450c80e71cdad565523c27a62bc94f53db949e02417e1d2dd4fe39927f34adeb"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/consent-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/consent-example.json",
+      "bytes": 1290,
+      "sha256": "464abff4f0bda68b6247e17acb5bad76ab9d1701e20b68357b67bdace62c6924"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/detectedissue-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/detectedissue-example.json",
+      "bytes": 2412,
+      "sha256": "c9804bb7c29c5edd5600878169073c3826a38aaef2946991034de93d9493e539"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/device-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/device-example.json",
+      "bytes": 369,
+      "sha256": "18de31b1dce7f78b92a321c56b9e2b2c0804df7b16a6a71dc10d0e46ec47b281"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/devicemetric-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/devicemetric-example.json",
+      "bytes": 1896,
+      "sha256": "dcd1ad954c52e3c91f2e2b8356a0f6060c26d2cda1f892904826f646c33d821d"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/deviceusestatement-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/deviceusestatement-example.json",
+      "bytes": 870,
+      "sha256": "8654f473b0573581c985a18b52db7f7aa8a4de6e18c820d068e0ee011b53bca6"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/diagnosticreport-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/diagnosticreport-example.json",
+      "bytes": 132785,
+      "sha256": "ea53e6871a30543a058325c3ca598c69de47c87ecd0714ce3fbdfa04c634d4d2"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/documentreference-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/documentreference-example.json",
+      "bytes": 5986,
+      "sha256": "63e3fb3aacff16f95b2d0ba313935fb8ec7345296992481bfdbbe0a322f1b9c0"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/encounter-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/encounter-example.json",
+      "bytes": 413,
+      "sha256": "6ef7c93b28fa76d3f1f1dcd3e795a8e35c70b5f86ad4659b75f7fc3d93ff0bb5"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/endpoint-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/endpoint-example.json",
+      "bytes": 1166,
+      "sha256": "306444ead9bec427de9c0b894465a83ae455b07a0e965aa066f9b9336fd15f8d"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/episodeofcare-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/episodeofcare-example.json",
+      "bytes": 2110,
+      "sha256": "6166ff34e19b135aefab5e5978a90c2f9c566ff5c6c1b0e4f8ce8cb74a48ad0e"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/familymemberhistory-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/familymemberhistory-example.json",
+      "bytes": 1418,
+      "sha256": "f669002715274275427990e6cab5a137dba151dbea1f3b16bdd6ce8442db04e1"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/flag-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/flag-example.json",
+      "bytes": 1033,
+      "sha256": "6f4c00ab1f056c0025c66acf300e46bc0e51ac6e3a2dd4e41b247ea76fa95231"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/goal-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/goal-example.json",
+      "bytes": 1922,
+      "sha256": "c41dd3b9282b3da5a45c002ce9ef414abb9252ca2e23235c7929d8faf6add591"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/graphdefinition-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/graphdefinition-example.json",
+      "bytes": 2380,
+      "sha256": "c88026bde3054412dfdf0e9c465db40f8ca48803a75c85322ad70d441e1db160"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/group-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/group-example.json",
+      "bytes": 836,
+      "sha256": "077517483b52b6e2205967d2afe67a9e76c203621538daf0b33a3f4de2a2148f"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/healthcareservice-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/healthcareservice-example.json",
+      "bytes": 4515,
+      "sha256": "955e86134762482e727504fb6b8d8628c0405fdb2b3b6f5e160c0fc6b3f33344"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/immunization-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/immunization-example.json",
+      "bytes": 5039,
+      "sha256": "97f6e177a40210fa6b6d29946c77a31da9f975b03ed9d10d0c527cd0ba21fbcd"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/implementationguide-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/implementationguide-example.json",
+      "bytes": 5815,
+      "sha256": "e87891c6dd81323f6b714e8d5fca342d8b4e4ae775e14c52c96ca4065c89158f"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/linkage-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/linkage-example.json",
+      "bytes": 806,
+      "sha256": "41ae1dcc704d88bb60fd165ef5eec34aeed2f4f564c78d3a66cb81ab5c5e1a18"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/list-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/list-example.json",
+      "bytes": 1497,
+      "sha256": "a23701f31abcbf6cda8cc53a44e3e0e24f737f3c1ed23b534142042c00a6d715"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/location-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/location-example.json",
+      "bytes": 1487,
+      "sha256": "82864277af3dbd87d1dd7021697e3f53b7f2c731e56a06fdd7e74afb2b977d1b"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/medicationadministration0301.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/medicationadministration0301.json",
+      "bytes": 4542,
+      "sha256": "ab9da82af6084ec661986c21a63fbfdc16eab52cb62e3ab515e3eeef8a6235e5"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/medicationdispense0301.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/medicationdispense0301.json",
+      "bytes": 4193,
+      "sha256": "e1ac1855c02cec1993c08d4d49c5a480f9f625823e3b8bd776af85da15f6a082"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/medicationrequest0301.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/medicationrequest0301.json",
+      "bytes": 9061,
+      "sha256": "08241f791e03723d850bc56a922bbc8fc9981dfec927c1c5ff0296e9b55f1f29"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/medicationstatementexample1.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/medicationstatementexample1.json",
+      "bytes": 5874,
+      "sha256": "bb35e017117871d4205ab3b5fe9ae4812b814aa82b8a437a7b3206477fea363c"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/messagedefinition-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/messagedefinition-example.json",
+      "bytes": 794,
+      "sha256": "eaf31e60261f0744a212eb15198b6cb0a559db1e5bf68620320464609f01d70b"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/messageheader-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/messageheader-example.json",
+      "bytes": 1523,
+      "sha256": "724c18b76f4824b2db9341089be5b722b02b70716e8b8ab7eac7b0518ef022bf"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/molecularsequence-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/molecularsequence-example.json",
+      "bytes": 1965,
+      "sha256": "df62bcbb5865e983983c33dfea4f4d1114d2e6166f083b74e8af4bc5e849c640"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/namingsystem-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/namingsystem-example.json",
+      "bytes": 1592,
+      "sha256": "558bdceb1c6c9682eea60a4c6324b744584a7824757779f8218c8eebe3410105"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/observation-decimal.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/observation-decimal.json",
+      "bytes": 2436,
+      "sha256": "ddad33c14fa6913018dc6eefb3294ba5baadc01a678d51c802c03500c8f96443"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/observation-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/observation-example.json",
+      "bytes": 2087,
+      "sha256": "95b2b641707cd473902670a65c20008282c09b7e71731d1010a3db6ce24fce7f"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/operationdefinition-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/operationdefinition-example.json",
+      "bytes": 5174,
+      "sha256": "a6f5c5a1a5bb9ad77a8059b3355494f69ecdf7879d71f1b84619c65ba6dcba4c"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/operationoutcome-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/operationoutcome-example.json",
+      "bytes": 638,
+      "sha256": "3b8883805d05a008a65ed600535de1fb195ef4720667bd276e7abc6d8de3ab80"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/organization-1.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/organization-1.json",
+      "bytes": 1100,
+      "sha256": "c25835c2cdc5d2268c56f96d8ebfbee77e7c474f1aa82551106a3cccab6d4d62"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/organization-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/organization-example.json",
+      "bytes": 1100,
+      "sha256": "c25835c2cdc5d2268c56f96d8ebfbee77e7c474f1aa82551106a3cccab6d4d62"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/parameters-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/parameters-example.json",
+      "bytes": 660,
+      "sha256": "d9b5c57c54801ba9a353799af48c0906d242de718e3369df5d998cb21f4edb08"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/patient-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/patient-example.json",
+      "bytes": 3748,
+      "sha256": "7cc6b3817264c22e722b6bc10e494d3441341032f8294db7ccec796ca7a0cf81"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/paymentnotice-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/paymentnotice-example.json",
+      "bytes": 1084,
+      "sha256": "02c1b91adbba0390ac6b43ba6e81f66896e57891c908de1e022e731128086d9b"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/person-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/person-example.json",
+      "bytes": 2088,
+      "sha256": "8e4b649ea08ae0037f0862a696133446621623b29a8e044d52d9a5986d778f57"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/practitioner-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/practitioner-example.json",
+      "bytes": 1290,
+      "sha256": "f7bdedca23fe131d62bbf7efae8c4dca6c691fe1ab78aa55e81b5fea43a88655"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/practitionerrole-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/practitionerrole-example.json",
+      "bytes": 2171,
+      "sha256": "97c3c35618fb583d21c8713062a5bca4a6b4813fc0e91e308b0452cc0aa761ac"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/questionnaire-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/questionnaire-example.json",
+      "bytes": 4958,
+      "sha256": "5c8adb2de88ad6e54bc1e923821b3f57aceae98465fc33f7954ca43f3431badc"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/questionnaireresponse-example-bluebook.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/questionnaireresponse-example-bluebook.json",
+      "bytes": 3994,
+      "sha256": "d1ae18c87ad3346d19c964b93f52b831f3cd50ec9f0da5b395fbc47a6b811d1d"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/riskassessment-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/riskassessment-example.json",
+      "bytes": 4923,
+      "sha256": "f57ffdf187761e44d909c7de93e64f5a137df7c25955443e4d962c06ea97941b"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/schedule-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/schedule-example.json",
+      "bytes": 1157,
+      "sha256": "4596b474f1f95d03a111915d78d86f6aa13b8e742d5d261e0930bd4262478d0a"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/searchparameter-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/searchparameter-example.json",
+      "bytes": 2814,
+      "sha256": "4467dd3d668de57c3b8c4e7674a8ba721c1a2f381c1a1650362634becfee2a6e"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/slot-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/slot-example.json",
+      "bytes": 1126,
+      "sha256": "c96be6b3e3aa52266a54d29161f34110d6c36e000affa38e13f249e7fb00ec39"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/specimen-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/specimen-example.json",
+      "bytes": 3801,
+      "sha256": "81ba863e53209a10d8d62d93e43cc49e364151a57c24d84fd44ff7b8dc68f5dd"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/structuredefinition-example-composition.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/structuredefinition-example-composition.json",
+      "bytes": 3905,
+      "sha256": "31745207f1aa781878a8e7a86c97e0e3816cbac88499a5729027fd36f4a1df59"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/structuremap-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/structuremap-example.json",
+      "bytes": 3032,
+      "sha256": "5dac2a79f83218fd41470b7d803fdfaa841baa153486604d9564c0607ed061fe"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/subscription-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/subscription-example.json",
+      "bytes": 663,
+      "sha256": "73596e758c9b25476cb5114740a698f967279f77e2fe396a669ec9cd2c9822b8"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/substance-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/substance-example.json",
+      "bytes": 941,
+      "sha256": "903fbb635baff7e8be71cce7fed93fc1bf661f3b294a2e32ab3f53da9d20376a"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/supplydelivery-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/supplydelivery-example.json",
+      "bytes": 1763,
+      "sha256": "8d124b1ae1e526fc8c46caf8e2c12b404ae8b4adb3812d9baa03bda7676698da"
+    },
+    {
+      "id": "fhir-test-cases/r4/examples/valueset-example.json",
+      "corpus": "fhir-test-cases",
+      "path": "r4/examples/valueset-example.json",
+      "bytes": 3243,
+      "sha256": "ec4718a971b5f763cb2d89b21bc16b90e0271cf85e6b6c91ce760f479c33e1f9"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/activitydefinition-administer-zika-virus-exposure-assessment.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "activitydefinition-administer-zika-virus-exposure-assessment.json",
+      "bytes": 5136,
+      "sha256": "3559bec510cf93f3b1889d0b615cd7fd6ed4138fc59cec670cec6e9f4c955cba"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/adverseevent-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "adverseevent-example.json",
+      "bytes": 3652,
+      "sha256": "e0e04b733bc641cda198ab2d339e6fe5080cb6a2c73be01f54007956cb7a200f"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/basic-example2.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "basic-example2.json",
+      "bytes": 1729,
+      "sha256": "f314c5537a8a6da83e8c72ca301627a1bca27320c911e26ba1c9ffffabde12e6"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/biologicallyderivedproduct-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "biologicallyderivedproduct-example.json",
+      "bytes": 409,
+      "sha256": "22a4a0e8d30891bfc036f0573898e1ea295af9b1f9ed0524321e431424a5c365"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/careplan-example-f001-heart.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "careplan-example-f001-heart.json",
+      "bytes": 4793,
+      "sha256": "3e18a8d299a85a67980a73232d613f9cc96a43e40f4ff07bec83e0143348bec0"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/catalogentry-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "catalogentry-example.json",
+      "bytes": 624,
+      "sha256": "b1c705ce350c77b710770df989716d0237aaaa40937980f44b91309d9800df63"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/chargeitem-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "chargeitem-example.json",
+      "bytes": 2862,
+      "sha256": "c1be648cd9081d263d07391dd571328758fef660a6978e1044be4d4bcc0a0f92"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/chargeitemdefinition-device-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "chargeitemdefinition-device-example.json",
+      "bytes": 6178,
+      "sha256": "0b9c3686ebb23660536edc010e9feac59fd97da14f9ad3c563b301160b84bb18"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/claim-example-cms1500-medical.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "claim-example-cms1500-medical.json",
+      "bytes": 6947,
+      "sha256": "ca488c1473ebd8d5263688f06eab49782bf1a41fa14da94aabd88a637f25537a"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/claimresponse-example-2.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "claimresponse-example-2.json",
+      "bytes": 1924,
+      "sha256": "df87f114e59a80ffda8cfcd95660c822f0341b6401eb9c25eaf8d18c4206e990"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/communicationrequest-example-fm-solicit-attachment.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "communicationrequest-example-fm-solicit-attachment.json",
+      "bytes": 2272,
+      "sha256": "e83495cdfed076d563f3e805e2654b23d071502ce3daf243bad7356aff943c79"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/contract-example-42cfr-part2.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "contract-example-42cfr-part2.json",
+      "bytes": 9514,
+      "sha256": "e324da5defdaf82b4452f6e90aba59f05c7c332a5d784140d6e87488b963e8c3"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coverage-example-2.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coverage-example-2.json",
+      "bytes": 2730,
+      "sha256": "739c4c80d002f17bb37d13c03b6e8847f309dd5273933827daabb31a9c32340e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coverageeligibilityrequest-example-2.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coverageeligibilityrequest-example-2.json",
+      "bytes": 1596,
+      "sha256": "cdc2c1b6ad8de52ca15279e983a723be73bb72bbd0293f2d290df3fca15c359f"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/coverageeligibilityresponse-example-benefits-2.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "coverageeligibilityresponse-example-benefits-2.json",
+      "bytes": 8144,
+      "sha256": "61a7adddaab1bc35bc96f5e9e28596af1f86c1c1d7996c75a8be1a454fdde41c"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/devicedefinition-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "devicedefinition-example.json",
+      "bytes": 651,
+      "sha256": "1d1edbc048eab2672b9cb6c00463ed1aaddd15091746d63ea93e20166905d823"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/devicerequest-example-insulinpump.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "devicerequest-example-insulinpump.json",
+      "bytes": 4216,
+      "sha256": "564cb5682651c4fac5f58c8269867dadda924d2729f471666b2a6eafe63b9fec"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/diagnosticreport-example-dxa.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "diagnosticreport-example-dxa.json",
+      "bytes": 6944,
+      "sha256": "0ef062caa5dadffbd224480e7e5b20b89827f4cd5aac873a7b19c8a8b51a4d10"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/documentmanifest-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "documentmanifest-example.json",
+      "bytes": 1640,
+      "sha256": "047a87d26e5d70065fdb1d02848228a5e7436df1235a485e96b25951461a64a9"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/effectevidencesynthesis-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "effectevidencesynthesis-example.json",
+      "bytes": 699,
+      "sha256": "a1b1d6b0cb2e82f4d69aab8d214f163fc035659a6e54f31ca65ec86af8ba477c"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/enrollmentrequest-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "enrollmentrequest-example.json",
+      "bytes": 815,
+      "sha256": "23501bbf6b67d61f7a93e82a1a4592ca4a7a9250c4acbddfd59247565dcfbcc8"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/enrollmentresponse-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "enrollmentresponse-example.json",
+      "bytes": 899,
+      "sha256": "7425deb74928f0f0c8f0a9b6de4de8dce0bbb46c7cf80e8c9f2a589bd3f49032"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/eventdefinition-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "eventdefinition-example.json",
+      "bytes": 991,
+      "sha256": "33603c65040b9563db928109581d095325f2c3d2bb8356aa742c137f763bdea1"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/evidence-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "evidence-example.json",
+      "bytes": 487,
+      "sha256": "fed3ebd8cb17a49d6a84e12aaf7700a62c69444de033d1abe854dc7bfccdf5c6"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/evidencevariable-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "evidencevariable-example.json",
+      "bytes": 548,
+      "sha256": "5c4ea265021b83e2796ad2608a4d9646f9e7d01557b2bb8f13f70ae5843191d5"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/explanationofbenefit-example-2.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "explanationofbenefit-example-2.json",
+      "bytes": 4202,
+      "sha256": "3d20f29182d3d4f88a109ca0fcc491e83408d4f11c7f7532586de24cc58868b5"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/guidanceresponse-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "guidanceresponse-example.json",
+      "bytes": 3182,
+      "sha256": "523fe5fd3f8af293dff76fd6d87f902f6ba919afa3a826269c6c22dcdcddcd51"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/imagingstudy-example-xr.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "imagingstudy-example-xr.json",
+      "bytes": 4045,
+      "sha256": "f110253aa436fd66fb3f4b7e05f32436f08973528ba2a5553bc5850acf4ad238"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/immunizationevaluation-example-notvalid.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "immunizationevaluation-example-notvalid.json",
+      "bytes": 3330,
+      "sha256": "cff2d2b203dcc4266b83e70ad70c9ace1c24bf51ae4ac9610666873b77bad329"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/immunizationrecommendation-example-target-disease.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "immunizationrecommendation-example-target-disease.json",
+      "bytes": 2404,
+      "sha256": "7ecde8a17c1c494a199d4422031a64889d4bfc5cc75f94b63269d2c03c0cf405"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/insuranceplan-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "insuranceplan-example.json",
+      "bytes": 607,
+      "sha256": "e2a2fdfb690577139b23552c50d5e4fd2b48cdc5347167dfbb62cd86df24f02f"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/invoice-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "invoice-example.json",
+      "bytes": 1239,
+      "sha256": "5bdfbf186433fd6f63d181d6e4d44ba73a6dbeee0a3e8d4c55da76b6c171de3f"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/library-composition-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "library-composition-example.json",
+      "bytes": 1738,
+      "sha256": "40c713113fa4f534efa1a79a3a52d181446fad3adced1d9b8de974395dd63021"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/measure-component-a-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "measure-component-a-example.json",
+      "bytes": 1649,
+      "sha256": "df4e5c0f57cfd9dac75681045d3b7cbafb4edae0b090bc832c9a9eec2d9262a6"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/media-example-dicom.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "media-example-dicom.json",
+      "bytes": 2613,
+      "sha256": "1e8764406d9921e7060b48f7cda3736c9ee668630da888ae7c3ad5c15e3d0f23"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationexample0301.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationexample0301.json",
+      "bytes": 3881,
+      "sha256": "99a19c3e442ee4b0f7db099420647aa5326a055cf38f8a514edcc8201b1fb92c"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicationknowledge-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicationknowledge-example.json",
+      "bytes": 2310,
+      "sha256": "efcbdc53f3fbc228d260b44625329c69d2a97e3b0713b4e6870990500e1fed1b"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproduct-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproduct-example.json",
+      "bytes": 6646,
+      "sha256": "f26cadd98c115517ac6355675bd6f09e09a7f7c854ed10f994374cd02cbb2d1e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproductauthorization-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproductauthorization-example.json",
+      "bytes": 5755,
+      "sha256": "2f9b150f9cb2f2e2aa3b7f673ddccbc2f2fb4cc65fe1c2e80c812f890261583a"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproductcontraindication-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproductcontraindication-example.json",
+      "bytes": 1690,
+      "sha256": "b5471179072dac4c4ef675c93c296fcf77fdcd772d6cfbb1407720df28fcdaf9"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproductindication-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproductindication-example.json",
+      "bytes": 3236,
+      "sha256": "0daa2a1ce5343b113560160129d758545c8a551f5a34ac0440db3ec4cf036557"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproductingredient-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproductingredient-example.json",
+      "bytes": 3181,
+      "sha256": "8daff3d7f72b6a7c9a0148acf9d49c268fc075cb20e6e1554c4bfedf0e18b227"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproductinteraction-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproductinteraction-example.json",
+      "bytes": 5478,
+      "sha256": "459bbcaadf59b07c9fcfd6b797292b712f2c62c82ac27f91387c256f1ffcebf3"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproductmanufactured-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproductmanufactured-example.json",
+      "bytes": 2096,
+      "sha256": "b93d9a92c63f42584e1afd3da25e0c715cf31964839de3cf22a75b70a109a1bb"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproductpackaged-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproductpackaged-example.json",
+      "bytes": 5966,
+      "sha256": "e48db3d78de3b58397a728d3f8b10162c5bcaf1e95a4b9ed98406a1659ab1fe9"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproductpharmaceutical-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproductpharmaceutical-example.json",
+      "bytes": 2454,
+      "sha256": "5df377a7384d622a9269d607f456bac9b54dcbd1f8f5a419d97dbff1bc0c56bc"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/medicinalproductundesirableeffect-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "medicinalproductundesirableeffect-example.json",
+      "bytes": 2137,
+      "sha256": "e291066aeba78fbc3e5790a9c091fea83a5444d73af3d100b988a2d191cc8e42"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/nutritionorder-example-cardiacdiet.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "nutritionorder-example-cardiacdiet.json",
+      "bytes": 6283,
+      "sha256": "82984d8182a26c5e2eafb0e68e574c7469771c787aa6abced9f4151c3e6a0315"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/observationdefinition-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "observationdefinition-example.json",
+      "bytes": 982,
+      "sha256": "e6555861f3c20455ce6e37c05bd49456c1c6369a45b3e5f1e15fc4c08e8342cc"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/organizationaffiliation-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "organizationaffiliation-example.json",
+      "bytes": 1748,
+      "sha256": "d28a081019baaab0712cbd58dc9ea2b9413949a7dfa70846e02baf76bcf5ff5d"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/paymentreconciliation-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "paymentreconciliation-example.json",
+      "bytes": 3381,
+      "sha256": "4710fef74e909e70d70bc5b5ef5a3d66780e26b352b6dc53ad4c0f4dc1f9b717"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/plandefinition-chlamydia-screening-intervention.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "plandefinition-chlamydia-screening-intervention.json",
+      "bytes": 6416,
+      "sha256": "6ac75b3935045b67beac2d476721f804f637aa8b1792bd51aba2e5b3b35b778e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/procedure-example-ambulation.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "procedure-example-ambulation.json",
+      "bytes": 1677,
+      "sha256": "50de8f588fedfb359d80b0f863dcb99a9402ab200e4514d15c8b612f700881a4"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/provenance-consent-signature.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "provenance-consent-signature.json",
+      "bytes": 2299,
+      "sha256": "9748a6f80f9d4860b4da83edfa0212fa1a47073cd94a3e4d6bc0c197c7ccef1e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/relatedperson-example-f001-sarah.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "relatedperson-example-f001-sarah.json",
+      "bytes": 1130,
+      "sha256": "8cfe65c72f1867c9126e367bbb7806aea346477badfe972e811b45728e036d92"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/requestgroup-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "requestgroup-example.json",
+      "bytes": 3201,
+      "sha256": "23503e1908ca46f25e06dc0e334ce9b9ef5809ff6b63d4f5a018975616106d3a"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/researchdefinition-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "researchdefinition-example.json",
+      "bytes": 498,
+      "sha256": "40ebb6c7afa6eed1c2cb449af511b633274fc98854311d132cdc5c844cf871a1"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/researchelementdefinition-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "researchelementdefinition-example.json",
+      "bytes": 581,
+      "sha256": "aff7a303928bf2c380d7763f0c5dd1635f6cd36b626aa750648b0d52688210f7"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/researchstudy-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "researchstudy-example.json",
+      "bytes": 421,
+      "sha256": "71cb77ddb7f261173a0449a0d3d1c8b5dfeb1c9938b0cf234017a43a7044270e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/researchsubject-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "researchsubject-example.json",
+      "bytes": 704,
+      "sha256": "ef109e3f64c25a84766da6f7abf71ad56de9289bdb78f3cab1a8b5515f598beb"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/riskevidencesynthesis-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "riskevidencesynthesis-example.json",
+      "bytes": 556,
+      "sha256": "25d49ff584c44949dc561aa39e6fd54606994edf293b987120c63d5c57e1b06e"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/servicerequest-example-ambulation.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "servicerequest-example-ambulation.json",
+      "bytes": 2253,
+      "sha256": "578f4f631a74dbab786db54abd02013040b717430609a84a76cac4e79d8af81a"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/substancenucleicacid-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "substancenucleicacid-example.json",
+      "bytes": 536,
+      "sha256": "c828341466c09f6d69244c21e942795694ed488a60b710d5b62238677922c8f4"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/supplyrequest-example-simpleorder.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "supplyrequest-example-simpleorder.json",
+      "bytes": 2910,
+      "sha256": "eeb46b9ff484e2503876ac54942daf1c77446f86b1768a5ad486d45956265396"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/task-example-fm-cancel.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "task-example-fm-cancel.json",
+      "bytes": 1283,
+      "sha256": "0df52cb8b9ca4a6e61aa89b1067242c20b8003f97af5c62e5cfd6468dd78cac3"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/terminologycapabilities-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "terminologycapabilities-example.json",
+      "bytes": 1572,
+      "sha256": "09a6404721d2f9edb997bf7f469196cdee5d370f6a18ccc701f18dde9add23c5"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/verificationresult-example.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "verificationresult-example.json",
+      "bytes": 626,
+      "sha256": "2d4d79c558a994368ca4635a7cc3672c9cce06a9cc253850ae3579a15e2afd75"
+    },
+    {
+      "id": "hl7-fhir-r4-examples/visionprescription-example-1.json",
+      "corpus": "hl7-fhir-r4-examples",
+      "path": "visionprescription-example-1.json",
+      "bytes": 2172,
+      "sha256": "0263e6229888c21c57ecdf1ce04daba4fb56ab7b78b6828ac918a4397b3d25e6"
+    }
+  ]
+}

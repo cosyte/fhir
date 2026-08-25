@@ -251,6 +251,17 @@ Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
   back to the name set.** Re-read the section when you bump the pin. **`scripts/verify.sh` in the
   meta-repo needs no change and must not be touched.**
   [`#attw-false-green-port`](documentation/agent-notes.md#attw-false-green-port)
+- **The differential corpus is DECLARED (`corpus/corpus.json`), FETCHED, and never committed.** It
+  is no longer ten in-tree fixtures; it is three corpora and only one of them was written here. **Do
+  not vendor third-party documents to make them handy**: real FHIR examples spell `family` /
+  `given` / `birthDate` / `line`, the scanner sweeps what git carries repo-wide, and its allow-lists
+  are declarations about OUR synthetic fixtures. **CHANGE THE LAYOUT, NEVER THE ALLOW-LISTS**, and
+  remember git history is not undone by a revert. **An exclusion needs a REASON and it is printed
+  every run; a disagreement is NEVER closed by loosening what the validator reports**, and a
+  hand-authored document to reach the floor is forbidden (ADR 0018). **A missing answer is not
+  agreement**: no readable oracle outcome means uncounted AND not clean. The oracle is pinned to a
+  release and identified by the **jar's own bytes**, so a substituted artifact shows.
+  [`#the-differential-corpus-is-no-longer-ten-fixtures-2026-08-25`](documentation/agent-notes.md#the-differential-corpus-is-no-longer-ten-fixtures-2026-08-25)
 - **The PHI scan's SCOPE and its RECOGNISER move together, never one alone.** Enumerating buys the
   SSN + email floor only. **Read both spellings** (`family: "…"` AND `<family value="…"/>`); **never
   key `text` / `identifier.value` / `telecom.value` in source.** A weakening scoped to "source" also

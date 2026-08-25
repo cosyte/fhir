@@ -9,6 +9,51 @@ used to sit in `CLAUDE.md`, in its original order, with headings added so it can
 section here that carries the incident it came from. These are clinical-safety lessons that each
 cost a defect or a refuted gate pass to learn: **relocate them, never delete them.**
 
+## The differential corpus is no longer ten fixtures (2026-08-25)
+
+**READ THIS BEFORE ANY PARAGRAPH BELOW THAT DESCRIBES THE DIFFERENTIAL CORPUS.** The phase-history
+entries further down say the `validator_cli.jar` differential runs over the synthetic spec-clean tier
+plus the Tier-2 quirk corpus. That was true, it was **ten documents, five of them written here**, and
+it is now superseded. Those paragraphs are history and stay verbatim; this is the current state.
+
+- **The corpus is declared in `corpus/corpus.json`**, not in two arrays inside
+  `scripts/differential.mjs`. It is **three corpora, and only the first was written here**: this
+  repository's own spec-clean + quirk fixtures (kept in full, MIT), `FHIR/fhir-test-cases` at tag
+  `1.7.67` (Apache-2.0), and the FHIR R4 `4.0.1` specification's own published examples (CC0-1.0).
+  Every declared document records its corpus, that corpus's exact pinned version, that corpus's
+  licence identifier, its byte count and a SHA-256.
+- **The third-party documents are FETCHED, NEVER COMMITTED** (`pnpm corpus:fetch` into the
+  git-ignored `corpus/documents/`). That is a **safety** decision before a licensing one: real FHIR
+  examples spell `family`, `given`, `birthDate` and `line`, the PHI scanner sweeps what git carries
+  repo-wide and gives anything outside `test/__fixtures__/` the source pass, and its allow-lists are
+  declarations about **self-authored synthetic fixtures**. Vendoring would have forced a token-level
+  entry per name and date in someone else's corpus, permanently, because content committed into git
+  history is not undone by a revert. **The layout changed instead of the safety control:**
+  `scripts/phi-allow-list.txt` and `phi-scan-overrides.md` are byte-identical to what they were.
+- **The oracle is pinned to a release**, not `releases/latest`, and its identity is derived from the
+  **jar's own bytes**: substituting a different artifact changes the recorded identity even when the
+  configured version string does not. No identity, no comparison.
+- **A missing answer is never agreement.** A document counts as compared only when BOTH sides
+  produced a readable answer; a crash, a timeout, unparseable output or an outcome that cannot be
+  attributed to exactly one document leaves it uncounted and NOT clean. Below the declared floor the
+  run exits non-zero and names the shortfall.
+- **An exclusion needs a reason, and the reason is printed every run.** Two documents are excluded
+  today and both reasons are in `corpus/corpus.json`. **Do not close a disagreement by loosening what
+  the validator reports**: exclude with the reason recorded and make the shortfall up elsewhere. And
+  **do not hand-author a document to reach the floor** (ADR 0018): that satisfies the count and
+  destroys its meaning.
+- **What the number buys is bounded, and saying so is not modesty.** Only `Patient` has a built-in
+  structural schema, so over most resource types this library emits an informational
+  `RESOURCE_NOT_MODELED` and no error: agreement at scale mostly means "we invented no error on a real
+  document the oracle finds clean". The safety-critical direction, never a false valid, is what the
+  corpus makes harder to satisfy by accident. The shared corpus labels its own `r4` half "not
+  maintained": breadth there is not currency.
+- **Still CI-only, still never observed green here.** No JVM in this container. Run
+  `node scripts/differential.mjs` with no `VALIDATOR_CLI_JAR` and it prints the corpus and the
+  exclusions it WOULD compare, then skips; that is what makes the accounting reviewable locally.
+  The accounting itself is graded by `test/differential-{corpus,oracle,harness}.test.ts`, which need
+  no build, no Java and no network.
+
 ## Gate discipline
 
 Relocated VERBATIM to make room in `CLAUDE.md` for a PHI-scanner trap; nothing dropped, and the
