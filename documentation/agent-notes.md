@@ -1151,6 +1151,16 @@ document, so it carries no signal about the loss. It is another of the encodings
 and it is what a generic FHIR-XML to JSON converter makes of `<status value="entered-in-error"/>`,
 the same traffic that docblock cites. CLOSED 2026-08-10 bar `valid`; wrapped-`status` residual open.
 
+  **The `valid` half CLOSED 2026-08-25 by `MODEL-OBSERVATION-1`**, and the qualifier gate pass 3
+  measured is what closed it: the schema is no longer caller-supplied-only, because `Observation` is
+  now in `BUILTIN_SCHEMAS` beside `Patient` with `status` typed `code` at `1..1`. So the default
+  path returns `valid: false` with `TYPE_MISMATCH @Observation.status` in both modes, which is
+  exactly what the paragraph above says a supplied `ResourceSchema` used to be needed for. The
+  reading is unchanged on every safety channel: nothing is read through the object, `retracted` is
+  still `false` and the disclosure still carries it. Pinned by `test/validate-observation.test.ts`
+  ("Observation.status present as an object"), which also refuses a required-binding verdict on a
+  value that never became a readable code. The sentence above is left as it was taken.
+
 **Added 2026-08-21 by the modifier-ELEMENT channel (`SAFETY-MODIFIER-2`), filed rather than
 absorbed, and none of them closed here.** The channel reports the four elements at every node the
 safety walk reaches, so its reach IS that walk's reach and nothing was widened to feed it. Three
@@ -3153,3 +3163,65 @@ points here. See also
 declared required elements and this library enforced **none**. Fixed at `parseMin`, not the reader.
 **🛑 SAFE ONLY BECAUSE `mergeElement` NOW TAKES THE TIGHTER `min`**: it overlaid verbatim, retiring
 a `CARDINALITY_MIN`.
+
+## Declared absence, read (2026-08-25)
+
+Cursor: `MISSING-DATA-1`. US Core's Missing Data rule forbids omitting an element whose minimum
+cardinality is greater than zero, so a source system with no data for one writes it **present, with
+no value**, carrying the R4 DataAbsentReason EXTENSION and a reason code. Measured at `ecba960`: this
+package read that into a value-absent primitive, so the element counted as present, no
+`CARDINALITY_MIN` fired, and every value reader returned the same `undefined` an element nobody wrote
+returns. **"We asked and nobody knows" and "we never sent this" were one answer**, recoverable only
+by re-reading the wire document. `SafetyReadout.absenceMarkers` is the read that separates them, one
+`{ code, location }` per declared absence, with `unreadableAbsenceMarkers` and
+`conflictingAbsenceMarkers` beside it. The predicate and the closed value set live in
+`src/safety/absence.ts`; the walk is that module's own, not the safety walk's.
+
+### The four decisions this channel turns on, none of them forced by the code
+
+- **A readable, non-conflicting marker does NOT lower `safeToSummarize`, and it is the only
+  location-bearing channel on that readout that does not.** Every other one marks something the codec
+  could not read or the layer could not rank; this one marks a declaration the sender made on purpose
+  and the caller can now read, so refusing over it would withdraw an affirmation from a **conformant**
+  document, the one direction the fail-safe contract forbids. Pinned in both directions, and three
+  suites that already asserted `safeToSummarize: true` over a conformant `data-absent-reason` shape
+  (`xml-unreadable-boolean`, `negation-unreadable-code-shape`, and the fixture `value-absent.json` in
+  the base-versus-head corpus) are the independent evidence that the choice was the compatible one.
+- **A conflicting marker appears on `absenceMarkers` AND on `conflictingAbsenceMarkers`.** Dropping
+  it from the first would leave the value readable and the declaration invisible, which IS silently
+  preferring the value: exactly what the finding exists to stop. Both survive; neither is ranked.
+- **Recognition reads `url` across every member a repeated name left; the REASON does not.**
+  Recognising a marker is additive, so a fail-safe read there can only add a disclosure. Choosing
+  among two written `valueCode`s would rank values the sender left unranked, so **exactly one**
+  written `valueCode`, holding a string that is a member of the closed set, is readable, and every
+  other shape is disclosed as unreadable.
+- **`resourceType` is excluded from the "carries a value" test for a sharper reason than `id`,
+  `url`, `extension` and `modifierExtension` are.** Those four are an element's identity or metadata.
+  `resourceType` is how FHIR **JSON** names the type where FHIR XML spells it as the tag, so counting
+  it as content would make the two wire formats disagree about one instance, which is the property
+  the cross-format axis exists to hold.
+
+### What is deliberately NOT a marker, both pinned
+
+- **The same concepts as a `Coding` inside a coded element** (`system` = the DataAbsentReason CODE
+  SYSTEM, `code` = `unknown`) is a present, conformant coded VALUE. Reading it as an absent element
+  is a different question with a different failure mode and is not answered here.
+- **The `Observation.dataAbsentReason` ELEMENT**, an ordinary `CodeableConcept` with its own `obs-6`
+  invariant, unchanged: it still fires exactly once beside a `value[x]` and never arrives alongside an
+  absence finding. **The element is not the extension.**
+- **The two URIs are close enough that one published IG page confuses them.** The US Core Missing
+  Data section's non-coded JSON example writes the extension's `url` as the code system URI. That is
+  an error on that page; `Extension.url` is fixed by the extension definition, and the canonical is
+  the only string matched. Do not implement against the example.
+
+### Declared limits, not closed here
+
+- **The `valueCode` read is single-valued and un-wrapped.** An array-wrapped `valueCode` (ordinary
+  generic XML-to-JSON converter output) reads as unreadable and is disclosed rather than read
+  through. Reading through the wrapper would need the same wrapper report beside it, and the report
+  window and the read window must be the same window: a widening here without one is the defect
+  wearing the fix's clothes.
+- **The conflict test for a complex element is by member name, not by datatype.** It has no element
+  table to consult, so it asks R4's own question (`ele-1`: a value, or children) with the four
+  metadata names and `resourceType` subtracted. A vendor element that reused one of those five names
+  for content would be read as carrying none.

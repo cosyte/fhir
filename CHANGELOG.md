@@ -46,6 +46,68 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   Both are named and pinned to their expression and answer, so an engine that starts refusing them
   fails the suite and asks for the line to be re-made deliberately.
 
+- **A declared absence is readable (`MISSING-DATA-1`): `readSafety` carries `absenceMarkers`, so an
+  element a source system explicitly does not know is distinguishable from one it never sent.** US
+  Core's Missing Data rule forbids omitting an element whose minimum cardinality is greater than
+  zero, so a system with no data for one writes it present, with no value, carrying the R4
+  DataAbsentReason EXTENSION and a reason code. At the previous release this package read that into a
+  value-absent primitive: the element counted as present so no `CARDINALITY_MIN` fired, and every
+  value reader returned the same `undefined` an element nobody wrote returns. The two were one answer
+  to a caller, and the difference was recoverable only by re-reading the wire document.
+  `absenceMarkers` carries one `{ code, location }` per declared absence, on a complex element or on
+  a primitive's extension metadata, from either wire format, on any resource type, at every depth
+  (`contained` and `Bundle.entry` included), and it carries the reason the sender spelled so
+  `unknown` is distinguishable from `masked`, `not-applicable` and `not-performed` on otherwise
+  identical instances. `absenceMarkers(resource, path)` is the standalone collector.
+  **It is the one location-bearing channel on that readout that leaves `safeToSummarize` standing**,
+  because a declaration the caller can now read is a disclosure and not a loss, and refusing over it
+  would withdraw an affirmation from a conformant document.
+  **Two neighbouring channels do refuse.** A reason outside the closed fifteen-concept value set the
+  extension's `value[x]` binds to at required strength, or one that is absent, empty, unreadable or
+  written twice, lands on `unreadableAbsenceMarkers` with the new `ABSENCE_MARKER_UNREADABLE` (error,
+  `code-invalid`): the reason is never folded into `unknown` and the element is never read as
+  populated, since FHIR `code` is case-sensitive and excludes surrounding whitespace. A marker beside
+  a value on one element lands on `conflictingAbsenceMarkers` with the new `ABSENCE_MARKER_CONFLICT`
+  (error, `structure`): both survive on the model and on the readout, and the finding is what stops a
+  consumer preferring whichever of the two its own read reached first.
+  **Deliberately NOT this, and pinned in both directions:** the same concepts used as a `Coding`
+  inside a coded element are a present, conformant coded VALUE; and the
+  `Observation.dataAbsentReason` ELEMENT is an ordinary `CodeableConcept` whose `obs-6` invariant is
+  unchanged and never arrives alongside an absence finding, because the element is not the extension.
+  Recognition is by the extension definition's own canonical `url` and nothing that resembles it.
+  New exports: `absenceMarkers`, `unreadableAbsenceMarkers`, `conflictingAbsenceMarkers`,
+  `isAbsenceCode`, `ABSENCE_CODES`, `DATA_ABSENT_REASON_URL`, and the `AbsenceCode` / `AbsenceMarker`
+  types. **Nothing a document without the extension draws has changed:** required-element reporting
+  moves in neither direction, no runtime dependency was added, no terminology or profile content is
+  bundled, the profiles surface is untouched, and the base-versus-head readout differential over the
+  JSON corpus is unchanged on every channel it compares.
+- **`Observation` is modeled (`MODEL-OBSERVATION-1`): `validateResource` checks its own elements
+  instead of reporting that it has none.** The built-in schema set held exactly one resource type
+  (`Patient`), so an `Observation` degraded to a single informational `RESOURCE_NOT_MODELED` at the
+  resource root with its own elements left unchecked. It now ships the full R4 4.0.1 DIRECT element
+  table, twenty-four elements verified row by row against `observation.html`, which turns the
+  existing generic checks on for it: `status` at `1..1` carrying the required-strength
+  `ObservationStatus` binding over the eight codes the published value set expands to (a code
+  outside that set is a `CODE_INVALID` error **with no terminology service supplied**), `code` at
+  `1..1`, `value[x]` as a choice over its eleven variants and `effective[x]` over its four (more
+  than one variant of either is one `CHOICE_AMBIGUOUS` at the `[x]` path, never a spurious
+  cardinality error), and an element name R4 does not define reported as a warning when reading
+  leniently and an error when reading strictly.
+  **NOTHING IS RETIRED, RE-SEVERITIED OR RELOCATED.** The safety, quantity, bundle and terminology
+  layers key off the resource model directly and were never gated on the structural schema, so every
+  finding they emitted for an `Observation` before, they emit now, at the same severity and the same
+  location. The one finding that disappears is the informational `RESOURCE_NOT_MODELED` note at an
+  `Observation` root, whose removal is the point; `valid` may move `true` to `false` where the table
+  catches something real and never the other way. The base-versus-head readout differential is
+  re-derived and its declared allowance narrowed to exactly those two shapes.
+  **Deliberately still unmodeled:** `component` and `referenceRange` are backbone elements checked
+  for cardinality and node shape only, exactly as `Patient.contact` and `Patient.link` are, so
+  `component.value[x]` and everything else inside one draws nothing; the weaker bindings on
+  `category`, `code`, `interpretation`, `dataAbsentReason`, `bodySite` and `method` stay with the
+  terminology layer, since this layer enforces `required` strength only; and every other resource
+  type still degrades to `RESOURCE_NOT_MODELED` with its own elements unchecked, until each gets a
+  table verified the same way. No public export, option or issue code changed.
+
 - **Modifier ELEMENTS reach the safety readout (`SAFETY-MODIFIER-2`), on a new
   `SafetyReadout.modifierElements` channel carrying `{ element, location }` per location.** A
   modifier is not only a `modifierExtension`: R4 flags several ordinary base elements

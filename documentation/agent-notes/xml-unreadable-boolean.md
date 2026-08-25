@@ -140,7 +140,9 @@ schema supplied while `{"doNotPerform":"Y"}` draws `TYPE_MISMATCH`. The package'
 `olive-comets-listen` changeset already said so.
 
 **What survives unscoped is availability, not discrimination.** `MedicationRequest` has **no built-in
-schema** (`BUILTIN_SCHEMAS` is `[Patient]`), so the validator is silent about this element's
+schema** (`BUILTIN_SCHEMAS` was `[Patient]` when this was written and is `[Patient, Observation]`
+from 2026-08-25; `MedicationRequest` is in neither list, so the claim is unchanged, and read the set
+off the module rather than off this parenthesis), so the validator is silent about this element's
 **datatype** unless a caller supplies one (the shape channels, `ARRAY_WRAPPED_SCALAR` and
 `DUPLICATE_PROPERTY`, still fire at this element with no schema at all: pass 3's one-word finding), and a readout that has to hold on every document cannot be built on a diagnostic
 that only exists when a caller opts in. The safety layer knows the datatype **unconditionally**, which

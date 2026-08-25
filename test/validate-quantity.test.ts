@@ -162,9 +162,12 @@ describe("UCUM shape: warn on a UCUM-declared unit that is absent or malformed",
 
   it("does NOT warn on a quantity that declares no UCUM system (legal FHIR, no false error)", () => {
     const result = check(
-      '{"resourceType":"Observation","status":"final","valueQuantity":{"value":1,"unit":"widgets"}}',
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+        '"valueQuantity":{"value":1,"unit":"widgets"}}',
     );
     expect(codes(result)).not.toContain("UCUM_UNIT_UNRECOGNIZED");
+    // `code` is carried so the document is conformant end to end: the built-in Observation element
+    // table makes it mandatory, and `valid` here is meant to say "this layer found nothing".
     expect(result.valid).toBe(true);
   });
 

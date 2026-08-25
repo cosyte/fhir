@@ -102,8 +102,10 @@ describe("a doNotPerform value outside the boolean lexical space is reported", (
         "Resource cannot be safely summarized: an unhandled modifierExtension, a modifier " +
           "element, a repeated property name, an array-wrapped single-valued element, an array " +
           "inside an array, dropped XML element text, a boolean value this library cannot read, " +
-          "a code that spells a negation bar its case or its surrounding whitespace, or content " +
-          "where a code belongs leaves an element this library must not flatten (1 location(s)).",
+          "a code that spells a negation bar its case or its surrounding whitespace, content " +
+          "where a code belongs, a declared absence whose reason this library cannot read, or a " +
+          "declared absence beside a value leaves an element this library must not flatten " +
+          "(1 location(s)).",
       );
     }
   });

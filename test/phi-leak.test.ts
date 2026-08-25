@@ -311,3 +311,97 @@ describe("PHI-leak tier: name sentinels, no document-supplied NAME reaches any d
     }
   });
 });
+
+// ── Observation element-table findings ───────────────────────────────────────────────────────────
+
+/**
+ * The findings a built-in element table draws are a NEW diagnostic surface for every type it is
+ * added to, so each one needs the same sweep the rest of this file applies. The two batteries above
+ * plant sentinels in a Patient and in a resource type that has no table at all; neither reaches the
+ * codes a modeled Observation draws (a required-binding verdict on `status`, a choice-exclusivity
+ * verdict on `value[x]`, a mandatory element absent, a datatype mismatch), and a finding that echoed
+ * a lab value would be exactly the leak this tier exists to refuse.
+ */
+const OBSERVATION_SENTINELS = {
+  status: "SENTINELSTATUSCODE4242",
+  resultText: "SENTINELOBSERVATIONRESULT4242",
+  decimal: "424243.000424243424243",
+  unit: "SENTINELUNITCODE4242",
+  reference: "Practitioner/SENTINELPERFORMER4242",
+  identity: "SENTINELOBSERVATIONID4242",
+  elementName: "SENTINELELEMENTNAME4242",
+} as const;
+
+/** One document per finding the Observation element table can draw, sentinel-filled throughout. */
+const OBSERVATION_FINDING_RESOURCES: readonly string[] = [
+  // A status outside the eight-code value set: the required-binding verdict.
+  `{"resourceType":"Observation","id":"${OBSERVATION_SENTINELS.identity}",` +
+    `"status":"${OBSERVATION_SENTINELS.status}","code":{"text":"${OBSERVATION_SENTINELS.resultText}"}}`,
+  // Two of the eleven value[x] variants: the choice-exclusivity verdict, over a real result value.
+  `{"resourceType":"Observation","status":"final","code":{"text":"${OBSERVATION_SENTINELS.resultText}"},` +
+    `"valueString":"${OBSERVATION_SENTINELS.resultText}",` +
+    `"valueQuantity":{"value":${OBSERVATION_SENTINELS.decimal},"unit":"${OBSERVATION_SENTINELS.unit}"}}`,
+  // Both mandatory elements absent: the cardinality verdict, on a document that is otherwise a
+  // performer reference and an id.
+  `{"resourceType":"Observation","id":"${OBSERVATION_SENTINELS.identity}",` +
+    `"performer":[{"reference":"${OBSERVATION_SENTINELS.reference}"}]}`,
+  // An element R4 does not define, named by the sender: the unknown-element verdict.
+  `{"resourceType":"Observation","status":"final","code":{"text":"${OBSERVATION_SENTINELS.resultText}"},` +
+    `"${OBSERVATION_SENTINELS.elementName}":"${OBSERVATION_SENTINELS.resultText}"}`,
+  // A status carrying an object where the code belongs: the datatype-mismatch verdict.
+  `{"resourceType":"Observation","code":{"text":"${OBSERVATION_SENTINELS.resultText}"},` +
+    `"status":{"text":"${OBSERVATION_SENTINELS.status}"}}`,
+  // A 0..1 element repeated: the cardinality-max verdict, reported per occurrence.
+  `{"resourceType":"Observation","status":"final","code":{"text":"${OBSERVATION_SENTINELS.resultText}"},` +
+    `"issued":["${OBSERVATION_SENTINELS.resultText}","${OBSERVATION_SENTINELS.identity}"]}`,
+];
+
+/** Every field a value-free finding is allowed to carry. `type` and `constraint` are both fixed
+ * public FHIR vocabulary (an R4 `IssueType`, a spec constraint key), never instance content. */
+const FINDING_FIELDS: ReadonlySet<string> = new Set([
+  "code",
+  "severity",
+  "type",
+  "expression",
+  "constraint",
+]);
+
+describe("PHI-leak tier: an Observation finding carries a code, a severity and a location only", () => {
+  const sentinelValues = Object.values(OBSERVATION_SENTINELS);
+
+  for (const [index, text] of OBSERVATION_FINDING_RESOURCES.entries()) {
+    it(`observation finding #${String(index)}: no sentinel reaches any diagnostic`, () => {
+      const surface = diagnosticSurfaceForJson(text);
+      const leaked = sentinelValues.filter((v) => surface.includes(v));
+      expect(leaked, "an Observation sentinel leaked into a diagnostic").toEqual([]);
+    });
+
+    it(`observation finding #${String(index)}: every finding carries only the allowed fields`, () => {
+      const { resource } = parseResource(text);
+      const issues = validateResource(resource).issues;
+      expect(
+        issues.length,
+        "the document drew no finding, so the sweep is vacuous",
+      ).toBeGreaterThan(0);
+      for (const issue of issues) {
+        expect(Object.keys(issue).filter((key) => !FINDING_FIELDS.has(key))).toEqual([]);
+        expect(issue.expression.startsWith("Observation")).toBe(true);
+      }
+    });
+  }
+
+  it("no leaf value of any of those documents reaches any finding field", () => {
+    for (const text of OBSERVATION_FINDING_RESOURCES) {
+      const values = new Set<string>();
+      collectLeafValues(JSON.parse(text), values);
+      const { resource } = parseResource(text);
+      const surface = JSON.stringify(validateResource(resource).issues);
+      // The type name roots every expression and is not an element value; everything else in the
+      // document is, and none of it may appear.
+      const leaked = [...values].filter(
+        (value) => value !== "Observation" && value.length >= 2 && surface.includes(value),
+      );
+      expect(leaked, `an element value reached a finding for ${text}`).toEqual([]);
+    }
+  });
+});

@@ -69,7 +69,10 @@ describe("the three shapes the defect was filed with, each against its conforman
       droppedText: [],
     });
     expect(twin.issues).toEqual([]);
-    expect(codes(twin.resource)).toEqual(["RESOURCE_NOT_MODELED", "RETRACTED_RESOURCE"]);
+    // The pair is deliberately minimal, so the built-in Observation element table raises the
+    // mandatory `code` neither spelling carries. That is an ADDED finding and says nothing about the
+    // retraction; `RETRACTED_RESOURCE` is what this test is here for and is unmoved.
+    expect(codes(twin.resource)).toEqual(["CARDINALITY_MIN", "RETRACTED_RESOURCE"]);
 
     // The non-conformant spelling still cannot READ the retraction (the value is not in the model,
     // and this half does not put it there), but it no longer claims the record is fine.
@@ -217,6 +220,7 @@ describe("the marker lands at every site `hasStrayText` observes text, and only 
       <Observation ${NS}>
         <id value="o1"/>
         <status value="final"/>
+        <code><text value="synthetic"/></code>
       </Observation>
     `);
     expect(issues).toEqual([]);

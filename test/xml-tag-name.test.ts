@@ -116,21 +116,29 @@ describe("a model name at an XML tag position", () => {
     /**
      * THE HEADLINE, AND THE REASON THIS IS A REFUSAL RATHER THAN A REPORT.
      *
-     * This document names no `status` anywhere. It reads with zero diagnostics and `valid: true`,
-     * because a schema-free model has nothing to say about a member name. Written as XML by the
+     * This document names no `status` anywhere, and nothing upstream of the writer objects to the
+     * member NAME beyond "not an element R4 defines", which is a warning. Written as XML by the
      * unguarded writer it became `<zz value="1"/><status value="final"/>`, which is well-formed,
      * which a conformant parser accepts, and which this library re-reads as an `Observation`
      * **whose status is `final`**. A clinical value present on neither side of the sender's
-     * document, asserted by our own writer, under `valid: true` at both ends.
+     * document, asserted by our own writer, with nothing at either end saying so.
      */
     it("does not fabricate a status the document never named", () => {
       const forged = model(
         JSON.stringify({ resourceType: "Observation", 'zz value="1"/><status': "final" }),
       );
       // The reading itself is unremarkable, which is precisely the problem: nothing upstream of the
-      // writer has any reason to object to this document.
+      // writer has any reason to object to the NAME. The built-in Observation element table reports
+      // it as an element R4 does not define, at warning severity, and raises the two mandatory
+      // elements this bare document never carried. Not one of the three is about the markup the
+      // writer will make of that name, which is why the refusal has to live in the writer.
       expect(parseResource(JSON.stringify({ resourceType: "Observation" })).issues).toEqual([]);
-      expect(validateResource(forged).valid).toBe(true);
+      const findings = validateResource(forged).issues;
+      expect(findings.map((issue) => `${issue.code}/${issue.severity}`)).toEqual([
+        "UNKNOWN_ELEMENT/warning",
+        "CARDINALITY_MIN/error",
+        "CARDINALITY_MIN/error",
+      ]);
       expect(readSafety(forged).status).toBeUndefined();
 
       const err = refusal(forged);
