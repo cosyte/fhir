@@ -81,7 +81,18 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
       expect(laundered.issues).toEqual([]);
       expect(readSafety(laundered.resource).arrayWrappedScalars).toEqual([]);
       expect(readSafety(laundered.resource).safeToSummarize).toBe(true);
-      expect(validateResource(laundered.resource).valid).toBe(true);
+      // Nothing about the wrapper survives, which is the harm. Stated as the whole finding list
+      // rather than as `valid`, which is strictly stronger: the mandatory `code` this two-property
+      // document never carried is raised by the built-in Observation element table and says nothing
+      // about a retraction sitting inside an array, and the retraction note is information.
+      expect(
+        validateResource(laundered.resource).issues.map(
+          (issue) => `${issue.code}/${issue.severity} at ${issue.expression}`,
+        ),
+      ).toEqual([
+        "CARDINALITY_MIN/error at Observation.code",
+        "RETRACTED_RESOURCE/information at Observation.status",
+      ]);
     });
 
     it("leaves the JSON route open, which is where the wrapper survives", () => {

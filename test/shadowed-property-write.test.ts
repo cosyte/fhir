@@ -29,6 +29,12 @@ import {
  * re-read with an empty issue list, `valid: true` and `safeToSummarize: true`. The retraction is not
  * in either output. Which value is lost depends only on the order the sender wrote them in.
  *
+ * That measurement is a reading taken then and is left as it was taken. Re-read today, those two
+ * outputs draw the mandatory `Observation.code` a two-property document never carried, because
+ * `Observation` now has a built-in element table. It is an ADDED finding about a DIFFERENT element
+ * and it says nothing about the shadowed member, so the assertions below name the finding list
+ * rather than `valid`, which no longer separates the two questions.
+ *
  * Handing both back is the route the JSON-only shapes take, and here it is worse: `JSON.parse`
  * resolves a repeated name last-wins while this library reads first-wins, so emitting both members
  * hands every other consumer the value this one calls shadowed. That is asserted below rather than
@@ -84,11 +90,18 @@ describe("a member a repeated property name shadowed is refused by both writers"
     // writers used to produce, and it is what makes the finding disappear.
     const laundered = parseResource('{"resourceType":"Observation","status":"final"}');
     expect(laundered.issues).toEqual([]);
-    expect(validateResource(laundered.resource).valid).toBe(true);
+    // Not a trace of the shadowed member: the one finding left is the mandatory `code` this
+    // reconstruction never carried, which is about a different element entirely.
+    expect(validateResource(laundered.resource).issues.map((issue) => issue.code)).toEqual([
+      "CARDINALITY_MIN",
+    ]);
     expect(readSafety(laundered.resource).safeToSummarize).toBe(true);
     expect(readSafety(laundered.resource).negations).toEqual([]);
     // Where the input said otherwise on every one of those three.
     const { resource } = parseResource(RETRACTION_SHADOWED);
+    expect(validateResource(resource).issues.map((issue) => issue.code)).toContain(
+      "DUPLICATE_PROPERTY",
+    );
     expect(validateResource(resource).valid).toBe(false);
     expect(readSafety(resource).safeToSummarize).toBe(false);
     expect(readSafety(resource).negations).toEqual(["entered-in-error"]);
@@ -246,7 +259,7 @@ describe("what it does not cover, measured rather than implied", () => {
     // round trip from a model this library reports as fine: the one cost none of these refusals
     // pays. Declared, and asserted in the state that makes it a gap.
     const source =
-      '{"resourceType":"Observation","status":"final","_status":{"extension":' +
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},"_status":{"extension":' +
       '[{"url":"http://example.org/synthetic","valueString":"x","valueString":"y"}]}}';
     const { resource, viaJson, viaXml } = bothWriters(source);
     expect(viaJson).toBeUndefined();

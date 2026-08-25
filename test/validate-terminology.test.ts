@@ -119,11 +119,13 @@ describe("content-free system checks (no terminology service needed)", () => {
       { path: "Observation.method", valueSet: "http://x/vs", strength: "preferred" },
     ];
     const result = check(
-      '{"resourceType":"Observation","status":"final",' +
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
         '"method":{"coding":[{"system":"http://example.org/local","code":"m1"}]}}',
       { bindings },
     );
     expect(codes(result)).toContain("CODE_SYSTEM_UNKNOWN");
+    // `code` is carried so the document is conformant against the built-in Observation element
+    // table; `valid` here is asserting that a preferred-strength note does not fail a document.
     expect(result.valid).toBe(true);
   });
 
@@ -261,11 +263,13 @@ describe("binding-strength severity ladder (required→error, extensible→error
       },
     ];
     const r = check(
-      '{"resourceType":"Observation","status":"final",' +
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
         `"method":{"coding":[{"system":"${ICD10CM_SYSTEM}","code":"Z00"}]}}`,
       { bindings },
     );
     expect(codes(r)).not.toContain("CODE_SYSTEM_UNEXPECTED");
+    // `code` is carried so the document is conformant against the built-in Observation element
+    // table; `valid` here is asserting that an example-strength binding never fails a document.
     expect(r.valid).toBe(true);
   });
 });

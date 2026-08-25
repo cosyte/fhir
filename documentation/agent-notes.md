@@ -1151,6 +1151,16 @@ document, so it carries no signal about the loss. It is another of the encodings
 and it is what a generic FHIR-XML to JSON converter makes of `<status value="entered-in-error"/>`,
 the same traffic that docblock cites. CLOSED 2026-08-10 bar `valid`; wrapped-`status` residual open.
 
+  **The `valid` half CLOSED 2026-08-25 by `MODEL-OBSERVATION-1`**, and the qualifier gate pass 3
+  measured is what closed it: the schema is no longer caller-supplied-only, because `Observation` is
+  now in `BUILTIN_SCHEMAS` beside `Patient` with `status` typed `code` at `1..1`. So the default
+  path returns `valid: false` with `TYPE_MISMATCH @Observation.status` in both modes, which is
+  exactly what the paragraph above says a supplied `ResourceSchema` used to be needed for. The
+  reading is unchanged on every safety channel: nothing is read through the object, `retracted` is
+  still `false` and the disclosure still carries it. Pinned by `test/validate-observation.test.ts`
+  ("Observation.status present as an object"), which also refuses a required-binding verdict on a
+  value that never became a readable code. The sentence above is left as it was taken.
+
 **Added 2026-08-21 by the modifier-ELEMENT channel (`SAFETY-MODIFIER-2`), filed rather than
 absorbed, and none of them closed here.** The channel reports the four elements at every node the
 safety walk reaches, so its reach IS that walk's reach and nothing was widened to feed it. Three
