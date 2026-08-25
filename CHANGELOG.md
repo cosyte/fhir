@@ -8,7 +8,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
-- **The `validator_cli.jar` differential compares 149 declared documents from three corpora instead
+- **The `validator_cli.jar` differential compares 173 documents from three corpora instead
   of ten in-tree fixtures (`DIFF-CORPUS-2`), prints the count it compared and the identity of the
   oracle it compared against, and fails rather than reporting success over a smaller corpus.** At the
   base commit the gate ran over two arrays inside `scripts/differential.mjs`, five spec-clean plus
@@ -16,10 +16,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   not be told what it covered. The corpus is now declared in `corpus/corpus.json`: those same ten
   fixtures kept in full, **`FHIR/fhir-test-cases` at tag `1.7.67`** (commit `0d7196d7`, Apache-2.0,
   the corpus the reference validator's own build pins itself against), and the **FHIR R4 `4.0.1`
-  specification's own published examples** (CC0-1.0), one per resource type the first corpus does not
-  cover. **139 of the 149 are third party**, so the floor clears without counting one self-authored
-  document, and **nothing was hand-authored to reach it** (ADR 0018: every document traces to a real,
-  publicly cited artifact).
+  specification's own published examples** (CC0-1.0). **266 declared, 173 compared, 93 excluded, and
+  163 of the 173 are third party**, so the floor of one hundred clears without counting one
+  self-authored document, and **nothing was hand-authored to reach it** (ADR 0018: every document
+  traces to a real, publicly cited artifact).
   - **Fetched and digest-verified, never vendored.** `pnpm corpus:fetch` retrieves the third-party
     documents into a git-ignored directory and refuses any whose SHA-256 is not the declared one; the
     archive one corpus is published in is refused on its own digest before an entry is read.
@@ -44,12 +44,21 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
     finds exactly one staged name in the outcome; **two matches is ambiguity and resolves to "no
     outcome", never to a guess**. Below the declared floor of one hundred the run **exits non-zero
     and names the shortfall**.
-  - **Two documents are excluded, each with the reason recorded and printed every run**: one the
-    corpus itself ships as a negative case, one exposing a real disagreement (a modifier extension
-    this library declines to affirm and the oracle resolves). **Neither was answered by relaxing what
-    the validator reports**, and the mechanism refuses a label in place of a reason. Both invariants
-    are unchanged and still enforced hard, including the fail-closed parse-refusal exemption to the
-    second, which stays scoped to a **reader** refusal and not to a validation error.
+  - **93 of the 266 are excluded, each with the reason recorded and printed every run, and THE
+    EXCLUSION RATE IS PART OF THE RESULT.** Two are principled from the start (one the corpus itself
+    ships as a negative case; one exposing a modifier extension this library declines to affirm and
+    the oracle resolves). The other 91 were **measured** against the pinned release, and each reason
+    records the release, the date, the error count, the class breakdown by `OperationOutcome.issue.code`
+    and the first locations. The classes are almost entirely one thing: the oracle resolves canonical
+    URLs (`identifier.system`, `url`, `instantiatesUri`, `library`, `relatedArtifact.resource`,
+    `Attachment.url`) and checks `coding.display` and code membership against terminology content,
+    and **this library does neither and has always said so**. A handful sit outside that class and
+    their codes say so (`structure`, `invariant`, `business-rule`, `not-found`, `unknown`).
+    **None was answered by relaxing what this library reports, and the oracle was not reconfigured to
+    report less**; the mechanism refuses a label in place of a reason. Both invariants are unchanged
+    and still enforced hard, including the fail-closed parse-refusal exemption to the second, which
+    stays scoped to a **reader** refusal and not to a validation error. **Quote the 173 with the 93,
+    never alone.**
   - **What the number buys is bounded, and the docs say so.** Only `Patient` has a built-in
     structural schema, so over most resource types the library emits an informational
     `RESOURCE_NOT_MODELED` and no error: agreement at scale mostly means "we invented no error on a

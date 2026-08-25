@@ -24,11 +24,11 @@
  *     (`test/__fixtures__/`, MIT), which is what the ten-fixture corpus used to be, kept in full;
  *   - **`FHIR/fhir-test-cases`** at tag `1.7.67` (Apache-2.0), the shared corpus the reference
  *     validator's own `pom.xml` pins itself against;
- *   - the **FHIR R4 (4.0.1) specification's own published examples** (CC0-1.0), one per resource
- *     type that `fhir-test-cases` does not already cover.
+ *   - the **FHIR R4 (4.0.1) specification's own published examples** (CC0-1.0).
  *
- * The third-party documents are **fetched, never committed** (`pnpm corpus:fetch`, materialised into
- * the git-ignored `corpus/documents/`), each verified against the SHA-256 the declaration records.
+ * **266 declared, 173 compared, 93 excluded**, 163 of the 173 third party. The third-party documents
+ * are **fetched, never committed** (`pnpm corpus:fetch`, materialised into the git-ignored
+ * `corpus/documents/`), each verified against the SHA-256 the declaration records.
  * `scripts/differential/corpus.mjs` carries the reasoning; the short version is that committing
  * someone else's clinical examples would put real-looking names and dates of birth into this
  * repository's history, where a revert does not reach them, and would force the PHI scanner's
@@ -39,10 +39,22 @@
  * The two invariants (never a false valid; no spurious errors on clean input) are enforced hard over
  * every compared document, and the fail-closed parse-refusal exemption to the second is unchanged.
  * They are stated in full in `scripts/differential/compare.mjs`, which is also where the accounting
- * lives. What the number does NOT buy: over resource types this library does not model, it emits an
- * informational `RESOURCE_NOT_MODELED` and no error, so agreement at scale mostly means "we invented
- * no error on a real document the oracle finds clean". That is a real property and a bounded one.
- * The corpus's own `r4` half is declared "not maintained" by its maintainer: breadth is not currency.
+ * lives.
+ *
+ * **THE EXCLUSION RATE IS PART OF THE RESULT, NOT A FOOTNOTE TO IT.** 93 of the 266 declared
+ * documents are held out, each with the reason measured and recorded in `corpus/corpus.json` and
+ * printed on every run, and the classes are almost entirely one thing: the reference validator
+ * resolves canonical URLs (`identifier.system`, `url`, `instantiatesUri`, `library`,
+ * `relatedArtifact.resource`, `Attachment.url`) and checks `coding.display` and code membership
+ * against terminology content, and this library does neither and says so. So the number is "173
+ * documents on which the two were SHOWN to agree", beside "93 on which they were shown not to".
+ * Reading only the first is reading half of it.
+ *
+ * What the number does NOT buy, separately: over resource types this library does not model, it
+ * emits an informational `RESOURCE_NOT_MODELED` and no error, so agreement at scale mostly means "we
+ * invented no error on a real document the oracle finds clean". That is a real property and a
+ * bounded one. The shared corpus's own `r4` half is declared "not maintained" by its maintainer:
+ * breadth is not currency.
  *
  * WHAT IS PRINTED, AND WHY
  * ------------------------

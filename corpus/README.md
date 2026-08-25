@@ -3,15 +3,37 @@
 `corpus/corpus.json` is the declaration the `validator_cli.jar` differential runs over. It is not
 ten in-tree fixtures any more. It is **three corpora, and only the first was written here**:
 
-| corpus                 | version                                     | licence      | authored    |
-| ---------------------- | ------------------------------------------- | ------------ | ----------- |
-| `cosyte-fhir-fixtures` | in-tree at the commit under test            | `MIT`        | this repo   |
-| `fhir-test-cases`      | tag `1.7.67` (`0d7196d7…`)                  | `Apache-2.0` | third party |
-| `hl7-fhir-r4-examples` | FHIR R4 `4.0.1`                             | `CC0-1.0`    | third party |
+| corpus                 | version                          | licence      | authored    | declared | compared |
+| ---------------------- | -------------------------------- | ------------ | ----------- | -------- | -------- |
+| `cosyte-fhir-fixtures` | in-tree at the commit under test | `MIT`        | this repo   | 10       | 10       |
+| `fhir-test-cases`      | tag `1.7.67` (`0d7196d7`)        | `Apache-2.0` | third party | 73       | 43       |
+| `hl7-fhir-r4-examples` | FHIR R4 `4.0.1`                  | `CC0-1.0`    | third party | 183      | 120      |
 
-Every declared document records which corpus it came from, that corpus's exact pinned version, that
-corpus's licence identifier, its byte count and its SHA-256. Licence texts and the attribution each
-corpus requires are in `licences/`.
+**266 declared, 173 compared, 93 excluded**, and 163 of the 173 are third party, so the floor of one
+hundred clears without counting a single document written here. Every declared document records
+which corpus it came from, that corpus's exact pinned version, that corpus's licence identifier, its
+byte count and its SHA-256. Licence texts and the attribution each corpus requires are in
+`licences/`.
+
+## The exclusion rate is the honest headline
+
+**93 of 266 declared documents are excluded, and every one carries the reason it was excluded**,
+printed on every run. They are not noise and they are not a convenience: they were each measured
+against `validator_cli` 6.10.2, and the reason records the release, the date, the error count, the
+class breakdown by `OperationOutcome.issue.code`, and the first locations.
+
+The classes are almost entirely one thing: **URL and canonical resolution, and terminology**. The
+reference validator resolves `identifier.system`, `url`, `instantiatesUri`, `library`,
+`relatedArtifact.resource` and `Attachment.url`, and it checks `coding.display` and code membership
+against terminology content. This library does neither, says so, and has always said so: it validates
+code systems and binding strength **without vendoring any terminology content**, and makes no
+code-validity or value-set-membership guarantee without a supplied terminology service. A handful of
+exclusions sit outside that class and their codes say so (`structure`, `invariant`, `business-rule`,
+`not-found`, `unknown`).
+
+So the number a consumer can quote is **173 real documents from three public corpora on which this
+library and the reference validator were shown to agree**, next to **93 on which they did not, each
+with the disagreement recorded**. Reading only the first number is reading half of this file.
 
 ## The documents are fetched, never committed
 

@@ -2,7 +2,7 @@
 "@cosyte/fhir": patch
 ---
 
-The `validator_cli.jar` differential compares 149 declared documents from three corpora instead of
+The `validator_cli.jar` differential compares 173 documents from three corpora instead of
 ten in-tree fixtures, prints the count it compared and the identity of the oracle it compared
 against, and fails rather than reporting success over a smaller corpus (`DIFF-CORPUS-2`).
 
@@ -13,10 +13,10 @@ could be told the gate existed and could not be told what it covered. The corpus
 those same ten fixtures, kept in full; `FHIR/fhir-test-cases` at tag `1.7.67`, commit
 `0d7196d75a85626383d697d34825bcd33f541b87`, Apache-2.0, which is the corpus the reference
 validator's own build pins itself against; and the FHIR R4 `4.0.1` specification's own published
-examples, CC0-1.0, one per resource type the first corpus does not already cover. 139 of the 149 are
-third party, so the floor is cleared without counting a single self-authored document. Nothing was
-hand-authored to reach it: every document traces to a real, publicly cited artifact, which is the
-anti-invention rule and not a preference.
+examples, CC0-1.0. 266 documents are declared, 173 are compared and 163 of those 173 are third
+party, so the floor of one hundred is cleared without counting a single self-authored document.
+Nothing was hand-authored to reach it: every document traces to a real, publicly cited artifact,
+which is the anti-invention rule and not a preference.
 
 The third-party documents are fetched and digest-verified rather than vendored. `pnpm corpus:fetch`
 retrieves them into a git-ignored directory and refuses any document whose SHA-256 is not the one
@@ -46,13 +46,20 @@ validator records, or by finding exactly one staged name in the outcome; two mat
 and is resolved as "no outcome" rather than by guessing. Below the declared floor of one hundred the
 run exits non-zero and names the shortfall.
 
-Two declared documents are excluded, both with the reason recorded and printed on every run: one the
-corpus itself ships as a negative case, and one that exposes a real disagreement, a modifier
-extension this library declines to affirm and the reference implementation resolves. Neither was
-answered by relaxing what the validator reports, and the exclusion mechanism refuses a label in
-place of a reason. Both invariants are unchanged and still enforced hard, the fail-closed
-parse-refusal exemption to the second included, and it is still scoped to a reader refusal and not
-to a validation error.
+93 of the 266 declared documents are excluded, every one with its reason recorded and printed on
+every run, and the exclusion rate is part of the result rather than a footnote to it. Two are
+principled from the start: one the corpus itself ships as a negative case, and one that exposes a
+modifier extension this library declines to affirm and the reference implementation resolves. The
+other 91 were measured against the reference implementation at the pinned release and each reason
+records the release, the date, the error count, the class breakdown by issue code and the first
+locations. The classes are almost entirely one thing: the reference implementation resolves
+canonical URLs and checks display strings and code membership against terminology content, and this
+library does neither and has always said so. A handful sit outside that class and their codes say
+so. None of the 93 was answered by relaxing what this library reports, and the reference
+implementation was not reconfigured to report less; the exclusion mechanism refuses a label in place
+of a reason. Both invariants are unchanged and still enforced hard, the fail-closed parse-refusal
+exemption to the second included, and it is still scoped to a reader refusal and not to a validation
+error.
 
 What the number buys is bounded and the documentation says so rather than letting the count imply
 more. Only `Patient` has a built-in structural schema, so over most resource types the library emits

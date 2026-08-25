@@ -47,15 +47,18 @@ profiles you supply, and evaluates their FHIRPath invariants** (failing safe to 
 on any unsupported expression); it does **not** yet do `type`·`profile` slicing discriminator or
 reslicing validation (still `PROFILE_SLICE_UNCHECKED`), and it bundles **no** US Core
 IG corpus. The `validator_cli.jar` **differential is authored but CI-only** (a JVM oracle job: there is
-no Java in the dev container, so it has not been observed green there) and runs over **149 declared
+no Java in the dev container, so it has not been observed green there) and runs over **266 declared
 documents from three corpora**, only one of which was written here: the synthetic spec-clean and
 real-world quirk fixtures, `FHIR/fhir-test-cases` at tag `1.7.67` (Apache-2.0), and the FHIR R4
 `4.0.1` specification's own published examples (CC0-1.0). The third-party documents are fetched and
-digest-verified rather than vendored, and the compared count and the oracle's own identity are
-printed on every run, so a silent shrink of either is visible in the log. **What that number buys is
-bounded**: over resource types with no built-in structural schema the library emits an informational
-`RESOURCE_NOT_MODELED` and no error, so agreement at scale mostly means "no error was invented on a
-real document the reference implementation finds clean". The built-in structural schema set is the base-resource elements plus
+digest-verified rather than vendored, and the compared count and the reference implementation's own
+identity are printed on every run, so a silent shrink of either is visible in the log. **173 of the
+266 are compared and 93 are excluded, each with the measured reason recorded and printed**: over
+real documents the reference implementation's error surface is dominated by canonical-URL resolution
+and terminology checks this library does not perform and does not claim to. **What the number buys
+is bounded** in a second way too: over resource types with no built-in structural schema the library
+emits an informational `RESOURCE_NOT_MODELED` and no error, so agreement at scale mostly means "no
+error was invented on a real document the reference implementation finds clean". The built-in structural schema set is the base-resource elements plus
 `Patient` as a worked demonstrator; other resource types validate only against a caller-supplied schema
 or profile. Without a supplied terminology service there is **no code-validity / value-set-membership**
 guarantee beyond `system` + strength (no terminology content is bundled: licensing). Its XML codec is

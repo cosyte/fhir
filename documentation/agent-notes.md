@@ -20,8 +20,18 @@ it is now superseded. Those paragraphs are history and stay verbatim; this is th
   `scripts/differential.mjs`. It is **three corpora, and only the first was written here**: this
   repository's own spec-clean + quirk fixtures (kept in full, MIT), `FHIR/fhir-test-cases` at tag
   `1.7.67` (Apache-2.0), and the FHIR R4 `4.0.1` specification's own published examples (CC0-1.0).
-  Every declared document records its corpus, that corpus's exact pinned version, that corpus's
-  licence identifier, its byte count and a SHA-256.
+  **266 declared, 173 compared, 93 excluded**, 163 of the 173 third party. Every declared document
+  records its corpus, that corpus's exact pinned version, that corpus's licence identifier, its byte
+  count and a SHA-256.
+- **THE EXCLUSION RATE IS PART OF THE RESULT AND MUST BE QUOTED WITH THE COUNT.** 93 of 266 are held
+  out, each with a reason measured against `validator_cli` 6.10.2 on 2026-08-25 and printed every
+  run. The classes are almost entirely one thing: the oracle resolves canonical URLs
+  (`identifier.system`, `url`, `instantiatesUri`, `library`, `relatedArtifact.resource`,
+  `Attachment.url`) and checks `coding.display` and code membership against terminology content, and
+  this library does neither and has always said so. **A few sit outside that class** and their codes
+  record it (`structure`, `invariant`, `business-rule`, `not-found`, `unknown`); the largest single
+  one is a `Questionnaire` in a Bundle with 50 `structure` findings. **Do not report "173 documents
+  agree" without "93 do not, here is why".**
 - **The third-party documents are FETCHED, NEVER COMMITTED** (`pnpm corpus:fetch` into the
   git-ignored `corpus/documents/`). That is a **safety** decision before a licensing one: real FHIR
   examples spell `family`, `given`, `birthDate` and `line`, the PHI scanner sweeps what git carries
