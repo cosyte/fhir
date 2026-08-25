@@ -14,10 +14,11 @@
  * - **type tests** on the System primitive types (`is` / `as` / `ofType` for `Boolean` / `String` /
  *   `Integer` / `Decimal`).
  *
- * Everything else, arithmetic, string functions, `descendants()`, `resolve()`, FHIR-type `is`/`as`
- * (a generic model carries no datatype name), and a **type-qualified path head** (`Patient.name`,
- * see {@link isTypeQualifier}, out for the same reason), raises
- * {@link ./errors.js UnsupportedFhirPathError}.
+ * A **type-qualified path head** (`Patient.name`) resolves only where the focus is a resource root
+ * whose `resourceType` the qualifier names, which is the one place a generic model can check it; see
+ * {@link resolveTypeQualifier}. Everything else, arithmetic, string functions, `descendants()`,
+ * `resolve()`, FHIR-type `is`/`as` (a generic model carries no datatype name), and a type qualifier
+ * that cannot be checked, raises {@link ./errors.js UnsupportedFhirPathError}.
  * That is the whole safety contract: the engine **never guesses**. `where`/`select`/`all`
  * evaluate their criteria *lazily per item*, so an unsupported sub-term inside a filter over an empty
  * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires,
@@ -37,6 +38,7 @@ import {
   isComplex,
   isList,
   isPrimitive,
+  resourceType,
   type FhirComplex,
   type FhirNode,
   type PrimitiveValue,
@@ -182,14 +184,8 @@ function navigate(focus: FpColl, name: string): FpItem[] {
  * and datatypes alike, are UpperCamelCase. So an upper-case first letter at the head of a path is a
  * type qualifier and nothing else.
  *
- * The bounded subset does **not** implement type qualification: the model is generic and carries no
- * datatype name (which is the same reason FHIR-type `is` / `as` is out of scope), so the engine
- * cannot tell whether the qualifier matches the focus. Navigating it as an ordinary member is the
- * one option that must not be taken, because a resource has no property called `Patient`, so
- * `Patient.name.exists()` would silently evaluate to `false` on a Patient that HAS a name: a wrong
- * answer with no diagnostic, which is exactly what {@link ./errors.js UnsupportedFhirPathError}
- * exists to prevent. Refusing is the conservative direction, and the one this engine already takes
- * everywhere else it cannot answer properly.
+ * Recognising it is not the same as resolving it: {@link resolveTypeQualifier} decides that, and
+ * refuses wherever the match cannot be checked.
  *
  * Scoped to the head of a path on purpose. `ofType(Boolean)` and `x is System.String` never reach
  * here: a type-name argument is read off the AST by {@link typeNameOf} / the `typeop` node and is
@@ -198,6 +194,39 @@ function navigate(focus: FpColl, name: string): FpItem[] {
 function isTypeQualifier(name: string): boolean {
   const first = name.charAt(0);
   return first >= "A" && first <= "Z";
+}
+
+/**
+ * Resolve a **head-of-path** type qualifier ({@link isTypeQualifier}) against the focus, or refuse.
+ *
+ * A type qualifier is not a member: it asserts what the path is rooted in, and when the assertion
+ * holds the path continues from the focus unchanged. This engine checks the assertion in the one
+ * place its generic model can: a **resource root** carries `resourceType`, so `Patient.name` over a
+ * focus whose {@link ../model/node.js resourceType} reads `Patient` resolves to that focus without
+ * guessing and without widening the subset. Every other shape is refused, because the model carries
+ * no datatype name for an element focus (the same reason FHIR-type `is` / `as` is out of scope) and
+ * an empty focus has nothing to check the qualifier against at all.
+ *
+ * The two options this must never take, both of which the corpus caught:
+ *
+ * - **Navigating it as an ordinary member.** No resource has a property called `Patient`, so
+ *   `Patient.name.exists()` answered `false` on a Patient that HAS a name: a wrong answer with no
+ *   diagnostic, exactly what {@link ./errors.js UnsupportedFhirPathError} exists to prevent.
+ * - **Refusing it unconditionally.** That is safe-looking and is not safe: an invariant written the
+ *   type-qualified way (the spelling most published constraints use) becomes *unchecked*, so a
+ *   resource that genuinely violates it stops being reported and `validateResource(...).valid`
+ *   flips from `false` to `true`. Withdrawing a true finding from a non-conformant document is the
+ *   one direction this package's fail-safe contract forbids, and the refusal has to be narrow
+ *   enough not to do it. `test/profile-invariant-type-qualified.test.ts` pins both directions.
+ */
+function resolveTypeQualifier(name: string, focus: FpColl): FpColl {
+  const matchesFocus =
+    focus.length > 0 &&
+    focus.every(
+      (item) => item.t === "node" && isComplex(item.node) && resourceType(item.node) === name,
+    );
+  if (matchesFocus) return focus;
+  throw new UnsupportedFhirPathError(`type-qualified path head '${name}'`);
 }
 
 /** The immediate child nodes of an item (used by `children()`, resourceType is type info, not a child). */
@@ -279,7 +308,114 @@ function stringOf(item: FpItem): string | undefined {
   return undefined;
 }
 
-/** Evaluate an ordering comparison (`<`, `>`, `<=`, `>=`) over two singleton collections. */
+/**
+ * A FHIR temporal value split into its ordered components, as the lexical form writes them.
+ *
+ * `components` runs most-significant first and stops where the value's own precision stops, which is
+ * what makes a precision difference visible to {@link compareTemporal}. `hasTime` and `zone` are
+ * carried because two values written in different timezone offsets cannot be ordered without
+ * normalising them, which this engine does not do.
+ */
+interface TemporalValue {
+  readonly form: "date" | "time";
+  readonly components: readonly number[];
+  readonly hasTime: boolean;
+  readonly zone: string;
+}
+
+/** `YYYY[-MM[-DD]][THH[:MM[:SS[.fff]]]][Z|(+|-)HH:MM]`, the FHIR `date` / `dateTime` lexical form. */
+const DATE_LEXICAL =
+  /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2})(?::(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?(Z|[+-]\d{2}:\d{2})?)?)?)?$/;
+
+/** `HH[:MM[:SS[.fff]]]`, the FHIR `time` lexical form (no timezone in FHIR `time`). */
+const TIME_LEXICAL = /^(\d{2})(?::(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?$/;
+
+/**
+ * Read a FHIR temporal lexical form, or `undefined` when the text is not one.
+ *
+ * This is a **lexical** reading, not a semantic one: it says how the text is written, which is all a
+ * generic model has. A fractional second is normalised to milliseconds so `10:30:00` and
+ * `10:30:00.0` differ in precision but not in value at the shared components.
+ */
+function readTemporal(text: string): TemporalValue | undefined {
+  const date = DATE_LEXICAL.exec(text);
+  if (date !== null) {
+    const parts = [date[1], date[2], date[3], date[4], date[5], date[6]];
+    const components: number[] = [];
+    for (const part of parts) {
+      if (part === undefined) break;
+      components.push(Number(part));
+    }
+    const fraction = date[7];
+    if (fraction !== undefined) components.push(Number(`0.${fraction}`) * 1000);
+    return {
+      form: "date",
+      components,
+      hasTime: date[4] !== undefined,
+      zone: date[8] ?? "",
+    };
+  }
+  const time = TIME_LEXICAL.exec(text);
+  if (time === null) return undefined;
+  const components: number[] = [];
+  for (const part of [time[1], time[2], time[3]]) {
+    if (part === undefined) break;
+    components.push(Number(part));
+  }
+  const fraction = time[4];
+  if (fraction !== undefined) components.push(Number(`0.${fraction}`) * 1000);
+  return { form: "time", components, hasTime: true, zone: "" };
+}
+
+/**
+ * Order two temporal values the way FHIRPath does, or say the comparison cannot be made.
+ *
+ * FHIRPath compares temporal values component by component from the most significant, and when the
+ * shared components are all equal but one operand carries **more precision** than the other, the
+ * comparison is *indeterminate* and the expression's value is the empty collection, not a boolean.
+ * That is why `@2001-05-06 <= @2001-05-06T10:10:10Z` is `{}`: the day is the same, and whether a day
+ * is before or after an instant inside it is not a question the values answer.
+ *
+ * @returns `-1` / `0` / `1` when they order, `"indeterminate"` when FHIRPath says `{}`, or
+ *   `"unorderable"` when this engine will not answer (a date against a time-of-day, or two timezone
+ *   designators it would have to normalise to compare).
+ */
+function compareTemporal(
+  a: TemporalValue,
+  b: TemporalValue,
+): -1 | 0 | 1 | "indeterminate" | "unorderable" {
+  if (a.form !== b.form) return "unorderable";
+  // One is `Z`, one is `+02:00`, or one carries an offset the other omits. Ordering those means
+  // normalising to a common offset, which this engine does not do, so it does not guess either.
+  if (a.hasTime && b.hasTime && a.zone !== b.zone) return "unorderable";
+  const shared = Math.min(a.components.length, b.components.length);
+  for (let i = 0; i < shared; i += 1) {
+    const av = a.components[i] as number;
+    const bv = b.components[i] as number;
+    if (av !== bv) return av < bv ? -1 : 1;
+  }
+  if (a.components.length !== b.components.length) return "indeterminate";
+  return 0;
+}
+
+/**
+ * Evaluate an ordering comparison (`<`, `>`, `<=`, `>=`) over two singleton collections.
+ *
+ * Numbers order as numbers, and two values the **engine itself computed** as strings order as
+ * System Strings. A **model** primitive is the case that needs care: the model is generic, so a
+ * string-valued primitive is the FHIR *lexical form* of an element whose type the model does not
+ * carry, and it may be a `string`, a `code`, a `date`, a `dateTime`, a `time`, or (read from XML,
+ * which is untyped) a `decimal`. Ordering it lexically answers a question the engine has not asked:
+ * the shared corpus caught both directions of that, `Observation.value.value < 'test'` (a decimal
+ * against a string, which FHIRPath makes an execution error) answered `true`, and `per-1`'s
+ * `start <= end` over a day-precision date and a second-precision dateTime answered `true` where
+ * FHIRPath says `{}`.
+ *
+ * So where either side is a model primitive, the two must both read as temporal values of the same
+ * shape, and then {@link compareTemporal} answers with FHIRPath's own precision rules. Anything
+ * else is refused rather than guessed, which keeps `start <= end` answering for the same-precision
+ * dates it always answered for while withdrawing the answers that were never determinations.
+ */
 function compare(op: string, left: FpColl, right: FpColl): FpColl {
   if (left.length === 0 || right.length === 0) return [];
   if (left.length !== 1 || right.length !== 1) {
@@ -298,7 +434,23 @@ function compare(op: string, left: FpColl, right: FpColl): FpColl {
     if (as === undefined || bs === undefined) {
       throw new UnsupportedFhirPathError("comparison of non-orderable values");
     }
-    cmp = as < bs ? -1 : as > bs ? 1 : 0;
+    if (a.t === "str" && b.t === "str") {
+      cmp = as < bs ? -1 : as > bs ? 1 : 0;
+    } else {
+      const at = readTemporal(as);
+      const bt = readTemporal(bs);
+      if (at === undefined || bt === undefined) {
+        throw new UnsupportedFhirPathError(
+          "ordering comparison on a model value whose type the model does not carry",
+        );
+      }
+      const ordered = compareTemporal(at, bt);
+      if (ordered === "indeterminate") return [];
+      if (ordered === "unorderable") {
+        throw new UnsupportedFhirPathError("ordering comparison of unnormalised temporal values");
+      }
+      cmp = ordered;
+    }
   }
   const result = op === "<" ? cmp < 0 : op === ">" ? cmp > 0 : op === "<=" ? cmp <= 0 : cmp >= 0;
   return [{ t: "bool", value: result }];
@@ -326,9 +478,32 @@ function systemTypeOf(item: FpItem): string | undefined {
   return undefined;
 }
 
-/** Whether an item is of a given (System-primitive) type; FHIR complex types are not determinable. */
+/**
+ * The System primitive types this subset can test for. The list is the whole of it: FHIR-type
+ * `is` / `as` is out of scope by design, because the model is generic and carries no datatype name,
+ * so `code`, `instant`, `HumanName` and every other FHIR type name is a question this engine cannot
+ * answer, only refuse.
+ */
+const SYSTEM_TYPE_NAMES: ReadonlySet<string> = new Set(["Boolean", "String", "Integer", "Decimal"]);
+
+/**
+ * Whether an item is of a given System-primitive type.
+ *
+ * Both halves of the question have to be answerable. An item whose System type the model cannot
+ * determine (a complex element, a list, a value-absent primitive) is refused, and so is a **type
+ * name outside {@link SYSTEM_TYPE_NAMES}**: `Observation.issued is instant` and
+ * `Patient.gender.ofType(code)` are asking about the FHIR type of an element, which a generic model
+ * does not carry. Answering `false` there looks like a determination and is not one, which is the
+ * wrong-answer-with-no-diagnostic the fail-safe contract exists to prevent (the shared corpus
+ * expects `{}` from the first and `male` from the second, and `false` / `{}` is neither).
+ */
 function itemIsType(item: FpItem, typeName: string): boolean {
-  const normalized = typeName.replace(/^System\./, "").replace(/^FHIR\./, "");
+  const normalized = typeName.replace(/^System\./, "");
+  if (!SYSTEM_TYPE_NAMES.has(normalized)) {
+    throw new UnsupportedFhirPathError(
+      `type test '${typeName}' outside the System primitive types`,
+    );
+  }
   const actual = systemTypeOf(item);
   if (actual === undefined) {
     throw new UnsupportedFhirPathError(`type test '${typeName}' on a non-System value`);
@@ -539,7 +714,7 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
       throw new UnsupportedFhirPathError(`unsupported variable $${expr.name}`);
     case "member":
       if (expr.target === null && isTypeQualifier(expr.name)) {
-        throw new UnsupportedFhirPathError(`type-qualified path head '${expr.name}'`);
+        return resolveTypeQualifier(expr.name, focus);
       }
       return navigate(expr.target === null ? focus : evaluate(expr.target, focus, ctx), expr.name);
     case "call": {
@@ -569,6 +744,12 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
       // `operand is/as Type`.
       const operand = evaluate(expr.operand, focus, ctx);
       if (expr.op === "is") {
+        // `{} is T` is `{}`, not `false`: FHIRPath propagates the empty collection through a type
+        // test rather than deciding one. Both coerce to `false` through convertToBoolean, so no
+        // invariant's verdict moves; what moves is the *collection* an expression yields, which the
+        // shared corpus reads directly (`Observation.issued is instant` over a document with no
+        // `issued` expects `{}`).
+        if (operand.length === 0) return [];
         if (operand.length !== 1) return [{ t: "bool", value: false }];
         return [{ t: "bool", value: itemIsType(operand[0] as FpItem, expr.type) }];
       }

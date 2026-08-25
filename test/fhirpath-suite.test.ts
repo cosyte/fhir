@@ -28,14 +28,17 @@ import {
   CORPUS_REPOSITORY,
   CORPUS_TAG,
   countBuckets,
+  declaredLenientPolymorphicProblems,
   declaredRefusalProblems,
   inputDocumentNames,
+  LENIENT_POLYMORPHIC_CASES,
   loadInputDocuments,
   RAW_TEST_TAG_OCCURRENCES,
   readCorpusFile,
   READER_REFUSED_INPUTS,
   readSuiteCases,
   REFUSED_INPUT_CASES,
+  renderResult,
   runSuite,
   SUITE_FILE,
   TOTAL_CASES,
@@ -282,8 +285,11 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
     expect(naming.map((r) => r.testCase.name)).toEqual([...REFUSED_INPUT_CASES.keys()]);
     for (const result of naming) {
       expect(result.bucket).toBe("unsupported");
-      // Document-independent: the refusal is raised at the head of the path, so it is the same with
-      // no focus at all, which is what makes counting it unsupported honest.
+      // The refusal is the engine's own, on the expression as the harness can pose it: with no
+      // readable document there is no focus, and an empty focus is nothing to check a type
+      // qualifier against. It is caused by the absent document rather than independent of it, which
+      // is why the placement is argued as conservative (a case counted declined can only shrink the
+      // coverage number) and not as a measurement. Pinning the message keeps it to this one case.
       expect(() =>
         evaluate(parseFhirPath(result.testCase.expression), [], {
           resource: { kind: "complex", properties: [] },
@@ -291,6 +297,72 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
         }),
       ).toThrow(REFUSED_INPUT_CASES.get(result.testCase.name));
     }
+    // And the honest statement of what that costs: exactly one case in the whole corpus, and it is
+    // counted in the direction that cannot flatter the engine.
+    expect(naming.length).toBe(1);
+  });
+
+  it("keeps the two declared lenient-mode cases honest in both directions", () => {
+    // The declaration is scoped to what the corpus itself calls a MODE: `testSchema.xsd` documents
+    // `mode` as strict-versus-lenient choice-element access, and the corpus's own comment says some
+    // engines are lenient there. This one is. The gate is what stops that being a bypass.
+    expect([...LENIENT_POLYMORPHIC_CASES.keys()]).toEqual([
+      "testPolymorphismB",
+      "testPolymorphicsB",
+    ]);
+    expect(declaredLenientPolymorphicProblems(RUN.cases, RUN.loads)).toEqual([]);
+
+    // Both are counted invalid, which is where every case marked invalid goes, and neither is
+    // credited to the engine as evaluated.
+    const declared = RUN.results.filter((r) => LENIENT_POLYMORPHIC_CASES.has(r.testCase.name));
+    expect(declared.map((r) => r.bucket)).toEqual(["invalid", "invalid"]);
+
+    // And the gate fires. A declaration for a case the corpus does not carry, one whose expression
+    // has moved, and one whose declared answer is not the engine's, are each named.
+    expect(
+      declaredLenientPolymorphicProblems(
+        RUN.cases.filter((c) => c.name !== "testPolymorphismB"),
+        RUN.loads,
+      ).some((p) => p.startsWith("testPolymorphismB:")),
+    ).toBe(true);
+    const edited = RUN.cases.map((c) =>
+      c.name === "testPolymorphicsB" ? { ...c, expression: "Observation.value.exists()" } : c,
+    );
+    expect(
+      declaredLenientPolymorphicProblems(edited, RUN.loads).some((p) =>
+        p.startsWith("testPolymorphicsB:"),
+      ),
+    ).toBe(true);
+    const unmarked = RUN.cases.map((c) =>
+      c.name === "testPolymorphicsB" ? { ...c, invalid: null } : c,
+    );
+    expect(
+      declaredLenientPolymorphicProblems(unmarked, RUN.loads).some((p) =>
+        p.includes("no longer marks it invalid"),
+      ),
+    ).toBe(true);
+
+    // The exception is per case AND per answer: an undeclared case that answers a marked-invalid
+    // expression is still wrong, and so is a declared one whose answer moved.
+    const undeclared: SuiteCase = {
+      index: -1,
+      group: "(harness self-test)",
+      name: "not-declared",
+      inputFile: "observation-example.xml",
+      expression: "Observation.valueQuantity.unit",
+      invalid: "semantic",
+      predicate: false,
+      ordered: null,
+      outputs: [],
+    };
+    expect(classifyCase(undeclared, RUN.loads).bucket).toBe("wrong");
+    expect(
+      classifyCase(
+        { ...undeclared, name: "testPolymorphismB", expression: "Observation.value.unit" },
+        RUN.loads,
+      ).bucket,
+    ).toBe("wrong");
+    expect(renderResult([{ t: "bool", value: true }])).toBe("true");
   });
 
   it("matches the committed coverage record, naming both numbers on drift", () => {

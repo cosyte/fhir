@@ -44,8 +44,8 @@ NAME DOE
 # --- test/__fixtures__/fhirpath-suite/ from FHIR/fhir-test-cases at tag 1.7.67
 # The vendored corpus is HL7's own published example data, redistributed under
 # Apache-2.0 beside its LICENSE.txt. Nothing below is a real person: every token
-# is one HL7 itself prints in the R4 specification's example documents. Three of
-# the vendored inputs (patient-example.xml, patient-example-period.xml,
+# is one HL7 itself prints in the R4 specification's example documents. FOUR of
+# the eleven vendored inputs (patient-example.xml, patient-example-period.xml,
 # patient-name-extensions.json, patient-container-example.json) carry the tokens
 # the scanner names; the remaining seven carry none.
 #
@@ -70,6 +70,12 @@ NAME DICTE
 # "some-name", which tokenizes to two ordinary English words. Neither is a
 # surname anyone here carries; both are declared because the scanner cannot tell
 # a placeholder from a name and must not be taught to guess.
+# THESE TWO ARE THE BROADEST ENTRIES IN THIS FILE AND THE COST IS PERMANENT.
+# `SOME` and `NAME` are ordinary words, so a FUTURE fixture carrying either as a
+# real surname would clear the gate on these lines rather than on its own merit.
+# That is the price of a token-level declaration over a whole-file bypass and it
+# is the cheaper of the two, but it is a price: if a later change can retire the
+# `some-name` placeholder from the vendored bytes, delete both lines with it.
 NAME SOME
 NAME NAME
 

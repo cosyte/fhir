@@ -60,13 +60,13 @@ suite asserts all three numbers, so neither the byte count nor the live count ca
 
 | bucket | cases | what it means |
 |---|---|---|
-| evaluated | 148 | the engine produced an answer and it matches the corpus |
-| unsupported | 752 | the engine itself raised `UnsupportedFhirPathError` |
+| evaluated | 190 | the engine produced an answer and it matches the corpus |
+| unsupported | 710 | the engine itself raised `UnsupportedFhirPathError` |
 | wrongly answered | 0 | the engine produced an answer that disagrees, or one the harness cannot compare |
 | marked invalid by the corpus | 35 | the corpus expects a syntax / semantic / execution error, so the engine gets no credit |
 | **total** | **935** | every live `<test>` element, each in exactly one bucket |
 
-**The engine answers 15.8% of the whole corpus**, or **16.4%** of the cases the corpus expects to
+**The engine answers 20.3% of the whole corpus**, or **21.1%** of the cases the corpus expects to
 evaluate at all (the same numerator over a denominator with the 35 invalid cases removed). Both
 fractions are stated because they answer different questions, and quoting one as the other is how a
 coverage number drifts.
@@ -77,12 +77,12 @@ corpus_tag: 1.7.67
 raw_test_tag_occurrences: 937
 commented_out_cases: 2
 total_cases: 935
-evaluated: 148
-unsupported: 752
+evaluated: 190
+unsupported: 710
 wrong: 0
 invalid: 35
-answered_fraction: 15.8%
-answered_fraction_of_valid: 16.4%
+answered_fraction: 20.3%
+answered_fraction_of_valid: 21.1%
 ```
 
 ## How to read the number
@@ -119,26 +119,63 @@ broken and cannot be recovered without re-indexing or dropping a position, which
 to do by design.
 
 One case names that document, `testPrimitiveExtensions`. It is **not skipped**: it is asked with no
-document, the engine refuses its expression at the head of the path (`type-qualified path head
-'Patient'`) before any focus item is read, and it is therefore counted `unsupported` on an observed
-refusal like every other case in that bucket. The declaration is checked in both directions: an
-undeclared document that stops loading fails the suite naming itself, and this document becoming
+document, and the engine refuses its expression at the head of the path (`type-qualified path head
+'Patient'`, because an empty focus is nothing to check a type qualifier against), so it is counted
+`unsupported` on an observed refusal like every other case in that bucket.
+
+**That placement is conservative, and it is not a measurement of this case.** The refusal is *caused
+by* the absent document: handed the Patient the corpus meant, the engine would resolve the qualifier
+and answer. So one case in 935 is counted declined while the engine's real coverage of it is
+unknown, which can only make the evaluated count **smaller** than the engine deserves, never larger.
+The alternatives are worse: crediting it as evaluated would claim an answer nobody has seen, and
+counting it wrong would attribute a correct reader refusal to the evaluator and red the suite
+permanently over this package behaving as designed. The declaration is checked in both directions:
+an undeclared document that stops loading fails the suite naming itself, and this document becoming
 readable also fails the suite, so the exception cannot outlive its reason.
 
-## Two engine corrections this measurement forced
+## Two cases the corpus writes for a mode this engine does not run in
 
-Running the corpus for the first time surfaced 51 wrongly answered cases. Both causes were fixed at
-the engine, and every one of the 51 is now either evaluated correctly, refused, or in the corpus's
-own invalid bucket.
+The corpus's vendored schema defines a `mode` attribute as whether a test is to be evaluated with
+**strict** (`Patient.deceased`) as opposed to **lenient** (`Patient.deceasedBoolean`) semantics for
+choice-valued elements, and the comment above the corpus's own `polymorphics` group says the direct
+spelling "is not technical conformant. For this reason, some engines have a non-strict mode where
+this is allowed". This engine is one of those: it takes the element a document actually wrote before
+it tries a `[x]` choice variant, so `Observation.valueQuantity` selects the Quantity and
+`Observation.value` selects it too.
 
-1. **A type-qualified path head is now refused.** FHIRPath lets a path be written
-   `Patient.name.given`, where the leading segment names the type the path is rooted in. The engine
-   was navigating it as an ordinary member, and since no resource has a property called `Patient`,
-   `Patient.name.exists()` evaluated to `false` on a Patient that has a name: a wrong answer with no
-   diagnostic. FHIR's naming rules make the two spellings disjoint (element names are lowerCamelCase,
-   type names are UpperCamelCase), so the head of a path starting with an upper-case letter is a type
-   qualifier and is now refused. The generic model carries no datatype name, which is the same reason
-   FHIR type `is` / `as` is out of scope, so refusing is the only honest option.
+Two cases turn on that, `testPolymorphismB` (`Observation.valueQuantity.unit`, which carries
+`mode="strict"`) and `testPolymorphicsB` (`Observation.valueQuantity.exists()`). Both are marked
+`invalid="semantic"`, and this engine answers them. It cannot do otherwise: telling a choice element
+spelled with its type (`valueQuantity`) from an ordinary element that is also lowerCamelCase with an
+internal capital (`birthDate`, `managingOrganization`) needs the FHIR *definition* of the resource,
+which this deliberately generic model does not carry.
+
+They are declared one at a time in `LENIENT_POLYMORPHIC_CASES`, pinned by expression **and** by the
+exact answer the engine gives, and counted in the **invalid** bucket, which is where every case the
+corpus marks invalid goes. The declaration buys nothing for the coverage number: a declared case is
+never credited as evaluated. It is checked in both directions, so an upstream edit to either
+expression, a case that stops being marked invalid, or an engine that starts refusing or answering
+differently, each fails the suite and asks for the line to be re-made deliberately.
+
+## Four engine corrections this measurement forced
+
+Running the corpus surfaced wrongly answered cases in four constructs. Each was fixed at the engine
+by the narrower of the two options available, refusing the construct or correcting an answer the
+subset already claims to give, and `wrong` is now zero.
+
+1. **A type-qualified path head now resolves against the resource it names.** FHIRPath lets a path
+   be written `Patient.name.given`, where the leading segment names the type the path is rooted in
+   (127 of the 935 cases are written that way, and so is most published FHIR constraint text). The
+   engine was navigating that head as an ordinary member, and since no resource has a property
+   called `Patient`, `Patient.name.exists()` evaluated to `false` on a Patient that has a name: a
+   wrong answer with no diagnostic. It now resolves where the model can check it, at a **resource
+   root whose `resourceType` the qualifier names**, and refuses everywhere else, which is any focus
+   the generic model carries no type for. Refusing it *unconditionally* was tried and withdrawn: on
+   a Patient with no name, a caller-supplied `Patient.name.exists()` invariant went from
+   `INVARIANT_VIOLATED` at error to `INVARIANT_UNCHECKED` at information and `validateResource`
+   returned `valid: true` for a document it rejects today. Withdrawing a true finding is not a safe
+   default. `test/profile-invariant-type-qualified.test.ts` pins both directions at the layer that
+   decides an issue code, a severity and `valid`.
 
 2. **`is` / `as` sat one precedence level too loose.** The published FHIRPath precedence table binds
    `is` / `as` tighter than `|` and looser than `+`; this parser had it between equality and
@@ -147,8 +184,32 @@ own invalid bucket.
    language says the expression compares an Integer with a Boolean and errors. Both are wrong
    booleans out of a well-formed parse.
 
-Neither change removes, re-severities or relocates a finding any shipped layer emits today: the
-existing suite is green on both.
+3. **A type test outside the System primitives is now refused, and an empty operand yields empty.**
+   `Observation.issued is instant` and `Patient.gender.ofType(code)` were answered `false` and `{}`,
+   which look like determinations and are not: the model carries no FHIR datatype name, so `code`
+   and `instant` are questions this engine cannot answer at all. It now refuses any type name
+   outside `Boolean` / `String` / `Integer` / `Decimal`. Separately, `{} is T` is the empty
+   collection rather than `false`, which is what FHIRPath says and what the corpus reads; both
+   coerce alike, so no invariant's verdict moves with it.
+
+4. **An ordering comparison no longer orders a model value lexically.** The model is generic, so a
+   string-valued primitive is the FHIR lexical form of an element whose type it does not carry: a
+   `string`, a `code`, a `date`, or, read from XML, a `decimal`. Comparing lexically answered
+   `Observation.value.value < 'test'` (a decimal against a word, which FHIRPath makes an execution
+   error) with `true`, and answered `per-1`'s `start <= end` over a day-precision date and a
+   second-precision dateTime with `true` where FHIRPath says the comparison is indeterminate and the
+   value is `{}`. Where either side is a model value, both must now read as temporal values of the
+   same family and are compared by FHIRPath's own precision rules; anything else is refused. Two
+   values the engine computed itself are System Strings by construction and still order as Strings,
+   and a JSON-read decimal still orders as a number, so `start <= end` keeps answering for the
+   same-precision dates it always answered for.
+
+None of the four removes, re-severities or relocates a finding a shipped layer emits today. That is
+not asserted from a green suite alone, which is what missed it the first time: the layer that turns
+an engine outcome into an issue code, a severity and `valid` now has its own tests
+(`test/profile-invariant-type-qualified.test.ts`), the ordering change is pinned against the `per-1`
+period constraint in both the answered and the indeterminate direction, and every one of the 1730
+tests that predate this measurement is green unchanged.
 
 ## Re-running the measurement
 

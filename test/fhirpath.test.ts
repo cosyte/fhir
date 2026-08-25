@@ -526,36 +526,48 @@ describe("evaluateInvariant: boolean-node coercion in logic operators", () => {
   });
 });
 
-describe("evaluate: a type-qualified path head is refused, never navigated", () => {
+describe("evaluate: a type-qualified path head resolves against a matching resource, else refuses", () => {
   const patient = { resourceType: "Patient", name: [{ given: ["Synthgiven"] }] };
 
   /** Evaluate against the resource, returning the raw collection so a refusal is visible. */
-  function run(expression: string): FpColl {
-    const resource = parse(patient);
+  function run(expression: string, obj: unknown = patient): FpColl {
+    const resource = parse(obj);
     return evaluate(parseFhirPath(expression), focusCollection(resource), {
       resource,
       context: focusCollection(resource),
     });
   }
 
-  it("refuses a leading resource-type qualifier instead of answering false", () => {
-    // Navigated as a member this is `false` on a Patient that HAS a name: a wrong answer with no
-    // diagnostic. Refusing is what turns it into INVARIANT_UNCHECKED at the caller.
-    expect(() => run("Patient.name.exists()")).toThrow(UnsupportedFhirPathError);
-    expect(() => run("Patient.name.exists()")).toThrow(/type-qualified path head 'Patient'/);
-    expect(evalOn("Patient.name.exists()", patient)).toEqual({
-      unchecked: true,
+  it("resolves a leading resource-type qualifier to the focus it names", () => {
+    // Navigated as an ordinary member this is `false` on a Patient that HAS a name (no resource has
+    // a property called `Patient`): a wrong answer with no diagnostic. Refused outright it is
+    // INVARIANT_UNCHECKED on a Patient that has NO name, which withdraws a true finding. Resolving
+    // it against the focus whose resourceType the qualifier names is neither.
+    expect(run("Patient.name.exists()")).toEqual([{ t: "bool", value: true }]);
+    expect(evalOn("Patient.name.exists()", patient)).toEqual({ unchecked: false, satisfied: true });
+    expect(evalOn("Patient.name.exists()", { resourceType: "Patient", active: true })).toEqual({
+      unchecked: false,
       satisfied: false,
     });
+    // The delimited spelling names the same type, and is resolved the same way.
+    expect(run("`Patient`.name").length).toBe(1);
   });
 
-  it("refuses the delimited spelling and a qualifier that does not match the resource", () => {
-    expect(() => run("`Patient`.name")).toThrow(UnsupportedFhirPathError);
+  it("refuses a qualifier the focus does not match, rather than answering", () => {
     expect(() => run("Encounter.name.given")).toThrow(UnsupportedFhirPathError);
+    expect(() => run("Encounter.name.given")).toThrow(/type-qualified path head 'Encounter'/);
   });
 
-  it("refuses a type-qualified head inside a filter criteria, evaluated per item", () => {
+  it("refuses a type-qualified head over a focus that is not a resource root", () => {
+    // Inside a filter the focus is a HumanName element, and the generic model carries no datatype
+    // name, so there is nothing to check `Patient` against. Per item, and lazily.
     expect(() => run("name.where(Patient.given.exists())")).toThrow(UnsupportedFhirPathError);
+    // An empty focus has nothing to check either, which is what lets a case whose input document is
+    // unreadable still be scored on a document-independent refusal.
+    const resource = parse(patient);
+    expect(() => evaluate(parseFhirPath("Patient.name"), [], { resource, context: [] })).toThrow(
+      /type-qualified path head 'Patient'/,
+    );
   });
 
   it("leaves lowerCamelCase element navigation, and every type-name argument, untouched", () => {
@@ -570,6 +582,94 @@ describe("evaluate: a type-qualified path head is refused, never navigated", () 
     );
     expect(evalOn("name.given.first() is String", patient).satisfied).toBe(true);
     expect(evalOn("name.given.first() as String", patient).satisfied).toBe(true);
+  });
+});
+
+describe("evaluate: a type test outside the System primitives is refused, never answered false", () => {
+  const patient = { resourceType: "Patient", gender: "male", name: [{ given: ["Synthgiven"] }] };
+
+  it("refuses a FHIR type name in is / as / ofType", () => {
+    // `false` there looks like a determination and is not one: the model is generic and carries no
+    // FHIR datatype name, so `code` is a question the engine cannot answer (ADR 0002).
+    expect(evalOn("gender.ofType(code).exists()", patient).unchecked).toBe(true);
+    expect(evalOn("gender is code", patient).unchecked).toBe(true);
+    expect(evalOn("gender as code", patient).unchecked).toBe(true);
+    expect(evalOn("name.first() is HumanName", patient).unchecked).toBe(true);
+  });
+
+  it("keeps the four System primitive types, spelled bare or System-qualified", () => {
+    expect(evalOn("gender is String", patient).satisfied).toBe(true);
+    expect(evalOn("gender is System.String", patient).satisfied).toBe(true);
+    expect(evalOn("(1 is Integer)", patient).satisfied).toBe(true);
+    expect(evalOn("(1 is Decimal)", patient).satisfied).toBe(true); // Integer is a Decimal
+    expect(evalOn("(true is Boolean)", patient).satisfied).toBe(true);
+  });
+
+  it("yields the empty collection for a type test over an empty operand", () => {
+    const resource = parse(patient);
+    const focus = focusCollection(resource);
+    expect(
+      evaluate(parseFhirPath("missing is String"), focus, { resource, context: focus }),
+    ).toEqual([]);
+    // Empty and false coerce alike, so no invariant's verdict moves with it.
+    expect(evalOn("missing is String", patient)).toEqual({ unchecked: false, satisfied: false });
+  });
+});
+
+describe("evaluate: ordering a model value the model carries no type for", () => {
+  const periods = (start: string, end: string) => ({
+    resourceType: "Patient",
+    identifier: [{ period: { start, end } }],
+  });
+  const perOne =
+    "identifier.period.all(start.hasValue().not() or end.hasValue().not() or (start <= end))";
+
+  it("keeps answering per-1 where both ends are written at the same precision", () => {
+    // The finding this must not withdraw: a period whose start is after its end.
+    expect(evalOn(perOne, periods("2001-05-08", "2001-05-06")).satisfied).toBe(false);
+    expect(evalOn(perOne, periods("2001-05-06", "2001-05-08")).satisfied).toBe(true);
+    expect(evalOn(perOne, periods("2001-05-06", "2001-05-06")).satisfied).toBe(true);
+  });
+
+  it("yields empty where the two ends are written at different precisions", () => {
+    // FHIRPath says a day and an instant inside that day do not order, so the comparison is `{}`,
+    // and `all()` over it is false. Comparing the two lexically answered `true` instead.
+    const resource = parse(periods("2001-05-06", "2001-05-06T10:10:10Z"));
+    const focus = focusCollection(resource);
+    expect(
+      evaluate(parseFhirPath("identifier.period.start <= identifier.period.end"), focus, {
+        resource,
+        context: focus,
+      }),
+    ).toEqual([]);
+    expect(evalOn(perOne, periods("2001-05-06", "2001-05-06T10:10:10Z")).satisfied).toBe(false);
+  });
+
+  it("refuses two timezone offsets it would have to normalise to compare", () => {
+    expect(
+      evalOn(
+        "identifier.period.start < identifier.period.end",
+        periods("2001-05-06T10:10:10Z", "2001-05-06T10:10:10+02:00"),
+      ).unchecked,
+    ).toBe(true);
+  });
+
+  it("refuses a model value that is not temporal, and leaves System String ordering alone", () => {
+    // From XML a `decimal` reads as a string, so `Observation.value.value < 'test'` compared a
+    // number with a word and answered `true`. Two values the engine computed itself are Strings by
+    // construction and still order as Strings.
+    expect(evalOn("gender < 'test'", { resourceType: "Patient", gender: "male" }).unchecked).toBe(
+      true,
+    );
+    expect(evalOn("('a' < 'b')", { resourceType: "Patient" }).satisfied).toBe(true);
+    expect(evalOn("(2 > 1)", { resourceType: "Patient" }).satisfied).toBe(true);
+    // A JSON-read decimal still orders as a number: it reaches the numeric branch, not this one.
+    expect(
+      evalOn("valueQuantity.value > 100", {
+        resourceType: "Observation",
+        valueQuantity: { value: 185.0 },
+      }).satisfied,
+    ).toBe(true);
   });
 });
 
@@ -596,7 +696,7 @@ describe("parseFhirPath: 'is'/'as' bind tighter than union and looser than addit
     ).toEqual({ unchecked: true, satisfied: false });
   });
 
-  it("keeps 'is' tighter than additive, so the left operand is the whole sum", () => {
+  it("keeps 'is' looser than additive, so the left operand is the whole sum", () => {
     const ast = parseFhirPath("1 + 2 is Integer");
     expect(ast.kind).toBe("typeop");
     if (ast.kind !== "typeop") throw new Error("expected typeop");

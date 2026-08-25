@@ -15,7 +15,10 @@
  *   evaluate at all (a syntax / semantic / execution error is the expected outcome). These are not
  *   cases the engine gets credit for, so they are never counted among the ones it evaluates. A case
  *   here that the engine answers with a **non-empty** collection has manufactured an answer where
- *   the suite says there is none, and moves to `wrong`.
+ *   the suite says there is none, and moves to `wrong`. The two exceptions are named, pinned and
+ *   gated in {@link LENIENT_POLYMORPHIC_CASES}: cases the corpus marks invalid only under a
+ *   *strict* mode of choice-element access that this engine does not implement, and the corpus's
+ *   own schema and comments say lenient engines exist.
  * - **`unsupported`** - the engine itself raised {@link UnsupportedFhirPathError}. **Only** that.
  *   A harness that cannot read a case, cannot compare a result, or catches some other error must
  *   never land here: "unsupported" is a statement about the engine's refusal, and inflating it with
@@ -108,17 +111,67 @@ export const READER_REFUSED_INPUTS: ReadonlyMap<string, string> = new Map([
 ]);
 
 /**
- * The cases that name a {@link READER_REFUSED_INPUTS} document, and the **document-independent**
- * refusal the engine answers each with.
+ * The cases that name a {@link READER_REFUSED_INPUTS} document, and the exact refusal the engine
+ * answers each with when it is asked with no focus at all.
  *
- * With no document to focus on, only a refusal raised before the engine reads any focus item can be
- * scored, so each case is pinned to its exact `UnsupportedFhirPathError` message. That message is
- * value-free by the class's own contract, and pinning it is what makes "the refusal did not depend
- * on the missing document" a checked claim rather than an assurance: `type-qualified path head` is
- * raised at the head of the path, before the focus is touched at all.
+ * **Read this as the conservative placement it is, not as a measurement of the engine.** With no
+ * readable document there is no focus, and `Patient.name.given.select(…)` over an empty focus is
+ * refused at the head of the path because an empty focus is nothing to check a type qualifier
+ * against. That refusal is *caused by* the absent document: handed the Patient the corpus meant,
+ * the engine would resolve the qualifier and answer. So this case is credited `unsupported`
+ * although the engine's real coverage of it is unknown.
+ *
+ * That is the safe direction and it is the only reason the placement is defensible: a case counted
+ * declined can only make the coverage number **smaller** than the engine deserves, never larger.
+ * The alternative placements are worse. `evaluated` would credit an answer nobody has seen;
+ * `wrong` would attribute a correct reader refusal to the evaluator and red the suite permanently
+ * over this package behaving as designed; skipping it is what C8 forbids outright.
+ *
+ * Pinning the message is what keeps the placement narrow: exactly one case, one expression, one
+ * refusal, and anything else the engine does with it counts `wrong`. The message is value-free by
+ * the error class's own contract.
  */
 export const REFUSED_INPUT_CASES: ReadonlyMap<string, string> = new Map([
   ["testPrimitiveExtensions", "type-qualified path head 'Patient'"],
+]);
+
+/** A case the corpus marks invalid only under a mode this engine does not run in. */
+export interface LenientPolymorphicCase {
+  /** The expression, verbatim, so the declaration cannot outlive the case it was written for. */
+  readonly expression: string;
+  /** The answer this engine gives, rendered by {@link renderResult}, pinned so it cannot drift. */
+  readonly answer: string;
+}
+
+/**
+ * The cases the corpus marks invalid **only under strict polymorphic semantics**, which is a
+ * FHIRPath *mode* rather than a fact about the expression.
+ *
+ * The vendored `testSchema.xsd` defines a `mode` attribute as "whether the test should be evaluated
+ * with strict (e.g. `Patient.deceased`) as opposed to lenient (e.g. `Patient.deceasedBoolean`)
+ * semantics", and the corpus's own comment above the `polymorphics` group says the direct spelling
+ * "is not technical conformant. For this reason, **some engines have a non-strict mode where this is
+ * allowed**". This engine is one of those: `navigateItem` takes an exact property before it tries a
+ * `[x]` choice variant, so `Observation.valueQuantity` selects the element the document wrote.
+ *
+ * Being strict here is not a thing this engine can choose to be. Telling `valueQuantity` (a choice
+ * element, spelled with its type) from `birthDate` or `managingOrganization` (ordinary elements that
+ * are also lowerCamelCase with an internal capital) needs the FHIR *definition* of the resource, and
+ * the model is generic and carries none, which is the same reason FHIR-type `is` / `as` is out of
+ * scope under ADR 0002. Refusing every internally-capitalised member name instead would withdraw
+ * `Patient.birthDate` and `Observation.valueQuantity.exists()` from every caller-supplied invariant
+ * that uses them, which is the direction the fail-safe contract forbids.
+ *
+ * So this is a declaration, not a bypass, and it is checked in both directions by
+ * {@link declaredLenientPolymorphicProblems}: the case must still exist, still carry the `invalid`
+ * attribute, still spell that exact expression, and still produce that exact answer. It buys nothing
+ * for the coverage number either, because a declared case is counted in the **invalid** bucket, the
+ * same bucket every other case marked invalid lands in, and never among the ones the engine is
+ * credited with evaluating.
+ */
+export const LENIENT_POLYMORPHIC_CASES: ReadonlyMap<string, LenientPolymorphicCase> = new Map([
+  ["testPolymorphismB", { expression: "Observation.valueQuantity.unit", answer: "lbs" }],
+  ["testPolymorphicsB", { expression: "Observation.valueQuantity.exists()", answer: "true" }],
 ]);
 
 /** Which bucket a case landed in. Exactly one per case. */
@@ -356,6 +409,81 @@ export function declaredRefusalProblems(loads: ReadonlyMap<string, InputLoad>): 
   return problems;
 }
 
+/**
+ * Render a result collection as the text {@link LENIENT_POLYMORPHIC_CASES} pins.
+ *
+ * Item by item, in order, using the same lexical reading the output comparison uses, so a declared
+ * answer is the engine's answer and not a summary of it. An item with no lexical form renders as
+ * `(uncomparable)`, which no declaration may state: a declared case has to be one the engine really
+ * answers.
+ */
+export function renderResult(result: FpColl): string {
+  return result.map((item) => lexicalOf(item) ?? "(uncomparable)").join("|");
+}
+
+/**
+ * The gate over {@link LENIENT_POLYMORPHIC_CASES}: every declaration still describes a live case,
+ * and every declared case still behaves exactly as declared.
+ *
+ * Both directions, so the declaration cannot quietly outlive what it declares. A declared name that
+ * no longer names a case, a case that stops carrying the `invalid` attribute, an expression that was
+ * edited upstream, an engine that starts refusing the construct or answering it differently: each
+ * one fails the run and asks for the line to be deleted or re-made deliberately.
+ *
+ * @param cases - Every case the corpus carries.
+ * @param loads - The outcome of {@link loadInputDocuments}.
+ * @returns The problems, each naming the case. Empty means the gate passes.
+ */
+export function declaredLenientPolymorphicProblems(
+  cases: readonly SuiteCase[],
+  loads: ReadonlyMap<string, InputLoad>,
+): string[] {
+  const problems: string[] = [];
+  for (const [name, declared] of LENIENT_POLYMORPHIC_CASES) {
+    const matching = cases.filter((c) => c.name === name);
+    if (matching.length !== 1) {
+      problems.push(
+        `${name}: declared in LENIENT_POLYMORPHIC_CASES but the corpus carries ` +
+          `${String(matching.length)} case(s) by that name`,
+      );
+      continue;
+    }
+    const testCase = matching[0] as SuiteCase;
+    if (testCase.expression !== declared.expression) {
+      problems.push(
+        `${name}: declared for expression '${declared.expression}', the corpus now spells it ` +
+          `'${testCase.expression}'`,
+      );
+      continue;
+    }
+    if (testCase.invalid === null || testCase.invalid === "false") {
+      problems.push(
+        `${name}: declared as invalid-under-strict-semantics, but the corpus no longer marks it ` +
+          `invalid at all. Delete the LENIENT_POLYMORPHIC_CASES line and let it be scored.`,
+      );
+      continue;
+    }
+    const load = testCase.inputFile === null ? undefined : loads.get(testCase.inputFile);
+    const document = load?.kind === "loaded" ? load.resource : null;
+    const outcome = runExpression(testCase.expression, document);
+    if (outcome.kind !== "value" || outcome.result.length === 0) {
+      problems.push(
+        `${name}: declared because this engine answers it, but it now ${
+          outcome.kind === "value" ? "returns an empty collection" : `does not (${outcome.kind})`
+        }. Delete the LENIENT_POLYMORPHIC_CASES line: the case scores honestly without it.`,
+      );
+      continue;
+    }
+    const rendered = renderResult(outcome.result);
+    if (rendered !== declared.answer) {
+      problems.push(
+        `${name}: declared answer '${declared.answer}', the engine now answers '${rendered}'`,
+      );
+    }
+  }
+  return problems;
+}
+
 // ---------------------------------------------------------------------------
 // Comparing a result against a case's expected output
 // ---------------------------------------------------------------------------
@@ -551,14 +679,17 @@ export function classifyCase(
 
   if (documentRefused) {
     // The document is a declared reader refusal (the gate fails the run otherwise), so no answer the
-    // engine produces can be checked against the corpus. A refusal raised before the engine reads
-    // any focus item is the one outcome the missing document cannot have caused, and
-    // REFUSED_INPUT_CASES pins which refusal that is. Anything else is uncomparable, hence wrong.
+    // engine produces can be checked against the corpus. The case is asked anyway, with no focus,
+    // and counted declined on the exact refusal REFUSED_INPUT_CASES pins: a placement that can only
+    // understate the engine's coverage, never flatter it. Read that docblock before touching this.
+    // Anything other than the pinned refusal is uncomparable, hence wrong.
     if (outcome.kind === "refused" && REFUSED_INPUT_CASES.get(testCase.name) === outcome.message) {
       return {
         testCase,
         bucket: "unsupported",
-        detail: `the engine refused the construct before reading a focus item (${outcome.message})`,
+        detail:
+          `the input document is unreadable, so the case was asked with no focus and the engine ` +
+          `refused it (${outcome.message})`,
       };
     }
     return {
@@ -574,6 +705,20 @@ export function classifyCase(
   // the honest outcome; manufacturing a non-empty answer is not.
   if (testCase.invalid !== null && testCase.invalid !== "false") {
     if (outcome.kind === "value" && outcome.result.length > 0) {
+      const declared = LENIENT_POLYMORPHIC_CASES.get(testCase.name);
+      if (
+        declared !== undefined &&
+        declared.expression === testCase.expression &&
+        declared.answer === renderResult(outcome.result)
+      ) {
+        return {
+          testCase,
+          bucket: "invalid",
+          detail:
+            `invalid='${testCase.invalid}' under strict polymorphic semantics only; this engine ` +
+            `is lenient there and answers it (declared in LENIENT_POLYMORPHIC_CASES)`,
+        };
+      }
       return {
         testCase,
         bucket: "wrong",
