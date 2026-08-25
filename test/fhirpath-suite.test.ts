@@ -217,7 +217,17 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
       if (isMarked) expect(["invalid", "wrong"]).toContain(result.bucket);
       else expect(result.bucket).not.toBe("invalid");
     }
-    expect(counts.invalid).toBe(marked.length);
+    // The invalid bucket holds every marked case except the ones the engine answered non-empty,
+    // which the previous clause sends to `wrong` instead: the two counts partition the marked set,
+    // and nothing outside it reaches either.
+    const markedResults = results.filter(
+      (r) => r.testCase.invalid !== null && r.testCase.invalid !== "false",
+    );
+    expect(markedResults.length).toBe(marked.length);
+    expect(counts.invalid).toBe(markedResults.filter((r) => r.bucket === "invalid").length);
+    expect(counts.invalid + markedResults.filter((r) => r.bucket === "wrong").length).toBe(
+      marked.length,
+    );
     // Every live case spells `invalid` as an error kind; none spells the schema's "false", so
     // "carries the attribute" and "expects an error" name the same set here, and the reading the
     // harness took ("carries the attribute") is provably not load-bearing.
@@ -302,20 +312,28 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
     expect(naming.length).toBe(1);
   });
 
-  it("keeps the two declared lenient-mode cases honest in both directions", () => {
-    // The declaration is scoped to what the corpus itself calls a MODE: `testSchema.xsd` documents
-    // `mode` as strict-versus-lenient choice-element access, and the corpus's own comment says some
-    // engines are lenient there. This one is. The gate is what stops that being a bypass.
+  it("counts the two lenient-mode cases wrong like any other, and describes them in both directions", () => {
+    // What the corpus itself calls a MODE: `testSchema.xsd` documents `mode` as strict-versus-lenient
+    // choice-element access, and the corpus's own comment says some engines are lenient there. This
+    // one is. That EXPLAINS the two disagreements; it does not excuse them, and the harness does not
+    // treat it as an exception. Closing the gap means the engine refusing `Observation.valueQuantity`,
+    // which needs the FHIR definition of Observation that neither the generic model nor the built-in
+    // element schema carries.
     expect([...LENIENT_POLYMORPHIC_CASES.keys()]).toEqual([
       "testPolymorphismB",
       "testPolymorphicsB",
     ]);
     expect(declaredLenientPolymorphicProblems(RUN.cases, RUN.loads)).toEqual([]);
 
-    // Both are counted invalid, which is where every case marked invalid goes, and neither is
-    // credited to the engine as evaluated.
+    // Both are counted WRONG, which is what makes the suite red, and neither is credited to the
+    // engine as evaluated or filed as unsupported.
     const declared = RUN.results.filter((r) => LENIENT_POLYMORPHIC_CASES.has(r.testCase.name));
-    expect(declared.map((r) => r.bucket)).toEqual(["invalid", "invalid"]);
+    expect(declared.map((r) => r.bucket)).toEqual(["wrong", "wrong"]);
+    // They are also the ONLY wrong cases, so the count says exactly this and nothing else.
+    expect(RUN.results.filter((r) => r.bucket === "wrong").map((r) => r.testCase.name)).toEqual([
+      "testPolymorphismB",
+      "testPolymorphicsB",
+    ]);
 
     // And the gate fires. A declaration for a case the corpus does not carry, one whose expression
     // has moved, and one whose declared answer is not the engine's, are each named.
@@ -342,8 +360,8 @@ describe("the shared R4 FHIRPath suite: what the bounded engine covers", () => {
       ),
     ).toBe(true);
 
-    // The exception is per case AND per answer: an undeclared case that answers a marked-invalid
-    // expression is still wrong, and so is a declared one whose answer moved.
+    // Naming a case buys it nothing: an undeclared case that answers a marked-invalid expression is
+    // wrong, and so is a declared one, whatever it answers.
     const undeclared: SuiteCase = {
       index: -1,
       group: "(harness self-test)",

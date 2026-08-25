@@ -645,12 +645,46 @@ describe("evaluate: ordering a model value the model carries no type for", () =>
     expect(evalOn(perOne, periods("2001-05-06", "2001-05-06T10:10:10Z")).satisfied).toBe(false);
   });
 
-  it("refuses two timezone offsets it would have to normalise to compare", () => {
+  it("orders two timezone offsets by the instants they name, rather than refusing them", () => {
+    // Refusing these withdrew a true `per-1` violation: `13:00+02:00` is `11:00Z`, an hour AFTER
+    // `10:00Z`, so a period written this way is genuinely inverted and the validator reported it
+    // before this remedy existed. `test/profile-invariant-ordering.test.ts` pins the issue code, the
+    // severity and `valid` for exactly this document at the layer that decides them.
+    expect(evalOn(perOne, periods("2001-05-06T13:00:00+02:00", "2001-05-06T10:00:00Z"))).toEqual({
+      unchecked: false,
+      satisfied: false,
+    });
+    expect(evalOn(perOne, periods("2001-05-06T10:00:00Z", "2001-05-06T13:00:00+02:00"))).toEqual({
+      unchecked: false,
+      satisfied: true,
+    });
+    // Two designators for the same instant are equal, not unorderable, so `<=` holds both ways.
+    expect(
+      evalOn(
+        "identifier.period.start <= identifier.period.end",
+        periods("2001-05-06T10:00:00Z", "2001-05-06T12:00:00+02:00"),
+      ).satisfied,
+    ).toBe(true);
     expect(
       evalOn(
         "identifier.period.start < identifier.period.end",
-        periods("2001-05-06T10:10:10Z", "2001-05-06T10:10:10+02:00"),
-      ).unchecked,
+        periods("2001-05-06T10:00:00Z", "2001-05-06T12:00:00+02:00"),
+      ).satisfied,
+    ).toBe(false);
+    // A value with no designator is read at the engine's declared evaluation-context offset, UTC,
+    // which is the frame the pre-change lexical comparison used, so the answer is still given.
+    expect(
+      evalOn(
+        "identifier.period.start <= identifier.period.end",
+        periods("2001-05-06T12:00:00", "2001-05-06T11:00:00Z"),
+      ),
+    ).toEqual({ unchecked: false, satisfied: false });
+  });
+
+  it("refuses a date against a time of day, the one comparison FHIRPath does not define", () => {
+    expect(
+      evalOn("identifier.period.start < identifier.period.end", periods("2001-05-06", "10:10:10"))
+        .unchecked,
     ).toBe(true);
   });
 

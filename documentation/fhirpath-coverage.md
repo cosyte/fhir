@@ -13,6 +13,13 @@ counted.
 disagrees with this file fails the build**, naming both the recorded and the measured value. This is
 a checked record, not a snapshot someone has to remember to update.
 
+> **The suite is currently RED, and the two cases below say why.** The engine answers two cases the
+> corpus marks invalid, and the harness counts a case like that wrongly answered without exception,
+> so `wrong` is 2 rather than 0 and the run fails naming both. Making it green means the engine
+> refusing `Observation.valueQuantity`, which needs FHIR definitional knowledge this package does not
+> carry; see [the two cases](#two-cases-the-corpus-writes-for-a-mode-this-engine-does-not-run-in).
+> The number is published as measured rather than adjusted to reach zero.
+
 ## The corpus
 
 - **Repository**: `https://github.com/FHIR/fhir-test-cases`
@@ -62,14 +69,18 @@ suite asserts all three numbers, so neither the byte count nor the live count ca
 |---|---|---|
 | evaluated | 190 | the engine produced an answer and it matches the corpus |
 | unsupported | 710 | the engine itself raised `UnsupportedFhirPathError` |
-| wrongly answered | 0 | the engine produced an answer that disagrees, or one the harness cannot compare |
-| marked invalid by the corpus | 35 | the corpus expects a syntax / semantic / execution error, so the engine gets no credit |
+| wrongly answered | 2 | the engine produced an answer that disagrees, or one the harness cannot compare |
+| marked invalid by the corpus | 33 | the corpus expects a syntax / semantic / execution error and the engine did not answer, so it gets no credit |
 | **total** | **935** | every live `<test>` element, each in exactly one bucket |
 
-**The engine answers 20.3% of the whole corpus**, or **21.1%** of the cases the corpus expects to
-evaluate at all (the same numerator over a denominator with the 35 invalid cases removed). Both
-fractions are stated because they answer different questions, and quoting one as the other is how a
-coverage number drifts.
+The corpus marks **35** cases invalid. Thirty-three of them the engine declines or answers with
+nothing, and they sit in the invalid bucket; the other two it answers, which is a disagreement with
+the corpus however well explained, so they are counted `wrongly answered` and the suite reds.
+
+**The engine answers 20.3% of the whole corpus** (190 of 935), or **21.1%** of the cases it is
+expected to evaluate at all (190 of 902: the same numerator over a denominator with the 33 cases in
+the invalid bucket removed). Both fractions are stated because they answer different questions, and
+quoting one as the other is how a coverage number drifts.
 
 ```counts
 corpus_repository: https://github.com/FHIR/fhir-test-cases
@@ -79,8 +90,8 @@ commented_out_cases: 2
 total_cases: 935
 evaluated: 190
 unsupported: 710
-wrong: 0
-invalid: 35
+wrong: 2
+invalid: 33
 answered_fraction: 20.3%
 answered_fraction_of_valid: 21.1%
 ```
@@ -96,8 +107,9 @@ reflection, all of which are outside the bound on purpose. A refusal there is th
 designed.
 
 **A wrongly answered case is a defect, and the suite fails on one.** The bar this file holds is that
-the engine never answers a shared case wrongly rather than refusing it, so `wrong` is zero and the
-suite reds if it stops being.
+the engine never answers a shared case wrongly rather than refusing it. `wrong` is **2** today and
+the suite is red over exactly those two, which is the bar working rather than the bar being missed:
+the two are named, explained and left in the count instead of being moved out of it.
 
 **Growing the evaluated count is not the goal of this file.** Widening the subset is a separate
 decision with its own trade-offs; this file only says where the boundary is today.
@@ -145,23 +157,32 @@ it tries a `[x]` choice variant, so `Observation.valueQuantity` selects the Quan
 
 Two cases turn on that, `testPolymorphismB` (`Observation.valueQuantity.unit`, which carries
 `mode="strict"`) and `testPolymorphicsB` (`Observation.valueQuantity.exists()`). Both are marked
-`invalid="semantic"`, and this engine answers them. It cannot do otherwise: telling a choice element
-spelled with its type (`valueQuantity`) from an ordinary element that is also lowerCamelCase with an
-internal capital (`birthDate`, `managingOrganization`) needs the FHIR *definition* of the resource,
-which this deliberately generic model does not carry.
+`invalid="semantic"`, and this engine answers them, `lbs` and `true`. It cannot currently do
+otherwise: telling a choice element spelled with its type (`valueQuantity`) from an ordinary element
+that is also lowerCamelCase with an internal capital (`birthDate`, `managingOrganization`) needs the
+FHIR *definition* of the resource. The deliberately generic model carries none, and the built-in
+element schema in `src/validate/schema.ts` models `Patient` alone, so it cannot answer the question
+for `Observation` either. Refusing every internally-capitalised member name instead would withdraw
+`Patient.birthDate` and `Extension.valueString` from every caller-supplied invariant that uses them,
+which is the direction the fail-safe contract forbids.
 
-They are declared one at a time in `LENIENT_POLYMORPHIC_CASES`, pinned by expression **and** by the
-exact answer the engine gives, and counted in the **invalid** bucket, which is where every case the
-corpus marks invalid goes. The declaration buys nothing for the coverage number: a declared case is
-never credited as evaluated. It is checked in both directions, so an upstream edit to either
-expression, a case that stops being marked invalid, or an engine that starts refusing or answering
-differently, each fails the suite and asks for the line to be re-made deliberately.
+**These two are what `wrong` counts, and the suite is red because of them.** They are named in
+`LENIENT_POLYMORPHIC_CASES` and pinned by expression **and** by the exact answer the engine gives,
+but naming a case buys it nothing: `classifyCase` counts a non-empty answer to a case the corpus
+marks invalid as wrongly answered whether or not it is named. An earlier revision of this work did
+exclude them, which made `wrong` read zero; that is what a headline number stops meaning anything if
+it is allowed to do, so the exclusion is gone and the disagreement is in the count where a reader can
+see it. The naming is a tripwire in both directions: an upstream edit to either expression, a case
+that stops being marked invalid, or an engine that starts refusing or answering differently each
+fails the suite and asks for the line to be re-made deliberately. The last of those is what closing
+this gap looks like.
 
 ## Four engine corrections this measurement forced
 
 Running the corpus surfaced wrongly answered cases in four constructs. Each was fixed at the engine
 by the narrower of the two options available, refusing the construct or correcting an answer the
-subset already claims to give, and `wrong` is now zero.
+subset already claims to give. The two cases in the section above are the ones neither option
+reaches.
 
 1. **A type-qualified path head now resolves against the resource it names.** FHIRPath lets a path
    be written `Patient.name.given`, where the leading segment names the type the path is rooted in
@@ -199,17 +220,56 @@ subset already claims to give, and `wrong` is now zero.
    error) with `true`, and answered `per-1`'s `start <= end` over a day-precision date and a
    second-precision dateTime with `true` where FHIRPath says the comparison is indeterminate and the
    value is `{}`. Where either side is a model value, both must now read as temporal values of the
-   same family and are compared by FHIRPath's own precision rules; anything else is refused. Two
-   values the engine computed itself are System Strings by construction and still order as Strings,
-   and a JSON-read decimal still orders as a number, so `start <= end` keeps answering for the
-   same-precision dates it always answered for.
+   same family, and each is read as the **interval of instants** its written precision denotes and
+   compared at its own timezone offset. Two values order when their intervals are disjoint, are equal
+   when the intervals coincide, and are indeterminate (`{}`) when they overlap without coinciding,
+   which is FHIRPath's precision rule and its offset rule stated once. A value written with no
+   designator is read at the evaluation context's offset, which FHIRPath leaves to the engine and
+   which this engine declares to be UTC: the frame the previous lexical comparison used implicitly on
+   every value. Anything not temporal is refused. Two values the engine computed itself are System
+   Strings by construction and still order as Strings, and a JSON-read decimal still orders as a
+   number.
 
-None of the four removes, re-severities or relocates a finding a shipped layer emits today. That is
-not asserted from a green suite alone, which is what missed it the first time: the layer that turns
-an engine outcome into an issue code, a severity and `valid` now has its own tests
-(`test/profile-invariant-type-qualified.test.ts`), the ordering change is pinned against the `per-1`
-period constraint in both the answered and the indeterminate direction, and every one of the 1730
-tests that predate this measurement is green unchanged.
+   An earlier revision of this remedy **refused** any pair carrying different timezone designators
+   rather than normalising them, which withdrew a true finding: `13:00:00+02:00` is `11:00:00Z`, so a
+   period ending at `10:00:00Z` is genuinely inverted, and `per-1` over it went from
+   `INVARIANT_VIOLATED` at error to `INVARIANT_UNCHECKED` at information with
+   `validateResource(...).valid` flipping to `true`. Normalising is the correction that owed;
+   refusing was not a safe default.
+
+### What these four move, and what they do not
+
+Two of the four move findings, and this section is the honest statement of which, replacing an
+earlier sentence here that said none of them did while one was doing it.
+
+- **Nothing is removed, re-severitied or relocated.** Both directions of remedy 1 are pinned at the
+  layer that decides an issue code, a severity and `valid`, in `test/profile-invariant-type-qualified.test.ts`
+  (4 tests over `collectInvariantIssues` / `validateResource` with a caller-supplied profile).
+  Remedy 4's are pinned the same way in `test/profile-invariant-ordering.test.ts` (8 tests over the
+  same two entry points, using R4's `per-1` expression verbatim): an inverted period written with two
+  different offsets, with one, and with none is reported `INVARIANT_VIOLATED` at error with
+  `valid: false` in every spelling, and a conformant one reports nothing. Remedies 2 and 3 move no
+  verdict by construction, since `{}` and `false` coerce alike through `convertToBoolean` and the
+  re-associations they fix were parse errors rather than answers.
+- **Remedy 1 removes a false positive**, which is the permitted correction, not a withdrawal: a
+  conformant Patient was reported `INVARIANT_VIOLATED` for `Patient.name.exists()` because the head
+  selected nothing. The same test file pins that it now reports nothing.
+- **Remedy 4 adds a finding**, in one shape, and it is not optional: where the two ends of a period
+  are written at different precisions the comparison is indeterminate, `evaluateInvariant` coerces
+  empty to "not satisfied" (its documented, shipped behaviour, matching the reference validator), and
+  the profile layer makes that `INVARIANT_VIOLATED` at the constraint's own severity. The lexical
+  comparison answered `true` and reported nothing for such a document. The corpus is what forces it:
+  `testPeriodInvariantOld` grades `per-1` over exactly this document and expects `false`.
+  `test/profile-invariant-ordering.test.ts` pins the added error, and its severity, at the deciding
+  layer rather than leaving it to be discovered.
+- **Remedy 4 also costs an answer**: an ordering comparison over a model value that is not temporal
+  is refused, so a caller who ordered a `string`-valued element against a literal now gets
+  `INVARIANT_UNCHECKED` at information where they got a lexical answer before. That answer was
+  unsound for anything numeric, which is what the corpus caught. Pinned at the deciding layer too.
+
+Every one of the 1730 tests that predate this measurement is green unchanged; that is a necessary
+condition and, as the withdrawal above proved, not a sufficient one, which is why each claim here
+names the test that checks it at the layer that decides.
 
 ## Re-running the measurement
 

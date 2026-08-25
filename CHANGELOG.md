@@ -14,9 +14,9 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   or `fhir-test-cases` at all. The corpus is vendored under `test/__fixtures__/fhirpath-suite/` with
   its upstream Apache-2.0 `LICENSE.txt` and the `testSchema.xsd` that defines the file format, and
   `test/fhirpath-suite.test.ts` runs every case on every `pnpm test`, printing the counts.
-  **Measured at corpus tag `1.7.67`: 190 evaluated, 710 refused as unsupported, 0 answered wrongly,
-  35 the corpus itself marks invalid, 935 total**, i.e. the engine answers 20.3% of the corpus and
-  21.1% of the cases the corpus expects to evaluate at all.
+  **Measured at corpus tag `1.7.67`: 190 evaluated, 710 refused as unsupported, 2 answered wrongly,
+  33 the corpus marks invalid and the engine does not answer, 935 total**, i.e. the engine answers
+  20.3% of the corpus and 21.1% of the cases it is expected to evaluate at all.
   `documentation/fhirpath-coverage.md` is the committed record, and a run that disagrees with it
   fails the suite naming both the recorded and the measured number.
   **A LARGE REFUSAL COUNT IS THE MEASUREMENT, NOT A DEFECT** (the corpus grades the whole language;
@@ -39,9 +39,12 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   Two further cases, `testPolymorphismB` and `testPolymorphicsB`, are marked invalid by the corpus
   only under the **strict** mode of choice-element access that the corpus's own schema defines
   (`Observation.value`, not `Observation.valueQuantity`), a mode this engine does not run in and
-  cannot without FHIR resource definitions it deliberately does not carry. Both are declared by
-  name, pinned to their expression and to the exact answer this engine gives, and counted in the
-  corpus's own invalid bucket rather than credited as evaluated.
+  cannot without FHIR resource definitions it deliberately does not carry. **Those two are the
+  `2 answered wrongly` above, and the suite is red over them.** A case the corpus marks invalid that
+  the engine answers is a disagreement however well explained, so it is counted as one rather than
+  excused into the invalid bucket, which is the only way the headline number keeps meaning anything.
+  Both are named and pinned to their expression and answer, so an engine that starts refusing them
+  fails the suite and asks for the line to be re-made deliberately.
 
 - **Modifier ELEMENTS reach the safety readout (`SAFETY-MODIFIER-2`), on a new
   `SafetyReadout.modifierElements` channel carrying `{ element, location }` per location.** A
@@ -304,14 +307,27 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   `true`, and answered the `per-1` period constraint's `start <= end` over a day-precision date and
   a second-precision dateTime with `true` where FHIRPath says the comparison is indeterminate and
   the value is `{}`. Where either side is a model value, the two must now read as temporal values of
-  the same family and are compared by FHIRPath's own precision rules; anything else raises
-  `UnsupportedFhirPathError` rather than guessing. **NARROWED ON PURPOSE:** values the engine
+  the same family, each taken as the **interval of instants** its written precision denotes and read
+  at its own timezone offset: they order when the intervals are disjoint, are equal when the
+  intervals coincide, and are indeterminate (`{}`) when they overlap without coinciding. A value
+  written with no designator is read at the evaluation context's offset, which FHIRPath leaves to the
+  engine and which this engine declares to be UTC. Anything not temporal raises
+  `UnsupportedFhirPathError` rather than being guessed at. **NARROWED ON PURPOSE:** values the engine
   computed itself are System Strings by construction and still order as Strings, and a JSON-read
-  decimal still orders as a number, so `per-1` keeps answering for the same-precision dates it
-  always answered for rather than going unchecked.
-  None of the four fixes removes, re-severities or relocates a finding an already-shipped layer
-  emits. That is checked at the layer that decides an issue code, a severity and `valid`, not
-  inferred from a green suite, and every test that predates this measurement is green unchanged.
+  decimal still orders as a number.
+  **REFUSING A PAIR OF DIFFERENT TIMEZONE DESIGNATORS IS NOT THE SAFE DEFAULT EITHER, AND WAS
+  WITHDRAWN**: `13:00:00+02:00` is `11:00:00Z`, so a period ending `10:00:00Z` is genuinely inverted,
+  and refusing to normalise turned `per-1` over it from `INVARIANT_VIOLATED` at **error** into
+  `INVARIANT_UNCHECKED` at **information** with `valid` going `false` to `true`. Normalising is the
+  correction that was owed.
+  What these four move: **nothing is removed, re-severitied or relocated**, pinned at the layer that
+  decides an issue code, a severity and `valid` by `test/profile-invariant-type-qualified.test.ts`
+  and `test/profile-invariant-ordering.test.ts`, not inferred from a green suite; **a false positive
+  is removed** (a conformant Patient reported `INVARIANT_VIOLATED` because the type-qualified head
+  selected nothing); **a finding is added** where a period's two ends are written at different
+  precisions, since the comparison is indeterminate and `evaluateInvariant` has always coerced empty
+  to "not satisfied"; and **one answer is withdrawn**, the non-temporal model ordering above. Every
+  test that predates this measurement is green unchanged.
 - **A `Coding` array wrapper the negation read decided on was reported only on the resource types
   the cardinality table knows, so on every other type the read ran ahead of the report
   (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit, on plain JSON:

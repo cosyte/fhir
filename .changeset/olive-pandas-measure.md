@@ -12,8 +12,8 @@ neither side wrote. HL7's shared FHIRPath corpus is now vendored under
 `test/fhirpath-suite.test.ts` runs all 935 cases on every `pnpm test`, putting each in exactly one
 bucket and printing the counts. `documentation/fhirpath-coverage.md` records them, and a run that
 disagrees with that file fails the build naming both numbers. Measured at corpus tag `1.7.67`:
-**190 evaluated, 710 refused as unsupported, 0 answered wrongly, 35 the corpus itself marks
-invalid**, so the engine answers 20.3% of the corpus.
+**190 evaluated, 710 refused as unsupported, 2 answered wrongly, 33 the corpus marks invalid and the
+engine does not answer**, so the engine answers 20.3% of the corpus.
 
 A large refusal count is the measurement, not a defect: the corpus grades the whole language, and
 arithmetic, string functions, temporal arithmetic, `descendants()`, `resolve()`, aggregates and FHIR
@@ -55,16 +55,29 @@ The run surfaced wrongly answered cases in four constructs, all now fixed at the
   FHIRPath) with `true`, and answered the `per-1` period constraint's `start <= end` over a
   day-precision date and a second-precision dateTime with `true` where FHIRPath says the comparison
   is indeterminate. Where either side is a model value the two must now read as temporal values of
-  the same family, compared by FHIRPath's precision rules, and anything else is refused. Values the
-  engine computed itself still order as System Strings, and a JSON-read decimal still orders as a
-  number, so `start <= end` keeps answering for the same-precision dates it always answered for.
+  the same family, each taken as the interval of instants its written precision denotes, at its own
+  timezone offset: they order when the intervals are disjoint, are equal when the intervals coincide,
+  and are indeterminate (`{}`) when they overlap without coinciding. A value written with no
+  designator is read at the evaluation context's offset, which FHIRPath leaves to the engine and
+  which this engine declares to be UTC. Anything not temporal is refused. Values the engine computed
+  itself still order as System Strings, and a JSON-read decimal still orders as a number.
 
-None of the four removes, re-severities or relocates a finding an already-shipped layer emits.
-That is checked at the layer where a finding is decided, not inferred from a green suite:
-`test/profile-invariant-type-qualified.test.ts` pins the issue code, the severity and `valid` for a
-type-qualified constraint in both the satisfied and the violated direction, the ordering change is
-pinned against `per-1` in both the answered and the indeterminate direction, and every test that
-predates this measurement is green unchanged.
+What the four move, precisely, and each claim checked at the layer where a finding is decided rather
+than inferred from a green suite:
+
+- **Nothing is removed, re-severitied or relocated.** `test/profile-invariant-type-qualified.test.ts`
+  pins the issue code, the severity and `valid` for a type-qualified constraint in both the satisfied
+  and the violated direction, and `test/profile-invariant-ordering.test.ts` does the same for `per-1`
+  over an inverted period written with two different timezone offsets, with one, and with none, plus
+  the conformant orderings. Every test that predates this measurement is green unchanged.
+- **A false positive is removed**, which is the correction the first fix exists for: a conformant
+  Patient was reported `INVARIANT_VIOLATED` because the type-qualified head selected nothing.
+- **A finding is added**, in one shape: where the two ends of a period are written at different
+  precisions the comparison is indeterminate, `evaluateInvariant` coerces empty to "not satisfied"
+  as it has always documented, and the profile layer reports `INVARIANT_VIOLATED` at the
+  constraint's severity for a document the lexical comparison passed. The corpus is what requires it.
+- **An answer is withdrawn**, in one shape: an ordering comparison over a model value that is not
+  temporal is now `INVARIANT_UNCHECKED`. That answer was unsound for anything numeric.
 
 No public export is added or removed, and no runtime dependency: the corpus is read with the
 `readRawXml` reader the package already ships.
@@ -83,6 +96,9 @@ Two of the 935 cases, `testPolymorphismB` and `testPolymorphicsB`, are marked in
 only under the **strict** mode of choice-element access its own schema defines
 (`Observation.value` rather than `Observation.valueQuantity`); the corpus's own comment notes that
 lenient engines allow the direct spelling. This engine is lenient there and cannot be otherwise
-without FHIR resource definitions it deliberately does not carry, so both are declared by name,
-pinned to their expression and to the exact answer this engine gives, and counted in the corpus's
-invalid bucket rather than credited as evaluated.
+without FHIR resource definitions it deliberately does not carry. **They are the two cases counted
+wrongly answered**: a case the corpus marks invalid that the engine answers is a disagreement however
+well explained, so it is counted as one, and the suite is red over exactly those two rather than
+excusing them into the invalid bucket. Both are named and pinned to their expression and answer, so
+an engine that starts refusing them, or an upstream edit to either, fails the suite and asks for the
+line to be re-made deliberately.

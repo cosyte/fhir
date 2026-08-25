@@ -309,18 +309,26 @@ function stringOf(item: FpItem): string | undefined {
 }
 
 /**
- * A FHIR temporal value split into its ordered components, as the lexical form writes them.
+ * A FHIR temporal value as the **range of instants** its lexical form denotes.
  *
- * `components` runs most-significant first and stops where the value's own precision stops, which is
- * what makes a precision difference visible to {@link compareTemporal}. `hasTime` and `zone` are
- * carried because two values written in different timezone offsets cannot be ordered without
- * normalising them, which this engine does not do.
+ * A lexical form is not an instant, it is an interval: `2001-05-06` denotes the whole of that day and
+ * `2001-05-06T10:00Z` the whole of that minute. Carrying the interval rather than the components is
+ * what lets one function express both of FHIRPath's rules at once, the precision rule (two values
+ * whose intervals overlap without being the same interval do not order) and the offset rule (two
+ * values written in different timezone designators are the same instant when their intervals
+ * coincide). `lo` is inclusive, `hi` exclusive, both in milliseconds, both already read at the
+ * value's own offset. For `form: "time"` they are milliseconds since midnight, FHIR `time` carrying
+ * no offset at all.
+ *
+ * **The one reading here, declared once for the whole engine rather than guessed per value.** A
+ * `dateTime` written with no designator is read at the evaluation context's timezone, which FHIRPath
+ * leaves to the engine; this engine's is UTC. That is the frame the pre-change lexical comparison
+ * used implicitly on every value, so declaring it moves no answer that was being given.
  */
 interface TemporalValue {
   readonly form: "date" | "time";
-  readonly components: readonly number[];
-  readonly hasTime: boolean;
-  readonly zone: string;
+  readonly lo: number;
+  readonly hi: number;
 }
 
 /** `YYYY[-MM[-DD]][THH[:MM[:SS[.fff]]]][Z|(+|-)HH:MM]`, the FHIR `date` / `dateTime` lexical form. */
@@ -330,72 +338,100 @@ const DATE_LEXICAL =
 /** `HH[:MM[:SS[.fff]]]`, the FHIR `time` lexical form (no timezone in FHIR `time`). */
 const TIME_LEXICAL = /^(\d{2})(?::(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?$/;
 
+/** Milliseconds east of UTC a designator names (`Z` and an absent designator alike are `0`). */
+function zoneOffsetMillis(zone: string): number {
+  if (zone === "" || zone === "Z") return 0;
+  const sign = zone.charAt(0) === "-" ? -1 : 1;
+  return sign * (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(4, 6))) * 60_000;
+}
+
 /**
- * Read a FHIR temporal lexical form, or `undefined` when the text is not one.
+ * UTC milliseconds for a year-first component tuple, missing components defaulting to their first
+ * value. Out-of-range components carry (month `13` is January of the next year), which is what makes
+ * {@link bumpLast} a one-liner.
+ */
+function utcMillis(parts: readonly number[]): number {
+  const [year, month = 1, day = 1, hour = 0, minute = 0, second = 0] = parts;
+  const at = new Date(0);
+  // Not `Date.UTC`, which maps a two-digit year onto the 1900s and would order `0085` as `1985`.
+  at.setUTCFullYear(year as number, month - 1, day);
+  at.setUTCHours(hour, minute, second, 0);
+  return at.getTime();
+}
+
+/** The same tuple with one added to its least significant component: the width of that precision. */
+function bumpLast(parts: readonly number[]): number[] {
+  const bumped = [...parts];
+  bumped[bumped.length - 1] = (bumped[bumped.length - 1] as number) + 1;
+  return bumped;
+}
+
+/**
+ * Read a FHIR temporal lexical form as the interval it denotes, or `undefined` when the text is not
+ * one.
  *
  * This is a **lexical** reading, not a semantic one: it says how the text is written, which is all a
- * generic model has. A fractional second is normalised to milliseconds so `10:30:00` and
- * `10:30:00.0` differ in precision but not in value at the shared components.
+ * generic model carries. The written precision becomes the interval's width, so `2001-05-06` is a
+ * day wide and `2001-05-06T10:10:10Z` one second, and a fractional second narrows it further
+ * (`.5` → 100ms of width, `.500` → 1ms).
  */
 function readTemporal(text: string): TemporalValue | undefined {
   const date = DATE_LEXICAL.exec(text);
   if (date !== null) {
-    const parts = [date[1], date[2], date[3], date[4], date[5], date[6]];
-    const components: number[] = [];
-    for (const part of parts) {
+    const parts: number[] = [];
+    for (const part of [date[1], date[2], date[3], date[4], date[5], date[6]]) {
       if (part === undefined) break;
-      components.push(Number(part));
+      parts.push(Number(part));
     }
+    const offset = zoneOffsetMillis(date[8] ?? "");
+    const start = utcMillis(parts) - offset;
     const fraction = date[7];
-    if (fraction !== undefined) components.push(Number(`0.${fraction}`) * 1000);
-    return {
-      form: "date",
-      components,
-      hasTime: date[4] !== undefined,
-      zone: date[8] ?? "",
-    };
+    if (fraction === undefined) {
+      return { form: "date", lo: start, hi: utcMillis(bumpLast(parts)) - offset };
+    }
+    const lo = start + Number(`0.${fraction}`) * 1000;
+    return { form: "date", lo, hi: lo + 10 ** (3 - fraction.length) };
   }
   const time = TIME_LEXICAL.exec(text);
   if (time === null) return undefined;
-  const components: number[] = [];
-  for (const part of [time[1], time[2], time[3]]) {
+  const units = [3_600_000, 60_000, 1000];
+  let lo = 0;
+  let width = 0;
+  for (const [i, part] of [time[1], time[2], time[3]].entries()) {
     if (part === undefined) break;
-    components.push(Number(part));
+    lo += Number(part) * (units[i] as number);
+    width = units[i] as number;
   }
   const fraction = time[4];
-  if (fraction !== undefined) components.push(Number(`0.${fraction}`) * 1000);
-  return { form: "time", components, hasTime: true, zone: "" };
+  if (fraction === undefined) return { form: "time", lo, hi: lo + width };
+  const withFraction = lo + Number(`0.${fraction}`) * 1000;
+  return { form: "time", lo: withFraction, hi: withFraction + 10 ** (3 - fraction.length) };
 }
 
 /**
  * Order two temporal values the way FHIRPath does, or say the comparison cannot be made.
  *
- * FHIRPath compares temporal values component by component from the most significant, and when the
- * shared components are all equal but one operand carries **more precision** than the other, the
- * comparison is *indeterminate* and the expression's value is the empty collection, not a boolean.
- * That is why `@2001-05-06 <= @2001-05-06T10:10:10Z` is `{}`: the day is the same, and whether a day
- * is before or after an instant inside it is not a question the values answer.
+ * Two values order when the interval one denotes lies wholly outside the other's, and are equal when
+ * the two intervals coincide, which is FHIRPath's precision rule stated once: `2001-05-06` and
+ * `2001-05-06T10:10:10Z` overlap without coinciding, so whether the day is before or after an
+ * instant inside it is *indeterminate* and the expression's value is the empty collection rather
+ * than a boolean. Two designators for the same instant (`10:00:00Z`, `12:00:00+02:00`) coincide, and
+ * so compare **equal**, which is the correction this engine owes a caller: refusing them instead
+ * withdrew the `per-1` violation the validator reported for a period whose start really is after its
+ * end, and that direction is the one the fail-safe contract forbids.
  *
  * @returns `-1` / `0` / `1` when they order, `"indeterminate"` when FHIRPath says `{}`, or
- *   `"unorderable"` when this engine will not answer (a date against a time-of-day, or two timezone
- *   designators it would have to normalise to compare).
+ *   `"unorderable"` for a date against a time of day, which is not a comparison FHIRPath defines.
  */
 function compareTemporal(
   a: TemporalValue,
   b: TemporalValue,
 ): -1 | 0 | 1 | "indeterminate" | "unorderable" {
   if (a.form !== b.form) return "unorderable";
-  // One is `Z`, one is `+02:00`, or one carries an offset the other omits. Ordering those means
-  // normalising to a common offset, which this engine does not do, so it does not guess either.
-  if (a.hasTime && b.hasTime && a.zone !== b.zone) return "unorderable";
-  const shared = Math.min(a.components.length, b.components.length);
-  for (let i = 0; i < shared; i += 1) {
-    const av = a.components[i] as number;
-    const bv = b.components[i] as number;
-    if (av !== bv) return av < bv ? -1 : 1;
-  }
-  if (a.components.length !== b.components.length) return "indeterminate";
-  return 0;
+  if (a.hi <= b.lo) return -1;
+  if (b.hi <= a.lo) return 1;
+  if (a.lo === b.lo && a.hi === b.hi) return 0;
+  return "indeterminate";
 }
 
 /**
@@ -412,9 +448,10 @@ function compareTemporal(
  * FHIRPath says `{}`.
  *
  * So where either side is a model primitive, the two must both read as temporal values of the same
- * shape, and then {@link compareTemporal} answers with FHIRPath's own precision rules. Anything
- * else is refused rather than guessed, which keeps `start <= end` answering for the same-precision
- * dates it always answered for while withdrawing the answers that were never determinations.
+ * shape, and then {@link compareTemporal} answers with FHIRPath's own precision and offset rules.
+ * Anything else is refused rather than guessed, which keeps `start <= end` answering for every pair
+ * of dates it answered for before, in whatever offsets they are written, while withdrawing only the
+ * answers that were never determinations.
  */
 function compare(op: string, left: FpColl, right: FpColl): FpColl {
   if (left.length === 0 || right.length === 0) return [];
@@ -447,7 +484,7 @@ function compare(op: string, left: FpColl, right: FpColl): FpColl {
       const ordered = compareTemporal(at, bt);
       if (ordered === "indeterminate") return [];
       if (ordered === "unorderable") {
-        throw new UnsupportedFhirPathError("ordering comparison of unnormalised temporal values");
+        throw new UnsupportedFhirPathError("ordering comparison of a date against a time of day");
       }
       cmp = ordered;
     }

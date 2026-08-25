@@ -15,10 +15,11 @@
  *   evaluate at all (a syntax / semantic / execution error is the expected outcome). These are not
  *   cases the engine gets credit for, so they are never counted among the ones it evaluates. A case
  *   here that the engine answers with a **non-empty** collection has manufactured an answer where
- *   the suite says there is none, and moves to `wrong`. The two exceptions are named, pinned and
- *   gated in {@link LENIENT_POLYMORPHIC_CASES}: cases the corpus marks invalid only under a
- *   *strict* mode of choice-element access that this engine does not implement, and the corpus's
- *   own schema and comments say lenient engines exist.
+ *   the suite says there is none, and moves to `wrong`. **Without exception**, including the two
+ *   cases {@link LENIENT_POLYMORPHIC_CASES} names, which the corpus marks invalid only under a
+ *   *strict* mode of choice-element access that this engine does not implement. Those two are what
+ *   `wrong` currently counts, and the suite reds over them on purpose: the honest number is the one
+ *   that says an engine which answers a case the corpus calls invalid answered it.
  * - **`unsupported`** - the engine itself raised {@link UnsupportedFhirPathError}. **Only** that.
  *   A harness that cannot read a case, cannot compare a result, or catches some other error must
  *   never land here: "unsupported" is a statement about the engine's refusal, and inflating it with
@@ -144,8 +145,11 @@ export interface LenientPolymorphicCase {
 }
 
 /**
- * The cases the corpus marks invalid **only under strict polymorphic semantics**, which is a
- * FHIRPath *mode* rather than a fact about the expression.
+ * The two cases the corpus marks invalid **only under strict polymorphic semantics**, which is a
+ * FHIRPath *mode* rather than a fact about the expression. They are the whole of what `wrong`
+ * currently counts, and naming them here is a description of the gap, **not an exception to it**:
+ * {@link classifyCase} counts a non-empty answer to a case marked invalid as `wrong` whether or not
+ * it is named here, so the suite fails over these two.
  *
  * The vendored `testSchema.xsd` defines a `mode` attribute as "whether the test should be evaluated
  * with strict (e.g. `Patient.deceased`) as opposed to lenient (e.g. `Patient.deceasedBoolean`)
@@ -154,20 +158,21 @@ export interface LenientPolymorphicCase {
  * allowed**". This engine is one of those: `navigateItem` takes an exact property before it tries a
  * `[x]` choice variant, so `Observation.valueQuantity` selects the element the document wrote.
  *
- * Being strict here is not a thing this engine can choose to be. Telling `valueQuantity` (a choice
- * element, spelled with its type) from `birthDate` or `managingOrganization` (ordinary elements that
- * are also lowerCamelCase with an internal capital) needs the FHIR *definition* of the resource, and
- * the model is generic and carries none, which is the same reason FHIR-type `is` / `as` is out of
- * scope under ADR 0002. Refusing every internally-capitalised member name instead would withdraw
- * `Patient.birthDate` and `Observation.valueQuantity.exists()` from every caller-supplied invariant
- * that uses them, which is the direction the fail-safe contract forbids.
+ * **Being strict here is not a thing this engine can currently choose to be**, which is why the gap
+ * is declared rather than closed. Telling `valueQuantity` (a choice element, spelled with its type)
+ * from `birthDate` or `managingOrganization` (ordinary elements that are also lowerCamelCase with an
+ * internal capital) needs the FHIR *definition* of the resource. The model is generic and carries
+ * none, which is the same reason FHIR-type `is` / `as` is out of scope under ADR 0002, and the
+ * built-in element schema in `src/validate/schema.ts` models `Patient` alone, so it cannot answer it
+ * for `Observation` either. Refusing every internally-capitalised member name instead would withdraw
+ * `Patient.birthDate` and `Extension.valueString` from every caller-supplied invariant that uses
+ * them, which is the direction the fail-safe contract forbids.
  *
- * So this is a declaration, not a bypass, and it is checked in both directions by
+ * So the declaration is a tripwire, checked in both directions by
  * {@link declaredLenientPolymorphicProblems}: the case must still exist, still carry the `invalid`
- * attribute, still spell that exact expression, and still produce that exact answer. It buys nothing
- * for the coverage number either, because a declared case is counted in the **invalid** bucket, the
- * same bucket every other case marked invalid lands in, and never among the ones the engine is
- * credited with evaluating.
+ * attribute, still spell that exact expression, and still produce that exact answer. If the engine
+ * ever refuses one of them, or the corpus stops marking it invalid, the gate says so and the line
+ * comes out.
  */
 export const LENIENT_POLYMORPHIC_CASES: ReadonlyMap<string, LenientPolymorphicCase> = new Map([
   ["testPolymorphismB", { expression: "Observation.valueQuantity.unit", answer: "lbs" }],
@@ -425,10 +430,11 @@ export function renderResult(result: FpColl): string {
  * The gate over {@link LENIENT_POLYMORPHIC_CASES}: every declaration still describes a live case,
  * and every declared case still behaves exactly as declared.
  *
- * Both directions, so the declaration cannot quietly outlive what it declares. A declared name that
+ * Both directions, so the description cannot quietly outlive what it describes. A declared name that
  * no longer names a case, a case that stops carrying the `invalid` attribute, an expression that was
  * edited upstream, an engine that starts refusing the construct or answering it differently: each
- * one fails the run and asks for the line to be deleted or re-made deliberately.
+ * one fails the run and asks for the line to be deleted or re-made deliberately. The last of those
+ * is the direction that closes the gap, so it must be impossible to miss.
  *
  * @param cases - Every case the corpus carries.
  * @param loads - The outcome of {@link loadInputDocuments}.
@@ -459,7 +465,8 @@ export function declaredLenientPolymorphicProblems(
     if (testCase.invalid === null || testCase.invalid === "false") {
       problems.push(
         `${name}: declared as invalid-under-strict-semantics, but the corpus no longer marks it ` +
-          `invalid at all. Delete the LENIENT_POLYMORPHIC_CASES line and let it be scored.`,
+          `invalid at all. Delete the LENIENT_POLYMORPHIC_CASES line: the case is scored on its ` +
+          `output like any other.`,
       );
       continue;
     }
@@ -470,7 +477,8 @@ export function declaredLenientPolymorphicProblems(
       problems.push(
         `${name}: declared because this engine answers it, but it now ${
           outcome.kind === "value" ? "returns an empty collection" : `does not (${outcome.kind})`
-        }. Delete the LENIENT_POLYMORPHIC_CASES line: the case scores honestly without it.`,
+        }. That closes the gap: delete the LENIENT_POLYMORPHIC_CASES line, the case now lands in ` +
+          `the invalid bucket on its own.`,
       );
       continue;
     }
@@ -702,29 +710,26 @@ export function classifyCase(
   }
 
   // The corpus says this expression is not meant to evaluate. Refusing it, or producing nothing, is
-  // the honest outcome; manufacturing a non-empty answer is not.
+  // the honest outcome; manufacturing a non-empty answer is not, and there is no exception to that:
+  // a case whose non-empty answer is explainable (see LENIENT_POLYMORPHIC_CASES) is still a case the
+  // engine answered where the corpus says there is no answer, so it is counted `wrong` and reddens
+  // the suite. Declaring such a case out of this bucket would make the headline `wrong` count a
+  // statement about which disagreements were excused rather than about the engine.
   if (testCase.invalid !== null && testCase.invalid !== "false") {
     if (outcome.kind === "value" && outcome.result.length > 0) {
       const declared = LENIENT_POLYMORPHIC_CASES.get(testCase.name);
-      if (
-        declared !== undefined &&
-        declared.expression === testCase.expression &&
-        declared.answer === renderResult(outcome.result)
-      ) {
-        return {
-          testCase,
-          bucket: "invalid",
-          detail:
-            `invalid='${testCase.invalid}' under strict polymorphic semantics only; this engine ` +
-            `is lenient there and answers it (declared in LENIENT_POLYMORPHIC_CASES)`,
-        };
-      }
+      const why =
+        declared !== undefined && declared.expression === testCase.expression
+          ? `; the corpus marks it invalid under strict polymorphic semantics only, and this engine ` +
+            `is lenient there (see LENIENT_POLYMORPHIC_CASES), which explains the disagreement ` +
+            `without making it any less of one`
+          : "";
       return {
         testCase,
         bucket: "wrong",
         detail:
           `the corpus marks this expression invalid='${testCase.invalid}', but the engine ` +
-          `returned ${String(outcome.result.length)} item(s)`,
+          `returned ${String(outcome.result.length)} item(s)${why}`,
       };
     }
     return { testCase, bucket: "invalid", detail: `invalid='${testCase.invalid}'` };
