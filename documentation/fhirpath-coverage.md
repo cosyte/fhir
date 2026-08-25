@@ -253,13 +253,19 @@ reaches, which is why they are declared as a mode difference rather than fixed.
    inequality. That re-associated `1 | 1 is Integer` into `(1 | 1) is Integer`, a different
    collection, and `1 > 2 is Boolean` into `(1 > 2) is Boolean`, which answers `true` where the
    language says the expression compares an Integer with a Boolean and errors. Both are wrong
-   booleans out of a well-formed parse.
+   booleans out of a well-formed parse, which is also why this remedy moves findings: an expression
+   that parsed before and parses now, re-associated, answers differently on each tree. Rows 6 to 10
+   [below](#what-these-four-move-and-what-they-do-not) are those movements, and an earlier revision
+   of this record asserted there were none.
 
 3. **A type test outside the System primitives is now refused, and an empty operand yields empty.**
    `Observation.issued is instant` and `Patient.gender.ofType(code)` were answered `false` and `{}`,
    which look like determinations and are not: the model carries no FHIR datatype name, so `code`
    and `instant` are questions this engine cannot answer at all. It now refuses any type name
-   outside `Boolean` / `String` / `Integer` / `Decimal`. Separately, `{} is T` is the empty
+   outside `Boolean` / `String` / `Integer` / `Decimal`, and it no longer strips a leading `FHIR.`
+   before deciding, so `FHIR.Boolean` and `FHIR.String` are refused too rather than answered off the
+   System type of the value (rows 13 and 14 below); a `System.` prefix is still stripped, since
+   `System.Boolean` names a type this engine does carry. Separately, `{} is T` is the empty
    collection rather than `false`, which is what FHIRPath says and what the corpus reads
    (`testPolymorphismIsA3` is wrongly answered without it, measured by removing the rule and
    re-running). What that second half moves is set out below: `{}` and `false` coerce alike taken
@@ -281,11 +287,14 @@ reaches, which is why they are declared as a mode difference rather than fixed.
    used implicitly on every value. Every other pair is **undetermined too, and yields `{}`** rather
    than raising `UnsupportedFhirPathError`, which is the whole of the difference between an ordering
    this engine cannot decide and an expression it cannot evaluate: `{}` coerces through
-   `convertToBoolean` exactly as the old lexical `false` did, so a constraint that used to be
-   reported stays reported at its own code, severity and location, while a refusal would downgrade it
-   to `INVARIANT_UNCHECKED` at information with `valid: true`. Two values the engine computed itself
-   are System Strings by construction and still order as Strings, and a JSON-read decimal still
-   orders as a number.
+   `convertToBoolean` exactly as a lexical `false` did, so a constraint the lexical comparison
+   answered `false` for stays reported at its own code, severity and location, while a refusal would
+   downgrade it to `INVARIANT_UNCHECKED` at information with `valid: true`. **That is a comparison
+   with the refusal, not with the lexical comparison this remedy replaced**, and it says nothing
+   about a pair the lexical comparison answered `true` for or ordered the other way round: those
+   movements are rows 17 to 21 of the table below, measured on both trees. Two values the engine
+   computed itself are System Strings by construction and still order as Strings, and a JSON-read
+   decimal still orders as a number.
 
    An earlier revision of this remedy **refused** the non-temporal pair instead of answering `{}`,
    and that withdrew and re-severitied a correct finding in one step: `HumanName.family` is a FHIR
@@ -302,113 +311,229 @@ reaches, which is why they are declared as a mode difference rather than fixed.
    period ending at `10:00:00Z` is genuinely inverted, and `per-1` over it went from
    `INVARIANT_VIOLATED` at error to `INVARIANT_UNCHECKED` at information with
    `validateResource(...).valid` flipping to `true`. Normalising is the correction that owed;
-   refusing was not a safe default.
+   refusing was not a safe default. **Normalising moves the report in both directions and this
+   paragraph used to state only one of them**: the same arithmetic takes a report away where the
+   lexical order was a false positive, and adds one where the lexical order was wrong the other way.
+   Rows 17 to 19 below are the three, measured.
 
 ### What these four move, and what they do not
 
-**Three of the four ADD a finding somewhere, and two of them also WITHDRAW one, in four shapes named
-below.** Earlier revisions of this section said "nothing moves" and then "nothing is removed,
-re-severitied or relocated" while something was moving both times, so the movements are enumerated
-here rather than summarised. Every bullet names the test that decides it at the layer that decides
-it.
+**Each of the four remedies both ADDS a finding somewhere and TAKES one away somewhere, and every
+movement measured is tabled below.** Three earlier revisions of this section closed on an absolute -
+"nothing moves", then "nothing is removed, re-severitied or relocated", then "remedies 2 and 4
+withdraw nothing" - and each of the three was false when it was written. **There is no absolute here
+now, and nothing below should be read as one.** What follows is one measured row per movement class,
+where the classes are read off the diff itself (the precedence chain in `src/fhirpath/parser.ts`, and
+`resolveTypeQualifier`, `itemIsType` and `compare` in `src/fhirpath/evaluate.ts`) rather than off a
+summary of it. Another spelling of a class listed here moves the same way; a class nobody has thought
+of is not ruled out by anything here.
 
-- **Remedies 1 and 3 withdraw a finding, in four shapes, and the earlier claim that nothing was
-  removed, re-severitied or relocated was wrong.** Both remedies refuse a construct the previous
-  engine reduced to `false`, and a refusal is not neutral at this package's invariant layer: it
-  reaches `evaluateInvariant` as `unchecked`, so the constraint moves from `INVARIANT_VIOLATED` at
-  **error** with `validateResource(...).valid` of `false` to `INVARIANT_UNCHECKED` at
-  **information** with `valid: true`. All four, measured at `collectInvariantIssues` /
-  `validateResource` with a caller-supplied profile, and pinned there by
-  `test/profile-invariant-withdrawn-findings.test.ts` (8 tests), which carries each row's
-  pre-change reduction as a live control so the "before" column is measured rather than recalled:
+**How both columns were measured.** Every row was run twice, once against the shipped package
+(`git checkout --detach origin/main`) and once against this change, at `collectInvariantIssues` /
+`validateResource` over a caller-supplied Patient profile carrying a single root constraint at
+`error`, and the two outputs diffed. Neither column is inferred from the other or from a green suite.
+In the tables, `VIOLATED` abbreviates `INVARIANT_VIOLATED` at **error** with
+`validateResource(...).valid === false`, `UNCHECKED` abbreviates `INVARIANT_UNCHECKED` at
+**information** with `valid === true`, and `(none)` is no issue at all with `valid === true`. Every
+"this change" cell is pinned by `test/profile-invariant-withdrawn-findings.test.ts`, so the table is
+a checked statement rather than a remembered one, in both directions: change the engine back and
+those tests red, change it further and they red too.
 
-  | remedy | constraint expression | over | before | now |
-  |---|---|---|---|---|
-  | 1 | `Encounter.name.exists()` | a Patient with no `name` | `INVARIANT_VIOLATED` / error / `valid: false` | `INVARIANT_UNCHECKED` / information / `valid: true` |
-  | 1 | `name.all(HumanName.given.exists())` | a `HumanName` carrying no `given` | `INVARIANT_VIOLATED` / error / `valid: false` | `INVARIANT_UNCHECKED` / information / `valid: true` |
-  | 3 | `gender is Quantity` | `gender: "male"` | `INVARIANT_VIOLATED` / error / `valid: false` | `INVARIANT_UNCHECKED` / information / `valid: true` |
-  | 3 | `gender.ofType(Quantity).exists()` | `gender: "male"` | `INVARIANT_VIOLATED` / error / `valid: false` | `INVARIANT_UNCHECKED` / information / `valid: true` |
+#### Remedy 1, the type-qualified path head
 
-  **Each withdrawn finding was a correct one**, which is what makes this a withdrawal rather than the
-  false-positive correction the next bullet describes. A qualifier that does not match its focus
-  selects nothing in FHIRPath, so `Encounter.name.exists()` over a Patient really is `false`; the
-  `HumanName` really carries no `given`; a FHIR `code` really is not a `Quantity`. The previous
-  engine reached each of those answers by accident rather than by deciding them (it navigated
-  `Encounter` as an ordinary member, and it compared `systemTypeOf(item)` of `"String"` against
-  `"Quantity"`), and that is why the refusal ships anyway: answering `false` where the generic model
-  has not established the type is a determination the model has not made, which is the
-  wrong-answer-with-no-diagnostic shape `UnsupportedFhirPathError` exists to prevent. `unchecked` is
-  visible in the `OperationOutcome`; a silent `false` is not.
+| # | constraint expression | over | shipped | this change |
+|---|---|---|---|---|
+| 1 | `Encounter.name.exists()` | a Patient with no `name` | `VIOLATED` | `UNCHECKED` |
+| 2 | `name.all(HumanName.given.exists())` | a `HumanName` carrying no `given` | `VIOLATED` | `UNCHECKED` |
+| 3 | `Encounter.name.empty()` | a Patient with no `name` | `(none)` | `UNCHECKED` |
+| 4 | `Encounter.exists().not()` | a Patient with no `name` | `(none)` | `UNCHECKED` |
+| 5 | `Patient.name.exists()` | a Patient that HAS a `name` | `VIOLATED` | `(none)` |
 
-  **The same refusal also adds a finding, which is remedy 1's other face.** Where the accidental
-  navigation happened to *satisfy* a constraint, the package reported nothing at all; it now reports
-  `INVARIANT_UNCHECKED` at information. Measured over a Patient: `Encounter.name.empty()` and
-  `Encounter.exists().not()` each went from no issue to one, with `valid` staying `true` in both.
-  That is the third of the three remedies that add, and it is pinned in the same test file.
+Does not move, measured: `Patient.name.exists()` over a Patient with no `name` (`VIOLATED` on both),
+which is the narrowing that makes rows 1 and 2 survivable - the spelling most published constraints
+use is still evaluated.
 
-  **None of the four withdrawals is pinned by the existing suite**, which is the ground on which they
-  ship: `git diff --numstat origin/main...HEAD -- test/` shows **zero deletions in every file it
-  lists**, and the one pre-existing file the change modifies, `test/fhirpath.test.ts`, gains tests
-  and loses none, so every test that predates this measurement passes unchanged over all four
-  movements. The four are pinned deliberately on this branch, by the test file named above and by
-  `test/profile-invariant-type-qualified.test.ts`, whose third block asserts `INVARIANT_UNCHECKED` at
-  information with `valid: true` for `Encounter.name.exists()` over a Patient: those files pin the
-  cost, and are cited here for that and not as evidence that nothing moved. What a **suite-pinned**
-  withdrawal looks like is recorded above, under the choice-spelling remedy this record measured and
-  refused: two tests that predate this measurement red on it, and that is why it is not shipped.
+**Rows 1 and 2 withdraw a CORRECT finding.** A qualifier that does not match its focus selects
+nothing in FHIRPath, so `Encounter.name.exists()` over a Patient really is `false` and the
+`HumanName` really carries no `given`. The previous engine reached those answers by accident rather
+than by deciding them (it navigated `Encounter` as an ordinary member), and that is why the refusal
+ships anyway: answering `false` where the generic model has not established the type is a
+determination the model has not made, the wrong-answer-with-no-diagnostic shape
+`UnsupportedFhirPathError` exists to prevent. `unchecked` is visible in the `OperationOutcome`; a
+silent `false` is not. **Rows 3 and 4 are the same refusal's other face:** where the accidental
+navigation happened to *satisfy* a constraint the package reported nothing at all, and it now reports
+an information-level notice, `valid` unchanged. **Row 5 removes a false positive**, which is the
+permitted correction rather than a withdrawal: a conformant Patient was reported `INVARIANT_VIOLATED`
+because the head selected nothing.
 
-  Remedies 2 and 4 withdraw nothing. Remedy 2's re-associations were parse errors rather than
-  answers. Remedy 4 answers `{}` where an earlier revision of it refused, and `{}` coerces through
-  `convertToBoolean` exactly as the lexical `false` it replaces, so the constraint stays reported at
-  its own code, severity and location: `test/profile-invariant-ordering.test.ts` (15 tests over the
-  same two entry points, using R4's `per-1` expression verbatim) pins an inverted period written with
-  two different offsets, with one and with none as `INVARIANT_VIOLATED` at error with `valid: false`
-  in every spelling, a conformant one as reporting nothing, and an ordering over a non-temporal model
-  value (`gender > 'test'`, `name.all(family < 'A')`) as keeping its `INVARIANT_VIOLATED` at error
-  with `valid: false`.
-- **Remedy 1 removes a false positive**, which is the permitted correction, not a withdrawal: a
-  conformant Patient was reported `INVARIANT_VIOLATED` for `Patient.name.exists()` because the head
-  selected nothing. The same test file pins that it now reports nothing.
-- **Remedy 3 adds a finding too**, in its other half, and the earlier claim that it could not was
-  wrong. This half is the `{} is T` rule, not the refusal tabled above. `{}` and `false`
-  coerce alike through `convertToBoolean` **taken alone**, so a constraint that *is* an empty type
-  test keeps its verdict; they do not COMPOSE alike. `not()` over an empty input is `[]` rather than
-  `true` and `{} implies false` is `{}` rather than `true`, so `(gender is String).not()` and
-  `(gender is String) implies active` over a Patient with no `gender` are now `INVARIANT_VIOLATED` at
-  error with `valid: false`, where the package reported nothing before. The new behaviour is what
-  FHIRPath specifies and what the corpus reads; what was wrong was this record's statement of its
-  blast radius. Three tests in `test/profile-invariant-ordering.test.ts` pin it, including the
-  direction that does not move.
-- **Remedy 4 adds a finding**, in two shapes, and neither is optional. Where the two ends of a period
-  are written at different precisions the comparison is undetermined; where a model value is not
-  temporal at all the comparison is undetermined too. `evaluateInvariant` coerces empty to "not
-  satisfied" (its documented, shipped behaviour, matching the reference validator), and the profile
-  layer makes that `INVARIANT_VIOLATED` at the constraint's own severity. The lexical comparison
-  answered `true` for some of those documents and reported nothing. The corpus is what forces the
-  first shape: `testPeriodInvariantOld` grades `per-1` over exactly this document and expects
-  `false`. `test/profile-invariant-ordering.test.ts` pins the added error, and its severity, at the
-  deciding layer rather than leaving it to be discovered.
-- **An added finding is the cost of remedies 3 and 4, and it is the safe direction.** A caller who
-  ordered a `string`-valued element against a literal and got a satisfied constraint out of a lexical
-  guess now gets that constraint reported instead. The guess was unsound for anything numeric, which
-  is what the corpus caught.
-- **The cost of remedies 1 and 3 runs the other way, and it is the direction that needs stating.**
-  In the four shapes tabled above, `validateResource` hands back `valid: true` for a document this
-  package used to reject. That is a real loss of a diagnostic and it is not softened here. What
-  replaces it is an `INVARIANT_UNCHECKED` at information naming the constraint, so the caller is told
-  the constraint was not evaluated rather than told it passed: the whole of the difference between a
-  refusal and a wrong answer, and the reason ADR 0002 makes refusal this engine's declared fallback.
-  A reader who needs those constraints decided needs an engine that carries FHIR type information,
-  which is a wider subset than this package has chosen to ship.
+#### Remedy 2, the `is` / `as` precedence level
+
+The level moved from looser than both `|` and the inequality operators to tighter than both, so four
+spellings are affected and they are not affected alike.
+
+| # | constraint expression | over | shipped | this change |
+|---|---|---|---|---|
+| 6 | `name.family \| gender is String` | a Patient with a `name.family` and a `gender` | `VIOLATED` | `(none)` |
+| 7 | `name.given \| name.family is String` | the same Patient | `VIOLATED` | `(none)` |
+| 8 | `gender > 'test' is String` | `gender: "male"` | `VIOLATED` | `UNCHECKED` |
+| 9 | `gender > 'test' is Boolean` | `gender: "male"` | `(none)` | `UNCHECKED` |
+| 10 | `gender is String \| name.family` | a Patient with a `name.family` and a `gender` | `UNCHECKED` | `(none)` |
+
+Does not move, measured: `(name.family | gender) is String` (`VIOLATED` on both), which is the
+shipped tree's parse of row 6 written out; `name.family | (gender is String)` (`(none)` on both),
+which is this change's parse of it; `name.given | name.family` (`(none)` on both), which is how a
+two-item collection has always coerced at this layer; `gender > ('test' is String)` (`UNCHECKED` on
+both), this change's parse of row 8; `(gender is String) | name.family` (`(none)` on both), the parse
+row 10 newly gets; and `gender is String > 'test'` (`UNCHECKED` on both). `(gender > 'test') is
+String`, the shipped parse of row 8, reads `VIOLATED` on both trees but by two different routes,
+because remedy 4 changes the comparison inside it, so it is **not** offered as a control.
+
+**"Remedy 2's re-associations were parse errors rather than answers" was true of half the spellings
+and this record applied it to all of them.** With `is` to the LEFT of `|` or of an inequality (row 10,
+and `gender is String > 'test'`) the shipped parser stopped at a trailing token and raised
+`UnsupportedFhirPathError`, so there really was no answer to move: those two are the sentence's
+grounds. With `is` to the RIGHT (rows 6 to 9) the expression parses on **both** trees and answers
+differently on each. Those are answers, not parse errors, and rows 6 to 9 are what the sentence was
+denying.
+
+**Rows 6 and 7 remove a finding into silence**, with no diagnostic of any kind on the other side of
+it, which is set out under "the cost" below rather than folded into a summary here. **Row 10 is a
+removal too**, of an `INVARIANT_UNCHECKED`: the shipped package refused the expression outright and
+this one evaluates it, so what goes away there is a refusal, not a verdict.
+
+#### Remedy 3, a type test outside the System primitives, and `{} is T`
+
+| # | constraint expression | over | shipped | this change |
+|---|---|---|---|---|
+| 11 | `gender is Quantity` | `gender: "male"` | `VIOLATED` | `UNCHECKED` |
+| 12 | `gender.ofType(Quantity).exists()` | `gender: "male"` | `VIOLATED` | `UNCHECKED` |
+| 13 | `gender is FHIR.Boolean` | `gender: "male"` | `VIOLATED` | `UNCHECKED` |
+| 14 | `gender is FHIR.String` | `gender: "male"` | `(none)` | `UNCHECKED` |
+| 15 | `(gender is String).not()` | a Patient with no `gender` | `(none)` | `VIOLATED` |
+| 16 | `(gender is String) implies active` | a Patient with `active: false` and no `gender` | `(none)` | `VIOLATED` |
+
+Does not move, measured: `gender is System.Boolean` (`VIOLATED` on both) and `gender is System.String`
+(`(none)` on both), which are exactly the comparisons the shipped engine ran for rows 13 and 14 once
+it had stripped the prefix; `gender is String` and `gender.ofType(String).exists()` (`(none)` on
+both); and `gender.ofType(FHIR.String).exists()` and `gender.ofType(System.String).exists()`
+(`UNCHECKED` on both), a qualified type name inside `ofType` having been refused by the parser
+already.
+
+**Rows 11 and 12 withdraw a correct finding**, for the same reason rows 1 and 2 do: a FHIR `code`
+really is not a `Quantity`, but the shipped engine reached that by comparing `systemTypeOf(item)` of
+`"String"` against `"Quantity"`, which is not the question `is Quantity` asks.
+
+**Rows 13 and 14 are the `FHIR.` prefix, and they are tabled deliberately rather than left to the
+generalisation.** `itemIsType` no longer strips a leading `FHIR.`, so a name in FHIR's own type
+namespace now falls outside `SYSTEM_TYPE_NAMES` and is refused. That is the same mechanism as rows 11
+and 12 and the same judgement - `FHIR.Boolean` names FHIR's `boolean` datatype, which this generic
+model carries no type information for, exactly as `Quantity` is - so it is an instance of the tabled
+generalisation and not a fifth remedy. It is tabled anyway on two grounds: "outside the System
+primitives" does not read as covering a name whose last segment IS a System primitive, and row 14
+moves in the ADD direction, which no row from 11 to 13 would have let a reader predict.
+
+**Rows 15 and 16 are the `{} is T` half, which adds.** `{}` and `false` coerce alike through
+`convertToBoolean` **taken alone**, so a constraint that *is* an empty type test keeps its verdict;
+they do not COMPOSE alike. `not()` over an empty input is `[]` rather than `true` and `{} implies
+false` is `{}` rather than `true`. The new behaviour is what FHIRPath specifies and what the corpus
+reads; what was wrong was an earlier revision of this record's statement of its blast radius.
+
+#### Remedy 4, the ordering comparison
+
+| # | constraint | over | shipped | this change |
+|---|---|---|---|---|
+| 17 | `per-1` | a Period `2001-05-06T13:00:00+02:00` .. `2001-05-06T12:00:00Z` | `VIOLATED` | `(none)` |
+| 18 | `per-1` | a Period `2001-05-06T13:00:00+02:00` .. `2001-05-06T11:00:00Z` | `VIOLATED` | `(none)` |
+| 19 | `per-1` | a Period `2001-05-06T10:00:00Z` .. `2001-05-06T11:00:00+02:00` | `(none)` | `VIOLATED` |
+| 20 | `per-1` | a Period `2001-05-06` .. `2001-05-06T10:10:10Z` | `(none)` | `VIOLATED` |
+| 21 | `(gender > 'test') is Boolean` | `gender: "male"` | `(none)` | `VIOLATED` |
+
+`per-1` is R4's own Period constraint, spelled verbatim:
+`identifier.period.all(start.hasValue().not() or end.hasValue().not() or (start <= end))`.
+
+Does not move, measured: `per-1` over `2001-05-06T13:00:00+02:00` .. `2001-05-06T10:00:00Z`
+(`VIOLATED` on both), over `2001-05-08` .. `2001-05-06` (`VIOLATED` on both) and over
+`2001-05-06T10:00:00Z` .. `2001-05-06T13:00:00+02:00` (`(none)` on both); and an ordering over a
+non-temporal model value, `gender > 'test'` and `name.all(family < 'A')` (`VIOLATED` on both, by two
+different routes - a lexical `false` on the shipped tree, `{}` here - which is what "`{}` coerces
+exactly as the lexical `false` did" means and all it means). The **lexical** comparison this remedy
+replaced is still reachable at this commit between two String *literals*, so rows 17, 19 and 20 have
+a live control that reproduces the shipped answer rather than recalling it:
+`'2001-05-06T13:00:00+02:00' <= '2001-05-06T12:00:00Z'` is `VIOLATED`,
+`'2001-05-06T10:00:00Z' <= '2001-05-06T11:00:00+02:00'` is `(none)` and
+`'2001-05-06' <= '2001-05-06T10:10:10Z'` is `(none)`, on both trees.
+
+**Rows 17 and 18 remove a FALSE POSITIVE, and it is still a removal from remedy 4.**
+`2001-05-06T13:00:00+02:00` *is* `2001-05-06T11:00:00Z`, so a period ending at `12:00:00Z` is not
+inverted and a period ending at `11:00:00Z` is exactly zero-length: the finding that goes away was
+wrong, and this is the permitted correction, the same kind as row 5. Two earlier revisions of this
+record nevertheless said remedy 4 withdrew nothing, and it withdraws these. **Row 19 is their
+mirror**, and the reason normalising is not optional: where the lexical order was wrong the other
+way, the same normalisation ADDS a true finding to a document the shipped package passed. **Rows 20
+and 21 are the two shapes this record already stated:** two period ends written at different
+precisions do not order, and a model value that is not temporal does not order against anything, so
+both are undetermined and `evaluateInvariant` coerces empty to "not satisfied" (its documented,
+shipped behaviour, matching the reference validator). The corpus is what forces row 20:
+`testPeriodInvariantOld` grades `per-1` over exactly that document and expects `false`.
+
+#### What the movements cost, in the direction each one runs
+
+**Nothing here is pinned by the existing suite**, which is the ground on which all twenty-one ship:
+`git diff --numstat origin/main...HEAD -- test/` shows **zero deletions in every file it lists**, and
+the one pre-existing file the change modifies, `test/fhirpath.test.ts`, gains tests and loses none,
+so every test that predates this measurement passes unchanged over all of them. They are pinned
+deliberately on this branch, by `test/profile-invariant-withdrawn-findings.test.ts` and by
+`test/profile-invariant-type-qualified.test.ts` and `test/profile-invariant-ordering.test.ts`: those
+files pin the **cost**, and are cited here for that and never as evidence that nothing moved. What a
+**suite-pinned** withdrawal looks like is recorded above, under the choice-spelling remedy this
+record measured and refused: two tests that predate this measurement red on it, and that is why it is
+not shipped.
+
+**The added findings (rows 3, 4, 9, 14, 15, 16, 19, 20, 21) are the safe direction.** A caller who
+ordered a `string`-valued element against a literal and got a satisfied constraint out of a lexical
+guess now gets that constraint reported instead; a caller whose constraint was satisfied by an
+accidental navigation now learns it was never evaluated. The guess was unsound for anything numeric,
+which is what the corpus caught.
+
+**The withdrawals that land on `UNCHECKED` (rows 1, 2, 8, 11, 12, 13) are a real loss of a
+diagnostic**, and it is not softened here: `validateResource` hands back `valid: true` for a document
+this package used to reject. What replaces the error is an `INVARIANT_UNCHECKED` at information
+naming the constraint, so the caller is told the constraint was not evaluated rather than told it
+passed: the whole of the difference between a refusal and a wrong answer, and the reason ADR 0002
+makes refusal this engine's declared fallback. A reader who needs those constraints decided needs an
+engine that carries FHIR type information, which is a wider subset than this package has chosen to
+ship.
+
+**Rows 6, 7, 17 and 18 remove a finding into SILENCE, and the sentence above is not available for
+them.** There is no `INVARIANT_UNCHECKED` on the other side of these four: the caller is told the
+constraint PASSED, not that it was not evaluated. That sentence is the argument for everything else
+on this branch and it is deliberately not stretched to cover these. They have two different accounts,
+and only one of them is comfortable:
+
+- **Rows 17 and 18 are correct**, as above: the withdrawn finding was a false positive, so silence is
+  the right answer and the caller loses nothing they should have had.
+- **Rows 6 and 7 are not, and this record has no diagnostic to offer for them.** Under the corrected
+  precedence, `name.family | gender is String` is a union of a `family` and a Boolean: a two-item
+  collection. FHIRPath makes a constraint that yields more than one item an error;
+  `convertToBoolean` coerces any multi-item collection to `true` and has done so since long before
+  this change (control: `name.given | name.family` is `(none)` on **both** trees). So the silence is
+  a shipped coercion meeting a corrected parse rather than a new determination, and the error that
+  went away was the mis-parse's rather than the coercion's - but the caller still gets `valid: true`
+  and an empty `OperationOutcome` from a package that used to reject that document. Closing that gap
+  is a change to how `evaluateInvariant` coerces a multi-item collection, not to the parser, and it
+  is out of this change's scope and not made here.
 
 No test that predates this measurement was deleted or edited to accommodate it, and the whole suite
 is green. `git diff --numstat origin/main...HEAD -- test/` shows **zero deletions in every file it
 lists**, and `--diff-filter=M` over the same range lists exactly one pre-existing file,
 `test/fhirpath.test.ts`, which gains tests and loses none; everything else under `test/` is new here.
-That is a necessary condition and, as the four withdrawals above prove, nowhere near a sufficient
+That is a necessary condition and, as the twenty-one movements above prove, nowhere near a sufficient
 one: a green suite says only that nothing the suite pins moved, which is why each claim here names
 the test that checks it at the layer that decides, and why what the suite does not pin is tabled
-rather than left to be inferred from the green.
+rather than left to be inferred from the green. **The table is also not a proof of its own
+completeness**, and no revision of this section will carry one again: it is the movement classes read
+off the diff, each measured on both trees. Anything a later reader measures that is not in it belongs
+in it.
 
 ## What vendoring the corpus cost the PHI gate
 

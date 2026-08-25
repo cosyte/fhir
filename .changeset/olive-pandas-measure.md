@@ -43,13 +43,19 @@ The run surfaced wrongly answered cases in four constructs, all now fixed at the
   re-associated `1 | 1 is Integer` into `(1 | 1) is Integer`, a different collection, and
   `1 > 2 is Boolean` into `(1 > 2) is Boolean`, which answers `true` where the language says the
   expression compares an Integer with a Boolean and errors. Both are wrong booleans out of a
-  well-formed parse.
+  well-formed parse, which is also why this correction moves findings: an expression that parsed
+  before and parses now, re-associated, answers differently on each. Written the other way round,
+  with `is` to the LEFT of `|` or of an inequality, the expression did not parse at all before and
+  does now. Both directions are enumerated below.
 - **A type test outside the System primitives is refused rather than answered `false`.**
   `Observation.issued is instant` and `Patient.gender.ofType(code)` were being answered from the
   System type of the value, which is not the question: a generic model carries no FHIR datatype
   name, so `code` and `instant` cannot be tested for at all and `false` only looked like a
   determination. Any type name outside `Boolean` / `String` / `Integer` / `Decimal` now raises
-  `UnsupportedFhirPathError`. Separately `{} is T` is now the empty collection rather than `false`,
+  `UnsupportedFhirPathError`, and a leading `FHIR.` is no longer stripped before deciding, so
+  `FHIR.Boolean` and `FHIR.String` are refused rather than answered off the System type of the
+  value; `System.` is still stripped, since `System.Boolean` names a type this engine does carry.
+  Separately `{} is T` is now the empty collection rather than `false`,
   which is what FHIRPath says. The two coerce alike TAKEN ALONE, so a constraint that is the type
   test keeps its verdict, and they do not COMPOSE alike: see the added finding below.
 - **An ordering comparison no longer guesses a model value's type from its text.** A string-valued primitive is
@@ -63,55 +69,74 @@ The run surfaced wrongly answered cases in four constructs, all now fixed at the
   coincide, and are undetermined (`{}`) when they overlap without coinciding. A value written with no
   designator is read at the evaluation context's offset, which FHIRPath leaves to the engine and
   which this engine declares to be UTC. Every other pair is undetermined too and yields `{}`, NOT a
-  refusal: `{}` coerces exactly as the old lexical `false` did, so a constraint that used to be
-  reported stays reported, where refusing it would have downgraded it to `INVARIANT_UNCHECKED` at
-  information with `valid: true`. Values the engine computed itself still order as System Strings,
-  and a JSON-read decimal still orders as a number.
+  refusal: `{}` coerces exactly as a lexical `false` did, so a constraint the lexical comparison
+  answered `false` for stays reported, where refusing it would have downgraded it to
+  `INVARIANT_UNCHECKED` at information with `valid: true`. That is a comparison with the refusal and
+  not with the lexical comparison this replaces: reading two ends by their instants rather than
+  their spelling takes a report away where the lexical order was a false positive and adds one
+  where it was wrong the other way, and both directions are enumerated below. Values the engine
+  computed itself still order as System Strings, and a JSON-read decimal still orders as a number.
 
-What the four move, precisely, and each claim checked at the layer where a finding is decided rather
-than inferred from a green suite. **Three of the four add a finding somewhere, and two of them also
-withdraw one, in four shapes named below.**
+What the four move, precisely, each claim measured at the layer where a finding is decided by running
+the same probe against the published package and against this change and diffing the two outputs,
+rather than inferred from a green suite. **Each of the four both adds a finding somewhere and takes
+one away somewhere.** Twenty-one movements are tabled with both columns in
+`documentation/fhirpath-coverage.md` and pinned by
+`test/profile-invariant-withdrawn-findings.test.ts`; earlier drafts of this note closed on "nothing
+is removed, re-severitied or relocated", which was false, and there is no such sentence here now.
 
-- **A finding is withdrawn and re-severitied in four shapes, and an earlier draft of this note
-  claiming none was is wrong.** Remedies 1 and 3 refuse a construct the previous engine reduced to
-  `false`, and a refusal reaches the invariant layer as `unchecked`, so the constraint moves from
-  `INVARIANT_VIOLATED` at **error** with `validateResource(...).valid` of `false` to
-  `INVARIANT_UNCHECKED` at **information** with `valid: true`. The four are
-  `Encounter.name.exists()` over a Patient with no `name`,
-  `name.all(HumanName.given.exists())` over a `HumanName` carrying no `given`,
-  `gender is Quantity` and `gender.ofType(Quantity).exists()` over `gender: "male"`. Each pre-change
-  answer was `false` and each `false` was correct FHIRPath, so these are withdrawals of correct
-  findings rather than the false-positive correction below. They ship because the previous engine
-  reached those answers by accident rather than by deciding them, and answering `false` where a
-  generic model has not established the type is a determination the model has not made: `unchecked`
-  is visible in the `OperationOutcome`, a silent `false` is not.
-  `test/profile-invariant-withdrawn-findings.test.ts` pins all four with their pre-change controls,
-  and `documentation/fhirpath-coverage.md` tables them in full. The same refusal also **adds** a
-  finding in the opposite case: where the accidental navigation happened to satisfy a constraint the
-  package reported nothing, and now reports `INVARIANT_UNCHECKED` at information
-  (`Encounter.name.empty()`, `Encounter.exists().not()`), with `valid` unchanged.
-- **Nothing else is removed, re-severitied or relocated.** Remedy 2's re-associations were parse
-  errors rather than answers, and remedy 4 answers `{}` where an earlier revision refused, which
-  coerces exactly as the lexical `false` it replaces.
-  `test/profile-invariant-type-qualified.test.ts` pins the issue code, the severity and `valid` for a
-  type-qualified constraint in both the satisfied and the violated direction, and
-  `test/profile-invariant-ordering.test.ts` does the same for `per-1` over an inverted period written
-  with two different timezone offsets, with one, and with none, plus the conformant orderings, plus
-  an ordering over a non-temporal model value (`gender > 'test'`, `name.all(family < 'A')`), which
-  keeps its `INVARIANT_VIOLATED` at error with `valid: false`. Every test that predates this
-  measurement is green unchanged, which is why the four withdrawals above are tabled rather than left
-  to be inferred from that: a green suite says only that nothing the suite pins moved.
-- **A false positive is removed**, which is the correction the first fix exists for: a conformant
-  Patient was reported `INVARIANT_VIOLATED` because the type-qualified head selected nothing.
-- **A finding is added**, in two shapes, both from an undetermined ordering: two period ends written
-  at different precisions, and a model value that is not temporal at all. `evaluateInvariant` coerces
-  empty to "not satisfied" as it has always documented, and the profile layer reports
-  `INVARIANT_VIOLATED` at the constraint's severity for a document the lexical comparison passed. The
-  corpus is what requires the first.
+- **A finding is withdrawn and re-severitied**, in six shapes, by the two corrections that refuse
+  (the type-qualified head and the type test) and by the precedence move. A refusal reaches the
+  invariant layer as `unchecked`, so the constraint goes from `INVARIANT_VIOLATED` at **error** with
+  `validateResource(...).valid` of `false` to `INVARIANT_UNCHECKED` at **information** with
+  `valid: true`: `Encounter.name.exists()` over a Patient with no `name`,
+  `name.all(HumanName.given.exists())` over a `HumanName` carrying no `given`, `gender is Quantity`,
+  `gender.ofType(Quantity).exists()` and `gender is FHIR.Boolean` over `gender: "male"`, and
+  `gender > 'test' is String` over the same, which re-associates into a comparison the engine
+  declines. Each pre-change answer was `false` and each `false` was correct FHIRPath, so these are
+  withdrawals of correct findings rather than the false-positive corrections below. They ship because
+  the previous engine reached those answers by accident rather than by deciding them, and answering
+  `false` where a generic model has not established the type is a determination the model has not
+  made: `unchecked` is visible in the `OperationOutcome`, a silent `false` is not.
+- **Two findings are removed into silence, with no `unchecked` on the other side**, and that is the
+  one movement here the paragraph above does not cover, because the caller is told the constraint
+  passed rather than told it was not evaluated. Under the corrected precedence
+  `name.family | gender is String` and `name.given | name.family is String` are unions rather than
+  type tests, so each yields a two-item collection, and a multi-item collection has always coerced to
+  "satisfied" at this layer (unchanged control: `name.given | name.family`). The error that goes away
+  was the mis-parse's, not the coercion's, and the coercion is untouched by this change; the caller
+  still gets `valid: true` from a package that used to reject that document. `documentation/fhirpath-coverage.md`
+  states the gap rather than arguing it away.
+- **A false positive is removed, in three shapes**: a conformant Patient reported
+  `INVARIANT_VIOLATED` because the type-qualified head selected nothing, and R4's `per-1` reported
+  over a Period whose ends carry different timezone designators but are in order once normalised
+  (`13:00:00+02:00` *is* `11:00:00Z`, so an end at `12:00:00Z` or at `11:00:00Z` is not inverted).
+  The published package reports an error on those documents and this one reports nothing.
+- **An `unchecked` is removed too**, where the published parser refused an expression outright and
+  this one evaluates it: `gender is String | name.family` did not parse before the precedence move
+  and does now.
+- **A finding is added by an undetermined ordering**, in three shapes: two period ends written at
+  different precisions, a period whose lexical order is the reverse of its instants' order, and a
+  model value that is not temporal at all. `evaluateInvariant` coerces empty to "not satisfied" as it
+  has always documented, and the profile layer reports `INVARIANT_VIOLATED` at the constraint's
+  severity for a document the lexical comparison passed. The corpus is what requires the first.
 - **A finding is added by the empty type test too.** `{}` and `false` coerce alike taken alone and do
   not compose alike: `not()` over an empty input is `[]` rather than `true`, and `{} implies false`
   is `{}` rather than `true`, so `(gender is String).not()` over a Patient with no `gender` is now
-  `INVARIANT_VIOLATED` at error where the package reported nothing. Pinned in the same test file.
+  `INVARIANT_VIOLATED` at error where the package reported nothing.
+- **An `unchecked` notice is added** where a construct that used to be answered is now refused and
+  the constraint had been satisfied: `gender is FHIR.String` and `gender > 'test' is Boolean` over
+  `gender: "male"`, and `Encounter.name.empty()` and `Encounter.exists().not()` over a Patient, each
+  go from no issue at all to `INVARIANT_UNCHECKED` at information, with `valid` unchanged.
+
+Every test that predates this measurement is green unchanged, which is why the movements above are
+tabled rather than left to be inferred from that: a green suite says only that nothing the suite pins
+moved. `test/profile-invariant-type-qualified.test.ts` pins the issue code, the severity and `valid`
+for a type-qualified constraint in the satisfied, violated and non-matching directions, and
+`test/profile-invariant-ordering.test.ts` does the same for `per-1` over an inverted period written
+with two different timezone offsets, with one and with none, plus the conformant orderings and an
+ordering over a non-temporal model value. Those files pin what this change costs; neither is evidence
+that nothing moved.
 
 No public export is added or removed, and no runtime dependency: the corpus is read with the
 `readRawXml` reader the package already ships.
