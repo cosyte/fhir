@@ -48,36 +48,46 @@ The run surfaced wrongly answered cases in four constructs, all now fixed at the
   name, so `code` and `instant` cannot be tested for at all and `false` only looked like a
   determination. Any type name outside `Boolean` / `String` / `Integer` / `Decimal` now raises
   `UnsupportedFhirPathError`. Separately `{} is T` is now the empty collection rather than `false`,
-  which is what FHIRPath says; the two coerce alike, so no constraint's verdict moves with it.
-- **An ordering comparison no longer orders a model value lexically.** A string-valued primitive is
+  which is what FHIRPath says. The two coerce alike TAKEN ALONE, so a constraint that is the type
+  test keeps its verdict, and they do not COMPOSE alike: see the added finding below.
+- **An ordering comparison no longer guesses a model value's type from its text.** A string-valued primitive is
   the FHIR lexical form of an element whose type the model does not carry, so comparing it with `<`
   answered `Observation.value.value < 'test'` (a decimal against a word, an execution error in
   FHIRPath) with `true`, and answered the `per-1` period constraint's `start <= end` over a
   day-precision date and a second-precision dateTime with `true` where FHIRPath says the comparison
-  is indeterminate. Where either side is a model value the two must now read as temporal values of
-  the same family, each taken as the interval of instants its written precision denotes, at its own
-  timezone offset: they order when the intervals are disjoint, are equal when the intervals coincide,
-  and are indeterminate (`{}`) when they overlap without coinciding. A value written with no
+  is undetermined. Where either side is a model value the pair is ordered when both read as temporal
+  values of the same family, each taken as the interval of instants its written precision denotes, at
+  its own timezone offset: they order when the intervals are disjoint, are equal when the intervals
+  coincide, and are undetermined (`{}`) when they overlap without coinciding. A value written with no
   designator is read at the evaluation context's offset, which FHIRPath leaves to the engine and
-  which this engine declares to be UTC. Anything not temporal is refused. Values the engine computed
-  itself still order as System Strings, and a JSON-read decimal still orders as a number.
+  which this engine declares to be UTC. Every other pair is undetermined too and yields `{}`, NOT a
+  refusal: `{}` coerces exactly as the old lexical `false` did, so a constraint that used to be
+  reported stays reported, where refusing it would have downgraded it to `INVARIANT_UNCHECKED` at
+  information with `valid: true`. Values the engine computed itself still order as System Strings,
+  and a JSON-read decimal still orders as a number.
 
 What the four move, precisely, and each claim checked at the layer where a finding is decided rather
-than inferred from a green suite:
+than inferred from a green suite. **Three of the four add a finding somewhere; none removes,
+re-severities or relocates one.**
 
 - **Nothing is removed, re-severitied or relocated.** `test/profile-invariant-type-qualified.test.ts`
   pins the issue code, the severity and `valid` for a type-qualified constraint in both the satisfied
   and the violated direction, and `test/profile-invariant-ordering.test.ts` does the same for `per-1`
   over an inverted period written with two different timezone offsets, with one, and with none, plus
-  the conformant orderings. Every test that predates this measurement is green unchanged.
+  the conformant orderings, plus an ordering over a non-temporal model value (`gender > 'test'`,
+  `name.all(family < 'A')`), which keeps its `INVARIANT_VIOLATED` at error with `valid: false`.
+  Every test that predates this measurement is green unchanged.
 - **A false positive is removed**, which is the correction the first fix exists for: a conformant
   Patient was reported `INVARIANT_VIOLATED` because the type-qualified head selected nothing.
-- **A finding is added**, in one shape: where the two ends of a period are written at different
-  precisions the comparison is indeterminate, `evaluateInvariant` coerces empty to "not satisfied"
-  as it has always documented, and the profile layer reports `INVARIANT_VIOLATED` at the
-  constraint's severity for a document the lexical comparison passed. The corpus is what requires it.
-- **An answer is withdrawn**, in one shape: an ordering comparison over a model value that is not
-  temporal is now `INVARIANT_UNCHECKED`. That answer was unsound for anything numeric.
+- **A finding is added**, in two shapes, both from an undetermined ordering: two period ends written
+  at different precisions, and a model value that is not temporal at all. `evaluateInvariant` coerces
+  empty to "not satisfied" as it has always documented, and the profile layer reports
+  `INVARIANT_VIOLATED` at the constraint's severity for a document the lexical comparison passed. The
+  corpus is what requires the first.
+- **A finding is added by the empty type test too.** `{}` and `false` coerce alike taken alone and do
+  not compose alike: `not()` over an empty input is `[]` rather than `true`, and `{} implies false`
+  is `{}` rather than `true`, so `(gender is String).not()` over a Patient with no `gender` is now
+  `INVARIANT_VIOLATED` at error where the package reported nothing. Pinned in the same test file.
 
 No public export is added or removed, and no runtime dependency: the corpus is read with the
 `readRawXml` reader the package already ships.

@@ -19,7 +19,12 @@
  * {@link resolveTypeQualifier}. Everything else, arithmetic, string functions, `descendants()`,
  * `resolve()`, FHIR-type `is`/`as` (a generic model carries no datatype name), and a type qualifier
  * that cannot be checked, raises {@link ./errors.js UnsupportedFhirPathError}.
- * That is the whole safety contract: the engine **never guesses**. `where`/`select`/`all`
+ * That is the whole safety contract: the engine **never guesses**. Refusing is not the only way not
+ * to guess, and it is the expensive one, because a refusal makes a constraint *unchecked* and takes
+ * a diagnostic away: an ordering comparison the generic model cannot decide (see {@link compare})
+ * therefore yields the empty collection, FHIRPath's own spelling of "no determination", which
+ * coerces exactly as `false` does and so leaves every finding where it was.
+ * `where`/`select`/`all`
  * evaluate their criteria *lazily per item*, so an unsupported sub-term inside a filter over an empty
  * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires,
  * exactly the common case that lets base constraints like `dom-3` pass without implementing their full
@@ -420,18 +425,16 @@ function readTemporal(text: string): TemporalValue | undefined {
  * withdrew the `per-1` violation the validator reported for a period whose start really is after its
  * end, and that direction is the one the fail-safe contract forbids.
  *
- * @returns `-1` / `0` / `1` when they order, `"indeterminate"` when FHIRPath says `{}`, or
- *   `"unorderable"` for a date against a time of day, which is not a comparison FHIRPath defines.
+ * @returns `-1` / `0` / `1` when they order, or `"undetermined"` when FHIRPath says `{}`: two
+ *   overlapping precisions, and a date against a time of day, which is not a comparison FHIRPath
+ *   defines over values whose types this model does not carry.
  */
-function compareTemporal(
-  a: TemporalValue,
-  b: TemporalValue,
-): -1 | 0 | 1 | "indeterminate" | "unorderable" {
-  if (a.form !== b.form) return "unorderable";
+function compareTemporal(a: TemporalValue, b: TemporalValue): -1 | 0 | 1 | "undetermined" {
+  if (a.form !== b.form) return "undetermined";
   if (a.hi <= b.lo) return -1;
   if (b.hi <= a.lo) return 1;
   if (a.lo === b.lo && a.hi === b.hi) return 0;
-  return "indeterminate";
+  return "undetermined";
 }
 
 /**
@@ -447,11 +450,22 @@ function compareTemporal(
  * `start <= end` over a day-precision date and a second-precision dateTime answered `true` where
  * FHIRPath says `{}`.
  *
- * So where either side is a model primitive, the two must both read as temporal values of the same
- * shape, and then {@link compareTemporal} answers with FHIRPath's own precision and offset rules.
- * Anything else is refused rather than guessed, which keeps `start <= end` answering for every pair
- * of dates it answered for before, in whatever offsets they are written, while withdrawing only the
- * answers that were never determinations.
+ * So where either side is a model primitive, {@link compareTemporal} answers whenever both read as
+ * temporal lexical forms of the same family, with FHIRPath's own precision and offset rules; every
+ * other pair is **undetermined** and the expression's value is the empty collection.
+ *
+ * **`{}`, never a refusal, and that distinction is the whole point.** An
+ * {@link ./errors.js UnsupportedFhirPathError} here reaches
+ * {@link ../fhirpath/index.js evaluateInvariant} as `unchecked`, so the profile layer downgrades a
+ * constraint it used to report to `INVARIANT_UNCHECKED` at *information* with
+ * `validateResource(...).valid` flipping to `true`: a diagnostic withdrawn and re-severitied, which
+ * is the one direction this package's fail-safe contract forbids. `{}` coerces through
+ * {@link convertToBoolean} exactly as `false` did, so a constraint whose ordering the engine cannot
+ * determine stays **reported**, at the same code, the same severity and the same location as before.
+ * What the empty collection can do, and a lexical guess could not, is *add*: an ordering that used
+ * to come back `true` on a guess now leaves its constraint unsatisfied, which surfaces the
+ * undetermined comparison instead of hiding it behind an answer.
+ * `test/profile-invariant-ordering.test.ts` pins both halves.
  */
 function compare(op: string, left: FpColl, right: FpColl): FpColl {
   if (left.length === 0 || right.length === 0) return [];
@@ -476,16 +490,12 @@ function compare(op: string, left: FpColl, right: FpColl): FpColl {
     } else {
       const at = readTemporal(as);
       const bt = readTemporal(bs);
-      if (at === undefined || bt === undefined) {
-        throw new UnsupportedFhirPathError(
-          "ordering comparison on a model value whose type the model does not carry",
-        );
-      }
+      // Two temporal lexical forms of the same family are the one pair a generic model can order.
+      // Everything else, a value whose type the model does not carry against anything at all, is
+      // undetermined rather than unsupported, and FHIRPath spells an undetermined ordering `{}`.
+      if (at === undefined || bt === undefined) return [];
       const ordered = compareTemporal(at, bt);
-      if (ordered === "indeterminate") return [];
-      if (ordered === "unorderable") {
-        throw new UnsupportedFhirPathError("ordering comparison of a date against a time of day");
-      }
+      if (ordered === "undetermined") return [];
       cmp = ordered;
     }
   }
@@ -782,10 +792,16 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
       const operand = evaluate(expr.operand, focus, ctx);
       if (expr.op === "is") {
         // `{} is T` is `{}`, not `false`: FHIRPath propagates the empty collection through a type
-        // test rather than deciding one. Both coerce to `false` through convertToBoolean, so no
-        // invariant's verdict moves; what moves is the *collection* an expression yields, which the
-        // shared corpus reads directly (`Observation.issued is instant` over a document with no
-        // `issued` expects `{}`).
+        // test rather than deciding one, and the shared corpus reads that collection directly
+        // (`Observation.issued is instant` over a document with no `issued` expects `{}`; answering
+        // `false` makes that case wrongly answered, measured).
+        //
+        // Taken ALONE the two coerce alike through convertToBoolean, so a constraint that IS the
+        // type test keeps its verdict. They do not COMPOSE alike: `not()` over an empty input is
+        // `[]` rather than `true`, and `{} implies false` is `{}` rather than `true`, so a
+        // constraint wrapping the test in either can go from satisfied to violated. That is an
+        // ADDED finding, never a withdrawn one, and `test/profile-invariant-ordering.test.ts` pins
+        // both directions rather than leaving the blast radius asserted.
         if (operand.length === 0) return [];
         if (operand.length !== 1) return [{ t: "bool", value: false }];
         return [{ t: "bool", value: itemIsType(operand[0] as FpItem, expr.type) }];

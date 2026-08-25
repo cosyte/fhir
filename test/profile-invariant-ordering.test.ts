@@ -10,21 +10,27 @@
  * makes `validateResource(...).valid` false. A change to how the engine orders a date moves a
  * document between those outcomes, and nothing under `test/fhirpath*.test.ts` can see it happen.
  *
- * Three readings are pinned here, one per direction the remedy can move a document:
+ * Four readings are pinned here, one per direction a remedy can move a document:
  *
  * 1. **Two offsets order by the instants they name.** `13:00:00+02:00` is `11:00:00Z`, so a period
  *    written that way against a `10:00:00Z` end is genuinely inverted and stays reported. Refusing
  *    the pair instead reported `INVARIANT_UNCHECKED` and handed the caller `valid: true` for a
  *    document this package rejects, which is the one direction the fail-safe contract forbids.
- * 2. **A precision difference is indeterminate, and the invariant layer's shipped coercion makes an
- *    indeterminate constraint a violation.** This is an ADDITION: comparing the two lexically
+ * 2. **A precision difference is undetermined, and the invariant layer's shipped coercion makes an
+ *    undetermined constraint a violation.** This is an ADDITION: comparing the two lexically
  *    answered `true` and reported nothing. It is not a free choice, the shared corpus grades
  *    `testPeriodInvariantOld` over exactly this document and expects `false`, and `evaluateInvariant`
  *    documents `empty → not satisfied` as matching the reference validator's coercion. Pinned so the
  *    addition is visible rather than asserted away.
- * 3. **A model value that is not temporal is refused**, which costs the caller an answer they used to
- *    get (lexically, and wrongly for anything numeric). Pinned with its severity so the cost is
- *    stated where it lands rather than only where it is thrown.
+ * 3. **A model value that is not temporal is UNDETERMINED, not unsupported.** `{}` and the lexical
+ *    `false` coerce alike, so `gender > 'test'` keeps its `INVARIANT_VIOLATED` at *error* with
+ *    `valid: false`; refusing it instead removed and re-severitied that finding in one step. The
+ *    cost the empty collection does carry is an ADDITION, where the lexical guess used to answer
+ *    `true` and satisfy the constraint, and that is pinned beside it.
+ * 4. **A type test over an empty operand is `{}`, and `{}` does not compose the way `false` does.**
+ *    `not()` and a three-valued `implies` both turn it into a violation the shipped package did not
+ *    report. Another addition, pinned so the blast-radius sentence in the shipped record has a test
+ *    under it rather than a claim.
  */
 import { describe, expect, it } from "vitest";
 
@@ -169,15 +175,104 @@ describe("per-1 where the two ends are written at different precisions", () => {
 });
 
 describe("an ordering comparison over a model value that is not temporal", () => {
-  it("reports INVARIANT_UNCHECKED at information, never a decision", () => {
-    // The refusal's cost, at the layer that pays it: a caller who ordered a `string`-valued element
-    // against a literal used to get a lexical answer and now gets `unchecked`. The engine cannot tell
-    // a `string` from a `decimal` read out of XML (the corpus caught `Observation.value.value <
-    // 'test'` answering `true`), so it does not guess. `unchecked` is never an error, and never a
-    // silent pass either: `valid` stays true only because nothing was established.
-    const profile = profileWith("gender < 'test'");
+  // THE REGRESSION GUARD for the withdrawal this remedy must not make. The engine cannot tell a
+  // `string` from a `decimal` read out of XML (the corpus caught `Observation.value.value < 'test'`
+  // answering `true`), so it does not guess: the ordering is undetermined and the expression is
+  // `{}`. Refusing instead raised `UnsupportedFhirPathError`, and `unchecked` reaches this layer as
+  // `INVARIANT_UNCHECKED` at *information* with `valid: true`, which REMOVES and RE-SEVERITIES a
+  // finding the shipped package emits today. `{}` coerces exactly as the lexical `false` did, so the
+  // finding survives at its own code, its own severity and its own location.
+  it("keeps reporting INVARIANT_VIOLATED at error for a code ordered against a literal", () => {
+    const profile = profileWith("gender > 'test'");
     const resource = parse({ resourceType: "Patient", gender: "male" });
-    expect(findings(resource, profile)).toEqual([["INVARIANT_UNCHECKED", "information"]]);
-    expect(validateResource(resource, { profiles: [profile] }).valid).toBe(true);
+    expect(findings(resource, profile)).toEqual([["INVARIANT_VIOLATED", "error"]]);
+    expect(validateResource(resource, { profiles: [profile] }).valid).toBe(false);
+  });
+
+  it("keeps reporting it for a `string` element too, inside all()", () => {
+    // `HumanName.family` is a FHIR `string`, so String-against-String is a comparison FHIRPath
+    // defines and the pre-change answer was the right one. Not peculiar to `code`, and not peculiar
+    // to a top-level comparison: the undetermined value composes through `all()` unchanged.
+    const profile = profileWith("name.all(family < 'A')");
+    const resource = parse({ resourceType: "Patient", name: [{ family: "Chalmers" }] });
+    expect(findings(resource, profile)).toEqual([["INVARIANT_VIOLATED", "error"]]);
+    expect(validateResource(resource, { profiles: [profile] }).valid).toBe(false);
+  });
+
+  it("carries the constraint's own severity, exactly as a decided false does", () => {
+    const warning = req(
+      loadStructureDefinition(
+        parse({
+          resourceType: "StructureDefinition",
+          url: "http://example.org/StructureDefinition/ordering-nontemporal-warning",
+          type: "Patient",
+          snapshot: {
+            element: [
+              {
+                id: "Patient",
+                path: "Patient",
+                constraint: [
+                  {
+                    key: "probe-1",
+                    severity: "warning",
+                    human: "gender orders after the literal",
+                    expression: "gender > 'test'",
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    const resource = parse({ resourceType: "Patient", gender: "male" });
+    expect(findings(resource, warning)).toEqual([["INVARIANT_VIOLATED", "warning"]]);
+  });
+
+  it("costs an answer where the lexical guess used to satisfy the constraint (the ADDITION)", () => {
+    // Stated where it lands rather than only where it is returned. `'zzz' > 'test'` is lexically
+    // true, so the shipped package reported nothing for this document; the engine cannot establish
+    // that ordering, so the constraint is now unsatisfied and an error is ADDED. An addition is not
+    // a withdrawal, and this is the whole of what this remedy moves at this layer.
+    const profile = profileWith("gender > 'test'");
+    const resource = parse({ resourceType: "Patient", gender: "zzz" });
+    expect(findings(resource, profile)).toEqual([["INVARIANT_VIOLATED", "error"]]);
+  });
+
+  it("leaves a date against a time of day decided the same way, not unchecked", () => {
+    const profile = profileWith("identifier.period.start < identifier.period.end");
+    const resource = patientWithPeriod("2001-05-06", "10:10:10");
+    expect(findings(resource, profile)).toEqual([["INVARIANT_VIOLATED", "error"]]);
+  });
+});
+
+describe("a type test over an empty operand, at the layer that reports it", () => {
+  // What remedy 3 (`{} is T` yields `{}`, not `false`) actually moves. `{}` and `false` coerce
+  // alike through `convertToBoolean` TAKEN ALONE, and they do NOT compose alike: `not()` over an
+  // empty input is `[]` rather than `true`, and a three-valued `implies` with a false consequent is
+  // `{}` rather than `true`, so a constraint the shipped package reported nothing for is now
+  // violated. An ADDED finding, which is not what C17 forbids, but it is not "no verdict moves"
+  // either and the record says so in these words. Pinned here so the sentence has a test under it.
+  it("adds a violation where an empty type test used to reduce to false under not()", () => {
+    const profile = profileWith("(gender is String).not()");
+    const resource = parse({ resourceType: "Patient" });
+    expect(findings(resource, profile)).toEqual([["INVARIANT_VIOLATED", "error"]]);
+    expect(validateResource(resource, { profiles: [profile] }).valid).toBe(false);
+  });
+
+  it("adds one under implies with a false consequent, and none where the consequent is true", () => {
+    const profile = profileWith("(gender is String) implies active");
+    const inactive = parse({ resourceType: "Patient", active: false });
+    expect(findings(inactive, profile)).toEqual([["INVARIANT_VIOLATED", "error"]]);
+    const active = parse({ resourceType: "Patient", active: true });
+    expect(findings(active, profile)).toEqual([]);
+  });
+
+  it("moves nothing where the type test is the whole constraint", () => {
+    // The claim that IS true, and the reason the record's old sentence read plausibly: taken alone
+    // the empty collection and `false` are the same verdict.
+    const profile = profileWith("gender is String");
+    const resource = parse({ resourceType: "Patient" });
+    expect(findings(resource, profile)).toEqual([["INVARIANT_VIOLATED", "error"]]);
   });
 });

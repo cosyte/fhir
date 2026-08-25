@@ -245,25 +245,42 @@ reaches, which is why they are declared as a mode difference rather than fixed.
    which look like determinations and are not: the model carries no FHIR datatype name, so `code`
    and `instant` are questions this engine cannot answer at all. It now refuses any type name
    outside `Boolean` / `String` / `Integer` / `Decimal`. Separately, `{} is T` is the empty
-   collection rather than `false`, which is what FHIRPath says and what the corpus reads; both
-   coerce alike, so no invariant's verdict moves with it.
+   collection rather than `false`, which is what FHIRPath says and what the corpus reads
+   (`testPolymorphismIsA3` is wrongly answered without it, measured by removing the rule and
+   re-running). What that second half moves is set out below: `{}` and `false` coerce alike taken
+   alone, and they do not compose alike.
 
-4. **An ordering comparison no longer orders a model value lexically.** The model is generic, so a
+4. **An ordering comparison no longer guesses a model value's type from its text.** The model is generic, so a
    string-valued primitive is the FHIR lexical form of an element whose type it does not carry: a
    `string`, a `code`, a `date`, or, read from XML, a `decimal`. Comparing lexically answered
    `Observation.value.value < 'test'` (a decimal against a word, which FHIRPath makes an execution
    error) with `true`, and answered `per-1`'s `start <= end` over a day-precision date and a
-   second-precision dateTime with `true` where FHIRPath says the comparison is indeterminate and the
-   value is `{}`. Where either side is a model value, both must now read as temporal values of the
-   same family, and each is read as the **interval of instants** its written precision denotes and
-   compared at its own timezone offset. Two values order when their intervals are disjoint, are equal
-   when the intervals coincide, and are indeterminate (`{}`) when they overlap without coinciding,
-   which is FHIRPath's precision rule and its offset rule stated once. A value written with no
-   designator is read at the evaluation context's offset, which FHIRPath leaves to the engine and
-   which this engine declares to be UTC: the frame the previous lexical comparison used implicitly on
-   every value. Anything not temporal is refused. Two values the engine computed itself are System
-   Strings by construction and still order as Strings, and a JSON-read decimal still orders as a
-   number.
+   second-precision dateTime with `true` where FHIRPath says the comparison is undetermined and the
+   value is `{}`. Where either side is a model value, the pair is ordered when both read as temporal
+   values of the same family: each is read as the **interval of instants** its written precision
+   denotes and compared at its own timezone offset. Two values order when their intervals are
+   disjoint, are equal when the intervals coincide, and are undetermined (`{}`) when they overlap
+   without coinciding, which is FHIRPath's precision rule and its offset rule stated once. A value
+   written with no designator is read at the evaluation context's offset, which FHIRPath leaves to
+   the engine and which this engine declares to be UTC: the frame the previous lexical comparison
+   used implicitly on every value. Every other pair is **undetermined too, and yields `{}`** rather
+   than raising `UnsupportedFhirPathError`, which is the whole of the difference between an ordering
+   this engine cannot decide and an expression it cannot evaluate: `{}` coerces through
+   `convertToBoolean` exactly as the old lexical `false` did, so a constraint that used to be
+   reported stays reported at its own code, severity and location, while a refusal would downgrade it
+   to `INVARIANT_UNCHECKED` at information with `valid: true`. Two values the engine computed itself
+   are System Strings by construction and still order as Strings, and a JSON-read decimal still
+   orders as a number.
+
+   An earlier revision of this remedy **refused** the non-temporal pair instead of answering `{}`,
+   and that withdrew and re-severitied a correct finding in one step: `HumanName.family` is a FHIR
+   `string`, String-against-String is a comparison FHIRPath defines, and a caller-supplied
+   `name.all(family < 'A')` went from `INVARIANT_VIOLATED` at error to `INVARIANT_UNCHECKED` at
+   information with `valid: true`. The corpus case that forced the remedy,
+   `testLiteralDecimalLessThanInvalid`, is the only case in the 935 that reaches this branch, it is
+   one the corpus marks `invalid="execution"`, and `{}` places it in the invalid bucket exactly as
+   the refusal did: the bucket counts are identical either way, and only the shipped diagnostics
+   differ.
 
    An earlier revision of this remedy **refused** any pair carrying different timezone designators
    rather than normalising them, which withdrew a true finding: `13:00:00+02:00` is `11:00:00Z`, so a
@@ -274,33 +291,49 @@ reaches, which is why they are declared as a mode difference rather than fixed.
 
 ### What these four move, and what they do not
 
-Two of the four move findings, and this section is the honest statement of which, replacing an
-earlier sentence here that said none of them did while one was doing it.
+**Three of the four ADD a finding somewhere, and none of them removes, re-severities or relocates
+one.** That is the whole claim, it is the direction that matters, and it is stated this way because
+two earlier revisions of this section said "nothing moves" while something was moving. Every bullet
+below names the test that decides it at the layer that decides it.
 
-- **Nothing is removed, re-severitied or relocated.** Both directions of remedy 1 are pinned at the
-  layer that decides an issue code, a severity and `valid`, in `test/profile-invariant-type-qualified.test.ts`
-  (4 tests over `collectInvariantIssues` / `validateResource` with a caller-supplied profile).
-  Remedy 4's are pinned the same way in `test/profile-invariant-ordering.test.ts` (8 tests over the
-  same two entry points, using R4's `per-1` expression verbatim): an inverted period written with two
-  different offsets, with one, and with none is reported `INVARIANT_VIOLATED` at error with
-  `valid: false` in every spelling, and a conformant one reports nothing. Remedies 2 and 3 move no
-  verdict by construction, since `{}` and `false` coerce alike through `convertToBoolean` and the
-  re-associations they fix were parse errors rather than answers.
+- **Nothing is removed, re-severitied or relocated**, and those three words are meant literally: no
+  constraint this package reported before is reported at a different code, at a different severity,
+  at a different location, or not at all. Both directions of remedy 1
+  are pinned in `test/profile-invariant-type-qualified.test.ts` (4 tests over
+  `collectInvariantIssues` / `validateResource` with a caller-supplied profile). Remedies 3 and 4 are
+  pinned the same way in `test/profile-invariant-ordering.test.ts` (15 tests over the same two entry
+  points, using R4's `per-1` expression verbatim): an inverted period written with two different
+  offsets, with one, and with none is reported `INVARIANT_VIOLATED` at error with `valid: false` in
+  every spelling; a conformant one reports nothing; and an ordering over a non-temporal model value
+  (`gender > 'test'`, `name.all(family < 'A')`) keeps its `INVARIANT_VIOLATED` at error with
+  `valid: false`, because `{}` and the lexical `false` coerce alike. Remedy 2 moves no verdict,
+  because the re-associations it fixes were parse errors rather than answers.
 - **Remedy 1 removes a false positive**, which is the permitted correction, not a withdrawal: a
   conformant Patient was reported `INVARIANT_VIOLATED` for `Patient.name.exists()` because the head
   selected nothing. The same test file pins that it now reports nothing.
-- **Remedy 4 adds a finding**, in one shape, and it is not optional: where the two ends of a period
-  are written at different precisions the comparison is indeterminate, `evaluateInvariant` coerces
-  empty to "not satisfied" (its documented, shipped behaviour, matching the reference validator), and
-  the profile layer makes that `INVARIANT_VIOLATED` at the constraint's own severity. The lexical
-  comparison answered `true` and reported nothing for such a document. The corpus is what forces it:
-  `testPeriodInvariantOld` grades `per-1` over exactly this document and expects `false`.
-  `test/profile-invariant-ordering.test.ts` pins the added error, and its severity, at the deciding
-  layer rather than leaving it to be discovered.
-- **Remedy 4 also costs an answer**: an ordering comparison over a model value that is not temporal
-  is refused, so a caller who ordered a `string`-valued element against a literal now gets
-  `INVARIANT_UNCHECKED` at information where they got a lexical answer before. That answer was
-  unsound for anything numeric, which is what the corpus caught. Pinned at the deciding layer too.
+- **Remedy 3 adds a finding**, and the earlier claim that it could not was wrong. `{}` and `false`
+  coerce alike through `convertToBoolean` **taken alone**, so a constraint that *is* the type test
+  keeps its verdict; they do not COMPOSE alike. `not()` over an empty input is `[]` rather than
+  `true` and `{} implies false` is `{}` rather than `true`, so `(gender is String).not()` and
+  `(gender is String) implies active` over a Patient with no `gender` are now `INVARIANT_VIOLATED` at
+  error with `valid: false`, where the package reported nothing before. The new behaviour is what
+  FHIRPath specifies and what the corpus reads; what was wrong was this record's statement of its
+  blast radius. Three tests in `test/profile-invariant-ordering.test.ts` pin it, including the
+  direction that does not move.
+- **Remedy 4 adds a finding**, in two shapes, and neither is optional. Where the two ends of a period
+  are written at different precisions the comparison is undetermined; where a model value is not
+  temporal at all the comparison is undetermined too. `evaluateInvariant` coerces empty to "not
+  satisfied" (its documented, shipped behaviour, matching the reference validator), and the profile
+  layer makes that `INVARIANT_VIOLATED` at the constraint's own severity. The lexical comparison
+  answered `true` for some of those documents and reported nothing. The corpus is what forces the
+  first shape: `testPeriodInvariantOld` grades `per-1` over exactly this document and expects
+  `false`. `test/profile-invariant-ordering.test.ts` pins the added error, and its severity, at the
+  deciding layer rather than leaving it to be discovered.
+- **An added finding is the cost, and it is the safe direction.** A caller who ordered a
+  `string`-valued element against a literal and got a satisfied constraint out of a lexical guess now
+  gets that constraint reported instead. The guess was unsound for anything numeric, which is what
+  the corpus caught. What no remedy here does is hand back `valid: true` for a document this package
+  used to reject.
 
 No test that predates this measurement was deleted or edited to accommodate it, and the whole suite
 is green. `git diff --numstat origin/main...HEAD -- test/` shows **zero deletions in every file it
@@ -308,6 +341,25 @@ lists**, and `--diff-filter=M` over the same range lists exactly one pre-existin
 `test/fhirpath.test.ts`, which gains tests and loses none; everything else under `test/` is new here.
 That is a necessary condition and, as the withdrawal above proved, not a sufficient one, which is why
 each claim here names the test that checks it at the layer that decides.
+
+## What vendoring the corpus cost the PHI gate
+
+Nothing here is deleted or bypassed and no file is subtracted from the scanner's sweep: the corpus
+lands under `test/__fixtures__/fhirpath-suite/`, inside the walk roots, and every token the scanner
+names is declared token-level in `scripts/phi-allow-list.txt`. `scripts/phi-scan.ts`,
+`phi-scan-overrides.md`, the sentinel list and the walk roots are untouched, and `pnpm run phi-scan`
+exits 0.
+
+**One row-pair in that allow-list is a permanent widening and is recorded here rather than left in a
+comment.** `patient-container-example.json`, one of the eleven input documents the corpus names,
+writes `name.text` as the placeholder `some-name`. The name check tokenizes, so admitting that
+placeholder means admitting the tokens `SOME` and `NAME`, two ordinary English words: a future
+fixture carrying either as a real surname would clear the gate on those rows rather than on its own
+merit. Both are load-bearing (misspell either and the scan reports the hit and exits 1), and the
+narrower fix is an exact-phrase row for a `name.text` placeholder, the way `ADDR` already matches a
+whole street line. That is a change to the scanner's recogniser, not to its allow-list, so it is
+queued as its own change rather than folded into a corpus-vendoring one. Retire the placeholder from
+the vendored bytes and both rows go with it.
 
 ## Re-running the measurement
 

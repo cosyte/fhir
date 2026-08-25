@@ -364,35 +364,42 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   carries no FHIR datatype name, so `code` and `instant` cannot be tested for and `false` only
   looked like a determination. Any type name outside `Boolean` / `String` / `Integer` / `Decimal`
   now raises `UnsupportedFhirPathError`. Separately, `{} is T` is now the empty collection rather
-  than `false`, as FHIRPath specifies; both coerce to `false`, so no constraint's verdict moves.
-- **An ordering comparison ordered a model value lexically (`FHIRPATH-SUITE-1`).** A string-valued
+  than `false`, as FHIRPath specifies. **THE TWO COERCE ALIKE TAKEN ALONE AND DO NOT COMPOSE
+  ALIKE**, so a constraint that _is_ the type test keeps its verdict while one that wraps it in
+  `not()` or a three-valued `implies` can gain a finding; see "what these four move" below.
+- **An ordering comparison guessed a model value's type from its text (`FHIRPATH-SUITE-1`).** A string-valued
   primitive is the FHIR lexical form of an element whose type this model does not carry: a `string`,
   a `code`, a `date`, or, read from XML, a `decimal`. Comparing it with `<` answered
   `Observation.value.value < 'test'` (a decimal against a word, an execution error in FHIRPath) with
   `true`, and answered the `per-1` period constraint's `start <= end` over a day-precision date and
-  a second-precision dateTime with `true` where FHIRPath says the comparison is indeterminate and
-  the value is `{}`. Where either side is a model value, the two must now read as temporal values of
-  the same family, each taken as the **interval of instants** its written precision denotes and read
-  at its own timezone offset: they order when the intervals are disjoint, are equal when the
-  intervals coincide, and are indeterminate (`{}`) when they overlap without coinciding. A value
-  written with no designator is read at the evaluation context's offset, which FHIRPath leaves to the
-  engine and which this engine declares to be UTC. Anything not temporal raises
-  `UnsupportedFhirPathError` rather than being guessed at. **NARROWED ON PURPOSE:** values the engine
-  computed itself are System Strings by construction and still order as Strings, and a JSON-read
-  decimal still orders as a number.
-  **REFUSING A PAIR OF DIFFERENT TIMEZONE DESIGNATORS IS NOT THE SAFE DEFAULT EITHER, AND WAS
-  WITHDRAWN**: `13:00:00+02:00` is `11:00:00Z`, so a period ending `10:00:00Z` is genuinely inverted,
-  and refusing to normalise turned `per-1` over it from `INVARIANT_VIOLATED` at **error** into
-  `INVARIANT_UNCHECKED` at **information** with `valid` going `false` to `true`. Normalising is the
-  correction that was owed.
+  a second-precision dateTime with `true` where FHIRPath says the comparison is undetermined and
+  the value is `{}`. Where either side is a model value, the pair is ordered when both read as
+  temporal values of the same family, each taken as the **interval of instants** its written
+  precision denotes and read at its own timezone offset: they order when the intervals are disjoint,
+  are equal when the intervals coincide, and are undetermined (`{}`) when they overlap without
+  coinciding. A value written with no designator is read at the evaluation context's offset, which
+  FHIRPath leaves to the engine and which this engine declares to be UTC. Every other pair is
+  **undetermined too and yields `{}`**. **NARROWED ON PURPOSE:** values the engine computed itself
+  are System Strings by construction and still order as Strings, and a JSON-read decimal still orders
+  as a number.
+  **NEITHER REFUSAL THIS REPLACED WAS THE SAFE DEFAULT, AND BOTH WERE WITHDRAWN.** Refusing a pair of
+  different timezone designators: `13:00:00+02:00` is `11:00:00Z`, so a period ending `10:00:00Z` is
+  genuinely inverted, and refusing to normalise turned `per-1` over it from `INVARIANT_VIOLATED` at
+  **error** into `INVARIANT_UNCHECKED` at **information** with `valid` going `false` to `true`. And
+  refusing the non-temporal pair, which did the same thing to a correct answer: `HumanName.family` is
+  a FHIR `string` and String-against-String is a comparison FHIRPath defines, so a caller-supplied
+  `name.all(family < 'A')` lost its `INVARIANT_VIOLATED` the same way. `{}` coerces exactly as the
+  old lexical `false` did, so the constraint stays reported at its own code, severity and location.
   What these four move: **nothing is removed, re-severitied or relocated**, pinned at the layer that
   decides an issue code, a severity and `valid` by `test/profile-invariant-type-qualified.test.ts`
   and `test/profile-invariant-ordering.test.ts`, not inferred from a green suite; **a false positive
   is removed** (a conformant Patient reported `INVARIANT_VIOLATED` because the type-qualified head
-  selected nothing); **a finding is added** where a period's two ends are written at different
-  precisions, since the comparison is indeterminate and `evaluateInvariant` has always coerced empty
-  to "not satisfied"; and **one answer is withdrawn**, the non-temporal model ordering above. Every
-  test that predates this measurement is green unchanged.
+  selected nothing); and **three of the four ADD a finding**, since an undetermined comparison and an
+  empty type test both reach `evaluateInvariant`, which has always coerced empty to "not satisfied".
+  The added shapes are a period whose two ends are written at different precisions, an ordering over
+  a model value that is not temporal where the lexical guess used to answer `true`, and a type test
+  over an empty operand wrapped in `not()` or in an `implies` with a false consequent. Every test
+  that predates this measurement is green unchanged.
 - **A `Coding` array wrapper the negation read decided on was reported only on the resource types
   the cardinality table knows, so on every other type the read ran ahead of the report
   (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit, on plain JSON:

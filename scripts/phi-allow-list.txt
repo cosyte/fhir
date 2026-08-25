@@ -76,6 +76,18 @@ NAME DICTE
 # That is the price of a token-level declaration over a whole-file bypass and it
 # is the cheaper of the two, but it is a price: if a later change can retire the
 # `some-name` placeholder from the vendored bytes, delete both lines with it.
+# Both are load-bearing, measured rather than assumed: misspell either and
+# `pnpm run phi-scan` reports `element=Patient.name.text value="some"` /
+# `value="name"` and exits 1.
+# THE NARROWER REMEDY, AND WHY IT IS NOT TAKEN HERE. What this wants is an
+# exact-PHRASE row for a `name.text` placeholder, the way `ADDR` already matches
+# a whole street line instead of its tokens. That is not an allow-list edit: it
+# needs a new tag parsed by `loadAllowList` and consulted by `checkNameString`,
+# i.e. a change to the RECOGNISER in scripts/phi-scan.ts. Moving the recogniser
+# on its own is the failure this repo has already paid for once, so it belongs
+# to its own change with its own tests, not to a corpus-vendoring one. Until
+# then these two rows are the declared residual and they are the widest thing
+# this file admits.
 NAME SOME
 NAME NAME
 

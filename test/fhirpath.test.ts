@@ -681,20 +681,38 @@ describe("evaluate: ordering a model value the model carries no type for", () =>
     ).toEqual({ unchecked: false, satisfied: false });
   });
 
-  it("refuses a date against a time of day, the one comparison FHIRPath does not define", () => {
+  it("yields empty for a date against a time of day, the one comparison FHIRPath does not define", () => {
+    const resource = parse(periods("2001-05-06", "10:10:10"));
+    const focus = focusCollection(resource);
     expect(
-      evalOn("identifier.period.start < identifier.period.end", periods("2001-05-06", "10:10:10"))
-        .unchecked,
-    ).toBe(true);
+      evaluate(parseFhirPath("identifier.period.start < identifier.period.end"), focus, {
+        resource,
+        context: focus,
+      }),
+    ).toEqual([]);
+    // Undetermined, NOT unchecked: the constraint is still decided, and decided against.
+    expect(
+      evalOn("identifier.period.start < identifier.period.end", periods("2001-05-06", "10:10:10")),
+    ).toEqual({ unchecked: false, satisfied: false });
   });
 
-  it("refuses a model value that is not temporal, and leaves System String ordering alone", () => {
+  it("yields empty for a model value that is not temporal, and leaves System String ordering alone", () => {
     // From XML a `decimal` reads as a string, so `Observation.value.value < 'test'` compared a
-    // number with a word and answered `true`. Two values the engine computed itself are Strings by
-    // construction and still order as Strings.
-    expect(evalOn("gender < 'test'", { resourceType: "Patient", gender: "male" }).unchecked).toBe(
-      true,
+    // number with a word and answered `true`. The engine cannot name the type either value came
+    // from, so the ordering is undetermined and the expression is `{}`.
+    const resource = parse({ resourceType: "Patient", gender: "male" });
+    const focus = focusCollection(resource);
+    expect(evaluate(parseFhirPath("gender < 'test'"), focus, { resource, context: focus })).toEqual(
+      [],
     );
+    // `{}` and `false` coerce alike here, so the constraint stays DECIDED and stays reported: this
+    // is the difference between an undetermined comparison and an unsupported one, and
+    // `test/profile-invariant-ordering.test.ts` pins the issue code and the severity for it.
+    expect(evalOn("gender < 'test'", { resourceType: "Patient", gender: "male" })).toEqual({
+      unchecked: false,
+      satisfied: false,
+    });
+    // Two values the engine computed itself are Strings by construction and still order as Strings.
     expect(evalOn("('a' < 'b')", { resourceType: "Patient" }).satisfied).toBe(true);
     expect(evalOn("(2 > 1)", { resourceType: "Patient" }).satisfied).toBe(true);
     // A JSON-read decimal still orders as a number: it reaches the numeric branch, not this one.
