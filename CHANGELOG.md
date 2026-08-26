@@ -6,70 +6,25 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The published tarball is narrowed to the runtime files only, as a diagnostic probe for the
+  standing npm publish refusal (`FHIR-NPM-NAME`), at npm support's request of 2026-08-26.** No
+  runtime behaviour changes. `files` named `dist` as a directory, so both sourcemaps shipped, and
+  each embeds `sourcesContent`: the complete original TypeScript of all 47 source files, 613 KB per
+  map, 1.2 MB of the tarball. Because the XML reader is hardened by refusal rather than by
+  resolution, that source names what it refuses, and a count over the shipped bytes returns 104
+  `entity`, 37 `ENTITY`, 29 `XXE`, 28 `billion-laughs` and 26 `DOCTYPE`. Support's list did not
+  mention the sourcemaps; they carry more of the content it describes than every other shipped file
+  together. `files` now names the two bundles and the two declaration rollups one by one, and
+  `CHANGELOG.md` leaves the tarball with the maps. `README.md` is cut to a stub instead, because npm
+  includes a README whatever `files` says. Three of support's five steps were already true and were
+  not re-done: the allowlist existed, no `*.spec.js` could ship under it, and the version is already
+  past their suggested `0.0.9`. **This is a probe, not a release shape; revert it once npm returns a
+  result.**
+
 ### Added
 
-- **The `validator_cli.jar` differential compares 173 documents from three corpora instead
-  of ten in-tree fixtures (`DIFF-CORPUS-2`), prints the count it compared and the identity of the
-  oracle it compared against, and fails rather than reporting success over a smaller corpus.** At the
-  base commit the gate ran over two arrays inside `scripts/differential.mjs`, five spec-clean plus
-  five quirk fixtures, **all ten written here**: a consumer could be told the gate existed and could
-  not be told what it covered. The corpus is now declared in `corpus/corpus.json`: those same ten
-  fixtures kept in full, **`FHIR/fhir-test-cases` at tag `1.7.67`** (commit `0d7196d7`, Apache-2.0,
-  the corpus the reference validator's own build pins itself against), and the **FHIR R4 `4.0.1`
-  specification's own published examples** (CC0-1.0). **266 declared, 173 compared, 93 excluded, and
-  163 of the 173 are third party**, so the floor of one hundred clears without counting one
-  self-authored document, and **nothing was hand-authored to reach it** (ADR 0018: every document
-  traces to a real, publicly cited artifact).
-  - **Fetched and digest-verified, never vendored.** `pnpm corpus:fetch` retrieves the third-party
-    documents into a git-ignored directory and refuses any whose SHA-256 is not the declared one; the
-    archive one corpus is published in is refused on its own digest before an entry is read.
-    **A safety decision before a licensing one:** real FHIR examples spell `family` / `given` /
-    `birthDate` / `line`, the PHI scanner sweeps what git carries repo-wide and gives anything
-    outside `test/__fixtures__/` the source pass, and its allow-lists are declarations about
-    **self-authored synthetic fixtures**. Vendoring would have forced a token-level entry per name
-    and per date of birth in someone else's corpus, permanently, because git history is not undone by
-    a revert. **The LAYOUT changed, not the safety control:** `scripts/phi-allow-list.txt` and
-    `phi-scan-overrides.md` are byte-identical, and `pnpm phi-scan` is clean with the whole corpus on
-    disk. Each corpus's licence text and required attribution are carried in `corpus/licences/`.
-  - **The oracle is pinned to a release, and identified by its own bytes.** The `differential` job
-    downloads a fixed release rather than `releases/latest`, and the identity printed beside every
-    result is the SHA-256 of the jar actually loaded, so **substituting a different artifact changes
-    the record even when the configured version string does not**. An oracle whose identity cannot be
-    established is refused, never guessed at (no path, no file, a directory, an empty file, an
-    unreadable file). The job carries a **declared time limit** rather than the runner's default.
-  - **A missing answer is never agreement.** A document counts as compared only when **both** the
-    oracle's outcome and this library's own findings were obtained; a crash, a timeout, unparseable
-    output, output that is not an outcome, and an outcome attributable to no single document all
-    leave it **uncounted and not clean**. Attribution reads the file name the validator records, or
-    finds exactly one staged name in the outcome; **two matches is ambiguity and resolves to "no
-    outcome", never to a guess**. Below the declared floor of one hundred the run **exits non-zero
-    and names the shortfall**.
-  - **93 of the 266 are excluded, each with the reason recorded and printed every run, and THE
-    EXCLUSION RATE IS PART OF THE RESULT.** Two are principled from the start (one the corpus itself
-    ships as a negative case; one exposing a modifier extension this library declines to affirm and
-    the oracle resolves). The other 91 were **measured** against the pinned release, and each reason
-    records the release, the date, the error count, the class breakdown by `OperationOutcome.issue.code`
-    and the first locations. The classes are almost entirely one thing: the oracle resolves canonical
-    URLs (`identifier.system`, `url`, `instantiatesUri`, `library`, `relatedArtifact.resource`,
-    `Attachment.url`) and checks `coding.display` and code membership against terminology content,
-    and **this library does neither and has always said so**. A handful sit outside that class and
-    their codes say so (`structure`, `invariant`, `business-rule`, `not-found`, `unknown`).
-    **None was answered by relaxing what this library reports, and the oracle was not reconfigured to
-    report less**; the mechanism refuses a label in place of a reason. Both invariants are unchanged
-    and still enforced hard, including the fail-closed parse-refusal exemption to the second, which
-    stays scoped to a **reader** refusal and not to a validation error. **Quote the 173 with the 93,
-    never alone.**
-  - **What the number buys is bounded, and the docs say so.** Only `Patient` has a built-in
-    structural schema, so over most resource types the library emits an informational
-    `RESOURCE_NOT_MODELED` and no error: agreement at scale mostly means "we invented no error on a
-    real document the oracle finds clean". Never-a-false-valid is what the corpus makes harder to
-    satisfy by accident. The shared corpus labels its own r4 half "not maintained": breadth there is
-    not currency.
-  - **Still CI-only and still never observed green in the dev container** (no JVM). Run with no
-    oracle configured, `node scripts/differential.mjs` prints the corpus and the exclusions it would
-    compare, then skips. The accounting is graded by `test/differential-corpus.test.ts`,
-    `test/differential-oracle.test.ts` and `test/differential-harness.test.ts`, which need no build,
-    no Java and no network. **No library code changed**; nothing here ships in the published artifact.
 - **The bounded FHIRPath engine has a MEASURED coverage number (`FHIRPATH-SUITE-1`), taken from
   HL7's shared R4 conformance suite, and a wrongly answered case now fails the build.** The subset's
   size had only ever been asserted in prose: nothing in the checkout referenced `tests-fhir-r4.xml`

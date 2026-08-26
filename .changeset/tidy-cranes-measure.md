@@ -53,23 +53,28 @@ modifier extension this library declines to affirm and the reference implementat
 other 91 were measured against the reference implementation at the pinned release and each reason
 records the release, the date, the error count, the class breakdown by issue code and the first
 locations. The classes are almost entirely one thing: the reference implementation resolves
-canonical URLs and checks display strings and code membership against terminology content, and this
-library does neither and has always said so. A handful sit outside that class and their codes say
-so. None of the 93 was answered by relaxing what this library reports, and the reference
-implementation was not reconfigured to report less; the exclusion mechanism refuses a label in place
-of a reason. Both invariants are unchanged and still enforced hard, the fail-closed parse-refusal
-exemption to the second included, and it is still scoped to a reader refusal and not to a validation
-error.
+canonical URLs (`identifier.system`, `url`, `instantiatesUri`, `library`,
+`relatedArtifact.resource`, `Attachment.url`) and checks `coding.display` and code membership
+against terminology content, and this library does neither and has always said so. A handful sit
+outside that class and their own issue codes say so (`structure`, `invariant`, `business-rule`,
+`not-found`, `unknown`). None of the 93 was answered by relaxing what this library reports, and the
+reference implementation was not reconfigured to report less; the exclusion mechanism refuses a
+label in place of a reason. Both invariants are unchanged and still enforced hard, the fail-closed
+parse-refusal exemption to the second included, and it is still scoped to a reader refusal and not
+to a validation error. The figure to quote is 173 compared with 93 excluded beside it, never 173
+alone.
 
 What the number buys is bounded and the documentation says so rather than letting the count imply
-more. Only `Patient` has a built-in structural schema, so over most resource types the library emits
-an informational finding and no error: agreement at scale mostly means no error was invented on a
-real document the reference implementation finds clean. The safety-critical direction, never
+more. The built-in structural schema set covers only a few resource types and most of a real corpus
+falls outside it, and over a resource type with no built-in schema the library emits an
+informational finding and no error: agreement at scale mostly means no error was invented on a real
+document the reference implementation finds clean. The safety-critical direction, never
 reporting clean what the reference implementation errors on, is what a corpus this size makes harder
 to satisfy by accident. The shared corpus labels its own R4 half unmaintained, so breadth there is
 not currency.
 
 The gate remains CI-only and has still never been observed green in the dev container, which has no
 JVM. Run with no oracle configured it prints the corpus and the exclusions it would compare and
-skips, and the accounting itself is graded by three new test files that need no build, no Java and
-no network. No library code changed; nothing here ships in the published artifact.
+skips, and the accounting itself is graded by `test/differential-corpus.test.ts`,
+`test/differential-oracle.test.ts` and `test/differential-harness.test.ts`, which need no build, no
+Java and no network. No library code changed; nothing here ships in the published artifact.
