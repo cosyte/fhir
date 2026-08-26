@@ -45,12 +45,29 @@ jobs:
 
   # Differential vs the official validator (`org.hl7.fhir.core` / validator_cli.jar), roadmap §6.
   # AUTHORED, NOT YET PROVEN: the oracle is a JVM program, so this gate can only run here (never in the
-  # dev container). It runs over BOTH the synthetic spec-clean tier (P11) AND the Tier-2 real-world
-  # quirk corpus (P10b, unblocked by ADR 0018, grounded in FHIR published examples + public IG
-  # samples, provenance in test/quirk-corpus.test.ts). A genuinely vendor-proprietary quirk absent from
-  # every public sample stays grounded-only and is not in the corpus (inventing one is forbidden).
+  # dev container). The corpus is declared in corpus/corpus.json and is no longer ten in-tree
+  # fixtures. Three corpora, only the first written here: this repository's own synthetic spec-clean
+  # + Tier-2 quirk fixtures (P11 / P10b, provenance in test/quirk-corpus.test.ts); FHIR/fhir-test-cases
+  # at tag 1.7.67 (Apache-2.0), the shared corpus the reference validator pins itself against; and the
+  # FHIR R4 4.0.1 specification's own published examples (CC0-1.0). The third-party documents are
+  # FETCHED, never committed: `pnpm corpus:fetch` materialises them into the git-ignored
+  # corpus/documents/ and verifies a SHA-256 per document. A genuinely vendor-proprietary quirk absent
+  # from every public sample stays grounded-only and is not in the corpus (inventing one is forbidden),
+  # and no document here was hand-authored to reach the count (ADR 0018).
+  #
+  # THE ORACLE IS PINNED TO A RELEASE, NOT TO `releases/latest`. A moving pointer means two runs of
+  # the same commit can disagree about what they compared against and neither log says why. The
+  # release below and the one in scripts/differential/oracle.mjs (ORACLE_RELEASE) are the same
+  # release, and the harness prints the sha256 of the jar it actually loaded beside every result, so
+  # a substituted artifact is visible even when this string does not move.
   differential:
     runs-on: ubuntu-latest
+    # A DECLARED TIME BOUND, NOT THE RUNNER DEFAULT. ~150 documents through a JVM oracle is minutes,
+    # not seconds, and a corpus that cannot finish must fail visibly rather than sit for six hours.
+    timeout-minutes: 30
+    env:
+      # Keep in step with ORACLE_RELEASE in scripts/differential/oracle.mjs.
+      ORACLE_RELEASE: "6.10.2"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -61,11 +78,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build (the differential harness imports the built package)
         run: pnpm build
-      - name: Download validator_cli.jar (the differential oracle)
+      - name: Materialise the differential corpus (digest-verified, never committed)
+        run: pnpm corpus:fetch
+      - name: Download validator_cli.jar at a PINNED release (the differential oracle)
         run: |
           curl -fsSL -o "$RUNNER_TEMP/validator_cli.jar" \
-            https://github.com/hapifhir/org.hl7.fhir.core/releases/latest/download/validator_cli.jar
-      - name: Differential (synthetic spec-clean + Tier-2 quirk corpora)
+            "https://github.com/hapifhir/org.hl7.fhir.core/releases/download/${ORACLE_RELEASE}/validator_cli.jar"
+      - name: Differential (three corpora, >= 100 documents, count + oracle identity printed)
         # ubuntu-latest ships a Temurin JDK; $JAVA_HOME_21_X64 is set by the runner image. The
         # differential harness invokes `java` from PATH, no unpinned setup-java action needed.
         env:

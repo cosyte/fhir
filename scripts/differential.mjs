@@ -10,235 +10,290 @@
  * test harness, but it does mean this gate needs a Java runtime + the `validator_cli.jar`, neither of
  * which is present in the default dev container. So this script runs on GitHub Actions (the
  * `differential` job in `.github/workflows/ci.yml`, which provisions Temurin 21 and downloads the
- * jar) and is a no-op-with-clear-skip elsewhere. **It has not been observed green in this container,
- * do not read its presence as a proven differential.**
+ * jar at a PINNED release) and is a no-op-with-clear-skip elsewhere. **It has not been observed green
+ * in this container, do not read its presence as a proven differential.** Running it here with no
+ * `VALIDATOR_CLI_JAR` still prints the corpus it WOULD compare, and its exclusions, which is what
+ * makes the accounting reviewable without a JVM.
  *
- * WHAT IT PROVES (over the synthetic spec-clean corpus only)
- * ---------------------------------------------------------
- * The corpus here is **tier (a): synthetic, spec-clean** resources (roadmap §6). The two invariants:
+ * THE CORPUS
+ * ----------
+ * The corpus is declared in `corpus/corpus.json` and is no longer ten in-tree fixtures. It is
+ * **three corpora**, and only the first was written here:
  *
- *   1. **Never a false *valid*.** If the oracle reports an `error`/`fatal` on a resource, `@cosyte/fhir`
- *      must NOT report it clean. This is the safety-critical direction, a validator that passes what
- *      the authoritative implementation fails is dangerous. Enforced hard (a violation exits non-zero).
- *   2. **No spurious errors on clean input.** On a resource the oracle finds clean, we must not invent
- *      an `error`/`fatal`. Enforced hard.
+ *   - this repository's own synthetic **spec-clean** and **Tier-2 quirk** fixtures
+ *     (`test/__fixtures__/`, MIT), which is what the ten-fixture corpus used to be, kept in full;
+ *   - **`FHIR/fhir-test-cases`** at tag `1.7.67` (Apache-2.0), the shared corpus the reference
+ *     validator's own `pom.xml` pins itself against;
+ *   - the **FHIR R4 (4.0.1) specification's own published examples** (CC0-1.0).
  *
- * Comparison is on **issue presence + severity bucket + location**, never on diagnostic *text*, we
- * deliberately diverge on text (ours is PHI-redacted; the oracle echoes values, roadmap §7). Where we
- * are a deliberate *subset* validator (we do not yet check every profile/terminology rule the oracle
- * does), the oracle finding an extra WARNING/INFORMATION we don't is a **documented delta**, printed
- * but not failed.
+ * **266 declared, 173 compared, 93 excluded**, 163 of the 173 third party. The third-party documents
+ * are **fetched, never committed** (`pnpm corpus:fetch`, materialised into the git-ignored
+ * `corpus/documents/`), each verified against the SHA-256 the declaration records.
+ * `scripts/differential/corpus.mjs` carries the reasoning; the short version is that committing
+ * someone else's clinical examples would put real-looking names and dates of birth into this
+ * repository's history, where a revert does not reach them, and would force the PHI scanner's
+ * allow-lists to swallow third-party document content.
  *
- * THE TIER-2 QUIRK CORPUS (FHIR-P10b, ADR 0018)
- * ---------------------------------------------
- * The differential's highest-value corpus is the **real-world quirk set** (tier (b), roadmap §3/§6).
- * ADR 0018 unblocked it: a quirk is still encoded only when a **real document grounds it**, but "real
- * document" now explicitly includes **publicly available real artifacts** (FHIR published examples,
- * the spec's normative rules, US Core, documented public interop defects), not only private vendor
- * feeds. So the quirk corpus ({@link QUIRK_CORPUS}) is now differential-tested here alongside the
- * spec-clean tier. Its provenance (each fixture → its public source) lives in `test/quirk-corpus.test.ts`.
- * A genuinely vendor-proprietary deviation absent from every public sample stays grounded-only and is
- * not in this corpus (inventing one is forbidden).
+ * WHAT IT PROVES, AND WHAT IT DOES NOT
+ * ------------------------------------
+ * The two invariants (never a false valid; no spurious errors on clean input) are enforced hard over
+ * every compared document, and the fail-closed parse-refusal exemption to the second is unchanged.
+ * They are stated in full in `scripts/differential/compare.mjs`, which is also where the accounting
+ * lives.
  *
- * The two invariants apply to the quirk corpus unchanged. One quirk fixture (the HAPI-#5738 primitive-
- * extension misalignment) is designed to **fail closed**: `parseResource` throws a typed fatal, which
- * this harness surfaces as a `fatal` finding. A fail-closed *parse refusal* is exempt from Invariant 2
- * (spurious error): refusing unrecoverable structure is the safe, conservative direction, permitted
- * even where a more lenient oracle tolerates the input, and it can never be a false *valid* (we
- * errored). Invariant 1 still applies in full.
+ * **THE EXCLUSION RATE IS PART OF THE RESULT, NOT A FOOTNOTE TO IT.** 93 of the 266 declared
+ * documents are held out, each with the reason measured and recorded in `corpus/corpus.json` and
+ * printed on every run, and the classes are almost entirely one thing: the reference validator
+ * resolves canonical URLs (`identifier.system`, `url`, `instantiatesUri`, `library`,
+ * `relatedArtifact.resource`, `Attachment.url`) and checks `coding.display` and code membership
+ * against terminology content, and this library does neither and says so. So the number is "173
+ * documents on which the two were SHOWN to agree", beside "93 on which they were shown not to".
+ * Reading only the first is reading half of it.
+ *
+ * What the number does NOT buy, separately: over resource types this library does not model, it
+ * emits an informational `RESOURCE_NOT_MODELED` and no error, so agreement at scale mostly means "we
+ * invented no error on a real document the oracle finds clean". That is a real property and a
+ * bounded one. The shared corpus's own `r4` half is declared "not maintained" by its maintainer:
+ * breadth is not currency.
+ *
+ * WHAT IS PRINTED, AND WHY
+ * ------------------------
+ * The compared count and the oracle's identity are printed on every run, so a silent shrink of
+ * either is visible in the log. The identity is derived from the jar's own bytes, not from the
+ * configured release string, so substituting a different artifact changes the record. Excluded
+ * documents are printed with the recorded reason for their exclusion and are never counted.
  *
  * @packageDocumentation
  */
 
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, join } from "node:path";
 
 import { FhirCodecError, parseResource, validateResource } from "../dist/index.mjs";
 
-const FIXTURE_DIR = fileURLToPath(new URL("../test/__fixtures__/", import.meta.url));
+import {
+  compareDocument,
+  exitCodeFor,
+  formatExclusions,
+  formatRecord,
+  formatSummary,
+  summarize,
+} from "./differential/compare.mjs";
+import {
+  CorpusError,
+  corpusOf,
+  exclusions,
+  loadDeclaration,
+  provenanceLine,
+  resolveCorpus,
+} from "./differential/corpus.mjs";
+import {
+  formatOracleIdentity,
+  ORACLE_RELEASE,
+  oracleIdentity,
+  OracleError,
+  runOracleBatch,
+} from "./differential/oracle.mjs";
+
+/** How many documents go through one JVM start. Amortises ~30s of startup over a batch. */
+const BATCH_SIZE = Number(process.env.DIFFERENTIAL_BATCH_SIZE ?? "40");
+
+/** The time bound on one batch. Exceeding it yields no outcome for that batch, never "clean". */
+const BATCH_TIMEOUT_MS = Number(process.env.DIFFERENTIAL_ORACLE_TIMEOUT_MS ?? "600000");
 
 /**
- * The synthetic, spec-clean tier-(a) corpus this gate runs over. These are self-authored synthetic
- * resources (no PHI, no invented vendor quirk) that the oracle should find valid. Bundles / NDJSON /
- * deliberately-quirky fixtures are intentionally excluded, the quirk differential is REAL-CORPUS.
- *
- * "Spec-clean" is a hard contract: each MUST carry every element the base spec (and any spec-mandated
- * profile the oracle auto-applies) requires, or the oracle rejects it and the tier is a lie. So
- * `observation-vitals-bp` carries the vital-signs-profile-mandatory `subject` + `effective[x]`;
- * `medicationrequest-dose` carries the base-mandatory `MedicationRequest.subject` (1..1,
- * medicationrequest.html); and `observation-decimals` uses a non-vital-sign lab LOINC so no
- * vital-signs profile is auto-applied to what is really a decimal-precision test vehicle.
+ * Our own findings, normalized to the oracle's `{ severity, location }` shape (text deliberately
+ * dropped), plus `parseRefused`: whether the reader **failed closed** on unrecoverable input (a
+ * thrown `FhirCodecError`). A fail-closed refusal is a genuine `fatal` finding, never swallowed; the
+ * flag lets the accounting treat it as the safe, conservative direction rather than a spurious
+ * error. Anything else thrown is an answer we did NOT get, and is reported as such rather than as
+ * "no findings".
  */
-const SPEC_CLEAN = [
-  "patient.json",
-  "observation-decimals.json",
-  "observation-lab-refrange.json",
-  "observation-vitals-bp.json",
-  "medicationrequest-dose.json",
-];
-
-/**
- * The Tier-2 real-world quirk corpus (FHIR-P10b). Each fixture reproduces a documented public interop
- * quirk (see `test/quirk-corpus.test.ts` for the per-fixture grounding + citation). All are valid FHIR
- * the oracle finds clean, except `quirk-primitive-extension-misaligned.json`, which is malformed
- * (broken `_`-sibling alignment, HAPI #5738); the oracle rejects it and so do we (fail-closed throw).
- */
-const QUIRK_CORPUS = [
-  "quirk-resourcetype-last.json",
-  "quirk-scientific-decimal.json",
-  "quirk-searchset-paging.json",
-  "quirk-uscore-extensions.json",
-  "quirk-primitive-extension-misaligned.json",
-];
-
-const ERRORISH = new Set(["fatal", "error"]);
-
-/**
- * The US Core IG the oracle loads (`-ig`) so it can resolve US Core extension definitions. Without it,
- * the validator flags a `us-core-*` extension URL it cannot resolve as "not allowed here", an artifact
- * of the *oracle's* missing package, not a conformance defect in the instance (the base spec permits
- * extensions, and `@cosyte/fhir` deliberately preserves-and-flags unknown extensions rather than
- * rejecting them, roadmap §10 fail-safe). Loading US Core is the roadmap's documented oracle
- * configuration ("validates against base + IG profiles, US Core via `-ig <pkg#ver>`") and the 6.1.0
- * baseline (roadmap §3). It does not force US Core profiles onto instances that do not declare them in
- * `meta.profile`; it only makes the extension definitions resolvable.
- */
-const US_CORE_IG = "hl7.fhir.us.core#6.1.0";
-
-/** Resolve the validator jar from the environment; a missing jar is a clean skip, not a failure. */
-function resolveJar() {
-  const jar = process.env.VALIDATOR_CLI_JAR;
-  if (!jar) {
-    console.log(
-      "differential: VALIDATOR_CLI_JAR is not set (no JVM oracle available), SKIPPING.\n" +
-        "  This gate runs on GitHub Actions (the `differential` job), not in the dev container.",
-    );
-    process.exit(0);
-  }
-  return jar;
-}
-
-/** Run the oracle on one file and return its OperationOutcome issues (severity + location only). */
-function oracleIssues(jar, file) {
-  const out = join(mkdtempSync(join(tmpdir(), "fhir-diff-")), "outcome.json");
-  try {
-    execFileSync(
-      "java",
-      ["-jar", jar, file, "-version", "4.0.1", "-ig", US_CORE_IG, "-output", out],
-      {
-        stdio: ["ignore", "ignore", "inherit"],
-      },
-    );
-  } catch {
-    // The CLI exits non-zero when it finds validation errors, that is data, not a harness failure.
-    // The OperationOutcome is still written; fall through and read it.
-  }
-  const outcome = JSON.parse(readFileSync(out, "utf8"));
-  const issues = Array.isArray(outcome.issue) ? outcome.issue : [];
-  return issues.map((i) => ({
-    severity: String(i.severity ?? "information"),
-    location: String(i.expression?.[0] ?? i.location?.[0] ?? ""),
-  }));
-}
-
-/**
- * Our own findings, normalized to the same { severity, location } shape (text deliberately dropped),
- * plus `parseRefused`: whether the reader **failed closed** on unrecoverable input (a thrown
- * `FhirCodecError`, e.g. the HAPI-#5738 `_`-sibling misalignment). A fail-closed refusal is a genuine
- * `fatal` finding, never swallowed; the flag lets the caller treat it as the *safe, conservative*
- * direction (see Invariant 2) rather than a spurious error, since refusing malformed structure is
- * always permitted even where a more lenient oracle happens to tolerate it.
- */
-function ourIssues(text) {
+function ourFindings(text) {
   let resource;
   try {
     ({ resource } = parseResource(text));
   } catch (err) {
     if (err instanceof FhirCodecError) {
       return {
+        ok: true,
         issues: [{ severity: "fatal", location: String(err.expression ?? "") }],
         parseRefused: true,
       };
     }
-    throw err;
+    return { ok: false, reason: `the reader threw a non-codec error: ${String(err)}` };
   }
-  const result = validateResource(resource);
-  return {
-    issues: result.issues.map((i) => ({
-      severity: String(i.severity),
-      location: String(i.expression),
-    })),
-    parseRefused: false,
-  };
+  try {
+    const result = validateResource(resource);
+    return {
+      ok: true,
+      issues: result.issues.map((i) => ({
+        severity: String(i.severity),
+        location: String(i.expression),
+      })),
+      parseRefused: false,
+    };
+  } catch (err) {
+    return { ok: false, reason: `validateResource threw: ${String(err)}` };
+  }
+}
+
+/** Stage the corpus into one temp directory under names that are unique and map back to documents. */
+function stage(resolved) {
+  const dir = mkdtempSync(join(tmpdir(), "fhir-diff-corpus-"));
+  return resolved.map((entry, index) => {
+    const name = `${String(index).padStart(4, "0")}-${basename(entry.document.path)}`;
+    const file = join(dir, name);
+    writeFileSync(file, entry.bytes);
+    return { ...entry, staged: file, stagedName: name };
+  });
+}
+
+function chunk(items, size) {
+  const out = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Ask the oracle about every staged document, batch by batch. */
+function askOracle(jar, staged) {
+  const answers = new Map();
+  for (const batch of chunk(staged, Math.max(1, BATCH_SIZE))) {
+    const outputPath = join(mkdtempSync(join(tmpdir(), "fhir-diff-out-")), "outcome.json");
+    const result = runOracleBatch(
+      jar,
+      batch.map((s) => s.staged),
+      outputPath,
+      { timeoutMs: BATCH_TIMEOUT_MS },
+    );
+    for (const entry of batch) {
+      if (result.ok !== true) {
+        answers.set(entry.document.id, { ok: false, reason: result.reason });
+        continue;
+      }
+      const issues = result.byName.get(entry.stagedName);
+      answers.set(
+        entry.document.id,
+        issues === undefined
+          ? {
+              ok: false,
+              reason: "the oracle returned no outcome that could be attributed to this document",
+            }
+          : { ok: true, issues },
+      );
+    }
+  }
+  return answers;
+}
+
+function printCorpusSummary(declaration) {
+  const byCorpus = new Map();
+  for (const document of declaration.documents) {
+    const corpus = corpusOf(declaration, document);
+    const row = byCorpus.get(corpus.id) ?? { corpus, declared: 0, excluded: 0 };
+    row.declared += 1;
+    if (document.exclude !== undefined) row.excluded += 1;
+    byCorpus.set(corpus.id, row);
+  }
+  console.log("differential corpus:");
+  for (const { corpus, declared, excluded } of byCorpus.values()) {
+    console.log(
+      `  ${corpus.id}: ${String(declared - excluded)} compared, ${String(excluded)} excluded, ` +
+        `from ${corpus.title} @ ${corpus.version} (${corpus.licence}, ${corpus.origin})`,
+    );
+  }
+  for (const line of formatExclusions(exclusions(declaration))) console.log(line);
 }
 
 function main() {
-  const jar = resolveJar();
-  let violations = 0;
-
-  for (const name of [...SPEC_CLEAN, ...QUIRK_CORPUS]) {
-    const file = join(FIXTURE_DIR, name);
-    const text = readFileSync(file, "utf8");
-
-    const oracle = oracleIssues(jar, file);
-    const { issues: ours, parseRefused } = ourIssues(text);
-
-    const oracleErrors = oracle.filter((i) => ERRORISH.has(i.severity));
-    const ourErrors = ours.filter((i) => ERRORISH.has(i.severity));
-
-    // Invariant 1, never a false valid: the oracle errored, we did not.
-    if (oracleErrors.length > 0 && ourErrors.length === 0) {
-      console.error(
-        `✗ FALSE VALID: ${name}, oracle reports ${oracleErrors.length} error(s), we report none.`,
-      );
-      for (const e of oracleErrors)
-        console.error(`    oracle ${e.severity} @ ${e.location || "(root)"}`);
-      violations += 1;
-      continue;
-    }
-
-    // Invariant 2, no spurious errors on clean input: the oracle was clean, we errored.
-    // A fail-closed *parse refusal* is exempt: refusing unrecoverable structure (a broken `_`-sibling
-    // alignment) is the safe, conservative direction, allowed even where a more lenient oracle
-    // tolerates it. It cannot be a false *valid* (we errored), and stricter-than-the-oracle on
-    // malformed structure is not a defect. Only a spurious *validation* error is flagged here.
-    if (oracleErrors.length === 0 && ourErrors.length > 0 && !parseRefused) {
-      console.error(
-        `✗ SPURIOUS ERROR: ${name}, oracle is clean, we report ${ourErrors.length} error(s).`,
-      );
-      for (const e of ourErrors)
-        console.error(`    ours ${e.severity} @ ${e.location || "(root)"}`);
-      violations += 1;
-      continue;
-    }
-    if (oracleErrors.length === 0 && parseRefused) {
-      console.log(
-        `✓ ${name}: reader failed closed (safe refusal); oracle lenient, exempt from Invariant 2.`,
-      );
-      continue;
-    }
-
-    // Documented deltas: the oracle's richer warning/info set that our subset validator does not emit.
-    const delta = oracle.length - ours.length;
-    console.log(
-      `✓ ${name}: oracle ${oracleErrors.length} err / ${oracle.length} total; ` +
-        `ours ${ourErrors.length} err / ${ours.length} total` +
-        (delta > 0
-          ? ` (delta ${String(delta)}: oracle's extra profile/terminology findings, expected)`
-          : ""),
-    );
-  }
-
-  if (violations > 0) {
-    console.error(`\ndifferential: ${String(violations)} invariant violation(s), see above.`);
+  let declaration;
+  try {
+    declaration = loadDeclaration();
+  } catch (err) {
+    console.error(`differential: ${err instanceof CorpusError ? err.message : String(err)}`);
     process.exit(1);
   }
-  console.log(
-    "\ndifferential: spec-clean + Tier-2 quirk corpora agree with the oracle within documented deltas.",
+
+  printCorpusSummary(declaration);
+
+  const jar = process.env.VALIDATOR_CLI_JAR;
+  if (jar === undefined || jar === "") {
+    console.log(
+      `\ndifferential: VALIDATOR_CLI_JAR is not set (no JVM oracle available), SKIPPING the comparison.\n` +
+        `  This gate runs on GitHub Actions (the \`differential\` job), not in the dev container.\n` +
+        `  The corpus above is what it would compare; \`pnpm corpus:fetch\` materialises it.`,
+    );
+    process.exit(0);
+  }
+
+  let identity;
+  try {
+    identity = oracleIdentity(jar);
+  } catch (err) {
+    console.error(
+      `differential: ${err instanceof OracleError ? err.message : String(err)}\n` +
+        `  Refusing to compare documents against an unidentified oracle. The pinned release is ` +
+        `${ORACLE_RELEASE}.`,
+    );
+    process.exit(1);
+  }
+  const identityLine = formatOracleIdentity(identity);
+  console.log(`\n${identityLine}`);
+
+  let resolved;
+  try {
+    resolved = resolveCorpus(declaration);
+  } catch (err) {
+    console.error(`differential: ${err instanceof CorpusError ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
+  const staged = stage(resolved);
+  const answers = askOracle(jar, staged);
+
+  const records = staged.map((entry) =>
+    compareDocument({
+      id: entry.document.id,
+      oracle: answers.get(entry.document.id) ?? {
+        ok: false,
+        reason: "the oracle was never asked about this document",
+      },
+      ours: ourFindings(entry.text),
+    }),
   );
+
+  for (const record of records) {
+    const line = formatRecord(record);
+    if (record.violation) {
+      console.error(line);
+      const findings = record.oracleFindings ?? record.ourFindings ?? [];
+      for (const f of findings) {
+        // Severity, location and CODES. Never the diagnostic text: the oracle echoes document
+        // values and this log is public. The codes are what make a violation classifiable.
+        const kind = [f.code, f.messageId].filter(Boolean).join("/");
+        console.error(`    ${f.severity} @ ${f.location || "(root)"}${kind ? ` [${kind}]` : ""}`);
+      }
+    } else {
+      console.log(line);
+    }
+  }
+
+  const summary = summarize({ records, exclusions: exclusions(declaration), floor: declaration.comparedFloor });
+  console.log("");
+  for (const line of formatExclusions(summary.exclusions)) console.log(line);
+  for (const line of formatSummary(summary, identityLine)) {
+    if (summary.violations.length > 0 || !summary.meetsFloor) console.error(line);
+    else console.log(line);
+  }
+  if (summary.compared > 0 && summary.violations.length === 0 && summary.meetsFloor) {
+    const sample = resolved[0];
+    console.log(
+      `differential: the corpora above agree with the oracle within documented deltas ` +
+        `(provenance, first document: ${provenanceLine(declaration, sample.document)}).`,
+    );
+  }
+  process.exit(exitCodeFor(summary));
 }
 
 main();

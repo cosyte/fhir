@@ -1,0 +1,38 @@
+NOTICE for the differential corpus documents obtained from FHIR/fhir-test-cases
+==============================================================================
+
+Corpus:   FHIR/fhir-test-cases, "Shared test cases across multiple FHIR
+          reference implementations / validators"
+Origin:   https://github.com/FHIR/fhir-test-cases
+Version:  tag 1.7.67, commit 0d7196d75a85626383d697d34825bcd33f541b87
+Licence:  Apache License, Version 2.0 (SPDX: Apache-2.0). The full text is beside this file in
+          fhir-test-cases-LICENSE.txt, copied verbatim from the corpus's own
+          LICENSE.txt at that tag.
+
+Copyright is retained by the corpus's own contributors. Nothing in this
+repository claims authorship of those documents.
+
+WHAT THIS REPOSITORY CARRIES, AND WHAT IT DOES NOT
+--------------------------------------------------
+This repository does NOT redistribute the corpus documents. `corpus/corpus.json`
+declares each document by its path within the corpus, its byte count and its
+SHA-256 digest; `scripts/corpus-fetch.mjs` retrieves the bytes at run time from
+the commit above and refuses any document whose digest does not match. The
+materialised documents land in `corpus/documents/`, which is git-ignored, so no
+third-party document content enters this repository's history.
+
+That layout is deliberate and it is a safety decision as much as a licensing
+one. Committed content is not undone by a revert, and this repository's PHI
+scanner treats what it walks as self-authored synthetic fixtures. Keeping the
+documents out of the tree keeps both of those true without widening a single
+allow-list entry.
+
+The attribution above is carried here because the digests and paths in
+`corpus/corpus.json` are derived from the corpus, and because a reader who runs
+`pnpm corpus:fetch` does obtain Apache-2.0 licensed material through this
+repository's own tooling.
+
+The r4 half of this corpus is described by its own maintainer as "not
+maintained" (its README distinguishes "r5: r5 test cases (actively maintained)"
+from "r4: r4 test cases (not maintained)"). Breadth here is evidence about
+agreement on real documents, not a claim that the corpus is current.

@@ -1,0 +1,38 @@
+NOTICE for the differential corpus documents obtained from the FHIR R4 specification
+===================================================================================
+
+Corpus:   The HL7 FHIR R4 specification's own published examples
+Origin:   https://hl7.org/fhir/R4/downloads.html (examples-json.zip)
+Version:  FHIR R4, 4.0.1
+Licence:  CC0 1.0 Universal (SPDX: CC0-1.0). The specification states, verbatim:
+
+              "This document is licensed under Creative Commons 'No Rights
+              Reserved' (CC0)."
+
+          (https://hl7.org/fhir/R4/license.html). The full CC0 1.0 legal code is
+          beside this file in hl7-fhir-r4-examples-LICENSE.txt.
+
+TRADEMARK, WHICH CC0 DOES NOT COVER
+-----------------------------------
+The same page reserves the marks separately:
+
+    "HL7(R), HEALTH LEVEL SEVEN(R), FHIR(R) and the FHIR (flame image)(R) are
+    trademarks owned by Health Level Seven International, registered with the
+    United States Patent and Trademark Office."
+
+    "While HL7 places no restrictions on the right to copy the FHIR
+    specification or to create derivative works per the Creative Commons
+    license, HL7 protects the 'FHIR' trademark carefully."
+
+Use of the examples as validation input carries no claim to those marks, and
+nothing here is endorsed by or affiliated with HL7.
+
+WHAT THIS REPOSITORY CARRIES, AND WHAT IT DOES NOT
+--------------------------------------------------
+This repository does NOT redistribute the example documents. `corpus/corpus.json`
+declares each document by its name within examples-json.zip, its byte count and
+its SHA-256 digest, together with the archive's own SHA-256;
+`scripts/corpus-fetch.mjs` retrieves the archive at run time, refuses it if the
+archive digest does not match, and refuses any extracted document whose digest
+does not match. The materialised documents land in `corpus/documents/`, which is
+git-ignored, so no third-party document content enters this repository's history.
