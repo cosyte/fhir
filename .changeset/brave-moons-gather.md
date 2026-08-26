@@ -2,8 +2,8 @@
 "@cosyte/fhir": patch
 ---
 
-Read every negation at every resource root, instead of reading all but one only at the resource
-handed in (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).
+Read every negation at every resource root, instead of reading all but one only at the top-level
+resource (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).
 
 Measured at the base commit, on plain conformant JSON: a collection `Bundle` whose single entry is
 `{"resourceType":"Observation","status":"entered-in-error"}` returned `negations: []` under
