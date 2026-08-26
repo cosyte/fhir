@@ -7,12 +7,15 @@
  * is separate ({@link ../profiles/index.js}). This layer needs only enough shape to run layers 1–3,
  * so it uses a hand-authored, hierarchy-free record; the schema type is the seam between the two.
  *
- * **What ships built-in here is intentionally minimal:** the base `Resource` / `DomainResource`
- * elements (which are the same on every resource), and **`Patient`** as the one worked demonstrator
- * that proves the engine validates a real R4 resource end-to-end. Every other resource type is
+ * **What ships built-in here is a named, deliberately short list:** the base `Resource` /
+ * `DomainResource` elements (which are the same on every resource), plus one element table per
+ * modeled resource type. The types modeled today are exactly **`Patient`** and **`Observation`**,
+ * and that enumeration is the whole set, there is no third. Every other resource type is
  * "not modeled yet" and degrades safely (see {@link ./validate.js}) rather than emitting false
- * errors. Cardinalities are cited from the
- * R4 base definitions (resource.html, domainresource.html, patient.html).
+ * errors, which is why the set grows one fully-verified table at a time: a table missing a row R4
+ * defines turns a conformant document into an unknown-element finding, so a half-entered type would
+ * be worse than no entry at all. Cardinalities are cited from the R4 4.0.1 base definitions
+ * (resource.html, domainresource.html, patient.html, observation.html).
  *
  * @packageDocumentation
  */
@@ -119,9 +122,95 @@ const PATIENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   link: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
 };
 
-/** The built-in schemas (base elements are merged into each). */
+/**
+ * R4 `ObservationStatus`, the required binding on `Observation.status`, in the order the published
+ * expansion lists them. The value set contains exactly these eight concepts, all from
+ * `http://hl7.org/fhir/observation-status` at version 4.0.1; `corrected` is drawn one level under
+ * `amended` there, but the hierarchy is presentational and all eight are members.
+ * *(valueset-observation-status.html)*
+ */
+const OBSERVATION_STATUS = [
+  "registered",
+  "preliminary",
+  "final",
+  "amended",
+  "corrected",
+  "cancelled",
+  "entered-in-error",
+  "unknown",
+] as const;
+
+/**
+ * `Observation` direct elements, from the R4 4.0.1 base StructureDefinition (observation.html).
+ * `status` and `code` are the only two mandatory ones; `status` carries the one required-strength
+ * binding. `effective[x]` and `value[x]` are `choice[x]` elements (four and eleven variants).
+ *
+ * `component` and `referenceRange` are backbone elements and are modeled the way `Patient.contact`
+ * and `Patient.link` are: cardinality and node shape only. Their children, `component.value[x]`
+ * included, are deliberately left unmodeled here, so nothing inside one is checked and nothing
+ * inside one can draw a finding from this layer.
+ *
+ * The weaker bindings this type carries are deliberately absent: `category` (preferred), `code` and
+ * `bodySite` and `method` (example), `interpretation` and `dataAbsentReason` (extensible). This
+ * layer enforces `required` strength only, and severity by strength belongs to the terminology
+ * layer. The two FHIRPath invariants on this type (a data-absent reason beside a value, and a
+ * component code repeating the observation's own) are the profile/invariant layer's, not this one's.
+ */
+const OBSERVATION_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+  identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
+  basedOn: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  partOf: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  status: {
+    min: 1,
+    max: 1,
+    types: ["code"],
+    binding: { strength: "required", codes: [...OBSERVATION_STATUS] },
+  },
+  category: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  code: { min: 1, max: 1, types: ["CodeableConcept"] },
+  subject: { min: 0, max: 1, types: ["Reference"] },
+  focus: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  encounter: { min: 0, max: 1, types: ["Reference"] },
+  effective: { min: 0, max: 1, types: ["dateTime", "Period", "Timing", "instant"] },
+  issued: { min: 0, max: 1, types: ["instant"] },
+  performer: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  value: {
+    min: 0,
+    max: 1,
+    types: [
+      "Quantity",
+      "CodeableConcept",
+      "string",
+      "boolean",
+      "integer",
+      "Range",
+      "Ratio",
+      "SampledData",
+      "time",
+      "dateTime",
+      "Period",
+    ],
+  },
+  dataAbsentReason: { min: 0, max: 1, types: ["CodeableConcept"] },
+  interpretation: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  note: { min: 0, max: UNBOUNDED, types: ["Annotation"] },
+  bodySite: { min: 0, max: 1, types: ["CodeableConcept"] },
+  method: { min: 0, max: 1, types: ["CodeableConcept"] },
+  specimen: { min: 0, max: 1, types: ["Reference"] },
+  device: { min: 0, max: 1, types: ["Reference"] },
+  referenceRange: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+  hasMember: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  derivedFrom: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  component: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+};
+
+/**
+ * The built-in schemas (base elements are merged into each). This array IS the built-in set the
+ * module doc names: `Patient` and `Observation`, in that order.
+ */
 const BUILTIN_SCHEMAS: readonly ResourceSchema[] = [
   { type: "Patient", elements: PATIENT_ELEMENTS },
+  { type: "Observation", elements: OBSERVATION_ELEMENTS },
 ];
 
 /**

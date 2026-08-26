@@ -151,7 +151,10 @@ serializeResource(validateResource(resource).toOperationOutcome());
 - **Lenient vs strict:** an unknown element is a `warning` on read and an `error` under `mode: "strict"`.
 - **Fail-safe:** never a false error: a resource type with no schema degrades to one informational
   `RESOURCE_NOT_MODELED`, not a wall of false unknowns. Built-in schemas: base-resource elements +
-  `Patient`; supply your own via `validateResource(resource, { schemas: [...] })`.
+  `Patient` + `Observation`, and that list is the whole set; supply your own via
+  `validateResource(resource, { schemas: [...] })`. The set grows one fully-verified element table at
+  a time, because a table missing a row R4 defines would turn a conformant document into a wall of
+  false unknowns, which is the failure the degrade above exists to avoid.
 
 And the safety spine: FHIR's modifier (`?!`) elements, surfaced so they can never be silently dropped
 or inverted, and the invariants that harm a patient when read wrong:
@@ -186,7 +189,8 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `Bundle` entry or `contained` reaches `negations` too. **The readout's location channels
   (`unhandledModifierExtensions`, `modifierElements`, `shadowedProperties`, `arrayWrappedScalars`,
   `nestedArrays`, `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`,
-  `unreadableNegationCodes`) and
+  `unreadableNegationCodes`, `absenceMarkers`, `unreadableAbsenceMarkers`,
+  `conflictingAbsenceMarkers`) and
   `safeToSummarize` are document-wide.** The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
   and the rest) answer about the resource you handed in, because one value cannot say which resource
   it came from, so branch on `negations` whenever a resource may carry others.
@@ -506,6 +510,42 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `<status value="not-done"><extension …/></status>` is read; and a primitive whose value is _absent_
   is untouched, that being the conformant `data-absent-reason` shape and content the read never
   stepped over.
+- **An element a sender explicitly does not know is now distinguishable from one it never sent.**
+  A source system with no data for an element whose minimum cardinality is greater than zero cannot
+  omit it, so it writes the element present, with no value, carrying the R4 DataAbsentReason
+  **extension** and a reason code. Measured, both shapes reached a caller as the same answer: the
+  element counts as present so no required-element finding fires, and every value read returns
+  `undefined`, exactly as it does for an element nobody wrote. `absenceMarkers` is the read that
+  recovers the difference, one `{ code, location }` per declared absence, on a complex element or on
+  a primitive's extension metadata, in either wire format, at every depth (`contained` and
+  `Bundle.entry` included). It **carries the reason the sender spelled**, so `unknown` is
+  distinguishable from `masked`, `not-applicable` and `not-performed` on otherwise identical
+  instances. `absenceMarkers(resource, path)` is the standalone collector.
+  **This is the one location-bearing channel that leaves `safeToSummarize` standing**, and the
+  exception is the point rather than a hole: a declaration the caller can now read is a disclosure,
+  and refusing over it would withdraw an affirmation from a conformant document. **A report carries
+  the reason and the location and nothing else**, the reason being one of fifteen literal strings
+  this package spells (`ABSENCE_CODES`, the extension's own required-strength value set) rather than
+  anything taken off the document.
+  Its two neighbours behave like every channel above. **A reason outside that value set is refused,
+  never folded into `unknown`**: FHIR `code` is case-sensitive and excludes surrounding whitespace,
+  so `UNKNOWN` and `" unknown"` are not the code and coercing them would author a reason the sender
+  did not spell. The element is not read as populated either; the location goes on
+  `unreadableAbsenceMarkers`, `safeToSummarize` is `false`, and the validator raises
+  `ABSENCE_MARKER_UNREADABLE` (error). **A marker beside a value on one element is a contradiction
+  this library does not resolve**: both survive on the model and on the readout, the location goes on
+  `conflictingAbsenceMarkers`, and `ABSENCE_MARKER_CONFLICT` (error) says they disagree rather than
+  letting a consumer prefer whichever its own read reached first. A complex element "carries a value"
+  when it holds any member beyond `id`, `url`, `extension`, `modifierExtension` and the JSON
+  encoding's `resourceType`, none of which is a value a marker denies.
+  **Two neighbouring shapes are deliberately NOT this.** The same concepts used as a `Coding` inside
+  a coded element (`system` = the DataAbsentReason code system, `code` = `unknown`) are a present,
+  conformant coded VALUE, not an absent element, and draw nothing here. Nor is the
+  `Observation.dataAbsentReason` ELEMENT, an ordinary `CodeableConcept` whose `obs-6` invariant is
+  unchanged: the element is not the extension, so an Observation carrying one draws exactly what it
+  drew before and never both findings. Recognition is by the extension's **canonical URL** and
+  nothing that resembles it, so an extension whose `url` is the code system URI instead is not a
+  marker.
 - **Neither writer will re-emit a document the reader MARKED** (`FhirSerializeError`, code
   `DROPPED_ELEMENT_TEXT`). Say "marked", not "whose text was dropped": character data that is
   `String.trim()`-empty is dropped with no flag, no marker and no finding, so a `<status>` holding

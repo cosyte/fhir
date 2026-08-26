@@ -38,6 +38,20 @@
  *    `status` with no value, indistinguishable from one the sender left out: 2c's harm reached
  *    through the other wire format. `DROPPED_ELEMENT_TEXT`, `error`, unconditional at every position
  *    the model has a node for, and it cannot fire on a document read from JSON.
+ * 2e. **A declared absence beside a value => fail closed.** An element carrying the R4
+ *    DataAbsentReason EXTENSION and a value of its own says both that it holds that value and that
+ *    it holds none. `ABSENCE_MARKER_CONFLICT`, `error`, universal, and it cannot fire on a
+ *    conformant document: an element the sender has data for is written with the data and no
+ *    marker. Nothing is ranked and nothing is dropped, the value and the declaration both survive
+ *    on the model; the finding is what stops a consumer preferring whichever its own read reached.
+ *    **It is not `obs-6`**, which is about the `Observation.dataAbsentReason` ELEMENT beside a
+ *    `value[x]`: the element is not the extension, and the two never report about one another.
+ * 2f. **A declared absence with no readable reason => fail closed.** The same extension carrying no
+ *    `valueCode`, an unreadable one, one written twice, or a code outside the closed fifteen-concept
+ *    value set its `value[x]` binds to at **required** strength. `ABSENCE_MARKER_UNREADABLE`,
+ *    `error`, universal and schema-free (the binding is the extension's own, not a resource
+ *    schema's). The reason is never folded into `unknown` and the element is never read as
+ *    populated, which would author a reason nobody spelled or erase a declaration somebody did.
  * 3. **Retraction surfaced.** A resource marked `entered-in-error` is retracted, not data
  *    (`RETRACTED_RESOURCE`, `information`), surfaced so a consumer cannot silently treat it as active.
  * 4. **The named invariants**, `ait-1`/`ait-2` (AllergyIntolerance), `con-3`/`con-4`/`con-5`
@@ -71,10 +85,12 @@ import {
 } from "../safety/codes.js";
 import {
   arrayWrappedScalars,
+  conflictingAbsenceMarkers,
   droppedText,
   nestedArrays,
   shadowedProperties,
   unhandledModifierExtensions,
+  unreadableAbsenceMarkers,
 } from "../safety/status.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issues.js";
 
@@ -136,6 +152,27 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
   // returning `valid` for `<status>entered-in-error</status>`.
   for (const location of droppedText(resource, root)) {
     issues.push(validationIssue("DROPPED_ELEMENT_TEXT", ISSUE_SEVERITIES.ERROR, location));
+  }
+
+  // 2e. A declared absence beside a value on one element. The document asserts two contradictory
+  // things and this layer ranks neither, so it reports that they disagree rather than resolving it:
+  // a consumer reading whichever of the two its own walk reached first would report the record as
+  // though the other had not been written. Universal like 2 to 2d, and it cannot fire on a
+  // conformant document, where an element the sender has data for carries the data and no marker.
+  // It is NOT the `obs-6` invariant: that one is about the `dataAbsentReason` ELEMENT beside a
+  // `value[x]`, an entirely different pair of positions, and the two never report about each other.
+  for (const location of conflictingAbsenceMarkers(resource, root)) {
+    issues.push(validationIssue("ABSENCE_MARKER_CONFLICT", ISSUE_SEVERITIES.ERROR, location));
+  }
+
+  // 2f. A declared absence whose reason is outside the closed value set the extension's `value[x]`
+  // binds to at required strength, or is not readable at all. The same posture as any other
+  // required-binding miss, and the same refusal to coerce that the near-miss negation channel takes:
+  // the reason is not folded into `unknown` and the element is not read as populated. Universal, and
+  // schema-free: the binding is fixed by the extension's own definition, not by a resource schema a
+  // caller may or may not have supplied.
+  for (const location of unreadableAbsenceMarkers(resource, root)) {
+    issues.push(validationIssue("ABSENCE_MARKER_UNREADABLE", ISSUE_SEVERITIES.ERROR, location));
   }
 
   if (!SAFETY_RESOURCE_TYPES.has(rt)) return issues;

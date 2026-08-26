@@ -70,6 +70,109 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
     compare, then skips. The accounting is graded by `test/differential-corpus.test.ts`,
     `test/differential-oracle.test.ts` and `test/differential-harness.test.ts`, which need no build,
     no Java and no network. **No library code changed**; nothing here ships in the published artifact.
+- **The bounded FHIRPath engine has a MEASURED coverage number (`FHIRPATH-SUITE-1`), taken from
+  HL7's shared R4 conformance suite, and a wrongly answered case now fails the build.** The subset's
+  size had only ever been asserted in prose: nothing in the checkout referenced `tests-fhir-r4.xml`
+  or `fhir-test-cases` at all. The corpus is vendored under `test/__fixtures__/fhirpath-suite/` with
+  its upstream Apache-2.0 `LICENSE.txt` and the `testSchema.xsd` that defines the file format, and
+  `test/fhirpath-suite.test.ts` runs every case on every `pnpm test`, printing the counts.
+  **Measured at corpus tag `1.7.67`: 190 evaluated, 710 refused as unsupported, 0 answered wrongly,
+  35 the corpus marks invalid, 935 total**, i.e. the engine answers 20.3% of the corpus and 21.1% of
+  the cases it is expected to evaluate at all.
+  `documentation/fhirpath-coverage.md` is the committed record, and a run that disagrees with it
+  fails the suite naming both the recorded and the measured number.
+  **A LARGE REFUSAL COUNT IS THE MEASUREMENT, NOT A DEFECT** (the corpus grades the whole language;
+  arithmetic, string functions, temporal arithmetic, `descendants()`, `resolve()`, aggregates and
+  FHIR type reflection are outside the cap on purpose), **but a WRONG answer is a defect and the
+  suite reds on one.** A case counts as unsupported only where `UnsupportedFhirPathError` was
+  actually raised, and a result the harness cannot compare counts as wrong, so the number can never
+  be inflated by the harness's own gaps. `grep -c '<test '` over the suite file says 937; two of
+  those sit inside XML comments, so the corpus carries 935 cases and the suite asserts all three
+  numbers.
+  One of the eleven input documents, `r4/patient-name-extensions.json`, is refused by this package's
+  JSON reader with `PRIMITIVE_EXTENSION_MISALIGNED` (the published example writes a two-slot value
+  array beside a one-slot `_`-sibling array, which json.html §2.6.2.3 does not allow). The single
+  case naming it is **not skipped**: it is asked with no document, refused at the head of its path
+  (an empty focus is nothing to check a type qualifier against) and counted declined, a placement
+  that is conservative rather than measured because the refusal is caused by the absent document and
+  so can only make the coverage number smaller. The exception is declared by name and checked both
+  ways, so an undeclared document going unreadable, or this one becoming readable, each fail the
+  suite.
+  Two further cases, `testPolymorphismB` (`Observation.valueQuantity.unit`, answered `lbs`) and
+  `testPolymorphicsB` (`Observation.valueQuantity.exists()`, answered `true`), are marked invalid by
+  the corpus only under the **strict** mode of choice-element access that the corpus's own schema
+  defines (`Observation.value`, not `Observation.valueQuantity`), a mode this engine does not run in
+  and cannot without FHIR resource definitions it deliberately does not carry. That makes them a
+  mode difference rather than a wrong answer, so they are counted in the invalid bucket and
+  **the `0 answered wrongly` above excludes exactly those two cases**: read it as "wrong outside a
+  declared mode difference", with both named, with their expressions and answers, in
+  `documentation/fhirpath-coverage.md`. The exception is narrow and re-checked every run against the
+  corpus bytes and the running engine, so a case that stops being marked invalid, an expression
+  edited upstream, a mode claim the corpus stops grounding, or an engine that starts refusing or
+  answering differently each takes it away, counts the case wrong again and fails the suite.
+
+- **A declared absence is readable (`MISSING-DATA-1`): `readSafety` carries `absenceMarkers`, so an
+  element a source system explicitly does not know is distinguishable from one it never sent.** US
+  Core's Missing Data rule forbids omitting an element whose minimum cardinality is greater than
+  zero, so a system with no data for one writes it present, with no value, carrying the R4
+  DataAbsentReason EXTENSION and a reason code. At the previous release this package read that into a
+  value-absent primitive: the element counted as present so no `CARDINALITY_MIN` fired, and every
+  value reader returned the same `undefined` an element nobody wrote returns. The two were one answer
+  to a caller, and the difference was recoverable only by re-reading the wire document.
+  `absenceMarkers` carries one `{ code, location }` per declared absence, on a complex element or on
+  a primitive's extension metadata, from either wire format, on any resource type, at every depth
+  (`contained` and `Bundle.entry` included), and it carries the reason the sender spelled so
+  `unknown` is distinguishable from `masked`, `not-applicable` and `not-performed` on otherwise
+  identical instances. `absenceMarkers(resource, path)` is the standalone collector.
+  **It is the one location-bearing channel on that readout that leaves `safeToSummarize` standing**,
+  because a declaration the caller can now read is a disclosure and not a loss, and refusing over it
+  would withdraw an affirmation from a conformant document.
+  **Two neighbouring channels do refuse.** A reason outside the closed fifteen-concept value set the
+  extension's `value[x]` binds to at required strength, or one that is absent, empty, unreadable or
+  written twice, lands on `unreadableAbsenceMarkers` with the new `ABSENCE_MARKER_UNREADABLE` (error,
+  `code-invalid`): the reason is never folded into `unknown` and the element is never read as
+  populated, since FHIR `code` is case-sensitive and excludes surrounding whitespace. A marker beside
+  a value on one element lands on `conflictingAbsenceMarkers` with the new `ABSENCE_MARKER_CONFLICT`
+  (error, `structure`): both survive on the model and on the readout, and the finding is what stops a
+  consumer preferring whichever of the two its own read reached first.
+  **Deliberately NOT this, and pinned in both directions:** the same concepts used as a `Coding`
+  inside a coded element are a present, conformant coded VALUE; and the
+  `Observation.dataAbsentReason` ELEMENT is an ordinary `CodeableConcept` whose `obs-6` invariant is
+  unchanged and never arrives alongside an absence finding, because the element is not the extension.
+  Recognition is by the extension definition's own canonical `url` and nothing that resembles it.
+  New exports: `absenceMarkers`, `unreadableAbsenceMarkers`, `conflictingAbsenceMarkers`,
+  `isAbsenceCode`, `ABSENCE_CODES`, `DATA_ABSENT_REASON_URL`, and the `AbsenceCode` / `AbsenceMarker`
+  types. **Nothing a document without the extension draws has changed:** required-element reporting
+  moves in neither direction, no runtime dependency was added, no terminology or profile content is
+  bundled, the profiles surface is untouched, and the base-versus-head readout differential over the
+  JSON corpus is unchanged on every channel it compares.
+- **`Observation` is modeled (`MODEL-OBSERVATION-1`): `validateResource` checks its own elements
+  instead of reporting that it has none.** The built-in schema set held exactly one resource type
+  (`Patient`), so an `Observation` degraded to a single informational `RESOURCE_NOT_MODELED` at the
+  resource root with its own elements left unchecked. It now ships the full R4 4.0.1 DIRECT element
+  table, twenty-four elements verified row by row against `observation.html`, which turns the
+  existing generic checks on for it: `status` at `1..1` carrying the required-strength
+  `ObservationStatus` binding over the eight codes the published value set expands to (a code
+  outside that set is a `CODE_INVALID` error **with no terminology service supplied**), `code` at
+  `1..1`, `value[x]` as a choice over its eleven variants and `effective[x]` over its four (more
+  than one variant of either is one `CHOICE_AMBIGUOUS` at the `[x]` path, never a spurious
+  cardinality error), and an element name R4 does not define reported as a warning when reading
+  leniently and an error when reading strictly.
+  **NOTHING IS RETIRED, RE-SEVERITIED OR RELOCATED.** The safety, quantity, bundle and terminology
+  layers key off the resource model directly and were never gated on the structural schema, so every
+  finding they emitted for an `Observation` before, they emit now, at the same severity and the same
+  location. The one finding that disappears is the informational `RESOURCE_NOT_MODELED` note at an
+  `Observation` root, whose removal is the point; `valid` may move `true` to `false` where the table
+  catches something real and never the other way. The base-versus-head readout differential is
+  re-derived and its declared allowance narrowed to exactly those two shapes.
+  **Deliberately still unmodeled:** `component` and `referenceRange` are backbone elements checked
+  for cardinality and node shape only, exactly as `Patient.contact` and `Patient.link` are, so
+  `component.value[x]` and everything else inside one draws nothing; the weaker bindings on
+  `category`, `code`, `interpretation`, `dataAbsentReason`, `bodySite` and `method` stay with the
+  terminology layer, since this layer enforces `required` strength only; and every other resource
+  type still degrades to `RESOURCE_NOT_MODELED` with its own elements unchecked, until each gets a
+  table verified the same way. No public export, option or issue code changed.
+
 - **Modifier ELEMENTS reach the safety readout (`SAFETY-MODIFIER-2`), on a new
   `SafetyReadout.modifierElements` channel carrying `{ element, location }` per location.** A
   modifier is not only a `modifierExtension`: R4 flags several ordinary base elements
@@ -293,6 +396,120 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Fixed
 
+- **A type-qualified path head was silently navigated to nothing (`FHIRPATH-SUITE-1`).** FHIRPath
+  lets a path be written `Patient.name.given`, where the leading segment names the type the path is
+  rooted in, and most published constraint text is written that way. The engine was navigating it as
+  an ordinary member, and no resource has a property called `Patient`, so `Patient.name.exists()`
+  evaluated to `false` on a Patient that HAS a name: **a wrong answer with no diagnostic**, which is
+  the one outcome the engine's fail-safe contract exists to prevent. The head now **resolves against
+  the focus it names** where the model can check that, at a resource root whose `resourceType` the
+  qualifier reads, and raises `UnsupportedFhirPathError` for any other focus (an element, an empty
+  collection, a resource of another type), which the validator reports as `INVARIANT_UNCHECKED`.
+  **REFUSING IT UNCONDITIONALLY IS NOT THE SAFE DEFAULT AND WAS WITHDRAWN**: on a Patient with no
+  name, a caller-supplied `Patient.name.exists()` constraint went from `INVARIANT_VIOLATED` at
+  **error** to `INVARIANT_UNCHECKED` at **information**, and `validateResource(...).valid` went from
+  `false` to `true` on a resource that genuinely violates it, for the spelling most published
+  constraints use. **THE NARROW REFUSAL THAT SHIPPED STILL WITHDRAWS A FINDING** where the qualifier
+  does not match the focus, which is a cost and is enumerated under "what these four move" below
+  rather than rounded to nothing. `test/profile-invariant-type-qualified.test.ts` pins the issue
+  code, the severity and `valid` in both directions of a matching qualifier, and the non-matching one
+  beside them. **SCOPED TO THE HEAD OF A PATH:**
+  `ofType(Boolean)` and `x is System.String` read their type name off the parse tree and never reach
+  the member branch.
+- **`is` / `as` sat one precedence level too loose (`FHIRPATH-SUITE-1`).** The published FHIRPath
+  precedence table binds them tighter than `|` and looser than `+`; this parser had them between
+  equality and inequality. That re-associated `1 | 1 is Integer` into `(1 | 1) is Integer`, a
+  different collection, and `1 > 2 is Boolean` into `(1 > 2) is Boolean`, which answers `true` where
+  the language says the expression compares an Integer with a Boolean and errors. Both are wrong
+  booleans out of a well-formed parse, the failure mode the parser's own contract calls worse than
+  "unchecked". **THAT IS ALSO WHY THIS ONE MOVES FINDINGS:** an expression that parsed before and
+  parses now, re-associated, answers differently on each, and one written with `is` to the LEFT of
+  `|` or of an inequality did not parse at all before and does now. Both directions are enumerated
+  under "what these four move" below.
+- **A type test outside the System primitives answered `false` instead of refusing
+  (`FHIRPATH-SUITE-1`).** `Observation.issued is instant` and `Patient.gender.ofType(code)` were
+  decided from the System type of the value, which is not the question being asked: a generic model
+  carries no FHIR datatype name, so `code` and `instant` cannot be tested for and `false` only
+  looked like a determination. Any type name outside `Boolean` / `String` / `Integer` / `Decimal`
+  now raises `UnsupportedFhirPathError`, which a caller sees as `INVARIANT_UNCHECKED`: a constraint
+  that _is_ such a type test therefore **loses** the verdict it used to get, which is a withdrawal
+  and is enumerated under "what these four move" below. **A LEADING `FHIR.` IS NO LONGER STRIPPED
+  BEFORE DECIDING**, so `FHIR.Boolean` and `FHIR.String` are refused rather than answered off the
+  System type of the value; `System.` is still stripped, since `System.Boolean` names a type this
+  engine does carry. Separately, `{} is T` is now the empty
+  collection rather than `false`, as FHIRPath specifies. **THOSE TWO COERCE ALIKE TAKEN ALONE AND DO
+  NOT COMPOSE ALIKE**, so a constraint that is an empty type test keeps its verdict while one that
+  wraps it in `not()` or a three-valued `implies` can gain a finding; same section.
+- **An ordering comparison guessed a model value's type from its text (`FHIRPATH-SUITE-1`).** A string-valued
+  primitive is the FHIR lexical form of an element whose type this model does not carry: a `string`,
+  a `code`, a `date`, or, read from XML, a `decimal`. Comparing it with `<` answered
+  `Observation.value.value < 'test'` (a decimal against a word, an execution error in FHIRPath) with
+  `true`, and answered the `per-1` period constraint's `start <= end` over a day-precision date and
+  a second-precision dateTime with `true` where FHIRPath says the comparison is undetermined and
+  the value is `{}`. Where either side is a model value, the pair is ordered when both read as
+  temporal values of the same family, each taken as the **interval of instants** its written
+  precision denotes and read at its own timezone offset: they order when the intervals are disjoint,
+  are equal when the intervals coincide, and are undetermined (`{}`) when they overlap without
+  coinciding. A value written with no designator is read at the evaluation context's offset, which
+  FHIRPath leaves to the engine and which this engine declares to be UTC. Every other pair is
+  **undetermined too and yields `{}`**. **NARROWED ON PURPOSE:** values the engine computed itself
+  are System Strings by construction and still order as Strings, and a JSON-read decimal still orders
+  as a number.
+  **NEITHER REFUSAL THIS REPLACED WAS THE SAFE DEFAULT, AND BOTH WERE WITHDRAWN.** Refusing a pair of
+  different timezone designators: `13:00:00+02:00` is `11:00:00Z`, so a period ending `10:00:00Z` is
+  genuinely inverted, and refusing to normalise turned `per-1` over it from `INVARIANT_VIOLATED` at
+  **error** into `INVARIANT_UNCHECKED` at **information** with `valid` going `false` to `true`. And
+  refusing the non-temporal pair, which did the same thing to a correct answer: `HumanName.family` is
+  a FHIR `string` and String-against-String is a comparison FHIRPath defines, so a caller-supplied
+  `name.all(family < 'A')` lost its `INVARIANT_VIOLATED` the same way. `{}` coerces exactly as a
+  lexical `false` did, so a constraint the lexical comparison answered `false` for stays reported at
+  its own code, severity and location. **THAT COMPARES `{}` WITH THE REFUSAL, NOT WITH THE LEXICAL
+  COMPARISON**: reading two ends by their instants rather than their spelling takes a report away
+  where the lexical order was a false positive and adds one where it was wrong the other way.
+  What these four move, measured at the layer that decides an issue code, a severity and `valid` by
+  running the same probe against the published package and against this change and diffing the two
+  outputs, never inferred from a green suite. **EACH OF THE FOUR BOTH ADDS A FINDING SOMEWHERE AND
+  TAKES ONE AWAY SOMEWHERE**, in twenty-one measured shapes tabled in full in
+  `documentation/fhirpath-coverage.md`; earlier revisions of this entry said "nothing is relocated"
+  and "three of the four add", and both were wrong. **A finding is WITHDRAWN and re-severitied in six
+  shapes**, from the type-qualifier refusal, the type-test refusal AND the precedence move:
+  `Encounter.name.exists()` over a Patient with no `name`, `name.all(HumanName.given.exists())` over
+  a `HumanName` carrying no `given`, and `gender is Quantity`, `gender.ofType(Quantity).exists()`,
+  `gender is FHIR.Boolean` and `gender > 'test' is String` over `gender: "male"` each move from
+  `INVARIANT_VIOLATED` at **error** with `valid: false` to `INVARIANT_UNCHECKED` at **information**
+  with `valid: true`. Each pre-change answer was `false` and each `false` was correct FHIRPath, so
+  these are withdrawals of correct findings; they ship because the previous engine reached those
+  answers by accident rather than by deciding them, and a determination a generic model has not made
+  is the wrong-answer-with-no-diagnostic that `UnsupportedFhirPathError` exists to prevent.
+  **TWO ARE REMOVED INTO SILENCE INSTEAD, WITH NO `unchecked` ON THE OTHER SIDE**, and the sentence
+  above does not cover them, because the caller is told the constraint passed rather than told it was
+  not evaluated: under the corrected precedence `name.family | gender is String` and
+  `name.given | name.family is String` are unions rather than type tests, so each yields a two-item
+  collection, and a multi-item collection has always coerced to "satisfied" here. The error that goes
+  away was the mis-parse's rather than the coercion's, and the coercion is untouched by this change;
+  the caller still gets `valid: true` from a package that used to reject that document, and the
+  record states that gap rather than arguing it away. **A false positive is removed in three shapes**
+  (a conformant Patient reported `INVARIANT_VIOLATED` because the type-qualified head selected
+  nothing; `per-1` reported over a Period ending `12:00:00Z` or `11:00:00Z` after a start of
+  `13:00:00+02:00`, which normalises to `11:00:00Z` and is not inverted). **An `unchecked` is removed
+  too**, where the published parser refused an expression outright and this one evaluates it
+  (`gender is String | name.family` did not parse before the precedence move). **ALL FOUR ADD a
+  finding**, since an undetermined comparison and an empty type test both reach `evaluateInvariant`,
+  which has always coerced empty to "not satisfied", and a newly refused construct reaches it as
+  `unchecked`; the added shapes are a period whose two ends are written at different precisions, a
+  period whose lexical order is the reverse of its instants' order, an ordering over a model value
+  that is not temporal where the lexical guess used to answer `true`, a type test over an empty
+  operand wrapped in `not()` or in an `implies` with a false consequent, and an `INVARIANT_UNCHECKED`
+  at **information** where a construct that used to be answered satisfied the constraint in silence
+  (`Encounter.name.empty()` and `Encounter.exists().not()` over a Patient, `gender is FHIR.String`
+  and `gender > 'test' is Boolean` over `gender: "male"`, each going from no issue to one with
+  `valid` staying `true`). `test/profile-invariant-withdrawn-findings.test.ts` pins every one of the
+  twenty-one, with a live control beside each row whose pre-change reduction is still reachable, and
+  `test/profile-invariant-type-qualified.test.ts` and `test/profile-invariant-ordering.test.ts` pin
+  the surrounding behaviour. Those files pin what this change costs; none of them is evidence that
+  nothing moved. Every test that predates this measurement is green unchanged, which is why the
+  movements are enumerated rather than inferred from that: a green suite says only that nothing the
+  suite pins moved.
 - **A `Coding` array wrapper the negation read decided on was reported only on the resource types
   the cardinality table knows, so on every other type the read ran ahead of the report
   (`FHIR-NEGATION-READ-SCOPE-RESIDUALS`).** Measured at the base commit, on plain JSON:

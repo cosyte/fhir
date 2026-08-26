@@ -96,8 +96,13 @@ describe("XML read path: Quantity.comparator", () => {
       { element: "comparator", location: "Observation.valueQuantity.comparator" },
     ]);
     expect(safety.droppedText).toEqual(["Observation.valueQuantity.comparator"]);
+    // The document names neither mandatory element, so the built-in Observation element table
+    // raises both. Those are ADDED findings; the dropped-text one this test exists for is unmoved,
+    // at the same code, severity and location, and the informational "not modeled" note it used to
+    // sit beside is gone because the type now IS modeled.
     expect(findingsOfXml(xml)).toEqual([
-      "RESOURCE_NOT_MODELED/information at Observation",
+      "CARDINALITY_MIN/error at Observation.status",
+      "CARDINALITY_MIN/error at Observation.code",
       "DROPPED_ELEMENT_TEXT/error at Observation.valueQuantity.comparator",
     ]);
   });

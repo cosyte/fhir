@@ -54,6 +54,8 @@ describe("validation code / severity / issue-type registries (stable public cont
       ARRAY_WRAPPED_SCALAR: "ARRAY_WRAPPED_SCALAR",
       NESTED_ARRAY: "NESTED_ARRAY",
       DROPPED_ELEMENT_TEXT: "DROPPED_ELEMENT_TEXT",
+      ABSENCE_MARKER_CONFLICT: "ABSENCE_MARKER_CONFLICT",
+      ABSENCE_MARKER_UNREADABLE: "ABSENCE_MARKER_UNREADABLE",
       RETRACTED_RESOURCE: "RETRACTED_RESOURCE",
       INVARIANT_VIOLATED: "INVARIANT_VIOLATED",
       INVARIANT_UNCHECKED: "INVARIANT_UNCHECKED",
@@ -116,6 +118,10 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(validationIssue("CONTAINED_CYCLE", "error", "X").type).toBe("structure");
     expect(validationIssue("NESTED_ARRAY", "error", "X.y[0]").type).toBe("structure");
     expect(validationIssue("FULLURL_ID_MISMATCH", "error", "X").type).toBe("business-rule");
+    // A declared absence beside a value is a structural contradiction; a reason outside the
+    // extension's own required-strength value set is an ordinary binding miss.
+    expect(validationIssue("ABSENCE_MARKER_CONFLICT", "error", "X.y").type).toBe("structure");
+    expect(validationIssue("ABSENCE_MARKER_UNREADABLE", "error", "X.y").type).toBe("code-invalid");
   });
 
   it("carries the constraint key only on an invariant finding, never elsewhere", () => {

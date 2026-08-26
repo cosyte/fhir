@@ -22,8 +22,9 @@
  * guessed at.
  *
  * **Not in this layer:** terminology binding beyond required-code enumeration, profile /
- * slicing / must-support, FHIRPath invariants. The built-in schema set is base
- * elements + `Patient`; other resource types validate only when the caller supplies a schema.
+ * slicing / must-support, FHIRPath invariants. The built-in schema set is the base elements plus
+ * the resource types {@link ./schema.js} enumerates; other resource types validate only when the
+ * caller supplies a schema.
  *
  * @packageDocumentation
  */

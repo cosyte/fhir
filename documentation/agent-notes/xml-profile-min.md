@@ -24,6 +24,13 @@ both readings also carry `information: RESOURCE_NOT_MODELED @Observation`, which
 schema speaking and is unrelated; an earlier draft said "no finding at all" and was one finding out.
 ```
 
+**As of 2026-08-25 that third finding is gone**, and its disappearance is as unrelated to this
+lineage as its presence was: `MODEL-OBSERVATION-1` put `Observation` in `BUILTIN_SCHEMAS`, so the
+type is modeled and the informational note it used to draw is not emitted. The instance in the run
+above carries both mandatory elements, so the built-in table adds nothing in its place and the two
+profile findings are now the whole list. The asymmetry this note is about is untouched. Reading left
+as it was taken, with the correction beside it rather than in it.
+
 **The XML in that run is this package's own `serializeResourceXml` output, read back by its own
 `parseResourceXml`.** A caller who changed format inside this library got a profile that had stopped
 enforcing anything, and a verdict that moved `valid: false -> true`: a format change **upgrading** a

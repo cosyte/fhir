@@ -120,8 +120,9 @@ describe("a min stated in XML is a lower bound this library enforces", () => {
     const observation = bareObservation();
 
     expect(codes(observation, fromXml)).toEqual(codes(observation, fromJson));
+    // The instance is conformant against the built-in Observation element table (it carries both
+    // mandatory elements), so the profile's own two minima are the whole list.
     expect(codes(observation, fromXml)).toEqual([
-      "information:RESOURCE_NOT_MODELED at Observation",
       "error:CARDINALITY_MIN at Observation.subject",
       "error:CARDINALITY_MIN at Observation.performer",
     ]);

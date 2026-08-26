@@ -1389,10 +1389,16 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * goes red first.
      */
     describe("a foreign root launders into conformant FHIR across one round trip", () => {
+      // The document carries `code` as well as `status` so that it is conformant against the
+      // built-in Observation element table: the flag under test is the ONLY thing separating this
+      // document from FHIR, and a mandatory element it happened not to carry would muddy that.
       const VENDOR_ROOT =
         `<v:Observation xmlns:v="urn:vendor">` +
-        `<v:id value="o1"/><v:status value="entered-in-error"/></v:Observation>`;
-      const EMITTED = `<Observation ${FHIR_NS}><id value="o1"/><status value="entered-in-error"/></Observation>`;
+        `<v:id value="o1"/><v:status value="entered-in-error"/>` +
+        `<v:code><v:text value="synthetic"/></v:code></v:Observation>`;
+      const EMITTED =
+        `<Observation ${FHIR_NS}><id value="o1"/><status value="entered-in-error"/>` +
+        `<code><text value="synthetic"/></code></Observation>`;
 
       it("flags the root, once, and reports nothing else about the vocabulary", () => {
         const { issues } = parseResourceXml(VENDOR_ROOT);
