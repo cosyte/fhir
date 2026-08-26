@@ -6,6 +6,23 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The published tarball is narrowed to the runtime files only, as a diagnostic probe for the
+  standing npm publish refusal (`FHIR-NPM-NAME`), at npm support's request of 2026-08-26.** No
+  runtime behaviour changes. `files` named `dist` as a directory, so both sourcemaps shipped, and
+  each embeds `sourcesContent`: the complete original TypeScript of all 47 source files, 613 KB per
+  map, 1.2 MB of the tarball. Because the XML reader is hardened by refusal rather than by
+  resolution, that source names what it refuses, and a count over the shipped bytes returns 104
+  `entity`, 37 `ENTITY`, 29 `XXE`, 28 `billion-laughs` and 26 `DOCTYPE`. Support's list did not
+  mention the sourcemaps; they carry more of the content it describes than every other shipped file
+  together. `files` now names the two bundles and the two declaration rollups one by one, and
+  `CHANGELOG.md` leaves the tarball with the maps. `README.md` is cut to a stub instead, because npm
+  includes a README whatever `files` says. Three of support's five steps were already true and were
+  not re-done: the allowlist existed, no `*.spec.js` could ship under it, and the version is already
+  past their suggested `0.0.9`. **This is a probe, not a release shape; revert it once npm returns a
+  result.**
+
 ### Added
 
 - **The bounded FHIRPath engine has a MEASURED coverage number (`FHIRPATH-SUITE-1`), taken from
