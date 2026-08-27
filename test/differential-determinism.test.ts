@@ -116,9 +116,12 @@ describe("a run whose terminology questions a network could answer compares noth
     expect(() =>
       auditTerminologyArgv([...base, TX_CACHE_OPTION, NO_TERMINOLOGY], resolvedNone),
     ).toThrow(TerminologyError);
+    // A SUBSTRING assertion, deliberately not a constructed RegExp: a host name compiled into a
+    // pattern is a shape that matches more hosts than it names, and the refusal owes the reader the
+    // exact default it is warning about.
     expect(() =>
       auditTerminologyArgv([...base, TX_CACHE_OPTION, NO_TERMINOLOGY], resolvedNone),
-    ).toThrow(new RegExp(DEFAULT_TX_SERVER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    ).toThrow(DEFAULT_TX_SERVER);
   });
 
   it("names the condition it refused on for a -tx that is a URL", () => {
