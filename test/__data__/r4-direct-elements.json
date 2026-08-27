@@ -1,0 +1,2501 @@
+{
+  "note": "Committed expectation data: a field-subset projection of the R4 4.0.1 StructureDefinitions named below, carrying every `snapshot.element` unfiltered. Do not hand-edit. See the docblock of test/r4-direct-elements.test.ts for the projection rule and how to re-derive it.",
+  "fhirVersion": "4.0.1",
+  "provenance": {
+    "DiagnosticReport": "https://hl7.org/fhir/R4/diagnosticreport.profile.json",
+    "Condition": "https://hl7.org/fhir/R4/condition.profile.json",
+    "MedicationRequest": "https://hl7.org/fhir/R4/medicationrequest.profile.json",
+    "AllergyIntolerance": "https://hl7.org/fhir/R4/allergyintolerance.profile.json",
+    "Immunization": "https://hl7.org/fhir/R4/immunization.profile.json",
+    "MedicationStatement": "https://hl7.org/fhir/R4/medicationstatement.profile.json"
+  },
+  "valueSetProvenance": "https://hl7.org/fhir/R4/valuesets.json",
+  "types": {
+    "DiagnosticReport": {
+      "url": "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+      "version": "4.0.1",
+      "kind": "resource",
+      "derivation": "specialization",
+      "elements": [
+        {
+          "path": "DiagnosticReport",
+          "min": 0,
+          "max": "*"
+        },
+        {
+          "path": "DiagnosticReport.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.meta",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Meta"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.implicitRules",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.language",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+          }
+        },
+        {
+          "path": "DiagnosticReport.text",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Narrative"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.contained",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Resource"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.identifier",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.basedOn",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.status",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/diagnostic-report-status|4.0.1"
+          }
+        },
+        {
+          "path": "DiagnosticReport.category",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/diagnostic-service-sections"
+          }
+        },
+        {
+          "path": "DiagnosticReport.code",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/report-codes"
+          }
+        },
+        {
+          "path": "DiagnosticReport.subject",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.encounter",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.effective[x]",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime",
+            "Period"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.issued",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "instant"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.performer",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.resultsInterpreter",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.specimen",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.result",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.imagingStudy",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.media",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.media.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.media.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.media.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.media.comment",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.media.link",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.conclusion",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "DiagnosticReport.conclusionCode",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/clinical-findings"
+          }
+        },
+        {
+          "path": "DiagnosticReport.presentedForm",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Attachment"
+          ]
+        }
+      ]
+    },
+    "Condition": {
+      "url": "http://hl7.org/fhir/StructureDefinition/Condition",
+      "version": "4.0.1",
+      "kind": "resource",
+      "derivation": "specialization",
+      "elements": [
+        {
+          "path": "Condition",
+          "min": 0,
+          "max": "*"
+        },
+        {
+          "path": "Condition.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Condition.meta",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Meta"
+          ]
+        },
+        {
+          "path": "Condition.implicitRules",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "Condition.language",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+          }
+        },
+        {
+          "path": "Condition.text",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Narrative"
+          ]
+        },
+        {
+          "path": "Condition.contained",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Resource"
+          ]
+        },
+        {
+          "path": "Condition.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Condition.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Condition.identifier",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "Condition.clinicalStatus",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-clinical|4.0.1"
+          }
+        },
+        {
+          "path": "Condition.verificationStatus",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-ver-status|4.0.1"
+          }
+        },
+        {
+          "path": "Condition.category",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "extensible",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-category"
+          }
+        },
+        {
+          "path": "Condition.severity",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-severity"
+          }
+        },
+        {
+          "path": "Condition.code",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-code"
+          }
+        },
+        {
+          "path": "Condition.bodySite",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/body-site"
+          }
+        },
+        {
+          "path": "Condition.subject",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Condition.encounter",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Condition.onset[x]",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime",
+            "Age",
+            "Period",
+            "Range",
+            "string"
+          ]
+        },
+        {
+          "path": "Condition.abatement[x]",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime",
+            "Age",
+            "Period",
+            "Range",
+            "string"
+          ]
+        },
+        {
+          "path": "Condition.recordedDate",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "Condition.recorder",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Condition.asserter",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Condition.stage",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Condition.stage.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Condition.stage.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Condition.stage.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Condition.stage.summary",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-stage"
+          }
+        },
+        {
+          "path": "Condition.stage.assessment",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Condition.stage.type",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-stage-type"
+          }
+        },
+        {
+          "path": "Condition.evidence",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Condition.evidence.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Condition.evidence.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Condition.evidence.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Condition.evidence.code",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/manifestation-or-symptom"
+          }
+        },
+        {
+          "path": "Condition.evidence.detail",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Condition.note",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Annotation"
+          ]
+        }
+      ]
+    },
+    "MedicationRequest": {
+      "url": "http://hl7.org/fhir/StructureDefinition/MedicationRequest",
+      "version": "4.0.1",
+      "kind": "resource",
+      "derivation": "specialization",
+      "elements": [
+        {
+          "path": "MedicationRequest",
+          "min": 0,
+          "max": "*"
+        },
+        {
+          "path": "MedicationRequest.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "MedicationRequest.meta",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Meta"
+          ]
+        },
+        {
+          "path": "MedicationRequest.implicitRules",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "MedicationRequest.language",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+          }
+        },
+        {
+          "path": "MedicationRequest.text",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Narrative"
+          ]
+        },
+        {
+          "path": "MedicationRequest.contained",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Resource"
+          ]
+        },
+        {
+          "path": "MedicationRequest.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationRequest.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationRequest.identifier",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "MedicationRequest.status",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/medicationrequest-status|4.0.1"
+          }
+        },
+        {
+          "path": "MedicationRequest.statusReason",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/medicationrequest-status-reason"
+          }
+        },
+        {
+          "path": "MedicationRequest.intent",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/medicationrequest-intent|4.0.1"
+          }
+        },
+        {
+          "path": "MedicationRequest.category",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/medicationrequest-category"
+          }
+        },
+        {
+          "path": "MedicationRequest.priority",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/request-priority|4.0.1"
+          }
+        },
+        {
+          "path": "MedicationRequest.doNotPerform",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "MedicationRequest.reported[x]",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "boolean",
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.medication[x]",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "CodeableConcept",
+            "Reference"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/medication-codes"
+          }
+        },
+        {
+          "path": "MedicationRequest.subject",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.encounter",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.supportingInformation",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.authoredOn",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "MedicationRequest.requester",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.performer",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.performerType",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/performer-role"
+          }
+        },
+        {
+          "path": "MedicationRequest.recorder",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.reasonCode",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-code"
+          }
+        },
+        {
+          "path": "MedicationRequest.reasonReference",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.instantiatesCanonical",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "canonical"
+          ]
+        },
+        {
+          "path": "MedicationRequest.instantiatesUri",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "MedicationRequest.basedOn",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.groupIdentifier",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "MedicationRequest.courseOfTherapyType",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/medicationrequest-course-of-therapy"
+          }
+        },
+        {
+          "path": "MedicationRequest.insurance",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.note",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Annotation"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dosageInstruction",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Dosage"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.initialFill",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.initialFill.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.initialFill.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.initialFill.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.initialFill.quantity",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Quantity"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.initialFill.duration",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Duration"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.dispenseInterval",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Duration"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.validityPeriod",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Period"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.numberOfRepeatsAllowed",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "unsignedInt"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.quantity",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Quantity"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.expectedSupplyDuration",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Duration"
+          ]
+        },
+        {
+          "path": "MedicationRequest.dispenseRequest.performer",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.substitution",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "MedicationRequest.substitution.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "MedicationRequest.substitution.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationRequest.substitution.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationRequest.substitution.allowed[x]",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "boolean",
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://terminology.hl7.org/ValueSet/v3-ActSubstanceAdminSubstitutionCode"
+          }
+        },
+        {
+          "path": "MedicationRequest.substitution.reason",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://terminology.hl7.org/ValueSet/v3-SubstanceAdminSubstitutionReason"
+          }
+        },
+        {
+          "path": "MedicationRequest.priorPrescription",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.detectedIssue",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationRequest.eventHistory",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        }
+      ]
+    },
+    "AllergyIntolerance": {
+      "url": "http://hl7.org/fhir/StructureDefinition/AllergyIntolerance",
+      "version": "4.0.1",
+      "kind": "resource",
+      "derivation": "specialization",
+      "elements": [
+        {
+          "path": "AllergyIntolerance",
+          "min": 0,
+          "max": "*"
+        },
+        {
+          "path": "AllergyIntolerance.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.meta",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Meta"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.implicitRules",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.language",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.text",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Narrative"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.contained",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Resource"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.identifier",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.clinicalStatus",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/allergyintolerance-clinical|4.0.1"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.verificationStatus",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/allergyintolerance-verification|4.0.1"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.type",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/allergy-intolerance-type|4.0.1"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.category",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/allergy-intolerance-category|4.0.1"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.criticality",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/allergy-intolerance-criticality|4.0.1"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.code",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/allergyintolerance-code"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.patient",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.encounter",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.onset[x]",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime",
+            "Age",
+            "Period",
+            "Range",
+            "string"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.recordedDate",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.recorder",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.asserter",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.lastOccurrence",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.note",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Annotation"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.reaction",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.reaction.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.reaction.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.reaction.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.reaction.substance",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/substance-code"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.reaction.manifestation",
+          "min": 1,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/clinical-findings"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.reaction.description",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.reaction.onset",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "AllergyIntolerance.reaction.severity",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/reaction-event-severity|4.0.1"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.reaction.exposureRoute",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/route-codes"
+          }
+        },
+        {
+          "path": "AllergyIntolerance.reaction.note",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Annotation"
+          ]
+        }
+      ]
+    },
+    "Immunization": {
+      "url": "http://hl7.org/fhir/StructureDefinition/Immunization",
+      "version": "4.0.1",
+      "kind": "resource",
+      "derivation": "specialization",
+      "elements": [
+        {
+          "path": "Immunization",
+          "min": 0,
+          "max": "*"
+        },
+        {
+          "path": "Immunization.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Immunization.meta",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Meta"
+          ]
+        },
+        {
+          "path": "Immunization.implicitRules",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "Immunization.language",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+          }
+        },
+        {
+          "path": "Immunization.text",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Narrative"
+          ]
+        },
+        {
+          "path": "Immunization.contained",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Resource"
+          ]
+        },
+        {
+          "path": "Immunization.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.identifier",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "Immunization.status",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-status|4.0.1"
+          }
+        },
+        {
+          "path": "Immunization.statusReason",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-status-reason"
+          }
+        },
+        {
+          "path": "Immunization.vaccineCode",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/vaccine-code"
+          }
+        },
+        {
+          "path": "Immunization.patient",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Immunization.encounter",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Immunization.occurrence[x]",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "dateTime",
+            "string"
+          ]
+        },
+        {
+          "path": "Immunization.recorded",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "Immunization.primarySource",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "Immunization.reportOrigin",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-origin"
+          }
+        },
+        {
+          "path": "Immunization.location",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Immunization.manufacturer",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Immunization.lotNumber",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "Immunization.expirationDate",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "date"
+          ]
+        },
+        {
+          "path": "Immunization.site",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-site"
+          }
+        },
+        {
+          "path": "Immunization.route",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-route"
+          }
+        },
+        {
+          "path": "Immunization.doseQuantity",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Quantity"
+          ]
+        },
+        {
+          "path": "Immunization.performer",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Immunization.performer.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Immunization.performer.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.performer.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.performer.function",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "extensible",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-function"
+          }
+        },
+        {
+          "path": "Immunization.performer.actor",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Immunization.note",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Annotation"
+          ]
+        },
+        {
+          "path": "Immunization.reasonCode",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-reason"
+          }
+        },
+        {
+          "path": "Immunization.reasonReference",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Immunization.isSubpotent",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "Immunization.subpotentReason",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-subpotent-reason"
+          }
+        },
+        {
+          "path": "Immunization.education",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Immunization.education.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Immunization.education.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.education.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.education.documentType",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "Immunization.education.reference",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "Immunization.education.publicationDate",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "Immunization.education.presentationDate",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "Immunization.programEligibility",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-program-eligibility"
+          }
+        },
+        {
+          "path": "Immunization.fundingSource",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-funding-source"
+          }
+        },
+        {
+          "path": "Immunization.reaction",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Immunization.reaction.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Immunization.reaction.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.reaction.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.reaction.date",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "Immunization.reaction.detail",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Immunization.reaction.reported",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "Immunization.protocolApplied",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Immunization.protocolApplied.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Immunization.protocolApplied.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.protocolApplied.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Immunization.protocolApplied.series",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "Immunization.protocolApplied.authority",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Immunization.protocolApplied.targetDisease",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/immunization-target-disease"
+          }
+        },
+        {
+          "path": "Immunization.protocolApplied.doseNumber[x]",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "positiveInt",
+            "string"
+          ]
+        },
+        {
+          "path": "Immunization.protocolApplied.seriesDoses[x]",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "positiveInt",
+            "string"
+          ]
+        }
+      ]
+    },
+    "MedicationStatement": {
+      "url": "http://hl7.org/fhir/StructureDefinition/MedicationStatement",
+      "version": "4.0.1",
+      "kind": "resource",
+      "derivation": "specialization",
+      "elements": [
+        {
+          "path": "MedicationStatement",
+          "min": 0,
+          "max": "*"
+        },
+        {
+          "path": "MedicationStatement.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "MedicationStatement.meta",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Meta"
+          ]
+        },
+        {
+          "path": "MedicationStatement.implicitRules",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "MedicationStatement.language",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+          }
+        },
+        {
+          "path": "MedicationStatement.text",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Narrative"
+          ]
+        },
+        {
+          "path": "MedicationStatement.contained",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Resource"
+          ]
+        },
+        {
+          "path": "MedicationStatement.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationStatement.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "MedicationStatement.identifier",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "MedicationStatement.basedOn",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationStatement.partOf",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationStatement.status",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/medication-statement-status|4.0.1"
+          }
+        },
+        {
+          "path": "MedicationStatement.statusReason",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/reason-medication-status-codes"
+          }
+        },
+        {
+          "path": "MedicationStatement.category",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/medication-statement-category"
+          }
+        },
+        {
+          "path": "MedicationStatement.medication[x]",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "CodeableConcept",
+            "Reference"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/medication-codes"
+          }
+        },
+        {
+          "path": "MedicationStatement.subject",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationStatement.context",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationStatement.effective[x]",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime",
+            "Period"
+          ]
+        },
+        {
+          "path": "MedicationStatement.dateAsserted",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime"
+          ]
+        },
+        {
+          "path": "MedicationStatement.informationSource",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationStatement.derivedFrom",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationStatement.reasonCode",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-code"
+          }
+        },
+        {
+          "path": "MedicationStatement.reasonReference",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "MedicationStatement.note",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Annotation"
+          ]
+        },
+        {
+          "path": "MedicationStatement.dosage",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Dosage"
+          ]
+        }
+      ]
+    }
+  },
+  "valueSets": {
+    "http://hl7.org/fhir/ValueSet/diagnostic-report-status|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/diagnostic-report-status",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/diagnostic-report-status",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "registered",
+        "partial",
+        "preliminary",
+        "final",
+        "amended",
+        "corrected",
+        "appended",
+        "cancelled",
+        "entered-in-error",
+        "unknown"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/medicationrequest-status|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/medicationrequest-status",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/CodeSystem/medicationrequest-status",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "active",
+        "on-hold",
+        "cancelled",
+        "completed",
+        "entered-in-error",
+        "stopped",
+        "draft",
+        "unknown"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/medicationrequest-intent|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/medicationrequest-intent",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/CodeSystem/medicationrequest-intent",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "proposal",
+        "plan",
+        "order",
+        "original-order",
+        "reflex-order",
+        "filler-order",
+        "instance-order",
+        "option"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/request-priority|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/request-priority",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/request-priority",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "routine",
+        "urgent",
+        "asap",
+        "stat"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/allergy-intolerance-type|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/allergy-intolerance-type",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/allergy-intolerance-type",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "allergy",
+        "intolerance"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/allergy-intolerance-category|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/allergy-intolerance-category",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/allergy-intolerance-category",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "food",
+        "medication",
+        "environment",
+        "biologic"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/allergy-intolerance-criticality|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/allergy-intolerance-criticality",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/allergy-intolerance-criticality",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "low",
+        "high",
+        "unable-to-assess"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/reaction-event-severity|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/reaction-event-severity",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/reaction-event-severity",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "mild",
+        "moderate",
+        "severe"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/immunization-status|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/immunization-status",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/event-status",
+          "enumerated": true
+        }
+      ],
+      "codes": [
+        "completed",
+        "entered-in-error",
+        "not-done"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/medication-statement-status|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/medication-statement-status",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/CodeSystem/medication-statement-status",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "active",
+        "completed",
+        "entered-in-error",
+        "intended",
+        "stopped",
+        "on-hold",
+        "unknown",
+        "not-taken"
+      ]
+    }
+  }
+}

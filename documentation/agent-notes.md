@@ -52,12 +52,14 @@ it is now superseded. Those paragraphs are history and stay verbatim; this is th
   the validator reports**: exclude with the reason recorded and make the shortfall up elsewhere. And
   **do not hand-author a document to reach the floor** (ADR 0018): that satisfies the count and
   destroys its meaning.
-- **What the number buys is bounded, and saying so is not modesty.** Only `Patient` has a built-in
-  structural schema, so over most resource types this library emits an informational
-  `RESOURCE_NOT_MODELED` and no error: agreement at scale mostly means "we invented no error on a real
-  document the oracle finds clean". The safety-critical direction, never a false valid, is what the
-  corpus makes harder to satisfy by accident. The shared corpus labels its own `r4` half "not
-  maintained": breadth there is not currency.
+- **What the number buys is bounded, and saying so is not modesty.** The built-in structural schemas
+  are `Patient` plus the safety-critical types, and **read that set off `BUILTIN_SCHEMAS`, never off
+  this line**: it said "only `Patient`" for weeks after `Observation` joined it. Over every OTHER
+  resource type this library still emits an informational `RESOURCE_NOT_MODELED` and no error, so
+  agreement at scale mostly means "we invented no error on a real document the oracle finds clean".
+  The safety-critical direction, never a false valid, is what the corpus makes harder to satisfy by
+  accident, and it is exactly where the modeled set now is. The shared corpus labels its own `r4`
+  half "not maintained": breadth there is not currency.
 - **Still CI-only, still never observed green here.** No JVM in this container. Run
   `node scripts/differential.mjs` with no `VALIDATOR_CLI_JAR` and it prints the corpus and the
   exclusions it WOULD compare, then skips; that is what makes the accounting reviewable locally.

@@ -1,3 +1,18 @@
+/**
+ * The terminology binding layer, exercised through `validateResource`.
+ *
+ * **Every document here carries the direct elements R4 makes mandatory for its resource type**
+ * (`AllergyIntolerance.patient`, `Condition.subject`, `MedicationRequest.subject`, and the
+ * `status` / `intent` / `medication[x]` already written), for the same reason the two `Observation`
+ * cases below already carry `code`: this suite grades a terminology finding and a `valid` verdict,
+ * and a document that is ALSO structurally non-conformant makes both unattributable. It would let a
+ * `valid: false` assertion pass on a missing element after the terminology finding it is really
+ * about had disappeared.
+ *
+ * The values are synthetic throughout: coded values, reserved example hosts, and reference strings
+ * naming a resource type and a coined id.
+ */
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -32,7 +47,7 @@ function stubService(map: Record<string, "in" | "not-in" | "unknown">): Terminol
 describe("content-free system checks (no terminology service needed)", () => {
   it("passes a SNOMED-coded allergy substance (an expected system for the extensible binding)", () => {
     const result = check(
-      '{"resourceType":"AllergyIntolerance","clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
+      '{"resourceType":"AllergyIntolerance","patient":{"reference":"Patient/synthetic-1"},"clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
         '"code":{"coding":[{"system":"http://snomed.info/sct","code":"227493005"}]}}',
     );
     expect(codes(result)).not.toContain("CODE_SYSTEM_UNEXPECTED");
@@ -42,7 +57,7 @@ describe("content-free system checks (no terminology service needed)", () => {
 
   it("passes an RxNorm-coded allergy substance (the other expected system: multi-system accepted)", () => {
     const result = check(
-      '{"resourceType":"AllergyIntolerance","clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
+      '{"resourceType":"AllergyIntolerance","patient":{"reference":"Patient/synthetic-1"},"clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
         '"code":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"7980"}]}}',
     );
     expect(codes(result)).not.toContain("CODE_SYSTEM_UNEXPECTED");
@@ -51,7 +66,7 @@ describe("content-free system checks (no terminology service needed)", () => {
 
   it("accepts BOTH systems present at once on the one element (RxNorm + SNOMED)", () => {
     const result = check(
-      '{"resourceType":"AllergyIntolerance","clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
+      '{"resourceType":"AllergyIntolerance","patient":{"reference":"Patient/synthetic-1"},"clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
         '"code":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"7980"},' +
         '{"system":"http://snomed.info/sct","code":"7336002"}]}}',
     );
@@ -61,7 +76,7 @@ describe("content-free system checks (no terminology service needed)", () => {
 
   it("warns (not errors) on a KNOWN but unexpected system for an extensible binding", () => {
     const result = check(
-      '{"resourceType":"AllergyIntolerance","clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
+      '{"resourceType":"AllergyIntolerance","patient":{"reference":"Patient/synthetic-1"},"clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":"active"}]},' +
         `"code":{"coding":[{"system":"${ICD10CM_SYSTEM}","code":"T78.40XA"}]}}`,
     );
     const finding = result.issues.find((i) => i.code === "CODE_SYSTEM_UNEXPECTED");
@@ -74,7 +89,7 @@ describe("content-free system checks (no terminology service needed)", () => {
 
   it("notes (information) an UNKNOWN system: a local system is not a defect", () => {
     const result = check(
-      '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order","subject":{"reference":"Patient/synthetic-1"},' +
         '"medicationCodeableConcept":{"coding":[{"system":"http://example.org/local-drugs","code":"XYZ"}]}}',
     );
     const finding = result.issues.find((i) => i.code === "CODE_SYSTEM_UNKNOWN");
@@ -87,7 +102,7 @@ describe("content-free system checks (no terminology service needed)", () => {
 
   it("emits no terminology finding for a systemless coding", () => {
     const result = check(
-      '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order","subject":{"reference":"Patient/synthetic-1"},' +
         '"medicationCodeableConcept":{"coding":[{"code":"7980"}]}}',
     );
     expect(codes(result)).not.toContain("CODE_SYSTEM_UNKNOWN");
@@ -140,7 +155,7 @@ describe("content-free system checks (no terminology service needed)", () => {
       },
     ];
     const result = check(
-      '{"resourceType":"Condition","clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-clinical","code":"active"}]},' +
+      '{"resourceType":"Condition","subject":{"reference":"Patient/synthetic-1"},"clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-clinical","code":"active"}]},' +
         `"code":{"coding":[{"system":"${RXNORM_SYSTEM}","code":"7980"}]}}`,
       { bindings },
     );
@@ -154,7 +169,7 @@ describe("fail-safe: no terminology service → never a false membership error",
   it("does NOT emit CODE_NOT_IN_VALUESET for an expected-system code with no service", () => {
     // RxNorm system is expected; without a service we cannot (and must not) judge membership.
     const result = check(
-      '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order","subject":{"reference":"Patient/synthetic-1"},' +
         '"medicationCodeableConcept":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"not-a-real-code"}]}}',
     );
     expect(codes(result)).not.toContain("CODE_NOT_IN_VALUESET");
@@ -167,7 +182,7 @@ describe("membership checks (terminology service supplied)", () => {
 
   it("errors on an extensible not-in verdict from the service", () => {
     const result = check(
-      '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order","subject":{"reference":"Patient/synthetic-1"},' +
         '"medicationCodeableConcept":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"0000000"}]}}',
       { terminology: service },
     );
@@ -179,7 +194,7 @@ describe("membership checks (terminology service supplied)", () => {
 
   it("passes an in-set verdict cleanly", () => {
     const result = check(
-      '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order","subject":{"reference":"Patient/synthetic-1"},' +
         '"medicationCodeableConcept":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"1049502"}]}}',
       { terminology: service },
     );
@@ -189,7 +204,7 @@ describe("membership checks (terminology service supplied)", () => {
 
   it("degrades on an 'unknown' service answer: no finding (never guess)", () => {
     const result = check(
-      '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order","subject":{"reference":"Patient/synthetic-1"},' +
         '"medicationCodeableConcept":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"9999999"}]}}',
       { terminology: service },
     );
@@ -206,7 +221,7 @@ describe("membership checks (terminology service supplied)", () => {
       },
     };
     check(
-      '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order","subject":{"reference":"Patient/synthetic-1"},' +
         '"medicationCodeableConcept":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"1049502"}]}}',
       { terminology: spy },
     );
@@ -278,7 +293,7 @@ describe("terminology findings reach a value-free OperationOutcome", () => {
   it("never leaks the offending code into the outcome (only location + coded reason)", () => {
     const service = stubService({ "99999999": "not-in" });
     const result = check(
-      '{"resourceType":"MedicationRequest","status":"active","intent":"order",' +
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order","subject":{"reference":"Patient/synthetic-1"},' +
         '"medicationCodeableConcept":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"99999999"}]}}',
       { terminology: service },
     );

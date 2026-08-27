@@ -99,6 +99,15 @@ const ADDED: readonly CorpusDocument[] = [
     name: "added:none-of-the-four",
     json: '{"resourceType":"Observation","status":"final","valueQuantity":{"value":0.01,"unit":"mg"}}',
   },
+  {
+    // The one safety-critical type this corpus had no document of. Without it the base-versus-head
+    // allowance covers `DiagnosticReport` and no document ever reaches that half of it, which is
+    // the stale allowance the differential's own docblock warns about. `registered ` carries a
+    // trailing space, so head reports the lexical fault at the element rather than the resource
+    // being unmodeled, and both directions of the allowance are exercised for this type.
+    name: "added:diagnosticreport-status-trailing-space",
+    json: '{"resourceType":"DiagnosticReport","status":"registered ","code":{"text":"synthetic panel"}}',
+  },
 ];
 
 /**

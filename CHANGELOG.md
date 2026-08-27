@@ -25,6 +25,27 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **Element-level structural validation for every safety-critical resource type, not one of seven
+  (`MODEL-SAFETY6-1`).** `AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`,
+  `MedicationRequest` and `MedicationStatement` each gain a complete direct-element table in
+  `src/validate/schema.ts`, so `validateResource` checks their own elements (required element,
+  cardinality, datatype, required-binding `code`) and stops emitting the informational
+  `RESOURCE_NOT_MODELED` note for them. Derived from the published R4 4.0.1 StructureDefinitions.
+  **COMPLETENESS IS THE PROPERTY, NOT COVERAGE**: the registry treats a registered type as fully
+  described, so a table missing one element R4 defines manufactures a false unknown-element finding
+  on a conformant document, and a table that states an optional where R4 states mandatory turns an
+  invalid document valid. Both are fail-open, and `test/validate-safety-types.test.ts` grades every
+  row against committed projections of those StructureDefinitions
+  (`test/__data__/r4-direct-elements.json`) in both directions, with a deliberately truncated table
+  asserted to fail the same check. A `choice[x]` is carried under its `[x]` base with every datatype
+  it allows. Nine `code`-typed elements gain their required-strength code set;
+  **a `required` binding on a `CodeableConcept` is deliberately NOT carried** (`clinicalStatus`,
+  `verificationStatus`), because membership of a `Coding` inside a datatype is the terminology
+  layer's question. Backbone children are unchanged: cardinality and node shape only.
+  The base-versus-head read differential's allowance is re-keyed from `Observation` by name to
+  `SAFETY_RESOURCE_TYPES`, with **both directions of its bar unmoved** and both halves still asserted
+  exercised; its corpus gains a `DiagnosticReport` document because it had none. No new validation
+  code, no new issue code, and no change to the safety spine.
 - **The bounded FHIRPath engine has a MEASURED coverage number (`FHIRPATH-SUITE-1`), taken from
   HL7's shared R4 conformance suite, and a wrongly answered case now fails the build.** The subset's
   size had only ever been asserted in prose: nothing in the checkout referenced `tests-fhir-r4.xml`

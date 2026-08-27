@@ -115,7 +115,11 @@ describe("the four marked shapes are refused rather than emitted as an empty ele
       base: '<AllergyIntolerance xmlns="http://hl7.org/fhir"><clinicalStatus><coding><code value="active"/></coding><coding/></clinicalStatus></AllergyIntolerance>',
       reReadJson:
         '{"resourceType":"AllergyIntolerance","clinicalStatus":{"coding":[{"code":"active"},null]}}',
-      reReadValid: true,
+      // `false` only because this two-property document never carried the mandatory
+      // `AllergyIntolerance.patient`, exactly as the two rows above are false for the mandatory
+      // `Observation.code`. The erasure this row is about is untouched: the scalar the sender wrote
+      // at `clinicalStatus.coding[1]` comes back as a `null` with no finding naming it.
+      reReadValid: false,
     },
     {
       what: "an array inside an array",
