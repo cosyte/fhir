@@ -64,11 +64,18 @@ import {
   TerminologyError,
 } from "./differential/terminology.mjs";
 
-/** Report the refusal and leave. Never zero, never silent. */
+/**
+ * Report the refusal and leave. Never zero, never silent.
+ *
+ * Sets `process.exitCode` rather than calling `process.exit()`: under CI stdout is a PIPE, writes to
+ * it are buffered, and `process.exit()` terminates without draining that buffer. A check whose whole
+ * output is the reason it refused cannot afford to lose the reason. Every caller returns
+ * immediately after this, which is what makes the refusal a refusal.
+ */
 function refuse(reason) {
   const verdict = determinismRefusal(reason);
   for (const line of formatDeterminismVerdict(verdict)) console.error(line);
-  process.exit(exitCodeForDeterminism(verdict));
+  process.exitCode = exitCodeForDeterminism(verdict);
 }
 
 function main() {
@@ -173,7 +180,7 @@ function main() {
     if (verdict.demonstrated) console.log(line);
     else console.error(line);
   }
-  process.exit(exitCodeForDeterminism(verdict));
+  process.exitCode = exitCodeForDeterminism(verdict);
 }
 
 main();

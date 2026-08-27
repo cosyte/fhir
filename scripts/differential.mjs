@@ -83,6 +83,14 @@
  * the run's inputs, carrying no wall-clock time, no staging path and no ordinal, which is what
  * `pnpm differential:determinism` compares across two comparisons.
  *
+ * **THE EXIT IS `process.exitCode`, NEVER `process.exit()`, AND THAT IS NOT A STYLE CHOICE.** Under
+ * CI this process's stdout is a PIPE, so writes to it are asynchronous and buffered, and
+ * `process.exit()` terminates without flushing what is still in the buffer. Measured on a real run:
+ * the per-document lines and the exclusions block reached the log and **the closing summary, the
+ * oracle identity beside it and the run record did not**, which silently deleted the half of the
+ * output this file's own docblock says is the point. Setting the code and returning lets Node drain
+ * stdout and exit on its own. Do not "simplify" it back.
+ *
  * @packageDocumentation
  */
 
@@ -117,7 +125,8 @@ function main() {
     declaration = loadDeclaration();
   } catch (err) {
     console.error(`differential: ${err instanceof CorpusError ? err.message : String(err)}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   for (const line of corpusSummaryLines(declaration)) console.log(line);
@@ -135,7 +144,8 @@ function main() {
         `  No document was compared. The declared terminology inputs are honoured exactly or not ` +
         `at all; no other terminology source is substituted for them.`,
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const terminologyLine = formatTerminologyInputs(terminology);
   console.log(`\n${terminologyLine}`);
@@ -147,7 +157,8 @@ function main() {
         `  This gate runs on GitHub Actions (the \`differential\` job), not in the dev container.\n` +
         `  The corpus above is what it would compare; \`pnpm corpus:fetch\` materialises it.`,
     );
-    process.exit(0);
+    process.exitCode = 0;
+    return;
   }
 
   let identity;
@@ -159,7 +170,8 @@ function main() {
         `  Refusing to compare documents against an unidentified oracle. The pinned release is ` +
         `${ORACLE_RELEASE}.`,
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const identityLine = formatOracleIdentity(identity);
   console.log(identityLine);
@@ -174,10 +186,12 @@ function main() {
           `  No document was compared and no count is reported: a comparison whose terminology ` +
           `answers could come from a network is not reproducible from this repository.`,
       );
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
     console.error(`differential: ${err instanceof CorpusError ? err.message : String(err)}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const { records, summary, runRecord, resolved } = outcome;
@@ -221,7 +235,7 @@ function main() {
         `(provenance, first document: ${provenanceLine(declaration, sample.document)}).`,
     );
   }
-  process.exit(exitCodeFor(summary));
+  process.exitCode = exitCodeFor(summary);
 }
 
 main();

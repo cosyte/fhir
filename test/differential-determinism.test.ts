@@ -582,6 +582,27 @@ describe("the determinism check is wired where it is graded", () => {
     expect(workflow).toContain("determinismSubset");
     expect(workflow).toContain("what determinism was demonstrated over");
   });
+
+  it("sets `process.exitCode` and NEVER calls `process.exit()`, so the log keeps the last lines", () => {
+    // MEASURED, NOT THEORETICAL. Under CI these processes write to a PIPE, so stdout is
+    // asynchronous and buffered, and `process.exit()` terminates without draining it. In a real
+    // differential run the per-document lines and the exclusions block reached the log and the
+    // CLOSING SUMMARY, the oracle identity beside it and the RUN RECORD did not: exactly the half
+    // of the output that makes a silent shrink visible. Setting the code and returning lets Node
+    // drain stdout and exit on its own. A check whose evidence is what it printed cannot call
+    // `process.exit()`.
+    for (const script of ["scripts/differential.mjs", "scripts/differential-determinism.mjs"]) {
+      const source = readFileSync(join(REPO_ROOT, script), "utf8");
+      // Block comments stripped first: both files EXPLAIN this rule in prose, and a scan that read
+      // the explanation as a violation would fail on the fix.
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, "");
+      expect(
+        code.match(/process\.exit\s*\(/g) ?? [],
+        `${script} must not call process.exit()`,
+      ).toEqual([]);
+      expect(code, `${script} must set process.exitCode`).toContain("process.exitCode");
+    }
+  });
 });
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────────
