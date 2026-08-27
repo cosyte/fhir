@@ -1,6 +1,37 @@
 {
   "schemaVersion": 1,
   "comparedFloor": 100,
+  "determinismSubset": [
+    "cosyte-fhir-fixtures/medicationrequest-dose.json",
+    "cosyte-fhir-fixtures/quirk-searchset-paging.json",
+    "fhir-test-cases/r4/examples/clinicalimpression-example.json",
+    "fhir-test-cases/r4/examples/deviceusestatement-example.json",
+    "fhir-test-cases/r4/examples/location-example.json",
+    "fhir-test-cases/r4/examples/organization-example.json",
+    "fhir-test-cases/r4/examples/slot-example.json",
+    "hl7-fhir-r4-examples/allergyintolerance-nka.json",
+    "hl7-fhir-r4-examples/bundle-request-simplesummary.json",
+    "hl7-fhir-r4-examples/chargeitem-example.json",
+    "hl7-fhir-r4-examples/chargeitemdefinition-device-example.json",
+    "hl7-fhir-r4-examples/codesystem-abstract-types.json",
+    "hl7-fhir-r4-examples/condition-example-f002-lung.json",
+    "hl7-fhir-r4-examples/contract-example-ins-policy.json",
+    "hl7-fhir-r4-examples/contract-example.json",
+    "hl7-fhir-r4-examples/coord-0base-example.json",
+    "hl7-fhir-r4-examples/coverageeligibilityresponse-example-benefits-2.json",
+    "hl7-fhir-r4-examples/devicerequest-example.json",
+    "hl7-fhir-r4-examples/endpoint-example-direct.json",
+    "hl7-fhir-r4-examples/explanationofbenefit-example.json",
+    "hl7-fhir-r4-examples/imagingstudy-example-xr.json",
+    "hl7-fhir-r4-examples/imagingstudy-example.json",
+    "hl7-fhir-r4-examples/immunizationevaluation-example-notvalid.json",
+    "hl7-fhir-r4-examples/library-quick-model-definition.json",
+    "hl7-fhir-r4-examples/measure-component-b-example.json",
+    "hl7-fhir-r4-examples/medicinalproductmanufactured-example.json",
+    "hl7-fhir-r4-examples/relatedperson-example-f001-sarah.json",
+    "hl7-fhir-r4-examples/task-example-fm-cancel.json",
+    "hl7-fhir-r4-examples/visionprescription-example-1.json"
+  ],
   "corpora": [
     {
       "id": "cosyte-fhir-fixtures",
@@ -898,7 +929,7 @@
       "path": "chargeitem-example.json",
       "bytes": 2862,
       "sha256": "c1be648cd9081d263d07391dd571328758fef660a6978e1044be4d4bcc0a0f92",
-      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at ChargeItem.reason[].coding[].code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+      "note": "returned to the compared set: the exclusion measured on 2026-08-25 recorded ONLY code-invalid findings, which the reference validator emits when it checks a code against terminology content this library declaredly does not vendor. Such a finding is now classified out of both differential invariants under the terminology class, counted and printed per document, so the document is compared on everything else rather than held out on a snapshot of what a remote terminology service answered on one date."
     },
     {
       "id": "hl7-fhir-r4-examples/chargeitemdefinition-device-example.json",
@@ -1124,7 +1155,7 @@
       "path": "contract-example-ins-policy.json",
       "bytes": 4307,
       "sha256": "c9095038d822d22aab93862bc5a0494f6452182301698cbaae474a0092127823",
-      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at Contract.term[].asset[].type[].coding[].code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+      "note": "returned to the compared set: the exclusion measured on 2026-08-25 recorded ONLY code-invalid findings, which the reference validator emits when it checks a code against terminology content this library declaredly does not vendor. Such a finding is now classified out of both differential invariants under the terminology class, counted and printed per document, so the document is compared on everything else rather than held out on a snapshot of what a remote terminology service answered on one date."
     },
     {
       "id": "hl7-fhir-r4-examples/contract-example.json",
@@ -1132,7 +1163,7 @@
       "path": "contract-example.json",
       "bytes": 2085,
       "sha256": "3d1f7e6213530bed405b401ba7a0568302a2b09d1f01fba33bc3508234bd575f",
-      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at Contract.term[].asset[].type[].coding[].code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+      "note": "returned to the compared set: the exclusion measured on 2026-08-25 recorded ONLY code-invalid findings, which the reference validator emits when it checks a code against terminology content this library declaredly does not vendor. Such a finding is now classified out of both differential invariants under the terminology class, counted and printed per document, so the document is compared on everything else rather than held out on a snapshot of what a remote terminology service answered on one date."
     },
     {
       "id": "hl7-fhir-r4-examples/coord-0base-example.json",
@@ -1501,7 +1532,7 @@
       "path": "imagingstudy-example-xr.json",
       "bytes": 4045,
       "sha256": "f110253aa436fd66fb3f4b7e05f32436f08973528ba2a5553bc5850acf4ad238",
-      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at ImagingStudy.series[].bodySite.code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+      "note": "returned to the compared set: the exclusion measured on 2026-08-25 recorded ONLY code-invalid findings, which the reference validator emits when it checks a code against terminology content this library declaredly does not vendor. Such a finding is now classified out of both differential invariants under the terminology class, counted and printed per document, so the document is compared on everything else rather than held out on a snapshot of what a remote terminology service answered on one date."
     },
     {
       "id": "hl7-fhir-r4-examples/imagingstudy-example.json",
@@ -1537,7 +1568,7 @@
       "path": "immunizationevaluation-example-notvalid.json",
       "bytes": 3330,
       "sha256": "cff2d2b203dcc4266b83e70ad70c9ace1c24bf51ae4ac9610666873b77bad329",
-      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at ImmunizationEvaluation.doseStatusReason[].coding[].code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+      "note": "returned to the compared set: the exclusion measured on 2026-08-25 recorded ONLY code-invalid findings, which the reference validator emits when it checks a code against terminology content this library declaredly does not vendor. Such a finding is now classified out of both differential invariants under the terminology class, counted and printed per document, so the document is compared on everything else rather than held out on a snapshot of what a remote terminology service answered on one date."
     },
     {
       "id": "hl7-fhir-r4-examples/immunizationevaluation-example.json",
@@ -2012,7 +2043,7 @@
       "path": "visionprescription-example-1.json",
       "bytes": 2172,
       "sha256": "0263e6229888c21c57ecdf1ce04daba4fb56ab7b78b6828ac918a4397b3d25e6",
-      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 2 error(s) this library does not - 2x code-invalid (a code the reference validator checks against terminology content this library does not vendor); first at VisionPrescription.lensSpecification[].duration.code. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+      "note": "returned to the compared set: the exclusion measured on 2026-08-25 recorded ONLY code-invalid findings, which the reference validator emits when it checks a code against terminology content this library declaredly does not vendor. Such a finding is now classified out of both differential invariants under the terminology class, counted and printed per document, so the document is compared on everything else rather than held out on a snapshot of what a remote terminology service answered on one date."
     }
   ]
 }

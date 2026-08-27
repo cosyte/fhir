@@ -38,6 +38,8 @@ export interface DocumentRecord {
 export interface Declaration {
   readonly schemaVersion: 1;
   readonly comparedFloor: number;
+  /** The document ids `pnpm differential:determinism` compares twice, declared not derived. */
+  readonly determinismSubset?: readonly string[];
   readonly corpora: readonly CorpusRecord[];
   readonly documents: readonly DocumentRecord[];
 }
@@ -61,6 +63,11 @@ export interface LocationOptions {
   readonly documentsRoot?: string;
 }
 
+export interface ResolveCorpusOptions extends LocationOptions {
+  /** Narrows what is handed back. Never narrows what is verified. */
+  readonly only?: readonly string[] | ReadonlySet<string>;
+}
+
 export declare const REPO_ROOT: string;
 export declare const DECLARATION_PATH: string;
 export declare const DOCUMENTS_ROOT: string;
@@ -77,6 +84,7 @@ export declare function corpusOf(declaration: Declaration, document: DocumentRec
 export declare function declaredDocuments(declaration: Declaration): readonly DocumentRecord[];
 export declare function includedDocuments(declaration: Declaration): readonly DocumentRecord[];
 export declare function exclusions(declaration: Declaration): readonly Exclusion[];
+export declare function determinismSubset(declaration: Declaration): readonly DocumentRecord[];
 export declare function documentLocation(
   declaration: Declaration,
   document: DocumentRecord,
@@ -89,7 +97,7 @@ export declare function readDeclaredDocument(
 ): ResolvedDocument;
 export declare function resolveCorpus(
   declaration: Declaration,
-  options?: LocationOptions,
+  options?: ResolveCorpusOptions,
 ): readonly ResolvedDocument[];
 export declare function provenanceLine(declaration: Declaration, document: DocumentRecord): string;
 export declare function shortfall(compared: number, floor: number): string | null;

@@ -1,10 +1,13 @@
 /** Types for `oracle.mjs`. See `corpus.d.mts` for why these declarations are hand-written. */
 
+import type { TerminologyInputs } from "./terminology.d.mts";
+
 export interface OracleIssue {
   readonly severity: string;
   readonly location: string;
   readonly code?: string;
   readonly messageId?: string;
+  readonly messageSystem?: string;
 }
 
 export interface OracleIdentity {
@@ -25,6 +28,9 @@ export interface RunOptions {
   readonly timeoutMs?: number;
   readonly fhirVersion?: string;
   readonly ig?: string;
+  /** The declared terminology inputs the argv is built from. Never omitted at run time. */
+  readonly terminology?: TerminologyInputs;
+  readonly repoRoot?: string;
 }
 
 export declare const ORACLE_RELEASE: string;

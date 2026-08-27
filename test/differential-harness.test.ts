@@ -9,14 +9,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  classifyFinding,
   compareDocument,
   ERRORISH,
   exitCodeFor,
   formatExclusions,
   formatRecord,
   formatSummary,
+  isTerminologyFinding,
   STATUS,
   summarize,
+  TERMINOLOGY_CLASS,
+  TERMINOLOGY_ISSUE_CODES,
+  TX_ISSUE_TYPE_SYSTEM,
 } from "../scripts/differential/compare.mjs";
 import type { Record_ } from "../scripts/differential/compare.mjs";
 
@@ -24,6 +29,22 @@ const err = (location = "Patient.gender") => ({ severity: "error", location });
 const fatal = (location = "") => ({ severity: "fatal", location });
 const warn = (location = "Patient.name") => ({ severity: "warning", location });
 const info = (location = "Patient") => ({ severity: "information", location });
+
+/** An oracle error the validator's own vocabulary says came out of terminology resolution. */
+const txErr = (location = "Observation.code.coding[0].code") => ({
+  severity: "error",
+  location,
+  code: "code-invalid",
+});
+
+/** The same, said the other way: a message id drawn from the validator's tx issue-type system. */
+const txNotFound = (location = "Observation.code.coding[0].system") => ({
+  severity: "error",
+  location,
+  code: "not-found",
+  messageId: "not-found",
+  messageSystem: TX_ISSUE_TYPE_SYSTEM,
+});
 
 const oracleClean = { ok: true as const, issues: [] };
 const oursClean = { ok: true as const, issues: [], parseRefused: false };
@@ -95,6 +116,206 @@ describe("a document the oracle errors on is never reported clean", () => {
       });
       expect(result.clean, JSON.stringify(ours)).toBe(false);
     }
+  });
+});
+
+describe("a terminology-attributable finding is a recorded class, never a verdict", () => {
+  it("classifies on the VALIDATOR's own vocabulary, and on nothing else", () => {
+    expect(isTerminologyFinding(txErr())).toBe(true);
+    expect(isTerminologyFinding(txNotFound())).toBe(true);
+    expect(
+      isTerminologyFinding({
+        severity: "error",
+        location: "x",
+        messageId: "Terminology_TX_System_NotKnown",
+      }),
+    ).toBe(true);
+    expect(classifyFinding(txErr())).toBe(TERMINOLOGY_CLASS);
+    // The three shapes the corpus declaration's measured reasons record as NOT terminology.
+    expect(
+      isTerminologyFinding({
+        severity: "error",
+        location: "Patient.identifier[0].system",
+        code: "invalid",
+      }),
+    ).toBe(false);
+    expect(
+      isTerminologyFinding({
+        severity: "error",
+        location: "Questionnaire.item[0]",
+        code: "structure",
+      }),
+    ).toBe(false);
+    expect(isTerminologyFinding({ severity: "error", location: "x", code: "invariant" })).toBe(
+      false,
+    );
+    expect(isTerminologyFinding({ severity: "error", location: "x", code: "business-rule" })).toBe(
+      false,
+    );
+    expect(classifyFinding(err())).toBeNull();
+  });
+
+  it("does NOT classify a bare not-found, which is also an unresolved definition", () => {
+    // The corpus declaration records `not-found` as "a definition the reference validator could not
+    // resolve in its own loaded packages", which is profile resolution and not terminology.
+    // Admitting it on the code alone would classify a non-terminology error out of Invariant 1.
+    expect(isTerminologyFinding({ severity: "error", location: "x", code: "not-found" })).toBe(
+      false,
+    );
+    expect(TERMINOLOGY_ISSUE_CODES.has("not-found")).toBe(false);
+    expect(TERMINOLOGY_ISSUE_CODES.has("invalid")).toBe(false);
+    expect(TERMINOLOGY_ISSUE_CODES.has("code-invalid")).toBe(true);
+  });
+
+  it("does not let a message id that merely mentions a code pass as terminology", () => {
+    expect(
+      isTerminologyFinding({ severity: "error", location: "x", messageId: "CODE_IS_WRONG" }),
+    ).toBe(false);
+    expect(
+      isTerminologyFinding({ severity: "error", location: "x", messageId: "SOMETHING_TX_ISH" }),
+    ).toBe(false);
+  });
+
+  it("classifies the finding out of BOTH invariants, counts it, and prints the document", () => {
+    // "WHEN the oracle reports a finding that is attributable to terminology resolution, THE SYSTEM
+    // SHALL classify that finding out of both differential invariants under a recorded terminology
+    // class, count it, and print the count and the affected document"
+    const result = compareDocument({
+      id: "hl7-fhir-r4-examples/chargeitem-example.json",
+      oracle: { ok: true, issues: [txErr(), warn()] },
+      ours: oursClean,
+    });
+    expect(result.status).toBe(STATUS.TERMINOLOGY_DELTA);
+    expect(result.violation).toBe(false);
+    expect(result.compared).toBe(true);
+    expect(result.terminology).toBe(1);
+    expect(result.terminologyErrors).toBe(1);
+    const line = formatRecord(result);
+    expect(line).toContain("hl7-fhir-r4-examples/chargeitem-example.json");
+    expect(line).toContain(TERMINOLOGY_CLASS);
+    expect(line).toContain("1 terminology-attributable oracle finding(s)");
+    expect(line).not.toContain("FALSE VALID");
+  });
+
+  it("is still COMPARED and still counted: the class is not a route to comparing less", () => {
+    const records = [
+      compareDocument({ id: "a", oracle: { ok: true, issues: [txErr()] }, ours: oursClean }),
+      compareDocument({ id: "b", oracle: oracleClean, ours: oursClean }),
+    ];
+    const summary = summarize({ records, floor: 2 });
+    expect(summary.compared).toBe(2);
+    expect(summary.meetsFloor).toBe(true);
+    expect(summary.violations).toHaveLength(0);
+    expect(exitCodeFor(summary)).toBe(0);
+  });
+
+  it("does not report a terminology-only oracle error as clean, either", () => {
+    const result = compareDocument({
+      id: "a",
+      oracle: { ok: true, issues: [txErr()] },
+      ours: oursClean,
+    });
+    expect(result.clean).toBe(false);
+  });
+
+  it("does not turn agreement into a SPURIOUS ERROR when the oracle's only errors are terminology", () => {
+    // The absence of a terminology finding must not decide a violation any more than its presence
+    // may. Stripping the finding naively would flip this document from agreement to a violation.
+    const result = compareDocument({
+      id: "a",
+      oracle: { ok: true, issues: [txErr()] },
+      ours: { ok: true, issues: [err()], parseRefused: false },
+    });
+    expect(result.status).toBe(STATUS.TERMINOLOGY_DELTA);
+    expect(result.violation).toBe(false);
+  });
+
+  it("counts and prints how many documents carried such a finding", () => {
+    // "SHALL print how many documents carried such a finding"
+    const records = [
+      compareDocument({ id: "a", oracle: { ok: true, issues: [txErr()] }, ours: oursClean }),
+      compareDocument({
+        id: "b",
+        oracle: { ok: true, issues: [txNotFound(), txErr()] },
+        ours: oursClean,
+      }),
+      compareDocument({ id: "c", oracle: oracleClean, ours: oursClean }),
+    ];
+    const summary = summarize({ records, floor: 3 });
+    expect(summary.terminologyDocuments).toBe(2);
+    expect(summary.terminologyFindings).toBe(3);
+    expect(summary.terminologyDeltas).toBe(2);
+    const text = formatSummary(summary, "oracle: x").join("\n");
+    expect(text).toContain("2 document(s) carried a terminology-attributable oracle finding");
+    expect(text).toContain("3 finding(s) in total");
+    expect(text).toContain(TERMINOLOGY_CLASS);
+  });
+
+  it("treats a code or system the declared inputs cannot resolve under the same class", () => {
+    // "IF the oracle reports that a code or code system could not be resolved because it is absent
+    // from the terminology inputs the run declared, THEN THE SYSTEM SHALL treat that finding under
+    // the same recorded terminology class, SHALL NOT report the document as a violation on account
+    // of it"
+    const result = compareDocument({
+      id: "a",
+      oracle: { ok: true, issues: [txNotFound()] },
+      ours: oursClean,
+    });
+    expect(result.status).toBe(STATUS.TERMINOLOGY_DELTA);
+    expect(result.violation).toBe(false);
+    expect(result.terminology).toBe(1);
+    expect(summarize({ records: [result], floor: 1 }).violations).toHaveLength(0);
+  });
+
+  it("records the count on an AGREE document that carried one too, and prints it", () => {
+    const result = compareDocument({
+      id: "a",
+      oracle: { ok: true, issues: [txErr(), err("Patient.gender")] },
+      ours: { ok: true, issues: [err("Patient.gender")], parseRefused: false },
+    });
+    expect(result.status).toBe(STATUS.AGREE);
+    expect(result.terminology).toBe(1);
+    expect(formatRecord(result)).toContain(`1 ${TERMINOLOGY_CLASS} finding(s)`);
+  });
+
+  it("NEVER classifies a non-terminology error out of the false-valid direction", () => {
+    // "WHEN the oracle reports an error or fatal finding that is NOT attributable to terminology
+    // resolution and this library reports no error on the same document, THE SYSTEM SHALL still
+    // record that document as a false valid and fail the run."
+    for (const finding of [
+      err(),
+      fatal("Bundle"),
+      { severity: "error", location: "Patient.identifier[0].system", code: "invalid" },
+      { severity: "error", location: "Questionnaire.item[0]", code: "structure" },
+      { severity: "error", location: "x", code: "not-found" },
+      { severity: "fatal", location: "x", code: "exception" },
+    ]) {
+      const result = compareDocument({
+        id: "a",
+        // Beside a terminology finding, which must not launder the one that decides.
+        oracle: { ok: true, issues: [txErr(), finding] },
+        ours: oursClean,
+      });
+      expect(result.status, JSON.stringify(finding)).toBe(STATUS.FALSE_VALID);
+      expect(result.violation, JSON.stringify(finding)).toBe(true);
+      expect(result.clean, JSON.stringify(finding)).toBe(false);
+      const summary = summarize({ records: [result], floor: 1 });
+      expect(exitCodeFor(summary), JSON.stringify(finding)).toBe(1);
+      // The printed findings are the DECIDING ones, so a reader is not sent looking at the
+      // terminology finding for the reason the run failed.
+      expect(result.oracleFindings).toEqual([finding]);
+    }
+  });
+
+  it("still fails the run for a non-terminology error even when terminology findings outnumber it", () => {
+    const result = compareDocument({
+      id: "a",
+      oracle: { ok: true, issues: [txErr(), txErr(), txNotFound(), err("Patient.gender")] },
+      ours: oursClean,
+    });
+    expect(result.status).toBe(STATUS.FALSE_VALID);
+    expect(result.terminology).toBe(3);
+    expect(formatRecord(result)).toContain("not attributable to terminology");
   });
 });
 
