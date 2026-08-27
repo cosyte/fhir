@@ -643,6 +643,85 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
     });
   });
 
+  describe("on a type whose elements the validator now checks, the wrapper suppresses nothing", () => {
+    // TWO REPORTS, TWO LAYERS, ONE ELEMENT. The wrapper report is the safety layer's and has always
+    // fired for these types; what is new is that the validator has an element table for them, so the
+    // element's OWN structural findings arrive beside it. The direction that would be a defect is
+    // the wrapper standing in for them: a document whose `status` is both wrapped AND outside its
+    // required binding must draw both, or reading the wrapper has quietly become a way to launder
+    // the value inside it past every other check.
+
+    it("reports the wrapper AND the out-of-binding code inside it, at their own locations", () => {
+      const { resource } = parseResource(
+        '{"resourceType":"MedicationStatement","status":["taken"],' +
+          '"medicationCodeableConcept":{"text":"synthetic drug"},' +
+          '"subject":{"reference":"Patient/synthetic-1"}}',
+      );
+      const result = validateResource(resource);
+
+      // `taken` is the STU3 spelling R4 replaced, so it is a real value outside the R4 code set.
+      expect(result.issues.map((i) => `${i.code} at ${i.expression}`)).toEqual([
+        "CODE_INVALID at MedicationStatement.status[0]",
+        "ARRAY_WRAPPED_SCALAR at MedicationStatement.status",
+      ]);
+      expect(result.valid).toBe(false);
+      expect(readSafety(resource).arrayWrappedScalars).toEqual(["MedicationStatement.status"]);
+      expect(readSafety(resource).safeToSummarize).toBe(false);
+    });
+
+    it("reports the wrapper AND the cardinality violation the wrapper itself creates", () => {
+      // Two occurrences of a `1..1` element. The wrapper report answers "this is not how FHIR JSON
+      // spells a singleton"; the cardinality finding answers "and there are two of them".
+      const { resource } = parseResource(
+        '{"resourceType":"Immunization","status":["completed","not-done"],' +
+          '"vaccineCode":{"text":"synthetic vaccine"},"patient":{"reference":"Patient/synthetic-1"},' +
+          '"occurrenceDateTime":"2026-01-01"}',
+      );
+      const result = validateResource(resource);
+
+      expect(result.issues.map((i) => `${i.code} at ${i.expression}`)).toContain(
+        "CARDINALITY_MAX at Immunization.status",
+      );
+      expect(result.issues.map((i) => `${i.code} at ${i.expression}`)).toContain(
+        "ARRAY_WRAPPED_SCALAR at Immunization.status",
+      );
+      // …and the negation written inside the wrapper is still read, which is the whole point of
+      // reading through it rather than past it.
+      expect(readSafety(resource).negations).toContain("not-done");
+      expect(result.valid).toBe(false);
+    });
+
+    it("still reports the wrapper on a value that is otherwise perfectly conformant", () => {
+      // The wrapper is a finding in its own right: nothing about the value excuses it.
+      const { resource } = parseResource(
+        '{"resourceType":"DiagnosticReport","status":["final"],"code":{"text":"synthetic panel"}}',
+      );
+      const result = validateResource(resource);
+
+      expect(result.issues.map((i) => `${i.code} at ${i.expression}`)).toEqual([
+        "ARRAY_WRAPPED_SCALAR at DiagnosticReport.status",
+      ]);
+      expect(result.valid).toBe(false);
+    });
+
+    it("draws neither finding on the same three documents written the conformant way", () => {
+      // The control. Without it the three rows above could be passing on the element table alone.
+      for (const json of [
+        '{"resourceType":"MedicationStatement","status":"completed",' +
+          '"medicationCodeableConcept":{"text":"synthetic drug"},' +
+          '"subject":{"reference":"Patient/synthetic-1"}}',
+        '{"resourceType":"Immunization","status":"completed",' +
+          '"vaccineCode":{"text":"synthetic vaccine"},"patient":{"reference":"Patient/synthetic-1"},' +
+          '"occurrenceDateTime":"2026-01-01"}',
+        '{"resourceType":"DiagnosticReport","status":"final","code":{"text":"synthetic panel"}}',
+      ]) {
+        const { resource } = parseResource(json);
+        expect(validateResource(resource).issues, json).toEqual([]);
+        expect(readSafety(resource).arrayWrappedScalars, json).toEqual([]);
+      }
+    });
+  });
+
   describe("diagnostics stay value-free", () => {
     it("reports locations only, never the wrapped value", () => {
       const { resource } = parseResource(

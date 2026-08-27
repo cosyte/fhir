@@ -805,6 +805,27 @@
       "unreadableBooleans": [],
       "nearMissNegationCodes": [],
       "unreadableNegationCodes": []
+    },
+    "added:diagnosticreport-status-trailing-space": {
+      "issues": [],
+      "valid": true,
+      "findings": [
+        "RESOURCE_NOT_MODELED/information at DiagnosticReport"
+      ],
+      "resourceType": "DiagnosticReport",
+      "status": "registered ",
+      "retracted": false,
+      "noKnownAllergy": false,
+      "negations": [],
+      "safeToSummarize": true,
+      "unhandledModifierExtensions": [],
+      "shadowedProperties": [],
+      "arrayWrappedScalars": [],
+      "nestedArrays": [],
+      "droppedText": [],
+      "unreadableBooleans": [],
+      "nearMissNegationCodes": [],
+      "unreadableNegationCodes": []
     }
   }
 }

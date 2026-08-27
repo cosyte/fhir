@@ -268,24 +268,27 @@ describe("what is not an unreadable boolean", () => {
  */
 describe("declared residuals of the unreadable-boolean report, pinned", () => {
   it("raises no ValidationIssue of its own, on either validator path", () => {
-    // A deliberate asymmetry, and on the default path it puts `safeToSummarize: false` beside
-    // `valid: true` for the first time on this readout (the refusal itself is asserted in the
-    // parametrised block above; only the validator half is pinned here, because only the validator
-    // half is unchanged from base).
+    // A deliberate asymmetry: the report is a SAFETY channel and contributes no `ValidationIssue`,
+    // whichever schema the validator happens to be holding.
     //
-    // THE REASON IS AVAILABILITY, and two stronger-sounding versions of it were refuted, one per
-    // gate pass. The validator is NOT schema-free (`validateResource` takes `{ schemas }` and
-    // decides `boolean` on the resolved datatype), and "with a schema it cannot separate readable
-    // from unreadable either" was refuted ON THE JSON WIRE, where a conformant `true` validates
-    // clean while `"Y"` draws TYPE_MISMATCH. On the XML wire both spellings do draw TYPE_MISMATCH,
-    // which is why neither sentence may be written without naming its wire. What survives unscoped is that `MedicationRequest` has no BUILT-IN schema, so the
-    // validator is silent about this element's DATATYPE unless a caller opts in by supplying one (the
-    // shape channels still fire with no schema), and a readout
-    // that must hold on every document cannot rest on a diagnostic that only exists on request. The
-    // safety layer knows the datatype unconditionally, which is where the report belongs. The two
-    // rows below pin exactly that: silent by default, available on request.
+    // THE AVAILABILITY HALF OF THIS RESIDUAL IS CLOSED, and it is closed by a different change: the
+    // types this library treats as safety-critical all have BUILT-IN element tables now, so a
+    // `MedicationRequest` no longer needs a caller-supplied schema before the validator will decide
+    // this element's DATATYPE. What is pinned below is the part that did not move -- the two paths
+    // agree, so nothing in either finding set is attributable to the unreadable-boolean report.
+    //
+    // The sentence that used to stand here (the validator is silent about this element's datatype
+    // unless a caller opts in) is DELETED rather than softened, because it is now false. Two of its
+    // clauses survive and are still worth the next reader's time: the validator is NOT schema-free
+    // (`validateResource` takes `{ schemas }` and decides `boolean` on the resolved datatype), and
+    // "with a schema it cannot separate readable from unreadable either" was refuted ON THE JSON
+    // WIRE, where a conformant `true` validates clean while `"Y"` draws TYPE_MISMATCH. On the XML
+    // wire both spellings draw TYPE_MISMATCH, which is why neither sentence may be written without
+    // naming its wire. The safety layer knows the datatype unconditionally, which is why the report
+    // belongs there and not here.
     const unreadable = parseResourceXml(xmlMedicationRequest('<doNotPerform value="Y"/>')).resource;
-    // Every element the fixture writes, so the only issue left is the one under test.
+    // Every element the fixture writes, so the only issue left is the one under test. Deliberately
+    // NOT the built-in table: it is the caller-supplied arm, and it stays the caller-supplied arm.
     const schemas = [
       {
         type: "MedicationRequest",
@@ -299,11 +302,14 @@ describe("declared residuals of the unreadable-boolean report, pinned", () => {
       },
     ];
 
-    expect(validateResource(unreadable).valid).toBe(true);
+    // The built-in table reaches the same verdict the caller-supplied one does, on the datatype
+    // this element really has. The fixture writes `medicationCodeableConcept`, which the built-in
+    // table resolves as the `medication[x]` choice, so no element of it is left unaccounted for.
+    expect(validateResource(unreadable).valid).toBe(false);
     expect(validateResource(unreadable).issues.map((issue) => issue.code)).toEqual([
-      "RESOURCE_NOT_MODELED",
+      "TYPE_MISMATCH",
     ]);
-    // Available on request, so the silence above is about availability and nothing more.
+    // Available on request too, and identical: the report itself adds nothing on either path.
     expect(validateResource(unreadable, { schemas }).issues.map((issue) => issue.code)).toEqual([
       "TYPE_MISMATCH",
     ]);

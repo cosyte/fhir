@@ -105,9 +105,18 @@ describe("Quantity.comparator is reported wherever the walk reaches it, and lowe
     expect(serialized).not.toContain("0.01");
     expect(serialized).not.toContain("mg");
     expect(serialized).not.toContain("<");
-    // The base pin's findings for this document, its informational not-modeled issue included.
-    expect(findingsOf(json)).toEqual(["RESOURCE_NOT_MODELED/information at MedicationRequest"]);
-    expect(validateResource(parseResource(json).resource).valid).toBe(true);
+    // The validator's findings for this document. `MedicationRequest` has a built-in element table
+    // now, so the informational not-modeled note is gone and the four direct elements R4 makes
+    // mandatory are reported absent instead. NONE of them is about the comparator: the modifier
+    // element the readout reports is still invisible to the validator, which is the asymmetry this
+    // channel exists to close and the reason the readout carries it.
+    expect(findingsOf(json)).toEqual([
+      "CARDINALITY_MIN/error at MedicationRequest.status",
+      "CARDINALITY_MIN/error at MedicationRequest.intent",
+      "CARDINALITY_MIN/error at MedicationRequest.medication[x]",
+      "CARDINALITY_MIN/error at MedicationRequest.subject",
+    ]);
+    expect(validateResource(parseResource(json).resource).valid).toBe(false);
   });
 
   it("draws nothing on the same document with no comparator written", () => {

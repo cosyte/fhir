@@ -253,8 +253,14 @@ describe("a `_`-sibling that is not an object is reported and handed back", () =
       // `NESTED_ARRAY` and `DROPPED_ELEMENT_TEXT` mean it: a scalar in the metadata channel carries
       // no clinical content, and the element itself is read exactly as before. If a later slice
       // decides the safety layer should decline here, this is the test that has to move.
+      //
+      // The mandatory `AllergyIntolerance.patient` is carried so that `valid: true` is grading THIS
+      // rule. Without it the document is structurally non-conformant against the built-in element
+      // table, and the assertion would go on passing in the shape `false` long after this rule had
+      // started emitting a finding of its own.
       const { resource } = parseResource(
-        '{"resourceType":"AllergyIntolerance","clinicalStatus":{"coding":' +
+        '{"resourceType":"AllergyIntolerance","patient":{"reference":"Patient/synthetic-1"},' +
+          '"clinicalStatus":{"coding":' +
           '[{"system":"http://example.invalid/status","code":"active","_code":null}]}}',
       );
       expect(readSafety(resource).safeToSummarize).toBe(true);
