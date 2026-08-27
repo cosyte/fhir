@@ -60,10 +60,30 @@ jobs:
   # release below and the one in scripts/differential/oracle.mjs (ORACLE_RELEASE) are the same
   # release, and the harness prints the sha256 of the jar it actually loaded beside every result, so
   # a substituted artifact is visible even when this string does not move.
+  #
+  # AND THE ORACLE'S TERMINOLOGY ANSWERS ARE PINNED THE SAME WAY, BY BEING ABSENT. A pinned release
+  # was not enough: the validator resolves coding displays and code membership against a TERMINOLOGY
+  # SERVER, and its documented default is the public https://tx.fhir.org. That made a differential
+  # verdict a function of what a remote service answered on the day, and three documents landed in
+  # the safety-critical FALSE VALID bucket on one run and not the next with nothing having moved. So
+  # the run DECLARES its terminology inputs (scripts/differential/terminology.mjs, `source: "none"`
+  # today), spells `-tx n/a` and `-txCache n/a` into the oracle's argv, AUDITS that argv before a
+  # single document is staged, and compares nothing at all if any terminology question would remain
+  # answerable over a network or the declared inputs cannot be honoured exactly. The terminology
+  # inputs are printed beside the oracle identity on every run.
+  #
+  # A terminology finding is then a RECORDED CLASS rather than a verdict: this library declaredly
+  # vendors no terminology content, so scripts/differential/compare.mjs classifies such a finding out
+  # of BOTH invariants, counts it and prints it per document. An oracle error or fatal OUTSIDE that
+  # class, on a document this library reports clean, is still a false valid and still fails the job.
   differential:
     runs-on: ubuntu-latest
-    # A DECLARED TIME BOUND, NOT THE RUNNER DEFAULT. ~150 documents through a JVM oracle is minutes,
+    # A DECLARED TIME BOUND, NOT THE RUNNER DEFAULT. ~180 documents through a JVM oracle is minutes,
     # not seconds, and a corpus that cannot finish must fail visibly rather than sit for six hours.
+    # The determinism step below fits inside this same bound by repeating a DECLARED SUBSET
+    # (corpus/corpus.json, `determinismSubset`) rather than the whole corpus: the full corpus does
+    # not go through the oracle three times in thirty minutes. The check prints every repeated
+    # document id before it starts, so the log says what determinism was demonstrated over.
     timeout-minutes: 30
     env:
       # Keep in step with ORACLE_RELEASE in scripts/differential/oracle.mjs.
@@ -84,7 +104,7 @@ jobs:
         run: |
           curl -fsSL -o "$RUNNER_TEMP/validator_cli.jar" \
             "https://github.com/hapifhir/org.hl7.fhir.core/releases/download/${ORACLE_RELEASE}/validator_cli.jar"
-      - name: Differential (three corpora, >= 100 documents, count + oracle identity printed)
+      - name: Differential (three corpora, >= 100 documents, count + oracle identity + terminology inputs printed)
         # ubuntu-latest ships a Temurin JDK; $JAVA_HOME_21_X64 is set by the runner image. The
         # differential harness invokes `java` from PATH, no unpinned setup-java action needed.
         env:
@@ -93,3 +113,14 @@ jobs:
           export PATH="${JAVA_HOME_21_X64:-$JAVA_HOME}/bin:$PATH"
           java -version
           node scripts/differential.mjs
+      - name: Determinism (the declared subset compared TWICE, run records must be byte-identical)
+        # Its failure is the job's failure, and it is never softened into a warning: this step
+        # reports determinism NOT demonstrated and exits non-zero for every condition it cannot rule
+        # out, including a missing jar and a document that yielded no readable outcome. A silent skip
+        # would make a green job mean "the oracle was absent" and "the oracle answered the same way
+        # twice" interchangeably, which is worse than having no check.
+        env:
+          VALIDATOR_CLI_JAR: ${{ runner.temp }}/validator_cli.jar
+        run: |
+          export PATH="${JAVA_HOME_21_X64:-$JAVA_HOME}/bin:$PATH"
+          node scripts/differential-determinism.mjs

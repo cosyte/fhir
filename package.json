@@ -79,6 +79,7 @@
     "phi-scan": "tsx scripts/phi-scan.ts",
     "corpus:fetch": "node scripts/corpus-fetch.mjs",
     "differential": "node scripts/differential.mjs",
+    "differential:determinism": "node scripts/differential-determinism.mjs",
     "differential:read": "tsx scripts/read-differential.ts",
     "capture:base-readouts": "tsx scripts/capture-base-readouts.ts",
     "check:no-emdash": "bash scripts/check-no-emdash.sh",

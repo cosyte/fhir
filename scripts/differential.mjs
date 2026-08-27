@@ -12,8 +12,20 @@
  * `differential` job in `.github/workflows/ci.yml`, which provisions Temurin 21 and downloads the
  * jar at a PINNED release) and is a no-op-with-clear-skip elsewhere. **It has not been observed green
  * in this container, do not read its presence as a proven differential.** Running it here with no
- * `VALIDATOR_CLI_JAR` still prints the corpus it WOULD compare, and its exclusions, which is what
- * makes the accounting reviewable without a JVM.
+ * `VALIDATOR_CLI_JAR` still prints the corpus it WOULD compare, its exclusions and the terminology
+ * inputs it WOULD run under, which is what makes the accounting reviewable without a JVM.
+ *
+ * THE TERMINOLOGY INPUTS ARE DECLARED, AND THE RUN REFUSES BEFORE IT COMPARES
+ * ---------------------------------------------------------------------------
+ * A differential verdict is supposed to be a property of the document bytes and the oracle artifact.
+ * It was also a property of a remote terminology service: the pinned release defaults `-tx` to a
+ * public network endpoint, and three documents landed in the safety-critical `FALSE VALID` bucket on
+ * one day and not on another because that service answered differently. So the run DECLARES its
+ * terminology inputs (`scripts/differential/terminology.mjs`, `source: "none"` today), spells both
+ * terminology options into the oracle's argv, and AUDITS that argv before a single document is
+ * staged. If any terminology question would remain answerable over a network, or if the declared
+ * inputs cannot be honoured exactly, this run compares nothing, names the condition and exits
+ * non-zero. It never substitutes another terminology source.
  *
  * THE CORPUS
  * ----------
@@ -26,7 +38,7 @@
  *     validator's own `pom.xml` pins itself against;
  *   - the **FHIR R4 (4.0.1) specification's own published examples** (CC0-1.0).
  *
- * **266 declared, 173 compared, 93 excluded**, 163 of the 173 third party. The third-party documents
+ * **266 declared, 179 compared, 87 excluded**, 169 of the 179 third party. The third-party documents
  * are **fetched, never committed** (`pnpm corpus:fetch`, materialised into the git-ignored
  * `corpus/documents/`), each verified against the SHA-256 the declaration records.
  * `scripts/differential/corpus.mjs` carries the reasoning; the short version is that committing
@@ -39,16 +51,21 @@
  * The two invariants (never a false valid; no spurious errors on clean input) are enforced hard over
  * every compared document, and the fail-closed parse-refusal exemption to the second is unchanged.
  * They are stated in full in `scripts/differential/compare.mjs`, which is also where the accounting
- * lives.
+ * lives, including the **terminology class**: an oracle finding attributable to terminology
+ * resolution is classified out of BOTH invariants, counted and printed, because this library
+ * declaredly vendors no terminology content and such a finding is a documented delta rather than a
+ * verdict. An oracle `error`/`fatal` outside that class, on a document this library reports clean,
+ * is still a false valid and still fails the run.
  *
- * **THE EXCLUSION RATE IS PART OF THE RESULT, NOT A FOOTNOTE TO IT.** 93 of the 266 declared
+ * **THE EXCLUSION RATE IS PART OF THE RESULT, NOT A FOOTNOTE TO IT.** 87 of the 266 declared
  * documents are held out, each with the reason measured and recorded in `corpus/corpus.json` and
  * printed on every run, and the classes are almost entirely one thing: the reference validator
  * resolves canonical URLs (`identifier.system`, `url`, `instantiatesUri`, `library`,
- * `relatedArtifact.resource`, `Attachment.url`) and checks `coding.display` and code membership
- * against terminology content, and this library does neither and says so. So the number is "173
- * documents on which the two were SHOWN to agree", beside "93 on which they were shown not to".
- * Reading only the first is reading half of it.
+ * `relatedArtifact.resource`, `Attachment.url`) and this library does neither and says so. The six
+ * exclusions whose measured reason was ONLY a terminology finding are no longer exclusions: they are
+ * compared, under the terminology class above, because a rule beats a snapshot of what a remote
+ * service answered on one date. So the number is "179 documents on which the two were SHOWN to
+ * agree", beside "87 on which they were shown not to". Reading only the first is reading half of it.
  *
  * What the number does NOT buy, separately: over resource types this library does not model, it
  * emits an informational `RESOURCE_NOT_MODELED` and no error, so agreement at scale mostly means "we
@@ -58,153 +75,41 @@
  *
  * WHAT IS PRINTED, AND WHY
  * ------------------------
- * The compared count and the oracle's identity are printed on every run, so a silent shrink of
- * either is visible in the log. The identity is derived from the jar's own bytes, not from the
- * configured release string, so substituting a different artifact changes the record. Excluded
- * documents are printed with the recorded reason for their exclusion and are never counted.
+ * The compared count, the oracle's identity and the terminology inputs are printed on every run, so
+ * a silent shrink of any of them is visible in the log. The identity is derived from the jar's own
+ * bytes, not from the configured release string, so substituting a different artifact changes the
+ * record. Excluded documents are printed with the recorded reason for their exclusion and are never
+ * counted. The run closes with a RUN RECORD: a digest over a structure that is a pure function of
+ * the run's inputs, carrying no wall-clock time, no staging path and no ordinal, which is what
+ * `pnpm differential:determinism` compares across two comparisons.
  *
  * @packageDocumentation
  */
 
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
-
-import { FhirCodecError, parseResource, validateResource } from "../dist/index.mjs";
+import { writeFileSync } from "node:fs";
 
 import {
-  compareDocument,
   exitCodeFor,
   formatExclusions,
   formatRecord,
   formatSummary,
-  summarize,
 } from "./differential/compare.mjs";
-import {
-  CorpusError,
-  corpusOf,
-  exclusions,
-  loadDeclaration,
-  provenanceLine,
-  resolveCorpus,
-} from "./differential/corpus.mjs";
+import { CorpusError, exclusions, loadDeclaration, provenanceLine } from "./differential/corpus.mjs";
+import { ourFindings } from "./differential/findings.mjs";
 import {
   formatOracleIdentity,
   ORACLE_RELEASE,
   oracleIdentity,
   OracleError,
-  runOracleBatch,
 } from "./differential/oracle.mjs";
-
-/** How many documents go through one JVM start. Amortises ~30s of startup over a batch. */
-const BATCH_SIZE = Number(process.env.DIFFERENTIAL_BATCH_SIZE ?? "40");
-
-/** The time bound on one batch. Exceeding it yields no outcome for that batch, never "clean". */
-const BATCH_TIMEOUT_MS = Number(process.env.DIFFERENTIAL_ORACLE_TIMEOUT_MS ?? "600000");
-
-/**
- * Our own findings, normalized to the oracle's `{ severity, location }` shape (text deliberately
- * dropped), plus `parseRefused`: whether the reader **failed closed** on unrecoverable input (a
- * thrown `FhirCodecError`). A fail-closed refusal is a genuine `fatal` finding, never swallowed; the
- * flag lets the accounting treat it as the safe, conservative direction rather than a spurious
- * error. Anything else thrown is an answer we did NOT get, and is reported as such rather than as
- * "no findings".
- */
-function ourFindings(text) {
-  let resource;
-  try {
-    ({ resource } = parseResource(text));
-  } catch (err) {
-    if (err instanceof FhirCodecError) {
-      return {
-        ok: true,
-        issues: [{ severity: "fatal", location: String(err.expression ?? "") }],
-        parseRefused: true,
-      };
-    }
-    return { ok: false, reason: `the reader threw a non-codec error: ${String(err)}` };
-  }
-  try {
-    const result = validateResource(resource);
-    return {
-      ok: true,
-      issues: result.issues.map((i) => ({
-        severity: String(i.severity),
-        location: String(i.expression),
-      })),
-      parseRefused: false,
-    };
-  } catch (err) {
-    return { ok: false, reason: `validateResource threw: ${String(err)}` };
-  }
-}
-
-/** Stage the corpus into one temp directory under names that are unique and map back to documents. */
-function stage(resolved) {
-  const dir = mkdtempSync(join(tmpdir(), "fhir-diff-corpus-"));
-  return resolved.map((entry, index) => {
-    const name = `${String(index).padStart(4, "0")}-${basename(entry.document.path)}`;
-    const file = join(dir, name);
-    writeFileSync(file, entry.bytes);
-    return { ...entry, staged: file, stagedName: name };
-  });
-}
-
-function chunk(items, size) {
-  const out = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
-/** Ask the oracle about every staged document, batch by batch. */
-function askOracle(jar, staged) {
-  const answers = new Map();
-  for (const batch of chunk(staged, Math.max(1, BATCH_SIZE))) {
-    const outputPath = join(mkdtempSync(join(tmpdir(), "fhir-diff-out-")), "outcome.json");
-    const result = runOracleBatch(
-      jar,
-      batch.map((s) => s.staged),
-      outputPath,
-      { timeoutMs: BATCH_TIMEOUT_MS },
-    );
-    for (const entry of batch) {
-      if (result.ok !== true) {
-        answers.set(entry.document.id, { ok: false, reason: result.reason });
-        continue;
-      }
-      const issues = result.byName.get(entry.stagedName);
-      answers.set(
-        entry.document.id,
-        issues === undefined
-          ? {
-              ok: false,
-              reason: "the oracle returned no outcome that could be attributed to this document",
-            }
-          : { ok: true, issues },
-      );
-    }
-  }
-  return answers;
-}
-
-function printCorpusSummary(declaration) {
-  const byCorpus = new Map();
-  for (const document of declaration.documents) {
-    const corpus = corpusOf(declaration, document);
-    const row = byCorpus.get(corpus.id) ?? { corpus, declared: 0, excluded: 0 };
-    row.declared += 1;
-    if (document.exclude !== undefined) row.excluded += 1;
-    byCorpus.set(corpus.id, row);
-  }
-  console.log("differential corpus:");
-  for (const { corpus, declared, excluded } of byCorpus.values()) {
-    console.log(
-      `  ${corpus.id}: ${String(declared - excluded)} compared, ${String(excluded)} excluded, ` +
-        `from ${corpus.title} @ ${corpus.version} (${corpus.licence}, ${corpus.origin})`,
-    );
-  }
-  for (const line of formatExclusions(exclusions(declaration))) console.log(line);
-}
+import { canonicalJson, formatRunRecord } from "./differential/record.mjs";
+import { corpusSummaryLines, runComparison } from "./differential/run.mjs";
+import {
+  formatTerminologyInputs,
+  resolveTerminologyInputs,
+  TERMINOLOGY_INPUTS,
+  TerminologyError,
+} from "./differential/terminology.mjs";
 
 function main() {
   let declaration;
@@ -215,7 +120,25 @@ function main() {
     process.exit(1);
   }
 
-  printCorpusSummary(declaration);
+  for (const line of corpusSummaryLines(declaration)) console.log(line);
+  for (const line of formatExclusions(exclusions(declaration))) console.log(line);
+
+  // BEFORE the oracle, and before any document: the terminology inputs this run declares, honoured
+  // exactly or refused. A run that cannot honour them compares nothing rather than compare against
+  // answers it cannot reproduce.
+  let terminology;
+  try {
+    terminology = resolveTerminologyInputs(TERMINOLOGY_INPUTS);
+  } catch (err) {
+    console.error(
+      `differential: ${err instanceof TerminologyError ? err.message : String(err)}\n` +
+        `  No document was compared. The declared terminology inputs are honoured exactly or not ` +
+        `at all; no other terminology source is substituted for them.`,
+    );
+    process.exit(1);
+  }
+  const terminologyLine = formatTerminologyInputs(terminology);
+  console.log(`\n${terminologyLine}`);
 
   const jar = process.env.VALIDATOR_CLI_JAR;
   if (jar === undefined || jar === "") {
@@ -239,29 +162,25 @@ function main() {
     process.exit(1);
   }
   const identityLine = formatOracleIdentity(identity);
-  console.log(`\n${identityLine}`);
+  console.log(identityLine);
 
-  let resolved;
+  let outcome;
   try {
-    resolved = resolveCorpus(declaration);
+    outcome = runComparison({ jar, identity, declaration, terminology, ourFindings });
   } catch (err) {
+    if (err instanceof TerminologyError) {
+      console.error(
+        `differential: ${err.message}\n` +
+          `  No document was compared and no count is reported: a comparison whose terminology ` +
+          `answers could come from a network is not reproducible from this repository.`,
+      );
+      process.exit(1);
+    }
     console.error(`differential: ${err instanceof CorpusError ? err.message : String(err)}`);
     process.exit(1);
   }
 
-  const staged = stage(resolved);
-  const answers = askOracle(jar, staged);
-
-  const records = staged.map((entry) =>
-    compareDocument({
-      id: entry.document.id,
-      oracle: answers.get(entry.document.id) ?? {
-        ok: false,
-        reason: "the oracle was never asked about this document",
-      },
-      ours: ourFindings(entry.text),
-    }),
-  );
+  const { records, summary, runRecord, resolved } = outcome;
 
   for (const record of records) {
     const line = formatRecord(record);
@@ -279,13 +198,22 @@ function main() {
     }
   }
 
-  const summary = summarize({ records, exclusions: exclusions(declaration), floor: declaration.comparedFloor });
   console.log("");
   for (const line of formatExclusions(summary.exclusions)) console.log(line);
-  for (const line of formatSummary(summary, identityLine)) {
+  for (const line of formatSummary(summary, identityLine, terminologyLine)) {
     if (summary.violations.length > 0 || !summary.meetsFloor) console.error(line);
     else console.log(line);
   }
+  for (const line of formatRunRecord(runRecord)) console.log(line);
+
+  // The full record, for a reader who wants to diff two of them by hand. Opt-in, because the
+  // per-document lines above are already the readable form.
+  const recordPath = process.env.DIFFERENTIAL_RUN_RECORD;
+  if (recordPath !== undefined && recordPath !== "") {
+    writeFileSync(recordPath, canonicalJson(runRecord));
+    console.log(`run record: written to ${recordPath}`);
+  }
+
   if (summary.compared > 0 && summary.violations.length === 0 && summary.meetsFloor) {
     const sample = resolved[0];
     console.log(
