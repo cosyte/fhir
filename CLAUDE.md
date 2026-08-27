@@ -262,6 +262,26 @@ Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
   agreement**: no readable oracle outcome means uncounted AND not clean. The oracle is pinned to a
   release and identified by the **jar's own bytes**, so a substituted artifact shows.
   [`#the-differential-corpus-is-no-longer-ten-fixtures-2026-08-25`](documentation/agent-notes.md#the-differential-corpus-is-no-longer-ten-fixtures-2026-08-25)
+- **A PINNED RELEASE WAS NOT A PINNED ORACLE: `-tx` DEFAULTS TO `https://tx.fhir.org` AND THE
+  VERDICT WAS A FUNCTION OF THE WEATHER** (three documents in the `FALSE VALID` bucket on one run
+  and not the next, nothing having moved). The run DECLARES its terminology inputs
+  (`scripts/differential/terminology.mjs`, **`source: "none"`** = `-tx n/a` + `-txCache n/a`),
+  spells both options into the argv, and **AUDITS THE ARGV, not the constant, BEFORE a document is
+  staged** ([`#a-pinned-release-was-not-a-pinned-oracle-2026-08-27`](documentation/agent-notes.md#a-pinned-release-was-not-a-pinned-oracle-2026-08-27)):
+  network-answerable, unhonourable or absent inputs compare NOTHING and exit non-zero,
+  substituting no other source. **`-txCache` is not optional**: an omitted one is a directory of
+  someone's earlier network answers. **TWO PROPERTIES, NOT ONE.** The second is that a
+  terminology-attributable finding is a RECORDED CLASS out of BOTH invariants, counted and printed,
+  never a verdict. **The classifier keys on the VALIDATOR'S OWN vocabulary** (`code-invalid`, the
+  `tx-issue-type` system, `Terminology_*` message ids) and **`not-found` is DELIBERATELY OUT**: it
+  is also an unresolved definition, and admitting it would classify a non-terminology error out of
+  the one direction that may never widen. Stripping the finding naively flips agreement into a
+  SPURIOUS ERROR, so such a document is `terminology-delta`, **not a violation and still COMPARED**.
+  **Determinism is MEASURED, not intended**: `pnpm differential:determinism` runs two comparisons of
+  the DECLARED `determinismSubset` and compares byte-identical run records (**no clock, no staging
+  path, no ordinal**). It reports **determinism NOT demonstrated** and exits non-zero for a missing
+  jar, unhonourable inputs, or any document with no readable outcome. **NEVER give it a skip
+  branch**, and never buy determinism by excluding a document: the compared count may rise, not fall.
 - **The PHI scan's SCOPE and its RECOGNISER move together, never one alone.** Enumerating buys the
   SSN + email floor only. **Read both spellings** (`family: "…"` AND `<family value="…"/>`); **never
   key `text` / `identifier.value` / `telecom.value` in source.** A weakening scoped to "source" also

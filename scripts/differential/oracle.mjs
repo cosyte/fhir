@@ -30,6 +30,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 
+import { TX_ISSUE_TYPE_SYSTEM } from "./compare.mjs";
+import { TERMINOLOGY_INPUTS, terminologyArgs } from "./terminology.mjs";
+
 /**
  * The pinned oracle release. CI downloads THIS tag, not `releases/latest`: a moving pointer means
  * two runs of the same commit can disagree and neither log says why.
@@ -118,19 +121,30 @@ export function formatOracleIdentity(identity) {
  *
  * `severity` and `location` are what the comparison keys on; text is deliberately dropped, because
  * we diverge on it on purpose (ours is value-free by contract, the oracle echoes document values).
- * `code` and `messageId` are CODES, not text: `OperationOutcome.issue.code` is the bounded R4
- * `IssueType`, and `details.coding[].code` is the validator's own message identifier. Carrying them
- * costs nothing at the comparison, echoes no document content, and is the difference between a gate
- * failure a reader can classify and one that says only "somewhere under `Questionnaire.item`".
+ * `code`, `messageId` and `messageSystem` are CODES and a code-system URL, not text:
+ * `OperationOutcome.issue.code` is the bounded R4 `IssueType`, `details.coding[].code` is the
+ * validator's own message identifier, and `details.coding[].system` is the vocabulary that
+ * identifier is drawn from. Carrying them costs nothing at the comparison, echoes no document
+ * content, and is the difference between a gate failure a reader can classify and one that says
+ * only "somewhere under `Questionnaire.item`".
+ *
+ * **THE TERMINOLOGY CODING IS PREFERRED WHEN THERE IS ONE.** The validator may attach several
+ * detail codings to one finding, and the one drawn from its terminology issue-type CodeSystem is
+ * the one that says whether this finding came out of terminology resolution, which is what
+ * `compare.mjs` classifies on. Taking whichever coding happened to be first would make that
+ * classification depend on the validator's serialisation order.
  */
 function issueShape(issue) {
   const detailCodings = Array.isArray(issue.details?.coding) ? issue.details.coding : [];
-  const messageId = detailCodings.find((c) => typeof c?.code === "string")?.code;
+  const withCode = detailCodings.filter((c) => typeof c?.code === "string");
+  const coding = withCode.find((c) => String(c?.system ?? "") === TX_ISSUE_TYPE_SYSTEM) ?? withCode[0];
+  const messageSystem = coding === undefined ? undefined : coding.system;
   return {
     severity: String(issue.severity ?? "information"),
     location: String(issue.expression?.[0] ?? issue.location?.[0] ?? ""),
     code: String(issue.code ?? ""),
-    ...(messageId === undefined ? {} : { messageId: String(messageId) }),
+    ...(coding === undefined ? {} : { messageId: String(coding.code) }),
+    ...(typeof messageSystem === "string" ? { messageSystem } : {}),
   };
 }
 
@@ -232,7 +246,16 @@ export function parseOracleOutput(text, stagedNames) {
   };
 }
 
-/** The argv the oracle is invoked with. One place, so the workflow and the harness cannot drift. */
+/**
+ * The argv the oracle is invoked with. One place, so the workflow and the harness cannot drift.
+ *
+ * **THE TERMINOLOGY OPTIONS ARE PART OF THIS ARGV AND HAVE NO OMITTED DEFAULT.** The pinned
+ * release's own default terminology server is a public network service, so leaving `-tx` out is not
+ * "no terminology", it is "the network"; leaving `-txCache` out is "whatever directory the validator
+ * decides to create". Both are spelled from the run's declared terminology inputs, which default to
+ * {@link TERMINOLOGY_INPUTS}. `scripts/differential/terminology.mjs` audits the argv this function
+ * returns before a single document is staged.
+ */
 export function oracleArgs(jar, files, outputPath, options = {}) {
   return [
     "-jar",
@@ -242,6 +265,7 @@ export function oracleArgs(jar, files, outputPath, options = {}) {
     options.fhirVersion ?? FHIR_VERSION,
     "-ig",
     options.ig ?? US_CORE_IG,
+    ...terminologyArgs(options.terminology ?? TERMINOLOGY_INPUTS, { repoRoot: options.repoRoot }),
     "-output",
     outputPath,
   ];

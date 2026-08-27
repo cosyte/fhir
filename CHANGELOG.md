@@ -8,6 +8,36 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **The `validator_cli.jar` differential answers no terminology question over a network, and proves
+  it by running the comparison twice (`DIFF-DETERMINISM-1`).** No library code changed and nothing
+  here ships in the published artifact. A pinned oracle release was not a pinned oracle: the
+  reference validator's terminology server option defaults to a public network endpoint and the
+  harness never passed one, so the same commit over the same corpus put three documents into the
+  safety-critical false-valid bucket on one run and none on the next with nothing having moved. Each
+  run now DECLARES its terminology inputs (`scripts/differential/terminology.mjs`, `source: "none"`,
+  which is `-tx n/a` plus `-txCache n/a`, both sentinels the pinned release documents), spells them
+  into the argv the oracle is actually invoked with, and **audits that argv before a single document
+  is staged**: an absent `-tx`, a terminology option naming a network location, an undeclared cache
+  directory, or a declared input that is absent, unreadable or the wrong digest all compare **no
+  document**, name the condition and exit non-zero, substituting no other source. No terminology
+  content is pinned here, for the same reason the corpus documents are fetched and never committed.
+  **Terminology disagreement stopped being a verdict**: a terminology-attributable oracle finding is
+  classified out of BOTH invariants under a recorded class, counted and printed per document. The
+  classifier keys on the validator's own vocabulary only (the `tx-issue-type` code system,
+  `code-invalid`, message ids that name terminology); `not-found` is deliberately excluded because
+  the validator also uses it for an unresolved definition, and **an oracle error or fatal outside the
+  class, on a document this library reports clean, is still a false valid and still fails the run**.
+  That replaced a snapshot with a rule, so six exclusions came back and the corpus went from **173
+  compared / 93 excluded to 179 compared / 87 excluded** of 266 declared, 169 of them third party;
+  the compared count may rise and may not fall. Every run closes with a **run record** that is a pure
+  function of its inputs, carrying no wall-clock time, no staging path and no run ordinal, and
+  `pnpm differential:determinism` compares two of them over a declared subset, reporting
+  **determinism NOT demonstrated** and exiting non-zero for a missing or unidentifiable artifact,
+  inputs it cannot honour, or any document that yielded no readable outcome. There is no silent skip.
+  The check is wired into the differential CI job inside its declared thirty minute bound and prints
+  every repeated document, so the log says what determinism was demonstrated over. Graded by
+  `test/differential-determinism.test.ts` beside the existing suites, with no build, no Java and no
+  network.
 - **The published tarball is narrowed to the runtime files only, as a diagnostic probe for the
   standing npm publish refusal (`FHIR-NPM-NAME`), at npm support's request of 2026-08-26.** No
   runtime behaviour changes. `files` named `dist` as a directory, so both sourcemaps shipped, and

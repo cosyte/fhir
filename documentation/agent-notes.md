@@ -9,12 +9,95 @@ used to sit in `CLAUDE.md`, in its original order, with headings added so it can
 section here that carries the incident it came from. These are clinical-safety lessons that each
 cost a defect or a refuted gate pass to learn: **relocate them, never delete them.**
 
+## A pinned release was not a pinned oracle (2026-08-27)
+
+**READ THIS BEFORE ANY PARAGRAPH BELOW THAT DESCRIBES THE DIFFERENTIAL, INCLUDING THE NEXT SECTION.**
+The section below is the corpus as of 2026-08-25 and it is right about everything except two counts
+and one assumption. The counts: **266 declared, 179 compared, 87 excluded**, 169 of the 179 third
+party, because six exclusions came back (below). The assumption: that pinning the oracle to a release
+and identifying it by the jar's own bytes made a verdict reproducible. It did not.
+
+**The reference validator's `-tx` option defaults to the public `https://tx.fhir.org`**, and the
+harness never passed one. So the oracle resolved `Coding.display` and code membership over a network
+whose content and availability move under the harness's feet, and a differential verdict was a
+function of the day it ran. That is what put three documents into the safety-critical `FALSE VALID`
+bucket in one CI run with **no document, no library change and no pinned artifact having moved**, and
+why a downstream change could not land: a gate that answers differently on a re-run clears nothing.
+The corpus carried the same symptom one level up, in a block of exclusions whose recorded reason was
+a disagreement "measured against validator_cli 6.10.2 on 2026-08-25". An exclusion list derived from
+what a remote service answered on a date is a snapshot, not an invariant, and a document whose
+terminology finding appeared after that date was never on it.
+
+**TWO PROPERTIES WERE BOUGHT AND THEY ARE NOT THE SAME PROPERTY.** The first alone would still fail
+the same documents on every run; the second alone would still let a network outage change what the
+oracle returned.
+
+- **The oracle cannot be influenced by a remote service.** Every run DECLARES its terminology inputs
+  in `scripts/differential/terminology.mjs`. What this repository declares is **`source: "none"`**:
+  `-tx n/a` and `-txCache n/a`, both sentinels documented by the pinned release. **`-txCache` is not
+  a nicety**: an omitted one is a directory of whatever some earlier run got back from a network on a
+  date nobody recorded, which is the same non-determinism one indirection away. **Terminology content
+  was deliberately NOT pinned into this repository**: the library vendors none, the corpus documents
+  are fetched rather than committed precisely because git history is not undone by a revert, and a
+  pinned terminology cache would put a third party's code-system content into that same history to
+  answer questions this library does not answer either. `source: "pinned"` exists, is graded, and is
+  declared by nothing here.
+- **THE AUDIT IS ON THE ARGV, NOT ON THE CONSTANT, AND IT RUNS BEFORE A DOCUMENT IS STAGED.** A
+  constant somebody hopes is used is not a property of the run. `auditTerminologyArgv` reads the argv
+  the oracle is about to be invoked with and refuses an absent `-tx` (the default IS the network), a
+  `-tx` or `-txCache` naming a network location, an option spelled twice, and a cache directory the
+  run did not declare. Every refusal compares **no document**, names the condition and exits
+  non-zero, and **substitutes no other terminology source** when a declared input is absent,
+  unreadable or the wrong digest.
+- **A terminology finding is a RECORDED CLASS, never a verdict.** `compare.mjs` classifies a
+  terminology-attributable oracle finding out of **both** invariants, counts it and prints it per
+  document. **This is not a weakening**: the corpus already granted those documents the same relief
+  by hand, through exclusions measured on one date, and a rule beats a snapshot.
+- **THE CLASSIFIER KEYS ON THE VALIDATOR'S OWN VOCABULARY AND ON NOTHING ELSE**: the `tx-issue-type`
+  code system a message id is drawn from, the R4 issue code `code-invalid`, and a message id that
+  NAMES terminology (`Terminology_*`, `tx-*`). **`not-found` IS DELIBERATELY ABSENT**: the validator
+  also uses it for a definition it could not resolve in its own loaded packages, which is profile
+  resolution, and the corpus records exclusions under exactly that reading. Admitting it on the code
+  alone would classify a non-terminology error out of Invariant 1, the one direction that may never
+  widen. `invalid` is out for the same reason. **An oracle error or fatal outside the class, on a
+  document this library reports clean, is still a false valid and still fails the run.**
+- **THE DIRECTION THAT IS EASY TO GET WRONG.** When the oracle's only errors are terminology findings
+  and this library reports an error of its own, the old accounting called that agreement. Stripping
+  the finding naively turns it into a SPURIOUS ERROR, which is a violation the **absence** of a
+  terminology finding decided, and the whole point is that such a finding decides neither direction.
+  That document is `terminology-delta`: **not a violation, still COMPARED, still counted.**
+- **Six exclusions came back and the compared count ROSE.** Six documents were held out with
+  `code-invalid` as their only recorded class. They are compared now, under the class above.
+  Determinism bought by comparing less is not determinism: the compared count may rise and may not
+  fall, `test/differential-corpus.test.ts` pins that, and it also fails if an exclusion whose only
+  recorded class is `code-invalid` ever reappears. Exclusions naming any other class are untouched.
+- **DETERMINISM IS MEASURED, NOT INTENDED.** A configuration that intends determinism and a run that
+  exhibits it are different claims. `pnpm differential:determinism` runs **two** comparisons of the
+  DECLARED `determinismSubset` against the same artifact under the same inputs and passes only when
+  the two **run records** are byte-identical. A run record is a pure function of the run's inputs by
+  construction (named fields only), so **no wall-clock time, no staging path and no run ordinal** can
+  reach it, and the documents are keyed by their declared id and sorted.
+- **IT NEVER SKIPS, AND NEVER GIVE IT A SKIP BRANCH.** A missing jar, an unidentifiable artifact,
+  inputs it cannot honour, no declared subset, or **any document that yielded no readable outcome**
+  all report **determinism NOT demonstrated** and exit non-zero. Two runs that both failed to obtain
+  an answer produce identical records, and reading that as agreement would let a permanently broken
+  oracle certify its own determinism. A silent skip would make a green job mean "the oracle was
+  absent" and "the oracle answered the same way twice" interchangeably.
+- **It repeats a SUBSET because the job's bound is real**, not because the corpus is optional. The
+  differential job declares thirty minutes and 179 documents do not go through a JVM oracle three
+  times inside it. The subset is DECLARED in `corpus/corpus.json` rather than sampled (a check that
+  chose its own documents each run would measure a different thing each run), every repeated id is
+  printed before the first comparison, and **every declared document is still digest-verified on both
+  comparisons**: `only` narrows what is handed back, never what is verified.
+
 ## The differential corpus is no longer ten fixtures (2026-08-25)
 
 **READ THIS BEFORE ANY PARAGRAPH BELOW THAT DESCRIBES THE DIFFERENTIAL CORPUS.** The phase-history
 entries further down say the `validator_cli.jar` differential runs over the synthetic spec-clean tier
 plus the Tier-2 quirk corpus. That was true, it was **ten documents, five of them written here**, and
 it is now superseded. Those paragraphs are history and stay verbatim; this is the current state.
+**The counts in this section are themselves superseded by the section above** (2026-08-27): 179
+compared and 87 excluded, not 173 and 93.
 
 - **The corpus is declared in `corpus/corpus.json`**, not in two arrays inside
   `scripts/differential.mjs`. It is **three corpora, and only the first was written here**: this

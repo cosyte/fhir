@@ -181,7 +181,65 @@ export function parseDeclaration(text, where = "the corpus declaration") {
     }
     documentIds.add(entry.id);
   }
+  validateDeterminismSubset(raw, where);
   return raw;
+}
+
+/**
+ * The declared determinism subset: which documents `pnpm differential:determinism` compares TWICE.
+ *
+ * It exists because the differential job carries a declared 30 minute bound and the full corpus does
+ * not fit through the oracle three times. A subset is therefore DECLARED rather than chosen at run
+ * time, so the log says what determinism was demonstrated over and two runs of the check repeat the
+ * same documents. Validated when present, and optional in the parser so a scratch declaration in a
+ * test can leave it out; `test/differential-corpus.test.ts` pins that the COMMITTED declaration
+ * carries one, and the determinism check refuses rather than repeat nothing.
+ */
+function validateDeterminismSubset(raw, where) {
+  if (raw.determinismSubset === undefined) return;
+  if (!Array.isArray(raw.determinismSubset) || raw.determinismSubset.length === 0) {
+    throw new CorpusError(`${where}.determinismSubset must be a non-empty array of document ids`);
+  }
+  const included = new Set(raw.documents.filter((d) => d.exclude === undefined).map((d) => d.id));
+  const seen = new Set();
+  for (const [index, id] of raw.determinismSubset.entries()) {
+    const at = `${where}.determinismSubset[${String(index)}]`;
+    if (typeof id !== "string" || id.length === 0) {
+      throw new CorpusError(`${at} must be a non-empty document id`);
+    }
+    if (seen.has(id)) throw new CorpusError(`${where}: duplicate determinismSubset id ${id}`);
+    seen.add(id);
+    if (!included.has(id)) {
+      throw new CorpusError(
+        `${at} names ${id}, which is not a declared document that is compared. A determinism ` +
+          `subset may only repeat documents the differential compares.`,
+      );
+    }
+  }
+}
+
+/**
+ * The declared subset resolved to document records, in declaration order. Throws rather than
+ * returning a short list: a determinism check that repeats fewer documents than it declared has
+ * demonstrated determinism over something nobody wrote down.
+ */
+export function determinismSubset(declaration) {
+  const ids = declaration.determinismSubset;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new CorpusError(
+      `the corpus declaration declares no determinismSubset, so there is no declared set of ` +
+        `documents to compare twice.`,
+    );
+  }
+  const wanted = new Set(ids);
+  const documents = includedDocuments(declaration).filter((d) => wanted.has(d.id));
+  if (documents.length !== wanted.size) {
+    throw new CorpusError(
+      `the declared determinismSubset names ${String(wanted.size)} document(s) but only ` +
+        `${String(documents.length)} of them are compared documents in this declaration.`,
+    );
+  }
+  return documents;
 }
 
 /** Read and validate the committed declaration (or another one, for tests). */
@@ -274,14 +332,22 @@ export function readDeclaredDocument(declaration, document, options = {}) {
  * Verify every declared document, then hand back the included ones in declaration order. An
  * excluded document is still verified: the declaration declares it, so its absence is still a
  * corpus that is not what it says it is.
+ *
+ * `options.only` narrows what is HANDED BACK, never what is VERIFIED. The determinism check compares
+ * a declared subset twice, and a subset run that stopped digest-checking the rest of the corpus
+ * would be a quieter version of the same corpus shrinking in silence this whole module exists to
+ * prevent.
  */
 export function resolveCorpus(declaration, options = {}) {
+  const only = options.only === undefined ? null : new Set(options.only);
+  const resolved = [];
   for (const document of declaredDocuments(declaration)) {
-    if (document.exclude !== undefined) readDeclaredDocument(declaration, document, options);
+    const entry = readDeclaredDocument(declaration, document, options);
+    if (document.exclude === undefined && (only === null || only.has(document.id))) {
+      resolved.push(entry);
+    }
   }
-  return includedDocuments(declaration).map((document) =>
-    readDeclaredDocument(declaration, document, options),
-  );
+  return resolved;
 }
 
 /** A one-line provenance record for a document: corpus, pinned version, licence. */

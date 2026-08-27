@@ -28,6 +28,7 @@ import {
   corpusOf,
   DECLARATION_PATH,
   declaredDocuments,
+  determinismSubset,
   documentLocation,
   exclusions,
   includedDocuments,
@@ -130,6 +131,101 @@ describe("the declared corpus clears the floor, and the floor is what the run ex
     for (const entry of exclusions(declaration)) {
       expect(entry.reason.length, `${entry.id} must record why`).toBeGreaterThan(40);
     }
+  });
+});
+
+describe("determinism was not bought by comparing less", () => {
+  /**
+   * The compared count as of the corpus this declaration was written against. It is a FLOOR on the
+   * declaration, not a target: it may rise, and it may not fall. Held here rather than in prose
+   * because a count in a docblock does not red anything when someone quietly excludes a document to
+   * make a gate green.
+   */
+  const COMPARED_AT_LEAST = 173;
+
+  it("declares at least as many documents for comparison as it did before", () => {
+    // "WHEN the corpus declaration is loaded after this change, THE SYSTEM SHALL declare at least
+    // 173 documents for comparison and SHALL still meet the declared compared floor, so that no
+    // document is excluded in order to obtain determinism."
+    expect(includedDocuments(declaration).length).toBeGreaterThanOrEqual(COMPARED_AT_LEAST);
+    expect(includedDocuments(declaration).length).toBeGreaterThanOrEqual(declaration.comparedFloor);
+    expect(declaration.comparedFloor).toBeGreaterThanOrEqual(100);
+  });
+
+  it("returned the exclusions whose measured reason was ONLY a terminology finding", () => {
+    // Those six were held out because the reference validator reported `code-invalid`, which it
+    // emits when it checks a code against terminology content this library declaredly does not
+    // vendor. That is now a recorded class rather than a snapshot of one date's answers, so the
+    // documents are compared.
+    const returned = [
+      "hl7-fhir-r4-examples/chargeitem-example.json",
+      "hl7-fhir-r4-examples/contract-example-ins-policy.json",
+      "hl7-fhir-r4-examples/contract-example.json",
+      "hl7-fhir-r4-examples/imagingstudy-example-xr.json",
+      "hl7-fhir-r4-examples/immunizationevaluation-example-notvalid.json",
+      "hl7-fhir-r4-examples/visionprescription-example-1.json",
+    ];
+    const included = new Set(includedDocuments(declaration).map((d) => d.id));
+    const excluded = new Set(exclusions(declaration).map((e) => e.id));
+    for (const id of returned) {
+      expect(included.has(id), `${id} must be compared`).toBe(true);
+      expect(excluded.has(id), `${id} must not be excluded`).toBe(false);
+      const document = declaredDocuments(declaration).find((d) => d.id === id);
+      // The declaration records WHY it came back, the same way an exclusion records why it left.
+      expect(String(document?.note)).toContain("returned to the compared set");
+    }
+  });
+
+  it("keeps every exclusion whose measured reason is NOT only a terminology finding", () => {
+    // An exclusion that names a non-terminology class stays an exclusion: this change replaces a
+    // snapshot with a rule for ONE class, and does not clear anything else.
+    for (const entry of exclusions(declaration)) {
+      const classes = new Set<string>();
+      for (const match of entry.reason.matchAll(/\dx ([a-z-]+) \(/g)) classes.add(match[1] ?? "");
+      const terminologyOnly = classes.size === 1 && classes.has("code-invalid");
+      expect(terminologyOnly, `${entry.id} is excluded for a terminology finding alone`).toBe(
+        false,
+      );
+    }
+  });
+
+  it("declares the subset the determinism check repeats, rather than sampling one per run", () => {
+    const subset = determinismSubset(declaration);
+    expect(subset.length).toBeGreaterThan(0);
+    // A subset spanning all three corpora, so it is not a repeat of our own fixtures alone.
+    expect(new Set(subset.map((d) => d.corpus)).size).toBe(declaration.corpora.length);
+    // Every repeated document is one the differential compares.
+    const included = new Set(includedDocuments(declaration).map((d) => d.id));
+    for (const document of subset) expect(included.has(document.id)).toBe(true);
+    // It fits inside the differential job's declared time bound: a small multiple of one batch.
+    expect(subset.length).toBeLessThanOrEqual(40);
+  });
+
+  it("refuses a determinism subset that names a document the differential does not compare", () => {
+    const base = JSON.parse(readFileSync(DECLARATION_PATH, "utf8")) as {
+      determinismSubset: string[];
+      documents: { id: string; exclude?: string }[];
+    };
+    const excludedId = base.documents.find((d) => d.exclude !== undefined)?.id;
+    expect(excludedId).toBeDefined();
+    expect(() =>
+      parseDeclaration(JSON.stringify({ ...base, determinismSubset: [String(excludedId)] })),
+    ).toThrow(/may only repeat documents the differential compares/);
+    expect(() =>
+      parseDeclaration(JSON.stringify({ ...base, determinismSubset: ["nothing/at-all.json"] })),
+    ).toThrow(CorpusError);
+    expect(() => parseDeclaration(JSON.stringify({ ...base, determinismSubset: [] }))).toThrow(
+      /non-empty array/,
+    );
+    const first = String(base.determinismSubset[0]);
+    expect(() =>
+      parseDeclaration(JSON.stringify({ ...base, determinismSubset: [first, first] })),
+    ).toThrow(/duplicate determinismSubset id/);
+  });
+
+  it("refuses to repeat anything when no subset is declared, rather than repeating everything", () => {
+    const { declaration: decl } = scratchDeclaration();
+    expect(() => determinismSubset(decl)).toThrow(/declares no determinismSubset/);
   });
 });
 
@@ -266,6 +362,61 @@ describe("a document that is missing, unreadable or the wrong bytes fails the ru
     });
     const { root } = scratchCorpus();
     expect(() => resolveCorpus(decl, { documentsRoot: root })).toThrow(CorpusError);
+  });
+
+  it("narrowing to a subset narrows what is HANDED BACK, never what is VERIFIED", () => {
+    // "IF a declared corpus document is missing, unreadable, or its bytes do not match the digest
+    // recorded for it, THEN THE SYSTEM SHALL refuse the run ... and this refusal SHALL remain
+    // exactly as strict as it is today." The determinism check compares a declared subset twice; a
+    // subset run that stopped digest-checking the rest would be the same corpus shrinking in
+    // silence, one indirection away.
+    const bodyOne = '{"resourceType":"Patient","id":"x"}';
+    const bodyTwo = '{"resourceType":"Patient","id":"y"}';
+    const decl = parseDeclaration(
+      JSON.stringify({
+        schemaVersion: 1,
+        comparedFloor: 1,
+        corpora: [
+          {
+            id: "scratch",
+            title: "scratch",
+            version: "0",
+            licence: "CC0-1.0",
+            origin: "https://example.org/",
+            authored: "third-party",
+            acquisition: { kind: "files", baseUrl: "https://example.org/" },
+            licenceText: "licences/x.txt",
+            notice: "licences/x-NOTICE.txt",
+          },
+        ],
+        documents: [
+          {
+            id: "scratch/one.json",
+            corpus: "scratch",
+            path: "one.json",
+            bytes: Buffer.byteLength(bodyOne),
+            sha256: sha256(Buffer.from(bodyOne)),
+          },
+          {
+            id: "scratch/two.json",
+            corpus: "scratch",
+            path: "two.json",
+            bytes: Buffer.byteLength(bodyTwo),
+            sha256: sha256(Buffer.from(bodyTwo)),
+          },
+        ],
+      }),
+    );
+    const { root, write } = scratchCorpus();
+    write("scratch/one.json", bodyOne);
+    // The document OUTSIDE the subset is the wrong bytes, and the subset run still refuses.
+    write("scratch/two.json", '{"resourceType":"Patient","id":"tampered"}');
+    expect(() => resolveCorpus(decl, { documentsRoot: root, only: ["scratch/one.json"] })).toThrow(
+      /scratch\/two\.json/,
+    );
+    write("scratch/two.json", bodyTwo);
+    const resolved = resolveCorpus(decl, { documentsRoot: root, only: ["scratch/one.json"] });
+    expect(resolved.map((r) => r.document.id)).toEqual(["scratch/one.json"]);
   });
 });
 

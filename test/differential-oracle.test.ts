@@ -14,7 +14,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { REPO_ROOT } from "../scripts/differential/corpus.mjs";
+import { STATUS } from "../scripts/differential/compare.mjs";
+import type { Record_ } from "../scripts/differential/compare.mjs";
+import { REPO_ROOT, sha256 } from "../scripts/differential/corpus.mjs";
 import {
   attributeOutcome,
   FHIR_VERSION,
@@ -28,6 +30,19 @@ import {
   runOracleBatch,
   US_CORE_IG,
 } from "../scripts/differential/oracle.mjs";
+import {
+  buildRunRecord,
+  determinismVerdict,
+  exitCodeForDeterminism,
+  formatDeterminismVerdict,
+  NOT_DEMONSTRATED,
+} from "../scripts/differential/record.mjs";
+import {
+  formatTerminologyInputs,
+  NO_TERMINOLOGY,
+  resolveTerminologyInputs,
+  TERMINOLOGY_INPUTS,
+} from "../scripts/differential/terminology.mjs";
 
 function scratch(): string {
   return mkdtempSync(join(tmpdir(), "fhir-oracle-test-"));
@@ -86,6 +101,73 @@ describe("the recorded identity is derived from the artifact actually used", () 
   });
 });
 
+describe("the terminology inputs are recorded beside the identity, and move when they move", () => {
+  const jar = jarWith("PK-not-really-a-jar");
+
+  it("prints which terminology answers the run was capable of, beside the oracle identity", () => {
+    // "WHEN a differential run reports its result, THE SYSTEM SHALL record the terminology inputs in
+    // effect for that run alongside the oracle identity it already prints, such that changing those
+    // inputs changes the recorded line and a reader of the log can tell which terminology answers
+    // the run was capable of."
+    const identityLine = formatOracleIdentity(oracleIdentity(jar));
+    const terminologyLine = formatTerminologyInputs(resolveTerminologyInputs(TERMINOLOGY_INPUTS));
+    expect(identityLine).toContain(ORACLE_RELEASE);
+    expect(terminologyLine).toContain("terminology:");
+    expect(terminologyLine).toContain("source none");
+    expect(terminologyLine).toContain(`-tx ${NO_TERMINOLOGY}`);
+    expect(terminologyLine).toContain(`-txCache ${NO_TERMINOLOGY}`);
+    // The capability, in words, so the line is readable without knowing what `n/a` means to a CLI.
+    expect(terminologyLine).toContain("no code system, value set or display is resolved");
+    expect(terminologyLine).toContain("no terminology service is reached");
+    expect(terminologyLine).toMatch(/digest sha256 [0-9a-f]{64}/);
+  });
+
+  it("is derived from what the run will USE, not from a configured string", () => {
+    // Same declaration, resolved twice: the same line. A different declaration: a different line.
+    const same = formatTerminologyInputs(resolveTerminologyInputs(TERMINOLOGY_INPUTS));
+    expect(formatTerminologyInputs(resolveTerminologyInputs(TERMINOLOGY_INPUTS))).toBe(same);
+    const dir = scratch();
+    const body = '{"resourceType":"CodeSystem"}';
+    writeFileSync(join(dir, "codes.json"), body);
+    const pinned = formatTerminologyInputs(
+      resolveTerminologyInputs(
+        {
+          source: "pinned",
+          server: NO_TERMINOLOGY,
+          cache: "tx-cache",
+          pinned: [
+            {
+              path: "codes.json",
+              bytes: Buffer.byteLength(body),
+              sha256: sha256(Buffer.from(body)),
+            },
+          ],
+        },
+        { repoRoot: dir },
+      ),
+    );
+    expect(pinned).not.toBe(same);
+    expect(pinned).toContain("source pinned");
+    expect(pinned).toContain("1 pinned input(s)");
+    expect(pinned).toContain("every terminology answer comes from");
+  });
+
+  it("puts the terminology inputs into the run record beside the artifact's own digest", () => {
+    const record = buildRunRecord({
+      oracle: oracleIdentity(jar),
+      terminology: resolveTerminologyInputs(TERMINOLOGY_INPUTS),
+      corpus: { declared: 1, excluded: 0, floor: 1, scope: "full", documents: [], corpora: [] },
+      records: [],
+      summary: {},
+    });
+    expect(record.oracle.release).toBe(ORACLE_RELEASE);
+    expect(record.oracle.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(record.terminology.source).toBe("none");
+    expect(record.terminology.server).toBe(NO_TERMINOLOGY);
+    expect(record.terminology.digest).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
 describe("an oracle whose identity cannot be established is refused, never guessed at", () => {
   it("refuses an empty path", () => {
     // "IF the identity of the oracle artifact about to be used cannot be established THEN THE
@@ -136,14 +218,32 @@ describe("CI obtains the oracle at a fixed release identifier, and the two canno
     expect(workflow).toMatch(/timeout-minutes:\s*\d+/);
   });
 
-  it("keeps the oracle's configuration in one place: FHIR version and the US Core IG", () => {
+  it("keeps the oracle's configuration in one place: FHIR version, US Core IG, terminology", () => {
     const args = oracleArgs("/j.jar", ["/a.json", "/b.json"], "/out.json");
     expect(args.slice(0, 2)).toEqual(["-jar", "/j.jar"]);
     expect(args).toContain("/a.json");
     expect(args).toContain("/b.json");
     expect(args).toContain(FHIR_VERSION);
     expect(args).toContain(US_CORE_IG);
+    // The terminology options are part of THIS argv and have no omitted default: leaving `-tx` out
+    // is the release's public terminology server, not "no terminology".
+    expect(args).toContain("-tx");
+    expect(args).toContain("-txCache");
     expect(args.slice(-2)).toEqual(["-output", "/out.json"]);
+  });
+
+  it("carries the terminology options through to the process it actually spawns", () => {
+    let seen: readonly string[] = [];
+    runOracleBatch("/j.jar", ["/s/one.json"], "/o.json", {
+      exec: (_file, args) => {
+        seen = args;
+        return undefined;
+      },
+      read: () => JSON.stringify(outcome([])),
+    });
+    expect(seen[seen.indexOf("-tx") + 1]).toBe(NO_TERMINOLOGY);
+    expect(seen[seen.indexOf("-txCache") + 1]).toBe(NO_TERMINOLOGY);
+    expect(seen.join(" ")).not.toContain("tx.fhir.org");
   });
 });
 
@@ -349,5 +449,101 @@ describe("a run that produced nothing readable yields no outcome, and never 'cle
       read: () => JSON.stringify(outcome([])),
     });
     expect(seen).toBe(1234);
+  });
+});
+
+describe("a document without a readable outcome is not agreement between two runs", () => {
+  const record = (over: Partial<Record_> = {}): Record_ => ({
+    id: "corpus/a.json",
+    status: STATUS.AGREE,
+    compared: true,
+    clean: true,
+    violation: false,
+    detail: "",
+    ...over,
+  });
+
+  const runRecord = (records: readonly Record_[]) =>
+    buildRunRecord({
+      oracle: oracleIdentity(jarWith("PK-not-really-a-jar")),
+      terminology: resolveTerminologyInputs(TERMINOLOGY_INPUTS),
+      corpus: {
+        declared: records.length,
+        excluded: 0,
+        floor: 1,
+        scope: "subset",
+        documents: [],
+        corpora: [],
+      },
+      records,
+      summary: { compared: records.length, clean: 0, violations: [], unusable: [], exclusions: [] },
+    });
+
+  it("counts such a document as neither compared nor clean, whatever went wrong", () => {
+    // "IF the oracle yields no readable outcome for a document, because it crashed, exceeded its
+    // time bound, wrote nothing readable, or produced an outcome attributable to no single
+    // document, THEN THE SYSTEM SHALL count that document as neither compared nor clean"
+    for (const reason of [
+      "the oracle exceeded its 600000ms time bound",
+      "no `java` on PATH, so the oracle could not be run",
+      "the oracle wrote no readable output: ENOENT",
+      "the oracle's output is not parseable JSON",
+      "the oracle returned no outcome that could be attributed to this document",
+      "the oracle returned one outcome for several documents",
+    ]) {
+      const result = runOracleBatch("/j.jar", ["/s/one.json"], "/o.json", {
+        exec: () => undefined,
+        read: () => "not json at all",
+      });
+      expect(result.ok, reason).toBe(false);
+    }
+  });
+
+  it("reads two comparisons that both LOST the same document as determinism NOT demonstrated", () => {
+    // "and the determinism check SHALL treat a comparison containing such a document as determinism
+    // not demonstrated rather than as agreement between two runs". Two runs that both failed to
+    // obtain an answer produce identical records; reading that as agreement would let a
+    // permanently broken oracle certify its own determinism.
+    const lost = [
+      record({ id: "corpus/a.json" }),
+      record({
+        id: "corpus/b.json",
+        status: STATUS.NO_ORACLE_OUTCOME,
+        compared: false,
+        clean: false,
+        detail: "the oracle exceeded its time bound",
+      }),
+    ];
+    const first = runRecord(lost);
+    const second = runRecord(lost);
+    // The two records ARE identical, which is exactly the trap.
+    expect(JSON.stringify(first)).toBe(JSON.stringify(second));
+    const verdict = determinismVerdict(first, second);
+    expect(verdict.demonstrated).toBe(false);
+    expect(exitCodeForDeterminism(verdict)).toBe(1);
+    expect(verdict.reason).toContain(NOT_DEMONSTRATED);
+    expect(verdict.reason).toContain("no readable outcome");
+    const printed = formatDeterminismVerdict(verdict).join("\n");
+    expect(printed).toContain("corpus/b.json");
+    expect(printed).toContain("neither compared nor clean");
+  });
+
+  it("does the same when only ONE of the two comparisons lost a document", () => {
+    const first = runRecord([record({ id: "corpus/a.json" })]);
+    const second = runRecord([
+      record({
+        id: "corpus/a.json",
+        status: STATUS.NO_OWN_FINDINGS,
+        compared: false,
+        clean: false,
+      }),
+    ]);
+    expect(determinismVerdict(first, second).demonstrated).toBe(false);
+    expect(determinismVerdict(second, first).demonstrated).toBe(false);
+  });
+
+  it("demonstrates determinism only when every repeated document was actually compared", () => {
+    const both = [record({ id: "corpus/a.json" }), record({ id: "corpus/b.json" })];
+    expect(determinismVerdict(runRecord(both), runRecord(both)).demonstrated).toBe(true);
   });
 });
