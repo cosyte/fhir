@@ -25,6 +25,14 @@
  * `information` at most and a wrong system draws nothing, rebinding an example code can never fail
  * validation.
  *
+ * **The membership finding records which code-system release the answer was made against.** A
+ * service may declare one per answer ({@link ../terminology/service.js}
+ * `CodeValidationResult.systemVersion`); it is carried verbatim onto the finding, and an answer that
+ * declares none is marked **undeclared** rather than left silent, so a `not-in` never reads as a
+ * timeless fact when it is really an answer against one release. The record is the caller's
+ * assertion and nothing else: **the resource's own `Coding.version` is never read**, by this layer
+ * or any other, because it is document content and a finding is not a place to put document content.
+ *
  * Every finding is **value-free**: a code / severity / FHIRPath location, never a code value or a
  * resource value. The value-set identity is used only to call the service, never emitted.
  *
@@ -46,11 +54,12 @@ import {
   type BindingStrength,
   type TerminologyBinding,
 } from "../terminology/bindings.js";
-import type { TerminologyService } from "../terminology/service.js";
+import type { CodeValidationResult, TerminologyService } from "../terminology/service.js";
 import { isKnownSystem } from "../terminology/systems.js";
 import {
   ISSUE_SEVERITIES,
   validationIssue,
+  type CodeSystemVersionRecord,
   type ValidationIssue,
   type ValidationSeverity,
 } from "./issues.js";
@@ -131,6 +140,11 @@ function locatedCodings(node: FhirNode, basePath: string): LocatedCoding[] {
   const out: LocatedCoding[] = [];
   items.forEach((item, i) => {
     if (!isComplex(item)) return;
+    // `system` and `code` are the whole read, and that is deliberate. A `Coding.version` element
+    // beside them is the sender's claim about the release THEIR code was drawn from, i.e. document
+    // content, and the only release a finding may record is the one the caller's own service
+    // declared. Reading it here would put an instance value onto a finding, which is the one thing
+    // the value-free contract forbids. Do not add it, and do not pass it to the service either.
     out.push({
       system: primitiveString(getProperty(item, "system")),
       code: primitiveString(getProperty(item, "code")),
@@ -179,12 +193,36 @@ function checkCoding(
 
   // System is expected (or a known system under a system-less binding): ask the service, if any.
   if (service === undefined || code === undefined) return;
-  const { membership } = service.validateCode({ valueSet: binding.valueSet, system, code });
-  if (membership !== "not-in") return; // "in" or "unknown" → nothing (fail-safe: never guess).
+  const answer = service.validateCode({ valueSet: binding.valueSet, system, code });
+  // "in" or "unknown" → nothing, and no release record either (fail-safe: never guess). A declared
+  // release on such an answer is discarded with the answer; there is no finding to hang it on.
+  if (answer.membership !== "not-in") return;
   const severity = notInSeverity(binding.strength);
   if (severity !== undefined) {
-    issues.push(validationIssue("CODE_NOT_IN_VALUESET", severity, path));
+    issues.push(
+      validationIssue("CODE_NOT_IN_VALUESET", severity, path, undefined, declaredRelease(answer)),
+    );
   }
+}
+
+/**
+ * Read the code-system release a service declared its answer was made against.
+ *
+ * The declaration is the service's own assertion and is preserved **exactly**: the string is not
+ * trimmed, case-folded, parsed or truncated, so `"  2026-08-04  "` is recorded with its spaces
+ * intact. Trimming happens only to decide whether anything was declared **at all**.
+ *
+ * Everything that is not a non-blank string is the **undeclared** case, and it is marked rather than
+ * omitted: absent, a blank or whitespace-only string, and (reachable only from untyped JavaScript,
+ * which the interface's types cannot bind) a value of some other type entirely. It never throws, it
+ * never records an empty release, and it never substitutes a default, latest or "current" release,
+ * because the library holds no code-system content from which any of those could be derived and
+ * would be inventing currency the service never claimed.
+ */
+function declaredRelease(answer: CodeValidationResult): CodeSystemVersionRecord {
+  const declared: unknown = answer.systemVersion;
+  if (typeof declared !== "string" || declared.trim() === "") return { declared: false };
+  return { declared: true, version: declared };
 }
 
 /**

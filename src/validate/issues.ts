@@ -18,6 +18,14 @@
  * {@link diagnosticFor} table, there is no code path that interpolates an instance value into a
  * message. This is the redaction chokepoint.
  *
+ * Two identities ride **beside** that text rather than through it, and neither is instance data: the
+ * invariant {@link ValidationIssue.constraint} key (a published FHIR identifier such as `"ait-1"`)
+ * and the {@link ValidationIssue.codeSystemVersion} record (the code-system release a
+ * caller-supplied terminology service declared its answer was made against, plus the explicit
+ * marker for an answer that declared none). Both are assertions made outside the document: adding
+ * one to `DIAGNOSTIC_OF`, or interpolating either into a diagnostic string, would breach the
+ * chokepoint, so neither ever does.
+ *
  * @packageDocumentation
  */
 
@@ -237,6 +245,11 @@ export const VALIDATION_CODES = {
    * never an error). Emitted **only** when a service definitively answers `not-in`; with no service,
    * or an `unknown` answer, the library degrades to the content-free system checks and never
    * false-errors (fail-safe). Value-free, the coding location, never the code itself.
+   *
+   * The **only** finding that carries a {@link ValidationIssue.codeSystemVersion} record, because it
+   * is the only one a terminology service produces: the release the service declared its answer was
+   * made against, or the explicit mark that it declared none. Severity, emission and the fail-safe
+   * degrade are all independent of it.
    */
   CODE_NOT_IN_VALUESET: "CODE_NOT_IN_VALUESET",
   /**
@@ -316,6 +329,63 @@ export const VALIDATION_CODES = {
 export type ValidationCode = (typeof VALIDATION_CODES)[keyof typeof VALIDATION_CODES];
 
 /**
+ * The canonical identity of the library's own code system for the **code-system release record**
+ * carried by a membership finding. It names the two-concept vocabulary in
+ * {@link CODE_SYSTEM_VERSION_RECORD_CODES} and nothing else, and it reaches an `OperationOutcome` as
+ * `issue.details.coding[0].system`.
+ *
+ * It is **this library's** canonical, not a third-party terminology identity: the known-systems
+ * registry ({@link ../terminology/systems.js}) stays a frozen set of verified external URIs and
+ * gains nothing here. Renaming this is a breaking change.
+ */
+export const CODE_SYSTEM_VERSION_RECORD_SYSTEM =
+  "https://cosyte.com/fhir/CodeSystem/code-system-version-record";
+
+/**
+ * The two-concept vocabulary that says **whether** a membership answer declared the code-system
+ * release it was made against. Frozen via `as const`; the set is snapshotted (see
+ * `test/validation-codes.test.ts`) because it is a public wire identity.
+ *
+ * The concept is deliberately separate from the release string itself: the marker rides on
+ * `issue.details.coding[0].code` and the declared release rides on `issue.details.text`, so no
+ * release a service could declare (`"undeclared"` included) can ever be mistaken for the marker.
+ */
+export const CODE_SYSTEM_VERSION_RECORD_CODES = {
+  /** The service declared a release; the string it declared travels beside this marker. */
+  DECLARED: "declared",
+  /**
+   * The service was consulted, answered definitively, and declared **no** release. It is an
+   * applicable, unanswered question, **not** "current" and not "not applicable": the marker is
+   * emitted precisely so the silence cannot be read as currency.
+   */
+  UNDECLARED: "undeclared",
+} as const;
+
+/** One of the {@link CODE_SYSTEM_VERSION_RECORD_CODES}. */
+export type CodeSystemVersionRecordCode =
+  (typeof CODE_SYSTEM_VERSION_RECORD_CODES)[keyof typeof CODE_SYSTEM_VERSION_RECORD_CODES];
+
+/**
+ * Which code-system release a membership answer was made against, as recorded on the finding.
+ *
+ * Three states, all distinguishable, which is the whole point of the type:
+ *
+ * - the field is **absent** from a {@link ValidationIssue}: no terminology service was consulted to
+ *   produce that finding, so there is no release to record (every content-free system check, every
+ *   non-terminology finding);
+ * - `{ declared: true, version }`: the service named the release, and `version` is its string
+ *   **exactly** as declared, never normalised, trimmed, truncated or substituted;
+ * - `{ declared: false }`: the service answered but named no release. The answer stands; its
+ *   currency is **unknown and said so**, rather than left to a reader to fill in with "current".
+ *
+ * The release is always the caller's own assertion. It is never read from the instance: a resource's
+ * own `Coding.version` is document content and never reaches a finding.
+ */
+export type CodeSystemVersionRecord =
+  | { readonly declared: true; readonly version: string }
+  | { readonly declared: false };
+
+/**
  * A single value-free validation finding.
  *
  * `expression` is a FHIRPath location into the document (e.g. `Patient.gender`,
@@ -344,6 +414,19 @@ export interface ValidationIssue {
    * every non-invariant finding. It reaches the `OperationOutcome` as `issue.details.text`.
    */
   readonly constraint?: string;
+  /**
+   * Which code-system release the terminology service's answer was made against, when a service was
+   * consulted to produce this finding (today, `CODE_NOT_IN_VALUESET` and only it). `undefined` for
+   * every finding no service produced, including the content-free `CODE_SYSTEM_UNKNOWN` /
+   * `CODE_SYSTEM_UNEXPECTED` checks, which consult nothing.
+   *
+   * A declared release is the **caller's own assertion**, a public code-system release identifier on
+   * the same footing as the constraint key an invariant finding surfaces, never an instance value,
+   * so it is safe to surface. It reaches the `OperationOutcome` as `issue.details`
+   * ({@link ./operation-outcome.js}), and the `diagnostics` string stays derived from the finding
+   * code alone.
+   */
+  readonly codeSystemVersion?: CodeSystemVersionRecord;
 }
 
 /** The fixed R4 `IssueType` each validation code maps to. */
@@ -490,6 +573,9 @@ export function diagnosticFor(code: ValidationCode): string {
  * @param severity - The R4 severity to record (mode-dependent for some codes).
  * @param expression - The FHIRPath location of the finding, never a value.
  * @param constraint - The spec constraint key, for an invariant finding only (e.g. `"ait-1"`).
+ * @param codeSystemVersion - The code-system release record, for a finding a terminology service
+ *   produced only. Omit it for every finding no service was consulted for; passing
+ *   `{ declared: false }` is the distinct claim that a service answered and named no release.
  * @example
  * ```ts
  * import { validationIssue } from "@cosyte/fhir";
@@ -501,7 +587,11 @@ export function validationIssue(
   severity: ValidationSeverity,
   expression: string,
   constraint?: string,
+  codeSystemVersion?: CodeSystemVersionRecord,
 ): ValidationIssue {
   const issue: ValidationIssue = { code, severity, type: ISSUE_TYPE_OF[code], expression };
-  return constraint === undefined ? issue : { ...issue, constraint };
+  const withConstraint = constraint === undefined ? issue : { ...issue, constraint };
+  return codeSystemVersion === undefined
+    ? withConstraint
+    : { ...withConstraint, codeSystemVersion };
 }

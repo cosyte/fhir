@@ -90,11 +90,15 @@ export { toOperationOutcome } from "./validate/operation-outcome.js";
 export {
   diagnosticFor,
   validationIssue,
+  CODE_SYSTEM_VERSION_RECORD_CODES,
+  CODE_SYSTEM_VERSION_RECORD_SYSTEM,
   ISSUE_SEVERITIES,
   ISSUE_TYPES,
   VALIDATION_CODES,
 } from "./validate/issues.js";
 export type {
+  CodeSystemVersionRecord,
+  CodeSystemVersionRecordCode,
   IssueType,
   ValidationCode,
   ValidationIssue,
