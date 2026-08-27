@@ -10,6 +10,7 @@ import {
   getProperty,
   ISSUE_CODES,
   isComplex,
+  isForeignRoot,
   isList,
   isPrimitive,
   isRetracted,
@@ -22,6 +23,7 @@ import {
   readRawXml,
   readSafety,
   resourceType,
+  SERIALIZE_ERROR_CODES,
   serializeResource,
   serializeResourceXml,
   XML_FATAL_CODES,
@@ -1366,29 +1368,36 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
     });
 
     /**
-     * (2) A foreign ROOT **whose prefix is BOUND** is read as the FHIR resource its local name
-     * spells, flagged once at the root, and then re-emitted by the conservative writer under the
-     * FHIR namespace. The flag is the only thing in the whole reading that says the document was not
-     * FHIR, and it lives in the issue list rather than in the model, so **one write and one re-read
-     * leaves a document that reads as authoritative FHIR with nothing to say it was ever anything
-     * else.**
+     * (2) HAS SINCE BEEN CLOSED, AND THIS IS WHAT THAT LOOKS LIKE. What it used to pin, measured at
+     * `2ac2d72`: a foreign ROOT was read as the FHIR resource its local name spells, flagged once at
+     * the root, and then re-emitted by the conservative writer under the FHIR namespace with no
+     * trace of the vendor one. The flag was the only thing in the whole reading that said the
+     * document was not FHIR, and it lived in the issue list rather than in the model, so **one write
+     * and one re-read left a document that read as authoritative FHIR with nothing to say it was
+     * ever anything else** -- the re-read's issue list was `[]` and its re-emission was byte-identical
+     * to the same resource authored in FHIR from the start.
      *
-     * The bound-prefix scope is THIS TEST's, and it is narrower than the residual. `rootIsForeign`
-     * fires on any resolvable non-FHIR namespace, so a root reached by a default
-     * `xmlns="urn:vendor"` launders in exactly the same way and is NOT pinned here: that is the
-     * older, default-spelling half of the same residual, and the notes have always said so.
-     * `rootIsForeign` also covers an UNBOUND prefix, and that root reads differently in every
-     * respect: the tag is kept verbatim,
-     * so the resource is modeled as `v:Observation`, its children are foreign to it in turn and are
-     * flagged too, and the locations withhold the unresolvable name. That is the separate
-     * unbound-prefix residual, pinned above, and none of the sentences here reach it.
+     * The arm taken is the WRITE REFUSAL, in the shape of the dropped-text one: the reader marks the
+     * root it already flags, and `serializeResourceXml` declines rather than emitting a document that
+     * re-reads clean. That withdraws an XML round trip for this class, which is the cost four
+     * refusals beside it already pay; `serializeResource` is untouched, so that route stays open.
+     * Recovering the vocabulary instead -- carrying the root's namespace in the model and writing it
+     * back -- was the other arm and is NOT what shipped: see the notes.
      *
-     * The flag half is pinned above ("flags a prefix bound to a namespace that is not FHIR"). This
-     * is the half that was not: the round trip. Closing it means the model carrying the root's
-     * vocabulary, or a writer refusal in the shape of the dropped-text one; either way this test
-     * goes red first.
+     * **The class is the RESOLVABLE half of `rootIsForeign`, both spellings of it.** A bound prefix
+     * (`<v:Observation xmlns:v="urn:vendor">`) and a default declaration
+     * (`<Observation xmlns="urn:vendor">`) resolve the root to the same non-FHIR namespace and are
+     * refused on the same code; the second is the older, default-spelling half of the same residual
+     * and was not pinned here before.
+     *
+     * **`rootIsForeign` also covers an UNBOUND prefix, and that root is NOT in this class.** It reads
+     * differently in every respect: the tag is kept verbatim, so the resource is modeled as
+     * `v:Observation`, its children are foreign to it in turn and are flagged too, and the locations
+     * withhold the unresolvable name. That is the separate unbound-prefix residual, pinned above and
+     * in `xml-tag-name.test.ts`, and none of the sentences here reach it. A root declaring **no**
+     * namespace at all is not in the class either: it is read as FHIR, unflagged, on purpose.
      */
-    describe("a foreign root launders into conformant FHIR across one round trip", () => {
+    describe("a foreign root is refused by the XML writer rather than laundered", () => {
       // The document carries `code` as well as `status` so that it is conformant against the
       // built-in Observation element table: the flag under test is the ONLY thing separating this
       // document from FHIR, and a mandatory element it happened not to carry would muddy that.
@@ -1396,11 +1405,30 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         `<v:Observation xmlns:v="urn:vendor">` +
         `<v:id value="o1"/><v:status value="entered-in-error"/>` +
         `<v:code><v:text value="synthetic"/></v:code></v:Observation>`;
-      const EMITTED =
+      // The same root reached by a default declaration rather than a bound prefix: the older half of
+      // the same residual, which laundered identically at base.
+      const VENDOR_DEFAULT_NS =
+        `<Observation xmlns="urn:vendor">` +
+        `<id value="o1"/><status value="entered-in-error"/>` +
+        `<code><text value="synthetic"/></code></Observation>`;
+      // What base emitted for either of them, and what nothing emits now.
+      const LAUNDERED =
         `<Observation ${FHIR_NS}><id value="o1"/><status value="entered-in-error"/>` +
         `<code><text value="synthetic"/></code></Observation>`;
 
+      /** The refusal a call to `serializeResourceXml` raised, or `undefined` if it returned. */
+      function refusalOf(resource: FhirComplex): FhirSerializeError | undefined {
+        try {
+          serializeResourceXml(resource);
+          return undefined;
+        } catch (err) {
+          return err instanceof FhirSerializeError ? err : undefined;
+        }
+      }
+
       it("flags the root, once, and reports nothing else about the vocabulary", () => {
+        // The READ is unchanged by the closure: the same one warning, at the same location, and the
+        // document is still `valid` on the way in. Nothing was tightened into a read-side refusal.
         const { issues } = parseResourceXml(VENDOR_ROOT);
         expect(issues).toEqual([
           {
@@ -1409,28 +1437,146 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
             expression: "Observation",
           },
         ]);
-        // The flag is a warning, so the document is `valid` on the way in too: the flag is the only
-        // signal there is, which is why losing it loses everything.
         expect(validateResource(parseResourceXml(VENDOR_ROOT).resource).valid).toBe(true);
       });
 
-      it("re-emits it as a FHIR Observation with no trace of the vendor namespace", () => {
+      it("marks the root in the model, so the writer can see what the issue list said", () => {
+        // The flag alone could not reach the writer: it lives in the issue list, which the model
+        // does not carry. This is the marker that closes that gap, and it is a marker and not the
+        // vocabulary: a literal `true`, carrying no namespace, no tag and no value.
         const { resource } = parseResourceXml(VENDOR_ROOT);
-        const emitted = serializeResourceXml(resource);
-        expect(emitted).toBe(EMITTED);
-        expect(emitted).not.toContain("urn:vendor");
+        expect(isForeignRoot(resource)).toBe(true);
+        expect(resource.foreignRoot).toBe(true);
+        expect(isForeignRoot(parseResourceXml(VENDOR_DEFAULT_NS).resource)).toBe(true);
+        // Not set anywhere else: a FHIR root, and every element below any root, is unmarked.
+        const fhirRooted = parseResourceXml(LAUNDERED).resource;
+        expect(isForeignRoot(fhirRooted)).toBe(false);
+        expect(
+          isForeignRoot(req(getProperty(parseResourceXml(VENDOR_ROOT).resource, "code"))),
+        ).toBe(false);
       });
 
-      it("LOSES THE FLAG ON THE RE-READ: the vendor document is now indistinguishable from FHIR", () => {
+      it("REFUSES to write it to XML, so there is no laundered document to re-read", () => {
         const { resource } = parseResourceXml(VENDOR_ROOT);
-        const reread = parseResourceXml(serializeResourceXml(resource));
-        expect(reread.issues).toEqual([]);
-        expect(validateResource(reread.resource).valid).toBe(true);
-        // Byte-identical to the same resource authored in FHIR from the start: after one round trip
-        // there is nothing left to distinguish them. Compared against the literal, not against
-        // another serialization of the same model, which would be the same expression on both sides
-        // and could not fail on its own.
-        expect(serializeResourceXml(reread.resource)).toBe(EMITTED);
+        const refusal = refusalOf(resource);
+        expect(refusal).toBeInstanceOf(FhirSerializeError);
+        expect(refusal?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_ROOT);
+        expect(refusal?.locations).toEqual(["Observation"]);
+        // The thing base emitted here is what the refusal exists to stop, so it is named rather than
+        // implied: nothing produces it now.
+        expect(() => serializeResourceXml(resource)).toThrow(FhirSerializeError);
+        expect(parseResourceXml(LAUNDERED).issues).toEqual([]);
+      });
+
+      it("refuses the default-declaration spelling of the same root, on the same code", () => {
+        const { resource } = parseResourceXml(VENDOR_DEFAULT_NS);
+        const refusal = refusalOf(resource);
+        // Asserted present before its code is read, so this cannot pass by comparing one `undefined`
+        // to another on a tree where neither the refusal nor the code exists.
+        expect(refusal).toBeInstanceOf(FhirSerializeError);
+        expect(refusal?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_ROOT);
+        expect(refusal?.locations).toEqual(["Observation"]);
+      });
+
+      it("carries no document content in the refusal: no namespace, no tag, no value", () => {
+        const refusal = refusalOf(parseResourceXml(VENDOR_ROOT).resource);
+        expect(refusal).toBeInstanceOf(FhirSerializeError);
+        const surface = `${String(refusal?.message)} ${(refusal?.locations ?? []).join(" ")}`;
+        // The namespace URI is document content and is the one thing this residual is about; the
+        // prefixed tag is the document's own spelling; the rest are values the document wrote.
+        for (const content of [
+          "urn:vendor",
+          "v:Observation",
+          "v:",
+          "entered-in-error",
+          "o1",
+          "synthetic",
+        ]) {
+          expect(surface).not.toContain(content);
+        }
+      });
+
+      it("withholds a root name that is not shaped like a published resource type", () => {
+        // The location is the bounded root path every write-path refusal here uses, so a root whose
+        // local name does not match the published shape of a resource type is not echoed at all.
+        const { resource } = parseResourceXml(`<v:not_a_type xmlns:v="urn:vendor"/>`);
+        expect(refusalOf(resource)?.locations).toEqual(["<withheld>"]);
+      });
+
+      it("refuses it wherever it is composed into a document, not only at a root", () => {
+        // Parse-then-compose is ordinary use of the public API, and a vendor-rooted resource dropped
+        // into a Bundle launders exactly as it did at a root. The walk is the same deep one the
+        // refusals beside this use.
+        const { resource } = parseResourceXml(VENDOR_ROOT);
+        const bundle = complex([
+          { name: "resourceType", value: primitive("Bundle") },
+          { name: "type", value: primitive("collection") },
+          {
+            name: "entry",
+            value: list([complex([{ name: "resource", value: resource }])]),
+          },
+        ]);
+        const refusal = refusalOf(bundle);
+        expect(refusal).toBeInstanceOf(FhirSerializeError);
+        expect(refusal?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_ROOT);
+        expect(refusal?.locations).toEqual(["Bundle.entry[0].resource"]);
+      });
+
+      it("keeps the code a refusal raised before it, so no existing case moves onto this one", () => {
+        // This refusal is raised last of all. A vendor root that ALSO carries dropped character data
+        // reports the dropped-text code, exactly as it did at base.
+        const { resource } = parseResourceXml(
+          `<v:Observation xmlns:v="urn:vendor"><v:status>entered-in-error</v:status></v:Observation>`,
+        );
+        expect(refusalOf(resource)?.code).toBe(SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT);
+      });
+
+      it("still emits it through the JSON writer, exactly as at the base pin", () => {
+        // The refusal is XML-only. `serializeResource` is byte-for-byte what it was at `2ac2d72`,
+        // measured there and pinned here.
+        const { resource } = parseResourceXml(VENDOR_ROOT);
+        expect(serializeResource(resource)).toBe(
+          '{"resourceType":"Observation","id":"o1","status":"entered-in-error","code":{"text":"synthetic"}}',
+        );
+        // Which is a statement about this writer and NOT a claim that the JSON channel keeps the
+        // flag: it does not, and that half is declared open rather than closed here.
+        expect(parseResource(serializeResource(resource)).issues).toEqual([]);
+      });
+
+      it("still round-trips a document that is not of the refused class", () => {
+        // The cost is bounded to the declared class. The same resource authored in FHIR round-trips
+        // byte-identically, as it always did.
+        const { resource } = parseResourceXml(LAUNDERED);
+        expect(serializeResourceXml(resource)).toBe(LAUNDERED);
+        expect(parseResourceXml(serializeResourceXml(resource)).issues).toEqual([]);
+      });
+
+      it("leaves a root that declares no namespace exactly as it is", () => {
+        // The root is the one element with its own rule: a document declaring no namespace is still
+        // read as FHIR, still unflagged, still written. That is not tightened into a refusal here.
+        const NO_NS = `<Observation><id value="o1"/><status value="final"/></Observation>`;
+        const { resource, issues } = parseResourceXml(NO_NS);
+        expect(issues).toEqual([]);
+        expect(isForeignRoot(resource)).toBe(false);
+        expect(serializeResourceXml(resource)).toBe(
+          `<Observation ${FHIR_NS}><id value="o1"/><status value="final"/></Observation>`,
+        );
+      });
+
+      it("leaves an unbound-prefix root exactly as it is, deferral and all", () => {
+        // The other half of `rootIsForeign`, unmoved: modeled under the verbatim tag, flagged at
+        // three withheld locations, and still written. Closing it is the separate deferred residual.
+        const UNBOUND = `<v:Observation><v:id value="o1"/><v:status value="final"/></v:Observation>`;
+        const { resource, issues } = parseResourceXml(UNBOUND);
+        expect(issues.map((i) => i.expression)).toEqual([
+          "<withheld>",
+          "<withheld>.<withheld>",
+          "<withheld>.<withheld>",
+        ]);
+        expect(isForeignRoot(resource)).toBe(false);
+        expect(serializeResourceXml(resource)).toBe(
+          `<v:Observation ${FHIR_NS}><v:id value="o1"/><v:status value="final"/></v:Observation>`,
+        );
       });
     });
   });

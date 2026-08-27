@@ -9,6 +9,105 @@ used to sit in `CLAUDE.md`, in its original order, with headings added so it can
 section here that carries the incident it came from. These are clinical-safety lessons that each
 cost a defect or a refuted gate pass to learn: **relocate them, never delete them.**
 
+## The foreign root laundering, closed (2026-08-27)
+
+The third of the three residuals `test/xml.test.ts` pins under "declared residuals, pinned so they
+cannot move in silence", and the last one in that block whose closure was not parked behind a
+decision this repo had already recorded. Closed by a **write refusal**,
+`UNSERIALIZABLE_FOREIGN_ROOT`, in the shape of the dropped-text one.
+
+### The defect, measured at `2ac2d72` before anything was changed
+
+    <v:Observation xmlns:v="urn:vendor"><v:id value="o1"/>
+    <v:status value="entered-in-error"/><v:code><v:text value="synthetic"/></v:code></v:Observation>
+
+Four observations, taken in that order from that document:
+
+1. the first read reports **exactly one** issue, `UNEXPECTED_XML_CONTENT`, severity `warning`, at
+   `Observation`;
+2. `validateResource(...).valid` is `true`, because the flag is a warning: the flag is the whole of
+   what the reading says about the vocabulary;
+3. `serializeResourceXml` emitted
+   `<Observation xmlns="http://hl7.org/fhir"><id value="o1"/><status value="entered-in-error"/><code><text value="synthetic"/></code></Observation>`,
+   containing no trace of `urn:vendor`;
+4. the re-read of that output carried an issue list of `[]`, `valid: true`, and re-emitted
+   **byte-identically**. One write and one re-read, and the vendor document was indistinguishable
+   from FHIR authored as FHIR.
+
+The **default-declaration** spelling (`<Observation xmlns="urn:vendor">`) laundered identically and
+had never been pinned; the bound-prefix spelling was the one the test named.
+
+### Why the model carries a MARKER and not the vocabulary
+
+Two routes were open and the repo's own notes named both without disqualifying either: carry the
+root's namespace in the model and write it back, or refuse the write. **The refusal shipped.**
+Carrying the namespace is a model change that preserves document content on the node, so a vendor
+URI would then sit within reach of every walker and every diagnostic, on a model whose edge set is
+policed deliberately (`test/model-edges.test.ts`); the URI is exactly the content this residual is
+about, and a marker cannot leak content. `FhirComplex.foreignRoot` is therefore a literal `true`,
+set by `markForeignRoot` from `parseResourceXml` and nowhere else, read by the public
+`isForeignRoot`, and the two-file closure is asserted in `test/model-edges.test.ts` like the three
+markers beside it. The recovery route is not refuted, only not taken; it stays available and it
+would restore the round trip this withdraws.
+
+### It withdraws a round trip from a document that reads `valid: true`, and that is the cost
+
+Most of the refusals beside it cost the round trip only for models already reported `valid: false`
+with `safeToSummarize: false`. **This one does not, because the root flag is a warning**, and the
+module docblock's own sentence already covers the case: `breaksTag` and `assertXmlResourceType` each
+name a document of their own that reads with zero issues and is refused anyway. This is the third.
+The cost is bounded to the class and the bound is pinned: a FHIR-rooted document still round-trips
+byte-identically, a root declaring **no** namespace is still read as FHIR and still written, an
+**unbound**-prefix root is still modeled under its verbatim tag and still written, and
+`serializeResource` emits every one of them, this class included.
+
+### The class, which is one of the two arms of the root's own flag
+
+`rootVocabularyIsForeign` fires when the root RESOLVED to a namespace that is neither FHIR's nor
+none at all, by a default declaration or a bound prefix. It deliberately does not cover the other
+arm of `rootIsForeign`, the unbound prefix: that root reads differently in every respect and closing
+its round trip is `FHIR-UNBOUND-PREFIX-ROUNDTRIP`, whose deferral holds and whose own pins must red
+before it moves. **The read is untouched.** Nothing was widened: the marker records, on the model, a
+position the reader was already reporting, so the read window and the report window are still the
+same window.
+
+The refusal is raised **last** in `serializeResourceXml`, after every refusal above it, so a vendor
+root that also carries dropped character data still reports `DROPPED_ELEMENT_TEXT` and no existing
+case moves onto the new code. Its walk is `collectMarked`'s, so a vendor-rooted resource composed
+into a `Bundle.entry` or a `contained` is refused at its own bounded location rather than only at a
+document root: parse-then-compose is ordinary use of the public API and it launders the same way.
+
+### `serializeResource` is untouched, and that is NOT a claim the JSON channel keeps the flag
+
+It does not. `{"resourceType":"Observation","id":"o1","status":"entered-in-error",...}` is what that
+writer emitted at base and what it emits now, and re-reading it gives an empty issue list, so the
+JSON leg of the same trip still launders. That half is **declared open**, not closed here, and the
+refusal's message says only what it does not reach rather than promising a route that keeps the
+flag. The XML leg is what the pinned characterization test was about and what this closes.
+
+### What could not grade this
+
+`pnpm differential:read --base 2ac2d72` reports `readings moved 0` across 6 differing source files,
+with `valid false -> true 0`, `safeToSummarize false -> true 0`, `read diagnostics lost 0`,
+`validation findings lost 0`, `retractions lost 0`, `negations lost 0` and `JSON fixtures moved 0`.
+**Those zeros are a floor and not a proof of this change**, and the reason is structural: every XML
+fixture in the corpus is FHIR-rooted, so no document in front of the harness has a foreign root and
+none reaches the new refusal at all. Beside that, the harness's two standing limits both apply here
+-- `emit()` records every refusal as one sentinel, so `sameReading` cannot see WHICH refusal fired,
+and the leaf comparison SKIPS a refused document.
+
+So the control was extended rather than the numbers trusted. **Arm 4, `refusalBlindSpots`, is
+DERIVED and not keyed**: it differences the two trees' own published `SERIALIZE_ERROR_CODES` and
+names the refusals the run introduces, so it names this change while it is current and names nothing
+once it has merged. That is the one property the deleted hand-keyed `CONTROL.moved` could not hold,
+and both polarities are asserted in `test/scripts/read-differential.test.ts`. The run prints
+`this run introduces 1 writer refusal(s): UNSERIALIZABLE_FOREIGN_ROOT` under `WHAT THIS RUN CANNOT
+GRADE`, above the lines that refusal turns into floors. **A foreign-rooted document was deliberately
+NOT added to `test/__fixtures__/` to make the number move**: the corpus is shared by every later
+slice and the scanner sweeps it, so the honest move was to declare the floor rather than to
+manufacture a figure. What DOES grade the change is `test/xml.test.ts`, whose rewritten block was
+observed **red in 8 assertions** against the unchanged tree before it was made green.
+
 ## A pinned release was not a pinned oracle (2026-08-27)
 
 **READ THIS BEFORE ANY PARAGRAPH BELOW THAT DESCRIBES THE DIFFERENTIAL, INCLUDING THE NEXT SECTION.**
@@ -990,6 +1089,12 @@ clean), pre-existing for the default spelling and extended to the prefixed one h
 **distinct expanded names merge** when one prefix is rebound between siblings
 (`<p:x xmlns:p="urn:a"/><p:x xmlns:p="urn:b"/>` -> one property), both flagged foreign, which the
 `isForeign` / `groupChildren` expanded-name argument does not cover.
+**(iii) IS CLOSED (2026-08-27), FOR THE XML ROUND TRIP AND NOT FOR THE JSON ONE:** the reader marks a
+root that RESOLVED to another vocabulary and `serializeResourceXml` refuses it
+(`UNSERIALIZABLE_FOREIGN_ROOT`), both spellings, so there is no emitted document left to re-read
+clean. `serializeResource` is unchanged and the JSON leg still launders, which is declared rather
+than claimed closed; the **unbound**-prefix root is a different arm and is untouched. See
+[`#the-foreign-root-laundering-closed-2026-08-27`](#the-foreign-root-laundering-closed-2026-08-27).
 **(iv) IS CLOSED FOR THE READ (2026-08-05), AND NOT FOR THE ROUND TRIP:** `reportMixedSpelling` now
 compares the expanded name, so the merge is reported rather than silent, but `serializeResourceXml`
 drops the bindings and the report is gone on the re-read. The merge itself still happens,

@@ -18,6 +18,7 @@ export {
   isComplex,
   isList,
   isDroppedText,
+  isForeignRoot,
   isNestedArray,
   isPrimitive,
   isUndefinedNull,

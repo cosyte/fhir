@@ -188,6 +188,27 @@ export interface FhirComplex {
    * read from JSON. See {@link isDroppedText}.
    */
   readonly droppedText?: true;
+  /**
+   * Set when the XML document's **root** element resolved to a vocabulary that is neither FHIR's nor
+   * none at all: `<Observation xmlns="urn:vendor">` or `<v:Observation xmlns:v="urn:vendor">`. The
+   * reader already reports that position ({@link ../xml/issues.js ISSUE_CODES.UNEXPECTED_XML_CONTENT}),
+   * but a report lives in the issue list and the issue list is not carried on the model, so a writer
+   * handed the model alone could not tell a vendor-rooted resource from one authored in FHIR.
+   *
+   * **A marker that the root named another vocabulary, NOT the vocabulary.** It is a literal `true`:
+   * the namespace URI is document content and is deliberately not kept, so nothing here can be
+   * echoed into a diagnostic and no walker gains a position. What it buys is that
+   * {@link ../xml/write.js serializeResourceXml} refuses rather than emitting a FHIR-namespaced
+   * document whose re-read carries an empty issue list.
+   *
+   * **Set at a document root and nowhere else.** An element that merely inherits a foreign namespace
+   * from its parent is flagged where the document leaves the vocabulary and is not marked here, and
+   * a root whose prefix resolves to **nothing** is not marked either: that is the separate
+   * unbound-prefix residual, which reads under its verbatim tag and is deferred. A root declaring no
+   * namespace at all is read as FHIR, unflagged and unmarked. Absent on every conformant document
+   * and on every document read from JSON. See {@link isForeignRoot}.
+   */
+  readonly foreignRoot?: true;
 }
 
 /**
@@ -487,6 +508,53 @@ export function markDroppedText(node: FhirComplex): FhirComplex;
 export function markDroppedText(node: FhirPrimitive): FhirPrimitive;
 export function markDroppedText(node: FhirComplex | FhirPrimitive): FhirComplex | FhirPrimitive {
   return { ...node, droppedText: true };
+}
+
+/**
+ * Whether the XML document's **root** element resolved to a vocabulary other than FHIR's: a vendor
+ * namespace reached by a default declaration or by a bound prefix.
+ *
+ * The reader models such a root as the FHIR resource its local name spells and reports the position,
+ * because it is schema-free and lenient and the local name is the only thing it has to go on. That
+ * report is a warning in the issue list and the model carries no issue list, so before this marker
+ * existed a caller could write the model back to XML and get a document in the FHIR namespace whose
+ * re-read said nothing at all: one round trip and a vendor document was indistinguishable from FHIR.
+ * {@link ../xml/write.js serializeResourceXml} refuses a marked model rather than emit that.
+ *
+ * **The namespace itself is NOT kept**, which is the difference between this and recovering the
+ * vocabulary. The document's own namespace URI is content, and a marker cannot leak content.
+ *
+ * `false` for a root that declares no namespace (read as FHIR on purpose), for a root whose prefix
+ * resolves to nothing (the deferred unbound-prefix residual, modeled under its verbatim tag), for
+ * foreign content below a root, for every document read from JSON, and for every conformant document.
+ *
+ * @param node - Any model node.
+ * @returns `true` when this node is a root the XML reader read out of another vocabulary.
+ * @example
+ * ```ts
+ * import { isForeignRoot, parseResourceXml } from "@cosyte/fhir";
+ * const { resource } = parseResourceXml('<Observation xmlns="urn:vendor"><id value="o1"/></Observation>');
+ * isForeignRoot(resource); // true
+ * ```
+ */
+export function isForeignRoot(node: FhirNode): boolean {
+  return node.kind === "complex" && node.foreignRoot === true;
+}
+
+/**
+ * Mark a resource as having been read from a root in another vocabulary. The XML reader's own
+ * helper, **not part of the package's public surface**, for the same reason {@link markDroppedText}
+ * is not: this marker decides whether the XML writer refuses, so a consumer setting it would
+ * withdraw serialization from a document that never carried the shape. Read the marker with
+ * {@link isForeignRoot}, which is public.
+ *
+ * It copies the node rather than mutating it, and adds no element, property or item.
+ *
+ * @param node - The resource the reader produced at that root.
+ * @internal
+ */
+export function markForeignRoot(node: FhirComplex): FhirComplex {
+  return { ...node, foreignRoot: true };
 }
 
 /** Optional `id` / `extension` metadata for {@link primitive}. */

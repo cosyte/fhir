@@ -8,6 +8,32 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **A resource read from an XML root in another vocabulary is no longer written back as
+  authoritative FHIR (`XML-RESIDUAL-1`).** Measured at the base commit:
+  `<v:Observation xmlns:v="urn:vendor"><v:status value="entered-in-error"/>...</v:Observation>` read
+  with exactly one issue, an `UNEXPECTED_XML_CONTENT` warning at the root, and `valid: true`;
+  `serializeResourceXml` emitted a `http://hl7.org/fhir` `Observation` with no trace of the vendor
+  namespace; and the re-read of that output carried an **empty** issue list and re-emitted
+  byte-identically to the same resource authored in FHIR from the start. The one sentence in the
+  whole reading that said the document was not FHIR did not survive a single round trip. The
+  default-declaration spelling (`<Observation xmlns="urn:vendor">`) laundered the same way.
+  `serializeResourceXml` now refuses such a model with `UNSERIALIZABLE_FOREIGN_ROOT`, both
+  spellings, at every depth the resource is composed into, and the refusal carries **no namespace,
+  no tag and no value**: the reader records a marker (`FhirComplex.foreignRoot`, read with the new
+  `isForeignRoot`), never the vocabulary, because the namespace URI is the document content the whole
+  residual is about. **The read is unchanged** - the same one warning, at the same location, and the
+  document is still `valid` on the way in. **This withdraws an XML round trip from a document that
+  reads `valid: true`**, which is a cost two refusals beside it already pay and which is bounded to
+  this class: a FHIR-rooted document still round-trips byte-identically, a root declaring no
+  namespace at all is still read as FHIR and still written, an unbound-prefix root is still modeled
+  under its verbatim tag and still written, and `serializeResource` emits every one of them
+  unchanged. That last point is a statement about the JSON writer's output and **not** a claim that
+  the JSON channel keeps the flag: it does not, and that half stays declared open. The
+  characterization test that pinned the gap was rewritten to pin the refusal and was observed red in
+  eight assertions against the unchanged tree first. The base-versus-head read differential's
+  negative control gained a fourth arm that names the writer refusals a run introduces, derived by
+  differencing the two trees' own published refusal codes rather than keyed to a slice, so it says
+  which of its own lines that run turned into floors.
 - **The `validator_cli.jar` differential answers no terminology question over a network, and proves
   it by running the comparison twice (`DIFF-DETERMINISM-1`).** No library code changed and nothing
   here ships in the published artifact. A pinned oracle release was not a pinned oracle: the

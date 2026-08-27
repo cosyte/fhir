@@ -31,6 +31,8 @@ import {
   MUTANTS,
   PROBE,
   UNMOVED,
+  refusalBlindSpots,
+  refusalsIntroduced,
   sensitivityProblems,
   sourceTreesDiffer,
   unmovedProblems,
@@ -59,6 +61,7 @@ function stubCodec(): Codec {
       arrayWrappedScalars: [],
       nestedArrays: [],
     }),
+    SERIALIZE_ERROR_CODES: { DROPPED_ELEMENT_TEXT: "DROPPED_ELEMENT_TEXT" },
   };
 }
 
@@ -259,5 +262,48 @@ describe("arm 3: a conformant narrative has not moved", () => {
   it("uses a document the corpus is not scored on, so it cannot flatter a tally", () => {
     expect(UNMOVED).not.toBe(PROBE);
     expect(UNMOVED).toContain("CONTROL");
+  });
+});
+
+describe("arm 4: the run names the refusals it introduced", () => {
+  /** A codec that publishes exactly these refusal reasons. */
+  function withRefusals(...codes: string[]): Codec {
+    return { ...stubCodec(), SERIALIZE_ERROR_CODES: Object.fromEntries(codes.map((c) => [c, c])) };
+  }
+
+  it("names a refusal head declares and base does not", () => {
+    const base = withRefusals("DROPPED_ELEMENT_TEXT");
+    const head = withRefusals("DROPPED_ELEMENT_TEXT", "UNSERIALIZABLE_FOREIGN_ROOT");
+    expect(refusalsIntroduced(base, head)).toEqual(["UNSERIALIZABLE_FOREIGN_ROOT"]);
+    const spots = refusalBlindSpots(base, head);
+    // The point of the arm: the run says the code, so the zeros below are read with it in view.
+    expect(spots[0]).toContain("UNSERIALIZABLE_FOREIGN_ROOT");
+    expect(spots.join(" ")).toContain("SKIPPED by the leaf comparison");
+  });
+
+  it("names nothing once that refusal has merged into base, so it cannot go stale", () => {
+    // This is the property the deleted hand-keyed control could not hold. The same head, measured
+    // against a base that now carries the refusal, keys nothing rather than firing forever.
+    const merged = withRefusals("DROPPED_ELEMENT_TEXT", "UNSERIALIZABLE_FOREIGN_ROOT");
+    expect(refusalsIntroduced(merged, merged)).toEqual([]);
+    expect(refusalBlindSpots(merged, merged)).toEqual([]);
+  });
+
+  it("names nothing for a run that adds no refusal, which is not a fault either", () => {
+    expect(refusalBlindSpots(stubCodec(), stubCodec())).toEqual([]);
+  });
+
+  it("does not treat a refusal REMOVED at head as one introduced", () => {
+    // The difference is directional on purpose: this arm answers "what did head start refusing",
+    // which is what turns a line below into a floor. A code base had and head dropped does not.
+    const base = withRefusals("DROPPED_ELEMENT_TEXT", "UNSERIALIZABLE_FOREIGN_ROOT");
+    const head = withRefusals("DROPPED_ELEMENT_TEXT");
+    expect(refusalsIntroduced(base, head)).toEqual([]);
+  });
+
+  it("reports every introduced code, sorted, not just the first", () => {
+    const base = withRefusals("A");
+    const head = withRefusals("A", "C", "B");
+    expect(refusalsIntroduced(base, head)).toEqual(["B", "C"]);
   });
 });
