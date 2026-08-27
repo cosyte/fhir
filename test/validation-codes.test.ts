@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   diagnosticFor,
+  CODE_SYSTEM_VERSION_RECORD_CODES,
+  CODE_SYSTEM_VERSION_RECORD_SYSTEM,
   ISSUE_SEVERITIES,
   ISSUE_TYPES,
   VALIDATION_CODES,
@@ -127,5 +129,45 @@ describe("validation code / severity / issue-type registries (stable public cont
   it("carries the constraint key only on an invariant finding, never elsewhere", () => {
     expect(validationIssue("INVARIANT_VIOLATED", "error", "X", "obs-6").constraint).toBe("obs-6");
     expect(validationIssue("CODE_INVALID", "error", "X.y").constraint).toBeUndefined();
+  });
+
+  it("pins the code-system release record vocabulary and its canonical system", () => {
+    // Declaring a code-system release added no VALIDATION_CODES member (the snapshot above is
+    // unchanged and still agrees with what the validator can emit). It DID add a wire vocabulary,
+    // which reaches an OperationOutcome as `issue.details.coding`, so it is snapshotted here beside
+    // the others rather than shipping as an undeclared part of the public contract.
+    expect(CODE_SYSTEM_VERSION_RECORD_CODES).toEqual({
+      DECLARED: "declared",
+      UNDECLARED: "undeclared",
+    });
+    expect(CODE_SYSTEM_VERSION_RECORD_SYSTEM).toBe(
+      "https://cosyte.com/fhir/CodeSystem/code-system-version-record",
+    );
+    // It is this library's own canonical, deliberately not a third-party code-system identity.
+    expect(Object.values(VALIDATION_CODES)).not.toContain(CODE_SYSTEM_VERSION_RECORD_SYSTEM);
+  });
+
+  it("carries the release record only where a service produced the finding, never elsewhere", () => {
+    expect(
+      validationIssue("CODE_NOT_IN_VALUESET", "error", "X.y", undefined, {
+        declared: true,
+        version: "2.78",
+      }).codeSystemVersion,
+    ).toEqual({ declared: true, version: "2.78" });
+    // Three distinguishable states: declared, declared-nothing, and no record at all.
+    expect(
+      validationIssue("CODE_NOT_IN_VALUESET", "error", "X.y", undefined, { declared: false })
+        .codeSystemVersion,
+    ).toEqual({ declared: false });
+    expect(validationIssue("CODE_SYSTEM_UNEXPECTED", "warning", "X.y").codeSystemVersion).toBe(
+      undefined,
+    );
+    // Adding it changes nothing else about the finding, and no diagnostic mentions a release.
+    expect(
+      validationIssue("CODE_NOT_IN_VALUESET", "error", "X.y", undefined, { declared: false }).type,
+    ).toBe("code-invalid");
+    for (const code of Object.values(VALIDATION_CODES) as ValidationCode[]) {
+      expect(diagnosticFor(code)).not.toMatch(/2\.78|undeclared/i);
+    }
   });
 });

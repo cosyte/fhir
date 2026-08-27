@@ -8,6 +8,10 @@
  * content the library does not bundle. The validator that consumes them lives in
  * {@link ../validate/terminology.js}; absent a service it degrades to warnings and never false-errors.
  *
+ * A service may declare, per answer, the code-system **release** that answer was made against; the
+ * registry here stays a set of identities and records no release of its own, and no default,
+ * "latest" or "current" release is ever assumed for a system it recognises.
+ *
  * @packageDocumentation
  */
 

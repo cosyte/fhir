@@ -55,6 +55,32 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **A terminology service can declare which code-system release an answer was made against, and a
+  membership finding says so, or says it was not declared (`FHIR-VOCAB-VERSION-1`).** A
+  `TerminologyService` answers `in`, `not-in` or `unknown`, and until now the release it consulted
+  was not expressible. A `not-in` for an RxNorm code is an answer against one monthly RxNorm drop,
+  not a timeless fact, so a consumer reconciling a validation report months later could not tell
+  whether the answer was stale. `CodeValidationResult` gains an optional `systemVersion`: the
+  release the service consulted, per answer, carried onto the `CODE_NOT_IN_VALUESET` finding as
+  `ValidationIssue.codeSystemVersion` and onto the `OperationOutcome` as `issue.details`. The
+  declared string is preserved **exactly**, never trimmed, case-folded, parsed, truncated or
+  substituted, because it is the caller's own assertion and the library verifies nothing about it.
+  **An answer that declares no release is marked undeclared rather than left silent**: a missing
+  field reads as "not applicable" and the question is applicable and unanswered, so the record has
+  three distinguishable states (a release, an explicit `undeclared`, and no record at all for a
+  finding no service produced). A declaration that is absent, empty, whitespace-only or, from
+  untyped JavaScript, not a string at all degrades to undeclared without throwing, without emitting
+  an empty release and **without substituting any default, latest or "current" release**. On the
+  wire the marker rides on `details.coding` (a two-concept vocabulary,
+  `CODE_SYSTEM_VERSION_RECORD_CODES`, under this library's own canonical
+  `CODE_SYSTEM_VERSION_RECORD_SYSTEM`) and the release itself on `details.text`, so no release a
+  service could declare can be mistaken for the marker. `diagnostics` is untouched and stays derived
+  from the finding code alone through the single redaction chokepoint. The declaration is optional
+  and additive: an existing service that declares nothing compiles and behaves exactly as before.
+  **The library still bundles no code-system content**: the known-systems registry stays a frozen
+  set of identities with no release recorded on it, nothing is fetched or expanded, the licence
+  position is unchanged, and a resource's own `Coding.version` is still read by nothing and reaches
+  no finding, no `OperationOutcome` and no diagnostic string.
 - **Element-level structural validation for every safety-critical resource type, not one of seven
   (`MODEL-SAFETY6-1`).** `AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`,
   `MedicationRequest` and `MedicationStatement` each gain a complete direct-element table in

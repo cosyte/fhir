@@ -13,7 +13,13 @@
  *   gap rather than a path that resolves against the instance, so the outcome is spec-clean as a
  *   resource while that one element is deliberately not resolvable; and
  * - `diagnostics`, a value-free line derived **only** from the validation code (the redaction
- *   chokepoint in {@link ./issues.js}). No instance value ever reaches this resource.
+ *   chokepoint in {@link ./issues.js}). No instance value ever reaches this resource; in particular
+ *   neither identity below is interpolated into it; and
+ * - `details`, present only when the finding carries an identity asserted **outside** the document:
+ *   an invariant's constraint key (`details.text`), or a membership finding's code-system release
+ *   record (`details.coding` marks whether the caller's terminology service declared a release, and
+ *   a declared one rides verbatim in `details.text`). A resource's own `Coding.version` is never
+ *   read and never appears here.
  *
  * An `OperationOutcome.issue` is `1..*`, it must carry at least one issue. When validation found
  * nothing, {@link toOperationOutcome} emits a single `information` / `informational` "all clear"
@@ -24,7 +30,15 @@
  */
 
 import { complex, list, primitive, type FhirComplex, type FhirProperty } from "../model/index.js";
-import { diagnosticFor, ISSUE_SEVERITIES, ISSUE_TYPES, type ValidationIssue } from "./issues.js";
+import {
+  diagnosticFor,
+  CODE_SYSTEM_VERSION_RECORD_CODES,
+  CODE_SYSTEM_VERSION_RECORD_SYSTEM,
+  ISSUE_SEVERITIES,
+  ISSUE_TYPES,
+  type CodeSystemVersionRecord,
+  type ValidationIssue,
+} from "./issues.js";
 
 /** Build one `OperationOutcome.issue` complex node from a validation issue. */
 function issueNode(issue: ValidationIssue): FhirComplex {
@@ -34,15 +48,48 @@ function issueNode(issue: ValidationIssue): FhirComplex {
     { name: "diagnostics", value: primitive(diagnosticFor(issue.code)) },
     { name: "expression", value: list([primitive(issue.expression)]) },
   ];
-  // An invariant finding names its constraint key in `issue.details.text`, a public FHIR identifier
-  // (e.g. "ait-1"), never an instance value, so the redaction chokepoint holds.
-  if (issue.constraint !== undefined) {
-    properties.splice(3, 0, {
-      name: "details",
-      value: complex([{ name: "text", value: primitive(issue.constraint) }]),
-    });
-  }
+  const details = detailsNode(issue);
+  if (details !== undefined) properties.splice(3, 0, { name: "details", value: details });
   return complex(properties);
+}
+
+/**
+ * The `issue.details` CodeableConcept, or `undefined` when the finding carries neither identity it
+ * can hold. Both are assertions made **outside** the document, which is why they may be surfaced at
+ * all; `diagnostics` is untouched either way and stays keyed by the finding code alone.
+ *
+ * - An **invariant** finding names its constraint key in `details.text`, a public FHIR identifier
+ *   (e.g. `"ait-1"`), never an instance value.
+ * - A **membership** finding names its code-system release record in `details.coding`: the marker
+ *   from {@link CODE_SYSTEM_VERSION_RECORD_CODES} says whether the caller's service declared a
+ *   release, and a declared one rides verbatim in `details.text`. The two elements are separate on
+ *   purpose, so no release string a service could declare (`"undeclared"` included) can be mistaken
+ *   for the marker, and an undeclared answer is a positive statement rather than an absence.
+ *
+ * The two never co-occur (only `CODE_NOT_IN_VALUESET` carries a release record and it is not an
+ * invariant finding), and `details.text` is written at most once regardless.
+ */
+function detailsNode(issue: ValidationIssue): FhirComplex | undefined {
+  const members: FhirProperty[] = [];
+  const record = issue.codeSystemVersion;
+  if (record !== undefined) members.push({ name: "coding", value: list([recordCoding(record)]) });
+
+  let text: string | undefined = issue.constraint;
+  if (record !== undefined) text = record.declared ? record.version : undefined;
+  if (text !== undefined) members.push({ name: "text", value: primitive(text) });
+
+  return members.length === 0 ? undefined : complex(members);
+}
+
+/** The `details.coding[0]` marker saying whether the answer declared a code-system release. */
+function recordCoding(record: CodeSystemVersionRecord): FhirComplex {
+  const marker = record.declared
+    ? CODE_SYSTEM_VERSION_RECORD_CODES.DECLARED
+    : CODE_SYSTEM_VERSION_RECORD_CODES.UNDECLARED;
+  return complex([
+    { name: "system", value: primitive(CODE_SYSTEM_VERSION_RECORD_SYSTEM) },
+    { name: "code", value: primitive(marker) },
+  ]);
 }
 
 /** The synthetic "all clear" issue emitted when there are no findings. */

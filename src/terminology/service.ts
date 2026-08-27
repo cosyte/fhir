@@ -13,6 +13,18 @@
  * With **no** service configured at all, the validator behaves as if every membership question
  * returned `"unknown"`: it never emits a false "not a member" error (fail-safe).
  *
+ * **A membership answer may declare the code-system release it was made against.** A `not-in` for an
+ * RxNorm code is an answer against one monthly RxNorm drop, not a timeless fact, so
+ * {@link CodeValidationResult} carries an optional `systemVersion`: the release the service consulted
+ * when it decided. The declaration is the **caller's own assertion** and the library verifies nothing
+ * about it, it does not fetch, parse, compare or normalise the string, and it bundles no code-system
+ * content against which it could. The declaration is **optional and additive**: a service that
+ * declares nothing is a conformant service, and the absent case is a first-class part of this
+ * contract rather than an omission, a finding derived from an undeclared answer is marked as having
+ * an undeclared release rather than left silent (see {@link ../validate/issues.js}
+ * `CodeSystemVersionRecord`), because a silence reads as "current" and that is exactly the
+ * implication a stale answer must not carry.
+ *
  * The library ships **no implementation**, wiring a real one is a consumer/`pathways` concern. This
  * module defines only the contract.
  *
@@ -48,6 +60,30 @@ export type CodeMembership =
 export interface CodeValidationResult {
   /** Whether the code is in the value set, not in it, or undecidable. */
   readonly membership: CodeMembership;
+  /**
+   * **Optional.** The code-system release this answer was made against, exactly as the service
+   * names it: an RxNorm monthly drop (`"2026-08-04"`), a SNOMED CT edition
+   * (`"http://snomed.info/sct/731000124108/version/20260301"`), a LOINC release (`"2.78"`). It is
+   * carried onto the finding the validator emits (`CODE_NOT_IN_VALUESET`) and reaches the
+   * `OperationOutcome`, so a consumer reconciling a validation report months later can tell which
+   * release the answer was made against without asking the service again.
+   *
+   * **The library verifies nothing about it.** This is the service's own assertion, preserved
+   * **exactly**: never trimmed, case-folded, parsed, truncated or substituted. The library vendors
+   * no code-system content, so it has nothing to check the string against and does not pretend to.
+   *
+   * **Declaring nothing is conformant, and is recorded rather than assumed.** Omit it (or, from
+   * untyped JavaScript, hand over a value that is not a non-blank string) and the finding is marked
+   * as having an **undeclared** release. No default, "latest" or "current" release is ever
+   * substituted, and the answer is otherwise unchanged: this field never affects `membership`,
+   * severity, or whether a finding is emitted at all.
+   *
+   * It is a code-**system** release, not a value-set version, and it must never be read from the
+   * instance being validated: a resource's own `Coding.version` is document content, and echoing it
+   * onto a finding would publish instance data through the one surface this library keeps
+   * value-free.
+   */
+  readonly systemVersion?: string;
 }
 
 /**
@@ -56,7 +92,10 @@ export interface CodeValidationResult {
  *
  * An implementation MUST be **fail-safe**: when it cannot answer, it returns
  * `{ membership: "unknown" }` rather than throwing or guessing. It MUST be value-free, it receives
- * only identities ({@link CodeValidationRequest}), never a resource or a patient value.
+ * only identities ({@link CodeValidationRequest}), never a resource or a patient value. It MAY
+ * declare the code-system release an answer was made against
+ * ({@link CodeValidationResult.systemVersion}); declaring nothing is conformant and is recorded as
+ * undeclared rather than read as "current".
  *
  * @example
  * ```ts
@@ -67,6 +106,15 @@ export interface CodeValidationResult {
  *   validateCode({ valueSet, code }) {
  *     if (valueSet !== "http://example.org/vs/colors") return { membership: "unknown" };
  *     return { membership: ["red", "green", "blue"].includes(code) ? "in" : "not-in" };
+ *   },
+ * };
+ *
+ * // The same service, declaring the release each answer was made against.
+ * const dated: TerminologyService = {
+ *   validateCode({ valueSet, code }) {
+ *     if (valueSet !== "http://example.org/vs/colors") return { membership: "unknown" };
+ *     const membership = ["red", "green", "blue"].includes(code) ? "in" : "not-in";
+ *     return { membership, systemVersion: "2026-08-04" };
  *   },
  * };
  * ```
