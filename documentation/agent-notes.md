@@ -261,11 +261,32 @@ umbrella's own always-read `CLAUDE.md` and the `work-on` skill state both of the
 
 ## Publish state (`FHIR-NPM-NAME`)
 
-- **RESOLVED 2026-08-26. `@cosyte/fhir@0.0.10` is on the registry**, `latest`, with a provenance
-  attestation, tag `v0.0.10` and a GitHub release. The block below ran from 2026-07-23 to
-  2026-08-26 and everything under it is now HISTORY, kept because the measurements are what ruled
-  out the wrong explanations. `package.json` still runs ahead of the registry between releases, so
-  read the version there.
+- **NOT RESOLVED. `0.0.10` PUBLISHED, `0.0.11` WAS REFUSED, AND THIS ENTRY PREVIOUSLY SAID
+  "RESOLVED".** That is the first thing to read here, because the wrong version of this paragraph
+  was written from a single successful publish and the very next publish refuted it inside 48
+  hours. `@cosyte/fhir@0.0.10` is on the registry, `latest`, tagged, with provenance, published
+  2026-08-26 with a deliberately NARROWED tarball. `0.0.11`, which restored the README, the
+  changelog and the sourcemaps, drew the identical bare `E403` on
+  `PUT https://registry.npmjs.org/@cosyte%2ffhir` on 2026-08-28
+  (run [33177512959](https://github.com/cosyte/fhir/actions/runs/33177512959), provenance in rekor
+  at logIndex `2626322912` BEFORE the refusal, matching every earlier attempt). `package.json` runs
+  ahead of the registry at `0.0.11`, unpublished, no tag.
+  - **THE TWO ATTEMPTS, AND WHAT THEY DO AND DO NOT SEPARATE.** `0.0.10` shipped 7 files and
+    782 KB packed with `files` narrowed to the four runtime artifacts, no sourcemaps, no changelog
+    and a 234-byte README, and it SUCCEEDED. `0.0.11` shipped 10 files and 2.4 MB unpacked with the
+    README at 84,818 bytes, the changelog at 281 KB and both sourcemaps back, and it was REFUSED.
+    Same account, same pipeline, same shared workflow, two days apart. **That makes the contents the
+    leading hypothesis, which REVERSES what the previous version of this entry said.**
+  - **THE CONFOUND, WHICH IS REAL AND MUST NOT BE DROPPED.** `0.0.10` CREATED the package;
+    `0.0.11` ADDED A VERSION to a package that now exists. Those are different registry operations
+    with different policy paths, and both the contents AND the operation changed between the two
+    attempts. **Neither hypothesis is established.** The control that separates them is a NARROWED
+    republish now that the package exists: if a narrowed `0.0.12` succeeds, contents is the variable;
+    if it is refused, the create-vs-add distinction is.
+  - **DO NOT CONCLUDE FROM ONE PUBLISH.** This whole entry is the worked example. A month of `E403`
+    ended in one success, that success was written up here as resolution, and the next publish
+    restored the block. Publishes at this registry for this name are not repeatable enough to
+    support a single-observation conclusion.
   - **What the publish that succeeded actually carried.** npm support wrote on 2026-08-26 asking
     for a sanitized publish: a `files` allowlist, a simplified README, no `*.spec.js`, and no
     strings readable as exploit content. Three of those five were already true. The allowlist
@@ -277,12 +298,10 @@ umbrella's own always-read `CLAUDE.md` and the `work-on` skill state both of the
     count over the shipped bytes returned 104 `entity`, 37 `ENTITY`, 29 `XXE`, 28 `billion-laughs`
     and 26 `DOCTYPE`. The probe narrowed `files` to the four runtime artifacts, dropped
     `CHANGELOG.md`, and cut `README.md` to a stub, and `0.0.10` published with no `E403`.
-  - **DO NOT READ THAT AS "THE CONTENTS WERE THE CAUSE". IT IS NOT CONTROLLED.** One publish
-    changed the tarball AND happened after a month of support escalation, on a registry whose
-    behaviour toward this name had already changed once. Nothing distinguishes those. The narrowing
-    is reverted in `0.0.11` precisely because it was never established as load-bearing, and if a
-    future publish is refused again, **re-run the sanitized shape as a CONTROL before concluding
-    anything**, rather than treating the narrowing as a known remedy.
+  - **THAT CAUTION WAS WRITTEN BEFORE `0.0.11` AND ITS INSTRUCTION HAS NOW COME DUE.** It said the
+    narrowing was never established as load-bearing and that a future refusal should be answered by
+    re-running the sanitized shape as a control. `0.0.11` was refused, so **that control is the next
+    experiment**, not an optional one.
   - **Stripping the sourcemaps did NOT zero the security vocabulary**, and this is worth keeping:
     80 `entity`, 26 `ENTITY`, 20 `XXE`, 20 `billion-laughs` and 18 `DOCTYPE` survived in the
     shipped bytes, about three quarters of the original count, all of it JSDoc compiled into the
@@ -296,10 +315,12 @@ umbrella's own always-read `CLAUDE.md` and the `work-on` skill state both of the
     `verdict: uninstallable`. It resolved without intervention. **A 404 on the package document
     taken seconds after a publish is not evidence of anything**; re-read it before concluding, and
     that probe's verdict is not authoritative on its own.
-  - **`0.0.10`'s tarball is not the intended package shape.** It carries a 234-byte README and no
-    changelog. A published version is permanent, so this cannot be withdrawn; `0.0.11` restores
-    both. Three feature PRs (#103, #105, #106) also landed while the README was a stub, so the
-    restored README predates them and owes them their documentation.
+  - **`0.0.10`'s tarball is not the intended package shape, and it is still what installs.** It
+    carries a 234-byte README and no changelog. A published version is permanent, so it cannot be
+    withdrawn, and the restoration merged but never published, so a consumer running
+    `npm install @cosyte/fhir` today still gets the stub. Three feature PRs (#103, #105, #106) also
+    landed while the README was a stub, so the restored README predates them and owes them their
+    documentation.
 
 ### The block, as it stood from 2026-07-23 to 2026-08-26 (history)
 
@@ -2297,10 +2318,10 @@ length in [`#publish-state-fhir-npm-name`](#publish-state-fhir-npm-name) above: 
 and in rekor **before** the refusal, so it is not a signing failure; scope-level creation works
 (`transform`, `synth` and `cli` created 2026-07-29, `deid` 2026-07-30, all after the first refusal);
 and the refusal is identical across publish paths and account sessions. The trap keeps its headline
-in `CLAUDE.md` and the evidence lives here. **The block itself ENDED on 2026-08-26, when `0.0.10`
-published (see the head of that section). The retraction is what survives it: do not rename or
-rescope the package, and do not re-derive, re-trace or re-fire anything on the strength of this
-paragraph.**
+in `CLAUDE.md` and the evidence lives here. **The block did NOT end: `0.0.10` published on
+2026-08-26 with a narrowed tarball and `0.0.11` was refused on 2026-08-28 (see the head of that
+section). The retraction stands either way: do not rename or rescope the package, and do not
+re-derive, re-trace or re-fire anything on the strength of this paragraph.**
 
 ## The `null` laundering, closed (2026-08-07)
 

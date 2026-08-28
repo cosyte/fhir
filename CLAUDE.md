@@ -16,12 +16,23 @@ semantics, and validate it against US Core, without reading the FHIR spec.
 
 ## Status
 
-- **PUBLISHED ON NPM SINCE 2026-08-26. `FHIR-NPM-NAME` IS CLEARED.** `0.0.10` is `latest`, with a
-  provenance attestation, a `v0.0.10` tag and a GitHub release. The bare `E403` on the scoped `PUT`
-  that refused every attempt from 2026-07-23 did not recur, and **that block is over: do not
-  re-derive it, re-trace it, or rename anything on the strength of it.** Still pre-alpha.
-  **Read the version from `package.json`, never infer it from npm**: between releases it runs ahead.
-  What cleared it, and what that does NOT prove:
+- **`0.0.10` IS ON NPM. `0.0.11` WAS REFUSED. `FHIR-NPM-NAME` IS NOT CLEARED, AND A PRIOR VERSION OF
+  THIS LINE SAYING IT WAS IS THE MISTAKE TO LEARN FROM.** `0.0.10` published 2026-08-26 with a
+  deliberately NARROWED tarball and is `latest`, tagged, with provenance. `0.0.11` restored the
+  README, the changelog and the sourcemaps, and on 2026-08-28 it drew the identical bare `E403` on
+  `PUT https://registry.npmjs.org/@cosyte%2ffhir`, provenance signed into rekor first
+  (logIndex `2626322912`) exactly as every refusal before it. Still pre-alpha.
+  **Read the version from `package.json`, never infer it from npm**: it runs ahead again, at `0.0.11`
+  unpublished with no tag.
+  - **THE CONTENTS ARE NOW THE LEADING HYPOTHESIS, WHICH IS A REVERSAL, AND IT IS STILL NOT PROVEN.**
+    The one publish that succeeded is the one that stripped the tarball; the next one restored it and
+    was refused. **The confound is that `0.0.10` CREATED the package and `0.0.11` ADDED A VERSION to
+    an existing one, which is a different operation**, so contents and operation both changed. Do not
+    write this up as settled in either direction. The control that separates them is a narrowed
+    republish now that the package exists.
+  - **Do not conclude from one publish.** This trap exists because that is what happened here: the
+    success was written up as the block being over, and the very next publish refuted it.
+  The full sequence and what each attempt controlled for:
   [`agent-notes.md#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
   - **The "name-similarity" reading is RETRACTED. DO NOT RENAME OR RESCOPE THE PACKAGE ON IT.** npm
     has never named similarity or the unscoped `fhir` package in anything it returned. The three
@@ -37,11 +48,12 @@ semantics, and validate it against US Core, without reading the FHIR spec.
     installability are independent.** Verbatim:
     [`#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
   - **A PUBLISHED VERSION IS PERMANENT AND CAN NEVER BE RE-FIRED.** `0.0.10` is out and is the floor.
-    The versions npm traced during the block, none of which was ever published, were `0.0.2`,
-    `0.0.3`, `0.0.7` and `0.0.8`.
+    The versions npm refused, none of which reached the registry, are `0.0.2`, `0.0.3`, `0.0.7`,
+    `0.0.8` and now `0.0.11`.
   - **`0.0.10` SHIPPED A 234-BYTE STUB README AND NO CHANGELOG**, because it was a deliberately
-    narrowed diagnostic tarball, and a published version cannot be withdrawn. `0.0.11` restores
-    both. **Do not read `0.0.10`'s tarball as the intended package shape.**
+    narrowed diagnostic tarball, and a published version cannot be withdrawn. The restoration is
+    written and merged but **`0.0.11` never published**, so that stub is what a consumer installs
+    today. **Do not read `0.0.10`'s tarball as the intended package shape.**
   - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
     hand before ever linking one.
 - **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.**
