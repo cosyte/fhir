@@ -839,14 +839,6 @@ done
 # standing exclusions are named with their reasons in SCAN SURFACE above: `CHANGELOG.md`
 # (contested, queued) and `dist` (untracked build output this script cannot read; its
 # SOURCE is gated by the third pass instead).
-#
-# The `dist` exclusion is spelled BOTH ways on purpose. As of the FHIR-NPM-NAME sanitized
-# publish probe (2026-08-26), `files` names the four build artifacts one by one instead of
-# the `dist` directory, so that the two sourcemaps stay out of the tarball. Those four
-# paths are the SAME untracked build output the `dist` entry always stood for, excluded
-# for the identical reason and gated at the same place: their source, by the third pass.
-# Naming them changes what npm packs, and nothing about what this gate reads. Should
-# `files` go back to naming the directory, the `dist` entry is still here and still works.
 command -v node >/dev/null || {
   echo "ERROR: check-no-internal-refs - node is required (to read package.json) and is not" >&2
   echo "       on PATH. Refusing to skip the npm-surface half of this gate." >&2
@@ -855,18 +847,8 @@ command -v node >/dev/null || {
 UNKNOWN_TARBALL_DOCS=$(node -e '
   const pkg = JSON.parse(require("fs").readFileSync("package.json", "utf8"));
   // Scanned by this gate:            README.md, LICENSE
-  // Excluded deliberately, reasons in SCAN SURFACE: CHANGELOG.md, dist (as the directory,
-  // or as the four build artifacts named one by one; same untracked output either way)
-  const known = new Set([
-    "README.md",
-    "LICENSE",
-    "CHANGELOG.md",
-    "dist",
-    "dist/index.mjs",
-    "dist/index.cjs",
-    "dist/index.d.ts",
-    "dist/index.d.cts",
-  ]);
+  // Excluded deliberately, reasons in SCAN SURFACE: CHANGELOG.md, dist
+  const known = new Set(["README.md", "LICENSE", "CHANGELOG.md", "dist"]);
   process.stdout.write((pkg.files ?? []).filter((f) => !known.has(f)).join(" "));
 ')
 if [ -n "$UNKNOWN_TARBALL_DOCS" ]; then

@@ -261,12 +261,51 @@ umbrella's own always-read `CLAUDE.md` and the `work-on` skill state both of the
 
 ## Publish state (`FHIR-NPM-NAME`)
 
-- **Pre-alpha, unpublished on npm.** No version of `@cosyte/fhir` has ever reached the registry, and
-  the repo carries no git tag and no GitHub release, because the release job never gets past the
-  publish. Every attempt is refused by npm with a bare `E403` on
-  `PUT https://registry.npmjs.org/@cosyte%2ffhir` (FHIR-NPM-NAME; support request filed 2026-07-23,
-  still open). `package.json` runs ahead of the registry rather than behind it, so read the
-  version there and never infer it from npm.
+- **RESOLVED 2026-08-26. `@cosyte/fhir@0.0.10` is on the registry**, `latest`, with a provenance
+  attestation, tag `v0.0.10` and a GitHub release. The block below ran from 2026-07-23 to
+  2026-08-26 and everything under it is now HISTORY, kept because the measurements are what ruled
+  out the wrong explanations. `package.json` still runs ahead of the registry between releases, so
+  read the version there.
+  - **What the publish that succeeded actually carried.** npm support wrote on 2026-08-26 asking
+    for a sanitized publish: a `files` allowlist, a simplified README, no `*.spec.js`, and no
+    strings readable as exploit content. Three of those five were already true. The allowlist
+    existed, no `*.spec.js` could ship under it, and the version was already past the `0.0.9` they
+    suggested. What their list did not mention was the sourcemaps: `files` named `dist` as a
+    DIRECTORY, so `index.mjs.map` and `index.cjs.map` shipped, and each embeds `sourcesContent`,
+    the complete original TypeScript of all 47 source files, 613 KB per map. Since the XML reader
+    is hardened by refusal rather than by resolution, that source names what it refuses, and a
+    count over the shipped bytes returned 104 `entity`, 37 `ENTITY`, 29 `XXE`, 28 `billion-laughs`
+    and 26 `DOCTYPE`. The probe narrowed `files` to the four runtime artifacts, dropped
+    `CHANGELOG.md`, and cut `README.md` to a stub, and `0.0.10` published with no `E403`.
+  - **DO NOT READ THAT AS "THE CONTENTS WERE THE CAUSE". IT IS NOT CONTROLLED.** One publish
+    changed the tarball AND happened after a month of support escalation, on a registry whose
+    behaviour toward this name had already changed once. Nothing distinguishes those. The narrowing
+    is reverted in `0.0.11` precisely because it was never established as load-bearing, and if a
+    future publish is refused again, **re-run the sanitized shape as a CONTROL before concluding
+    anything**, rather than treating the narrowing as a known remedy.
+  - **Stripping the sourcemaps did NOT zero the security vocabulary**, and this is worth keeping:
+    80 `entity`, 26 `ENTITY`, 20 `XXE`, 20 `billion-laughs` and 18 `DOCTYPE` survived in the
+    shipped bytes, about three quarters of the original count, all of it JSDoc compiled into the
+    two declaration rollups. Going to zero means stripping JSDoc from the public declarations,
+    which is a regression, and was not done.
+  - **The post-publish window is real and the pipeline reads it wrong.** `changeset publish`
+    returned `success` and created the tag while
+    `GET https://registry.npmjs.org/@cosyte%2ffhir` was still `404`, with
+    `/@cosyte%2ffhir/0.0.10` and the tarball already `200` and sibling scope packages `200`. The
+    shared pipeline's post-publish install probe fired inside that window and failed the run with
+    `verdict: uninstallable`. It resolved without intervention. **A 404 on the package document
+    taken seconds after a publish is not evidence of anything**; re-read it before concluding, and
+    that probe's verdict is not authoritative on its own.
+  - **`0.0.10`'s tarball is not the intended package shape.** It carries a 234-byte README and no
+    changelog. A published version is permanent, so this cannot be withdrawn; `0.0.11` restores
+    both. Three feature PRs (#103, #105, #106) also landed while the README was a stub, so the
+    restored README predates them and owes them their documentation.
+
+### The block, as it stood from 2026-07-23 to 2026-08-26 (history)
+
+- Every attempt was refused by npm with a bare `E403` on
+  `PUT https://registry.npmjs.org/@cosyte%2ffhir` (FHIR-NPM-NAME; support request filed 2026-07-23).
+  No version reached the registry and the repo carried no tag and no GitHub release.
   - **The "name-similarity" reading is RETRACTED. Do not rename or rescope the package on it.** npm
     has never named similarity or the unscoped `fhir` package in anything it returned; the only body
     it sends is its generic "forbidden by your security policy, or on a server you do not have
@@ -2258,8 +2297,10 @@ length in [`#publish-state-fhir-npm-name`](#publish-state-fhir-npm-name) above: 
 and in rekor **before** the refusal, so it is not a signing failure; scope-level creation works
 (`transform`, `synth` and `cli` created 2026-07-29, `deid` 2026-07-30, all after the first refusal);
 and the refusal is identical across publish paths and account sessions. The trap keeps its headline
-in `CLAUDE.md` and the evidence lives here. **The item itself is unchanged and still blocked on npm:
-do not re-derive, re-trace, re-fire or rename anything on the strength of this paragraph.**
+in `CLAUDE.md` and the evidence lives here. **The block itself ENDED on 2026-08-26, when `0.0.10`
+published (see the head of that section). The retraction is what survives it: do not rename or
+rescope the package, and do not re-derive, re-trace or re-fire anything on the strength of this
+paragraph.**
 
 ## The `null` laundering, closed (2026-08-07)
 

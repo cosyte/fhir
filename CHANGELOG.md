@@ -8,6 +8,22 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **The README and the changelog are back in the published tarball, reverting the narrowed shape
+  `0.0.10` shipped as a diagnostic probe (`FHIR-NPM-NAME`).** No runtime behaviour changes.
+  `0.0.10` published on 2026-08-26 with `files` narrowed to the four runtime artifacts and
+  `README.md` cut to a 234-byte stub, answering npm support's request for a sanitized publish. It
+  succeeded with no `E403`, ending a block that had stood since 2026-07-23. A published version is
+  permanent, so `0.0.10` keeps that stub; `files` here returns to `dist`, `README.md`, `LICENSE` and
+  `CHANGELOG.md`, and `scripts/check-no-internal-refs.sh` returns to its pre-probe exclusion set.
+  **That success does not establish that the contents were the cause**: one publish changed the
+  tarball and also followed a month of support escalation, and nothing separates those, so the
+  narrowing is reverted rather than kept as a remedy. Recorded for the next reader: stripping the
+  sourcemaps, 1.2 MB carrying the complete original TypeScript via `sourcesContent`, removed only
+  about a quarter of the security vocabulary in the shipped bytes; the rest is JSDoc in the
+  declaration rollups.
+
+### Changed
+
 - **A resource read from an XML root in another vocabulary is no longer written back as
   authoritative FHIR (`XML-RESIDUAL-1`).** Measured at the base commit:
   `<v:Observation xmlns:v="urn:vendor"><v:status value="entered-in-error"/>...</v:Observation>` read
