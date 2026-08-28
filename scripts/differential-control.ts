@@ -32,6 +32,11 @@
  *      against deliberately perturbed copies of the head codec, one per method of the surface, every
  *      run. This is the arm that makes the control prove it can fail.
  *   3. {@link unmovedProblems} -- a conformant document that no slice should move has not moved.
+ *   4. {@link refusalBlindSpots} -- the run NAMES the writer refusals it introduced, and the lines
+ *      those refusals turn into floors. Derived by differencing the two trees' own published refusal
+ *      codes, so it keys the current slice while it is current and keys nothing once it has merged:
+ *      the one property the deleted hand-keyed control could not hold. Not a problem on either
+ *      polarity, because introducing a refusal is not a fault and not introducing one is not either.
  *
  * **Arm 1 is the one the old control was reaching for and could not express.** A source difference
  * is not a promise that any READING moves: a write-path slice can change real code that no readable
@@ -71,6 +76,11 @@ export interface Codec {
   serializeResourceXml: (resource: never) => string;
   validateResource: (resource: never) => { valid: boolean; issues: readonly RawIssue[] };
   readSafety: (resource: never) => RawSafety;
+  /**
+   * Every reason that tree's writers refuse, as the package publishes them. Read so the control can
+   * derive which refusals a run INTRODUCES rather than being told; see {@link refusalsIntroduced}.
+   */
+  SERIALIZE_ERROR_CODES: Readonly<Record<string, string>>;
 }
 
 /**
@@ -302,4 +312,61 @@ export function unmovedProblems(base: Codec, head: Codec, readsAlike: ReadsAlike
     : [
         "the two trees disagree on a conformant narrative document, which is not what this slice claims to change: check that before reading any number below",
       ];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// Arm 4: the run names the refusals it introduced, so its zeros are read with them in view
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The refusal codes head's writers declare that base's did not: the write-path refusals THIS run
+ * introduces, named by the run rather than by a human.
+ *
+ * **This is a KEY that cannot go stale, which is the whole reason it is derived and not written
+ * down.** The control this file replaced kept a hand-written document whose reading "this slice
+ * moves", it named a slice, the slice merged, and the control then fired on a clean tree and a
+ * changed one alike. Two codes sets differenced at run time name the current slice while it is
+ * current and name nothing once it has merged, with nobody remembering to re-key anything.
+ *
+ * It is deliberately **not** a problem, on either polarity. An empty result is the ordinary case for
+ * a run that adds no refusal, and a non-empty one is a statement about what the report below cannot
+ * grade rather than a fault; see {@link refusalBlindSpots}.
+ *
+ * @param base - The codec imported from `--base`.
+ * @param head - The working tree's codec.
+ * @returns The refusal codes present at head and absent at base, sorted.
+ */
+export function refusalsIntroduced(base: Codec, head: Codec): string[] {
+  const known = new Set(Object.values(base.SERIALIZE_ERROR_CODES));
+  return Object.values(head.SERIALIZE_ERROR_CODES)
+    .filter((code) => !known.has(code))
+    .sort();
+}
+
+/**
+ * What this report cannot grade about the refusals it just introduced, in its own words, printed
+ * beside the zeros they narrow.
+ *
+ * **A ZERO ON A LINE A REFUSAL NARROWS IS A FLOOR AND NOT A PROOF, and the report is the place that
+ * has to say so**: `emit()` records every refusal as one sentinel, so a `Reading` carries neither
+ * the refusal's code nor its message and swapping one refusal for another moves NO reading at all;
+ * and the leaf comparison SKIPS a refused document, because a document that was not emitted has no
+ * leaves to find, so a leaf a refused document's reader genuinely stopped modelling would be
+ * excluded rather than counted. Both are declared in `read-differential.ts` and neither is closed
+ * here. What is closed is that they used to be declarations a reader had to go and find; now the
+ * run that trips them prints them, keyed to the codes it introduced.
+ *
+ * @param base - The codec imported from `--base`.
+ * @param head - The working tree's codec.
+ * @returns One line per statement, or an empty list when the run introduces no refusal.
+ */
+export function refusalBlindSpots(base: Codec, head: Codec): string[] {
+  const introduced = refusalsIntroduced(base, head);
+  if (introduced.length === 0) return [];
+  return [
+    `this run introduces ${String(introduced.length)} writer refusal(s): ${introduced.join(", ")}`,
+    "a document refused on one of them is SKIPPED by the leaf comparison, so `leaf values base read` and `missing at head` are floors for it, not proofs: see `not compared (head refused to serialize)`",
+    "and `readings moved` cannot see WHICH refusal fired, because every refusal is recorded as one sentinel: a change swapping one refusal for another scores zero here",
+    "measure a slice that changes the READER as well as adding a refusal separately, against a base with no refusals in it",
+  ];
 }

@@ -79,6 +79,7 @@ import {
   complex,
   list,
   markDroppedText,
+  markForeignRoot,
   primitive,
   type FhirComplex,
   type FhirNode,
@@ -227,6 +228,34 @@ function isForeign(resolved: ResolvedName, parentNamespace: string): boolean {
  */
 function isNarrativeDiv(resolved: ResolvedName): boolean {
   return resolved.name === "div" && resolved.namespace === XHTML_NAMESPACE;
+}
+
+/**
+ * Whether a **root** element named a vocabulary that RESOLVES to something other than FHIR's.
+ *
+ * This is one of the two arms of the root's own foreign test, split out because only this arm can be
+ * carried on the model. It covers both spellings of a resolvable vendor root, a default declaration
+ * (`<Observation xmlns="urn:vendor">`) and a bound prefix (`<v:Observation xmlns:v="urn:vendor">`),
+ * and it covers neither of the other two roots the reader accepts:
+ *
+ * - **No namespace at all.** The root is the one element with its own rule and a document declaring
+ *   no namespace is read as FHIR, unflagged. Not tightened here, and `NO_NAMESPACE` is excluded by
+ *   name rather than by falling out of a comparison.
+ * - **A prefix bound to nothing.** There is no vocabulary to have resolved to, the tag is kept
+ *   verbatim so the resource models under the prefixed name, and its children are foreign to it in
+ *   turn. That root reads differently in every respect and closing its round trip is a separate,
+ *   deferred residual whose own characterization tests must red before it moves.
+ *
+ * The reader's window and its report's window are the same window: `unexpectedXmlContent` fires at
+ * the root for this arm **or** the unbound one, and this marks the subset of that flag whose closure
+ * shipped. Widening this predicate without widening what the reader reports would break that.
+ */
+function rootVocabularyIsForeign(resolved: ResolvedName): boolean {
+  return (
+    !resolved.unboundPrefix &&
+    resolved.namespace !== FHIR_XML_NAMESPACE &&
+    resolved.namespace !== NO_NAMESPACE
+  );
 }
 
 /**
@@ -762,10 +791,14 @@ export function parseResourceXml(input: string | XmlElement): ReadResult {
   // A document that declares no namespace at all is read as FHIR and not flagged, exactly as before:
   // the reader is schema-free and lenient, and refusing every unnamespaced document would reject
   // input it has always accepted. A root that names a vocabulary other than FHIR's is flagged.
-  const rootIsForeign =
-    resolved.unboundPrefix ||
-    (resolved.namespace !== FHIR_XML_NAMESPACE && resolved.namespace !== NO_NAMESPACE);
+  const rootIsForeign = resolved.unboundPrefix || rootVocabularyIsForeign(resolved);
   if (rootIsForeign) issues.push(unexpectedXmlContent(path));
-  const resource = readComplex(self, path, issues, { isResource: true });
+  const read = readComplex(self, path, issues, { isResource: true });
+  // The flag above is the whole reading's only word on the vocabulary, and it lives in the issue
+  // list, which the model does not carry. So the resolvable arm of it is ALSO recorded on the model,
+  // where `serializeResourceXml` can see it and refuse rather than emit a FHIR-namespaced document
+  // whose re-read says nothing. This adds no read: it records, on the model, a position the reader
+  // was already reporting, and it records the marker only, never the namespace.
+  const resource = rootVocabularyIsForeign(resolved) ? markForeignRoot(read) : read;
   return { resource, issues };
 }

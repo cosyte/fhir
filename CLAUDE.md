@@ -156,12 +156,16 @@ Unless noted:
   section requires `valid`/`safeToSummarize` to match, so it scores a refusal as _weaker_ for doing
   the right thing. Score a refusal base-vs-head.
 - **The control was RED on a clean tree AND a changed one, so it cleared neither: its zeros are
-  inadmissible.** `CONTROL.moved` DELETED; three arms, ONE comparison (`sameReading`). **Never
-  re-key a document in.**
+  inadmissible.** `CONTROL.moved` DELETED; **four** arms, ONE comparison (`sameReading`). **Never
+  re-key a document in.** Arm 4 (`refusalBlindSpots`) is the one that keys the current slice and it
+  does it by **DIFFERENCING THE TWO TREES' OWN `SERIALIZE_ERROR_CODES`**, so it names nothing once
+  the slice merges: derive a key, never write one down.
 - **If you add a writer refusal, check what the harness does with it before you trust a zero**: it
   reported 5,159 phantom leaf losses, and the leaf comparison now **skips** a refused document. **A
   slice that changes the reader _and_ adds a refusal has a real blind spot there**; measure the
-  reader change separately.
+  reader change separately. Arm 4 now PRINTS that, keyed to the codes the run introduced, but
+  printing a limit does not remove it: **a zero on a line a refusal narrows is a floor.** And a
+  refusal no corpus document reaches scores `readings moved 0` truthfully, which is not evidence.
 - **Two prefixes bound to the FHIR namespace are two spellings of one name, and reading them as one
   element WIDENS the read window: report it or drop the grouping.** Reporting was taken
   (`MIXED_XML_SPELLING`, plus `ARRAY_WRAPPED_SCALAR` at a safety-scoped element), because dropping
@@ -178,8 +182,8 @@ Unless noted:
   slice, and do not restate a gap as a claim. **Pinned by a test:** the **empty** `_`-sibling and a
   `_`-object's unreadable member,
   the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, the §2.6.1
-  value-absent primitive, the foreign-root laundering (`test/xml.test.ts`, "declared residuals,
-  pinned so they cannot move in silence"). **Each of those is a characterization test over a gap:
+  value-absent primitive (`test/xml.test.ts`, "declared residuals, pinned so they cannot move in
+  silence"). **Each of those is a characterization test over a gap:
   CLOSING one MUST red it, in the same change.** Not theoretical: every closure below red one.
   **"Pinned by a test" is load-bearing prose, so never write it without opening the test**: such
   sentences have been false for days here, and the next reader does not re-check.
@@ -203,6 +207,16 @@ Unless noted:
   - **CLOSED 2026-08-08: the SHADOWED member, BOTH writers** (`UNSERIALIZABLE_SHADOWED_PROPERTY`,
     window `shadowedProperties`). **DO NOT hand both back**: `JSON.parse` is last-wins, this is
     first-wins. [`#shadowed-member`](documentation/agent-notes.md#the-shadowed-member-2026-08-08)
+  - **CLOSED 2026-08-27: the FOREIGN-ROOT laundering** (`UNSERIALIZABLE_FOREIGN_ROOT`, marker
+    `FhirComplex.foreignRoot`). The model carries a **marker, never the namespace**: the URI is the
+    document content this residual is about, and a marker cannot leak it. **XML ONLY, and that is not
+    a claim the JSON channel keeps the flag** - it does not, `serializeResource` is byte-identical to
+    base, and that leg is declared open. **DO NOT WIDEN IT** to the other arm of `rootIsForeign`: an
+    **unbound**-prefix root and a **no-namespace** root are each accepted on purpose and each stay
+    written. It **withdraws a round trip from a document that reads `valid: true`**, the third
+    refusal to pay that (`breaksTag` and the untaggable type are the others), and it is raised
+    **last** so nothing that already reported another code moves onto it.
+    [`#foreign-root-laundering`](documentation/agent-notes.md#the-foreign-root-laundering-closed-2026-08-27)
   - **STILL OPEN; deferral RE-MEASURED 2026-08-07 and it HOLDS.** Only ONE of the two remedies
     withdraws a capability. **Beside it,
     `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as

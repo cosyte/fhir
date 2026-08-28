@@ -74,6 +74,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { Codec } from "./differential-control.js";
 import {
+  refusalBlindSpots,
+  refusalsIntroduced,
   sensitivityProblems,
   sourceTreesDiffer,
   unmovedProblems,
@@ -910,6 +912,10 @@ async function main(): Promise<void> {
     }
 
     const problems = [...controlProblems, ...reconcile(tally, corpus)];
+    // Arm 4 of the control. Not folded into `problems`: introducing a refusal is not a fault, it is
+    // a statement about which lines below became floors, and the run derives it from the two trees'
+    // own published refusal codes rather than from anything a human keyed in.
+    const blindSpots = refusalBlindSpots(base, head);
     const report = {
       base: ref,
       baseSha: execFileSync("git", ["rev-parse", "--short", ref], {
@@ -932,6 +938,8 @@ async function main(): Promise<void> {
         ]),
       ),
       twins: { twins, twinsEqual, twinsHeadLouder, twinsHeadWeaker, twinExamples, louderExamples },
+      refusalsIntroduced: refusalsIntroduced(base, head),
+      blindSpots,
       problems,
     };
 
@@ -1020,6 +1028,10 @@ async function main(): Promise<void> {
       if (tally.examples.length > 0) {
         process.stdout.write("\n  first losses seen\n");
         for (const e of tally.examples.slice(0, 10)) process.stdout.write(`    ${e}\n`);
+      }
+      if (blindSpots.length > 0) {
+        process.stdout.write("\n  WHAT THIS RUN CANNOT GRADE (control arm 4, derived not keyed)\n");
+        for (const b of blindSpots) process.stdout.write(`    ${b}\n`);
       }
       if (problems.length > 0) {
         process.stdout.write("\n  HARNESS PROBLEMS\n");

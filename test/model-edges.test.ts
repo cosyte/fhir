@@ -77,6 +77,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
     expect([...declared.keys()].sort()).toEqual([
       "FhirComplex.droppedText",
       "FhirComplex.duplicates",
+      "FhirComplex.foreignRoot",
       "FhirComplex.kind",
       "FhirComplex.nestedArray",
       "FhirComplex.nestedArraySource",
@@ -153,6 +154,29 @@ describe("the model's edge set is derived from the type, not from a search", () 
         .map((file) => file.slice(SRC.length))
         .sort(),
     ).toEqual(["codec/read.ts", "model/node.ts"]);
+  });
+
+  it("types the foreign-root marker as `true`, which carries no edge and no content", () => {
+    // The marker records that the document's root named a vocabulary other than FHIR's. Like the
+    // two above it, a literal `true` and not the namespace: the namespace URI is document content,
+    // so preserving it would put a vendor URI on the model within reach of a diagnostic. Nothing is
+    // kept, so there is nothing here for a walker to reach and nothing for a diagnostic to leak.
+    expect(membersOf("FhirComplex").get("foreignRoot")).toBe("true");
+    // On the complex only. A root is an object element, and the primitive has no root position to
+    // read a vocabulary at.
+    expect(membersOf("FhirPrimitive").has("foreignRoot")).toBe(false);
+  });
+
+  it("can only set the foreign-root marker through the XML reader's own helper", () => {
+    // Same closure as the three markers above: nothing else in the package marks a node, so the
+    // marker can only ever mean that a document's own root resolved to another vocabulary, and the
+    // XML writer can never be made to refuse a document that did not carry that shape.
+    expect(
+      sourceFiles(SRC)
+        .filter((file) => /markForeignRoot/.test(readFileSync(file, "utf8")))
+        .map((file) => file.slice(SRC.length))
+        .sort(),
+    ).toEqual(["model/node.ts", "xml/read.ts"]);
   });
 
   it("can only set the dropped-element-text marker through the XML reader's own helper", () => {

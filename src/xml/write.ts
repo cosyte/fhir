@@ -42,6 +42,7 @@ import {
   assertNoShadowedProperty,
   assertSerializable,
   assertXmlArrayWrapper,
+  assertXmlForeignRoot,
   assertXmlResourceType,
   assertXmlSerializable,
   breaksTag,
@@ -399,6 +400,19 @@ function writeElement(
  *   case. `serializeResource` emits a non-string `resourceType` through its
  *   ordinary path, so this refusal does not reach it. See `assertXmlResourceType` for the window,
  *   which reaches every depth, and for the bound that holds only at the root.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_FOREIGN_ROOT` if the model holds a resource whose
+ *   root the XML reader read out of a vocabulary that resolved to something other than FHIR's, by a
+ *   default declaration or by a bound prefix. FHIR XML puts the resource in the FHIR namespace and
+ *   this writer has no vendor binding to write instead, so
+ *   `<v:Observation xmlns:v="urn:vendor"><v:status value="entered-in-error"/>…</v:Observation>` came
+ *   back as `<Observation xmlns="http://hl7.org/fhir">…</Observation>` whose re-read carried an
+ *   **empty** issue list: the one warning saying the document came from elsewhere was gone after a
+ *   single trip. **Unlike most of the refusals above it this one withdraws a round trip from a
+ *   document that reads `valid: true`**, because the root flag is a warning; the cost is bounded to
+ *   this class, and a root declaring no namespace at all or carrying a prefix bound to nothing is
+ *   untouched. `serializeResource` emits the model exactly as it always did, so this refusal does not
+ *   reach it -- a statement about that writer's output, not a claim that the JSON channel keeps the
+ *   flag. See `assertXmlForeignRoot` for the window and for the route not taken.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -429,5 +443,8 @@ export function serializeResourceXml(node: FhirComplex): string {
   // And this one last of all, on the same rule again: it is the newest code, so nothing that already
   // reported one of the five moves onto it. An array-wrapped or `null` type gate keeps its own.
   assertXmlResourceType(node);
+  // And this one after THAT, on the same rule once more: it is now the newest code, so a vendor root
+  // that also carries dropped character data or an unwritable name keeps the code it already had.
+  assertXmlForeignRoot(node);
   return xml;
 }
