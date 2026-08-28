@@ -16,21 +16,32 @@ semantics, and validate it against US Core, without reading the FHIR spec.
 
 ## Status
 
-- **Pre-alpha, unpublished on npm, and that is not missing work.** Every publish attempt is refused
-  by npm with a bare `E403` on the scoped `PUT` (`FHIR-NPM-NAME`, support request open since
-  2026-07-23), so there is no git tag and no GitHub release.
-  **Read the version from `package.json`, never infer it from npm**: it runs ahead of the registry.
-  Why: [`agent-notes.md#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
+- **PUBLISHED ON NPM SINCE 2026-08-26. `FHIR-NPM-NAME` IS CLEARED.** `0.0.10` is `latest`, with a
+  provenance attestation, a `v0.0.10` tag and a GitHub release. The bare `E403` on the scoped `PUT`
+  that refused every attempt from 2026-07-23 did not recur, and **that block is over: do not
+  re-derive it, re-trace it, or rename anything on the strength of it.** Still pre-alpha.
+  **Read the version from `package.json`, never infer it from npm**: between releases it runs ahead.
+  What cleared it, and what that does NOT prove:
+  [`agent-notes.md#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
   - **The "name-similarity" reading is RETRACTED. DO NOT RENAME OR RESCOPE THE PACKAGE ON IT.** npm
     has never named similarity or the unscoped `fhir` package in anything it returned. The three
     evidence clauses moved to the notes 2026-08-07, and are not summarised again here:
     [`#fhir-npm-name-the-evidence-which-was-duplicated`](documentation/agent-notes.md#fhir-npm-name-the-evidence-which-was-duplicated).
-  - **It is a HUMAN GATE, not work you can pick up.** The trace npm asked for was hand-checked free
-    of credential material and sent 2026-08-05, so it waits on npm. **Leave it blocked.**
+  - **A SUCCESSFUL PUBLISH IS NOT VISIBLE THE MOMENT IT SUCCEEDS, AND A 404 INSIDE THAT WINDOW IS
+    NOT A FAILURE.** `0.0.10` returned `success` while the PACKAGE document was still `404` and the
+    VERSION document and the tarball were already `200`. The pipeline's own post-publish probe fired
+    inside that window and marked the run failed with `verdict: uninstallable`, which was wrong. It
+    resolved on its own. **Re-check the package document before reading anything into a 404**, and
+    do not act on a single reading taken seconds after a publish.
   - **Do not generalise the error code across the three affected packages; publish state and
     installability are independent.** Verbatim:
     [`#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
-  - **Never re-fire a version npm has already traced:** `0.0.2`, `0.0.3`, `0.0.7`, `0.0.8`.
+  - **A PUBLISHED VERSION IS PERMANENT AND CAN NEVER BE RE-FIRED.** `0.0.10` is out and is the floor.
+    The versions npm traced during the block, none of which was ever published, were `0.0.2`,
+    `0.0.3`, `0.0.7` and `0.0.8`.
+  - **`0.0.10` SHIPPED A 234-BYTE STUB README AND NO CHANGELOG**, because it was a deliberately
+    narrowed diagnostic tarball, and a published version cannot be withdrawn. `0.0.11` restores
+    both. **Do not read `0.0.10`'s tarball as the intended package shape.**
   - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
     hand before ever linking one.
 - **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.**
