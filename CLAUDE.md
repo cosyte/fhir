@@ -32,8 +32,8 @@ semantics, and validate it against US Core, without reading the FHIR spec.
     republish now that the package exists.
   - **Do not conclude from one publish.** This trap exists because that is what happened here: the
     success was written up as the block being over, and the very next publish refuted it.
-  The full sequence and what each attempt controlled for:
-  [`agent-notes.md#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
+    The full sequence and what each attempt controlled for:
+    [`agent-notes.md#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
   - **The "name-similarity" reading is RETRACTED. DO NOT RENAME OR RESCOPE THE PACKAGE ON IT.** npm
     has never named similarity or the unscoped `fhir` package in anything it returned. The three
     evidence clauses moved to the notes 2026-08-07, and are not summarised again here:
