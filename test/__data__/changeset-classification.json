@@ -1,0 +1,11 @@
+{
+  "certifiedBy": "documentation/release-0.1.0-readiness.md",
+  "note": "The audit's classification register. The audit writes it and the release readiness check in test/release-readiness.test.ts reads it, so that 'a changeset the audit classifies as a break candidate' has an input rather than a phrase list standing in for one. Keys are file names inside .changeset/. An entry may RAISE a level and may NAME a break candidate with the observable a consumer would see; it can never lower a level the changeset's own text established, nor clear a break that text described. A pending changeset neither this register nor its own text classifies is REFUSED by the check and owed a reading here, and that refusal is a release decision recorded in the audit rather than a build failure. An entry for a changeset a later `changeset version` run has consumed is stale, not defective: it classifies nothing, because only a pending file is ever looked up.",
+  "entries": {
+    "olive-comets-teach.md": {
+      "level": "patch",
+      "breakCandidate": false,
+      "reason": "its own text states 'No runtime change: nothing under `src/` was touched and the public API is unchanged', and what it does change is the documentation set under docs-content/ plus the test-run gate over it, neither of which reaches the published artifact: package.json's `files` allow list publishes dist, README.md, LICENSE and CHANGELOG.md and nothing else. Every public observable is identical, which is the classification rule's `patch` arm"
+    }
+  }
+}
