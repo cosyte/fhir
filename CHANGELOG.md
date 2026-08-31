@@ -97,6 +97,29 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **The published documentation set is the full spine the overview page promised, and a gate now
+  grades it on every test run.** `docs-content/` gains installation, quickstart, core concepts,
+  guides, current limits and troubleshooting pages, each enumerated by `sidebars.json`, and the
+  overview page no longer describes the rest of the set as absent. `scripts/docs-set-check.ts`,
+  wired into `pnpm test` through `test/docs-set.test.ts`, grades the set on eight arms: brace safety
+  for the documentation site's MDX build (one unescaped brace fails that build globally, and the PHI
+  scanner does not read `.md`, so this surface had no gate of its own), dangling links and sidebar
+  entries, agreement with `package.json` on name, module format, supported Node range and registry
+  availability, a `scripts/phi-allow-list.txt` declaration behind every example value, stale claims
+  that a present page is unwritten, required pages and the topics each owes, coded reasons the
+  package does not define, and compilation plus the stated result of every fenced TypeScript sample.
+  Each arm is proven able to fail against a control directory seeded with exactly the fault it
+  catches. **The walk and the recogniser match the thing they guard.** `scripts/build-docs-artifacts.sh`
+  packs `docs-content/` recursively, so the walk recurses too and a page in a subdirectory is graded
+  by every arm and named by its path; a relative link is resolved against the directory of the page
+  that wrote it. And an example is graded on what it says rather than on how it is spelled: the
+  synthetic-identifier arm reads a fenced `json` payload, a quoted or templated object, and a
+  TypeScript object literal through the same walker, plus an identifying key written as a source
+  literal in any fence, so the same undeclared value reds whichever way an author writes it. That is
+  this repository's own recorded lesson on the PHI scanner, where scope moved without the recogniser
+  and a name typed as `family: "..."` was read by nothing. No new dependency, no `src/` change, and
+  the public API is byte-identical.
+
 - **A terminology service can declare which code-system release an answer was made against, and a
   membership finding says so, or says it was not declared (`FHIR-VOCAB-VERSION-1`).** A
   `TerminologyService` answers `in`, `not-in` or `unknown`, and until now the release it consulted
