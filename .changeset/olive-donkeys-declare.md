@@ -1,5 +1,5 @@
 ---
-"@cosyte/fhir": patch
+"@cosyte/fhir": minor
 ---
 
 A terminology service can declare which code-system release an answer was made against, and the

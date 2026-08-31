@@ -1,5 +1,5 @@
 ---
-"@cosyte/fhir": patch
+"@cosyte/fhir": minor
 ---
 
 Every resource type this library treats as safety-critical is now checked against its own elements.

@@ -1,0 +1,51 @@
+{
+  "package": "@cosyte/fhir",
+  "baselineVersion": "0.0.10",
+  "targetVersion": "0.1.0",
+  "classifiedOn": "2026-08-31",
+  "rule": "documentation/release-0.1.0-readiness.md#classification-rule",
+  "changesets": {
+    "brave-pandas-refuse.md": {
+      "level": "minor",
+      "proseSha256": "94fefc7517b62ad2fd883d5316855777502c71c2d3ca1bda4b70de675195ce98",
+      "justification": "It states its own cost: \"This withdraws an XML round trip from a document that reads valid: true\", which is a withdrawal of previously working public behavior, and it also adds the public export isForeignRoot and a new refusal code.",
+      "breakCandidate": {
+        "observable": "serializeResourceXml, given a model the XML reader built from a root that resolved to a namespace other than the FHIR one, previously returned XML and now throws instead of writing, and the withdrawal reaches every depth such a resource is composed into. The changeset states the cost itself: it withdraws an XML round trip from a document that reads valid: true.",
+        "symbol": "UNSERIALIZABLE_FOREIGN_ROOT"
+      }
+    },
+    "lucky-moons-repeat.md": {
+      "level": "patch",
+      "proseSha256": "586657d31c82d4ca41e39bfd33c0bbeb75a5de1825388c841a2d74a732fcb2e5",
+      "justification": "Its own closing sentence is \"No library code changed, the pinned oracle release, the FHIR version and the loaded implementation guide are where they were, and nothing here ships in the published artifact.\"",
+      "breakCandidate": null
+    },
+    "olive-donkeys-declare.md": {
+      "level": "minor",
+      "proseSha256": "8a778b9e8c00d3546b374d55f38f27a9032203f9b13a41953894cb3ddfb95cd4",
+      "justification": "It adds new public capability, \"CodeValidationResult now carries an optional systemVersion\", plus ValidationIssue.codeSystemVersion and the CODE_SYSTEM_VERSION_RECORD_CODES / CODE_SYSTEM_VERSION_RECORD_SYSTEM exports, and it declares itself \"Additive throughout\".",
+      "breakCandidate": null
+    },
+    "quick-moons-listen.md": {
+      "level": "minor",
+      "proseSha256": "cace9b5da6627f713881f99b2c408b883c174fdcd25054c99b0f7045e552f1ea",
+      "justification": "Six safety-critical types gain complete element tables where the validator previously emitted \"an informational note saying the type had no element table, and no structural check of that resource's own elements at all\", which both adds capability and widens the finding set on documents that previously came back valid.",
+      "breakCandidate": {
+        "observable": "validateResource over an AllergyIntolerance, Condition, DiagnosticReport, Immunization, MedicationRequest or MedicationStatement previously reported no structural finding about that resource's own elements and could return valid: true. The same document can now draw a required-element, cardinality, datatype or required-binding error and return valid: false, which reaches the caller through ValidationResult.valid and toOperationOutcome(). The finding vocabulary is unchanged: the changeset states \"No new validation code and no new issue code\", so the codes a consumer switches on are the published VALIDATION_CODES members carried on ValidationIssue.code.",
+        "symbol": "VALIDATION_CODES"
+      }
+    },
+    "tidy-cranes-measure.md": {
+      "level": "patch",
+      "proseSha256": "b448cb8699b87b1e1ee36b7ba48f6ed5e228a6cc914d3d30a1c8d08ee570b00e",
+      "justification": "Its own closing sentence is \"No library code changed; nothing here ships in the published artifact.\"",
+      "breakCandidate": null
+    },
+    "warm-pumas-audit.md": {
+      "level": "patch",
+      "proseSha256": "5c5d9ea4c3bf467e01989497d2136c8924c64ec16469dd741bb467e72fc41b53",
+      "justification": "It adds a release readiness check, a certified surface test and in-repo documentation only; nothing here ships in the published artifact.",
+      "breakCandidate": null
+    }
+  }
+}

@@ -1,5 +1,5 @@
 ---
-"@cosyte/fhir": patch
+"@cosyte/fhir": minor
 ---
 
 A resource read from an XML root in another vocabulary is no longer written back as authoritative

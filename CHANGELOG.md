@@ -78,6 +78,36 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   not re-done: the allowlist existed, no `*.spec.js` could ship under it, and the version is already
   past their suggested `0.0.9`. **This is a probe, not a release shape; revert it once npm returns a
   result.**
+- **The pending release set is classified against a written rule, and three changesets that were
+  declaring `patch` now declare `minor` (`FHIR-RELEASE-PREP-1`).** No library code changed and
+  nothing here ships in the published artifact. The next version is not stated anywhere: Changesets
+  derives it from the bump levels sitting in `.changeset/`, so a set that is entirely `patch` derives
+  a patch however this file reads. All five pending changesets declared `patch` and three of them are
+  not patches under any reading of what they changed. `XML-RESIDUAL-1` withdraws an XML round trip
+  from a document that reads `valid: true` (the sentence was already in the entry above, and the
+  number Changesets reads was never in it); `FHIR-VOCAB-VERSION-1` adds an optional member to a
+  public type plus two exports; `MODEL-SAFETY6-1` widens the finding set over six resource types the
+  structural validator previously did not check at all. Each now declares `minor`, edited on the bump
+  level line with its prose byte-identical. **On a `0.x` line the minor position is the only place a
+  break can be signalled at all**, which is why a withdrawal is `minor` at minimum here rather than
+  something a caller could read as a fix, and why `major` is a finding rather than a classification.
+  `scripts/release-readiness.mjs` reads the pending set and **refuses rather than reports**: an empty
+  or absent directory, no parseable frontmatter, another package's name, a level outside the three,
+  `major`, an unclassified file, a classification whose file is gone, a declared level that disagrees
+  with the classification, edited prose under a classification, and a break candidate riding out as a
+  patch are each named with the file and the defect and each exit non-zero, none skipped, counted
+  anyway or defaulted. The classification is **committed data, not inferred from prose**
+  (`documentation/release-0.1.0-classification.json`), because deciding whether a paragraph describes
+  a withdrawal is a judgement and a keyword matcher would be a second place that judgement lives and
+  the first place it is wrong. The public surface is certified as data and pinned **in both
+  directions**, so neither a removal nor an uncertified addition passes silently, with export KIND
+  (runtime value versus type-only) and the `exports` subpath set graded beside it. Graded by
+  `test/release-readiness.test.ts` with no build, no Java, no network and no npm credentials.
+  `documentation/release-0.1.0-readiness.md` is the audit: the per-changeset table, both break
+  candidates with their observables and published symbols, the derived version, the observed
+  precondition and docs-artifact results, and its verdict, which is **not releasable as `0.1.0` from
+  this tree** because this repository's own committed statements keep it on the `0.0.x` ladder.
+  **Nothing was versioned, tagged or published**, and every classified changeset is still pending.
 
 ### Added
 
