@@ -1,0 +1,5 @@
+{
+  "certifiedBy": "documentation/release-0.1.0-readiness.md",
+  "note": "The audit's classification register. The audit writes it and the release readiness check in test/release-readiness.test.ts reads it, so that 'a changeset the audit classifies as a break candidate' has an input rather than a phrase list standing in for one. Keys are file names inside .changeset/. An entry may RAISE a level and may NAME a break candidate with the observable a consumer would see; it can never lower a level the changeset's own text established, nor clear a break that text described. A pending changeset neither this register nor its own text classifies is REFUSED, never assumed to be a patch. It is empty because this tree holds zero pending changesets.",
+  "entries": {}
+}

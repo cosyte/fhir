@@ -14,9 +14,11 @@
  *  1. THE PENDING SET. Every file in `.changeset/` other than `README.md` and `config.json` is a
  *     changeset. Each is read for the package it names and the level it declares, and the level is
  *     compared against the classification rule below. A file that cannot be read is a REFUSAL, never
- *     a skip and never a default level.
+ *     a skip and never a default level. So is a file whose level cannot be ESTABLISHED: see
+ *     THE TWO CHANNELS below.
  *  2. THE BREAK CANDIDATES. A changeset whose own text describes a withdrawal or a narrowing of
- *     previously working public behaviour is named, and may not sit at `patch`.
+ *     previously working public behaviour, or which the audit's committed classification register
+ *     names as one, is named with the observable a consumer would see, and may not sit at `patch`.
  *  3. THE DERIVED VERSION. What Changesets would produce from the classified set, and whether that
  *     is the version the release is asking for.
  *  4. THE CERTIFIED SURFACE. The entry point's exported names and their kinds, and the `exports`
@@ -38,10 +40,26 @@
  *   - A withdrawal is `minor` AT MINIMUM precisely because `major` is unavailable: on a `0.x`
  *     package the minor position is the only place a break can be signalled.
  *
+ * THE TWO CHANNELS a level can be established through, and the refusal when neither speaks:
+ *
+ *   a. THE CHANGESET'S OWN TEXT, through the narrow phrase recogniser below. It matches the idiom
+ *      this repository has actually used, so it recognises a withdrawal stated in those words and
+ *      the "nothing here ships in the published artifact" the rule names as evidence for `patch`.
+ *   b. THE AUDIT'S CLASSIFICATION REGISTER, `test/__data__/changeset-classification.json`, a
+ *      committed file the audit writes and this check reads. It may RAISE a level and NAME a break
+ *      candidate with its observable; it can never lower a level the text established nor clear a
+ *      break the text described, so the effective level is the higher of the two readings.
+ *
+ * When NEITHER channel speaks, the changeset is UNCLASSIFIED and the whole set is refused. There is
+ * no `patch` fallback. A recogniser miss is not evidence of anything, and treating it as evidence of
+ * a fix is precisely how a withdrawal of working behaviour ships to a consumer on a caret range.
+ *
  * FAIL CLOSED, EVERYWHERE. Every refusal below reports a problem rather than skipping. An empty
- * `.changeset/`, an absent one, a file with no frontmatter, a foreign package name, an unknown level
- * and a `major` declaration are each a named failure. A readiness check that reports "ready" over a
- * set it could not read is worse than no check: it is the one output that gets acted on.
+ * `.changeset/`, an absent one, a file with no frontmatter, a foreign package name, an unknown level,
+ * a `major` declaration, a register entry that names a break candidate without its observable, and a
+ * changeset neither channel classifies are each a named failure. A readiness check that reports
+ * "ready" over a set it could not read is worse than no check: it is the one output that gets acted
+ * on.
  *
  * NO BUILD, NO JVM, NO NETWORK, NO CREDENTIALS. Everything here reads the working tree and the
  * package entry point through the ordinary test import. The unhappy paths are driven from fixtures
@@ -179,10 +197,16 @@ function readChangeset(file: string, source: string): ChangesetRead {
  * Phrases that mark a WITHDRAWAL or NARROWING of previously working public behaviour.
  *
  * These are read from the changeset's own prose, which in this repository states the cost of a
- * change explicitly. The recogniser is deliberately narrow and its misses are the safe direction
- * for the automated half: it can only ever RAISE a level or name a break, never lower one or clear
- * one, and the audit carries the human reading beside it. What it must never do is stay silent on a
- * changeset that says in plain words that it takes something away.
+ * change explicitly. The recogniser is deliberately narrow, and NARROW MEANS IT MISSES: it carries
+ * this repository's idiom and nothing wider, so ordinary changeset prose spelling any of the cases
+ * the rule names in general terms goes unrecognised here. A miss is therefore worth nothing in
+ * either direction and is never read as evidence of a fix. What the recogniser buys is one thing
+ * only: it can RAISE a level and name a break the author declared too low. Everything it does not
+ * recognise falls to the audit's register, and what neither reads is refused.
+ *
+ * DO NOT ANSWER A MISS BY LENGTHENING THIS LIST. A longer list has the same shape and the same
+ * blind spot one paraphrase further out; the register is the channel for a reading a keyword cannot
+ * make.
  */
 const WITHDRAWAL_PHRASES: readonly string[] = [
   "withdraws",
@@ -217,45 +241,177 @@ const NO_SHIP_PHRASES: readonly string[] = [
 interface Classification {
   readonly level: BumpLevel;
   readonly breakCandidate: boolean;
+  /** What a consumer sees change. Non-empty whenever `breakCandidate` is true, per AC3 and AC4. */
+  readonly observable: string;
   readonly reason: string;
 }
 
-/** Apply the rule to one changeset's text. */
-function classify(changeset: PendingChangeset): Classification {
+/**
+ * ONE ENTRY IN THE AUDIT'S CLASSIFICATION REGISTER.
+ *
+ * The acceptance criterion this serves speaks of "a changeset the audit classifies as a break
+ * candidate". A check whose only authority is its own keyword recogniser gives that phrase no input
+ * at all: it can then only refuse the breaks it happens to recognise, and every other one passes as
+ * a fix. This is the input. The audit writes an entry, the check reads it, and the two cannot drift
+ * apart silently because a pending changeset that neither channel classifies is refused.
+ */
+interface RegisterEntry {
+  /** The level the audit assigns. `major` is unavailable on this line and is refused. */
+  readonly level: string;
+  /** Whether the audit calls this a break candidate. */
+  readonly breakCandidate: boolean;
+  /** What a consumer would see change. REQUIRED when `breakCandidate` is true. */
+  readonly observable?: string;
+  /** The audit's own words for why. Required: an unexplained classification is not one. */
+  readonly reason: string;
+}
+
+interface ClassificationRegister {
+  /** The document that wrote this register, quoted in every problem it produces. */
+  readonly certifiedBy: string;
+  /** Keyed by file name inside `.changeset/`. */
+  readonly entries: Readonly<Record<string, RegisterEntry>>;
+}
+
+/** The committed register, read the same way the committed surface inventory is. */
+const REGISTER = JSON.parse(
+  readFileSync(new URL("./__data__/changeset-classification.json", import.meta.url), "utf8"),
+) as ClassificationRegister;
+
+/** A register for a fixture set, standing in for the committed one. */
+function registerOf(entries: Readonly<Record<string, RegisterEntry>>): ClassificationRegister {
+  return { certifiedBy: "a fixture register standing in for the audit", entries };
+}
+
+/** The register that classifies nothing, which is what the committed one holds today. */
+const EMPTY_REGISTER = registerOf({});
+
+/** `patch` < `minor` < `major`, so two readings of one changeset resolve upward and never down. */
+const LEVEL_RANK: Readonly<Record<BumpLevel, number>> = { patch: 0, minor: 1, major: 2 };
+
+/**
+ * The sentence a matched phrase sits in, so a refusal quotes the changeset rather than a keyword.
+ * The observable AC4 requires is a thing a consumer sees, and a bare phrase is not one.
+ */
+function sentenceAround(body: string, phrase: string): string {
+  const lower = body.toLowerCase();
+  const at = lower.indexOf(phrase);
+  if (at < 0) return body.replace(/\s+/g, " ").trim();
+  const start = lower.lastIndexOf(".", at) + 1;
+  const stop = lower.indexOf(".", at + phrase.length);
+  return body
+    .slice(start, stop < 0 ? body.length : stop + 1)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The outcome of applying the rule to one changeset: a classification, or a refusal to make one.
+ *
+ * THE REFUSAL IS THE POINT. There is no third arm returning a default, because a default here is a
+ * positive claim ("this changes no public observable") that nothing established.
+ */
+type Verdict = { readonly ok: Classification } | { readonly unclassifiable: string };
+
+/** Apply the rule to one changeset, through both channels, refusing when neither speaks. */
+function classify(changeset: PendingChangeset, register: ClassificationRegister): Verdict {
   const text = changeset.body.toLowerCase();
   const hit = (phrases: readonly string[]): string | undefined =>
     phrases.find((phrase) => text.includes(phrase));
 
+  // Channel (a): what the changeset's own text establishes. A miss establishes nothing at all.
   const withdrawal = hit(WITHDRAWAL_PHRASES);
+  const capability = hit(CAPABILITY_PHRASES);
+  const noShip = hit(NO_SHIP_PHRASES);
+
+  let fromText: Classification | undefined;
   if (withdrawal !== undefined) {
-    return {
+    fromText = {
       level: "minor",
       breakCandidate: true,
+      observable: sentenceAround(changeset.body, withdrawal),
       reason: `its own text describes a withdrawal or narrowing of previously working public behaviour (\`${withdrawal}\`), which is \`minor\` at minimum because \`major\` is unavailable on this line`,
     };
-  }
-
-  const noShip = hit(NO_SHIP_PHRASES);
-  const capability = hit(CAPABILITY_PHRASES);
-  if (capability !== undefined && noShip === undefined) {
-    return {
+  } else if (capability !== undefined && noShip === undefined) {
+    fromText = {
       level: "minor",
       breakCandidate: false,
+      observable: "",
       reason: `its own text describes new public capability (\`${capability}\`)`,
     };
-  }
-  if (noShip !== undefined) {
-    return {
+  } else if (noShip !== undefined) {
+    fromText = {
       level: "patch",
       breakCandidate: false,
+      observable: "",
       reason: `its own text states that nothing in it reaches the published artifact (\`${noShip}\`)`,
     };
   }
+
+  // Channel (b): what the audit recorded about this file, if anything. A defective entry is a
+  // refusal too: a register that cannot be read cannot classify, and half-reading one is the same
+  // failure as half-reading a changeset.
+  const entry = register.entries[changeset.file];
+  let fromAudit: Classification | undefined;
+  if (entry !== undefined) {
+    if (entry.level !== "patch" && entry.level !== "minor") {
+      return {
+        unclassifiable: `${register.certifiedBy} assigns it level \`${entry.level}\`, which is neither \`patch\` nor \`minor\`; \`major\` is unavailable on this line and there is no other level`,
+      };
+    }
+    const observable = (entry.observable ?? "").trim();
+    if (entry.breakCandidate && observable === "") {
+      return {
+        unclassifiable: `${register.certifiedBy} calls it a break candidate and names no observable, so a refusal could not say what a consumer would see change`,
+      };
+    }
+    if (entry.reason.trim() === "") {
+      return { unclassifiable: `${register.certifiedBy} carries no reason for its classification` };
+    }
+    fromAudit = {
+      level: entry.level,
+      breakCandidate: entry.breakCandidate,
+      observable,
+      reason: `the audit classifies it \`${entry.level}\` in ${register.certifiedBy}: ${entry.reason.trim()}`,
+    };
+  }
+
+  // Neither channel spoke. REFUSE, and say so in the words that make the refusal actionable.
+  if (fromText === undefined && fromAudit === undefined) {
+    return {
+      unclassifiable:
+        "neither its own text nor the audit's classification register classifies it. The recogniser carries this repository's idiom and nothing wider, so a miss establishes nothing; reading one as a fix is how a withdrawal of working behaviour reaches a consumer labelled a patch. Classify it in the audit's register, or state the cost in the changeset's own prose",
+    };
+  }
+
+  // Both may speak. Resolve UPWARD only: the register can raise a level the author declared too low
+  // and can name a break the text did not spell out, and it can do neither in the other direction.
+  const readings = [fromText, fromAudit].filter((r): r is Classification => r !== undefined);
+  const level = readings.reduce<BumpLevel>(
+    (highestSoFar, reading) =>
+      LEVEL_RANK[reading.level] > LEVEL_RANK[highestSoFar] ? reading.level : highestSoFar,
+    "patch",
+  );
+  const breakCandidate = readings.some((reading) => reading.breakCandidate);
+  // The audit's observable is preferred where it has one: it was written by a reader, and the
+  // recogniser's is a sentence it found near a keyword.
+  const audited = fromAudit?.observable ?? "";
+  const named = audited !== "" ? audited : (fromText?.observable ?? "");
+
+  if (breakCandidate && named === "") {
+    return {
+      unclassifiable:
+        "it reads as a break candidate and no observable could be named for it, and a refusal that cannot say what a consumer sees change is not the refusal this check owes",
+    };
+  }
+
   return {
-    level: "patch",
-    breakCandidate: false,
-    reason:
-      "its own text describes no new public capability and no withdrawal of existing behaviour",
+    ok: {
+      level,
+      breakCandidate,
+      observable: named,
+      reason: readings.map((reading) => reading.reason).join("; and "),
+    },
   };
 }
 
@@ -291,6 +447,9 @@ interface ReadinessOptions {
   readonly currentVersion: string;
   /** The version this release is asking for. */
   readonly targetVersion: string;
+  /** The audit's classification register for this set. Never optional: an absent one would be a
+   *  silent empty one, which is the fallback this check does not have. */
+  readonly register: ClassificationRegister;
 }
 
 interface ReadinessReport {
@@ -302,6 +461,10 @@ interface ReadinessReport {
   readonly classified: number;
   readonly derivedVersion: string | undefined;
   readonly breakCandidates: readonly string[];
+  /** Files neither channel could classify. Non-empty means the set was NOT classified. */
+  readonly unclassified: readonly string[];
+  /** Every file the check treated as a changeset, so a skip is visible rather than inferred. */
+  readonly pendingFiles: readonly string[];
 }
 
 /**
@@ -326,6 +489,8 @@ function releaseReadiness(options: ReadinessOptions): ReadinessReport {
       classified: 0,
       derivedVersion: undefined,
       breakCandidates: [],
+      unclassified: [],
+      pendingFiles: [],
     };
   }
 
@@ -337,6 +502,8 @@ function releaseReadiness(options: ReadinessOptions): ReadinessReport {
       classified: 0,
       derivedVersion: undefined,
       breakCandidates: [],
+      unclassified: [],
+      pendingFiles: [],
     };
   }
 
@@ -360,30 +527,61 @@ function releaseReadiness(options: ReadinessOptions): ReadinessReport {
       classified: 0,
       derivedVersion: undefined,
       breakCandidates: [],
+      unclassified: [],
+      pendingFiles: files,
     };
   }
 
   const breakCandidates: string[] = [];
-  const levels: BumpLevel[] = [];
+  const unclassified: string[] = [];
   for (const changeset of pending) {
-    const verdict = classify(changeset);
-    levels.push(verdict.level);
-    if (verdict.breakCandidate) {
+    const verdict = classify(changeset, options.register);
+
+    if ("unclassifiable" in verdict) {
+      // THE FAIL-CLOSED ARM. A changeset nothing classified is refused by name. It is not scored
+      // `patch`, not counted, and does not contribute a level, because every one of those is a
+      // claim about a change nobody read.
+      unclassified.push(changeset.file);
+      problems.push(
+        `.changeset/${changeset.file} could not be classified: ${verdict.unclassifiable}.`,
+      );
+      lines.push(`.changeset/${changeset.file}: declared ${changeset.declared}, rule UNCLASSIFIED`);
+      continue;
+    }
+
+    const classification = verdict.ok;
+    if (classification.breakCandidate) {
       breakCandidates.push(changeset.file);
       if (changeset.declared === "patch") {
         problems.push(
-          `.changeset/${changeset.file} is a break candidate and declares \`patch\`: ${verdict.reason}. A withdrawal shipped as a patch reaches a consumer on a caret range with no signal.`,
+          `.changeset/${changeset.file} is a break candidate and declares \`patch\`: ${classification.reason}. The observable a consumer sees change: ${classification.observable} A withdrawal shipped as a patch reaches a consumer on a caret range with no signal.`,
         );
       }
     }
-    if (changeset.declared !== verdict.level) {
+    if (changeset.declared !== classification.level) {
       problems.push(
-        `.changeset/${changeset.file} declares \`${changeset.declared}\` and the classification rule yields \`${verdict.level}\`: ${verdict.reason}.`,
+        `.changeset/${changeset.file} declares \`${changeset.declared}\` and the classification rule yields \`${classification.level}\`: ${classification.reason}.`,
       );
     }
     lines.push(
-      `.changeset/${changeset.file}: declared ${changeset.declared}, rule ${verdict.level}`,
+      `.changeset/${changeset.file}: declared ${changeset.declared}, rule ${classification.level}`,
     );
+  }
+
+  // An unclassified member sinks the SET, exactly as an unreadable one does. Deriving a version
+  // over the remainder is the "skip it and count the rest" behaviour that must not happen, and
+  // reporting readiness over it is the output this whole file exists to prevent.
+  if (unclassified.length > 0) {
+    return {
+      exitCode: 1,
+      output: `${String(unclassified.length)} changeset file(s) could not be classified, so this set was not classified and no version was derived. NOT RELEASABLE.\n${lines.join("\n")}\n${problems.join("\n")}`,
+      problems,
+      classified: 0,
+      derivedVersion: undefined,
+      breakCandidates,
+      unclassified,
+      pendingFiles: files,
+    };
   }
 
   const level = highest(pending.map((changeset) => changeset.declared));
@@ -403,6 +601,8 @@ function releaseReadiness(options: ReadinessOptions): ReadinessReport {
       classified: pending.length,
       derivedVersion,
       breakCandidates,
+      unclassified: [],
+      pendingFiles: files,
     };
   }
 
@@ -413,6 +613,8 @@ function releaseReadiness(options: ReadinessOptions): ReadinessReport {
     classified: pending.length,
     derivedVersion,
     breakCandidates,
+    unclassified: [],
+    pendingFiles: files,
   };
 }
 
@@ -433,8 +635,22 @@ function changeset(level: string, body: string, pkg: string = PACKAGE_NAME): str
   return `---\n"${pkg}": ${level}\n---\n\n${body}\n`;
 }
 
-/** Prose the rule reads as an ordinary fix. */
+/**
+ * Prose describing an ordinary fix.
+ *
+ * The recogniser does NOT read this as anything: nothing in it is this repository's idiom for a
+ * withdrawal, for new capability, or for a change that does not ship. That is deliberate, and it is
+ * why the fixtures using it also carry a register entry. Before the audit's register existed, prose
+ * like this was scored `patch` by default, which is the same silent default a withdrawal got.
+ */
 const PATCH_PROSE = "A rounding fix in an internal helper. Every public observable is identical.";
+
+/** The audit's reading of `PATCH_PROSE`, supplied the way the audit supplies one. */
+const PATCH_ENTRY: RegisterEntry = {
+  level: "patch",
+  breakCandidate: false,
+  reason: "a rounding fix inside a helper no export reaches; every public observable is identical",
+};
 
 /** Prose the rule reads as a withdrawal, in this repository's own idiom. */
 const WITHDRAWAL_PROSE =
@@ -444,11 +660,22 @@ const WITHDRAWAL_PROSE =
 const CAPABILITY_PROSE =
   "The result now carries an optional member declaring the release an answer was made against. Additive throughout.";
 
-const CONTROL_OPTIONS = { currentVersion: "0.0.11", targetVersion: "0.1.0" };
+const CONTROL_OPTIONS = {
+  currentVersion: "0.0.11",
+  targetVersion: "0.1.0",
+  register: EMPTY_REGISTER,
+};
 
 // ===========================================================================
 // AC1 + AC5: the pending set as this tree actually holds it.
 // ===========================================================================
+
+/** What `.changeset/` holds right now, minus the two files that are not changesets. */
+function pendingOnThisTree(): string[] {
+  return readdirSync(CHANGESET_DIR)
+    .filter((name) => !NON_CHANGESET_FILES.has(name))
+    .sort();
+}
 
 describe("the pending changeset set, re-measured on this tree", () => {
   it("names every file in .changeset/, and only README.md and config.json are not changesets", () => {
@@ -456,22 +683,64 @@ describe("the pending changeset set, re-measured on this tree", () => {
     for (const name of NON_CHANGESET_FILES) {
       expect(present, `.changeset/${name} is missing`).toContain(name);
     }
-    const changesets = present.filter((name) => !NON_CHANGESET_FILES.has(name));
-    // This is the MEASUREMENT, not a wish. It is asserted so that a changeset added after this
-    // audit reds the suite and forces the classification to be redone rather than inherited.
+    // Every other file is a changeset and the check treats it as one. Asserting the count is
+    // whatever the directory holds, and asserting that the check SAW every one of them, is the
+    // measurement. Asserting the set is EMPTY would be a different claim: it would red on a
+    // changeset a later change legitimately adds under this repository's standing discipline,
+    // including the one the audit's own go-forward step recommends, and it would say nothing
+    // about whether the set was classified. Classification is what the next test asserts.
+    const report = releaseReadiness({ ...CONTROL_OPTIONS, changesetDir: CHANGESET_DIR });
     expect(
-      changesets,
-      "the pending set moved since the readiness audit was written; re-run the classification in documentation/release-0.1.0-readiness.md",
-    ).toEqual([]);
+      [...report.pendingFiles].sort(),
+      "the check skipped a file in .changeset/ that is neither README.md nor config.json",
+    ).toEqual(pendingOnThisTree());
   });
 
-  it("reports the empty set as zero pending, refuses to call it releasable, and exits non-zero", () => {
-    const report = releaseReadiness({ ...CONTROL_OPTIONS, changesetDir: CHANGESET_DIR });
-    expect(report.classified).toBe(0);
-    expect(report.derivedVersion).toBeUndefined();
-    expect(report.exitCode).not.toBe(0);
-    expect(report.output).toContain("zero pending changesets");
-    expect(report.output).toContain("NOT RELEASABLE");
+  it("either reports zero pending, or classifies every pending changeset: never neither", () => {
+    // THE LIVE INVARIANT. Whatever `.changeset/` holds, the check has a reading of it. An empty
+    // set is reported as empty and refused; a non-empty one is classified in full, by the
+    // changesets' own text or by the audit's register, with nothing left unread. A file the
+    // register does not carry and the recogniser does not recognise reds here, which is what
+    // forces the classification to be redone rather than inherited.
+    const pending = pendingOnThisTree();
+    const report = releaseReadiness({
+      ...CONTROL_OPTIONS,
+      changesetDir: CHANGESET_DIR,
+      register: REGISTER,
+    });
+
+    if (pending.length === 0) {
+      expect(report.classified).toBe(0);
+      expect(report.derivedVersion).toBeUndefined();
+      expect(report.exitCode).not.toBe(0);
+      expect(report.output).toContain("zero pending changesets");
+      expect(report.output).toContain("NOT RELEASABLE");
+      return;
+    }
+
+    expect(
+      report.unclassified,
+      `these pending changesets are classified by neither their own text nor ${REGISTER.certifiedBy}; classify them there and re-run the audit`,
+    ).toEqual([]);
+    expect(report.classified).toBe(pending.length);
+  });
+
+  it("reads the audit's classification register, and the register names the audit that wrote it", () => {
+    // The register is a committed input, so its own shape is graded here rather than assumed.
+    expect(REGISTER.certifiedBy).toBe("documentation/release-0.1.0-readiness.md");
+    for (const [file, entry] of Object.entries(REGISTER.entries)) {
+      expect(pendingOnThisTree(), `${file} is registered and is not pending`).toContain(file);
+      expect(["patch", "minor"], `${file} is registered at an unavailable level`).toContain(
+        entry.level,
+      );
+      expect(entry.reason.trim().length, `${file} is registered with no reason`).toBeGreaterThan(0);
+      if (entry.breakCandidate) {
+        expect(
+          (entry.observable ?? "").trim().length,
+          `${file} names no observable`,
+        ).toBeGreaterThan(0);
+      }
+    }
   });
 });
 
@@ -632,14 +901,67 @@ describe("a break candidate is named and may not sit at patch", () => {
   });
 
   it("leaves a genuine patch alone, so the rule is not simply raising everything", () => {
+    // The audit classified this one, so the check has a reading and does not refuse it. The
+    // register raises and names; it does not lower, and here there is nothing to lower.
     const report = releaseReadiness({
       currentVersion: "0.0.11",
       targetVersion: "0.0.12",
+      register: registerOf({ "a-fix.md": PATCH_ENTRY }),
       changesetDir: fixtureDir({ "a-fix.md": changeset("patch", PATCH_PROSE) }),
     });
     expect(report.exitCode).toBe(0);
     expect(report.breakCandidates).toEqual([]);
+    expect(report.unclassified).toEqual([]);
     expect(report.derivedVersion).toBe("0.0.12");
+  });
+
+  it("does not let the register lower a level the changeset's own text established", () => {
+    // The laundering the register must not enable: the audit calls it a patch and says nothing
+    // withdrew, and the changeset's own prose says it withdraws a round trip. The higher reading
+    // wins and the candidacy survives, so an entry can never talk a break down into a fix.
+    const report = releaseReadiness({
+      ...CONTROL_OPTIONS,
+      register: registerOf({
+        "takes-something-away.md": {
+          level: "patch",
+          breakCandidate: false,
+          reason: "the audit read this as an internal change",
+        },
+      }),
+      changesetDir: fixtureDir({ "takes-something-away.md": changeset("patch", WITHDRAWAL_PROSE) }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.breakCandidates).toEqual(["takes-something-away.md"]);
+    expect(report.problems.some((problem) => problem.includes("yields `minor`"))).toBe(true);
+  });
+
+  it("lets the register RAISE a level and name a break its own text never spelled out", () => {
+    // The other direction, which is the whole reason the register exists: prose the recogniser
+    // cannot read, classified by a reader, refused because it declares `patch`.
+    const report = releaseReadiness({
+      ...CONTROL_OPTIONS,
+      register: registerOf({
+        "drops-an-export.md": {
+          level: "minor",
+          breakCandidate: true,
+          observable: "`readRawJson` is gone from the entry point; `import { readRawJson }` throws",
+          reason: "an export a consumer may already import was removed",
+        },
+      }),
+      changesetDir: fixtureDir({
+        "drops-an-export.md": changeset(
+          "patch",
+          "The `readRawJson` entry point is gone. Callers reach the same model through `parseResource`.",
+        ),
+      }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.breakCandidates).toEqual(["drops-an-export.md"]);
+    const named = report.problems.filter((problem) => problem.includes("break candidate"));
+    expect(named).toHaveLength(1);
+    expect(named[0]).toContain("drops-an-export.md");
+    expect(named[0]).toContain("readRawJson");
+    expect(report.output).toContain("NOT RELEASABLE");
   });
 
   it("reads `nothing here ships in the published artifact` as evidence for patch", () => {
@@ -648,10 +970,202 @@ describe("a break candidate is named and may not sit at patch", () => {
     const report = releaseReadiness({
       currentVersion: "0.0.11",
       targetVersion: "0.0.12",
+      register: EMPTY_REGISTER,
       changesetDir: fixtureDir({ "harness-only.md": changeset("patch", prose) }),
     });
     expect(report.exitCode).toBe(0);
     expect(report.problems).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// AC4, the arm the phrase recogniser cannot reach: prose neither channel classifies is REFUSED.
+//
+// This is the shape of the defect these cases exist to keep closed. The recogniser carries this
+// repository's idiom; every case below spells a withdrawal the classification rule names IN GENERAL
+// TERMS, in the words a changeset is ordinarily written in, and the recogniser matches none of
+// them. Scored as a default `patch` they would push no problem, enter no break-candidate list, and
+// exit 0 with RELEASABLE the moment the derived version happened to equal the target: a withdrawal
+// of working public behaviour, reported ready, over a set nothing had read.
+// ===========================================================================
+
+describe("a changeset neither channel classifies is refused, never scored patch by default", () => {
+  /** Each is a case `## Classification rule` names, spelled the way changesets are written here. */
+  const UNRECOGNISED_WITHDRAWALS: ReadonlyArray<readonly [clause: string, prose: string]> = [
+    [
+      "an export or member removed",
+      "The `readRawJson` export is gone from the public entry point. Callers reach the same model through `parseResource`.",
+    ],
+    [
+      "a document that now reports an error where it reported none",
+      "A document that previously validated clean now reports an error, because the vital-signs unit check reaches one more element.",
+    ],
+    [
+      "an output the library now refuses to produce",
+      "`serializeResource` will not emit a document carrying a shadowed member; it raises instead.",
+    ],
+    [
+      "a widened set of findings that can turn a previously valid document invalid",
+      "The structural validator gained six resource tables, so a resource that carried a single informational note is now checked against its own elements.",
+    ],
+  ];
+
+  for (const [clause, prose] of UNRECOGNISED_WITHDRAWALS) {
+    it(`refuses it by name rather than assuming a fix: ${clause}`, () => {
+      const report = releaseReadiness({
+        ...CONTROL_OPTIONS,
+        changesetDir: fixtureDir({ "unread-thing.md": changeset("patch", prose) }),
+      });
+      expect(report.exitCode).toBe(1);
+      expect(report.unclassified).toEqual(["unread-thing.md"]);
+      expect(report.classified).toBe(0);
+      expect(report.derivedVersion).toBeUndefined();
+      expect(report.problems).toHaveLength(1);
+      expect(report.problems[0]).toContain("unread-thing.md");
+      expect(report.problems[0]).toContain("could not be classified");
+      expect(report.output).toContain("NOT RELEASABLE");
+    });
+  }
+
+  it("NEVER reports RELEASABLE over a set carrying prose it could not classify", () => {
+    // The headline. The target is set to the version this all-`patch` set derives, so nothing else
+    // can be what refuses it: with a silent `patch` default this call exits 0 and prints
+    // RELEASABLE over a changeset saying in plain words that an export is gone.
+    const report = releaseReadiness({
+      currentVersion: "0.0.11",
+      targetVersion: "0.0.12",
+      register: EMPTY_REGISTER,
+      changesetDir: fixtureDir({
+        "drops-an-export.md": changeset(
+          "patch",
+          "The `readRawJson` export is gone from the public entry point. Callers reach the same model through `parseResource`.",
+        ),
+      }),
+    });
+    expect(report.exitCode).not.toBe(0);
+    // The affirmative verdict, and only it: `NOT RELEASABLE` contains the word and is the opposite.
+    expect(report.output).not.toMatch(/(?<!NOT )RELEASABLE/);
+    expect(report.output).toContain("NOT RELEASABLE");
+    expect(report.output).not.toContain("derived version");
+    expect(report.unclassified).toEqual(["drops-an-export.md"]);
+  });
+
+  it("does not skip an unclassifiable file, count it, or derive a version around it", () => {
+    // Beside a changeset both channels DO read. A check that skipped the unread one would classify
+    // 1, derive `0.1.0` and report the set ready, which is the same half-read verdict a malformed
+    // file may not produce either.
+    const report = releaseReadiness({
+      ...CONTROL_OPTIONS,
+      changesetDir: fixtureDir({
+        "unread-thing.md": changeset(
+          "patch",
+          "`serializeResource` will not emit a document carrying a shadowed member; it raises instead.",
+        ),
+        "adds-something.md": changeset("minor", CAPABILITY_PROSE),
+      }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.classified).toBe(0);
+    expect(report.derivedVersion).toBeUndefined();
+    expect(report.unclassified).toEqual(["unread-thing.md"]);
+    expect(report.output).toContain("was not classified");
+    expect(report.pendingFiles).toEqual(["adds-something.md", "unread-thing.md"]);
+  });
+
+  it("still names the break candidates it DID read while refusing the set", () => {
+    // Refusing early must not hide what was read: a set carrying both an unread file and a
+    // recognised break names both, so a reader fixes two things rather than discovering the second
+    // on the next run.
+    const report = releaseReadiness({
+      ...CONTROL_OPTIONS,
+      changesetDir: fixtureDir({
+        "unread-thing.md": changeset(
+          "patch",
+          "An internal refactor of the reader's dispatch table.",
+        ),
+        "takes-something-away.md": changeset("patch", WITHDRAWAL_PROSE),
+      }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.unclassified).toEqual(["unread-thing.md"]);
+    expect(report.breakCandidates).toEqual(["takes-something-away.md"]);
+    expect(report.problems.some((problem) => problem.includes("break candidate"))).toBe(true);
+  });
+
+  it("refuses a register entry that names a break candidate without its observable", () => {
+    // The register is an input like any other and its defects are refusals too. AC4's refusal has
+    // to name the observable, so an entry that supplies none cannot classify anything.
+    const report = releaseReadiness({
+      ...CONTROL_OPTIONS,
+      register: registerOf({
+        "drops-an-export.md": {
+          level: "minor",
+          breakCandidate: true,
+          reason: "an export was removed",
+        },
+      }),
+      changesetDir: fixtureDir({
+        "drops-an-export.md": changeset("patch", "The `readRawJson` export is gone."),
+      }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.unclassified).toEqual(["drops-an-export.md"]);
+    expect(report.problems[0]).toContain("names no observable");
+  });
+
+  it("refuses a register entry declaring an unavailable level", () => {
+    const report = releaseReadiness({
+      ...CONTROL_OPTIONS,
+      register: registerOf({
+        "a-fix.md": { level: "major", breakCandidate: false, reason: "the audit said so" },
+      }),
+      changesetDir: fixtureDir({ "a-fix.md": changeset("patch", PATCH_PROSE) }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.unclassified).toEqual(["a-fix.md"]);
+    expect(report.problems[0]).toContain("neither `patch` nor `minor`");
+  });
+
+  it("refuses a register entry carrying no reason", () => {
+    const report = releaseReadiness({
+      ...CONTROL_OPTIONS,
+      register: registerOf({
+        "a-fix.md": { level: "patch", breakCandidate: false, reason: "   " },
+      }),
+      changesetDir: fixtureDir({ "a-fix.md": changeset("patch", PATCH_PROSE) }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.unclassified).toEqual(["a-fix.md"]);
+    expect(report.problems[0]).toContain("no reason");
+  });
+
+  it("has teeth: the same prose classified in the register is accepted, so the refusal is the miss", () => {
+    // The control. Without it, every refusal above could be firing for an unrelated reason.
+    const prose = "An internal refactor of the reader's dispatch table.";
+    const files = { "internal-thing.md": changeset("patch", prose) };
+    const refused = releaseReadiness({
+      currentVersion: "0.0.11",
+      targetVersion: "0.0.12",
+      register: EMPTY_REGISTER,
+      changesetDir: fixtureDir(files),
+    });
+    const accepted = releaseReadiness({
+      currentVersion: "0.0.11",
+      targetVersion: "0.0.12",
+      register: registerOf({
+        "internal-thing.md": {
+          level: "patch",
+          breakCandidate: false,
+          reason:
+            "an internal dispatch table no export reaches; every public observable is identical",
+        },
+      }),
+      changesetDir: fixtureDir(files),
+    });
+    expect(refused.exitCode).toBe(1);
+    expect(accepted.exitCode).toBe(0);
+    expect(accepted.classified).toBe(1);
+    expect(accepted.derivedVersion).toBe("0.0.12");
   });
 });
 
@@ -663,6 +1177,7 @@ describe("a well formed, consistently classified set that derives the target", (
   it("exits zero and prints the count classified and the version derived", () => {
     const report = releaseReadiness({
       ...CONTROL_OPTIONS,
+      register: registerOf({ "a-fix.md": PATCH_ENTRY }),
       changesetDir: fixtureDir({
         "adds-something.md": changeset("minor", CAPABILITY_PROSE),
         "a-fix.md": changeset("patch", PATCH_PROSE),
@@ -683,6 +1198,7 @@ describe("a well formed, consistently classified set that derives the target", (
     // misclassified. It still is not a 0.1.0, and saying so is the whole job.
     const report = releaseReadiness({
       ...CONTROL_OPTIONS,
+      register: registerOf({ "a-fix.md": PATCH_ENTRY, "another-fix.md": PATCH_ENTRY }),
       changesetDir: fixtureDir({
         "a-fix.md": changeset("patch", PATCH_PROSE),
         "another-fix.md": changeset("patch", PATCH_PROSE),
@@ -928,18 +1444,27 @@ describe("this tree performs no publication and makes none inevitable", () => {
   });
 
   it("leaves every classified changeset still pending in .changeset/", () => {
-    // Zero were classified, because the set is empty, so the assertion is that the directory still
-    // holds exactly the two non-changeset files and no `version` run has been performed here.
-    const present = readdirSync(CHANGESET_DIR).sort();
-    expect(present).toEqual([...NON_CHANGESET_FILES].sort());
+    // A `changeset version` run CONSUMES the pending set: it deletes the files and bumps the
+    // version in one commit. So what is asserted is that running this check consumes nothing and
+    // that the directory still holds its two non-changeset files, whatever else is beside them.
+    // Asserting the set is EMPTY would assert a fact about the tree's release state rather than
+    // about publication, and would red on any changeset a later change legitimately adds.
+    const before = readdirSync(CHANGESET_DIR).sort();
+    releaseReadiness({ ...CONTROL_OPTIONS, changesetDir: CHANGESET_DIR, register: REGISTER });
+    const after = readdirSync(CHANGESET_DIR).sort();
+    expect(after).toEqual(before);
+    for (const name of NON_CHANGESET_FILES) expect(after).toContain(name);
   });
 
-  it("leaves no built artifact standing in for a publish", () => {
-    // A `changeset version` run rewrites package.json AND src/index.ts in one commit, which is why
-    // the two assertions above are the ones that catch it. This adds the third: no tag was made
-    // here, and the readiness report over this tree still refuses.
-    const report = releaseReadiness({ ...CONTROL_OPTIONS, changesetDir: CHANGESET_DIR });
-    expect(report.exitCode).not.toBe(0);
+  it("leaves no artifact of a version run standing in for a publish", () => {
+    // A `changeset version` run rewrites package.json AND src/index.ts, which is what the two
+    // assertions above catch. This is the third artifact: `changeset pre enter` writes
+    // `.changeset/pre.json` and makes every publish after it a prerelease, stickily, until someone
+    // exits. Nothing here writes it, and reading the tree must not either.
+    const packageBefore = readFileSync(join(REPO_ROOT, "package.json"), "utf8");
+    releaseReadiness({ ...CONTROL_OPTIONS, changesetDir: CHANGESET_DIR, register: REGISTER });
+    expect(readFileSync(join(REPO_ROOT, "package.json"), "utf8")).toBe(packageBefore);
+    expect(readdirSync(CHANGESET_DIR)).not.toContain("pre.json");
   });
 });
 

@@ -58,6 +58,43 @@ exists only here, with no tag. That does not soften finding 3 below: the classif
 the version was derived from it, and the only reason it did not reach a consumer is an unrelated
 registry refusal. Read the version from `package.json`, never from npm.
 
+## How a pending changeset is classified, and when the check refuses
+
+The classification rule is applied by `test/release-readiness.test.ts`, which runs under `pnpm test`
+with no build, no JVM, no network and no credentials. A level can be established through exactly two
+channels, and a changeset neither channel reads is **refused, never scored `patch`**.
+
+**Channel (a): the changeset's own text.** A narrow phrase recogniser carries the idiom this
+repository has actually used, so it recognises a withdrawal stated in those words, new capability
+stated in those words, and the "nothing here ships in the published artifact" that this rule names
+as evidence for `patch`. It is narrow, and **narrow means it misses**: ordinary changeset prose
+spelling any of the cases the rule names in general terms goes unrecognised. A miss is therefore
+worth nothing in either direction. What the recogniser buys is one thing: it can RAISE a level and
+name a break an author declared too low.
+
+**Channel (b): the audit's classification register**, `test/__data__/changeset-classification.json`.
+This document writes it and the check reads it, keyed by file name inside `.changeset/`, each entry
+carrying the level, whether it is a break candidate, the observable a consumer would see, and the
+reason. It exists because the criterion this audit answers to speaks of *a changeset the audit
+classifies as a break candidate*, and a check whose only authority is its own keyword list gives
+that phrase no input at all. An entry may raise a level and name a break; it can never lower a level
+the changeset's own text established, nor clear a break that text described, so the effective level
+is the higher of the two readings and an entry cannot talk a break down into a fix. A register entry
+that names a break candidate without its observable, or assigns a level other than `patch` or
+`minor`, or carries no reason, is itself a refusal.
+
+**When neither channel speaks the whole set is refused.** The check reports NOT RELEASABLE, names
+the file, derives no version, and counts nothing classified. That is the same fail-closed shape a
+malformed changeset already gets, and it is the reason a set carrying an undeclared break cannot be
+reported ready: the report never rests on a level nobody established. The register is empty on this
+tree because the pending set is empty; the refusal is exercised by fixtures, including the four
+cases the classification rule names in general terms, and each of those was observed passing under a
+silent `patch` default before this behaviour existed.
+
+**This is not answered by a longer phrase list.** A longer list has the same shape and the same
+blind spot one paraphrase further out. The register is the channel for a reading a keyword cannot
+make.
+
 ## The derived version
 
 With zero pending changesets there is no highest level to resolve and **Changesets derives no new
@@ -210,7 +247,7 @@ observed results, not expectations.
 | --- | --- |
 | `pnpm typecheck` | pass, exit 0, no diagnostics |
 | `pnpm lint` | pass, exit 0, no errors or warnings |
-| `pnpm test` | pass, exit 0. **89 files, 2440 tests**, up from 88 and 2390 before this change |
+| `pnpm test` | pass, exit 0. **89 files, 2454 tests**, up from 88 and 2390 before this change |
 | `pnpm build` | pass, exit 0. ESM 250.99 KB, CJS 255.50 KB, `index.d.ts` 392.74 KB |
 | `pnpm attw` | pass, exit 0. "No problems found", green on node10, node16 CJS, node16 ESM and bundler |
 | `pnpm pack:docs` | pass, exit 0. Produced **both** `dist-artifacts/docs-content.tar.gz` and `dist-artifacts/source.tar.gz` |
@@ -241,9 +278,13 @@ which reported no modification to any tracked file.
 
 - **Nothing was published and nothing was made inevitable.** No `changeset version`, no
   `changeset publish`, no `pnpm run version`, no `pnpm run release`, no tag, no npm publish.
-  `package.json` still reads `0.0.11`, the `VERSION` export still agrees with it, and `.changeset/`
-  still holds exactly its two non-changeset files. All four are asserted in
-  `test/release-readiness.test.ts`.
+  `package.json` still reads `0.0.11`, the `VERSION` export still agrees with it, `.changeset/`
+  still holds its two non-changeset files and no `pre.json`, and running the check consumes
+  nothing. All of it is asserted in `test/release-readiness.test.ts`. What is deliberately **not**
+  asserted there is that the pending set is EMPTY: that is a fact about this tree's release state
+  rather than about publication, and asserting it would turn every changeset a later change
+  legitimately adds into a red suite, including the one step 2 below recommends. What is asserted
+  instead is that the pending set is CLASSIFIED, which is the property that keeps this audit honest.
 - **No changeset was reclassified**, because none is pending. The corrections the rule would have
   made are recorded above against files that no longer exist.
 - `README.md`, `docs-content/` and `package.json`'s `description` field are each owned by another
@@ -268,7 +309,9 @@ Recorded so the next reader does not have to re-derive it. This is a sequence, n
 1. Settle the ladder in `documentation/`, and update `CHANGELOG.md`, `CONTRIBUTING.md`,
    `.changeset/README.md` and the `test/sanity.test.ts` assertion together.
 2. Add one changeset declaring `minor`, whose prose names the two breaks recorded above so they
-   appear in the release notes as breaks rather than as fixes.
+   appear in the release notes as breaks rather than as fixes, and classify it in
+   `test/__data__/changeset-classification.json` unless its own prose already says the cost in
+   words the recogniser carries. An unclassified pending changeset is a refusal, by design.
 3. Re-run the readiness check. From `0.0.11` a single `minor` derives `0.1.0`.
 4. Re-run the precondition chain and `pnpm pack:docs`.
 5. Re-certify the public surface inventory if any export moved in the meantime; the test reds if it
