@@ -301,6 +301,7 @@ interface PackageFacts {
   readonly isEsm: boolean;
   readonly hasCjs: boolean;
   readonly engines: string;
+  readonly isPrivate: boolean;
   readonly onPublicRegistry: boolean;
 }
 
@@ -325,6 +326,7 @@ function packageFacts(path: string): PackageFacts {
     isEsm: pkg["type"] === "module",
     hasCjs: typeof dot === "object" && dot !== null && "require" in (dot as Record<string, unknown>),
     engines: typeof nodeRange === "string" ? nodeRange : "",
+    isPrivate: pkg["private"] === true,
     // WHY THE VERSION LADDER DECIDES THIS, AND WHAT IT COSTS.
     // "Can a reader install this from the public registry today" has no npm-native field: `private`
     // says whether publishing is ALLOWED, never whether it HAPPENED. What this repository does carry
@@ -384,7 +386,7 @@ function checkPackageAgreement(pages: readonly DocPage[], packageJsonPath: strin
     say(
       `the page says the package ${claimsAvailable ? "is" : "is not"} installable from the public ` +
         `npm registry today, which disagrees with package.json (version "${facts.version}", ` +
-        `private ${String(!facts.onPublicRegistry && claimsAvailable)})`,
+        `private: ${String(facts.isPrivate)})`,
     );
   }
   return findings;
@@ -511,7 +513,16 @@ function walkJson(node: unknown, path: readonly string[], line: number, out: Can
     return;
   }
   if (typeof node === "object" && node !== null) {
-    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    const object = node as Record<string, unknown>;
+    // `display` beside a `reference` is a Reference's human-readable label, which is where a
+    // practitioner or patient NAME lands in a real document. `display` beside a `system` and a
+    // `code` is a terminology display and identifies nobody, so the sibling is what tells them
+    // apart. Keying on the element name alone would put every coding display through the
+    // person-name allow-list.
+    if (typeof object["reference"] === "string" && typeof object["display"] === "string") {
+      out.push({ kind: "name", value: object["display"], line });
+    }
+    for (const [key, value] of Object.entries(object)) {
       walkJson(value, [...path, key], line, out);
     }
     return;

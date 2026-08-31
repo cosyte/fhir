@@ -43,6 +43,32 @@ function graded(files: Record<string, string>, arms: readonly ArmName[]): Findin
   }
 }
 
+/**
+ * Grade a control against an allow-list that declares nothing.
+ *
+ * WHY THE ALLOW-LIST MOVES INSTEAD OF THE VALUES. A control for the synthetic-identifier arm needs
+ * a value the allow-list does not cover, and writing an undeclared person name or birth date into
+ * this file to get one would put realistic-PHI-shaped bytes into the repository, which is the exact
+ * thing `scripts/phi-scan.ts` exists to refuse. So the fixtures below use the tokens this
+ * repository has already declared synthetic, and the DECLARATION is what is emptied. Set membership
+ * is set membership: an empty list makes a declared token undeclared, and the companion case that
+ * runs the same fixture against the real list shows the declaration is what silences the arm.
+ */
+function gradedWithoutDeclarations(
+  files: Record<string, string>,
+  arms: readonly ArmName[],
+): Finding[] {
+  const dir = mkdtempSync(join(tmpdir(), "fhir-docs-control-"));
+  try {
+    for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body);
+    const allowListPath = join(dir, "empty-allow-list.txt");
+    writeFileSync(allowListPath, "# declares nothing\n");
+    return checkDocsSet(dir, { arms, allowListPath });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 /** Every message a grading pass produced, joined, for a readable assertion failure. */
 function messages(findings: readonly Finding[]): string {
   return findings.map(formatFinding).join("\n");
@@ -168,43 +194,58 @@ describe("every arm goes red on a seeded control", () => {
     expect(messages(findings)).toBe("");
   });
 
-  it("synthetic-identifiers: an example name that is not declared synthetic", () => {
-    const findings = graded(
-      {
-        "quickstart.md": page(
-          "quickstart",
-          "Quickstart",
-          '```json\n{ "resourceType": "Patient", "name": [{ "family": "Kowalski" }] }\n```\n',
-        ),
-      },
-      ["synthetic-identifiers"],
-    );
-    expect(messages(findings)).toContain('name value "Kowalski" is not declared synthetic');
-  });
-
-  it("synthetic-identifiers: an undeclared birth date, address line and contact number", () => {
-    const findings = graded(
+  it("synthetic-identifiers: every identifying element is graded against the declaration", () => {
+    const findings = gradedWithoutDeclarations(
       {
         "quickstart.md": page(
           "quickstart",
           "Quickstart",
           [
             "```json",
-            '{ "resourceType": "Patient", "birthDate": "1962-03-04",',
-            '  "address": [{ "line": ["12 Nowhere Lane"] }],',
-            '  "telecom": [{ "system": "phone", "value": "555-867-5309" }] }',
+            '{ "resourceType": "Patient", "birthDate": "1974-12-25",',
+            '  "name": [{ "family": "Chalmers", "given": ["Peter"] }],',
+            '  "address": [{ "line": ["534 Erewhon St"] }],',
+            '  "telecom": [{ "system": "phone", "value": "(03) 3410 5613" }],',
+            '  "identifier": [{ "system": "http://hospital.example.org", "value": "SYN-0001" }] }',
             "```",
           ].join("\n"),
         ),
       },
       ["synthetic-identifiers"],
     );
-    expect(messages(findings)).toContain('dob value "1962-03-04"');
-    expect(messages(findings)).toContain('addr value "12 Nowhere Lane"');
-    expect(messages(findings)).toContain('id value "555-867-5309"');
+    expect(messages(findings)).toContain('name value "Chalmers"');
+    expect(messages(findings)).toContain('name value "Peter"');
+    expect(messages(findings)).toContain('dob value "1974-12-25"');
+    expect(messages(findings)).toContain('addr value "534 Erewhon St"');
+    expect(messages(findings)).toContain('id value "(03) 3410 5613"');
+    expect(messages(findings)).toContain('id value "SYN-0001"');
   });
 
-  it("synthetic-identifiers: declared tokens pass the same arm", () => {
+  it("synthetic-identifiers: a name carried as a reference display, not as a name element", () => {
+    const findings = gradedWithoutDeclarations(
+      {
+        "quickstart.md": page(
+          "quickstart",
+          "Quickstart",
+          [
+            "```json",
+            '{ "resourceType": "Observation",',
+            '  "performer": [{ "reference": "Practitioner/syn-0002", "display": "Chalmers" }],',
+            '  "code": { "coding": [{ "system": "http://loinc.org", "code": "8480-6",',
+            '    "display": "Systolic blood pressure" }] } }',
+            "```",
+          ].join("\n"),
+        ),
+      },
+      ["synthetic-identifiers"],
+    );
+    // The reference display is graded; the terminology display beside it is not, or every coding
+    // in the set would have to be declared a synthetic person name.
+    expect(messages(findings)).toContain('name value "Chalmers"');
+    expect(messages(findings)).not.toContain("Systolic");
+  });
+
+  it("synthetic-identifiers: the same values pass against the repository's real declaration", () => {
     const findings = graded(
       {
         "quickstart.md": page(
@@ -215,6 +256,7 @@ describe("every arm goes red on a seeded control", () => {
             '{ "resourceType": "Patient", "birthDate": "1974-12-25",',
             '  "name": [{ "family": "Chalmers", "given": ["Peter"] }],',
             '  "address": [{ "line": ["534 Erewhon St"] }],',
+            '  "telecom": [{ "system": "phone", "value": "(03) 3410 5613" }],',
             '  "identifier": [{ "system": "http://hospital.example.org", "value": "SYN-0001" }] }',
             "```",
           ].join("\n"),

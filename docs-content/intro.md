@@ -11,53 +11,49 @@ JSON **and** XML codec, and layered validation, with the same one-line ergonomic
 `@cosyte/*` parser suite. It is the FHIR member of that suite and mirrors the API shape of
 [`@cosyte/hl7`](https://github.com/cosyte/hl7), the reference parser.
 
-:::note Status: pre-alpha, docs are a growing stub
+What it is for, in one sentence: read a real-world FHIR resource, model it with correct primitive
+semantics, and validate it against US Core, without reading the FHIR specification first.
 
-`@cosyte/fhir` is **pre-alpha and not yet published to npm.** It is **registered in the docs site but
-disabled** until it cuts its first release.
+## Status
 
-The full documentation spine (Installation, Quickstart, Core Concepts, Guides, and Troubleshooting)
-is **not written yet**. Until then, the [repository README](https://github.com/cosyte/fhir#readme)
-and its `CHANGELOG.md` are the authoritative, always-current account of what the parser does.
+`@cosyte/fhir` is pre-alpha and sits on the `0.0.x` version line. It is not installable from npm
+today, and [installation](./installation.md) covers the route that does work. What the package does
+not do is listed in [current limits](./limits.md), which is worth reading before you plan around it.
 
-:::
+## Start here
 
-## What exists today
+- **[Installation](./installation.md)**: runtime requirements, module formats, and how to get the
+  package today.
+- **[Quickstart](./quickstart.md)**: an unparsed document to a parsed resource, a clinical value and
+  a validation verdict, in four steps.
+- **[Core concepts](./core-concepts.md)**: the schema-free model, exact primitives, the two codecs
+  and the validation layers.
+- **[Guides](./guides.md)**: the tasks readers arrive with, from accepting both wire formats to
+  validating against your own profiles.
+- **[Current limits](./limits.md)**: the deliberate boundaries, including what is checked and what
+  is only reported as unchecked.
+- **[Troubleshooting](./troubleshooting.md)**: every refusal and degraded reading, with the coded
+  reason it carries and the action to take.
 
-The library is further along than this stub documents. As of the current pre-alpha it can already,
-against **FHIR R4 (`4.0.1`)**:
+## What it does
 
-- **Read and round-trip** a resource through a **precision-preserving JSON codec** and a
-  **zero-dependency XML codec** that share one schema-free model: `decimal` / `integer64` values
-  are kept as their exact lexical strings and are never routed through a JavaScript `number` (no
-  silent dose or identifier corruption). The XML reader is **XXE- and billion-laughs-proof by
-  refusal**: it rejects any `<!DOCTYPE` or non-predefined entity rather than resolving it.
-- **Validate** a resource across structural, cardinality, and primitive/enumerated value-domain
-  layers, emitting a **value-free `OperationOutcome`**: a finding carries a coded reason and a
-  FHIRPath location, never the value it was raised over, and the location is bounded to the
-  published form of a FHIR name rather than echoing whatever the document put there.
-- Preserve the **safety-critical status & negation model**: it fails closed on an unknown
-  `modifierExtension` and never drops a status, modifier, or negation.
-- Surface measured values by their **true `value[x]` type** with **UCUM `code`** unit fidelity
-  (never the display string, never converted), validate code `system`s and binding **strength**
-  without vendoring any SNOMED / CPT / LOINC content, validate against **caller-supplied US Core /
-  vendor `StructureDefinition`s** (snapshot generation, slicing, `fixed[x]` / `pattern[x]`,
-  must-support as an obligation), and evaluate their FHIRPath **invariants** through a bounded,
-  in-repo FHIRPath subset, reporting anything outside that subset as `INVARIANT_UNCHECKED` rather
-  than passing it.
+Against FHIR R4 (`4.0.1`), the package can already:
 
-## What is not here yet
+- **Read and round-trip** a resource through a precision-preserving JSON codec and a
+  zero-dependency XML codec that share one schema-free model. A `decimal` or `integer64` value is
+  kept as its exact lexical text and never routed through a JavaScript number, so a dose or an
+  identifier cannot be silently corrupted. The XML reader refuses any `DOCTYPE` or non-predefined
+  entity rather than resolving it.
+- **Validate** across structural, cardinality and value-domain layers, emitting a value-free
+  `OperationOutcome`: a finding carries a coded reason and a location, never the value it was raised
+  over.
+- **Surface the safety-critical status and negation model**: it fails closed on an unknown
+  `modifierExtension` and does not drop a status, a modifier or a negation on the paths it reads.
+- **Report measured values by their true type** with UCUM unit fidelity, never the display string
+  and never converted, validate code systems and binding strength without vendoring any terminology
+  content, validate against caller-supplied US Core or vendor profiles, and evaluate their FHIRPath
+  invariants through a bounded, in-repository expression subset, reporting anything outside that
+  subset as `INVARIANT_UNCHECKED` rather than passing it.
 
-Honestly, and by design for a pre-alpha:
-
-- **No published package**: it is not yet installable from npm, and the docs site keeps it disabled
-  until the first release.
-- **No bundled terminology or profile content**: there is no code-validity / value-set-membership
-  guarantee beyond `system` + binding strength unless you supply a terminology service, and no US
-  Core IG corpus is bundled (US Core / vendor profiles are caller-supplied).
-- **No typed per-resource models**, no `type`·`profile` slicing-discriminator or reslicing
-  validation (`PROFILE_SLICE_UNCHECKED`), and no `validator_cli.jar` differential yet.
-- **No narrative or full-guide documentation**: see the status note above.
-
-For the precise record of what is in the package and what is deferred, read the
-[repository README](https://github.com/cosyte/fhir#readme) and `CHANGELOG.md`.
+Every one of those has a page behind it. The [quickstart](./quickstart.md) is the shortest way to
+see the whole flow working.
