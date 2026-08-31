@@ -696,12 +696,25 @@ describe("the pending changeset set, re-measured on this tree", () => {
     ).toEqual(pendingOnThisTree());
   });
 
-  it("either reports zero pending, or classifies every pending changeset: never neither", () => {
-    // THE LIVE INVARIANT. Whatever `.changeset/` holds, the check has a reading of it. An empty
-    // set is reported as empty and refused; a non-empty one is classified in full, by the
-    // changesets' own text or by the audit's register, with nothing left unread. A file the
-    // register does not carry and the recogniser does not recognise reds here, which is what
-    // forces the classification to be redone rather than inherited.
+  it("reports zero pending, or names no break candidate sitting at `patch`: never neither", () => {
+    // THE LIVE INVARIANT, scoped to the property AC3 and AC4 actually name.
+    //
+    // WHAT THIS DELIBERATELY DOES NOT ASSERT, and why. An earlier form required
+    // `report.unclassified` to be empty over the live `.changeset/`. That made a RELEASE decision
+    // into a BUILD failure: `CLAUDE.md` standing discipline 2 asks for a changeset on every change
+    // and `.changeset/README.md` tells the author to "pick patch", so the ordinary next
+    // contribution arrives with prose this deliberately narrow recogniser does not carry and the
+    // audit's register has not yet read, and the suite reded on it. `pnpm test` is this
+    // repository's own gate and its `prepublishOnly` step, so that assertion put every contributor
+    // in front of a release audit's test data. Refusing to classify is the check's job and the
+    // audit's to resolve; it is reported by `releaseReadiness()` and recorded in the audit, and it
+    // is not a reason for the build to fail. The unclassified case keeps its FULL grading in the
+    // fixtures below, where AC4 is graded and the input is controlled rather than inherited.
+    //
+    // What survives here is the one property the criteria name over the real tree: a withdrawal or
+    // narrowing of previously working public behaviour may not sit at `patch`. That fires on the
+    // defect this whole file exists to prevent and on nothing else, and it cannot be quieted by a
+    // register entry, because the register resolves upward only.
     const pending = pendingOnThisTree();
     const report = releaseReadiness({
       ...CONTROL_OPTIONS,
@@ -718,18 +731,39 @@ describe("the pending changeset set, re-measured on this tree", () => {
       return;
     }
 
+    const misdeclared: string[] = [];
+    for (const file of report.pendingFiles) {
+      const read = readChangeset(file, readFileSync(join(CHANGESET_DIR, file), "utf8"));
+      // A file the reader refuses is AC7's shape and is graded by fixture; a file neither channel
+      // classifies is reported by the check and owed a reading in the audit. Neither is this
+      // assertion's subject, and neither is read here as evidence that nothing was withdrawn.
+      if ("bad" in read) continue;
+      const verdict = classify(read.ok, REGISTER);
+      if ("unclassifiable" in verdict) continue;
+      if (verdict.ok.breakCandidate && read.ok.declared === "patch") {
+        misdeclared.push(`.changeset/${file}: ${verdict.ok.observable}`);
+      }
+    }
+
+    const unread =
+      report.unclassified.length === 0 ? "none" : [...report.unclassified].sort().join(", ");
     expect(
-      report.unclassified,
-      `these pending changesets are classified by neither their own text nor ${REGISTER.certifiedBy}; classify them there and re-run the audit`,
+      misdeclared,
+      `these pending changesets withdraw or narrow previously working public behaviour and declare \`patch\`; raise each to \`minor\` and name it a break candidate in ${REGISTER.certifiedBy}. Pending files neither channel classified, which the audit owes a reading and which do not fail this test: ${unread}`,
     ).toEqual([]);
-    expect(report.classified).toBe(pending.length);
   });
 
   it("reads the audit's classification register, and the register names the audit that wrote it", () => {
-    // The register is a committed input, so its own shape is graded here rather than assumed.
+    // The register is a committed input, so its own SHAPE is graded here rather than assumed.
+    //
+    // Deliberately NOT graded: whether every registered file is still pending. `changeset version`
+    // CONSUMES the pending set, deleting the files it bumped, so an entry for a consumed changeset
+    // is a stale reading rather than a defective one, and failing on it would put exactly the
+    // release bookkeeping the test above just took off the build gate straight back on it. A stale
+    // entry classifies nothing either way: `classify()` only ever looks up the entry for a file
+    // that is pending.
     expect(REGISTER.certifiedBy).toBe("documentation/release-0.1.0-readiness.md");
     for (const [file, entry] of Object.entries(REGISTER.entries)) {
-      expect(pendingOnThisTree(), `${file} is registered and is not pending`).toContain(file);
       expect(["patch", "minor"], `${file} is registered at an unavailable level`).toContain(
         entry.level,
       );

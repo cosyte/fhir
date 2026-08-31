@@ -1,13 +1,17 @@
 # Release readiness for `0.1.0`
 
 An audit of whether `@cosyte/fhir` can be released as `0.1.0` from this tree, what would be in that
-release, and what stands in the way. Measured on the working tree at branch point
-`013364d77413f35bb5661d6a875ba43a8f181976`, the tip of `main` at the time of writing.
+release, and what stands in the way. Measured on the working tree of a branch current with `main` at
+`5acd5fd`. An earlier revision of this document measured the branch point
+`013364d77413f35bb5661d6a875ba43a8f181976`, where the pending set was empty; `main` has since gained
+one changeset, and every count and version below is re-measured against what is here now rather than
+carried forward.
 
 **Verdict: NOT RELEASABLE as `0.1.0`.** Two independent blockers, either one sufficient:
 
-1. **The pending set is empty.** `.changeset/` holds zero changesets, so Changesets derives no
-   version at all. There is nothing to release, let alone a `0.1.0`.
+1. **The pending set derives `0.0.12`, not `0.1.0`.** `.changeset/` holds one changeset, declaring
+   `patch` and correctly classified `patch`, so Changesets derives `0.0.12` from `0.0.11`. No number
+   of `patch` changesets ever derives a `0.1.0`.
 2. **The repository's own version ladder does not permit a `0.1.0`.** `CHANGELOG.md` states the
    project stays on the `v0.0.x-until-first-alpha` ladder, `CONTRIBUTING.md` and
    `.changeset/README.md` repeat it, and `test/sanity.test.ts` pins it with an assertion that a
@@ -29,15 +33,24 @@ classification rule scores as breaks, both declared `patch`.** See
 | --- | --- | --- | --- | --- |
 | `README.md` | no | n/a | n/a | one of the two files in the directory that are not changesets |
 | `config.json` | no | n/a | n/a | the Changesets configuration |
+| `olive-comets-teach.md` | yes | `patch` | `patch` | "**No runtime change: nothing under `src/` was touched and the public API is unchanged.**" What it does change is the documentation set under `docs-content/` and the test-run gate over it, and neither reaches the published artifact: `package.json`'s `files` allow list publishes `dist`, `README.md`, `LICENSE` and `CHANGELOG.md` and nothing else. Every public observable is identical, which is the rule's `patch` arm. Not a break candidate: nothing is withdrawn or narrowed. |
 
-**Zero pending changesets.** The table above is complete: there is no file in `.changeset/` other
-than those two.
+**One pending changeset.** The table above is complete: there is no file in `.changeset/` other than
+those three. The declared level and the rule's level agree, so **no changeset needed correcting** and
+no changeset file was edited.
+
+The recogniser does not read this changeset's prose: it says "No runtime change: nothing under
+`src/` was touched", not the "no library code changed" or "nothing here ships in the published
+artifact" the narrow phrase list carries. The classification above is therefore the audit's, made by
+reading the file, and it is recorded in machine-readable form in
+`test/__data__/changeset-classification.json` so the check reads the same verdict this document
+states. That is channel (b) below doing exactly the job it exists for.
 
 ### Why this differs from the reading this work was commissioned against
 
 The work item recorded "0 pending changesets" measured on 2026-08-25, and the specification recorded
 FIVE, measured at pin `18ee8bae8b303bbcfd9389ada6af04ff7d48e167`. Neither is what is here now, and
-the difference is not drift in the measurement. It is a release:
+the difference is not drift in the measurement. It is a release, followed by one ordinary change:
 
 - `18ee8bae` (the pin) did hold five changesets, every one declaring `patch`, with `package.json` at
   `0.0.10`.
@@ -45,9 +58,11 @@ the difference is not drift in the measurement. It is a release:
 - `5fc7ca5`, the merge titled `Version Packages (#108)` on 2026-08-28, **consumed all six**, deleted
   them, and bumped `package.json` and the `VERSION` export from `0.0.10` to `0.0.11` in one commit,
   which is what `pnpm run version` does by design.
+- `5acd5fd` then added `olive-comets-teach.md`, the documentation-set change classified above, under
+  the repository's standing discipline of a changeset per change. It is the whole of the pending set.
 
 So the button this audit exists to get ahead of was pushed while the specification was being
-written. The pending set is empty because it was spent.
+written. The set was spent, and has since begun refilling in the ordinary way.
 
 ### What `0.0.11` is, and is not
 
@@ -86,8 +101,8 @@ that names a break candidate without its observable, or assigns a level other th
 **When neither channel speaks the whole set is refused.** The check reports NOT RELEASABLE, names
 the file, derives no version, and counts nothing classified. That is the same fail-closed shape a
 malformed changeset already gets, and it is the reason a set carrying an undeclared break cannot be
-reported ready: the report never rests on a level nobody established. The register is empty on this
-tree because the pending set is empty; the refusal is exercised by fixtures, including the four
+reported ready: the report never rests on a level nobody established. The register carries one entry
+on this tree, for the one pending changeset; the refusal is exercised by fixtures, including the four
 cases the classification rule names in general terms, and each of those was observed passing under a
 silent `patch` default before this behaviour existed.
 
@@ -95,14 +110,38 @@ silent `patch` default before this behaviour existed.
 blind spot one paraphrase further out. The register is the channel for a reading a keyword cannot
 make.
 
+### A refusal to classify is a release decision, not a build failure
+
+Where that refusal is ENFORCED is a separate question from what it means, and getting it wrong once
+already cost a red build. The check is a function inside `test/release-readiness.test.ts`, so `pnpm
+test` runs it, and `pnpm test` is this repository's own gate and its `prepublishOnly` step. An
+earlier revision asserted over the live `.changeset/` that nothing in it was unclassified. That put
+every contributor in front of this audit's test data: the standing discipline asks for a changeset on
+every change and `.changeset/README.md` tells the author to pick `patch`, so the ordinary next
+changeset arrives in prose the deliberately narrow recogniser does not carry, and the suite reded
+until someone edited the register. It reded on `olive-comets-teach.md`, which withdraws nothing and
+is correctly declared.
+
+What the suite asserts over the live directory is now scoped to the property the criteria name: **no
+pending changeset may be a break candidate and declare `patch`**. That fires on the defect this whole
+audit exists to prevent and on nothing else, it names the file and the observable when it fires, and
+it cannot be quieted by a register entry, because the register resolves upward only. Files neither
+channel classified are reported in the same failure message as owed a reading here, and are exercised
+in full by fixtures where the input is controlled. The register's own shape is graded too, minus one
+clause: an entry for a changeset a later `changeset version` run has consumed is **stale, not
+defective**, so it is not a failure. It classifies nothing either way, because only a pending file is
+ever looked up.
+
 ## The derived version
 
-With zero pending changesets there is no highest level to resolve and **Changesets derives no new
-version**. `0.0.11` stays `0.0.11`.
+The pending set holds one changeset declaring `patch`, and the classification rule agrees with that
+declaration. The highest level in the set is therefore `patch`, and **Changesets would derive
+`0.0.12` from `0.0.11`**. The check reports the same number from the same input.
 
 This does not equal `0.1.0`. What is missing, stated concretely: **at least one pending changeset
-declaring `minor`**. From `0.0.11`, a single `minor` derives `0.1.0` exactly. No number of `patch`
-changesets ever will; they derive `0.0.12`, `0.0.13`, and so on along the same ladder.
+declaring `minor`**. From `0.0.11`, a single `minor` derives `0.1.0` exactly, whatever `patch`
+changesets sit beside it. No number of `patch` changesets ever will; they derive `0.0.12`, `0.0.13`,
+and so on along the same ladder.
 
 That is the mechanical answer. It is not permission, because the ladder question below is unresolved.
 
@@ -217,8 +256,9 @@ by hand, and its `## [Unreleased]` section still carries the entries for changes
 `Version Packages (#108)` consumed into `0.0.11`. Those entries are no longer unreleased in the
 repository's sense, though `0.0.11` is also not on npm, and that ambiguity is exactly why this audit
 does not resolve it: writing a `## [0.0.11]` heading would assert a release state that is true of
-the repository and false of the registry. It needs the same decision as the ladder, and this audit
-carries **no** pending changeset whose entry would need adding.
+the repository and false of the registry. It needs the same decision as the ladder. The one pending
+changeset's own `[Unreleased]` entry is already there, written with it by its author, so nothing is
+owed on that count either; what is stale is the entries above it that `0.0.11` consumed.
 
 ## The certified public surface
 
@@ -240,14 +280,17 @@ being relied on; the mutations and their results are recorded in the implementat
 
 ## Publish preconditions, as observed
 
-Every command below was run on this tree, with the new test file and inventory in place. These are
-observed results, not expectations.
+Every command below was run on this tree, with the new test file, the inventory and the
+classification register in place, and with the branch already current with `main` at `5acd5fd`, so
+these are the results for the checkout a landing merge produces rather than for a branch measured
+apart from it. These are observed results, not expectations. `pnpm test` ran with `dist/` absent, no
+JVM, no network and no npm credentials.
 
 | command | observed |
 | --- | --- |
 | `pnpm typecheck` | pass, exit 0, no diagnostics |
 | `pnpm lint` | pass, exit 0, no errors or warnings |
-| `pnpm test` | pass, exit 0. **89 files, 2454 tests**, up from 88 and 2390 before this change |
+| `pnpm test` | pass, exit 0. **90 files, 2481 tests**, run with `dist/` absent |
 | `pnpm build` | pass, exit 0. ESM 250.99 KB, CJS 255.50 KB, `index.d.ts` 392.74 KB |
 | `pnpm attw` | pass, exit 0. "No problems found", green on node10, node16 CJS, node16 ESM and bundler |
 | `pnpm pack:docs` | pass, exit 0. Produced **both** `dist-artifacts/docs-content.tar.gz` and `dist-artifacts/source.tar.gz` |
@@ -267,12 +310,15 @@ exercised by withholding an input and running the real script. Observed:
 
 | input withheld | observed exit | observed message |
 | --- | --- | --- |
-| `tsconfig.json` | **1** | `error: source bundle requires src/, package.json, and tsconfig.json at the package root` |
 | `docs-content/intro.md` | **1** | `error: docs-content/ must contain intro.md and sidebars.json` |
+| `tsconfig.json` | **1** | `error: source bundle requires src/, package.json, and tsconfig.json at the package root` |
 
-In both cases **no artifact was reported built** and the run stopped before `tar` was reached. Each
-input was restored immediately afterwards and the tree confirmed byte-identical with `git status`,
-which reported no modification to any tracked file.
+In both cases **no artifact was reported built** and the run stopped before `tar` was reached. The
+first was observed with `dist-artifacts/` deleted beforehand, and the directory **did not exist**
+afterwards, so the refusal precedes even the `mkdir -p`. Each input was restored immediately
+afterwards, `pnpm pack:docs` was re-run and produced both artifacts again, and the tree was confirmed
+with `git status`, which reported no modification to any tracked file beyond the three this change
+edits.
 
 ## What this audit did not touch
 
@@ -281,26 +327,35 @@ which reported no modification to any tracked file.
   `package.json` still reads `0.0.11`, the `VERSION` export still agrees with it, `.changeset/`
   still holds its two non-changeset files and no `pre.json`, and running the check consumes
   nothing. All of it is asserted in `test/release-readiness.test.ts`. What is deliberately **not**
-  asserted there is that the pending set is EMPTY: that is a fact about this tree's release state
-  rather than about publication, and asserting it would turn every changeset a later change
-  legitimately adds into a red suite, including the one step 2 below recommends. What is asserted
-  instead is that the pending set is CLASSIFIED, which is the property that keeps this audit honest.
-- **No changeset was reclassified**, because none is pending. The corrections the rule would have
-  made are recorded above against files that no longer exist.
+  asserted there is that the pending set is EMPTY, nor that it is fully CLASSIFIED: the first is a
+  fact about this tree's release state rather than about publication, and both turn an ordinary
+  later changeset into a red suite, including the one step 2 below recommends. What is asserted over
+  the live directory is the property the criteria name, that no pending changeset is a break
+  candidate declaring `patch`. See
+  [A refusal to classify is a release decision, not a build failure](#a-refusal-to-classify-is-a-release-decision-not-a-build-failure).
+- **No changeset was reclassified and no changeset file was edited.** The one pending changeset
+  declares the level the rule yields, so there was nothing to correct. The corrections the rule
+  would have made are recorded above against the six files that no longer exist.
 - `README.md`, `docs-content/` and `package.json`'s `description` field are each owned by another
   item in this batch and are untouched here.
 - `CHANGELOG.md`'s version-ladder sentence is quoted above and deliberately not edited.
 - No library behaviour changed. Nothing under `src/` was modified.
-- **This change adds no changeset of its own, deliberately.** The repository's standing discipline is
-  a changeset per change, and the reason one is withheld here is that this audit's headline
-  measurement is the size of the pending set: adding a changeset would make the set non-empty, so
-  the document would be reporting on a condition it had itself created, and the readiness check
-  would be grading its own entry. A changeset is also an input to the release machinery, and this
-  work is scoped to leave that machinery exactly where it found it. The contents of this change,
-  one test file and two documents, reach no consumer: nothing here ships in the published artifact,
-  which is the same ground on which two of the six changesets above are classified `patch`. If the
-  ladder decision above is taken and a release is prepared, the changeset written then should
-  describe the breaks, not this audit.
+- **This change adds no changeset of its own, deliberately, and this is the closest call in the
+  audit.** The repository's standing discipline is a changeset plus a `CHANGELOG.md` `[Unreleased]`
+  entry per change, and the changeset classified above arrived carrying both, so the discipline is
+  live and this is a departure from it. One of the three reasons originally given no longer holds
+  and is withdrawn rather than restated: it was that adding a changeset would make the pending set
+  non-empty and so make this document report on a condition it created, which is moot now that the
+  set is non-empty regardless and nothing in the suite turns on its size. What carries the decision
+  is the other two. A pending changeset is a live input to `.github/workflows/release.yml`, which
+  fires on every push to `main` and opens a pull request whose merge publishes, and this work is
+  scoped to leave that machinery exactly where it found it. And the contents of this change, one
+  test file, two committed data files and this document, reach no consumer: nothing here ships in
+  the published artifact, which is the same ground on which three of the seven changesets classified
+  in this audit are `patch`. If the ladder decision above is taken and a release is prepared, the
+  changeset written then should describe the breaks, not this audit. A reviewer who weighs the
+  standing discipline higher than the release-input argument should say so, and adding one is a
+  one-file change that reds nothing.
 
 ## If the ladder question is answered "yes, go to 0.1.0"
 
@@ -311,8 +366,12 @@ Recorded so the next reader does not have to re-derive it. This is a sequence, n
 2. Add one changeset declaring `minor`, whose prose names the two breaks recorded above so they
    appear in the release notes as breaks rather than as fixes, and classify it in
    `test/__data__/changeset-classification.json` unless its own prose already says the cost in
-   words the recogniser carries. An unclassified pending changeset is a refusal, by design.
-3. Re-run the readiness check. From `0.0.11` a single `minor` derives `0.1.0`.
+   words the recogniser carries. Do the same for every other changeset pending at that moment: an
+   unclassified pending changeset makes the check REFUSE the whole set, by design, so the readiness
+   verdict cannot be reached until each one has a reading. That refusal is reported by the check and
+   resolved here; it does not fail `pnpm test`.
+3. Re-run the readiness check. From `0.0.11` a single `minor` derives `0.1.0`, whatever `patch`
+   changesets sit beside it.
 4. Re-run the precondition chain and `pnpm pack:docs`.
 5. Re-certify the public surface inventory if any export moved in the meantime; the test reds if it
    did.
