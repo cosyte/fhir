@@ -1,6 +1,20 @@
 /**
- * The documentation-set gate: grades everything under `docs-content/` against the package as it
- * actually exists in this repository.
+ * The documentation-set gate: grades every `.md` and `.mdx` page in the `docs-content/` TREE,
+ * subdirectories included, against the package as it actually exists in this repository.
+ *
+ * WHAT IT WALKS, STATED EXACTLY, BECAUSE THE PUBLISHER IS RECURSIVE. `scripts/build-docs-artifacts.sh`
+ * packs the bundle with `tar -czf ... -C docs-content .`, so every entry at every depth ships. So
+ * `loadPages` recurses, and a page one directory down is read by every arm below exactly as a
+ * top-level one is; a finding names it by its path relative to the content directory, and a relative
+ * link is resolved against the directory of the page that wrote it. Two classes of entry are
+ * deliberately NOT pages, and are declared here rather than left to be inferred from the code:
+ *   - a file whose name ends in neither `.md` nor `.mdx`. `sidebars.json` is graded by the links arm
+ *     below; any OTHER such file is a declared residual, because which detector a data file or an
+ *     asset should get is a question this gate does not answer, and the set carries none today.
+ *   - a SYMBOLIC LINK TO A DIRECTORY, which is not descended. Descending one is how a walk loops or
+ *     leaves the directory the bundle is built from, and `tar` packs the link rather than the tree
+ *     behind it, so nothing under it reaches a reader this way. A link to a regular `.md` file IS
+ *     read, exactly as it was before this walk recursed.
  *
  * `docs-content/` is the narrative content the docs site pulls from a release asset and publishes
  * verbatim. Three properties make an unguarded edit there expensive:
@@ -30,7 +44,15 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -161,19 +183,63 @@ function frontmatter(lines: readonly LineInfo[]): Map<string, string> {
   return found;
 }
 
-/** Load every `.md` page in the content directory, in filename order. */
+/** One page file in the content tree: where it is on disk, and what the bundle will call it. */
+interface PageFile {
+  /** The path relative to the content directory, `/`-separated, which is what the bundle carries. */
+  readonly relative: string;
+  readonly path: string;
+}
+
+/** Does this path lead to a regular file? Follows a link, and answers `false` for a broken one. */
+function leadsToFile(path: string): boolean {
+  return statSync(path, { throwIfNoEntry: false })?.isFile() === true;
+}
+
+/**
+ * Every page file in the content TREE, in relative-path order.
+ *
+ * RECURSIVE, BECAUSE THE PUBLISHER IS. `tar -czf ... -C docs-content .` ships every depth, so a walk
+ * that read one directory level left a published page graded by nothing at all.
+ *
+ * WIDENING ONLY, WHICH IS WHY THE TWO KIND TESTS DIFFER. Recursion is keyed on `Dirent.isDirectory`,
+ * an lstat answer, so a SYMBOLIC LINK TO A DIRECTORY IS NOT DESCENDED: descending one is how a walk
+ * loops, or leaves the directory the bundle is built from. A page is keyed on `statSync`, which
+ * FOLLOWS, so a link to a regular `.md` file is read exactly as it was before this walk recursed;
+ * keying it on the entry's own kind would have RETIRED grading this gate already did. A broken link,
+ * a directory named `x.md`, a socket or a device leads to no regular file and is skipped rather than
+ * crashing the read. Both boundaries are stated in this file's docblock.
+ */
+function pageFiles(root: string, prefix: string): PageFile[] {
+  const found: PageFile[] = [];
+  const here = prefix === "" ? root : join(root, ...prefix.split("/"));
+  const entries = readdirSync(here, { withFileTypes: true });
+  for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+    const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+    const path = join(here, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...pageFiles(root, relative));
+      continue;
+    }
+    if (!relative.endsWith(".md") && !relative.endsWith(".mdx")) continue;
+    if (!leadsToFile(path)) continue;
+    found.push({ relative, path });
+  }
+  return found;
+}
+
+/** Load every page in the content tree, in relative-path order. */
 function loadPages(dir: string): DocPage[] {
   const pages: DocPage[] = [];
-  for (const entry of readdirSync(dir).sort()) {
-    if (!entry.endsWith(".md") && !entry.endsWith(".mdx")) continue;
-    const path = join(dir, entry);
-    const text = readFileSync(path, "utf8");
+  for (const file of pageFiles(dir, "")) {
+    const text = readFileSync(file.path, "utf8");
     const lines = classifyLines(text);
     const meta = frontmatter(lines);
     pages.push({
-      file: entry,
-      path,
-      id: meta.get("id") ?? entry.replace(/\.mdx?$/, ""),
+      file: file.relative,
+      path: file.path,
+      // The default doc id is the path without its extension, which is what the site derives for a
+      // page in a subdirectory too. Frontmatter still overrides it, as the site lets it.
+      id: meta.get("id") ?? file.relative.replace(/\.mdx?$/, ""),
       title: meta.get("title") ?? "",
       text,
       lines,
@@ -193,6 +259,13 @@ function loadPages(dir: string): DocPage[] {
  * The rule is deliberately stricter than MDX itself: an inline code span protects a brace from MDX,
  * but not from a later edit that unwraps it, and the fenced form always reads better in a doc that
  * is about a wire format. Braces belong in fences here.
+ *
+ * IT IS LOOSER THAN MDX IN EXACTLY ONE PLACE, AND THAT IS DECLARED RATHER THAN INFERRED FROM THE
+ * `continue` BELOW. The leading frontmatter block is skipped. Frontmatter is outside a fenced code
+ * block, so the criterion's literal words reach it and this arm does not, but the site reads that
+ * block as YAML and strips it before anything compiles it as MDX, so the global SSG failure this arm
+ * exists to prevent is not reachable there. A brace in frontmatter is a YAML question, and grading it
+ * as an MDX one would red a `title: "{ }"` that the site renders perfectly well.
  */
 function checkBraces(pages: readonly DocPage[]): Finding[] {
   const findings: Finding[] = [];
@@ -241,6 +314,27 @@ function readSidebar(dir: string): { entries: string[]; error: string | undefine
   return { entries, error: undefined };
 }
 
+/**
+ * Resolve a relative link target against the directory of the page that wrote it.
+ *
+ * A link is relative to its own page, not to the content root, so `./sibling.md` on
+ * `guides/a.md` means `guides/sibling.md`. For a top-level page the two are the same string, which
+ * is why this was invisible while the walk read one directory level.
+ */
+function resolveTarget(fromFile: string, target: string): string {
+  const slash = fromFile.lastIndexOf("/");
+  const segments = slash === -1 ? [] : fromFile.slice(0, slash).split("/");
+  for (const part of target.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") {
+      segments.pop();
+      continue;
+    }
+    segments.push(part);
+  }
+  return segments.join("/");
+}
+
 /** Sidebar entries and relative links must both land on a page that is really there. */
 function checkLinks(dir: string, pages: readonly DocPage[]): Finding[] {
   const findings: Finding[] = [];
@@ -275,9 +369,10 @@ function checkLinks(dir: string, pages: readonly DocPage[]): Finding[] {
       for (const match of line.text.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
         const target = match[1] ?? "";
         if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) continue;
-        const withoutAnchor = (target.split("#")[0] ?? "").replace(/^\.\//, "");
+        const withoutAnchor = target.split("#")[0] ?? "";
         if (withoutAnchor === "") continue;
-        if (byFile.has(withoutAnchor) || byId.has(withoutAnchor.replace(/\.mdx?$/, ""))) continue;
+        const resolved = resolveTarget(page.file, withoutAnchor);
+        if (byFile.has(resolved) || byId.has(resolved.replace(/\.mdx?$/, ""))) continue;
         findings.push({
           arm: "links",
           file: page.file,
@@ -444,6 +539,37 @@ interface Candidate {
   readonly line: number;
 }
 
+/** One fenced code block: its info string, its body, and the line the body starts on. */
+interface FencedBlock {
+  readonly lang: string;
+  readonly text: string;
+  readonly line: number;
+}
+
+/** Every fenced code block in a page, whatever its info string says. */
+function fencedBlocks(page: DocPage): FencedBlock[] {
+  const blocks: FencedBlock[] = [];
+  let buffer: string[] = [];
+  let lang = "";
+  let start = 0;
+  for (const line of page.lines) {
+    if (line.inFence) {
+      if (buffer.length === 0) {
+        start = line.number;
+        lang = line.fenceLang;
+      }
+      buffer.push(line.text);
+      continue;
+    }
+    if (buffer.length > 0) {
+      blocks.push({ lang, text: buffer.join("\n"), line: start });
+      buffer = [];
+    }
+  }
+  if (buffer.length > 0) blocks.push({ lang, text: buffer.join("\n"), line: start });
+  return blocks;
+}
+
 /**
  * Every JSON-looking payload in a page: fenced `json` blocks, and the object literals a sample
  * embeds in a quoted or templated string.
@@ -452,23 +578,17 @@ interface Candidate {
  * stops at the first `}` truncates every nested object, the truncation then fails to parse, and a
  * failed parse is silent: the whole structural half of the synthetic-identifier arm would read a
  * page carrying a nested `name` as clean.
+ *
+ * This is the SAMPLES arm's view, which is about JSON that has to parse AS JSON. The
+ * synthetic-identifier arm reads a wider set through {@link structuredExamples}, because an example
+ * spelled as a TypeScript object literal is the same example and has to be graded the same way.
  */
 function jsonPayloads(page: DocPage): { text: string; line: number }[] {
   const payloads: { text: string; line: number }[] = [];
-  let buffer: string[] = [];
-  let start = 0;
-  for (const line of page.lines) {
-    if (line.inFence && line.fenceLang === "json") {
-      if (buffer.length === 0) start = line.number;
-      buffer.push(line.text);
-      continue;
-    }
-    if (buffer.length > 0) {
-      payloads.push({ text: buffer.join("\n"), line: start });
-      buffer = [];
-    }
+  for (const block of fencedBlocks(page)) {
+    if (block.lang !== "json") continue;
+    payloads.push({ text: block.text, line: block.line });
   }
-  if (buffer.length > 0) payloads.push({ text: buffer.join("\n"), line: start });
   for (const embedded of embeddedObjects(page.text)) payloads.push(embedded);
   return payloads;
 }
@@ -504,6 +624,129 @@ function embeddedObjects(text: string): { text: string; line: number }[] {
     }
   }
   return found;
+}
+
+/** The answer from a reader that could not read the text it was handed. */
+const UNREADABLE = Symbol("unreadable");
+
+/** Read a payload as JSON, or say it is not JSON, without throwing either way. */
+function readJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return UNREADABLE;
+  }
+}
+
+/** Read a property name that names a fixed key: an identifier, a quoted key, or a computed one. */
+function literalKey(name: ts.PropertyName): string | undefined {
+  if (ts.isIdentifier(name)) return name.text;
+  if (ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
+  if (ts.isNoSubstitutionTemplateLiteral(name)) return name.text;
+  // `{ ["family"]: "..." }`. `phi-scan-overrides.md` records the computed key as a shape its
+  // recogniser reads nothing in; reading the syntax tree rather than a regex closes it here.
+  if (ts.isComputedPropertyName(name)) {
+    const inner = literalValue(name.expression);
+    return typeof inner === "string" ? inner : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Convert a syntax node into the plain value it denotes, or `undefined` when it denotes no constant.
+ *
+ * `undefined` is the right answer for a computed value: it is what {@link walkJson} already skips,
+ * so a resource half-built from variables is still graded on the half that is written down.
+ */
+function literalValue(node: ts.Node): unknown {
+  if (ts.isObjectLiteralExpression(node)) {
+    const object: Record<string, unknown> = {};
+    for (const property of node.properties) {
+      if (!ts.isPropertyAssignment(property)) continue;
+      const key = literalKey(property.name);
+      if (key === undefined) continue;
+      object[key] = literalValue(property.initializer);
+    }
+    return object;
+  }
+  if (ts.isArrayLiteralExpression(node)) {
+    return node.elements.map((element) => literalValue(element));
+  }
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  if (ts.isNumericLiteral(node)) return Number(node.text);
+  if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (node.kind === ts.SyntaxKind.NullKeyword) return null;
+  if (ts.isParenthesizedExpression(node)) return literalValue(node.expression);
+  if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) return literalValue(node.expression);
+  if (ts.isNonNullExpression(node)) return literalValue(node.expression);
+  return undefined;
+}
+
+/**
+ * Every object literal a JavaScript or TypeScript snippet builds, as a plain value.
+ *
+ * THIS IS THE SECOND SPELLING, AND IT IS NOT OPTIONAL. A sample that constructs a resource without a
+ * wire string writes it as an object literal, which has no quote in front of its `{` and unquoted
+ * keys inside it, so neither the fenced-`json` route nor {@link embeddedObjects} reaches it and
+ * `JSON.parse` would reject it if they did. This repository has already paid for exactly that gap on
+ * the other gate: `phi-scan-overrides.md` records a real surname typed as `family: "..."` in a `.ts`
+ * file being read by nothing, and `CLAUDE.md` states the rule it cost, "the PHI scan's SCOPE and its
+ * RECOGNISER move together, never one alone", "read both spellings". So the recogniser reads the
+ * syntax tree, which is exact where a regex would guess, and the same walker grades what comes out.
+ *
+ * EVERY object literal is reported, nested ones included, rather than only the outermost. A nested
+ * literal is walked twice, once with the full element path and once from its own root, and the
+ * second pass can only produce FEWER candidates than the first, because every path-sensitive rule in
+ * {@link walkJson} needs an ancestor the truncated walk does not have. Duplicates are collapsed by
+ * the caller, so the cost is a second walk and the benefit is a literal reached through an
+ * expression this reader does not evaluate, such as a call argument.
+ *
+ * The parse is error-tolerant by design: a snippet that does not compile still yields the literals it
+ * did spell, and the `samples` arm is what reports the syntax error itself.
+ */
+function objectLiterals(text: string, startLine: number): { value: unknown; line: number }[] {
+  const source = ts.createSourceFile(
+    "docs-example.ts",
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const found: { value: unknown; line: number }[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isObjectLiteralExpression(node)) {
+      const position = source.getLineAndCharacterOfPosition(node.getStart(source));
+      found.push({ value: literalValue(node), line: startLine + position.line });
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(source, visit);
+  return found;
+}
+
+/**
+ * Every example in a page that carries structure, in whichever spelling the author chose.
+ *
+ * One reader, two spellings, so the SAME example is graded the same way whether it is written as a
+ * JSON payload or as an object literal. JSON is tried first because it is exact; anything JSON
+ * rejects goes to the object-literal reader. Every fenced block is offered to both, whatever its info
+ * string says, because the info string is prose the author picks and a resource written under
+ * ```` ```text ```` is still a resource written on a page that gets published.
+ */
+function structuredExamples(page: DocPage): { value: unknown; line: number }[] {
+  const examples: { value: unknown; line: number }[] = [];
+  const read = (text: string, line: number): void => {
+    const parsed = readJson(text);
+    if (parsed !== UNREADABLE) {
+      examples.push({ value: parsed, line });
+      return;
+    }
+    examples.push(...objectLiterals(text, line));
+  };
+  for (const block of fencedBlocks(page)) read(block.text, block.line);
+  for (const embedded of embeddedObjects(page.text)) read(embedded.text, embedded.line);
+  return examples;
 }
 
 /** Walk a parsed example and pull out every value FHIR gives an identifying meaning to. */
@@ -545,33 +788,60 @@ function walkJson(node: unknown, path: readonly string[], line: number, out: Can
 }
 
 /**
+ * The identifying elements a source literal names by key, and the class each one carries.
+ *
+ * `text` and `value` are deliberately absent, and the reason is `phi-scan-overrides.md`'s, measured
+ * on the other gate rather than guessed here: `text` cannot be told from `CodeableConcept.text` or a
+ * narrative by a flat pass, and bare `value` is the most overloaded key in FHIR. Both are read by the
+ * STRUCTURAL route instead, which has the ancestor element that makes them mean something.
+ */
+const KEYED_LITERALS =
+  /(?:^|[^\w$.])["'`]?(family|given|prefix|suffix|birthDate|deceasedDateTime|line)["'`]?\s*[:=]\s*(\[[^\]]*\]|["'`][^"'`\n]*["'`])/g;
+
+/** Every quoted string inside a keyed literal's value, so `given: ["Peter", "James"]` yields both. */
+function quotedStrings(value: string): string[] {
+  return [...value.matchAll(/["'`]([^"'`\n]*)["'`]/g)].map((match) => match[1] ?? "");
+}
+
+/**
  * Grade every example value against the synthetic declaration.
  *
- * TWO ROUTES, ON PURPOSE. The structural route parses each example and keys on the ELEMENT the value
- * sits at, which is exact. The shape route sweeps the whole page (prose included, because a page can
- * name an identifier in a sentence) for the shapes that identify a person regardless of element:
- * an email address, an SSN, and any run of nine or more digits.
+ * TWO ROUTES, ON PURPOSE, AND EACH READS BOTH SPELLINGS. The structural route parses each example
+ * and keys on the ELEMENT the value sits at, which is exact; {@link structuredExamples} feeds it a
+ * JSON payload and a TypeScript object literal alike, so the same example is graded identically
+ * however it is written. The shape route sweeps every line of the page, prose and fences alike,
+ * for what identifies a person regardless of element: an XML `value=` attribute, a source literal at
+ * an identifying key, an email address, an SSN, and any run of nine or more digits.
  *
- * KNOWN AND DELIBERATE RESIDUAL: the shape route cannot tell a nine-digit clinical code from a
- * nine-digit identifier, so writing one into a page means either declaring it or naming the exported
- * constant instead. That is the same trade `scripts/phi-allow-list.txt` already documents, and it
- * fails in the safe direction.
+ * KNOWN AND DELIBERATE RESIDUALS, both in the direction the other gate already accepted. The shape
+ * route cannot tell a nine-digit clinical code from a nine-digit identifier, so writing one into a
+ * page means either declaring it or naming the exported constant instead. And a SHORT identifier
+ * (`ZZZ-9999`) has no shape at all, so it is caught only where an `identifier` or `telecom` ancestor
+ * gives it meaning, which is the structural route; the same limit `scripts/phi-allow-list.txt`
+ * records for a six-to-eight digit MRN.
  */
 function checkSyntheticIdentifiers(pages: readonly DocPage[], allowListPath: string): Finding[] {
   const allow = loadAllowList(allowListPath);
   const findings: Finding[] = [];
   for (const page of pages) {
     const candidates: Candidate[] = [];
-    for (const payload of jsonPayloads(page)) {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(payload.text);
-      } catch {
-        continue;
-      }
-      walkJson(parsed, [], payload.line, candidates);
+    for (const example of structuredExamples(page)) {
+      walkJson(example.value, [], example.line, candidates);
     }
     for (const line of page.lines) {
+      for (const match of line.text.matchAll(KEYED_LITERALS)) {
+        const element = match[1] ?? "";
+        const kind =
+          element === "birthDate" || element === "deceasedDateTime"
+            ? "dob"
+            : element === "line"
+              ? "addr"
+              : "name";
+        for (const value of quotedStrings(match[2] ?? "")) {
+          if (value === "") continue;
+          candidates.push({ kind, value, line: line.number });
+        }
+      }
       for (const match of line.text.matchAll(
         /<(family|given|prefix|suffix|birthDate|deceasedDateTime|line)\s+value="([^"]*)"/g,
       )) {
@@ -995,11 +1265,18 @@ function collectSamples(pages: readonly DocPage[]): Sample[] {
  *     against the package in this repository" means with no build step and no published tarball;
  *   - an expectation line (`expr; // => value`) becomes a runtime assertion, so a stated result is
  *     checked rather than believed.
+ *
+ * THE TRAILING SEMICOLON IS OPTIONAL, WHICH IS NOT COSMETIC. A sample that writes
+ * `expr // => value` states a result to the reader exactly as one that writes `expr; // => value`
+ * does, and a rewrite that required the semicolon turned the second into an assertion and left the
+ * first as an unchecked comment. The expression group is barred from ending on a `;` or a space so
+ * the semicolon cannot be swallowed into it, and the `//` is still found by backtracking from the
+ * END of the line, so a `//` inside a URL in the expression is not mistaken for the marker.
  */
 function rewriteSample(sample: Sample, sourceIndexPath: string): string {
   const lines = sample.body.map((line, index) => {
     const docLine = sample.fenceLine + index + 1;
-    const expectation = /^(\s*)(.+);\s*\/\/\s*=>\s*(.+)$/.exec(line);
+    const expectation = /^(\s*)(.*[^;\s])\s*;?\s*\/\/\s*=>\s*(.+)$/.exec(line);
     if (expectation !== null) {
       const indent = expectation[1] ?? "";
       const expression = expectation[2] ?? "";

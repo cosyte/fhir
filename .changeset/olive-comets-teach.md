@@ -22,6 +22,9 @@ in silence. The gate covers brace safety for the documentation site's build, lin
 entries, agreement with `package.json` on the package name, module format, supported Node range and
 registry availability, a declared synthetic identifier behind every example value, the absence of
 any claim that a part of the set is missing while it is present, coded reasons that the package
-really defines, and compilation plus the stated result of every TypeScript sample.
+really defines, and compilation plus the stated result of every TypeScript sample. It grades every
+page the release artifact carries, including one written in a subdirectory, and it reads an example
+the same way whether it is written as a JSON payload or as a TypeScript object literal, so an
+undeclared value in an example cannot reach a published page by being spelled differently.
 
 No runtime change: nothing under `src/` was touched and the public API is unchanged.

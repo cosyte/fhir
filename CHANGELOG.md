@@ -93,7 +93,16 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   that a present page is unwritten, required pages and the topics each owes, coded reasons the
   package does not define, and compilation plus the stated result of every fenced TypeScript sample.
   Each arm is proven able to fail against a control directory seeded with exactly the fault it
-  catches. No new dependency, no `src/` change, and the public API is byte-identical.
+  catches. **The walk and the recogniser match the thing they guard.** `scripts/build-docs-artifacts.sh`
+  packs `docs-content/` recursively, so the walk recurses too and a page in a subdirectory is graded
+  by every arm and named by its path; a relative link is resolved against the directory of the page
+  that wrote it. And an example is graded on what it says rather than on how it is spelled: the
+  synthetic-identifier arm reads a fenced `json` payload, a quoted or templated object, and a
+  TypeScript object literal through the same walker, plus an identifying key written as a source
+  literal in any fence, so the same undeclared value reds whichever way an author writes it. That is
+  this repository's own recorded lesson on the PHI scanner, where scope moved without the recogniser
+  and a name typed as `family: "..."` was read by nothing. No new dependency, no `src/` change, and
+  the public API is byte-identical.
 
 - **A terminology service can declare which code-system release an answer was made against, and a
   membership finding says so, or says it was not declared (`FHIR-VOCAB-VERSION-1`).** A

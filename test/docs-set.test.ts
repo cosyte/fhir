@@ -15,9 +15,9 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -32,11 +32,23 @@ const TSX_BIN = join(REPO_ROOT, "node_modules", ".bin", "tsx");
 /** Compiling and running every sample dominates the runtime of a full grading pass. */
 const SAMPLE_TIMEOUT = 180_000;
 
+/**
+ * Write one seeded file, making the directories its name asks for.
+ *
+ * A key carrying a `/` seeds a page in a SUBDIRECTORY, which is a control in its own right: the
+ * bundle is packed recursively, so a page at any depth is published and has to be graded.
+ */
+function seed(dir: string, name: string, body: string): void {
+  const path = join(dir, name);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, body);
+}
+
 /** Seed a control directory, grade it with one arm, and clean up whatever the grading wrote. */
 function graded(files: Record<string, string>, arms: readonly ArmName[]): Finding[] {
   const dir = mkdtempSync(join(tmpdir(), "fhir-docs-control-"));
   try {
-    for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body);
+    for (const [name, body] of Object.entries(files)) seed(dir, name, body);
     return checkDocsSet(dir, { arms });
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -60,7 +72,7 @@ function gradedWithoutDeclarations(
 ): Finding[] {
   const dir = mkdtempSync(join(tmpdir(), "fhir-docs-control-"));
   try {
-    for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body);
+    for (const [name, body] of Object.entries(files)) seed(dir, name, body);
     const allowListPath = join(dir, "empty-allow-list.txt");
     writeFileSync(allowListPath, "# declares nothing\n");
     return checkDocsSet(dir, { arms, allowListPath });
@@ -267,6 +279,99 @@ describe("every arm goes red on a seeded control", () => {
     expect(messages(findings)).toBe("");
   });
 
+  it("synthetic-identifiers: the same example spelled as a TypeScript object literal", () => {
+    const findings = gradedWithoutDeclarations(
+      {
+        "quickstart.md": page(
+          "quickstart",
+          "Quickstart",
+          [
+            "```ts",
+            "const patient = {",
+            '  resourceType: "Patient",',
+            '  birthDate: "1974-12-25",',
+            '  name: [{ family: "Chalmers", given: ["Peter"] }],',
+            '  address: [{ line: ["534 Erewhon St"] }],',
+            '  telecom: [{ system: "phone", value: "(03) 3410 5613" }],',
+            '  identifier: [{ system: "http://hospital.example.org", value: "SYN-0001" }],',
+            "};",
+            "```",
+          ].join("\n"),
+        ),
+      },
+      ["synthetic-identifiers"],
+    );
+    // The SAME six values the fenced-`json` control above names. Nothing about this spelling puts a
+    // quote in front of the `{` or quotes around the keys, which is what made it unreadable to a
+    // route built on `JSON.parse` alone.
+    expect(messages(findings)).toContain('name value "Chalmers"');
+    expect(messages(findings)).toContain('name value "Peter"');
+    expect(messages(findings)).toContain('dob value "1974-12-25"');
+    expect(messages(findings)).toContain('addr value "534 Erewhon St"');
+    expect(messages(findings)).toContain('id value "(03) 3410 5613"');
+    expect(messages(findings)).toContain('id value "SYN-0001"');
+  });
+
+  it("synthetic-identifiers: an object literal reached only through a call argument", () => {
+    const findings = gradedWithoutDeclarations(
+      {
+        "guides.md": page(
+          "guides",
+          "Guides",
+          [
+            "```ts",
+            "const outcome = validateResource(",
+            '  toResource({ resourceType: "Patient", name: [{ family: "Chalmers" }] }),',
+            ");",
+            "```",
+          ].join("\n"),
+        ),
+      },
+      ["synthetic-identifiers"],
+    );
+    expect(messages(findings)).toContain('name value "Chalmers"');
+  });
+
+  it("synthetic-identifiers: a value at an identifying key in a fence nothing parses", () => {
+    const findings = gradedWithoutDeclarations(
+      {
+        "guides.md": page(
+          "guides",
+          "Guides",
+          ["```text", '  family: "Chalmers"', '  birthDate: "1974-12-25"', "```"].join("\n"),
+        ),
+      },
+      ["synthetic-identifiers"],
+    );
+    // Neither JSON nor a TypeScript object literal, so only the keyed shape route reaches this one.
+    expect(messages(findings)).toContain('name value "Chalmers"');
+    expect(messages(findings)).toContain('dob value "1974-12-25"');
+  });
+
+  it("synthetic-identifiers: the object-literal spelling passes against the real declaration", () => {
+    const findings = graded(
+      {
+        "quickstart.md": page(
+          "quickstart",
+          "Quickstart",
+          [
+            "```ts",
+            "const patient = {",
+            '  resourceType: "Patient",',
+            '  birthDate: "1974-12-25",',
+            '  name: [{ family: "Chalmers", given: ["Peter"] }],',
+            '  address: [{ line: ["534 Erewhon St"] }],',
+            '  identifier: [{ system: "http://hospital.example.org", value: "SYN-0001" }],',
+            "};",
+            "```",
+          ].join("\n"),
+        ),
+      },
+      ["synthetic-identifiers"],
+    );
+    expect(messages(findings)).toBe("");
+  });
+
   it("stale-assertions: a page that sends the reader away from content that exists", () => {
     const findings = graded(
       {
@@ -378,6 +483,13 @@ describe("every arm goes red on a seeded control", () => {
               'const { resource } = parseResource(\'{"resourceType":"Patient"}\');',
               'resourceType(resource); // => "Observation"',
               "```",
+              "",
+              "```ts",
+              'import { parseResource } from "@cosyte/fhir";',
+              "",
+              'const { resource } = parseResource(\'{"resourceType":"Patient"}\');',
+              'resource.kind // => "primitive"',
+              "```",
             ].join("\n"),
           ),
         },
@@ -387,6 +499,9 @@ describe("every arm goes red on a seeded control", () => {
       expect(messages(findings)).toContain("noSuchMember");
       expect(messages(findings)).toContain("sample threw when run");
       expect(messages(findings)).toContain('expected "Observation", got "Patient"');
+      // The third sample states its result with no trailing semicolon, which reads to a reader
+      // exactly as the second one does and used to be left as an unchecked comment.
+      expect(messages(findings)).toContain('expected "primitive", got "complex"');
     },
     SAMPLE_TIMEOUT,
   );
@@ -410,6 +525,68 @@ describe("every arm goes red on a seeded control", () => {
     },
     SAMPLE_TIMEOUT,
   );
+});
+
+describe("the walk reaches every page the bundle publishes", () => {
+  it("a page in a subdirectory is graded, and a finding names its path", () => {
+    const findings = gradedWithoutDeclarations(
+      {
+        "guides/profiles.md": page(
+          "profiles",
+          "Profiles",
+          [
+            "A resource is written as { ... } in JSON.",
+            "",
+            "```json",
+            '{ "resourceType": "Patient", "name": [{ "family": "Chalmers" }] }',
+            "```",
+          ].join("\n"),
+        ),
+      },
+      ["mdx-braces", "synthetic-identifiers"],
+    );
+    // `scripts/build-docs-artifacts.sh` packs `docs-content/` recursively, so this page ships. A
+    // walk that read one directory level reported nothing at all here.
+    expect(messages(findings)).toContain("guides/profiles.md:6 [mdx-braces]");
+    expect(messages(findings)).toContain('name value "Chalmers"');
+  });
+
+  it("a relative link on a nested page resolves against its own directory", () => {
+    const findings = graded(
+      {
+        "sidebars.json": '{ "docs": ["intro", "guides/a", "guides/b"] }\n',
+        "intro.md": page("intro", "Getting started", "Start at [a](./guides/a.md)."),
+        "guides/a.md": page("guides/a", "A", "Next is [b](./b.md), never [c](./c.md)."),
+        "guides/b.md": page("guides/b", "B", "Back to the [intro](../intro.md)."),
+      },
+      ["links"],
+    );
+    expect(messages(findings)).toContain('relative link target "./c.md" is not a page');
+    expect(messages(findings)).not.toContain('"./b.md"');
+    expect(messages(findings)).not.toContain('"../intro.md"');
+    expect(messages(findings)).not.toContain('"./guides/a.md"');
+  });
+
+  it("a link to a page file is still read, and a linked directory is still not descended", () => {
+    const dir = mkdtempSync(join(tmpdir(), "fhir-docs-control-"));
+    const outside = mkdtempSync(join(tmpdir(), "fhir-docs-outside-"));
+    try {
+      seed(dir, "intro.md", page("intro", "Getting started", "A brace like { this } breaks MDX."));
+      seed(outside, "elsewhere.md", page("elsewhere", "Elsewhere", "Another { brace }."));
+      symlinkSync(join(dir, "intro.md"), join(dir, "linked.md"));
+      symlinkSync(outside, join(dir, "linked-dir"));
+      const findings = checkDocsSet(dir, { arms: ["mdx-braces"] });
+      // Recursion is keyed on the entry's own kind and a page on what it leads to, which is what
+      // makes the widened walk a widening: the linked FILE is graded, as it was before the walk
+      // recursed, and the linked DIRECTORY is not descended, so the walk cannot loop or leave the
+      // directory the bundle is built from. Both are declared in the checker's docblock, and pinned
+      // here so neither can move in silence.
+      expect(findings.map((finding) => finding.file).sort()).toEqual(["intro.md", "linked.md"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("the gate's command-line entry point", () => {
