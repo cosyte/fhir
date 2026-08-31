@@ -1,3 +1,11 @@
 {
-  "docs": ["intro"]
+  "docs": [
+    "intro",
+    "installation",
+    "quickstart",
+    "core-concepts",
+    "guides",
+    "limits",
+    "troubleshooting"
+  ]
 }
