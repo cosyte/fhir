@@ -292,6 +292,38 @@ and produces no record here. What admitting the path buys is the **mode check**,
 which is the whole of the link and gitlink case; a regular blob there is a
 disclosed gap, below.
 
+**A TARGET THIS RUN ENUMERATED AND NEVER READ REFUSES THE SCAN (exit 2), AND
+EVERY OFFENDER IS NAMED.** This is the rule that makes `--allow-fixture` a
+withdrawal a reader can see rather than a hole shaped like a feature. The flag
+subtracts a target from the sweep, and a run that then returns its ORDINARY exit
+code over whatever is left reports clean, over a corpus whose only violator is
+the withdrawn file, about a file nothing has opened. A scan that did not open a
+file has no clean verdict to give about it.
+
+**Where the enumeration is taken decides what the rule can see, so it is stated
+rather than left to the code.** It is snapshotted **after** the announced
+sentinel skip and **before** `--allow-fixture` subtracts anything. A declared
+sentinel is a standing, reviewed exemption, recorded by exact path in the bypass
+entries below and **announced on every sweep**, so skipping one is not a target
+left unaccounted for; a `--allow-fixture` bypass is a caller's per-run
+withdrawal, and it is precisely what this rule exists to catch. Taking the
+snapshot before the sentinel filter instead would refuse every ordinary run,
+which is the shape of gate a developer learns to bypass.
+
+**It is a SET DIFFERENCE over paths, never a count of files scanned.** A count
+counts the targets that DID get read, so `n read of n targets` is exactly the
+arithmetic that hides which ones did not; the same reasoning already recorded
+above for `refuseUnobserved`. `read` is filled in only once a target's bytes have
+been through `scanTarget`, so it is evidence of observation and never a plan to
+observe.
+
+**Hits found before the refusal are printed first, and `OK, no hits` is not.**
+The refusal still wins the exit code, so nothing is reported as accounted for
+that is not; what the ordering buys is that a finding already made is not thrown
+away by the refusal that follows it. The asymmetry on the clean line is the
+point: a run that refuses has no clean verdict, so it must not write the line
+that reads as one.
+
 **A scan that failed anywhere inside `main()` exits 2, not 1.** Node exits 1 on
 an uncaught throw and 1 is this gate's code for **hits found**, so a failure that
 was not an `InvocationError` was reported to CI and to the developer as a

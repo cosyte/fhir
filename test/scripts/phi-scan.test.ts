@@ -965,6 +965,153 @@ describe("phi-scan: paths mode and the override-log gate", () => {
 });
 
 // ---------------------------------------------------------------------------
+// A target the run ENUMERATED and never READ refuses the scan
+// ---------------------------------------------------------------------------
+//
+// The hole these close has the shape of a feature. `--allow-fixture` subtracts a
+// target from the sweep, and a run that then returns its ORDINARY exit code over
+// whatever is left reports clean, over a corpus whose only violator is the
+// withdrawn file, about a file nothing has opened.
+//
+// EVERY CASE HERE ASSERTS THE CODE IS NOT THE HITS CODE, not merely that it is
+// non-zero. A refusal that reused 1 would be indistinguishable from a finding to
+// every consumer that branches on the two, which is what a scanner's exit
+// contract is for.
+
+const VIOLATOR = "test/__fixtures__/violator.txt";
+const DECOY = "test/__fixtures__/decoy.txt";
+
+/**
+ * A throwaway repo carrying one violator, one clean decoy, and an override log
+ * that admits a bypass of EITHER. The log only permits a bypass; it withdraws
+ * nothing on its own, so each case below chooses what it withdraws in its argv.
+ */
+function makeWithdrawableRepo(): string {
+  const root = makeRepo();
+  writeFileSync(join(root, VIOLATOR), SYNTHETIC_PHI);
+  writeFileSync(join(root, DECOY), "nothing to see here\n");
+  writeFileSync(
+    join(root, "phi-scan-overrides.md"),
+    [
+      "# phi-scan bypass log",
+      "",
+      "## Bypass entries",
+      "",
+      `### ${VIOLATOR}`,
+      "",
+      `### ${DECOY}`,
+      "",
+    ].join("\n"),
+  );
+  return root;
+}
+
+describe("phi-scan: a target enumerated and never read refuses the scan", () => {
+  it("names the withdrawn target and exits 2, which is neither clean nor the hits code", () => {
+    const root = makeWithdrawableRepo();
+
+    const r = runIn(root, [VIOLATOR, DECOY, "--allow-fixture", DECOY]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.code).not.toBe(1);
+    expect(r.stderr).toContain("enumerated and never read");
+    expect(r.stderr).toContain(DECOY);
+    expect(r.stdout).not.toContain("OK, no hits");
+  });
+
+  it("reports the hits it DID find before refusing, so the refusal swallows none", () => {
+    // The ordering is asserted, not assumed. A refusal raised ahead of the hit
+    // report discards every finding made before it, and a consumer then sees a
+    // refusal with no indication that PHI has already been found.
+    const root = makeWithdrawableRepo();
+
+    const r = runIn(root, [VIOLATOR, DECOY, "--allow-fixture", DECOY]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(VIOLATOR);
+    expect(r.stderr.indexOf("HIT:")).toBeLessThan(r.stderr.indexOf("enumerated and never read"));
+  });
+
+  it("a corpus whose ONLY violator is withdrawn does not report clean", () => {
+    // The exact state the old code exited 0 in. Nothing read the file, so there
+    // is no clean verdict to give about it.
+    const root = makeWithdrawableRepo();
+
+    const r = runIn(root, [VIOLATOR, "--allow-fixture", VIOLATOR]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain(VIOLATOR);
+    expect(r.stdout).not.toContain("OK, no hits");
+  });
+
+  it("`--allow-fixture X` alone is a withdrawal of a scanned target, not a no-op", () => {
+    // `parseArgs` seeds the target list from the bypass so the flag means "scan
+    // X, but allow it". That claim is only true if withdrawing X is then
+    // observable, which is this.
+    const root = makeWithdrawableRepo();
+
+    const r = runIn(root, ["--allow-fixture", DECOY]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain(DECOY);
+  });
+
+  it("the hook route is covered too: a withdrawn STAGED target refuses", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "inline.test.ts"), 'const s = "SSN 123-45-6789";\n');
+    writeFileSync(join(root, "test", "clean.test.ts"), "export const answer = 42;\n");
+    writeFileSync(
+      join(root, "phi-scan-overrides.md"),
+      ["# phi-scan bypass log", "", "## Bypass entries", "", "### test/clean.test.ts", ""].join(
+        "\n",
+      ),
+    );
+    git(root, ["add", "test/inline.test.ts", "test/clean.test.ts"]);
+
+    const r = runIn(root, ["--staged", "--allow-fixture", "test/clean.test.ts"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("enumerated and never read");
+    expect(r.stderr).toContain("test/clean.test.ts");
+  });
+
+  // The other direction, and it is the one that decides whether this gate
+  // survives contact with a developer. A rule that refuses every ordinary run is
+  // a rule the next person bypasses, and the pre-commit hook runs the sweep with
+  // no flags at all.
+
+  it("an ordinary sweep with nothing withdrawn still exits 0", () => {
+    const root = makeWithdrawableRepo();
+    rmSync(join(root, VIOLATOR), { force: true });
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("OK, no hits");
+    expect(r.stderr).not.toContain("enumerated and never read");
+  });
+
+  it("two paths named with nothing withdrawn report normally, hits code and all", () => {
+    const root = makeWithdrawableRepo();
+
+    const r = runIn(root, [VIOLATOR, DECOY]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).not.toContain("enumerated and never read");
+  });
+
+  it("a declared sentinel skipped by the sweep is not an unread target", () => {
+    // THE ORDERING THIS PINS IS LOAD-BEARING. The enumeration is snapshotted
+    // AFTER the announced sentinel skip and BEFORE the bypass withdrawal: a
+    // sentinel is a standing, reviewed, announced exemption, while a bypass is a
+    // caller's per-run withdrawal. Snapshot it before the sentinel filter and
+    // every CI run refuses instead.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "phi-leak.test.ts"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("declared sentinel");
+    expect(r.stderr).not.toContain("enumerated and never read");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The walk root is `test`, not `test/__fixtures__`
 // ---------------------------------------------------------------------------
 //
