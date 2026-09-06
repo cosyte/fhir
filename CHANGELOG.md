@@ -8,6 +8,24 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **The PHI commit-gate refuses a scan that enumerated a target and never read it, naming every
+  offender (exit 2, not the code reserved for findings).** The hole had the shape of a feature:
+  `--allow-fixture` subtracted a target from the sweep and `scripts/phi-scan.ts` then returned its
+  ordinary exit code over whatever was left, so the same argv over a corpus whose only violator was
+  the withdrawn file exited **0** about a file nothing had opened. The rule is a set difference over
+  paths, never a count of files scanned, because a count counts the targets that DID get read. Hits
+  found before the refusal are printed first, so a refusal discards no finding, and `OK, no hits` is
+  unreachable from the refusing path. **An ordinary run is unaffected**: the enumeration is
+  snapshotted after the announced sentinel skip and before the bypass withdrawal, so the sweep the
+  `pre-commit` hook and CI both make still exits 0. Pinned in `test/scripts/phi-scan.test.ts` in
+  both directions, and recorded in `phi-scan-overrides.md`.
+- **Install hardening is declared: a 24-hour publication cooldown and a no-downgrade trust policy**
+  (`pnpm-workspace.yaml`, `minimumReleaseAge: 1440`, `trustPolicy: no-downgrade`). Stated rather
+  than implied: both settings postdate the pinned `pnpm@10.0.0`, which ignores them, so this
+  declares the policy and does not yet put it in force. No runtime behaviour changes.
+- **The build-time `js-yaml` resolution moves to `4.3.0`**, covering the full advisory range for the
+  quadratic merge-key denial of service rather than its earlier upper bound. Dev and build
+  dependencies only; nothing under `src/` and no published artifact changes.
 - **The README and the changelog are back in the published tarball, reverting the narrowed shape
   `0.0.10` shipped as a diagnostic probe (`FHIR-NPM-NAME`).** No runtime behaviour changes.
   `0.0.10` published on 2026-08-26 with `files` narrowed to the four runtime artifacts and

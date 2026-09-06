@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# INSTALL HARDENING. These two settings are the only defence this repository
+# has against a compromised release during the window between its publication
+# and its removal from the registry. Both are DECLARED here rather than left to
+# a default: pnpm ships minimumReleaseAge at 0 before v11 and trustPolicy off,
+# so neither is on anywhere unless a file says so.
+#
+# NEITHER IS IN FORCE AT THE PINNED PACKAGE MANAGER, AND THAT IS STATED RATHER
+# THAN IMPLIED. minimumReleaseAge was added in pnpm 10.16.0 and trustPolicy in
+# 10.21.0; package.json pins pnpm@10.0.0, which ignores both keys entirely. So
+# this file declares the policy and does not yet enforce it. Putting it in force
+# means moving that pin, which is a change with its own blast radius and is not
+# made here. Read no protection off the presence of this file.
+#
+# EVERY EXEMPTION NEEDS A REASON, ON THE LINE ABOVE IT, STARTING `# reason:`.
+# An exemption with no recorded reason is not reviewable. The exemption lists
+# are ABSENT rather than empty while nothing is exempted: an empty list is a
+# place for an entry to appear unremarked. Neither value below may be weakened
+# to make an install pass; record the one package as an exemption instead.
+#
+# THE `packages:` KEY IS REQUIRED AND NAMES THE ROOT ALONE. pnpm refuses to
+# install against a workspace file with no `packages` entry ("packages field
+# missing or empty"), and this repository publishes one package, from its own
+# root, with no sub-packages. So the list is exactly the root: a glob such as
+# `packages/*` would declare a layout that does not exist here.
+# ---------------------------------------------------------------------------
+
+packages:
+  - "."
+
+# 1440 minutes = 24 hours. pnpm's own rationale for the number: "Since malware
+# is usually detected quickly, delaying updates by 24 hours will most likely
+# prevent you from installing a bad version"
+# (https://pnpm.io/supply-chain-security).
+minimumReleaseAge: 1440
+
+# Fail the install when a package's trust evidence is weaker than that of an
+# earlier-published version of the same package: a trusted publisher that
+# becomes provenance-only, or provenance that becomes nothing at all.
+trustPolicy: no-downgrade

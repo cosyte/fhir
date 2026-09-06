@@ -44,8 +44,26 @@
  *                              is not every blob either -- a `.md` path and a
  *                              declared sentinel are out of scope on both routes
  *
- * Exit codes: 0 (clean), 1 (hits found), 2 (invocation error).
+ * Exit codes: 0 (clean, meaning every enumerated target was READ and nothing was
+ * found in it), 1 (hits found), 2 (the scan refused: an invocation error, or a
+ * target this run enumerated and never read).
  *
+ * ---------------------------------------------------------------------------
+ * A TARGET THIS RUN ENUMERATED AND NEVER READ REFUSES THE SCAN (exit 2), AND
+ * EVERY OFFENDER IS NAMED. The enumeration is snapshotted after the announced
+ * sentinel skip and BEFORE `--allow-fixture` subtracts anything, so a bypass is
+ * always a withdrawal of something the run had declared it would read.
+ *
+ * The rule is a SET DIFFERENCE over paths, never a count of files scanned: a
+ * count counts the targets that DID get read, so `n read of n targets` is
+ * exactly the arithmetic that hides which ones did not. Hits found before the
+ * refusal are still reported; the refusal wins the exit code and the `OK, no
+ * hits` line is unreachable from it.
+ *
+ * WITHOUT IT `--allow-fixture` IS A HOLE SHAPED LIKE A FEATURE. The flag
+ * subtracts a target from the sweep, and a run that then returns its ordinary
+ * code over whatever is left reports clean, over a corpus whose only violator
+ * is the withdrawn file, about a file nothing has opened.
  * ---------------------------------------------------------------------------
  * THE SWEEP READS THE BYTES GIT CARRIES AS A UNION WITH THE WALK. A walk reads
  * the WORKING TREE, and that is not what a commit contains: a fixture `git
@@ -2088,13 +2106,19 @@ function main(): number {
     throw err;
   }
 
-  targets = targets.filter((t) => !allowed.has(t.path));
-
   // The declared sentinel files are subtracted from the SWEEPING routes only. A
   // path named explicitly on the command line is still scanned, because that is
   // the caller's own request to read whatever is there and it errs toward
   // scanning more. Skipping is announced rather than silent: an exemption
   // nobody sees is the same shape of blind spot this gate exists to refuse.
+  //
+  // IT RUNS BEFORE THE ENUMERATION IS TAKEN, AND THAT ORDER IS THE ONE THING
+  // THAT KEEPS THE COMPLETENESS RULE BELOW OFF AN ORDINARY RUN. A declared
+  // sentinel is a standing, reviewed, ANNOUNCED exemption recorded by exact path
+  // in `phi-scan-overrides.md`, so a sweep that skips one has not silently left
+  // a target unaccounted for; a `--allow-fixture` bypass is a caller's per-run
+  // withdrawal and is exactly what the rule exists to catch. Snapshotting the
+  // enumeration before this filter would refuse every CI run.
   if (args.mode !== "paths") {
     // DEDUPED: a declared path can arrive from the walk AND from the index (they
     // are separate targets by design, since the two copies can differ), and
@@ -2111,7 +2135,18 @@ function main(): number {
     }
   }
 
+  // ENUMERATED: the set of paths this run DECLARED it would read. Taken before
+  // the `--allow-fixture` withdrawal on the next line, so a bypass is always a
+  // withdrawal of something this set already holds, and never a quiet narrowing
+  // of what the run claims to have covered.
+  const enumerated = new Set<string>(targets.map((t) => t.path));
+
+  targets = targets.filter((t) => !allowed.has(t.path));
+
   const hits: Hit[] = [];
+  // READ: filled in only once a target's bytes have actually been through
+  // `scanTarget`. It is evidence of observation, never a plan to observe.
+  const read = new Set<string>();
   for (const t of targets) {
     try {
       scanTarget(t, allow, hits);
@@ -2122,6 +2157,36 @@ function main(): number {
       }
       throw err;
     }
+    read.add(t.path);
+  }
+
+  // THE COMPLETENESS RULE. A SET DIFFERENCE, NEVER A SIZE COMPARISON: a count
+  // counts the targets that DID get read, so `n read of n targets` is exactly
+  // the arithmetic that hides WHICH ones did not. Every offender is named.
+  //
+  // Without it, `--allow-fixture` is a hole with the shape of a feature: the
+  // flag subtracts a target from the sweep, and a run that then takes its
+  // ORDINARY exit code over the ones left reports clean (exit 0), over a corpus
+  // whose only violator is the withdrawn file, about a file it never opened. A
+  // scan that did not open a file has no clean verdict to give about it.
+  const unread = [...enumerated].filter((p) => !read.has(p));
+
+  if (unread.length > 0) {
+    // HITS FOUND SO FAR ARE PRINTED BEFORE THE REFUSAL, so a refusal cannot
+    // discard a finding the sweep already made. `OK, no hits` is NOT printed on
+    // this path, and that asymmetry is the point: this run has no clean verdict
+    // to give, so it must not write the line that reads as one.
+    if (hits.length > 0) report(hits);
+    const lines = unread.map((p) => `  - ${p}`).join("\n");
+    const noun = unread.length === 1 ? "target was" : "targets were";
+    process.stderr.write(
+      `[phi-scan] refusing the scan: ${String(unread.length)} ${noun} enumerated and never ` +
+        `read:\n${lines}\n` +
+        "A scan that did not open a file has no clean verdict to give about it. If the file is " +
+        "genuinely synthetic, declare its identifiers in scripts/phi-allow-list.txt rather than " +
+        "withdrawing the file from the scan.\n",
+    );
+    return 2;
   }
 
   report(hits);
