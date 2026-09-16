@@ -8,6 +8,28 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **A FHIR primitive whose value arrives as the element's own character data is now READ, so
+  `<status>entered-in-error</status>` reaches the safety readout with the same retraction, the same
+  negations and the same dose its `value=` twin gets** (`fhir#XML-RESIDUAL-1`, the element-text
+  residual; the other two that phase covers stay open and stay pinned). Before this the document was
+  reported and refused but the value was unreadable: `readSafety` answered `retracted: false` with
+  `negations: []` over a retracted record, and a dose number vanished while its unit and UCUM code
+  survived. **The report does not move.** R4 is unambiguous that the encoding is wrong (xml.html
+  §2.6.1, and "FHIR elements are never empty"), so this is a reader tolerance and not a conformance
+  claim: `UNEXPECTED_XML_CONTENT` still fires at the position, the marker still lands,
+  `DROPPED_ELEMENT_TEXT` is still an error, `safeToSummarize` stays `false`, and **both writers still
+  refuse the model**. The refusal now arrives beside the retraction rather than instead of it.
+  **The tolerance is bounded at one position and never invents content**: a `value` attribute wins
+  outright and the text beside it is never read, merged or compared against it; a complex element and
+  the resource-valued unwrap have no value slot and still drop; two text runs separated by a child
+  element read as no value rather than a joined token; the value is handed on exactly as written, so
+  a near miss stays on `nearMissNegationCodes` and a decimal keeps its precision. JSON is untouched.
+  Measured against the base pin over the 1195-document read differential: nothing withdrawn,
+  relocated or re-severitied, no `valid` or `safeToSummarize` false-to-true flip, no retraction,
+  negation or leaf value lost, no JSON fixture moved. `test/dropped-element-text.test.ts` is updated
+  in the same change, `scripts/read-differential.ts` declares the shape's `value=` twin so the twin
+  arm covers it, and that report gained a derived line separating pairs that read weaker only by
+  refusing what the twin affirmed from any that read weaker by carrying less.
 - **The PHI commit-gate refuses a scan that enumerated a target and never read it, naming every
   offender (exit 2, not the code reserved for findings).** The hole had the shape of a feature:
   `--allow-fixture` subtracted a target from the sweep and `scripts/phi-scan.ts` then returned its

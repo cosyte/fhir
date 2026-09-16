@@ -292,9 +292,17 @@ const SHAPES: readonly Shape[] = [
     xml: '<contained xmlns="urn:vendor">@<AllergyIntolerance><id value="a"/></AllergyIntolerance></contained>',
     narrative: false,
   },
-  // A primitive whose value is written as element text rather than `value=`. The value has no slot
-  // on the model and is dropped on BOTH trees; it is in the corpus so that stays measured.
-  { id: "primitive-text-not-value", xml: "<status>@</status>", narrative: false },
+  // A primitive whose value is written as element text rather than `value=`. The encoding is
+  // non-conformant on both trees and stays reported on both; what the twin measures is whether the
+  // VALUE reaches the reading, which base loses and head recovers. Declaring the twin is what turns
+  // a finding that only ever existed because the value was missing into an attributable number
+  // rather than an apparent suppression.
+  {
+    id: "primitive-text-not-value",
+    xml: "<status>@</status>",
+    narrative: false,
+    twin: '<status value="@"/>',
+  },
   {
     id: "uppercase-div-wrapper",
     xml: `<DIV xmlns="${XHTML}">@<BR/></DIV>`,
@@ -873,6 +881,23 @@ async function main(): Promise<void> {
     let twinsEqual = 0;
     let twinsHeadLouder = 0;
     let twinsHeadWeaker = 0;
+    // A SUBSET of `twinsHeadWeaker`, never a fourth bucket, and the three counts above keep their
+    // exact meanings and values because of it.
+    //
+    // The louder arm requires `valid` and `safeToSummarize` to MATCH the twin's, so a document head
+    // reads exactly as the twin plus a non-conformance it refuses over lands in `weaker` for doing
+    // the right thing. That is the whole of the "score a refusal base-vs-head" rule: a refusal is
+    // not a loss, and the twin arm as written cannot say so. This line says which of the weaker
+    // pairs are that case, decided by the readings themselves rather than by a keyed-in shape id,
+    // so it cannot go stale against a slice the way a named control did.
+    //
+    // A pair counts here only when head carries EVERYTHING the twin carried -- every issue, every
+    // finding, every negation, and the retraction if the twin had one -- and the only differences
+    // left run in the strict direction: `valid` or `safeToSummarize` false at head where the twin
+    // read true. Lose one issue, one finding, one negation or the retraction and the pair drops out
+    // of this count while staying in `twinsHeadWeaker`, which is what keeps it from laundering a
+    // real loss as a refusal.
+    let twinsHeadStricter = 0;
     const twinExamples: string[] = [];
     const louderExamples: string[] = [];
     for (const doc of corpus) {
@@ -907,6 +932,17 @@ async function main(): Promise<void> {
         }
       } else {
         twinsHeadWeaker += 1;
+        const carriesAll =
+          baseTwin.issues.every((i) => headReading.issues.includes(i)) &&
+          baseTwin.findings.every((f) => headReading.findings.includes(f)) &&
+          baseTwin.negations.every((n) => headReading.negations.includes(n)) &&
+          (!baseTwin.retracted || headReading.retracted) &&
+          headReading.thrown === baseTwin.thrown;
+        const stricterOnly =
+          (headReading.valid === baseTwin.valid || !headReading.valid) &&
+          (headReading.safeToSummarize === baseTwin.safeToSummarize ||
+            !headReading.safeToSummarize);
+        if (carriesAll && stricterOnly) twinsHeadStricter += 1;
         if (twinExamples.length < 5) twinExamples.push(doc.name);
       }
     }
@@ -937,7 +973,15 @@ async function main(): Promise<void> {
           { ...t, readDiagnosticsLostByCode: Object.fromEntries(t.readDiagnosticsLostByCode) },
         ]),
       ),
-      twins: { twins, twinsEqual, twinsHeadLouder, twinsHeadWeaker, twinExamples, louderExamples },
+      twins: {
+        twins,
+        twinsEqual,
+        twinsHeadLouder,
+        twinsHeadWeaker,
+        twinsHeadStricter,
+        twinExamples,
+        louderExamples,
+      },
       refusalsIntroduced: refusalsIntroduced(base, head),
       blindSpots,
       problems,
@@ -1009,6 +1053,7 @@ async function main(): Promise<void> {
       line("  head reads exactly as base read the twin", twinsEqual);
       line("  head reads LOUDER than base read the twin", twinsHeadLouder);
       line("  head reads WEAKER than base read the twin", twinsHeadWeaker);
+      line("    of those, weaker ONLY by refusing what the twin affirmed", twinsHeadStricter);
       for (const e of louderExamples) line("    louder example", e);
       for (const e of twinExamples) line("    weaker example", e);
       process.stdout.write(

@@ -109,13 +109,30 @@ Unless noted:
 - **Do not answer a duplicate reaching the vital-signs unit check via `category.coding` by widening
   the cardinality table**. See the closed-table trap above.
 - **Do not cite ADR 0018 to block a refusal; cite it to block a tolerance.** Refusing to affirm
-  recognises nothing and invents nothing. _Recovering_ element text as a primitive value is a
-  tolerance for a non-conformant encoding, and **two grounding searches have now failed**, so it
-  stays unbuilt. Do not re-run that search blind; read the negative result first.
+  recognises nothing and invents nothing.
   [`#fhir-primitive-as-element-text-2026-08-03`](documentation/agent-notes.md#fhir-primitive-as-element-text-2026-08-03)
-- **Do not declare a differential twin for a shape the reader still does not read**: the twin
-  section requires `valid`/`safeToSummarize` to match, so it scores a refusal as _weaker_ for doing
-  the right thing. Score a refusal base-vs-head.
+  - **The element-text tolerance is now TAKEN, and it is TAKEN AT ONE POSITION.** A primitive
+    carrying no `value` attribute reads its own character data as its lexical value; nothing else
+    does. **DO NOT WIDEN IT** to a complex element or to the resource-valued unwrap (neither has a
+    value slot, so reading there would model content at a position FHIR spells nothing at), and **do
+    not let it reach an element that DID carry a `value`**: the attribute wins outright and the text
+    beside it is never read, merged or compared against it, which is the arm
+    `<status value="final">final</status>` broke a previous claim on. **Two separated text runs read
+    as NO value**, because joining them mints a token the document does not contain. And the value
+    is handed to the safety layer exactly as written: **never case-folded, trimmed into or coerced
+    towards a code it nearly spells** - a near miss stays a near miss.
+  - **The tolerance changes NOTHING about the report.** `UNEXPECTED_XML_CONTENT` still fires, the
+    marker still lands, `DROPPED_ELEMENT_TEXT` is still an error, `safeToSummarize` is still false
+    and **both writers still refuse**. A change that makes a recovered value summarisable or
+    emittable has reopened the laundering, not finished the job.
+- **A refusal is scored BASE-VS-HEAD, never on the twin arm**: the twin section requires
+  `valid`/`safeToSummarize` to match, so a document head reads exactly as the twin **plus** a
+  non-conformance it refuses over is scored _weaker_ for doing the right thing.
+  `primitive-text-not-value` declares a twin and sits in that bucket on purpose. Read
+  `weaker ONLY by refusing what the twin affirmed` beside it: it is a SUBSET of the weaker count,
+  derived from the readings, and when it equals the weaker count nothing was lost against a twin.
+  **Do not "fix" the weaker count by relaxing the louder arm** - that is the one number a real
+  suppression would land in.
 - **The control was RED on a clean tree AND a changed one, so it cleared neither: its zeros are
   inadmissible.** `CONTROL.moved` DELETED; **four** arms, ONE comparison (`sameReading`). **Never
   re-key a document in.** Arm 4 (`refusalBlindSpots`) is the one that keys the current slice and it
