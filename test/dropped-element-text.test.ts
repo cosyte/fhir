@@ -430,9 +430,7 @@ describe("what the tolerance does NOT do, pinned so it cannot be mistaken for a 
     // The value is recovered exactly as written; it is never case-folded into the code it nearly
     // spells. `NOT-DONE` is not the code `not-done`, so the negation stays unclassified and the
     // near-miss channel is what discloses it.
-    const { resource } = parseResourceXml(
-      `<Procedure ${NS}><status>NOT-DONE</status></Procedure>`,
-    );
+    const { resource } = parseResourceXml(`<Procedure ${NS}><status>NOT-DONE</status></Procedure>`);
     expect(child(resource, "status")).toMatchObject({ kind: "primitive", value: "NOT-DONE" });
     const safety = readSafety(resource);
     expect(safety.negations).toEqual([]);
