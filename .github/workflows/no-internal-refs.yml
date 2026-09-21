@@ -14,10 +14,24 @@ name: Public-surface gate
 # workflow accordingly. This needs to not happen again." A sweep regresses the first time
 # someone writes `(Phase 12)` into a README; a job that reds does not.
 #
+# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-internal-refs`, which is
+# this repository's own checker. The job below delegates the plumbing (checkout, pnpm,
+# Node) to the shared gate workflow, which carries no pattern, no allow-list and no file
+# selection of its own: it prepares the tree, runs the command, and lets the command's
+# exit status decide the job. The detection rules, the self-tests and the known project
+# prefixes all stay here, because what counts as a project prefix and what counts as a
+# domain designator is a property of this package.
+#
+# THE JOB ID IS LOAD-BEARING. A called job's check run is named
+# `<caller job id> / <inner job id>`, so the job id `no-internal-refs` below publishes
+# `no-internal-refs / public-surface`, which is the context a branch ruleset must require.
+# Renaming the job detaches that requirement with no error anywhere, and a required
+# context nothing emits blocks every pull request.
+#
 # WHY A SEPARATE WORKFLOW, and not a job in ci.yml. Same reasoning as the em-dash gate next
 # door, and the first half is the deciding one:
 #
-#   The reusable pipeline is not an option. This repo's `ci` job calls
+#   The shared ci pipeline is not an option. This repo's `ci` job calls
 #   cosyte/.github/.github/workflows/ci.yml@main, which runs a fixed ladder and no arbitrary
 #   repo script. Adding this there would also flip every other caller red on its next run:
 #   the measured backlog was 149 internal references across 11 repos, and remediating each
@@ -42,8 +56,7 @@ name: Public-surface gate
 # re-reads the finished body bytes and refuses to publish a violating one. This job covers
 # the repo's own files; that one covers what gets published to the releases page.
 #
-# Run it locally with `pnpm check:no-internal-refs`, which is also on the meta-repo's
-# `scripts/verify.sh fhir` ladder.
+# Run it locally with `pnpm check:no-internal-refs`.
 
 on:
   push:
@@ -55,23 +68,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
-  # The job id is the check-run context name a branch ruleset requires. Renaming it
-  # silently detaches the required check, so the ruleset stops protecting anything while
-  # still looking configured. Rename both together or neither.
+  # The check-run context prefix. See the note above before touching this id.
   no-internal-refs:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      # The script self-tests before it reports: it proves each rule still matches its own
-      # positive sample AND still lets through the reference material it was most likely to
-      # destroy (`FHIR-R4`, `HL7-V2`, `US-Core`, the ICD-10-CM code `T78.40XA`, the LOINC
-      # code `8480-6`, the `ait-1` / `con-3` / `obs-6` invariants, a Phase III trial). It
-      # refuses to print OK from a scan that did not read all of its input. No `|| true`,
-      # no `continue-on-error`: a check that cannot fail is documentation.
-      - name: Check the public surface
-        run: bash scripts/check-no-internal-refs.sh
+    # Pinned to the 40 character commit, not to the tag beside it: a tag can be moved
+    # or deleted by anyone who gains write access to the workflow's repository, so a
+    # tag is not an immutable reference and is not a pin. The trailing comment is the
+    # published reference that commit was released as, so the release note stays
+    # findable from here.
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@84ecccd771cbc9c1ece003a3f8ff61415360395b # workflows-2026-09-18-84ecccd771cb
+    # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
+    # downgraded by its caller, and this gate reads the tree and nothing else.
+    permissions:
+      contents: read
