@@ -50,12 +50,25 @@
  * separated, exactly as before. Reading is otherwise lenient (Postel's Law): nothing here is
  * rejected. **Lenient does not mean lossless, and the two halves differ.** An element in an
  * unexpected namespace is modeled and flagged; non-whitespace character data written directly on a
- * FHIR element is **dropped** and flagged, because a FHIR element carries its value in `value=`
- * (§2.6.1) and there is no slot on the model for text. Wherever `hasStrayText` observes such text
- * the node is also **marked** ({@link ../model/node.js} `isDroppedText`), which is what the safety
- * layer reads: the flag says the position was odd, the marker says content is missing from it, and
- * only the second can stop an affirmative verdict being computed over an element the document did
- * fill in. **`hasStrayText` is the scope of both, and it is narrower than "any character data":** it
+ * FHIR element is **flagged wherever it appears**, because a FHIR element carries its value in
+ * `value=` (§2.6.1) and an element holding nothing but text has none of the three things §2.6.1 says
+ * an element SHALL have. Wherever `hasStrayText` observes such text the node is also **marked**
+ * ({@link ../model/node.js} `isDroppedText`), which is what the safety layer reads: the flag says
+ * the position was odd, the marker says the format puts no content there, and only the second can
+ * stop an affirmative verdict being computed over an element the document did fill in.
+ *
+ * **Whether that text is also READ is decided by the position, and one position reads it.** On a
+ * primitive element carrying no `value` attribute the character data is the value the sender wrote
+ * in the wrong place, so it is read as the element's lexical value ({@link elementTextValue}) as
+ * well as flagged and marked. Everywhere else it is genuinely dropped: a complex element has no
+ * value slot to read it into, and the resource-valued unwrap models the wrapped resource and nothing
+ * beside it. Reading it repairs no document and displaces no value that arrived properly - the
+ * encoding stays non-conformant, stays reported at its own position, stays marked, and both writers
+ * keep refusing the model - so the tolerance can only add a retraction, a negation or a dose that
+ * would otherwise have read as an element the sender left out.
+ *
+ * **`hasStrayText` is the scope of the flag and the marker, and it is narrower than "any character
+ * data":** it
  * tests JS `String.trim()`, whose whitespace set is wider than XML's S production and is not one
  * Unicode category: it spans U+00A0 and the Zs block, U+2028 (Zl) and U+2029 (Zp), U+FEFF (Cf), and
  * VT/FF. Character data made only of those is dropped with neither a flag nor a marker. That gap is
@@ -585,6 +598,38 @@ function hasStrayText(children: readonly XmlNode[]): boolean {
 }
 
 /**
+ * The lexical value a primitive element's own character data spells, when it spells one.
+ *
+ * This is the reader's tolerance for `<status>entered-in-error</status>`: R4 puts a primitive's value
+ * in the `value` attribute (xml.html §2.6.1) and says an element is never empty, so the encoding is
+ * non-conformant either way and stays reported, marked, and refused by both writers. What the
+ * tolerance buys is that the value the sender wrote reaches the safety layer instead of reading as an
+ * element the sender left out. It can only ADD a retraction, a negation or a dose: nothing here
+ * retires a finding or affirms anything.
+ *
+ * **The form is tolerated, the content is never invented** (`clinical-safety` C1). Three limits carry
+ * that, and all three are the difference between recovering what was written and authoring something:
+ *
+ * - **A `value` attribute always wins and is never compared against the text.** This is only ever
+ *   consulted where the element carries no `value`, so text beside a value stays dropped, stays
+ *   marked, and is never merged into or checked against the value that did arrive.
+ * - **Exactly one non-whitespace run, or nothing.** Two runs separated by a child element are two
+ *   things the sender wrote at two positions; joining them would mint a token the document does not
+ *   contain anywhere.
+ * - **The run is returned as its exact lexical string**, trimmed of the surrounding whitespace no
+ *   FHIR primitive's lexical space admits. It is not case-folded, coerced, or checked against any
+ *   value domain: this reader is schema-free, so whether the string spells a code the safety layer
+ *   can classify is that layer's question, and a spelling it can only record as unreadable or a near
+ *   miss is recorded that way rather than repaired here.
+ */
+function elementTextValue(children: readonly XmlNode[]): string | undefined {
+  const runs = children.flatMap((node) =>
+    node.type === "text" && node.value.trim() !== "" ? [node.value.trim()] : [],
+  );
+  return runs.length === 1 ? runs[0] : undefined;
+}
+
+/**
  * Whether `path` already carries an {@link unexpectedXmlContent} report.
  *
  * The code covers two different observations (content from another vocabulary, and character data
@@ -750,12 +795,16 @@ function buildSingle(
         issues.push(unknownProperty(`${path}.@${safeDerivedName(attr.name, "elementName")}`));
       }
     }
-    // The headline case: `<status>entered-in-error</status>` has no `value` attribute, so the
-    // primitive built here holds `undefined` while the document plainly wrote a code at it. Without
-    // the marker that node is indistinguishable from a `status` the sender left out, which is what
-    // let an affirmative safety verdict be computed over a retraction.
+    // The headline case: `<status>entered-in-error</status>` has no `value` attribute, so the value
+    // R4 puts in one is sitting in the element's own character data instead. The reader reads it
+    // there ({@link elementTextValue}) so the safety layer sees the retraction, the negation or the
+    // dose the sender wrote, and the marker still goes on: the position is still non-conformant, the
+    // flag above still reports it, and both writers still refuse the model. The two say different
+    // things and both are needed - the value says what was written, the marker says it was written
+    // somewhere this format does not put it - and only the marker can stop an affirmative verdict
+    // being computed over an element whose text no read can reach.
     const dropped = flagStrayText(element.children, path, issues);
-    const node = primitive(valueAttribute(element), meta);
+    const node = primitive(valueAttribute(element) ?? elementTextValue(element.children), meta);
     return dropped ? markDroppedText(node) : node;
   }
 

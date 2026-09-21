@@ -1435,13 +1435,27 @@ and `45b42b5`, not cited. The XML 1.0 clauses above are the only external citati
 _Relocated verbatim from `CLAUDE.md` on 2026-08-07 under the doc budget, nothing dropped. The rule it
 qualifies stays there._
 
-A **status** or a dose number written as XML element text is dropped (reported, and the writer
-refuses, but the safety spine reads `negations: []`), which is the one that qualifies "never drops a
-modifier, status or negation"; so are a scalar beside a nested array (**still not modeled**, but
+**CLOSED: a status or a dose number written as XML element text.** It used to be the loss that
+qualified "never drops a modifier, status or negation" - dropped, reported, both writers refusing,
+and the safety spine reading `negations: []` over a retracted record. The reader now reads the value
+out of the character data at **one** position, a primitive element carrying no `value` attribute, so
+the retraction, the negation and the dose reach the readout. Everything the reporting half bought is
+untouched: the encoding is still non-conformant, `UNEXPECTED_XML_CONTENT` still fires at the
+position, the marker still lands, `safeToSummarize` is still false and both writers still refuse.
+The bound is the tolerance's own: a `value` attribute always wins and the text beside it is never
+read, merged or compared against it; two text runs separated by a child element read as no value
+rather than as a joined token; and a spelling the negation layer cannot classify stays on
+`nearMissNegationCodes` / `unreadableNegationCodes` rather than being folded into a code. **The other
+two `flagStrayText` sites are unchanged and still drop**: a complex element has no value slot, and
+the resource-valued unwrap models the wrapped resource and nothing beside it.
+
+Still open, and none of them moved here: a scalar beside a nested array (**still not modeled**, but
 since 2026-08-05 its text is preserved and handed back, so the finding survives a **JSON** round
 trip; through the XML writer it is still `<name/>` and both the value and the finding go), a
-`_`-sibling discarded whole, a foreign child of a valued primitive, character data at the three
-`flagStrayText` sites, an unbound prefix, and a `<DIV>` wrapper.
+`_`-sibling discarded whole, a foreign child of a valued primitive, character data at the two
+`flagStrayText` sites that have no value slot, an unbound prefix, and a `<DIV>` wrapper. The
+`String.trim()` whitespace gap is unchanged too: character data made only of U+00A0, U+FEFF and
+their neighbours is still dropped with neither a flag nor a marker, so nothing here reads it either.
 
 **Added 2026-08-09** (raised by the negation-read-scope-depth gate, `PRE-EXISTING`, filed rather than
 absorbed): **a `status` written as a JSON OBJECT was invisible on every safety channel.**

@@ -173,17 +173,18 @@ describe("every negation is read at every resource root, not only the one handed
       `<Bundle ${FHIR_NS}><type value="collection"/><entry><resource>` +
       `<Procedure>${statusElement}</Procedure></resource></entry></Bundle>`;
 
-    it("reports the unreadable twin at the same nested location", () => {
+    it("AC-1/AC-2: reports the non-conformant twin at the same nested location AND reads it", () => {
       // BOTH-STATES. FHIR XML carries a primitive's value in the `value` attribute (xml.html
-      // §2.6.1), so `<status>not-done</status>` writes character data the reader has no slot for and
-      // drops. That was reported at this nested location at the base commit too, and it is why this
-      // slice widens no refusal: the report was already wider than the read.
+      // §2.6.1), so `<status>not-done</status>` is a non-conformant encoding and is reported at this
+      // nested location, on the base commit and on this one alike. What moved is that the value is
+      // no longer lost with the report: the reader reads it out of the character data, so the
+      // negation reaches the readout and the refusal arrives beside it instead of instead of it.
       const { resource } = parseResourceXml(xmlBundle("<status>not-done</status>"));
       const safety = readSafety(resource);
 
       expect(droppedText(resource, "Bundle")).toEqual(["Bundle.entry.resource.status"]);
       expect(safety.droppedText).toEqual(["Bundle.entry.resource.status"]);
-      expect(safety.negations).toEqual([]);
+      expect(safety.negations).toEqual(["not-done"]);
       expect(safety.safeToSummarize).toBe(false);
     });
 

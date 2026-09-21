@@ -51,11 +51,18 @@ interface Surfaces {
  * and the location lists on the safety readout, which are findings in everything but name.
  *
  * **It does NOT sweep every location list, and the shortfall is named rather than counted.**
- * `droppedText`, `unreadableBooleans` and `nearMissNegationCodes` are not collected here, a
- * `PRE-EXISTING` gap this slice widens by nothing: `unreadableNegationCodes` IS collected below, and
- * so are the three absence channels, whose locations are swept here and whose `code` half is a
- * literal from a closed set this package spells rather than anything a document supplies. Closing
- * the other three is its own slice.
+ * `unreadableBooleans` and `nearMissNegationCodes` are not collected here, a `PRE-EXISTING` gap this
+ * slice widens by nothing: `unreadableNegationCodes` IS collected below, and so are the three
+ * absence channels, whose locations are swept here and whose `code` half is a literal from a closed
+ * set this package spells rather than anything a document supplies. Closing the other two is its own
+ * slice.
+ *
+ * **`droppedText` moved out of that shortfall and into the sweep**, because it is the channel the
+ * XML reader now carries a RECOVERED value through. The reader reads a primitive's value out of the
+ * element's own character data when no `value` attribute arrived, so document content that used to
+ * be dropped is now in the model at exactly the positions this channel locates. A location is still
+ * a bounded FHIRPath expression and the value is still nowhere in it, and that is the property the
+ * slot below plants a marker to grade rather than assert.
  */
 function runJson(text: string, mode: ValidationMode): Surfaces {
   const { resource, issues } = parseResource(text);
@@ -70,6 +77,7 @@ function runJson(text: string, mode: ValidationMode): Surfaces {
       ...safety.shadowedProperties,
       ...safety.arrayWrappedScalars,
       ...safety.nestedArrays,
+      ...safety.droppedText,
       ...safety.unreadableNegationCodes,
       ...safety.absenceMarkers.map((report) => `${report.code} ${report.location}`),
       ...safety.unreadableAbsenceMarkers,
@@ -96,6 +104,7 @@ function runXml(text: string, mode: ValidationMode): Surfaces {
       ...safety.shadowedProperties,
       ...safety.arrayWrappedScalars,
       ...safety.nestedArrays,
+      ...safety.droppedText,
       ...safety.unreadableNegationCodes,
       ...safety.absenceMarkers.map((report) => `${report.code} ${report.location}`),
       ...safety.unreadableAbsenceMarkers,
@@ -249,6 +258,26 @@ const XML_SLOTS: readonly DiagnosticSlot<string>[] = [
     name: "<primitive attribute-name> (unknown attribute on a primitive)",
     plant: (m) => `<Patient xmlns="${FHIR_NS}"><gender value="male" ${m}="x"/></Patient>`,
     expectCode: "UNKNOWN_PROPERTY",
+  },
+  {
+    // AC-10. A primitive's own character data, with no `value` attribute beside it: the position the
+    // reader now reads a VALUE out of. It is the only slot here that plants document content rather
+    // than a document-supplied NAME, and it is the one this change creates, so it grades the claim
+    // that a report stays an issue code plus a FHIRPath expression when the value behind that
+    // expression is in the model.
+    name: "<primitive> element text (a value recovered from character data)",
+    plant: (m) => `<Patient xmlns="${FHIR_NS}"><gender>${m}</gender></Patient>`,
+    expectCode: "DROPPED_ELEMENT_TEXT",
+  },
+  {
+    // The same position with the value beyond any binding this package holds, so the terminology and
+    // schema layers are reached with the recovered value in hand rather than stopping at the
+    // `gender` value set. Same claim, a different set of walkers asked to honour it.
+    name: "<primitive> element text on a coded element (recovered value, terminology reached)",
+    plant: (m) =>
+      `<Observation xmlns="${FHIR_NS}"><status>${m}</status>` +
+      `<code><coding><system value="http://loinc.org"/><code value="8302-2"/></coding></code></Observation>`,
+    expectCode: "DROPPED_ELEMENT_TEXT",
   },
 ];
 

@@ -7,13 +7,18 @@
  * was then indistinguishable from a `status` the sender never wrote: the safety spine affirmed
  * `retracted: false`, `safeToSummarize: true`, `valid: true` over a retracted record.
  *
- * **This is the REPORTING half.** The text is not read back as the element's value: that would be a
- * tolerance for a non-conformant encoding, a decision about what this reader accepts, and it is not
- * taken here. What is asserted is that the loss can no longer sit underneath an affirmative verdict.
+ * **Both halves are here now, and they are separate assertions.** The REPORTING half is that the
+ * loss can never sit underneath an affirmative verdict. The READING half is that the value the
+ * sender wrote reaches the safety readout anyway: the decision this file used to park - whether the
+ * reader tolerates a primitive value written as element text - is taken, in one direction only. The
+ * form is tolerated exactly far enough to surface the value; the content is never invented, the
+ * encoding is still not conformant, and nothing about the report, the marker, the summarise refusal
+ * or either writer's refusal moves.
  *
  * The comparand throughout is **the same document spelled the other way** (`value=`), not a previous
- * release: the question is whether the conformant twin still reads exactly as it always did while the
- * non-conformant one stops affirming.
+ * release: the question is whether the non-conformant spelling now reads the retraction, the
+ * negation and the dose its conformant twin reads, while still refusing over the encoding, and
+ * whether the twin itself reads exactly as it always did.
  */
 import { describe, expect, it } from "vitest";
 
@@ -53,7 +58,7 @@ function child(node: FhirComplex, name: string): FhirNode {
 }
 
 describe("the three shapes the defect was filed with, each against its conformant twin", () => {
-  it("reads a retraction written as element text as a refusal, not an affirmation", () => {
+  it("AC-1/AC-2/AC-3: reads a retraction written as element text, and still refuses over it", () => {
     const text = parseResourceXml(
       `<Observation ${NS}><id value="o1"/><status>entered-in-error</status></Observation>`,
     );
@@ -74,21 +79,29 @@ describe("the three shapes the defect was filed with, each against its conforman
     // retraction; `RETRACTED_RESOURCE` is what this test is here for and is unmoved.
     expect(codes(twin.resource)).toEqual(["CARDINALITY_MIN", "RETRACTED_RESOURCE"]);
 
-    // The non-conformant spelling still cannot READ the retraction (the value is not in the model,
-    // and this half does not put it there), but it no longer claims the record is fine.
+    // AC-1: the same retraction and the same negations as the twin.
     const safety = readSafety(text.resource);
-    expect(safety.retracted).toBe(false);
-    expect(safety.negations).toEqual([]);
+    expect(safety.retracted).toBe(true);
+    expect(safety.negations).toEqual(readSafety(twin.resource).negations);
+    // AC-2 and AC-3: the report, the location and the refusal all stand. The retraction now arrives
+    // BESIDE the refusal instead of instead of it, which is the whole of what moved.
     expect(safety.safeToSummarize).toBe(false);
     expect(safety.droppedText).toEqual(["Observation.status"]);
+    expect(text.issues).toEqual([
+      { code: "UNEXPECTED_XML_CONTENT", severity: "warning", expression: "Observation.status" },
+    ]);
     expect(codes(text.resource)).toContain("DROPPED_ELEMENT_TEXT");
+    expect(codes(text.resource)).toContain("RETRACTED_RESOURCE");
     expect(validateResource(text.resource).valid).toBe(false);
     expect(() => {
       assertSafeToSummarize(text.resource);
     }).toThrow(FhirSafetyError);
+    // AC-2: both writers still refuse the model, so the loss cannot launder across a round trip.
+    expect(() => serializeResourceXml(text.resource)).toThrow(FhirSerializeError);
+    expect(() => serializeResource(text.resource)).toThrow(FhirSerializeError);
   });
 
-  it("refuses over a verificationStatus coding whose `refuted` is written as element text", () => {
+  it("AC-1/AC-2: reads a verificationStatus coding whose `refuted` is written as element text", () => {
     const coding = (code: string) =>
       `<coding><system value="http://terminology.hl7.org/CodeSystem/allergyintolerance-verification"/>${code}</coding>`;
     const text = parseResourceXml(
@@ -101,16 +114,17 @@ describe("the three shapes the defect was filed with, each against its conforman
     expect(readSafety(twin.resource).negations).toEqual(["refuted"]);
     expect(readSafety(twin.resource).safeToSummarize).toBe(true);
 
+    // AC-1: the negation the coding spells now reaches the readout, from a position two levels down
+    // that the single-value convenience field does not answer about.
     const safety = readSafety(text.resource);
-    // The negation is still not readable: the code never reached the model. What changed is that the
-    // readout no longer presents that as a document with nothing to say.
-    expect(safety.negations).toEqual([]);
+    expect(safety.negations).toEqual(readSafety(twin.resource).negations);
+    // AC-2 and AC-3: the report at its own position, the location, and the refusal.
     expect(safety.safeToSummarize).toBe(false);
     expect(safety.droppedText).toEqual(["AllergyIntolerance.verificationStatus.coding.code"]);
     expect(codes(text.resource)).toContain("DROPPED_ELEMENT_TEXT");
   });
 
-  it("refuses over a doseQuantity that lost the dose NUMBER while its unit and UCUM code survived", () => {
+  it("AC-1/AC-2: reads a doseQuantity's dose NUMBER, which was gone while its unit survived", () => {
     const dose = (value: string) =>
       `<MedicationRequest ${NS}><dosageInstruction><doseAndRate><doseQuantity>${value}<unit value="mg"/><system value="http://unitsofmeasure.org"/><code value="mg"/></doseQuantity></doseAndRate></dosageInstruction></MedicationRequest>`;
     const text = parseResourceXml(dose("<value>5</value>"));
@@ -125,13 +139,13 @@ describe("the three shapes the defect was filed with, each against its conforman
         "value",
       );
 
-    // The twin keeps the number; the other spelling does not. This is the sharpest of the three,
-    // because the surviving `mg` unit makes the resource look complete.
+    // AC-1: the dose is the twin's dose, kept as its exact lexical string. This is the sharpest of
+    // the three, because the surviving `mg` unit made the resource look complete without it.
     expect(quantityOf(twin.resource)).toMatchObject({ kind: "primitive", value: "5" });
-    const lost = quantityOf(text.resource);
-    expect(lost).toMatchObject({ kind: "primitive" });
-    expect((lost as { value?: unknown }).value).toBeUndefined();
-    expect(isDroppedText(lost)).toBe(true);
+    const recovered = quantityOf(text.resource);
+    expect(recovered).toMatchObject({ kind: "primitive", value: "5" });
+    // AC-2: the marker is still on the node the value was recovered from.
+    expect(isDroppedText(recovered)).toBe(true);
 
     expect(readSafety(twin.resource).safeToSummarize).toBe(true);
     expect(readSafety(text.resource).safeToSummarize).toBe(false);
@@ -139,6 +153,16 @@ describe("the three shapes the defect was filed with, each against its conforman
       "MedicationRequest.dosageInstruction.doseAndRate.doseQuantity.value",
     ]);
     expect(codes(text.resource)).toContain("DROPPED_ELEMENT_TEXT");
+  });
+
+  it("AC-1: a decimal dose keeps the precision the document wrote, never a JS number's", () => {
+    // The recovery hands back the lexical string the sender wrote, so the `0.010` / `0.01` hazard
+    // the model exists to avoid is not reintroduced by the route the value now travels.
+    const { resource } = parseResourceXml(
+      `<Observation ${NS}><status value="final"/><valueQuantity><value>0.010</value><unit value="mg"/></valueQuantity></Observation>`,
+    );
+    const quantity = child(resource, "valueQuantity") as FhirComplex;
+    expect(child(quantity, "value")).toMatchObject({ kind: "primitive", value: "0.010" });
   });
 });
 
@@ -171,16 +195,20 @@ describe("the marker lands at every site `hasStrayText` observes text, and only 
     expect(readSafety(resource).droppedText).toEqual(["Observation.contained"]);
   });
 
-  it("marks a primitive that DOES carry a value but also carries text, because the text is dropped too", () => {
-    // A narrower loss than the headline (the value survives), but content the sender wrote is still
-    // missing from the model, so the same refusal applies rather than a second, softer rule.
+  it("AC-6: marks a primitive that DOES carry a value but also carries text, and keeps the value", () => {
+    // The attribute wins outright and the text beside it is neither read, merged, nor compared
+    // against it. `entered-in-error` sits in the character data and the readout does NOT see a
+    // retraction, because the value the document put where R4 puts one says `final`.
     const { resource } = parseResourceXml(
       `<Observation ${NS}><status value="final">entered-in-error</status></Observation>`,
     );
     const status = child(resource, "status");
     expect(status).toMatchObject({ kind: "primitive", value: "final" });
     expect(isDroppedText(status)).toBe(true);
+    expect(isRetracted(resource)).toBe(false);
+    expect(readSafety(resource).negations).toEqual([]);
     expect(readSafety(resource).safeToSummarize).toBe(false);
+    expect(readSafety(resource).droppedText).toEqual(["Observation.status"]);
   });
 
   it("does NOT mark character data that `String.trim()` calls whitespace, a PRE-EXISTING gap", () => {
@@ -200,11 +228,12 @@ describe("the marker lands at every site `hasStrayText` observes text, and only 
     }
   });
 
-  it("refuses even when the dropped text MATCHES the value, because the reader never compares them", () => {
+  it("AC-6: refuses even when the dropped text MATCHES the value, because the reader never compares them", () => {
     // The honest scope of the value-plus-text arm. Justifying it with "content the sender wrote is
     // missing" is false here: nothing is missing. The rule keys on the reader DROPPING character
-    // data, and deciding this case is harmless would mean READING the text, which is exactly the
-    // tolerance this half declines to take.
+    // data, and the tolerance does not reach this element at all, because a `value` attribute
+    // arrived. Deciding this case is harmless would mean comparing the text against the value, which
+    // is the one thing that stays out of the reader.
     const { resource } = parseResourceXml(
       `<Observation ${NS}><status value="final">final</status></Observation>`,
     );
@@ -331,13 +360,15 @@ describe("the refusal surface", () => {
 });
 
 describe("the cross-format oracle sees the difference", () => {
-  it("does not call an element whose text was dropped equivalent to a genuinely absent value", () => {
+  it("AC-2: does not call a recovered value equivalent to one the document spelled conformantly", () => {
     const { resource: fromXml } = parseResourceXml(
       `<Observation ${NS}><status>entered-in-error</status></Observation>`,
     );
-    // The JSON counterpart of a value-absent primitive: the same node shape, honestly empty.
+    // The same VALUE, arrived the way FHIR JSON spells it. The marker is now the only thing left
+    // separating the two, which is what says the recovery did not quietly repair the document: a
+    // caller comparing across the wire still sees that one of them was written non-conformantly.
     const { resource: fromJson } = parseResource(
-      '{"resourceType":"Observation","status":null,"_status":{"id":"s"}}',
+      '{"resourceType":"Observation","status":"entered-in-error"}',
     );
     expect(nodesEquivalent(fromXml, fromJson)).toBe(false);
   });
@@ -353,19 +384,76 @@ describe("the cross-format oracle sees the difference", () => {
   });
 });
 
-describe("what this half deliberately does NOT do, pinned so it cannot be mistaken for done", () => {
-  it("does not read the text back as the element's value", () => {
+describe("what the tolerance does NOT do, pinned so it cannot be mistaken for a repair", () => {
+  // AC-5. The tolerance is bounded by the POSITION it reads at. Text on a complex element, and text
+  // beside a resource-valued unwrap, have no value slot to be read into, so they stay dropped: the
+  // location stays on the channel, the readout keeps refusing, and no value is minted anywhere.
+  it("AC-5: reads no value where the element has no value slot to read one into", () => {
+    const complexText = parseResourceXml(
+      `<AllergyIntolerance ${NS}><verificationStatus>refuted<coding><code value="confirmed"/></coding></verificationStatus></AllergyIntolerance>`,
+    );
+    const status = child(complexText.resource, "verificationStatus");
+    expect(status).toMatchObject({ kind: "complex" });
+    expect((status as { value?: unknown }).value).toBeUndefined();
+    // The refuted spelling was never reachable as a `code` and still is not: recovering it would be
+    // authoring a coding the sender did not write.
+    expect(readSafety(complexText.resource).negations).toEqual([]);
+    expect(readSafety(complexText.resource).safeToSummarize).toBe(false);
+    expect(readSafety(complexText.resource).droppedText).toEqual([
+      "AllergyIntolerance.verificationStatus",
+    ]);
+
+    const unwrap = parseResourceXml(
+      `<Observation ${NS}><contained>stray<Patient><id value="p1"/></Patient></contained></Observation>`,
+    );
+    expect(child(unwrap.resource, "contained")).toMatchObject({ kind: "complex" });
+    expect(readSafety(unwrap.resource).droppedText).toEqual(["Observation.contained"]);
+    expect(readSafety(unwrap.resource).safeToSummarize).toBe(false);
+  });
+
+  it("AC-5: reads two separated text runs as no value at all, rather than joining them", () => {
+    // Two runs on either side of a child element are two things the sender wrote at two positions.
+    // Joining them would mint a token the document does not contain anywhere, which is the one move
+    // `clinical-safety` C1 forbids outright.
+    const { resource } = parseResourceXml(
+      `<Observation ${NS}><status>entered<extension url="http://example.org/x"/>-in-error</status></Observation>`,
+    );
+    const status = child(resource, "status");
+    expect(status).toMatchObject({ kind: "primitive" });
+    expect((status as { value?: unknown }).value).toBeUndefined();
+    expect(isRetracted(resource)).toBe(false);
+    expect(readSafety(resource).droppedText).toEqual(["Observation.status"]);
+    expect(readSafety(resource).safeToSummarize).toBe(false);
+  });
+
+  it("AC-5: leaves a spelling the negation layer cannot classify recorded as a near miss", () => {
+    // The value is recovered exactly as written; it is never case-folded into the code it nearly
+    // spells. `NOT-DONE` is not the code `not-done`, so the negation stays unclassified and the
+    // near-miss channel is what discloses it.
+    const { resource } = parseResourceXml(`<Procedure ${NS}><status>NOT-DONE</status></Procedure>`);
+    expect(child(resource, "status")).toMatchObject({ kind: "primitive", value: "NOT-DONE" });
+    const safety = readSafety(resource);
+    expect(safety.negations).toEqual([]);
+    expect(safety.nearMissNegationCodes).toEqual(["Procedure.status"]);
+    expect(safety.safeToSummarize).toBe(false);
+    expect(safety.droppedText).toEqual(["Procedure.status"]);
+  });
+
+  it("AC-3: does not make a document that refuses to be summarised summarisable", () => {
+    // The point of the whole change, stated as the thing it must not do: the refusal now arrives
+    // BESIDE the retraction rather than instead of it.
     const { resource } = parseResourceXml(
       `<Observation ${NS}><status>entered-in-error</status></Observation>`,
     );
-    // Recovering the value is a TOLERANCE for a non-conformant encoding, which needs a real document
-    // to ground it. Nothing here grounds it, so the value stays unread and the verdict stays a
-    // refusal rather than a repair.
-    expect(isRetracted(resource)).toBe(false);
-    expect(getProperty(resource, "status")).toMatchObject({ kind: "primitive" });
+    expect(isRetracted(resource)).toBe(true);
+    expect(readSafety(resource).safeToSummarize).toBe(false);
+    expect(validateResource(resource).valid).toBe(false);
+    expect(() => {
+      assertSafeToSummarize(resource);
+    }).toThrow(FhirSafetyError);
   });
 
-  it("no longer LAUNDERS on a write-and-re-read: BOTH writers refuse the marked model", () => {
+  it("AC-2: no longer LAUNDERS on a write-and-re-read: BOTH writers refuse the marked model", () => {
     // This used to be the measured cost of shipping the reporting half alone, and it is closed by a
     // REFUSAL, not by recovering the text. The text is still not read; what changed is that neither
     // writer will emit a document in which the loss is invisible.

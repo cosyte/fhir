@@ -58,9 +58,11 @@ semantics, and validate it against US Core, without reading the FHIR spec.
     hand before ever linking one.
 - **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.**
   **▶ IT IS NOT A NO-DATA-LOSS CLAIM OVER THE WHOLE PACKAGE**: read-path losses remain open and
-  declared, and the one that qualifies "never drops a modifier, status or negation" is a **status**
-  or a dose number written as XML element text (dropped and reported, the writer refuses, but the
-  safety spine reads `negations: []`). The envelope, today's precisely, the losses, what is left open
+  declared. The one that used to qualify "never drops a modifier, status or negation" - a **status**
+  or a dose number written as XML element text, reported but invisible to the safety spine - is
+  **CLOSED**: the reader reads that value back at the one position that has a slot for it, and the
+  report, the marker, the summarise refusal and both write refusals all still stand.
+  The envelope, today's precisely, the losses, what is left open
   and the per-phase history, all in `agent-notes.md`:
   [`#the-shipped-envelope-p1-through-p11`](documentation/agent-notes.md#the-shipped-envelope-p1-through-p11) ·
   [`#p2-p3-and-what-the-package-does-today`](documentation/agent-notes.md#p2-p3-and-what-the-package-does-today) ·
