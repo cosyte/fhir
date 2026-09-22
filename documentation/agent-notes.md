@@ -770,11 +770,30 @@ text, so the five shapes below are unchanged.
 
 ## Left open deliberately, a through e
 
-**Left open, deliberately, each pinned by a test rather than a sentence:** (a) an array-wrapped
-`value[x]` draws **no** `ARRAY_WRAPPED_SCALAR` (outside the closed set; widening to every R4 `0..1`
-element _is_ the per-resource model), and `readObservationValue` still has no issue channel of its
-own, though it fails **safe** on this route (reports the present variant, `quantity: undefined`, so
-no wrong number is handed out); (b) the JSON reader still does not model a nested array **as an
+**Left open, deliberately, each pinned by a test rather than a sentence:** (a) **CLOSED
+2026-09-22 (`ARRAY_WRAPPED_CHOICE` + `UNSERIALIZABLE_CHOICE_WRAPPER`), and the closure red the
+characterization test that pinned it, in `array-wrapped-scalar.test.ts` and
+`xml-array-wrapper.test.ts` both.** What it used to pin: an array-wrapped `value[x]` drew **no**
+code at all, `readObservationValue` had no issue channel of its own (it failed **safe** -- present
+variant, `quantity: undefined`, so no wrong number was handed out -- but silently), and the XML
+writer normalized the wrapper away, so `{"status":"final","valueQuantity":[{"value":5,"system":
+"http://unitsofmeasure.org","code":"mg"}]}` came back from one write and one re-read as an
+unambiguous **5 mg** under `valid: true` and an empty issue list. **THE SENTENCE THAT IS STILL TRUE
+IS THE ONE ABOUT THE SAFETY LAYER**: `arrayWrappedScalars` is UNCHANGED, still draws nothing here,
+and `safeToSummarize` does not move -- widening that closed set to every R4 `0..1` element _is_ the
+per-resource model, and that is not what closed this. The cardinality came from the **value
+readout's own walk** over the eleven `value[x]` variant names, at the two positions R4 spells that
+choice (`Observation.value[x]` and `Observation.component.value[x]`, both `0..1`, observation.html),
+at every Observation resource root including a `contained` or `Bundle.entry` one. **ONE WINDOW**:
+the validator's code, `ObservationValue.encodingIssue` and the write refusal all read that single
+call, never a table each. **DO NOT MAKE THE REFUSAL ARITY-BLIND** for the same reason the
+element-level one is not: two items write as two elements, the re-read groups them into a list and
+the report is raised again, so refusing them would withdraw a round trip that works AND keeps the
+finding. The refusal is raised **last** of the seven, so nothing that already reported another code
+moves onto it. **`readObservationValue` still reads nothing out of the wrapper**, and that is the
+remedy, not a limitation: picking a member is authoring a dose. `serializeResource` is untouched and
+that route stays open. The phase's **unbound-prefix** residual is NOT touched by this and stays open
+with its own remedy; (b) the JSON reader still does not model a nested array **as an
 element**, and deliberately never will, but `[["x"]]` no longer loses the inner value: it is kept
 as text and read with `nestedArrayContent()` (`FHIR-NESTED-ARRAY-PRESERVATION`, above). (c) The
 **THE ARRAY ROUTE** does not launder read -> write -> read **through the JSON writer**: the writer
@@ -3075,8 +3094,12 @@ can never name a location `arrayWrappedScalars` does not.
   name, and `serializeResource` drops it **identically** (`{"resourceType":"Observation",
 "status":"final"}`, `safeToSummarize` `false -> true` on that route too). The repeated name is its
   own declared-open residual.
-- **`Observation.value[x]`**, a `0..1` choice, is outside the window and its wrapper still launders.
-  Widening means the per-resource model this library does not have.
+- **`Observation.value[x]`**, a `0..1` choice, is outside THIS window and always will be: widening
+  the safety layer's element table to it means the per-resource model this library does not have.
+  Its wrapper no longer launders all the same, on a **second** refusal taking its cardinality from
+  the value readout's own walk (`UNSERIALIZABLE_CHOICE_WRAPPER`, 2026-09-22, "Left open
+  deliberately, a through e" residual (a)). So the sentence that is still true here is about this
+  refusal's window, not about the wrapper's fate.
 
 ### The axis of every "0" and every count reported here
 
