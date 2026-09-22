@@ -54,6 +54,9 @@ describe("validation code / severity / issue-type registries (stable public cont
       UNHANDLED_MODIFIER_EXTENSION: "UNHANDLED_MODIFIER_EXTENSION",
       DUPLICATE_PROPERTY: "DUPLICATE_PROPERTY",
       ARRAY_WRAPPED_SCALAR: "ARRAY_WRAPPED_SCALAR",
+      // AC-3: the stable code the value readout's own channel reports an ambiguously encoded
+      // `Observation.value[x]` through, published here so a caller can switch on it.
+      ARRAY_WRAPPED_CHOICE: "ARRAY_WRAPPED_CHOICE",
       NESTED_ARRAY: "NESTED_ARRAY",
       DROPPED_ELEMENT_TEXT: "DROPPED_ELEMENT_TEXT",
       ABSENCE_MARKER_CONFLICT: "ABSENCE_MARKER_CONFLICT",

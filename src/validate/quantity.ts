@@ -16,6 +16,12 @@
  *    is **not** a Quantity is `VALUE_TYPE_UNEXPECTED` (`warning`).
  * 3. **Dose units.** `MedicationRequest`/`MedicationStatement` dose quantities are UCUM-shape-checked
  *    the same way (a wrong dose unit is a prescribing hazard).
+ * 4. **The `value[x]` ENCODING, not its value.** A choice variant wrapped in a JSON array is
+ *    `ARRAY_WRAPPED_CHOICE` (`error`). The three checks above read the value and cannot see this:
+ *    a wrapper reads identically to an element the sender left out, so a 5 mg dose inside one is
+ *    indistinguishable from no dose at all. Scoped to `Observation.value[x]` and
+ *    `Observation.component.value[x]`, `0..1` in R4, so it needs no per-resource cardinality table
+ *    and cannot fire on a conformant document. Nothing is read out of the wrapper.
  *
  * **Never a false error.** The vital-signs check fires only when the element declares the vital-signs
  * category (or the vital-signs profile) **and** its own LOINC code is in the closed required-unit
@@ -25,7 +31,7 @@
  * @packageDocumentation
  */
 
-import { getProperty, isList, type FhirComplex } from "../model/index.js";
+import { getProperty, isList, rootPath, type FhirComplex } from "../model/index.js";
 import { locateDoseQuantities } from "../quantity/dose.js";
 import {
   LOINC_SYSTEM,
@@ -38,7 +44,7 @@ import {
   VITAL_SIGNS_PROFILE,
   type Quantity,
 } from "../quantity/ucum.js";
-import { readObservationValue } from "../quantity/value.js";
+import { arrayWrappedValueChoices, readObservationValue } from "../quantity/value.js";
 import { codingsOf, hasCoding, primitiveString } from "../safety/codes.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issues.js";
 
@@ -69,13 +75,21 @@ export function collectQuantityIssues(resource: FhirComplex, rt: string): Valida
     forEachComponent(resource, (component, path) => {
       checkValueChoice(component, path, vital, issues);
     });
-    return issues;
-  }
-
-  if (rt === "MedicationRequest" || rt === "MedicationStatement") {
+  } else if (rt === "MedicationRequest" || rt === "MedicationStatement") {
     for (const { node, path } of locateDoseQuantities(resource, rt)) {
       checkUcumShape(readQuantity(node), path, issues);
     }
+  }
+
+  // The ENCODING of a `value[x]`, which the checks above cannot see: they read the value, and a
+  // wrapper is a shape no value-shaped question distinguishes from an element the sender left out.
+  // Raised after them so a document tripping both keeps the order it already had, and taken from the
+  // value layer's own window rather than re-derived here, so the report, the readout's own
+  // `encodingIssue` channel and the XML write refusal can never drift apart. Not gated on `rt`: it
+  // walks to every Observation resource root the model holds, a `contained` or `Bundle.entry` one
+  // included, because a dose laundered at depth is laundered all the same.
+  for (const location of arrayWrappedValueChoices(resource, rootPath(rt))) {
+    issues.push(validationIssue("ARRAY_WRAPPED_CHOICE", ISSUE_SEVERITIES.ERROR, location));
   }
 
   return issues;

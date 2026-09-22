@@ -17,6 +17,7 @@ import {
   readSafety,
   serializeResource,
   serializeResourceXml,
+  VALIDATION_CODES,
   validateResource,
 } from "../src/index.js";
 
@@ -42,6 +43,11 @@ import { req } from "./_util.js";
 
 /** The reported document, verbatim. */
 const REPORTED = '{"resourceType":"Observation","status":["entered-in-error"]}';
+
+/** An array-wrapped `value[x]`, the reported document of the leg this closes. Synthetic. */
+const REPORTED_VALUE =
+  '{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,' +
+  '"system":"http://unitsofmeasure.org","code":"mg"}]}';
 
 describe("an array-wrapped 0..1 element (generic converter output)", () => {
   describe("the reported document", () => {
@@ -817,35 +823,172 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
       expect(isRetracted(resource)).toBe(true);
     });
 
-    it("does not extend the cardinality rule beyond the elements the safety layer reads", () => {
-      // Deferred bound, stated as a fact rather than a sentence: `value[x]` is a `0..1` choice, but
-      // it is not one of the elements this layer reads to reach a safety verdict, so an array around
-      // it draws **no** ARRAY_WRAPPED_SCALAR. Widening the table to every 0..1 element in R4 is a
-      // per-resource model, which this library does not have and this layer must not become.
-      const { resource } = parseResource(
-        '{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,' +
-          '"system":"http://unitsofmeasure.org","code":"mg"}]}',
-      );
+    it("still does not extend the SAFETY layer's cardinality rule to reach it", () => {
+      // The bound that has NOT moved, and the one the scope of this whole rule rests on: `value[x]`
+      // is a `0..1` choice, and it is still not one of the elements this layer reads to reach a
+      // safety verdict, so an array around it draws **no** ARRAY_WRAPPED_SCALAR and does not move
+      // `safeToSummarize`. Widening that table to every `0..1` element in R4 is a per-resource
+      // model, which this library does not have and this layer must not become. What closed is the
+      // silence, and it closed in the VALUE layer, which has a cardinality for this one position
+      // without needing such a table (the block below).
+      const { resource } = parseResource(REPORTED_VALUE);
 
       expect(readSafety(resource).arrayWrappedScalars).toEqual([]);
-
-      // It fails **safe** where it does reach: `readObservationValue` reports the variant that is
-      // present and no `quantity`, so no wrong number is ever handed out. What it still lacks is a
-      // channel of its own to say the encoding was ambiguous, which is a public-surface change and
-      // belongs in its own slice.
-      const value = req(readObservationValue(resource));
-      expect(value.type).toBe("Quantity");
-      expect(value.quantity).toBeUndefined();
-      expect(value.node.kind).toBe("list");
-
-      // …and the write-path refusal is scoped to the same window, so this wrapper is written out and
-      // still launders. Stated as the fact it is: the refusal took its cardinality from this layer
-      // rather than growing a per-resource model, so it inherits exactly this bound.
-      expect(serializeResourceXml(resource)).toBe(
-        '<Observation xmlns="http://hl7.org/fhir"><status value="final"/>' +
-          '<valueQuantity><value value="5"/><system value="http://unitsofmeasure.org"/>' +
-          '<code value="mg"/></valueQuantity></Observation>',
-      );
+      expect(readSafety(resource).safeToSummarize).toBe(true);
     });
+  });
+});
+
+/**
+ * An array-wrapped `Observation.value[x]`, which used to be read safely in JSON and laundered
+ * through XML.
+ *
+ * The same generic-converter shape one element over, at the position where the number is a **DOSE**.
+ * Measured at `3ce7298`, base: {@link REPORTED_VALUE} read with the variant reported and `quantity`
+ * undefined, so no number was handed out, but nothing anywhere said the encoding had been ambiguous
+ * (`arrayWrappedScalars: []`, `valid: true` bar the missing mandatory `code`), and the XML writer
+ * normalized the wrapper away so one write and one re-read produced an unambiguous 5 mg.
+ *
+ * **The cardinality decision, which is what closing this needed.** The safety layer's element table
+ * is scoped by resource type and cannot reach here; widening it to every R4 `0..1` element is the
+ * per-resource model this library does not have. So the report takes its cardinality from the walk
+ * the VALUE readout already does -- the eleven `value[x]` variant names -- at the two positions R4
+ * spells them, `Observation.value[x]` and `Observation.component.value[x]`, both `0..1`
+ * (observation.html). One window, and the validator's `ARRAY_WRAPPED_CHOICE`, the readout's own
+ * `encodingIssue` channel and the XML write refusal all read it rather than each deciding one.
+ *
+ * All values here are synthetic.
+ */
+describe("an array-wrapped `value[x]` choice (the same converter output, at the dose)", () => {
+  it("AC-3: reports the position through a stable published code a caller can switch on", () => {
+    const { resource } = parseResource(REPORTED_VALUE);
+    const result = validateResource(resource);
+
+    const wrapped = req(result.issues.find((i) => i.code === "ARRAY_WRAPPED_CHOICE"));
+    expect(wrapped.severity).toBe("error");
+    expect(wrapped.expression).toBe("Observation.valueQuantity");
+    expect(wrapped.type).toBe("structure");
+    expect(result.valid).toBe(false);
+    // The published registry is the switch: the code is a member of it, not a string this test made
+    // up, which is what makes it something a caller can branch on.
+    expect(VALIDATION_CODES.ARRAY_WRAPPED_CHOICE).toBe("ARRAY_WRAPPED_CHOICE");
+  });
+
+  it("AC-3: hands back no magnitude, unit or code taken from inside the wrapper", () => {
+    const { resource } = parseResource(REPORTED_VALUE);
+    const value = req(readObservationValue(resource));
+
+    // The variant that is present IS reported: that is the position, not the content.
+    expect(value.type).toBe("Quantity");
+    expect(value.property).toBe("valueQuantity");
+    expect(value.node.kind).toBe("list");
+    // And nothing is read out of the member. `5`, `mg` and the UCUM system are all sitting one
+    // level inside the wrapper, and picking them is authoring a dose the sender spelled ambiguously.
+    expect(value.quantity).toBeUndefined();
+    // Value-free, like every diagnostic here: the readout's channel carries a code, and the issue
+    // carries a code and a location. Neither carries the 5 or the mg.
+    expect(JSON.stringify(validateResource(resource).issues)).not.toContain("mg");
+    expect(JSON.stringify(validateResource(resource).issues)).not.toContain("5");
+  });
+
+  it("AC-3: the readout's own channel carries the SAME code the validator raises", () => {
+    // The channel `readObservationValue` did not have. Two vocabularies for one encoding fault is
+    // how a caller that switches on one and reads the other ends up disagreeing with itself.
+    const { resource } = parseResource(REPORTED_VALUE);
+    const value = req(readObservationValue(resource));
+
+    expect(value.encodingIssue).toBe(VALIDATION_CODES.ARRAY_WRAPPED_CHOICE);
+    expect(validateResource(resource).issues.some((i) => i.code === value.encodingIssue)).toBe(
+      true,
+    );
+  });
+
+  it("AC-3: reports a wrapped component value and a wrapped value on a contained resource", () => {
+    // `Observation.component.value[x]` is `0..1` exactly as the root's is, and a resource nested in
+    // `contained` or a Bundle entry is a resource: a dose laundered at depth is laundered all the
+    // same. Both are the same window, reached by the same walk.
+    const component = parseResource(
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+        '"component":[{"code":{"text":"synthetic"},"valueQuantity":[{"value":5,"code":"mg"}]}]}',
+    ).resource;
+    expect(validateResource(component).issues.map((i) => `${i.code} at ${i.expression}`)).toContain(
+      "ARRAY_WRAPPED_CHOICE at Observation.component[0].valueQuantity",
+    );
+
+    const contained = parseResource(
+      '{"resourceType":"Patient","contained":[{"resourceType":"Observation","status":"final",' +
+        '"valueQuantity":[{"value":5,"code":"mg"}]}]}',
+    ).resource;
+    expect(validateResource(contained).issues.map((i) => `${i.code} at ${i.expression}`)).toContain(
+      "ARRAY_WRAPPED_CHOICE at Patient.contained[0].valueQuantity",
+    );
+  });
+
+  it("AC-8: reports a member the variant cannot hold, and infers no magnitude from it", () => {
+    // A `Quantity` is a complex, so a string inside the wrapper is not a shape the variant can
+    // carry. What must not happen is a number parsed out of the text: `"5 mg"` is one character
+    // class away from a dose, and reading it would be inventing the content rather than tolerating
+    // the form. The position is reported instead.
+    const { resource } = parseResource(
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+        '"valueQuantity":["5 mg"]}',
+    );
+    const value = req(readObservationValue(resource));
+
+    expect(value.quantity).toBeUndefined();
+    expect(value.encodingIssue).toBe(VALIDATION_CODES.ARRAY_WRAPPED_CHOICE);
+    expect(validateResource(resource).issues.map((i) => `${i.code} at ${i.expression}`)).toContain(
+      "ARRAY_WRAPPED_CHOICE at Observation.valueQuantity",
+    );
+    expect(validateResource(resource).valid).toBe(false);
+  });
+
+  it("AC-6: says nothing about an element outside BOTH windows, and refuses no write for one", () => {
+    // The false-positive control, and the reason the window is the value readout's own rather than
+    // "every `0..1` element". A backbone element's cardinality is not something this library knows;
+    // `Questionnaire.code` and `ElementDefinition.code` really are `0..*` in R4; and a conformant
+    // repeating element is just a repeating element. Each of these reads at head exactly as it read
+    // at base, and none of them is refused.
+    const outside: readonly string[] = [
+      // A backbone element, whose cardinality this library does not model.
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+        '"component":[{"code":["x"]}]}',
+      // R4 really does define these as repeating.
+      '{"resourceType":"Questionnaire","status":"active","code":[{"code":"synthetic-1"}]}',
+      // A conformant repeating element on the very resource the new window is scoped to.
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+        '"identifier":[{"value":"synthetic-1"}],"category":[{"coding":[{"code":"vital-signs"}]}]}',
+      // A `value[x]`-shaped name that is NOT a `value[x]` variant: `Observation.valueQuantity` is,
+      // `Questionnaire.item` is not, and the name test must not spread on the prefix alone.
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+        '"valueless":[{"value":5}]}',
+    ];
+
+    for (const json of outside) {
+      const { resource } = parseResource(json);
+      expect(
+        validateResource(resource).issues.some((i) => i.code === "ARRAY_WRAPPED_CHOICE"),
+        json,
+      ).toBe(false);
+      expect(readSafety(resource).arrayWrappedScalars, json).toEqual([]);
+      // And the XML write is not refused on its account. `expect(...).not.toThrow()` is the whole
+      // assertion: what would be a defect is a refusal, not any particular output.
+      expect(() => serializeResourceXml(resource), json).not.toThrow();
+    }
+  });
+
+  it("AC-6: leaves a conformant, unwrapped `value[x]` completely alone", () => {
+    // The other pole of the same control. Without it every row above could be passing because the
+    // check never fires at all.
+    const { resource } = parseResource(
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+        '"valueQuantity":{"value":5,"system":"http://unitsofmeasure.org","code":"mg"}}',
+    );
+    const value = req(readObservationValue(resource));
+
+    expect(value.encodingIssue).toBeUndefined();
+    expect(value.quantity?.code).toBe("mg");
+    expect(validateResource(resource).issues).toEqual([]);
+    expect(validateResource(resource).valid).toBe(true);
   });
 });

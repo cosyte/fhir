@@ -7,7 +7,8 @@
  * harm is a name reaching a tag position, and JSON escapes a member name so no name reaches this
  * refusal there. {@link refuseUnserializableDivMarkup} is raised by the XML writer for the same
  * reason, at its one raw-markup site: JSON carries the string as a string.
- * {@link assertXmlSerializable}, {@link assertXmlArrayWrapper} and {@link assertXmlResourceType} are
+ * {@link assertXmlSerializable}, {@link assertXmlArrayWrapper}, {@link assertXmlValueChoiceWrapper}
+ * and {@link assertXmlResourceType} are
  * XML-only for the mirror-image reason: the shapes they refuse are ones the JSON writer writes, and
  * XML has no channel to write them into. {@link assertXmlForeignRoot} is XML-only for a reason of its
  * own and the difference is worth reading rather than assuming: a namespace is an XML construct, so
@@ -27,7 +28,9 @@
  * because a copy would be free to disagree with the thing it copies: `emitsOneDivElement` sits in
  * `../xml/write.js` next to the code that emits the markup, and the cardinality window
  * {@link assertXmlArrayWrapper} refuses on is the safety layer's own walk in `../safety/status.js`,
- * the same walk that reports it to a caller.
+ * the same walk that reports it to a caller. {@link assertXmlValueChoiceWrapper} follows that rule
+ * at the one position the safety layer's walk does not reach: its window is the value layer's own,
+ * in `../quantity/value.js`, the same call the validator and the value readout report from.
  *
  * The rest of this comment is the first refusal.
  *
@@ -51,6 +54,7 @@
  */
 import { isForeignRoot, isPrimitive, type FhirComplex, type FhirNode } from "../model/node.js";
 import { childPath, rootPath } from "../model/path.js";
+import { unspellableXmlValueChoices } from "../quantity/value.js";
 import { typeOf } from "../safety/codes.js";
 import {
   collectMarked,
@@ -123,6 +127,21 @@ export const SERIALIZE_ERROR_CODES = {
    * See {@link assertXmlArrayWrapper} for the exact predicate and for what it deliberately leaves.
    */
   UNSERIALIZABLE_ARRAY_WRAPPER: "UNSERIALIZABLE_ARRAY_WRAPPER",
+  /**
+   * The model carries, at a location this library already reports as an array-wrapped
+   * `Observation.value[x]` choice, a wrapper FHIR XML has no repetition to spell back: one holding
+   * fewer than two items. **XML only**: `serializeResource` writes the list back and the re-read
+   * reports the same location, so that route stays open.
+   *
+   * The same harm as {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER}, at the position
+   * where the number is a DOSE: `{"resourceType":"Observation","status":"final","valueQuantity":
+   * [{"value":5,"system":"http://unitsofmeasure.org","code":"mg"}]}` reads with the encoding
+   * reported and no magnitude handed out, and used to come back from XML as an unambiguous 5 mg
+   * nothing had complained about.
+   *
+   * See {@link assertXmlValueChoiceWrapper} for the window and for what it deliberately leaves.
+   */
+  UNSERIALIZABLE_CHOICE_WRAPPER: "UNSERIALIZABLE_CHOICE_WRAPPER",
   /**
    * The model carries, at one or more object elements, a member a repeated property name shadowed
    * ({@link ../model/node.js} `duplicates`). **Both writers**, unlike the four refusals above it:
@@ -408,6 +427,68 @@ export function assertXmlArrayWrapper(node: FhirComplex): void {
     // the same test -- with the shadowed-member limit stated in the docblock rather than here.
     `cannot serialize to XML: ${String(locations.length)} location(s) carry an array wrapper around a 0..1 element that XML has no repeated element to spell back; this refusal does not reach serializeResource`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER,
+    locations,
+  );
+}
+
+/**
+ * Refuse to serialize **to XML** a model carrying an array wrapper around an
+ * `Observation.value[x]` choice that XML has no repetition to spell back, which the XML writer would
+ * flatten away.
+ *
+ * ## The site, measured at `3ce7298`
+ *
+ * `{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,"system":
+ * "http://unitsofmeasure.org","code":"mg"}]}` reads with the encoding reported and `quantity`
+ * undefined, so no number is handed out. The XML writer emitted
+ * `<Observation xmlns="http://hl7.org/fhir"><status value="final"/><valueQuantity><value value="5"/>
+ * <system value="http://unitsofmeasure.org"/><code value="mg"/></valueQuantity></Observation>`,
+ * which re-reads as an unambiguous 5 mg with an empty issue list. **The thing no re-run undoes is a
+ * dose**: one write and one re-read turned a magnitude this library declined to read into one it
+ * hands out, with nothing anywhere saying the encoding had ever been ambiguous.
+ *
+ * ## The window, which is not a second cardinality table
+ *
+ * `unspellableXmlValueChoices` -- the narrowing of the same call the validator raises
+ * `ARRAY_WRAPPED_CHOICE` from and the same one {@link ../quantity/value.js} `ObservationValue`
+ * reports on its own `encodingIssue` channel. So
+ * this refusal can never name a location this library does not already report, which is the
+ * discipline the element-level wrapper refusal beside it holds against `arrayWrappedScalars`. It is
+ * scoped to `Observation.value[x]` and `Observation.component.value[x]`, `0..1` in R4
+ * (observation.html), at every Observation resource root; outside that the writer keeps saying
+ * nothing, because deciding cardinality anywhere else needs the per-resource model this library does
+ * not have.
+ *
+ * ## Which wrappers inside that window, and why not all of them
+ *
+ * Only the ones XML cannot write back as a wrapper: fewer than two items. A wrapper of two or more
+ * emits repeated elements, the re-read groups them into a list, and the location is reported again,
+ * so refusing it would withdraw a round trip that works today **and keeps the finding**. There is no
+ * `resourceType`-style exception: a `value[x]` variant is an ordinary element with a tag.
+ *
+ * ## Refusing rather than reporting or repairing
+ *
+ * The same fork {@link assertXmlArrayWrapper} took, at the position where repairing is worst:
+ * picking the wrapper's member would author a magnitude, and FHIR XML has no shape to hand a wrapper
+ * back into. Refusing recognises nothing and invents nothing, and it costs a round trip only for
+ * models this library already reports `valid: false`, because `ARRAY_WRAPPED_CHOICE` is an error.
+ *
+ * **Raised last**, after every refusal above it, so a model that trips two keeps the code it already
+ * reported and no case moves onto this one.
+ *
+ * @param node - The model about to be serialized to XML.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_CHOICE_WRAPPER}.
+ * @internal
+ */
+export function assertXmlValueChoiceWrapper(node: FhirComplex): void {
+  const locations = unspellableXmlValueChoices(node, rootPath(typeOf(node) ?? "Resource"));
+  if (locations.length === 0) return;
+  throw new FhirSerializeError(
+    // Says what this refusal does not reach, in the wording the refusals beside it were narrowed to.
+    // `serializeResource` writes the wrapper back and the re-read reports the same location, pinned
+    // by the JSON half of the same test.
+    `cannot serialize to XML: ${String(locations.length)} location(s) carry an array wrapper around a 0..1 value[x] choice that XML has no repeated element to spell back; this refusal does not reach serializeResource`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_CHOICE_WRAPPER,
     locations,
   );
 }
