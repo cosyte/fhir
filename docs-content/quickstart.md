@@ -6,42 +6,24 @@ sidebar_position: 3
 
 # Quickstart
 
-Five minutes, one file, and four steps: an unparsed FHIR document, a parsed resource, one clinically
-meaningful value read off it, and a validation verdict. Everything below uses the package's public
-entry point and nothing else.
+Five minutes, one file, and three steps: an unparsed FHIR document read into a resource, one
+clinically meaningful value read off it, and a validation verdict. Everything below uses the
+package's public entry point and nothing else.
 
 Start from an empty file, `first-read.ts`, in a project that already
 [has the package](./installation.md).
 
-## 1. The document
+## 1. Read a document
 
-This is a synthetic systolic blood pressure, written the way a server would send it. Every value in
-it is fabricated, and the identifiers are declared synthetic in this repository:
-
-```json
-{
-  "resourceType": "Observation",
-  "id": "syn-0001",
-  "status": "final",
-  "code": { "coding": [{ "system": "http://loinc.org", "code": "8480-6" }] },
-  "subject": { "reference": "Patient/syn-0001" },
-  "effectiveDateTime": "2026-01-05",
-  "valueQuantity": {
-    "value": 120.0,
-    "unit": "mmHg",
-    "system": "http://unitsofmeasure.org",
-    "code": "mm[Hg]"
-  }
-}
-```
-
-## 2. Read it
+The document below is a synthetic systolic blood pressure, written the way a server would send it.
+Every value in it is fabricated, and the same document is committed as a synthetic test fixture in
+this repository.
 
 `parseResource` takes the document text and returns two things: the resource model, and the
 diagnostics the read produced. It never throws for content it can keep, and it never rewrites a
 value to make it fit.
 
-```ts
+```ts runnable
 import { parseResource } from "@cosyte/fhir";
 
 const document = `{
@@ -70,7 +52,7 @@ magnitude was written `120.0`, and a reader that routed it through a JavaScript 
 you back `120`, silently losing the precision the sender chose to state. This one keeps the exact
 lexical form and tells you the protection mattered here.
 
-## 3. Read a value off it
+## 2. Read a value off it
 
 A blood pressure is only useful as a magnitude with a unit. `readObservationValue` reports which
 `value[x]` variant is actually present, so a caller can never read a coded or free-text result as if
@@ -96,7 +78,7 @@ Two habits worth forming here. Branch on `type` before you touch `quantity`, bec
 all. And compare on `code`, the machine-actionable UCUM unit, never on `unit`, which is a display
 string a sender is free to spell however it likes.
 
-## 4. Get a verdict
+## 3. Get a verdict
 
 `validateResource` walks the resource once and returns coded findings plus a single `valid` flag.
 Warnings and informational findings do not make a resource invalid; errors do.

@@ -151,7 +151,9 @@ function classifyLines(text: string): LineInfo[] {
       }
       continue;
     }
-    const fence = /^\s*(?:```|~~~)\s*([A-Za-z0-9_-]*)\s*$/.exec(line);
+    // An info string is a language and then optional tags (` ```ts runnable `): the tags do not
+    // change what a fence is, and a runnable example has to be read as a fence like any other.
+    const fence = /^\s*(?:```|~~~)\s*([A-Za-z0-9_-]*)(?:[ \t]+[A-Za-z0-9_-]+)*\s*$/.exec(line);
     if (fence !== null) {
       if (inFence) {
         out.push({ number, text: line, inFence: false, fenceLang: "", inFrontmatter: false });
