@@ -159,7 +159,7 @@ Unless noted:
 - **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
   slice, and do not restate a gap as a claim. **Pinned by a test:** the **empty** `_`-sibling and a
   `_`-object's unreadable member,
-  the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the array-wrapped `value[x]`, the §2.6.1
+  the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the §2.6.1
   value-absent primitive (`test/xml.test.ts`, "declared residuals, pinned so they cannot move in
   silence"). **Each of those is a characterization test over a gap:
   CLOSING one MUST red it, in the same change.** Not theoretical: every closure below red one.
@@ -182,6 +182,19 @@ Unless noted:
     written MEMBER (`some`, not `every`), and the two dedupe sets are INDEPENDENT or a short wrapper
     hides behind a long one at one location.
     [`#the-array-wrapper-laundering`](documentation/agent-notes.md#the-array-wrapper-laundering-closed-2026-08-08)
+  - **CLOSED 2026-09-22: the array-wrapped `value[x]` laundering** (`ARRAY_WRAPPED_CHOICE` on the
+    read, `UNSERIALIZABLE_CHOICE_WRAPPER` on the write). **THAT IS A SECOND REFUSAL, NOT A WIDER
+    WINDOW ON THE ONE ABOVE**, and the distinction is the whole design: `arrayWrappedScalars` is
+    UNCHANGED, still says nothing here, and `safeToSummarize` does not move, because widening its
+    element table to every R4 `0..1` element IS the per-resource model. **THE NEW REFUSAL TAKES ITS
+    CARDINALITY FROM THE VALUE READOUT'S OWN WALK, NEVER A SECOND TABLE** -- the eleven `value[x]`
+    variant names at the two positions R4 spells that choice (`Observation.value[x]`,
+    `Observation.component.value[x]`, both `0..1`), at every Observation resource root. **ONE
+    WINDOW** for the validator code, `ObservationValue.encodingIssue` and the refusal. **DO NOT MAKE
+    IT ARITY-BLIND** (same reason: two items round-trip byte-exact AND keep the report), do not read
+    anything out of the wrapper (picking a member authors a DOSE), and it is raised **LAST** of the
+    seven. `serializeResource` is untouched.
+    [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e)
   - **CLOSED 2026-08-08: the SHADOWED member, BOTH writers** (`UNSERIALIZABLE_SHADOWED_PROPERTY`,
     window `shadowedProperties`). **DO NOT hand both back**: `JSON.parse` is last-wins, this is
     first-wins. [`#shadowed-member`](documentation/agent-notes.md#the-shadowed-member-2026-08-08)

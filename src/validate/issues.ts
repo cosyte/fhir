@@ -123,6 +123,30 @@ export const VALIDATION_CODES = {
    */
   ARRAY_WRAPPED_SCALAR: "ARRAY_WRAPPED_SCALAR",
   /**
+   * Safety, an `Observation.value[x]` choice element arrived wrapped in a JSON array. The same
+   * non-conformant encoding {@link VALIDATION_CODES.ARRAY_WRAPPED_SCALAR} reports (json.html
+   * §2.6.2.2 reserves the array for a repeating element), at the one position whose cardinality is
+   * decided by a choice rather than by a per-resource element table, so it needs a code of its own
+   * rather than a wider window on that one. An `error`.
+   *
+   * **Why the value readout needs its own channel.** `readObservationValue` fails safe on this
+   * shape, it reports the variant that is present and no `quantity`, so no wrong number is handed
+   * out, but "the variant is present and the magnitude is absent" reads identically to an
+   * `Observation` whose `valueQuantity` carried no `value`. A dose the sender wrote is then
+   * indistinguishable from one it did not, and this is the record that the position held content
+   * nothing here would read.
+   *
+   * **The window is `Observation.value[x]` and `Observation.component.value[x]`, at every
+   * Observation resource root the model holds**, which is the window the value readout itself reads
+   * (`../quantity/value.js`). Both are `0..1` in R4 (observation.html), so this needs no
+   * per-resource cardinality table and cannot fire on a conformant document. It is deliberately not
+   * every R4 `0..1` element: that is the per-resource model this library does not have.
+   *
+   * Value-free, the location of the choice variant, never the magnitude, unit or code inside the
+   * wrapper.
+   */
+  ARRAY_WRAPPED_CHOICE: "ARRAY_WRAPPED_CHOICE",
+  /**
    * Safety, the document wrote a JSON array **inside another array**. FHIR JSON uses an array for a
    * repeating element and for nothing else (json.html §2.6.2.2), so a list of lists has no meaning at
    * any position and this is a non-conformant encoding wherever it appears, which is why it needs no
@@ -443,6 +467,7 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   UNHANDLED_MODIFIER_EXTENSION: ISSUE_TYPES.NOT_SUPPORTED,
   DUPLICATE_PROPERTY: ISSUE_TYPES.STRUCTURE,
   ARRAY_WRAPPED_SCALAR: ISSUE_TYPES.STRUCTURE,
+  ARRAY_WRAPPED_CHOICE: ISSUE_TYPES.STRUCTURE,
   NESTED_ARRAY: ISSUE_TYPES.STRUCTURE,
   DROPPED_ELEMENT_TEXT: ISSUE_TYPES.STRUCTURE,
   ABSENCE_MARKER_CONFLICT: ISSUE_TYPES.STRUCTURE,
@@ -492,6 +517,10 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   ARRAY_WRAPPED_SCALAR:
     "Single-valued element is wrapped in an array; FHIR JSON writes a 0..1 element as a name/value " +
     "pair and uses an array only for a repeating element, so the element's encoding is ambiguous.",
+  ARRAY_WRAPPED_CHOICE:
+    "Observation value[x] choice is wrapped in an array; FHIR JSON writes a 0..1 choice as a " +
+    "name/value pair and uses an array only for a repeating element, so the value's encoding is " +
+    "ambiguous and no magnitude, unit or code was read from inside the wrapper.",
   NESTED_ARRAY:
     "A JSON array appears inside another array; FHIR JSON uses an array only for a repeating " +
     "element, so this shape has no meaning and its contents were not read. Content the sender " +

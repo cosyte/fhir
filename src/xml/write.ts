@@ -45,6 +45,7 @@ import {
   assertXmlForeignRoot,
   assertXmlResourceType,
   assertXmlSerializable,
+  assertXmlValueChoiceWrapper,
   breaksTag,
   refuseUnserializableDivMarkup,
   refuseUnserializableNames,
@@ -413,6 +414,18 @@ function writeElement(
  *   untouched. `serializeResource` emits the model exactly as it always did, so this refusal does not
  *   reach it -- a statement about that writer's output, not a claim that the JSON channel keeps the
  *   flag. See `assertXmlForeignRoot` for the window and for the route not taken.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_CHOICE_WRAPPER` if the model carries an array
+ *   wrapper around an `Observation.value[x]` choice, at a location this library already reports as
+ *   `ARRAY_WRAPPED_CHOICE`, that XML has no repeated element to spell back: one holding fewer than
+ *   two items. `{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,
+ *   "system":"http://unitsofmeasure.org","code":"mg"}]}` reads with the encoding reported and no
+ *   magnitude handed out, and used to come back as `<valueQuantity><value value="5"/>…` re-reading
+ *   as an unambiguous 5 mg under an empty issue list: a **dose** a format change made confident. **A
+ *   wrapper of two or more items is left alone rather than refused**, because it writes as repeated
+ *   elements that re-read as a list and the location is reported again. Scoped to `value[x]` and
+ *   `component.value[x]`, `0..1` in R4, at every Observation resource root; the window is the value
+ *   layer's own rather than a second cardinality table. {@link serializeResource} writes the wrapper
+ *   back, so this refusal does not reach it. See `assertXmlValueChoiceWrapper`.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -446,5 +459,9 @@ export function serializeResourceXml(node: FhirComplex): string {
   // And this one after THAT, on the same rule once more: it is now the newest code, so a vendor root
   // that also carries dropped character data or an unwritable name keeps the code it already had.
   assertXmlForeignRoot(node);
+  // And this one at the very end of the chain, on the same rule again: it is the newest code, so a
+  // document whose `value[x]` wrapper sits beside an element-level one, a shadowed member or an
+  // untaggable type keeps the code it already reported and no case moves onto this one.
+  assertXmlValueChoiceWrapper(node);
   return xml;
 }

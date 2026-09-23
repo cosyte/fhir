@@ -8,6 +8,42 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **An array wrapper around an `Observation.value[x]` choice is now REPORTED on a stable code and
+  REFUSED by the XML writer, so a dose that reads as unreadable in JSON is no longer laundered into a
+  confident number by one write and one re-read** (`fhir#XML-RESIDUAL-1`, the array-wrapped `value[x]`
+  residual; the unbound-prefix one that phase also covers is not taken here and stays open and
+  pinned). Array-wrapping every element is ordinary generic XML-to-JSON converter output, so this is
+  not exotic input.
+  `{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,"system":"http://unitsofmeasure.org","code":"mg"}]}`
+  read with the variant reported and `quantity` undefined, which failed **safe** as far as it went,
+  no wrong number was handed out, but nothing said the position held content nothing would read, and
+  a present variant with no magnitude is indistinguishable from a `valueQuantity` that carried no
+  `value`. Written as FHIR XML and read back it was an unambiguous 5 mg under `valid: true` with an
+  empty issue list. Three things close it and they share **one window**: `validateResource` raises
+  the new `ARRAY_WRAPPED_CHOICE` (error) at the choice's location, `readObservationValue` carries
+  that same code on the new `ObservationValue.encodingIssue` field, the issue channel that readout
+  did not have, and `serializeResourceXml` refuses on the new `UNSERIALIZABLE_CHOICE_WRAPPER`.
+  **The cardinality is the value readout's own walk**, over the eleven `value[x]` variant names at
+  the two positions R4 spells that choice (`Observation.value[x]` and
+  `Observation.component.value[x]`, both `0..1`, observation.html), at every Observation resource
+  root including one in `contained` or a `Bundle.entry`. It is **not** a wider window on the
+  element-level wrapper rule and **not** a per-resource cardinality table: `arrayWrappedScalars` is
+  unchanged, still reports nothing here, and `safeToSummarize` does not move. **Two bounds are
+  deliberate.** A wrapper of two or more items is written rather than refused, because XML spells a
+  repeat by repeating the element, so it round-trips byte-exactly and the re-read raises the report
+  again; refusing it would withdraw a round trip that works _and_ keeps the finding. And nothing is
+  read out of the wrapper at any arity, because picking a member authors a magnitude the sender
+  spelled ambiguously. The refusal is raised **last**, so a document already tripping another keeps
+  the code it had. `serializeResource` is untouched and that route stays open.
+  `test/array-wrapped-scalar.test.ts` and `test/xml-array-wrapper.test.ts` both carried a
+  characterization test over this gap and both went red in this change, which is the rule such a
+  closure is held to here. Measured against the base pin over the read differential: no `valid` or
+  `safeToSummarize` false-to-true flip, no retraction, negation, read diagnostic, validation finding
+  or leaf value lost, and no regression among the readings that moved. **Those zeros are a floor and
+  not a proof for the class this change refuses**: the harness records a refusal as one sentinel and
+  skips the refused document in the leaf comparison, and its corpus holds no document that reaches
+  the new refusal, so what grades this change are the characterization tests above, observed red
+  before green.
 - **A FHIR primitive whose value arrives as the element's own character data is now READ, so
   `<status>entered-in-error</status>` reaches the safety readout with the same retraction, the same
   negations and the same dose its `value=` twin gets** (`fhir#XML-RESIDUAL-1`, the element-text

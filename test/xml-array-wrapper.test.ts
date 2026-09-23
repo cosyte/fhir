@@ -7,6 +7,7 @@ import {
   parseResource,
   parseResourceXml,
   primitive,
+  readObservationValue,
   readSafety,
   SERIALIZE_ERROR_CODES,
   serializeResource,
@@ -449,19 +450,17 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
       ).toBe(true);
     });
 
-    it("does not extend past the safety layer's window, `Observation.value[x]` included", () => {
-      // A `0..1` choice element, and a wrapper on it still launders -- because the window this took
-      // its cardinality from does not reach it. Widening it means a per-resource model, which is a
-      // different change and one this library deliberately does not have.
-      const source =
-        '{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,"unit":"mg"}]}';
-      const { resource, refused } = fromJson(source);
-      expect(refused).toBeUndefined();
-      expect(readSafety(resource).arrayWrappedScalars).toEqual([]);
-      expect(serializeResourceXml(resource)).toBe(
-        '<Observation xmlns="http://hl7.org/fhir"><status value="final"/>' +
-          '<valueQuantity><value value="5"/><unit value="mg"/></valueQuantity></Observation>',
+    it("still does not extend the SAFETY layer's own window past the elements it reads", () => {
+      // The bound that has NOT moved. `Observation.value[x]` is a `0..1` choice and is still not an
+      // element the safety layer reads a verdict out of, so it draws no ARRAY_WRAPPED_SCALAR and
+      // THIS refusal still says nothing about it. What closed is the laundering, and it closed on a
+      // cardinality the VALUE layer has for that one position (`xml-value-choice-wrapper`, below),
+      // not by widening this window into the per-resource model the library does not have.
+      const { resource, refused } = fromJson(
+        '{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,"unit":"mg"}]}',
       );
+      expect(readSafety(resource).arrayWrappedScalars).toEqual([]);
+      expect(refused?.code).not.toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER);
     });
   });
 
@@ -495,5 +494,229 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
         ).refused?.locations,
       ).toEqual(["Bundle.entry[0].resource.status"]);
     });
+  });
+});
+
+/** A `code` so the reported documents below are conformant but for the wrapper under test. */
+const CODE = '"code":{"text":"synthetic"}';
+
+/** The reported document: one array-wrapped `value[x]`, carrying a DOSE. Synthetic throughout. */
+const REPORTED_VALUE =
+  `{"resourceType":"Observation","status":"final",${CODE},` +
+  '"valueQuantity":[{"value":5,"system":"http://unitsofmeasure.org","code":"mg"}]}';
+
+/**
+ * An array wrapper around an `Observation.value[x]` choice, laundered by the `JSON -> XML` writer.
+ *
+ * The sibling of the element-level residual above, at the position where the number is a **dose**,
+ * and the reason it needed a rule of its own: the element-level refusal takes its cardinality from
+ * the safety layer's walk, which is scoped by resource type to the elements a safety verdict is read
+ * out of, and `value[x]` is not one of them. Widening THAT window to every R4 `0..1` element is the
+ * per-resource model this library does not have.
+ *
+ * **Where the cardinality comes from instead.** The value readout already walks the eleven
+ * `value[x]` variant names, and R4 spells that choice at two positions, `Observation.value[x]` and
+ * `Observation.component.value[x]`, both `0..1` (observation.html). That walk is the window, and the
+ * validator's `ARRAY_WRAPPED_CHOICE`, the readout's own `encodingIssue` and this refusal all read it
+ * rather than each deciding a cardinality. So this refusal can never name a location the library
+ * does not already report, which is the discipline the element-level one holds.
+ *
+ * **The arity rule is the same rule and for the same reason**: XML spells a repeat by repeating the
+ * element, so a wrapper of two or more items writes as repeated elements the re-read groups back
+ * into a list, and the location is reported again. Refusing those would withdraw a round trip that
+ * works today AND keeps the finding. Both poles are asserted.
+ */
+describe("an array wrapper around `value[x]` is refused rather than normalized away", () => {
+  it("AC-4: refuses the write on its own stable code, naming the position", () => {
+    const { refused } = fromJson(REPORTED_VALUE);
+    expect(refused).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_CHOICE_WRAPPER,
+      locations: ["Observation.valueQuantity"],
+    });
+  });
+
+  it("AC-4: what base emitted re-read as a confident dose, which is the harm and is asserted", () => {
+    // The bytes base produced for the document above, run through this library's own reader. If the
+    // refusal ever disappears, THIS is what it would be handing a caller: a 5 mg nothing complained
+    // about, out of a document whose own reading declined to give a number at all.
+    const laundered = parseResourceXml(
+      '<Observation xmlns="http://hl7.org/fhir"><status value="final"/>' +
+        '<code><text value="synthetic"/></code><valueQuantity><value value="5"/>' +
+        '<system value="http://unitsofmeasure.org"/><code value="mg"/></valueQuantity></Observation>',
+    );
+    expect(laundered.issues).toEqual([]);
+    expect(validateResource(laundered.resource).issues).toEqual([]);
+    expect(validateResource(laundered.resource).valid).toBe(true);
+    const value = readObservationValue(laundered.resource);
+    expect(value?.quantity?.value?.toString()).toBe("5");
+    expect(value?.quantity?.code).toBe("mg");
+    expect(value?.encodingIssue).toBeUndefined();
+
+    // …and the same document before the trip, which is what makes the line above a LOSS rather than
+    // a reading: no magnitude was readable, and the encoding was reported.
+    const { resource } = parseResource(REPORTED_VALUE);
+    expect(readObservationValue(resource)?.quantity).toBeUndefined();
+    expect(readObservationValue(resource)?.encodingIssue).toBe("ARRAY_WRAPPED_CHOICE");
+  });
+
+  it("AC-4: leaves the JSON route open, which is where the wrapper survives", () => {
+    // The capability is routed rather than lost, exactly as the element-level refusal routes it.
+    const { resource } = parseResource(REPORTED_VALUE);
+    expect(serializeResource(resource)).toBe(REPORTED_VALUE);
+
+    const back = parseResource(serializeResource(resource)).resource;
+    expect(readObservationValue(back)?.encodingIssue).toBe("ARRAY_WRAPPED_CHOICE");
+    expect(readObservationValue(back)?.quantity).toBeUndefined();
+    expect(validateResource(back).issues.map((i) => `${i.code} at ${i.expression}`)).toContain(
+      "ARRAY_WRAPPED_CHOICE at Observation.valueQuantity",
+    );
+  });
+
+  it("AC-4: refuses a wrapped component value and one on a contained resource", () => {
+    expect(
+      fromJson(
+        `{"resourceType":"Observation","status":"final",${CODE},"component":[{${CODE},` +
+          '"valueQuantity":[{"value":5,"code":"mg"}]}]}',
+      ).refused,
+    ).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_CHOICE_WRAPPER,
+      locations: ["Observation.component[0].valueQuantity"],
+    });
+
+    expect(
+      fromJson(
+        '{"resourceType":"Patient","contained":[{"resourceType":"Observation","status":"final",' +
+          '"valueQuantity":[{"value":5,"code":"mg"}]}]}',
+      ).refused,
+    ).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_CHOICE_WRAPPER,
+      locations: ["Patient.contained[0].valueQuantity"],
+    });
+  });
+
+  it("AC-5: does NOT refuse a two-item wrapper, and the report survives the round trip", () => {
+    // The negative pole, and the reason the rule is not arity-blind: XML writes two elements, the
+    // re-read groups them into a list, and the same location is reported again. Refusing here would
+    // withdraw a round trip that works today AND keeps the finding.
+    const source =
+      `{"resourceType":"Observation","status":"final",${CODE},"valueQuantity":[` +
+      '{"value":5,"system":"http://unitsofmeasure.org","code":"mg"},' +
+      '{"value":7,"system":"http://unitsofmeasure.org","code":"mg"}]}';
+    const { resource, refused } = fromJson(source);
+    expect(refused).toBeUndefined();
+
+    const xml = serializeResourceXml(resource);
+    const back = parseResourceXml(xml);
+    expect(readObservationValue(back.resource)?.encodingIssue).toBe("ARRAY_WRAPPED_CHOICE");
+    expect(readObservationValue(back.resource)?.quantity).toBeUndefined();
+    expect(
+      validateResource(back.resource).issues.map((i) => `${i.code} at ${i.expression}`),
+    ).toContain("ARRAY_WRAPPED_CHOICE at Observation.valueQuantity");
+    // And the trip is byte-exact, so nothing was traded for the report.
+    expect(serializeResourceXml(back.resource)).toBe(xml);
+  });
+
+  it("AC-7: reports an EMPTY wrapper and refuses rather than emitting a document with neither", () => {
+    // An empty wrapper emits no element at all, so the element AND the report both vanish: the same
+    // laundering with even less left behind. The position is unreadable and is reported as such.
+    const empty = `{"resourceType":"Observation","status":"final",${CODE},"valueQuantity":[]}`;
+    const { resource, refused } = fromJson(empty);
+
+    expect(readObservationValue(resource)?.encodingIssue).toBe("ARRAY_WRAPPED_CHOICE");
+    expect(readObservationValue(resource)?.quantity).toBeUndefined();
+    expect(validateResource(resource).issues.map((i) => `${i.code} at ${i.expression}`)).toContain(
+      "ARRAY_WRAPPED_CHOICE at Observation.valueQuantity",
+    );
+    expect(refused).toMatchObject({
+      code: SERIALIZE_ERROR_CODES.UNSERIALIZABLE_CHOICE_WRAPPER,
+      locations: ["Observation.valueQuantity"],
+    });
+    // What base emitted for this document, asserted rather than described: no `valueQuantity` at
+    // all, and a reading with nothing anywhere to say one had ever been written.
+    const laundered = parseResourceXml(
+      '<Observation xmlns="http://hl7.org/fhir"><status value="final"/>' +
+        '<code><text value="synthetic"/></code></Observation>',
+    );
+    expect(laundered.issues).toEqual([]);
+    expect(readObservationValue(laundered.resource)).toBeUndefined();
+    expect(validateResource(laundered.resource).valid).toBe(true);
+  });
+
+  it("AC-10: a document tripping an existing refusal keeps that code, unchanged", () => {
+    // Raised last, so nothing that already reported one of the six moves onto this one. One row per
+    // refusal that can sit beside a wrapped `value[x]` on the same model.
+    const wrapped = '"valueQuantity":[{"value":5,"code":"mg"}]';
+    const cases: readonly (readonly [string, string])[] = [
+      // The element-level wrapper refusal, the nearest neighbour of all.
+      [
+        `{"resourceType":"Observation","status":["final"],${wrapped}}`,
+        SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ARRAY_WRAPPER,
+      ],
+      // A shape only FHIR JSON can spell.
+      [
+        `{"resourceType":"Observation","status":"final","name":[[{"family":"Roe"}]],${wrapped}}`,
+        SERIALIZE_ERROR_CODES.UNSERIALIZABLE_JSON_ONLY_SHAPE,
+      ],
+      // A name that cannot occupy a tag.
+      [
+        `{"resourceType":"Observation","status":"final","zz value=\\"1\\"/><x":"1",${wrapped}}`,
+        SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME,
+      ],
+      // A member a repeated property name shadowed.
+      [
+        `{"resourceType":"Observation","status":"final","status":"amended",${wrapped}}`,
+        SERIALIZE_ERROR_CODES.UNSERIALIZABLE_SHADOWED_PROPERTY,
+      ],
+      // A `resourceType` with no string to name a tag with.
+      [
+        `{"resourceType":"Observation","contained":[{"resourceType":42,${wrapped}}]}`,
+        SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE,
+      ],
+    ];
+
+    for (const [json, code] of cases) {
+      expect(fromJson(json).refused?.code, json).toBe(code);
+    }
+  });
+
+  it("AC-10: and the control, so the rows above are not passing on a shape that never reaches it", () => {
+    // Each document minus the OTHER refusal reports the new code, which is what makes the ordering
+    // above an ordering rather than five documents this refusal cannot see.
+    for (const json of [
+      `{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,"code":"mg"}]}`,
+      `{"resourceType":"Observation","contained":[{"resourceType":"Observation",` +
+        '"valueQuantity":[{"value":5,"code":"mg"}]}]}',
+    ]) {
+      expect(fromJson(json).refused?.code, json).toBe(
+        SERIALIZE_ERROR_CODES.UNSERIALIZABLE_CHOICE_WRAPPER,
+      );
+    }
+  });
+
+  it("AC-9: the refusal is value-free, carrying a code and bounded locations only", () => {
+    const { refused } = fromJson(
+      `{"resourceType":"Observation","status":"final",${CODE},` +
+        '"valueQuantity":[{"value":5,"unit":"SECRET-UNIT","code":"SECRET-CODE"}]}',
+    );
+    const serialized = JSON.stringify({
+      message: refused?.message,
+      locations: refused?.locations,
+      code: refused?.code,
+    });
+    expect(serialized).not.toContain("SECRET");
+    expect(serialized).not.toContain("5");
+  });
+
+  it("AC-6: refuses nothing for a conformant document, wrapped or unwrapped elsewhere", () => {
+    // The false-positive control for the write path. A conformant `value[x]`, a conformant repeating
+    // element, and a backbone element whose cardinality this library does not know.
+    for (const json of [
+      `{"resourceType":"Observation","status":"final",${CODE},"valueQuantity":{"value":5,"code":"mg"}}`,
+      `{"resourceType":"Observation","status":"final",${CODE},"identifier":[{"value":"synthetic-1"}]}`,
+      `{"resourceType":"Observation","status":"final",${CODE},"component":[{"code":["x"]}]}`,
+      '{"resourceType":"Questionnaire","status":"active","code":[{"code":"synthetic-1"}]}',
+    ]) {
+      expect(fromJson(json).refused, json).toBeUndefined();
+    }
   });
 });

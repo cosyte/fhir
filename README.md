@@ -888,7 +888,24 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   **Not** closed by it: a wrapper that only a **shadowed** member carried is the repeated-property-name
   case rather than this one, and both writers now refuse it (on whichever of the two codes is raised
   first, which is this one where the wrapper is itself unspellable); and the window does not reach
-  `Observation.value[x]`, a `0..1` choice whose wrapper still launders.
+  `Observation.value[x]`, a `0..1` choice, which has a refusal of its own on a cardinality of its own
+  (below) rather than a wider window on this one.
+- **An array wrapper around an `Observation.value[x]` choice is reported and refused**
+  (`ARRAY_WRAPPED_CHOICE` on the read, `UNSERIALIZABLE_CHOICE_WRAPPER` on the XML write). The same
+  generic-converter shape as the bullet above, at the position where the number is a **dose**.
+  `{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,"system":"http://unitsofmeasure.org","code":"mg"}]}`
+  used to read with the variant reported and no magnitude handed out, and nothing said the encoding
+  had been ambiguous, so one write and one re-read produced an unambiguous 5 mg under `valid: true`.
+  Now `readObservationValue` carries the code on `ObservationValue.encodingIssue`, `validateResource`
+  raises the same code at the same location at error severity, and the XML writer refuses. **The
+  cardinality is the value readout's own**, not a wider table: it is scoped to `Observation.value[x]`
+  and `Observation.component.value[x]`, both `0..1` in R4 (observation.html), at every Observation
+  resource root including a `contained` or `Bundle.entry` one, so a conformant document cannot draw
+  it and the safety layer's own wrapper window is untouched. **A wrapper of two or more items is
+  deliberately left alone** for the same reason as above: it writes as repeated elements, the re-read
+  groups them into a list and the report is raised again, byte-exact. **Nothing is read out of the
+  wrapper**: picking a member would author a magnitude the sender spelled ambiguously.
+  `serializeResource` writes the wrapper back and is the route that stays open.
 - **A member a repeated property name shadowed is refused, by BOTH writers**
   (`UNSERIALIZABLE_SHADOWED_PROPERTY`). The reader keeps it, validation raises an error over it and
   `safeToSummarize` is `false`: **all three about the input**. Each writer walks the surviving
