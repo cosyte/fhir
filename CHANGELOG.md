@@ -31,7 +31,7 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   unchanged, still reports nothing here, and `safeToSummarize` does not move. **Two bounds are
   deliberate.** A wrapper of two or more items is written rather than refused, because XML spells a
   repeat by repeating the element, so it round-trips byte-exactly and the re-read raises the report
-  again; refusing it would withdraw a round trip that works *and* keeps the finding. And nothing is
+  again; refusing it would withdraw a round trip that works _and_ keeps the finding. And nothing is
   read out of the wrapper at any arity, because picking a member authors a magnitude the sender
   spelled ambiguously. The refusal is raised **last**, so a document already tripping another keeps
   the code it had. `serializeResource` is untouched and that route stays open.
