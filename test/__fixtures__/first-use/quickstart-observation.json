@@ -1,0 +1,14 @@
+{
+  "resourceType": "Observation",
+  "id": "syn-0001",
+  "status": "final",
+  "code": { "coding": [{ "system": "http://loinc.org", "code": "8480-6" }] },
+  "subject": { "reference": "Patient/syn-0001" },
+  "effectiveDateTime": "2026-01-05",
+  "valueQuantity": {
+    "value": 120.0,
+    "unit": "mmHg",
+    "system": "http://unitsofmeasure.org",
+    "code": "mm[Hg]"
+  }
+}

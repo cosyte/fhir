@@ -8,6 +8,16 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **The quickstart's first example and a new README usage example are executed by the test suite.**
+  Until now nothing in this repository ran a documented example. The quickstart's first step now
+  reads its synthetic Observation in a runnable block with the `DECIMAL_PRECISION_AT_RISK`
+  diagnostic it claims asserted, the README gains a `## Usage` example over the same document, and
+  the document is committed byte for byte as a test fixture the PHI scan reads. Every runnable block
+  and both first examples are also compiled with the settings `tsc --init` writes for a new
+  TypeScript project, so one that does not compile fails the suite. A changed value in
+  either example fails the suite, and the install command the installation page prints is checked
+  against the package name. The dev-only `@cosyte/vitest-config` range moves to the release that
+  publishes the snippet harness. No runtime change.
 - **A model name carrying a colon is now REFUSED by the XML writer rather than written with its
   prefix bound to nothing** (the unbound-prefix residual, at the tag sites; its route through a
   `div` value is not taken here and stays open and pinned). XML reads a colon in an element name as a

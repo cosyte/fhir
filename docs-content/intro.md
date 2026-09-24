@@ -25,7 +25,7 @@ not do is listed in [current limits](./limits.md), which is worth reading before
 - **[Installation](./installation.md)**: runtime requirements, module formats, and how to get the
   package today.
 - **[Quickstart](./quickstart.md)**: an unparsed document to a parsed resource, a clinical value and
-  a validation verdict, in four steps.
+  a validation verdict, in three steps.
 - **[Core concepts](./core-concepts.md)**: the schema-free model, exact primitives, the two codecs
   and the validation layers.
 - **[Guides](./guides.md)**: the tasks readers arrive with, from accepting both wire formats to
