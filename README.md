@@ -59,6 +59,45 @@ validated (carried opaquely as a string (the JSON codec's fidelity), never dropp
 out of scope. It has no typed per-resource models
 yet, and it **never converts a unit** or evaluates a reference range. Do not depend on this package.
 
+## Usage
+
+Read a document, keep its exact values, and get a verdict. The Observation below is synthetic: every
+value in it is fabricated, and the same document is committed as a test fixture in this repository.
+
+```ts runnable
+import { parseResource, readObservationValue, validateResource } from "@cosyte/fhir";
+
+const document = `{
+  "resourceType": "Observation",
+  "id": "syn-0001",
+  "status": "final",
+  "code": { "coding": [{ "system": "http://loinc.org", "code": "8480-6" }] },
+  "subject": { "reference": "Patient/syn-0001" },
+  "effectiveDateTime": "2026-01-05",
+  "valueQuantity": {
+    "value": 120.0,
+    "unit": "mmHg",
+    "system": "http://unitsofmeasure.org",
+    "code": "mm[Hg]"
+  }
+}`;
+
+const { resource, issues } = parseResource(document);
+
+// The magnitude was written 120.0: the read keeps that exact form and says the protection mattered.
+issues.map((issue) => issue.code); // => ["DECIMAL_PRECISION_AT_RISK"]
+
+// Branch on the value[x] type before touching a magnitude, and compare on the UCUM code.
+const reading = readObservationValue(resource);
+reading?.type; // => "Quantity"
+reading?.quantity?.value?.raw; // => "120.0"
+reading?.quantity?.code; // => "mm[Hg]"
+
+validateResource(resource).valid; // => true
+```
+
+The [quickstart](./docs-content/quickstart.md) walks the same document step by step.
+
 ## What works today
 
 The no-data-loss core: read FHIR R4 JSON into an immutable model and serialize it back, **without

@@ -141,6 +141,21 @@ describe("every arm goes red on a seeded control", () => {
     expect(messages(findings)).toBe("");
   });
 
+  it("AC-FH2: a fence whose info string carries a tag (ts runnable) is still a fence", () => {
+    const findings = graded(
+      {
+        "intro.md": page(
+          "intro",
+          "Getting started",
+          "```ts runnable\nconst { a } = { a: 1 };\n```\n\nA resource is written as { ... } in JSON.",
+        ),
+      },
+      ["mdx-braces"],
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.line).toBe(10);
+  });
+
   it("links: a sidebar entry and a relative link that land on nothing", () => {
     const findings = graded(
       {
