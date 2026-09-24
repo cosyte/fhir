@@ -78,9 +78,12 @@ const EXPECTED_PATHS: readonly string[] = [
  */
 const PROBES: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
   ...Object.fromEntries(
-    MODELED_TYPES.flatMap((type) => [
+    MODELED_TYPES.flatMap((type): [string, Record<string, unknown>][] => [
       [`${type}.implicitRules`, { implicitRules: "http://example.org/implicit-rules" }],
-      [`${type}.modifierExtension`, { modifierExtension: [{ url: "http://example.org/modifier" }] }],
+      [
+        `${type}.modifierExtension`,
+        { modifierExtension: [{ url: "http://example.org/modifier" }] },
+      ],
     ]),
   ),
   "AllergyIntolerance.clinicalStatus": {

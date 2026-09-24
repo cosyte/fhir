@@ -1350,7 +1350,9 @@ describe("the certified public surface matches the package entry point", () => {
 
   it("counts what it certifies, so a dropped ROW reds even if every name still matches", () => {
     expect(INVENTORY.values).toHaveLength(170);
-    expect(INVENTORY.types).toHaveLength(102);
+    // S0364-fhir-safety-modifier-3: two type-only exports added (IntentReport,
+    // MedicationRequestIntent), the types of the two safety readout fields that change adds.
+    expect(INVENTORY.types).toHaveLength(104);
     expect(INVENTORY.exportSubpaths).toHaveLength(2);
   });
 

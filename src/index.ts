@@ -142,7 +142,12 @@ export {
 } from "./safety/status.js";
 export type { NegationKind, SafetyReadout } from "./safety/status.js";
 export { MODIFIER_ELEMENT_ROOT_TYPES } from "./safety/modifier-elements.js";
-export type { ModifierElementName, ModifierElementReport } from "./safety/modifier-elements.js";
+export type {
+  IntentReport,
+  MedicationRequestIntent,
+  ModifierElementName,
+  ModifierElementReport,
+} from "./safety/modifier-elements.js";
 // Declared absence: the DataAbsentReason extension read as a first-class answer, so an element a
 // sender explicitly does not know is distinguishable from one it simply did not send.
 export { isAbsenceCode, ABSENCE_CODES, DATA_ABSENT_REASON_URL } from "./safety/absence.js";
