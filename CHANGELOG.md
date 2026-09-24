@@ -12,7 +12,9 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   Until now nothing in this repository ran a documented example. The quickstart's first step now
   reads its synthetic Observation in a runnable block with the `DECIMAL_PRECISION_AT_RISK`
   diagnostic it claims asserted, the README gains a `## Usage` example over the same document, and
-  the document is committed byte for byte as a test fixture the PHI scan reads. A changed value in
+  the document is committed byte for byte as a test fixture the PHI scan reads. Every runnable block
+  and both first examples are also compiled with the settings `tsc --init` writes for a new
+  TypeScript project, so one that does not compile fails the suite. A changed value in
   either example fails the suite, and the install command the installation page prints is checked
   against the package name. The dev-only `@cosyte/vitest-config` range moves to the release that
   publishes the snippet harness. No runtime change.

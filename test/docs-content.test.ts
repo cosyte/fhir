@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -10,7 +10,13 @@ import {
   runSnippet,
 } from "@cosyte/vitest-config/snippets";
 
-import { fences, fixturesByContent, resourceLiterals, section } from "./_first-use.js";
+import {
+  compileErrors,
+  fences,
+  fixturesByContent,
+  resourceLiterals,
+  section,
+} from "./_first-use.js";
 
 /**
  * Doc/code-agreement gate. Every ```` ```ts runnable ```` block in `docs-content/` and in `README.md`
@@ -75,13 +81,64 @@ const FIRST_USE = [
   },
 ] as const;
 const DIAGNOSTIC_CLAIM = 'issues.map((issue) => issue.code); // => ["DECIMAL_PRECISION_AT_RISK"]';
+/**
+ * The snippet harness strips types without checking them, so compiling is checked separately, the
+ * way a reader's new TypeScript project compiles a block, against the source entry point the
+ * bundler compiles into the published types. A program over the source takes seconds to check, so
+ * these cases state their own budget.
+ */
+const SOURCE_PATHS = { "@cosyte/fhir": join(root, "src", "index.ts") };
+const COMPILE_TIMEOUT = 60_000;
 
 afterAll(() => {
   rmSync(FIRST_USE_TMP, { recursive: true, force: true });
 });
 
+describe("every runnable-tagged block under docs-content/ compiles", () => {
+  it(
+    "AC-FH1: each one compiles in a new TypeScript project against the package's types",
+    () => {
+      const docsDir = join(root, "docs-content");
+      const blocks = readdirSync(docsDir, { recursive: true, encoding: "utf8" })
+        .filter((file) => file.endsWith(".md"))
+        .flatMap((file) =>
+          extractRunnableSnippets(readFileSync(join(docsDir, file), "utf8")).map((s) => ({
+            file,
+            code: s.code,
+          })),
+        );
+      expect(blocks.length, "docs-content/ carries no runnable-tagged block").toBeGreaterThan(0);
+      for (const block of blocks) {
+        expect(compileErrors(root, SOURCE_PATHS, block.code), block.file).toEqual([]);
+      }
+    },
+    COMPILE_TIMEOUT,
+  );
+});
+
 describe("the first-use examples", () => {
   for (const example of FIRST_USE) {
+    it(
+      `${example.ac}: the first block of ${example.doc} compiles in a new TypeScript project`,
+      () => {
+        expect(compileErrors(root, SOURCE_PATHS, example.fence?.body ?? "")).toEqual([]);
+      },
+      COMPILE_TIMEOUT,
+    );
+
+    it(
+      `${example.ac}: a first block of ${example.doc} that does not compile is reported, so it turns this suite red`,
+      () => {
+        const code = example.fence?.body ?? "";
+        expect(code.split(DIAGNOSTIC_CLAIM).length - 1).toBe(1);
+        const broken = DIAGNOSTIC_CLAIM.replace("issue.code)", "issue.codes)");
+        expect(compileErrors(root, SOURCE_PATHS, code.replace(DIAGNOSTIC_CLAIM, broken))).toEqual([
+          expect.stringMatching(/TS2551|TS2339/),
+        ]);
+      },
+      COMPILE_TIMEOUT,
+    );
+
     it(`${example.ac}: the first block of ${example.doc} is one the sweep executes, and it runs`, async () => {
       expect(example.fence?.lang).toBe("ts");
       expect(example.fence?.tags).toContain("runnable");

@@ -35,4 +35,20 @@ describe("the documented install specifier", () => {
       ),
     ).toEqual(["@cosyte/fhirr", "@cosyte/fhir"]);
   });
+
+  it("AC-FH8: every install command form a reader may copy is read, inline code included", () => {
+    const forms = [
+      "pnpm i @cosyte/fhis",
+      "pnpm install @cosyte/fhis",
+      "npm add @cosyte/fhis",
+      "deno add npm:@cosyte/fhis",
+      "run `npm install @cosyte/fhis` first",
+      "then run npm install @cosyte/fhis.",
+    ];
+    for (const form of forms) expect(installSpecifiers(form), form).toEqual(["@cosyte/fhis"]);
+    expect(installSpecifiers("pnpm install\npnpm install --frozen-lockfile")).toEqual([]);
+    expect(
+      installSpecifiers("pnpm add file:../fhir\nnpm install git+https://x.test/fhir.git"),
+    ).toEqual([]);
+  });
 });
