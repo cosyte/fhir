@@ -1,0 +1,196 @@
+{
+  "note": "Committed expectation data: the resource-level isModifier elements of the eight types below, projected from the R4 4.0.1 StructureDefinitions named under provenance. Do not hand-edit: re-derive it by the rule.",
+  "rule": "For each StructureDefinition, every snapshot.element whose path is exactly one segment below the root (<Type>.<name>) and whose isModifier is true. path and isModifierReason are copied verbatim; an absent isModifierReason is null. Types in the order listed under provenance, elements in snapshot order within a type. Each input is checked against the sha256 recorded beside its URL before it is read.",
+  "fhirVersion": "4.0.1",
+  "provenance": {
+    "AllergyIntolerance": {
+      "url": "https://hl7.org/fhir/R4/allergyintolerance.profile.json",
+      "sha256": "9ddd15d35932fee211dedd5268e6b454ea0dc04fc007a2c884255552a7c464df"
+    },
+    "Condition": {
+      "url": "https://hl7.org/fhir/R4/condition.profile.json",
+      "sha256": "bab440ee2496ab53296777c39388c053f0765e324b7b330ade1b5a8bc73a5fb8"
+    },
+    "DiagnosticReport": {
+      "url": "https://hl7.org/fhir/R4/diagnosticreport.profile.json",
+      "sha256": "a2d68a05690261e288f1e292edaf7f458f9bc99052cb26b3e1b79ec75268b616"
+    },
+    "Immunization": {
+      "url": "https://hl7.org/fhir/R4/immunization.profile.json",
+      "sha256": "b882c9127230e8ccc93760c671cb2a96a4060ae79a3a38efb3ff5624a9165cbb"
+    },
+    "MedicationRequest": {
+      "url": "https://hl7.org/fhir/R4/medicationrequest.profile.json",
+      "sha256": "eee87fafe924726c561f323f43341794c1baa9c6a2cb4c42ae2a6da5a3134cdd"
+    },
+    "MedicationStatement": {
+      "url": "https://hl7.org/fhir/R4/medicationstatement.profile.json",
+      "sha256": "c048c8b04fcaee5c929b38d1cb8fe95c62a5be781720b79dafaf6c658d557b3c"
+    },
+    "Observation": {
+      "url": "https://hl7.org/fhir/R4/observation.profile.json",
+      "sha256": "41c731c85517d49c506141606418fdd3cf700a6d448e1d4e4846aac4e7c81c99"
+    },
+    "Patient": {
+      "url": "https://hl7.org/fhir/R4/patient.profile.json",
+      "sha256": "c60e7a581b7b311d37b4baf0edb87183f3f41242ee3ad8d7fffd3ce79f0a5458"
+    }
+  },
+  "elements": [
+    {
+      "type": "AllergyIntolerance",
+      "path": "AllergyIntolerance.implicitRules",
+      "isModifierReason": "This element is labeled as a modifier because the implicit rules may provide additional knowledge about the resource that modifies it's meaning or interpretation"
+    },
+    {
+      "type": "AllergyIntolerance",
+      "path": "AllergyIntolerance.modifierExtension",
+      "isModifierReason": "Modifier extensions are expected to modify the meaning or interpretation of the resource that contains them"
+    },
+    {
+      "type": "AllergyIntolerance",
+      "path": "AllergyIntolerance.clinicalStatus",
+      "isModifierReason": "This element is labeled as a modifier because the status contains the codes inactive and resolved that mark the AllergyIntolerance as no longer active."
+    },
+    {
+      "type": "AllergyIntolerance",
+      "path": "AllergyIntolerance.verificationStatus",
+      "isModifierReason": "This element is labeled as a modifier because the status contains the codes refuted and entered-in-error that mark the AllergyIntolerance as not currently valid."
+    },
+    {
+      "type": "Condition",
+      "path": "Condition.implicitRules",
+      "isModifierReason": "This element is labeled as a modifier because the implicit rules may provide additional knowledge about the resource that modifies it's meaning or interpretation"
+    },
+    {
+      "type": "Condition",
+      "path": "Condition.modifierExtension",
+      "isModifierReason": "Modifier extensions are expected to modify the meaning or interpretation of the resource that contains them"
+    },
+    {
+      "type": "Condition",
+      "path": "Condition.clinicalStatus",
+      "isModifierReason": "This element is labeled as a modifier because the status contains codes that mark the condition as no longer active."
+    },
+    {
+      "type": "Condition",
+      "path": "Condition.verificationStatus",
+      "isModifierReason": "This element is labeled as a modifier because the status contains the code refuted and entered-in-error that mark the Condition as not currently valid."
+    },
+    {
+      "type": "DiagnosticReport",
+      "path": "DiagnosticReport.implicitRules",
+      "isModifierReason": "This element is labeled as a modifier because the implicit rules may provide additional knowledge about the resource that modifies it's meaning or interpretation"
+    },
+    {
+      "type": "DiagnosticReport",
+      "path": "DiagnosticReport.modifierExtension",
+      "isModifierReason": "Modifier extensions are expected to modify the meaning or interpretation of the resource that contains them"
+    },
+    {
+      "type": "DiagnosticReport",
+      "path": "DiagnosticReport.status",
+      "isModifierReason": "This element is labeled as a modifier because it is a status element that contains status entered-in-error which means that the resource should not be treated as valid"
+    },
+    {
+      "type": "Immunization",
+      "path": "Immunization.implicitRules",
+      "isModifierReason": "This element is labeled as a modifier because the implicit rules may provide additional knowledge about the resource that modifies it's meaning or interpretation"
+    },
+    {
+      "type": "Immunization",
+      "path": "Immunization.modifierExtension",
+      "isModifierReason": "Modifier extensions are expected to modify the meaning or interpretation of the resource that contains them"
+    },
+    {
+      "type": "Immunization",
+      "path": "Immunization.status",
+      "isModifierReason": "This element is labeled as a modifier because it is a status element that contains statuses entered-in-error and not-done which means that the resource should not be treated as valid"
+    },
+    {
+      "type": "Immunization",
+      "path": "Immunization.isSubpotent",
+      "isModifierReason": "This element is labeled as a modifier because an immunization event with a subpotent vaccine doesn't protect the patient the same way as a potent dose."
+    },
+    {
+      "type": "MedicationRequest",
+      "path": "MedicationRequest.implicitRules",
+      "isModifierReason": "This element is labeled as a modifier because the implicit rules may provide additional knowledge about the resource that modifies it's meaning or interpretation"
+    },
+    {
+      "type": "MedicationRequest",
+      "path": "MedicationRequest.modifierExtension",
+      "isModifierReason": "Modifier extensions are expected to modify the meaning or interpretation of the resource that contains them"
+    },
+    {
+      "type": "MedicationRequest",
+      "path": "MedicationRequest.status",
+      "isModifierReason": "This element is labeled as a modifier because it is a status element that contains status entered-in-error which means that the resource should not be treated as valid"
+    },
+    {
+      "type": "MedicationRequest",
+      "path": "MedicationRequest.intent",
+      "isModifierReason": "This element changes the interpretation of all descriptive attributes. For example \"the time the request is recommended to occur\" vs. \"the time the request is authorized to occur\" or \"who is recommended to perform the request\" vs. \"who is authorized to perform the request"
+    },
+    {
+      "type": "MedicationRequest",
+      "path": "MedicationRequest.doNotPerform",
+      "isModifierReason": "This element is labeled as a modifier because this element negates the request to occur (ie, this is a request for the medication not to be ordered or prescribed, etc)"
+    },
+    {
+      "type": "MedicationStatement",
+      "path": "MedicationStatement.implicitRules",
+      "isModifierReason": "This element is labeled as a modifier because the implicit rules may provide additional knowledge about the resource that modifies it's meaning or interpretation"
+    },
+    {
+      "type": "MedicationStatement",
+      "path": "MedicationStatement.modifierExtension",
+      "isModifierReason": "Modifier extensions are expected to modify the meaning or interpretation of the resource that contains them"
+    },
+    {
+      "type": "MedicationStatement",
+      "path": "MedicationStatement.status",
+      "isModifierReason": "This element is labelled as a modifier because it is a status element that contains status entered-in-error which means that the resource should not be treated as valid"
+    },
+    {
+      "type": "Observation",
+      "path": "Observation.implicitRules",
+      "isModifierReason": "This element is labeled as a modifier because the implicit rules may provide additional knowledge about the resource that modifies it's meaning or interpretation"
+    },
+    {
+      "type": "Observation",
+      "path": "Observation.modifierExtension",
+      "isModifierReason": "Modifier extensions are expected to modify the meaning or interpretation of the resource that contains them"
+    },
+    {
+      "type": "Observation",
+      "path": "Observation.status",
+      "isModifierReason": "This element is labeled as a modifier because it is a status element that contains status entered-in-error which means that the resource should not be treated as valid"
+    },
+    {
+      "type": "Patient",
+      "path": "Patient.implicitRules",
+      "isModifierReason": "This element is labeled as a modifier because the implicit rules may provide additional knowledge about the resource that modifies it's meaning or interpretation"
+    },
+    {
+      "type": "Patient",
+      "path": "Patient.modifierExtension",
+      "isModifierReason": "Modifier extensions are expected to modify the meaning or interpretation of the resource that contains them"
+    },
+    {
+      "type": "Patient",
+      "path": "Patient.active",
+      "isModifierReason": "This element is labelled as a modifier because it is a status element that can indicate that a record should not be treated as valid"
+    },
+    {
+      "type": "Patient",
+      "path": "Patient.deceased[x]",
+      "isModifierReason": "This element is labeled as a modifier because once a patient is marked as deceased, the actions that are appropriate to perform on the patient may be significantly different."
+    },
+    {
+      "type": "Patient",
+      "path": "Patient.link",
+      "isModifierReason": "This element is labeled as a modifier because it might not be the main Patient resource, and the referenced patient should be used instead of this Patient record. This is when the link.type value is 'replaced-by'"
+    }
+  ]
+}
