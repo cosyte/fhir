@@ -4,7 +4,8 @@
  * **The output is NOT unconditionally spec-clean, and this line used to say it was.** A name with no
  * colon that is not a conformant XML name at all is written verbatim, so `<a&b/>` and `<1abc/>` are
  * emitted, and a conformant third-party parser rejects each. A name carrying a colon is no longer
- * written with its prefix unbound: it is refused. The exceptions are enumerated on
+ * written with its prefix unbound: it is refused, and so is a narrative `div` string whose own markup
+ * names a prefix nothing inside it binds. The exceptions are enumerated on
  * {@link serializeResourceXml}, with the refusals, and this header deliberately keeps no second copy.
  *
  * The writer is the conservative half of Postel's Law, and for a model read from a conformant
@@ -26,7 +27,9 @@
  * A decimal value is emitted from its exact lexical text and never routes
  * through a JavaScript `number`. Narrative `<div>` XHTML is written back as the opaque string the
  * model carries, verbatim. Its XHTML is not validated, but the string is checked at that branch for
- * the one property splicing it in depends on ({@link emitsOneDivElement}).
+ * the two properties splicing it in depends on: that it spells the one `div` element the property
+ * names ({@link emitsOneDivElement}), and that every prefix its markup names is bound inside it
+ * ({@link bindsEveryPrefix}).
  *
  * @packageDocumentation
  */
@@ -48,13 +51,14 @@ import {
   assertXmlValueChoiceWrapper,
   breaksTag,
   carriesUndeclarablePrefix,
+  refuseUnboundDivPrefixes,
   refuseUndeclarablePrefixes,
   refuseUnserializableDivMarkup,
   refuseUnserializableNames,
 } from "../codec/serialize-guard.js";
 import { childPath, rootPath } from "../model/path.js";
 import { FHIR_XML_NAMESPACE } from "./read.js";
-import { readRawXml } from "./raw-xml.js";
+import { readRawXml, type XmlElement } from "./raw-xml.js";
 
 /**
  * The one mutable thing the writer carries: the locations it refuses, by reason.
@@ -70,6 +74,8 @@ interface RefusalSink {
   readonly refusedDivs: string[];
   /** Locations whose name carries a colon no declaration here can bind ({@link carriesUndeclarablePrefix}). */
   readonly refusedPrefixes: string[];
+  /** `div` locations whose markup names a prefix nothing inside the string binds ({@link bindsEveryPrefix}). */
+  readonly refusedDivPrefixes: string[];
 }
 
 /**
@@ -117,9 +123,11 @@ function tag(name: string, path: string, sink: RefusalSink): string {
  *
  * **What it does NOT check**, because neither is this defect: which namespace the root is in (an
  * unprefixed `<div>` under no declaration, and a vendor one, both reach `Narrative.div` on the
- * read), and whether a prefix on the root is bound inside the string. An unbound prefix there is the
- * value route of the residual the colon refusal closes at the tag sites, and it stays open here:
- * this site writes a value, not a name, so that refusal does not reach it. Comments and processing
+ * read), and whether a prefix the markup names is bound inside the string. The second is asked next,
+ * of this same parse and only of a string that passes here, by {@link bindsEveryPrefix}, on a code
+ * of its own: an unbound prefix is the value route of the residual the colon refusal closes at the
+ * tag sites, which that refusal cannot reach because this site writes a value, not a name. A string
+ * that fails here keeps `UNSERIALIZABLE_DIV_MARKUP` whatever prefix it names. Comments and processing
  * instructions around the root parse as prolog/misc and are accepted: neither is an element.
  *
  * **THE STRUCTURE IS WHAT THIS SETTLES. IT SETTLES NOTHING ELSE, AND THE COUNTEREXAMPLES BELOW ARE
@@ -135,17 +143,123 @@ function tag(name: string, path: string, sink: RefusalSink): string {
  * document is rejected by a conformant third-party parser. All three are `PRE-EXISTING`.
  *
  * @param value - The raw string a `div` property carries.
+ * @returns The string's root element when the string spells the one `div` element the property
+ *   names, so the branch can ask its next question ({@link bindsEveryPrefix}) of the same parse;
+ *   `undefined` when it does not.
+ */
+function emitsOneDivElement(value: string): XmlElement | undefined {
+  let root: XmlElement;
+  try {
+    root = readRawXml(value);
+  } catch {
+    return undefined; // not one well-formed element: unbalanced, multi-root, a DTD, an undefined entity.
+  }
+  const colon = root.name.indexOf(":");
+  return (colon === -1 ? root.name : root.name.slice(colon + 1)) === "div" ? root : undefined;
+}
+
+/** The prefix Namespaces in XML 1.0 §3 binds by definition, so a name may use it undeclared. */
+const XML_PREFIX = "xml";
+
+/** The prefix Namespaces in XML 1.0 §3 reserves for declarations: it binds nothing a name may use. */
+const XMLNS_PREFIX = "xmlns";
+
+/** How a prefix-declaring attribute's name begins (`xmlns:p="…"`). */
+const DECLARATION = `${XMLNS_PREFIX}:`;
+
+/** The prefixes a `div` string's root inherits from inside the string: none. */
+const NOTHING_BOUND: ReadonlySet<string> = new Set();
+
+/**
+ * The prefixes in scope on `element`: what it inherited from enclosing elements inside the string,
+ * plus what its own `xmlns:p` attributes declare. A declaration with an empty value binds nothing
+ * (Namespaces in XML 1.0 §3 forbids it, and 1.1 reads it as undeclaring the prefix), so under either
+ * reading the prefix is out of scope from that element down.
+ */
+function prefixesInScope(element: XmlElement, inherited: ReadonlySet<string>): ReadonlySet<string> {
+  const declarations = element.attributes.filter(({ name }) => name.startsWith(DECLARATION));
+  if (declarations.length === 0) return inherited;
+  const scope = new Set(inherited);
+  for (const { name, value } of declarations) {
+    const prefix = name.slice(DECLARATION.length);
+    if (value === "") scope.delete(prefix);
+    else scope.add(prefix);
+  }
+  return scope;
+}
+
+/**
+ * Whether one element or attribute name is namespace-well-formed under `scope`: it carries no colon,
+ * or exactly one, between a non-empty prefix and a non-empty local part, and the prefix is `xml` or
+ * in scope. `xmlns` is never accepted as a prefix here, whatever was declared: an element name MUST
+ * NOT carry it (§3), and on an attribute it marks a declaration, which the caller does not ask about.
+ */
+function nameIsBound(name: string, scope: ReadonlySet<string>): boolean {
+  const colon = name.indexOf(":");
+  if (colon === -1) return true;
+  const prefix = name.slice(0, colon);
+  const local = name.slice(colon + 1);
+  if (prefix === "" || prefix === XMLNS_PREFIX || local === "" || local.includes(":")) return false;
+  return prefix === XML_PREFIX || scope.has(prefix);
+}
+
+/**
+ * Whether every element and attribute name a `div` string's markup carries names only prefixes that
+ * a declaration inside the string binds, so splicing the string in keeps the output
+ * namespace-well-formed.
+ *
+ * **This is the value route of the unbound-prefix residual, closed at the site that splices the
+ * value in.** The tag-site colon refusal ({@link carriesUndeclarablePrefix}) asks its question of a
+ * NAME, and this branch writes a STRING, so it never reached one: `<v:div>x</v:div>` passes
+ * {@link emitsOneDivElement} (one element, local name `div`), was spliced in with nothing binding
+ * `v`, and the emitted document, which a conformant parser rejects, re-read here with the narrative
+ * turned into a property named `v:div`.
+ *
+ * **The line is the one the tag-site refusal draws, namespace-well-formedness.** Namespaces in XML
+ * 1.0 (Third Edition) §5, Prefix Declared: "The namespace prefix, unless it is xml or xmlns, MUST
+ * have been declared in a namespace declaration attribute in either the start-tag of the element
+ * where the prefix is used or in an ancestor element"; §7: "All element and attribute names contain
+ * either zero or one colon"; §3: "The prefix xml is by definition bound", and "Element names MUST NOT
+ * have the prefix xmlns". The ancestors that count are the ones inside the string, because the
+ * string is all this branch splices in and the document around it is the skeleton this writer
+ * authors, which declares no prefix. So every element and attribute name carrying a colon must split
+ * at its one colon into a non-empty local part and a prefix that is `xml`, or that an `xmlns:p`
+ * attribute on that element or an enclosing one inside the string binds. An `xmlns` or `xmlns:p`
+ * attribute is a declaration, not a prefixed name, and is not asked. An unbound prefix on an inner
+ * element or an attribute is refused as well as one on the root.
+ *
+ * **Asked only of a string {@link emitsOneDivElement} accepted, and of the tree it parsed**, so a
+ * string that fails that check keeps `UNSERIALIZABLE_DIV_MARKUP` whatever prefix it names. The walk
+ * goes no deeper than that parse did, which `readRawXml` bounds.
+ *
+ * **What it costs, stated rather than implied: it withdraws an XML write from models that read
+ * `valid: true`**, and for an inner prefix from a model this library itself round-tripped:
+ * `{"resourceType":"Patient","text":{"status":"generated","div":"<div xmlns=\"…xhtml\"><v:p>x</v:p></div>"}}`
+ * reads with zero issues, and the document written from it re-read the same string. The cost the
+ * tag-site colon refusal already pays. **What it does not withdraw**: a prefix a conformant document
+ * bound on an ANCESTOR of the `div`, because the reader writes the declarations the element inherited
+ * and uses into the string it hands back, so that string binds the prefix itself.
+ *
+ * **What it does NOT check**, none of it an unbound prefix: whether a bound prefix names the
+ * namespace the sender meant, whether two attributes expand to one name (§6.3), a malformed
+ * declaration (`xmlns:` with nothing after it), and the local part of a name beyond its being
+ * non-empty and colon-free.
+ *
+ * @param element - An element of the string, as `readRawXml` parsed it; the root at the first call.
+ * @param inherited - The prefixes declarations on enclosing elements inside the string bind.
  * @returns `true` when the string may be written verbatim.
  */
-function emitsOneDivElement(value: string): boolean {
-  let name: string;
-  try {
-    name = readRawXml(value).name;
-  } catch {
-    return false; // not one well-formed element: unbalanced, multi-root, a DTD, an undefined entity.
+function bindsEveryPrefix(
+  element: XmlElement,
+  inherited: ReadonlySet<string> = NOTHING_BOUND,
+): boolean {
+  const scope = prefixesInScope(element, inherited);
+  if (!nameIsBound(element.name, scope)) return false;
+  for (const { name } of element.attributes) {
+    if (name === XMLNS_PREFIX || name.startsWith(DECLARATION)) continue;
+    if (!nameIsBound(name, scope)) return false;
   }
-  const colon = name.indexOf(":");
-  return (colon === -1 ? name : name.slice(colon + 1)) === "div";
+  return element.children.every((child) => child.type === "text" || bindsEveryPrefix(child, scope));
 }
 
 /** Serialize a scalar primitive value to its lexical text (decimal from exact `raw`, never a `number`). */
@@ -224,10 +338,17 @@ function writeItem(
   // this property names. Not scoped to `Narrative`: any property named `div`, at any depth in any
   // resource, takes this branch, which is why the check is on the branch and not on a resource type.
   // Nothing is repaired: a string that fails is recorded and the refusal is raised at the root, so
-  // the forged markup is never built into the returned document.
+  // the forged markup is never built into the returned document. A string that passes is asked one
+  // more question, of the same parse, on a code of its own: whether every prefix its markup names is
+  // bound inside it, since this branch writes a value and the colon check in `tag()` never sees it.
   if (name === "div" && node.kind === "primitive" && typeof node.value === "string") {
-    if (emitsOneDivElement(node.value)) return node.value;
-    sink.refusedDivs.push(path);
+    const root = emitsOneDivElement(node.value);
+    if (root === undefined) {
+      sink.refusedDivs.push(path);
+      return "";
+    }
+    if (bindsEveryPrefix(root)) return node.value;
+    sink.refusedDivPrefixes.push(path);
     return "";
   }
   if (node.kind === "primitive") return writePrimitiveElement(path, name, node, sink);
@@ -326,19 +447,18 @@ function writeElement(
  * A `div` property is written back as its own raw string, so what that string spells is markup in
  * the output. `emitsOneDivElement` is checked at that branch before the string is spliced in, and
  * the string is written only when it parses as exactly one element whose local name is `div`; a
- * string that fails raises `UNSERIALIZABLE_DIV_MARKUP` below. The shape that check exists for is
+ * string that fails raises `UNSERIALIZABLE_DIV_MARKUP` below. A string that passes is written only
+ * when every prefix its markup names is bound by a declaration inside it (`bindsEveryPrefix`); one
+ * that is not raises `UNSERIALIZABLE_DIV_PREFIX` below. The shape the first check exists for is
  * `<div xmlns="…xhtml">ok</div></text><code><coding>…716186003…</coding></code><text>` on an
  * `AllergyIntolerance`: it used to be spliced in whole, and the emitted document re-read with
  * `noKnownAllergy: true` and a `no-known-allergy` negation over a record that had asserted nothing,
  * with no diagnostic at either end and `readSafety` affirming it.
  *
- * **What passing that check does and does not settle, by example rather than by rule.** A string it
- * accepts contributes one element, and that element is the `div`; it is not a claim that the round
- * trip is lossless or that the output is well-formed from there. `<v:div>x</v:div>` carrying no
- * binding for `v` is accepted, and the emitted document re-reads it as a property named `v:div`
- * rather than as the narrative. That is the unbound-prefix residual reached through a VALUE, and it
- * stays open: the colon refusal the paragraph above describes checks names at tag positions, and
- * this branch writes a string. A comment beside the root (`<!--c--><div …/>`) is accepted and does not
+ * **What passing both checks does and does not settle, by example rather than by rule.** A string
+ * they accept contributes one element, that element is the `div`, and every prefix its markup names
+ * is bound inside it; it is not a claim that the round trip is lossless or that the output is
+ * well-formed from there. A comment beside the root (`<!--c--><div …/>`) is accepted and does not
  * survive the re-read. `emitsOneDivElement` carries three more counterexamples, each `PRE-EXISTING`
  * and each asserted rather than argued: a depth bound this check spends from a different starting
  * depth than the re-read, an inserted namespace declaration, and an XML declaration a conformant
@@ -453,10 +573,28 @@ function writeElement(
  *   `Bundle.entry.resource` after it was read. Raised last of all, so a model carrying one of these
  *   names beside anything above keeps the code it already reported, and a name that both carries a
  *   colon and breaks the tag stays `UNSERIALIZABLE_ELEMENT_NAME`. **Not covered**: a name with no
- *   colon that is not a conformant XML name, which is still written, and a `div` string whose own
- *   markup carries an unbound prefix, which is written by the `div` branch rather than at a tag
- *   position. {@link serializeResource} spells a member name as a JSON string, so this refusal does
- *   not reach it and that route stays open.
+ *   colon that is not a conformant XML name, which is still written. A `div` string whose own markup
+ *   carries an unbound prefix is written by the `div` branch rather than at a tag position, so this
+ *   refusal does not reach it either; that branch refuses it on `UNSERIALIZABLE_DIV_PREFIX`, below.
+ *   {@link serializeResource} spells a member name as a JSON string, so this refusal does not reach
+ *   it and that route stays open.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_DIV_PREFIX` if a `div` property carries a string
+ *   that passes the `UNSERIALIZABLE_DIV_MARKUP` check above and whose markup names, on an element or
+ *   on an attribute, a namespace prefix no declaration inside the string binds (`xml` is bound by
+ *   definition, and an `xmlns` or `xmlns:p` attribute is a declaration, not a prefixed name). The
+ *   branch splices the string in verbatim, so it used to write `<v:div>x</v:div>` into a document a
+ *   conformant parser rejects, and this library's re-read of that document turned the narrative into
+ *   a property named `v:div`, with no diagnostic at either end. An unbound prefix on an inner element
+ *   or an attribute (`<div xmlns="…xhtml"><v:p>x</v:p></div>`) is refused as well: the line is
+ *   namespace-well-formedness, the one the colon refusal above draws at the tag sites. **It withdraws
+ *   an XML write from models that read `valid: true`**, and for an inner prefix from a model this
+ *   library itself round-tripped, the cost that refusal already pays. A prefix a conformant document
+ *   bound on an ANCESTOR of the `div` is not refused, because the reader writes that declaration into
+ *   the string it hands back. Checked at the `div` branch at every depth, including a resource
+ *   composed into a `contained` or a `Bundle.entry.resource` after it was read, and raised last of
+ *   all, so a model that also trips any refusal above keeps the code it already reported. The message
+ *   and the locations carry neither the string nor its prefix. {@link serializeResource} carries the
+ *   string as a string, so this refusal does not reach it and that route stays open.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -469,7 +607,12 @@ export function serializeResourceXml(node: FhirComplex): string {
   assertSerializable(node);
   const rt = resourceTypeOf(node);
   const tagName = rt ?? "Resource";
-  const sink: RefusalSink = { refusedNames: [], refusedDivs: [], refusedPrefixes: [] };
+  const sink: RefusalSink = {
+    refusedNames: [],
+    refusedDivs: [],
+    refusedPrefixes: [],
+    refusedDivPrefixes: [],
+  };
   const xml = writeElement(rootPath(tagName), tagName, node, true, false, sink);
   // Names first, which is the order base raised them in, so a model that trips both keeps the code
   // it already reported. Both are raised after the walk, so neither returns a half-built document.
@@ -499,6 +642,12 @@ export function serializeResourceXml(node: FhirComplex): string {
   // model that also trips any refusal above keeps the code the writer raised for it before.
   if (sink.refusedPrefixes.length > 0) {
     refuseUndeclarablePrefixes([...new Set(sink.refusedPrefixes)]);
+  }
+  // And the `div` prefix refusal at the very end, on the same rule: it is the newest code, collected
+  // at the `div` branch during the same walk, so a model that also trips any refusal above, the colon
+  // refusal at the tag sites included, keeps the code the writer raised for it before.
+  if (sink.refusedDivPrefixes.length > 0) {
+    refuseUnboundDivPrefixes([...new Set(sink.refusedDivPrefixes)]);
   }
   return xml;
 }

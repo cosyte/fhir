@@ -23,11 +23,13 @@
  * write and one re-read. It is refused now, on a code of its own, and the characterization tests
  * that pinned it as written were rewritten over the same documents in the change that closed it.
  *
- * **THE LAST TWO BLOCKS ARE THE OTHER MARKUP-EMITTING SITE**, the `div` branch, which writes a
+ * **THE LAST THREE BLOCKS ARE THE OTHER MARKUP-EMITTING SITE**, the `div` branch, which writes a
  * VALUE into markup position rather than a name. It used to carry whole elements into the document
- * and is now checked at that branch; the blocks are paired the same way, one for what is refused and
- * one for what is still written. **Two sites are covered here. Do not read that as a statement about
- * every branch `serializeResourceXml` has.**
+ * and is now checked at that branch; the first two blocks are paired the same way, one for what is
+ * refused and one for what is still written. The third is the colon residual reached through that
+ * value: a `div` whose own markup names a prefix nothing inside it binds, refused on a code of its
+ * own. **Two sites are covered here. Do not read that as a statement about every branch
+ * `serializeResourceXml` has.**
  *
  * All documents, names, namespace URIs and values here are synthetic.
  */
@@ -157,13 +159,91 @@ const D3 =
   `<Observation ${FHIR_NS}><status value="final"/>` +
   `<v:x xmlns:v="urn:vendor" value="1"/></Observation>`;
 
-/** `resource` composed into `Bundle.entry.resource` after parsing, as a caller builds one. */
-function inBundle(resource: FhirComplex): FhirComplex {
+/** Each resource composed into its own `Bundle.entry.resource` after parsing, as a caller builds one. */
+function inBundle(...resources: readonly FhirComplex[]): FhirComplex {
   return complex([
     { name: "resourceType", value: primitive("Bundle") },
     { name: "type", value: primitive("collection") },
-    { name: "entry", value: list([complex([{ name: "resource", value: resource }])]) },
+    {
+      name: "entry",
+      value: list(resources.map((resource) => complex([{ name: "resource", value: resource }]))),
+    },
   ]);
+}
+
+/** A `Patient` carrying nothing but a generated narrative spelled `div`, as the JSON text read. */
+function narrativeJson(div: string): string {
+  return JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } });
+}
+
+/** The property names under `text` in `node`, in order. */
+function textNames(node: FhirComplex): string[] {
+  const text = node.properties.find((p) => p.name === "text")?.value;
+  return text?.kind === "complex" ? text.properties.map((p) => p.name) : [];
+}
+
+/**
+ * The code a `div` naming a prefix nothing inside it binds is refused on, spelled as a literal and
+ * not read off `SERIALIZE_ERROR_CODES`: the pin has no such member, so reading it there would compare
+ * `undefined` with `undefined` and a refusal test would pass against a tree that never refuses.
+ */
+const DIV_PREFIX = "UNSERIALIZABLE_DIV_PREFIX";
+
+/** The first member of the unbound example set, and the one row the `AC-7(d)` list gave up. */
+const UNBOUND_ROOT = "<v:div>x</v:div>";
+
+/**
+ * The unbound example set (AC-1): each passes the one-`div`-element check, and each names a prefix
+ * that no declaration inside the string binds, on the root, on an inner element, on an attribute.
+ */
+const UNBOUND_DIVS = [
+  ["on the root", UNBOUND_ROOT],
+  ["on an inner element", '<div xmlns="http://www.w3.org/1999/xhtml"><v:p>x</v:p></div>'],
+  ["on an attribute", '<div xmlns="http://www.w3.org/1999/xhtml"><p v:a="1">x</p></div>'],
+] as const;
+
+/** The narrative spellings `parseResourceXml` produces a `div` string for, each written verbatim. */
+const NARRATIVES = [
+  ["the default XHTML spelling", '<div xmlns="http://www.w3.org/1999/xhtml">ok</div>'],
+  ["a prefixed XHTML spelling", '<h:div xmlns:h="http://www.w3.org/1999/xhtml">ok</h:div>'],
+  ["XHTML structure inside it", '<div xmlns="http://www.w3.org/1999/xhtml"><p>a</p><br/></div>'],
+  ["an empty narrative element", '<div xmlns="http://www.w3.org/1999/xhtml"/>'],
+  ["no namespace declaration at all", "<div>ok</div>"],
+  ["a vendor namespace", '<div xmlns="urn:vendor">ok</div>'],
+  ["an escaped less-than in the prose", '<div xmlns="http://www.w3.org/1999/xhtml">a &lt; b</div>'],
+] as const;
+
+/** An XHTML `div` holding `n` nested paragraphs. */
+function nestedDiv(n: number): string {
+  return `<div xmlns="http://www.w3.org/1999/xhtml">${"<p>".repeat(n)}x${"</p>".repeat(n)}</div>`;
+}
+
+/** The `AC-7(d)` list, the same documents in the same order, the unbound root still among them. */
+const AC7D_DIVS = [
+  ...NARRATIVES.map(([, div]) => div),
+  UNBOUND_ROOT,
+  nestedDiv(253),
+  nestedDiv(254),
+  "<div>x</div>",
+  '<?xml version="1.0"?><div xmlns="http://www.w3.org/1999/xhtml">x</div>',
+  '<!--c--><div xmlns="http://www.w3.org/1999/xhtml"/>',
+];
+
+/**
+ * AC-3's admitted set: every prefix bound inside the string, or only the `xml` prefix, followed by
+ * every other row the `AC-7(d)` list holds. Each was written verbatim at the pin.
+ */
+const ADMITTED_DIVS = [
+  '<h:div xmlns:h="http://www.w3.org/1999/xhtml">ok</h:div>',
+  '<div xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:x"><v:p>x</v:p></div>',
+  '<div xmlns="http://www.w3.org/1999/xhtml"><p xmlns:v="urn:x" v:a="1">x</p></div>',
+  '<div xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">x</div>',
+  ...AC7D_DIVS.filter((div) => div !== UNBOUND_ROOT),
+];
+
+/** What the writer emits for {@link narrativeJson} when it writes `div` verbatim. */
+function writtenNarrative(div: string): string {
+  return `<Patient ${FHIR_NS}><text><status value="generated"/>${div}</text></Patient>`;
 }
 
 /** One model holding a colon-bearing name at a tag site, with what was measured for it. */
@@ -1035,22 +1115,6 @@ describe("a model name at an XML tag position", () => {
    * so a refusal that caught one of them would be withdrawing a round trip that works.
    */
   describe("div markup that is still written", () => {
-    const NARRATIVES = [
-      ["the default XHTML spelling", '<div xmlns="http://www.w3.org/1999/xhtml">ok</div>'],
-      ["a prefixed XHTML spelling", '<h:div xmlns:h="http://www.w3.org/1999/xhtml">ok</h:div>'],
-      [
-        "XHTML structure inside it",
-        '<div xmlns="http://www.w3.org/1999/xhtml"><p>a</p><br/></div>',
-      ],
-      ["an empty narrative element", '<div xmlns="http://www.w3.org/1999/xhtml"/>'],
-      ["no namespace declaration at all", "<div>ok</div>"],
-      ["a vendor namespace", '<div xmlns="urn:vendor">ok</div>'],
-      [
-        "an escaped less-than in the prose",
-        '<div xmlns="http://www.w3.org/1999/xhtml">a &lt; b</div>',
-      ],
-    ] as const;
-
     it.each(NARRATIVES)("writes %s verbatim", (_label, div) => {
       const node = model(
         JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } }),
@@ -1079,30 +1143,31 @@ describe("a model name at an XML tag position", () => {
     });
 
     /**
-     * The `div` branch writes a VALUE into markup position, not a name, so the colon refusal does
-     * not reach it: a narrative whose own markup carries an unbound prefix is written exactly as the
-     * pin wrote it. That route of the same residual stays open, and this pins it so it cannot move
-     * in silence either way.
+     * The characterization test that pinned the `div`-value route as written, rewritten over the
+     * same documents in the change that closed it. Every row but one is still written exactly as the
+     * pin wrote it. The one that moved out, a root whose prefix nothing binds, is refused now: the
+     * pin wrote it into a document a conformant parser rejects.
      */
-    it("AC-7(d): writes every div string in this block exactly as the pin did", () => {
-      const nest = (n: number): string =>
-        `<div xmlns="http://www.w3.org/1999/xhtml">${"<p>".repeat(n)}x${"</p>".repeat(n)}</div>`;
-      const divs = [
-        ...NARRATIVES.map(([, div]) => div),
-        "<v:div>x</v:div>",
-        nest(253),
-        nest(254),
-        "<div>x</div>",
-        '<?xml version="1.0"?><div xmlns="http://www.w3.org/1999/xhtml">x</div>',
-        '<!--c--><div xmlns="http://www.w3.org/1999/xhtml"/>',
-      ];
-      for (const div of divs) {
-        const node = model(
-          JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } }),
-        );
-        expect(serializeResourceXml(node)).toBe(
-          `<Patient ${FHIR_NS}><text><status value="generated"/>${div}</text></Patient>`,
-        );
+    it("AC-2, AC-7(d): writes every div string in this block as the pin did, but the unbound root", () => {
+      for (const div of AC7D_DIVS.filter((row) => row !== UNBOUND_ROOT)) {
+        expect(serializeResourceXml(model(narrativeJson(div)))).toBe(writtenNarrative(div));
+      }
+      const err = refusal(model(narrativeJson(UNBOUND_ROOT)));
+      expect(err).toBeInstanceOf(FhirSerializeError);
+      expect(err?.code).toBe(DIV_PREFIX);
+      expect(err?.locations).toEqual(["Patient.text.div"]);
+    });
+
+    /**
+     * WHAT THE NEW REFUSAL MUST NOT REACH, AS A PIN COMPARISON: every prefix bound inside the string,
+     * on the root, on an inner element or on an attribute, the `xml` prefix, and every other row of
+     * the list above. Literals, and this test passes against the pin's `src/` as well.
+     */
+    it("AC-3: writes every div that binds its own prefixes, or uses only xml, as the pin did", () => {
+      for (const div of ADMITTED_DIVS) {
+        const node = model(narrativeJson(div));
+        expect(refusal(node)).toBeUndefined();
+        expect(serializeResourceXml(node)).toBe(writtenNarrative(div));
       }
     });
 
@@ -1113,22 +1178,9 @@ describe("a model name at an XML tag position", () => {
      * names), and a string can pass it and still not come back the same, and still leave output a
      * conformant parser rejects. They are asserted rather than described, because a sentence in
      * this area keeps being refuted and an example cannot drift from the code. Each reproduces on
-     * base; none is caused by the check.
+     * base; none is caused by the check. The unbound root that used to lead this list is refused
+     * now, by a check of its own, below.
      */
-    it("accepts a root whose prefix nothing binds, which re-reads as a different property", () => {
-      const node = model(
-        JSON.stringify({
-          resourceType: "Patient",
-          text: { status: "generated", div: "<v:div>x</v:div>" },
-        }),
-      );
-      const xml = serializeResourceXml(node);
-      expect(xml).toContain("<v:div>x</v:div>");
-      const text = parseResourceXml(xml).resource.properties.find((p) => p.name === "text")?.value;
-      const names = text?.kind === "complex" ? text.properties.map((p) => p.name) : [];
-      expect(names).toEqual(["status", "v:div"]);
-    });
-
     it("accepts a div whose nesting the re-read cannot afford, and that failure is loud", () => {
       // The check spends the reader's depth budget from 0; the re-read spends it from the `div`'s
       // depth in the document, so the two do not agree at the boundary. 253 survives, 254 does not.
@@ -1232,6 +1284,398 @@ describe("a model name at an XML tag position", () => {
         ),
         { numRuns: 2000 },
       );
+    });
+  });
+
+  /**
+   * THE SAME RESIDUAL THROUGH A VALUE, CLOSED ON A CODE OF ITS OWN.
+   *
+   * A `div` string that passes the one-element check can still name a prefix nothing inside it
+   * binds, and the branch splices the string in verbatim, so the pin wrote `<v:div>x</v:div>` into a
+   * document a conformant parser rejects, and the narrative came back as a property named `v:div`.
+   * The line is the one the tag-site refusal drew: every prefix bound by a declaration inside the
+   * string, `xml` exempt. The refusal tests here fail against the pin's `src/`; the ones named as
+   * pin comparisons assert, as literals, what the pin already did, and pass there too.
+   */
+  describe("a div whose markup names a prefix nothing inside it binds", () => {
+    /** AC-1's document read from XML: its XHTML `div` binds nothing for the prefix its child uses. */
+    const READ_FROM_XML =
+      `<Patient ${FHIR_NS}><text><status value="generated"/>` +
+      `<div xmlns="http://www.w3.org/1999/xhtml"><v:p>x</v:p></div></text></Patient>`;
+
+    /** One model holding a member of the unbound example set. */
+    interface UnboundCase {
+      /** Builds the model afresh, so no test can share a node with another. */
+      readonly build: () => FhirComplex;
+      /** The refusal's locations, in walk order. */
+      readonly locations: readonly string[];
+      /** What `serializeResource` returned for this model at the pin, measured there. */
+      readonly json: string;
+    }
+
+    /** A `Patient` whose one contained `Patient` carries the narrative `div`. */
+    const containedJson = (div: string): string =>
+      JSON.stringify({
+        resourceType: "Patient",
+        contained: [{ resourceType: "Patient", text: { status: "generated", div } }],
+      });
+
+    /** Every model AC-1 names, at every depth it names, and the one read from XML. */
+    const UNBOUND_MODELS: readonly (readonly [string, UnboundCase])[] = [
+      ...UNBOUND_DIVS.flatMap(([where, div]): (readonly [string, UnboundCase])[] => [
+        [
+          `a prefix ${where}, at Patient.text.div`,
+          {
+            build: () => model(narrativeJson(div)),
+            locations: ["Patient.text.div"],
+            json: narrativeJson(div),
+          },
+        ],
+        [
+          `a prefix ${where}, inside a contained resource`,
+          {
+            build: () => model(containedJson(div)),
+            locations: ["Patient.contained[0].text.div"],
+            json: containedJson(div),
+          },
+        ],
+        [
+          `a prefix ${where}, in a resource composed into Bundle.entry.resource after it was read`,
+          {
+            build: () => inBundle(model(narrativeJson(div))),
+            locations: ["Bundle.entry[0].resource.text.div"],
+            json: `{"resourceType":"Bundle","type":"collection","entry":[{"resource":${narrativeJson(div)}}]}`,
+          },
+        ],
+      ]),
+      [
+        "a div string read from XML, then written",
+        {
+          build: () => parseResourceXml(READ_FROM_XML).resource,
+          locations: ["Patient.text.div"],
+          json: '{"resourceType":"Patient","text":{"status":"generated","div":"<div xmlns=\\"http://www.w3.org/1999/xhtml\\"><v:p>x</v:p></div>"}}',
+        },
+      ],
+    ];
+
+    /**
+     * Conformant documents whose narrative uses a prefix an ANCESTOR of the `div` binds, with the
+     * `div` string the reader hands back for each: it carries the inherited declaration, which is
+     * what keeps the write open (AC-4). The first is the one AC-4 names.
+     */
+    const ANCESTOR_BOUND = [
+      [
+        "on the div itself, which an ancestor",
+        `<Patient ${FHIR_NS} xmlns:h="http://www.w3.org/1999/xhtml"><text><status value="generated"/>` +
+          `<h:div>ok</h:div></text></Patient>`,
+        '<h:div xmlns:h="http://www.w3.org/1999/xhtml">ok</h:div>',
+      ],
+      [
+        "on an inner element, which an ancestor",
+        `<Patient ${FHIR_NS} xmlns:v="urn:x"><text><status value="generated"/>` +
+          `<div xmlns="http://www.w3.org/1999/xhtml"><v:p>x</v:p></div></text></Patient>`,
+        '<div xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:x"><v:p>x</v:p></div>',
+      ],
+      [
+        "on an attribute, which an ancestor",
+        `<Patient ${FHIR_NS} xmlns:v="urn:x"><text><status value="generated"/>` +
+          `<div xmlns="http://www.w3.org/1999/xhtml"><p v:a="1">x</p></div></text></Patient>`,
+        '<div xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:x"><p v:a="1">x</p></div>',
+      ],
+    ] as const;
+
+    /** Strings that fail the one-element check AND name an unbound prefix (AC-5). */
+    const FAILS_BOTH = [
+      ["an unbound root followed by a sibling", "<v:div>x</v:div><x/>"],
+      ["an unbound root whose local name is not div", "<v:p>x</v:p>"],
+    ] as const;
+
+    /** A model the pin refused, built around one member of the unbound example set. */
+    interface EarlierCase {
+      /** Builds the model afresh. */
+      readonly build: () => FhirComplex;
+      /** What `serializeResource` returned for this model at the pin, measured there. */
+      readonly json: string;
+    }
+
+    /** A model read from `json`, which the pin's JSON writer returned unchanged. */
+    const fromJson = (json: string): EarlierCase => ({ build: () => model(json), json });
+
+    /** A root read out of a vendor vocabulary, which the pin refused on the foreign-root code. */
+    const FOREIGN_ROOT =
+      '<v:Observation xmlns:v="urn:vendor"><v:status value="final"/></v:Observation>';
+
+    /**
+     * Every refusal the pin raised that the JSON writer does not share, each beside a member of the
+     * unbound example set, with the code and the locations the pin raised for it, measured there.
+     */
+    const EARLIER_ROWS: readonly (readonly [
+      string,
+      (div: string) => EarlierCase,
+      string,
+      readonly string[],
+    ])[] = [
+      [
+        "a colon-bearing property name",
+        (div) =>
+          fromJson(
+            JSON.stringify({
+              resourceType: "Patient",
+              text: { status: "generated", div },
+              "p:x": "v",
+            }),
+          ),
+        "UNSERIALIZABLE_PREFIXED_NAME",
+        [`Patient.${WITHHELD}`],
+      ],
+      [
+        "a tag-breaking property name",
+        (div) =>
+          fromJson(
+            JSON.stringify({
+              resourceType: "Patient",
+              text: { status: "generated", div },
+              "a b": "v",
+            }),
+          ),
+        "UNSERIALIZABLE_ELEMENT_NAME",
+        [`Patient.${WITHHELD}`],
+      ],
+      [
+        "a second div failing the one-element check",
+        (div) =>
+          fromJson(
+            JSON.stringify({
+              resourceType: "Patient",
+              text: { status: "generated", div },
+              contained: [
+                { resourceType: "Patient", text: { status: "generated", div: "<p>b</p>" } },
+              ],
+            }),
+          ),
+        "UNSERIALIZABLE_DIV_MARKUP",
+        ["Patient.contained[0].text.div"],
+      ],
+      [
+        "a shape only FHIR JSON can spell",
+        (div) =>
+          fromJson(
+            JSON.stringify({
+              resourceType: "Patient",
+              text: { status: "generated", div },
+              name: [[{ family: "X" }]],
+            }),
+          ),
+        "UNSERIALIZABLE_JSON_ONLY_SHAPE",
+        ["Patient.name[0]"],
+      ],
+      [
+        "an array wrapper around a 0..1 element",
+        (div) =>
+          fromJson(
+            JSON.stringify({
+              resourceType: "Observation",
+              status: ["final"],
+              text: { status: "generated", div },
+            }),
+          ),
+        "UNSERIALIZABLE_ARRAY_WRAPPER",
+        ["Observation.status"],
+      ],
+      [
+        "an untaggable resourceType",
+        (div) =>
+          fromJson(
+            JSON.stringify({
+              resourceType: "Patient",
+              text: { status: "generated", div },
+              contained: [{ resourceType: 42 }],
+            }),
+          ),
+        "UNSERIALIZABLE_RESOURCE_TYPE",
+        ["Patient.contained[0].resourceType"],
+      ],
+      [
+        "a foreign root in the same Bundle",
+        (div) => ({
+          build: () => inBundle(parseResourceXml(FOREIGN_ROOT).resource, model(narrativeJson(div))),
+          json: `{"resourceType":"Bundle","type":"collection","entry":[{"resource":{"resourceType":"Observation","status":"final"}},{"resource":${narrativeJson(div)}}]}`,
+        }),
+        "UNSERIALIZABLE_FOREIGN_ROOT",
+        ["Bundle.entry[0].resource"],
+      ],
+      [
+        "an array wrapper around a value[x] choice",
+        (div) =>
+          fromJson(
+            JSON.stringify({
+              resourceType: "Observation",
+              status: "final",
+              valueString: ["a"],
+              text: { status: "generated", div },
+            }),
+          ),
+        "UNSERIALIZABLE_CHOICE_WRAPPER",
+        ["Observation.valueString"],
+      ],
+    ];
+
+    /** Every row above, once with each member of the unbound example set. */
+    const EARLIER_MODELS = EARLIER_ROWS.flatMap(([label, make, code, locations]) =>
+      UNBOUND_DIVS.map(
+        ([where, div]) =>
+          [`${label}, beside a prefix ${where}`, make(div), code, locations] as const,
+      ),
+    );
+
+    /**
+     * The characterization test that pinned this route as written, rewritten over the same document
+     * in the change that closed it. The pin wrote the string as it stands, and its re-read of that
+     * output (built here by hand, exactly as the pin wrote it) carries a property named `v:div` where
+     * the narrative was, with nothing at either end saying so.
+     */
+    it("AC-2: refuses a root whose prefix nothing binds, which the pin wrote and re-read as another property", () => {
+      const err = refusal(model(narrativeJson(UNBOUND_ROOT)));
+      expect(err).toBeInstanceOf(FhirSerializeError);
+      expect(err?.code).toBe(DIV_PREFIX);
+      expect(err?.locations).toEqual(["Patient.text.div"]);
+      expect(textNames(parseResourceXml(writtenNarrative(UNBOUND_ROOT)).resource)).toEqual([
+        "status",
+        "v:div",
+      ]);
+    });
+
+    /**
+     * The spellings AC-1's clause reaches beyond the example set: a prefix that no declaration can
+     * bind, whatever the string declares. An empty declaration binds nothing (Namespaces in XML 1.0
+     * §3 forbids it, 1.1 reads it as undeclaring), `xmlns` may never be declared (§3), and a name
+     * with an empty prefix, an empty local part or two colons is no qualified name at all (§7).
+     */
+    it.each([
+      [
+        "a prefix whose only declaration is empty",
+        '<div xmlns="http://www.w3.org/1999/xhtml" xmlns:v=""><v:p>x</v:p></div>',
+      ],
+      [
+        "an empty prefix, declared anyway",
+        '<div xmlns="http://www.w3.org/1999/xhtml" xmlns:="urn:x"><:p>x</:p></div>',
+      ],
+      [
+        "the xmlns prefix on an element, declared anyway",
+        '<div xmlns="http://www.w3.org/1999/xhtml" xmlns:xmlns="urn:x"><xmlns:p>x</xmlns:p></div>',
+      ],
+      [
+        "two colons under a bound prefix",
+        '<div xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:x"><v:p:q>x</v:p:q></div>',
+      ],
+      [
+        "an empty local part under a bound prefix",
+        '<div xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:x"><p v:="1">x</p></div>',
+      ],
+    ])("AC-1: refuses a div whose markup names %s, which no declaration binds", (_label, div) => {
+      const err = refusal(model(narrativeJson(div)));
+      expect(err).toBeInstanceOf(FhirSerializeError);
+      expect(err?.code).toBe(DIV_PREFIX);
+      expect(err?.locations).toEqual(["Patient.text.div"]);
+    });
+
+    it.each(UNBOUND_MODELS)("AC-1: refuses %s, and returns no document", (_label, c) => {
+      const node = c.build();
+      expect(() => serializeResourceXml(node)).toThrow(FhirSerializeError);
+      const err = refusal(node);
+      expect(err).toBeInstanceOf(FhirSerializeError);
+      expect(err?.code).toBe(DIV_PREFIX);
+    });
+
+    it.each(UNBOUND_MODELS)(
+      "AC-7: reports %s at its bounded location, and echoes none of it",
+      (_label, c) => {
+        const err = refusal(c.build());
+        expect(err).toBeInstanceOf(FhirSerializeError);
+        expect(err?.locations).toEqual(c.locations);
+        const surface = `${String(err?.message)}\n${(err?.locations ?? []).join("\n")}`;
+        for (const [, div] of UNBOUND_DIVS) expect(surface).not.toContain(div);
+        expect(surface).not.toContain("v:");
+        // No `<`, no `>`, and no colon at all, which covers every prefix followed by its colon.
+        expect(surface).not.toMatch(/[<>:]/u);
+        expect(err?.message).toContain(`${String(c.locations.length)} div location(s)`);
+      },
+    );
+
+    it("AC-7: reports every refused div once, deduplicated, in walk order", () => {
+      const text = (div: string): FhirComplex =>
+        complex([
+          { name: "status", value: primitive("generated") },
+          { name: "div", value: primitive(div) },
+        ]);
+      // Two properties named `text` in one element, built by hand: the writer walks both, at one
+      // location, and a third div sits in a contained resource after them.
+      const node = complex([
+        { name: "resourceType", value: primitive("Patient") },
+        { name: "text", value: text(UNBOUND_DIVS[0][1]) },
+        { name: "text", value: text(UNBOUND_DIVS[1][1]) },
+        { name: "contained", value: list([model(narrativeJson(UNBOUND_DIVS[2][1]))]) },
+      ]);
+      const err = refusal(node);
+      expect(err).toBeInstanceOf(FhirSerializeError);
+      expect(err?.code).toBe(DIV_PREFIX);
+      expect(err?.locations).toEqual(["Patient.text.div", "Patient.contained[0].text.div"]);
+      expect(err?.message).toContain("2 div location(s)");
+    });
+
+    it.each(ANCESTOR_BOUND)(
+      "AC-4: writes back a narrative whose prefix %s bound, and re-reads it as the narrative",
+      (_label, doc, read) => {
+        const { resource } = parseResourceXml(doc);
+        expect(refusal(resource)).toBeUndefined();
+        const xml = serializeResourceXml(resource);
+        expect(xml).toBe(writtenNarrative(read));
+        expect(textNames(parseResourceXml(xml).resource)).toEqual(["status", "div"]);
+      },
+    );
+
+    it.each(FAILS_BOTH)(
+      "AC-5: refuses %s on the one-element check, as the pin did, never on the prefix code",
+      (_label, div) => {
+        const err = refusal(model(narrativeJson(div)));
+        expect(err).toBeInstanceOf(FhirSerializeError);
+        expect(err?.code).toBe("UNSERIALIZABLE_DIV_MARKUP");
+        expect(err?.code).not.toBe(DIV_PREFIX);
+        expect(err?.locations).toEqual(["Patient.text.div"]);
+      },
+    );
+
+    it.each(EARLIER_MODELS)(
+      "AC-6: keeps the pin's code and locations for %s",
+      (_label, c, code, locations) => {
+        const err = refusal(c.build());
+        expect(err).toBeInstanceOf(FhirSerializeError);
+        expect(err?.code).toBe(code);
+        expect(err?.locations).toEqual(locations);
+      },
+    );
+
+    it.each(UNBOUND_MODELS)(
+      "AC-8: the JSON writer returns the pin's string, and no refusal, for %s",
+      (_label, c) => {
+        expect(serializeResource(c.build())).toBe(c.json);
+      },
+    );
+
+    it.each(EARLIER_MODELS)(
+      "AC-8: the JSON writer returns the pin's string, and no refusal, for %s",
+      (_label, c) => {
+        expect(serializeResource(c.build())).toBe(c.json);
+      },
+    );
+
+    it("AC-8: the JSON writer returns the pin's string, and no refusal, for every AC-3, AC-4 and AC-5 model", () => {
+      for (const div of [...ADMITTED_DIVS, ...FAILS_BOTH.map(([, row]) => row)]) {
+        expect(serializeResource(model(narrativeJson(div)))).toBe(narrativeJson(div));
+      }
+      for (const [, doc, read] of ANCESTOR_BOUND) {
+        expect(serializeResource(parseResourceXml(doc).resource)).toBe(narrativeJson(read));
+      }
     });
   });
 });

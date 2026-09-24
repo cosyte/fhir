@@ -875,10 +875,16 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   a record that had asserted nothing, with no diagnostic at either end. **Well-formedness alone is
   not the line**: `<status value="final"/>` is one well-formed element, and writing it for a property
   named `div` authors a status. `serializeResource` carries the string as a string and is the route
-  that stays open. Passing the check is not a claim that the round trip is lossless from there: a
-  root whose prefix nothing binds (`<v:div>x</v:div>`) is accepted and re-reads as a different
-  property. That is the unbound-prefix gap reached through a value, and it stays open: the colon
-  refusal below checks names at tag positions, and this branch writes a string.
+  that stays open. **A string that passes is asked one more question, on a code of its own**
+  (`UNSERIALIZABLE_DIV_PREFIX`): whether every namespace prefix its markup names, on an element or on
+  an attribute, is bound by a declaration inside the string. `<v:div>x</v:div>` used to be written
+  with nothing binding `v`, which a conformant parser rejects, and this library re-read it as a
+  property named `v:div` rather than as the narrative. It is refused now, and so is an unbound prefix
+  on an inner element or an attribute, which withdraws an XML write from models that read
+  `valid: true`, the cost the colon refusal below already pays. The `xml` prefix is bound by
+  definition, and a prefix a conformant document bound on an ancestor of the `div` is not refused,
+  because the reader writes that declaration into the string it hands back. Passing both checks is
+  still not a claim that the round trip is lossless from there.
 - **A shape only FHIR JSON can spell is refused rather than emitted as an empty element**
   (`UNSERIALIZABLE_JSON_ONLY_SHAPE`). The JSON reader marks four positions FHIR JSON gives no meaning
   to and keeps what the sender wrote there, so `serializeResource` hands it back and re-reading the
@@ -1006,8 +1012,9 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   Every earlier refusal is raised first, so a name that both carries a colon and breaks the tag stays
   `UNSERIALIZABLE_ELEMENT_NAME`. The read is unchanged, and `serializeResource` writes these names
   as JSON strings and is the route that stays open. **Not** closed by it: a name with no colon that is
-  not a conformant XML name (`a&b`, `1abc`) is still written, and a `div` string whose own markup
-  carries an unbound prefix is still written by the `div` branch, as above.
+  not a conformant XML name (`a&b`, `1abc`) is still written. A `div` string whose own markup carries
+  an unbound prefix never reaches this check, and is refused by the `div` branch on
+  `UNSERIALIZABLE_DIV_PREFIX` instead, as above.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).
