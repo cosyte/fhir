@@ -1598,6 +1598,7 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
  * that refusal is measured on is read here, and each reading (the issues, the `validateResource`
  * verdict and the full `readSafety` readout) is asserted at the value measured at the pin before any
  * source changed, so a change that moved a read to make the refusal look better would show here.
+ * All documents here are synthetic.
  */
 describe("AC-8: reading every document the prefix refusal is measured on is unchanged", () => {
   const D1 =

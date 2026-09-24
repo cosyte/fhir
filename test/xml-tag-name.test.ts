@@ -28,6 +28,8 @@
  * and is now checked at that branch; the blocks are paired the same way, one for what is refused and
  * one for what is still written. **Two sites are covered here. Do not read that as a statement about
  * every branch `serializeResourceXml` has.**
+ *
+ * All documents, names, namespace URIs and values here are synthetic.
  */
 import { readFileSync } from "node:fs";
 
