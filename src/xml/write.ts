@@ -1,10 +1,10 @@
 /**
  * The XML write path: the {@link FhirNode} model → compact FHIR XML text (xml.html).
  *
- * **The output is NOT unconditionally spec-clean, and this line used to say it was.** A property name
- * carrying a prefix is written with no declaration to bind it and a name that is not a conformant XML
- * name at all is written verbatim, so `<v:x value="1"/>`, `<a&b/>` and `<1abc/>` are all emitted; a
- * conformant third-party parser rejects each. The exceptions are enumerated on
+ * **The output is NOT unconditionally spec-clean, and this line used to say it was.** A name with no
+ * colon that is not a conformant XML name at all is written verbatim, so `<a&b/>` and `<1abc/>` are
+ * emitted, and a conformant third-party parser rejects each. A name carrying a colon is no longer
+ * written with its prefix unbound: it is refused. The exceptions are enumerated on
  * {@link serializeResourceXml}, with the refusals, and this header deliberately keeps no second copy.
  *
  * The writer is the conservative half of Postel's Law, and for a model read from a conformant
@@ -47,6 +47,8 @@ import {
   assertXmlSerializable,
   assertXmlValueChoiceWrapper,
   breaksTag,
+  carriesUndeclarablePrefix,
+  refuseUndeclarablePrefixes,
   refuseUnserializableDivMarkup,
   refuseUnserializableNames,
 } from "../codec/serialize-guard.js";
@@ -66,6 +68,8 @@ interface RefusalSink {
   readonly refusedNames: string[];
   /** `div` locations whose raw markup fails {@link emitsOneDivElement}. */
   readonly refusedDivs: string[];
+  /** Locations whose name carries a colon no declaration here can bind ({@link carriesUndeclarablePrefix}). */
+  readonly refusedPrefixes: string[];
 }
 
 /**
@@ -77,10 +81,16 @@ interface RefusalSink {
  * are dropped), and that duplicate would be free to disagree. If you add a branch that writes a tag,
  * call this from it.
  *
+ * Two questions are asked of the name, and a name is recorded under the first it fails only: does
+ * it break the tag ({@link breaksTag}), and does it carry a colon this writer cannot declare a
+ * binding for ({@link carriesUndeclarablePrefix}). A name failing both is a tag-breaking name, which
+ * is the code it drew before the second question existed.
+ *
  * @returns The name, unchanged, so a caller can write `<${tag(...)}>` inline.
  */
 function tag(name: string, path: string, sink: RefusalSink): string {
   if (breaksTag(name)) sink.refusedNames.push(path);
+  else if (carriesUndeclarablePrefix(name)) sink.refusedPrefixes.push(path);
   return name;
 }
 
@@ -107,9 +117,10 @@ function tag(name: string, path: string, sink: RefusalSink): string {
  *
  * **What it does NOT check**, because neither is this defect: which namespace the root is in (an
  * unprefixed `<div>` under no declaration, and a vendor one, both reach `Narrative.div` on the
- * read), and whether a prefix on the root is bound inside the string (an unbound prefix is the
- * separately declared residual on this function's own output). Comments and processing instructions
- * around the root parse as prolog/misc and are accepted: neither is an element.
+ * read), and whether a prefix on the root is bound inside the string. An unbound prefix there is the
+ * value route of the residual the colon refusal closes at the tag sites, and it stays open here:
+ * this site writes a value, not a name, so that refusal does not reach it. Comments and processing
+ * instructions around the root parse as prolog/misc and are accepted: neither is an element.
  *
  * **THE STRUCTURE IS WHAT THIS SETTLES. IT SETTLES NOTHING ELSE, AND THE COUNTEREXAMPLES BELOW ARE
  * ASSERTED RATHER THAN LEFT AS A CAVEAT. They are examples, not an enumeration.** `readRawXml`
@@ -301,13 +312,14 @@ function writeElement(
  * ## What this output is NOT guaranteed to be, stated rather than implied
  *
  * "Spec-clean" is a claim about the FHIR structure, not about namespace well-formedness, and the
- * gap is real for a model that carries content FHIR cannot spell. A property name carrying a
- * **prefix** is written verbatim with no declaration to bind it (`<v:x value="1"/>`), because the
- * binding was never modeled; a name that is not a conformant XML name at all is written verbatim
- * too (`<a&b/>`, `<1abc/>`). Both re-read through {@link parseResourceXml} exactly as written, and
- * both are rejected by a conformant third-party parser. They are not refused precisely because this
- * library's own round trip does survive them, and refusing would withdraw that from models it reads
- * as valid. What IS refused is the subset where nothing survives; see the `@throws` below.
+ * gap is real for a model that carries content FHIR cannot spell. A name with no colon that is not a
+ * conformant XML name at all is written verbatim (`<a&b/>`, `<1abc/>`): it re-reads through
+ * {@link parseResourceXml} exactly as written and is rejected by a conformant third-party parser. It
+ * is not refused precisely because this library's own round trip does survive it, and refusing would
+ * withdraw that from models it reads as valid. A name carrying a **colon** used to be written the
+ * same way, its prefix bound to nothing (`<v:x value="1"/>`), because the binding was never modeled;
+ * it is refused now, at the tag sites, on a code of its own (see the `@throws` below). What is
+ * refused on a name is otherwise the subset where nothing survives.
  *
  * ## The `div` branch, which writes markup rather than a name
  *
@@ -324,8 +336,9 @@ function writeElement(
  * accepts contributes one element, and that element is the `div`; it is not a claim that the round
  * trip is lossless or that the output is well-formed from there. `<v:div>x</v:div>` carrying no
  * binding for `v` is accepted, and the emitted document re-reads it as a property named `v:div`
- * rather than as the narrative, which is the same unbound-prefix residual the paragraph above
- * declares for names. A comment beside the root (`<!--c--><div …/>`) is accepted and does not
+ * rather than as the narrative. That is the unbound-prefix residual reached through a VALUE, and it
+ * stays open: the colon refusal the paragraph above describes checks names at tag positions, and
+ * this branch writes a string. A comment beside the root (`<!--c--><div …/>`) is accepted and does not
  * survive the re-read. `emitsOneDivElement` carries three more counterexamples, each `PRE-EXISTING`
  * and each asserted rather than argued: a depth bound this check spends from a different starting
  * depth than the re-read, an inserted namespace declaration, and an XML declaration a conformant
@@ -410,8 +423,9 @@ function writeElement(
  *   **empty** issue list: the one warning saying the document came from elsewhere was gone after a
  *   single trip. **Unlike most of the refusals above it this one withdraws a round trip from a
  *   document that reads `valid: true`**, because the root flag is a warning; the cost is bounded to
- *   this class, and a root declaring no namespace at all or carrying a prefix bound to nothing is
- *   untouched. `serializeResource` emits the model exactly as it always did, so this refusal does not
+ *   this class. A root declaring no namespace at all is untouched, and one carrying a prefix bound to
+ *   nothing is outside it too, refused on `UNSERIALIZABLE_PREFIXED_NAME` below rather than on this
+ *   code. `serializeResource` emits the model exactly as it always did, so this refusal does not
  *   reach it -- a statement about that writer's output, not a claim that the JSON channel keeps the
  *   flag. See `assertXmlForeignRoot` for the window and for the route not taken.
  * @throws {FhirSerializeError} With `UNSERIALIZABLE_CHOICE_WRAPPER` if the model carries an array
@@ -426,6 +440,23 @@ function writeElement(
  *   `component.value[x]`, `0..1` in R4, at every Observation resource root; the window is the value
  *   layer's own rather than a second cardinality table. {@link serializeResource} writes the wrapper
  *   back, so this refusal does not reach it. See `assertXmlValueChoiceWrapper`.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_PREFIXED_NAME` if any tag position holds a name
+ *   carrying a colon, other than `xml:` followed by a local part with no colon in it. XML reads the
+ *   colon as a namespace prefix and the model carries no binding for this writer to declare one
+ *   with, so it used to write the prefix bound to nothing: `<v:x value="1"/>`, `<:x/>`, `<a:b:c/>`,
+ *   `<xmlns:x/>`, and a root read as `<v:Observation>` written back as
+ *   `<v:Observation xmlns="http://hl7.org/fhir">`. A conformant parser rejects all of them, and a
+ *   prefix rebound between siblings lost its `MIXED_XML_SPELLING` report across one write and one
+ *   re-read. **It withdraws an XML write from models that read `valid: true`**, the cost the
+ *   foreign-root refusal above already pays: a property named `p:x` reads with zero issues. Checked
+ *   at every tag position, at every depth, including a resource composed into a `contained` or a
+ *   `Bundle.entry.resource` after it was read. Raised last of all, so a model carrying one of these
+ *   names beside anything above keeps the code it already reported, and a name that both carries a
+ *   colon and breaks the tag stays `UNSERIALIZABLE_ELEMENT_NAME`. **Not covered**: a name with no
+ *   colon that is not a conformant XML name, which is still written, and a `div` string whose own
+ *   markup carries an unbound prefix, which is written by the `div` branch rather than at a tag
+ *   position. {@link serializeResource} spells a member name as a JSON string, so this refusal does
+ *   not reach it and that route stays open.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -438,7 +469,7 @@ export function serializeResourceXml(node: FhirComplex): string {
   assertSerializable(node);
   const rt = resourceTypeOf(node);
   const tagName = rt ?? "Resource";
-  const sink: RefusalSink = { refusedNames: [], refusedDivs: [] };
+  const sink: RefusalSink = { refusedNames: [], refusedDivs: [], refusedPrefixes: [] };
   const xml = writeElement(rootPath(tagName), tagName, node, true, false, sink);
   // Names first, which is the order base raised them in, so a model that trips both keeps the code
   // it already reported. Both are raised after the walk, so neither returns a half-built document.
@@ -463,5 +494,11 @@ export function serializeResourceXml(node: FhirComplex): string {
   // document whose `value[x]` wrapper sits beside an element-level one, a shadowed member or an
   // untaggable type keeps the code it already reported and no case moves onto this one.
   assertXmlValueChoiceWrapper(node);
+  // And the colon refusal after every one of them, on the same rule: it is the newest code, and it
+  // was collected at the tag sites during the walk above rather than by a pass of its own, so a
+  // model that also trips any refusal above keeps the code the writer raised for it before.
+  if (sink.refusedPrefixes.length > 0) {
+    refuseUndeclarablePrefixes([...new Set(sink.refusedPrefixes)]);
+  }
   return xml;
 }

@@ -1274,7 +1274,8 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
    * because dropping the grouping would be a silent first-wins loss (the XML reader has no
    * `duplicates` mechanism), so the arm taken was to REPORT it: `reportMixedSpelling` now compares
    * the expanded name and not the tag alone. The assertions below moved from "says nothing" to
-   * "says this", in the change that made it true. (2) is still open.
+   * "says this", in the change that made it true. Its round trip through the XML writer, which lost
+   * that report, is now refused rather than written. (2) has since been closed as well, below.
    */
   describe("declared residuals, pinned so they cannot move in silence", () => {
     /**
@@ -1312,33 +1313,37 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       });
 
       /**
-       * AND THE REPORT DOES NOT SURVIVE THE PACKAGE'S OWN XML WRITER, WHICH IS A DECLARED RESIDUAL
-       * OF THE **UNBOUND-PREFIX** GAP AND NOT OF THIS ONE.
+       * AND THE XML WRITER NOW REFUSES IT, RATHER THAN LOSE THE REPORT.
        *
-       * `serializeResourceXml` emits the model name verbatim and has no binding to emit with it, so
-       * `<p:x xmlns:p="urn:a"/>` and `<p:x xmlns:p="urn:b"/>` come back as two `<p:x/>` with `p`
-       * bound to nothing. Re-reading them, the two occurrences now share one expanded name, so the
-       * merge report this slice added is gone. **So (iv) is closed for the READ and open for the
-       * round trip**, and the thing that has to close before the report can survive a write is the
-       * unbound prefix, which is a separate item with a separate remedy (model the binding, or
-       * refuse the shape). Characterization test over that gap: closing it MUST red this.
+       * `serializeResourceXml` used to emit the model name verbatim with no binding to emit beside
+       * it, so `<p:x xmlns:p="urn:a"/>` and `<p:x xmlns:p="urn:b"/>` came back as two `<p:x/>` with
+       * `p` bound to nothing, measured at the pin as
+       * `<Observation xmlns="http://hl7.org/fhir"><status value="final"/><p:x value="1"/><p:x value="2"/></Observation>`.
+       * Re-reading that, the two occurrences shared one expanded name, so `MIXED_XML_SPELLING` was
+       * gone. The binding is still not modeled; what closed is the write of a name whose prefix the
+       * output cannot declare, which is refused at the tag site on its own code. The read above and
+       * the report beside it are untouched, and `serializeResource` still writes the model.
        */
-      it("loses that report through the XML writer, because the bindings are not modeled", () => {
+      it("AC-1, AC-3: refuses the XML write rather than lose that report, because the bindings are not modeled", () => {
         const { resource } = parseResourceXml(REBOUND);
-        const emitted = serializeResourceXml(resource);
-        // Not namespace-well-formed: `p` is bound to nothing here. That is the residual.
-        expect(emitted).toBe(
-          `<Observation ${FHIR_NS}><status value="final"/><p:x value="1"/><p:x value="2"/></Observation>`,
+        let refused: unknown;
+        try {
+          serializeResourceXml(resource);
+        } catch (err) {
+          refused = err;
+        }
+        expect(refused).toBeInstanceOf(FhirSerializeError);
+        expect((refused as FhirSerializeError).code).toBe(
+          SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME,
         );
-        const again = parseResourceXml(emitted).issues;
-        expect(again.some((i) => i.code === ISSUE_CODES.MIXED_XML_SPELLING)).toBe(false);
-        // The foreign flag does survive, because an unbound prefix still satisfies `isForeign`. It
-        // is only the distinction between the two vendor namespaces that the round trip erases.
-        expect(
-          again
-            .filter((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT)
-            .map((i) => i.expression),
-        ).toEqual(["Observation.<withheld>[0]", "Observation.<withheld>[1]"]);
+        expect((refused as FhirSerializeError).locations).toEqual([
+          "Observation.<withheld>[0]",
+          "Observation.<withheld>[1]",
+        ]);
+        // The route that stays open, with the merge it cannot undo still visible in it.
+        expect(serializeResource(resource)).toBe(
+          '{"resourceType":"Observation","status":"final","p:x":["1","2"]}',
+        );
       });
 
       it("reports the merge, because that report keys on the namespace as well as the tag", () => {
@@ -1393,9 +1398,10 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * **`rootIsForeign` also covers an UNBOUND prefix, and that root is NOT in this class.** It reads
      * differently in every respect: the tag is kept verbatim, so the resource is modeled as
      * `v:Observation`, its children are foreign to it in turn and are flagged too, and the locations
-     * withhold the unresolvable name. That is the separate unbound-prefix residual, pinned above and
-     * in `xml-tag-name.test.ts`, and none of the sentences here reach it. A root declaring **no**
-     * namespace at all is not in the class either: it is read as FHIR, unflagged, on purpose.
+     * withhold the unresolvable name. Its XML write is refused too, but on a code of its own
+     * (`UNSERIALIZABLE_PREFIXED_NAME`, at the tag sites, beside `xml-tag-name.test.ts`), and none of
+     * the sentences here reach it. A root declaring **no** namespace at all is not in either class:
+     * it is read as FHIR, unflagged, and still written, on purpose.
      */
     describe("a foreign root is refused by the XML writer rather than laundered", () => {
       // The document carries `code` as well as `status` so that it is conformant against the
@@ -1563,9 +1569,11 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         );
       });
 
-      it("leaves an unbound-prefix root exactly as it is, deferral and all", () => {
-        // The other half of `rootIsForeign`, unmoved: modeled under the verbatim tag, flagged at
-        // three withheld locations, and still written. Closing it is the separate deferred residual.
+      it("AC-1, AC-3: reads an unbound-prefix root exactly as before, and refuses to write it", () => {
+        // The other half of `rootIsForeign`: modeled under the verbatim tag, flagged at three
+        // withheld locations and NOT marked, all unmoved. The pin wrote it as
+        // `<v:Observation xmlns="http://hl7.org/fhir"><v:id value="o1"/>...`, the prefix bound to
+        // nothing; that write is refused now, on the prefix code rather than the foreign-root one.
         const UNBOUND = `<v:Observation><v:id value="o1"/><v:status value="final"/></v:Observation>`;
         const { resource, issues } = parseResourceXml(UNBOUND);
         expect(issues.map((i) => i.expression)).toEqual([
@@ -1574,10 +1582,174 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
           "<withheld>.<withheld>",
         ]);
         expect(isForeignRoot(resource)).toBe(false);
-        expect(serializeResourceXml(resource)).toBe(
-          `<v:Observation ${FHIR_NS}><v:id value="o1"/><v:status value="final"/></v:Observation>`,
-        );
+        const refusal = refusalOf(resource);
+        expect(refusal).toBeInstanceOf(FhirSerializeError);
+        expect(refusal?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME);
+        expect(refusal?.locations).toEqual(["<withheld>", "<withheld>.<withheld>"]);
       });
     });
+  });
+});
+
+/**
+ * THE READ SIDE OF THE PREFIX REFUSAL, PINNED AT THE VALUES THE PIN RETURNED.
+ *
+ * The refusal lives in the XML writer and nothing on the read path moved with it. Every document
+ * that refusal is measured on is read here, and each reading (the issues, the `validateResource`
+ * verdict and the full `readSafety` readout) is asserted at the value measured at the pin before any
+ * source changed, so a change that moved a read to make the refusal look better would show here.
+ * All documents here are synthetic.
+ */
+describe("AC-8: reading every document the prefix refusal is measured on is unchanged", () => {
+  const D1 =
+    `<Observation ${FHIR_NS}><status value="final"/>` +
+    `<p:x xmlns:p="urn:a" value="1"/><p:x xmlns:p="urn:b" value="2"/></Observation>`;
+  const D2 = `<v:Observation><v:id value="o1"/><v:status value="final"/></v:Observation>`;
+  const D3 =
+    `<Observation ${FHIR_NS}><status value="final"/>` +
+    `<v:x xmlns:v="urn:vendor" value="1"/></Observation>`;
+
+  /** The readout fields every one of these documents reads empty, as measured at the pin. */
+  const QUIET = {
+    retracted: false,
+    noKnownAllergy: false,
+    negations: [],
+    unhandledModifierExtensions: [],
+    modifierElements: [],
+    shadowedProperties: [],
+    arrayWrappedScalars: [],
+    nestedArrays: [],
+    droppedText: [],
+    unreadableBooleans: [],
+    nearMissNegationCodes: [],
+    unreadableNegationCodes: [],
+    absenceMarkers: [],
+    unreadableAbsenceMarkers: [],
+    conflictingAbsenceMarkers: [],
+    safeToSummarize: true,
+  };
+  const OBSERVATION_FINDINGS = [
+    {
+      code: "UNKNOWN_ELEMENT",
+      severity: "warning",
+      type: "structure",
+      expression: "Observation.<withheld>",
+    },
+    {
+      code: "CARDINALITY_MIN",
+      severity: "error",
+      type: "required",
+      expression: "Observation.code",
+    },
+  ];
+  const PATIENT_READ = {
+    issues: [],
+    valid: true,
+    findings: [
+      {
+        code: "UNKNOWN_ELEMENT",
+        severity: "warning",
+        type: "structure",
+        expression: "Patient.<withheld>",
+      },
+    ],
+    safety: { ...QUIET, resourceType: "Patient" },
+  };
+
+  const READS = [
+    [
+      "D1",
+      () => parseResourceXml(D1),
+      {
+        issues: [
+          {
+            code: "MIXED_XML_SPELLING",
+            severity: "warning",
+            expression: "Observation.<withheld>",
+          },
+          {
+            code: "UNEXPECTED_XML_CONTENT",
+            severity: "warning",
+            expression: "Observation.<withheld>[0]",
+          },
+          {
+            code: "UNEXPECTED_XML_CONTENT",
+            severity: "warning",
+            expression: "Observation.<withheld>[1]",
+          },
+        ],
+        valid: false,
+        findings: OBSERVATION_FINDINGS,
+        safety: { ...QUIET, resourceType: "Observation", status: "final" },
+      },
+    ],
+    [
+      "D2",
+      () => parseResourceXml(D2),
+      {
+        issues: [
+          { code: "UNEXPECTED_XML_CONTENT", severity: "warning", expression: "<withheld>" },
+          {
+            code: "UNEXPECTED_XML_CONTENT",
+            severity: "warning",
+            expression: "<withheld>.<withheld>",
+          },
+          {
+            code: "UNEXPECTED_XML_CONTENT",
+            severity: "warning",
+            expression: "<withheld>.<withheld>",
+          },
+        ],
+        valid: true,
+        findings: [
+          {
+            code: "RESOURCE_NOT_MODELED",
+            severity: "information",
+            type: "informational",
+            expression: "<withheld>",
+          },
+        ],
+        safety: { ...QUIET, resourceType: "<withheld>" },
+      },
+    ],
+    [
+      "D3",
+      () => parseResourceXml(D3),
+      {
+        issues: [
+          {
+            code: "UNEXPECTED_XML_CONTENT",
+            severity: "warning",
+            expression: "Observation.<withheld>",
+          },
+        ],
+        valid: false,
+        findings: OBSERVATION_FINDINGS,
+        safety: { ...QUIET, resourceType: "Observation", status: "final" },
+      },
+    ],
+    ["M1 p:x", () => parseResource('{"resourceType":"Patient","p:x":"v"}'), PATIENT_READ],
+    ["M1 :x", () => parseResource('{"resourceType":"Patient",":x":"v"}'), PATIENT_READ],
+    ["M1 a:b:c", () => parseResource('{"resourceType":"Patient","a:b:c":"v"}'), PATIENT_READ],
+  ] as const;
+
+  it.each(READS)("AC-8: reads %s exactly as the pin did", (_label, read, expected) => {
+    const { resource, issues } = read();
+    expect(issues).toEqual(expected.issues);
+    const validated = validateResource(resource);
+    expect(validated.valid).toBe(expected.valid);
+    expect(validated.issues).toEqual(expected.findings);
+    expect(readSafety(resource)).toEqual(expected.safety);
+  });
+
+  it("AC-8: still reports D1's merge and D2's root as the pin did, D2 unmarked", () => {
+    const d1 = parseResourceXml(D1).issues;
+    expect(
+      d1.filter((i) => i.code === ISSUE_CODES.MIXED_XML_SPELLING).map((i) => i.expression),
+    ).toEqual(["Observation.<withheld>"]);
+    expect(
+      d1.filter((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT).map((i) => i.expression),
+    ).toEqual(["Observation.<withheld>[0]", "Observation.<withheld>[1]"]);
+    expect(isForeignRoot(parseResourceXml(D2).resource)).toBe(false);
   });
 });

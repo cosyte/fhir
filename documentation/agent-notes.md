@@ -9,6 +9,111 @@ used to sit in `CLAUDE.md`, in its original order, with headings added so it can
 section here that carries the incident it came from. These are clinical-safety lessons that each
 cost a defect or a refuted gate pass to learn: **relocate them, never delete them.**
 
+## The unbound-prefix round trip, closed at the tag sites (2026-09-24)
+
+The last residual `test/xml.test.ts` still pinned as open under "declared residuals, pinned so they
+cannot move in silence", closed on its **tag-site** route by a write refusal,
+`UNSERIALIZABLE_PREFIXED_NAME`. Its **`div`-value** route is not closed and stays declared open
+(below). Remedy (b) of the two `FHIR-UNBOUND-PREFIX-ROUNDTRIP` re-measured; (a) is not taken.
+
+### The defect, measured at `49364a3` before anything was changed
+
+`serializeResourceXml` wrote a model name carrying a colon verbatim, with nothing declaring the
+prefix. Every one of these was returned as a document, and a conformant parser rejects each:
+
+    D1  <Observation xmlns="…fhir"><status value="final"/>
+        <p:x xmlns:p="urn:a" value="1"/><p:x xmlns:p="urn:b" value="2"/></Observation>
+    out <Observation xmlns="…fhir"><status value="final"/><p:x value="1"/><p:x value="2"/></Observation>
+    D2  <v:Observation><v:id value="o1"/><v:status value="final"/></v:Observation>
+    out <v:Observation xmlns="…fhir"><v:id value="o1"/><v:status value="final"/></v:Observation>
+    D3  <Observation xmlns="…fhir"><status value="final"/><v:x xmlns:v="urn:vendor" value="1"/></Observation>
+    out <Observation xmlns="…fhir"><status value="final"/><v:x value="1"/></Observation>
+
+plus `{"resourceType":"Patient","p:x":"v"}`, `":x"`, `"a:b:c"` and `"xmlns:x"`, a colon-bearing
+name inside a backbone element, on an extension, inside a `contained` resource, as the wrapper name
+of a resource-valued element, as a `contained` resource's type, and inside a resource composed into
+`Bundle.entry.resource` after parsing. D1 is the one that lost a finding: it reads with
+`MIXED_XML_SPELLING` at `Observation.<withheld>`, and re-reading its output drops that report,
+because the two occurrences now share one (unbound) expanded name.
+
+### The remedy, and where the line is
+
+**Any colon at a tag position, with one exemption.** Namespaces in XML 1.0 (Third Edition) §7:
+"All element and attribute names contain either zero or one colon"; §5: "The namespace prefix,
+unless it is xml or xmlns, MUST have been declared"; §3: "The prefix xml is by definition bound" and
+"Element names MUST NOT have the prefix xmlns". The model carries no bindings, so every colon the
+writer emits is undeclared except under `xml`: `xml:` followed by a non-empty, colon-free local part
+is written (`<xml:x value="v"/>`), and everything else carrying a colon is refused, `xmlns:x`
+included.
+
+**A new code, not a wider `UNSERIALIZABLE_ELEMENT_NAME`.** That code's published line is "does this
+library's own round trip survive it", and `p:x` does survive it; widening it would change a
+published code's meaning. `SERIALIZE_ERROR_CODES` gains one member, raised by
+`serializeResourceXml` only.
+
+**Checked at the tag sites, never in a pre-pass.** `tag()` in `src/xml/write.ts` asks two questions
+of every name and records it under the first it fails: `breaksTag`, then
+`carriesUndeclarablePrefix`. The locations are collected during the walk and raised **after every
+refusal the writer already raised**, so no model that drew a code at `49364a3` moves onto the new
+one. Measured there and asserted at head, each beside a colon-bearing name:
+`{"a b":"1","contact":[{"p:x":"2"}]}` and `a b:c` stay `UNSERIALIZABLE_ELEMENT_NAME` at
+`Patient.<withheld>`; a refused `div` stays `UNSERIALIZABLE_DIV_MARKUP`; dropped element text stays
+`DROPPED_ELEMENT_TEXT`; and the JSON-only shape, array wrapper, shadowed member, untaggable type,
+foreign root and `value[x]` wrapper each keep their own code and locations.
+
+**Why (a), modeling the binding, is not taken.** It cannot close D2: the source binds `v` to nothing,
+so writing any binding authors a namespace the sender never sent. And it puts a vendor URI on the
+model within reach of every walker and diagnostic, the reason the foreign-root closure chose a marker
+over the vocabulary. It is not refuted, and stays available to a later change that wants the
+bound-prefix XML round trip back.
+
+**What it costs.** It withdraws an XML write from models that read `valid: true`:
+`{"resourceType":"Patient","p:x":"v"}` reads with an empty issue list and validates `valid: true`
+(one `UNKNOWN_ELEMENT` warning), and D2 validates `valid: true`. The fourth refusal to pay that
+(`breaksTag`, the untaggable type and the foreign root are the others). `serializeResource` is
+byte-identical to `49364a3` on every model above and is the route that stays open. The read path is
+unchanged: D1, D2, D3 and the JSON documents read with the same issues, validation and `readSafety`
+readout as at `49364a3`, asserted in `test/xml.test.ts`.
+
+**The message carries no colon at all, and the locations none either.** Every refused name carries
+a colon, which neither `elementName` nor `resourceTypeName` admits, so its own segment is
+`<withheld>`; a `contained` resource's type is reported at the element wrapping it. D2 reports
+`<withheld>` and `<withheld>.<withheld>`, deduplicated.
+
+### Still open, and not folded in
+
+- **The same residual through a `div` VALUE.** `<v:div>x</v:div>` is written by the `div` branch,
+  which splices a string rather than writing a name at a tag position, so the colon refusal does not
+  reach it; it re-reads as a property named `v:div`. Pinned in `test/xml-tag-name.test.ts` ("accepts
+  a root whose prefix nothing binds", and the `AC-7(d)` row), byte-identical to `49364a3`.
+- **A colon-free name that is not a conformant XML name** (`a&b`, `1abc`, `-lead`, `.lead`, `a"b`,
+  `a'b`, `\v`, `\f`, `U+00A0`), and the local part after `xml:`. A different gap, still written.
+- **The JSON leg of the foreign-root laundering**, declared open by that closure; untouched.
+
+### What graded it, and what could not
+
+The characterization tests red at head against the pin's copies of `test/xml.test.ts` and
+`test/xml-tag-name.test.ts`: "loses that report through the XML writer, because the bindings are
+not modeled", "leaves an unbound-prefix root exactly as it is, deferral and all", "writes %s
+verbatim" for `p:x`, `:x` and `a:b:c`, and "emits a prefixed foreign property with the prefix still
+unbound", each rewritten over the same document. One more pin test reds, and it is the same shape:
+the generated-alphabet property "either refuses, or its output re-reads as the same property names"
+expected only `UNSERIALIZABLE_ELEMENT_NAME` over an alphabet that spells `:`. The new tests were
+observed red in 37 assertions against the unchanged `src/`. A mutation matrix of 14 edits (the check
+removed at each tag site, colon names routed onto the name code, the refusal raised before the name
+or foreign-root refusal, no dedup, no exemption, an exemption widened to `xmlns`, a colon in the
+message, the name in a location, and a refusal widened into the colon-free gap) reddened the suite
+for 13; the fourteenth, echoing the bounded locations in the message, is not a leak and stays green.
+
+`pnpm differential:read --base 49364a3`: 1195 documents, `readings moved 0`, `valid false -> true`
+0, `safeToSummarize false -> true` 0, retractions, negations, read diagnostics and validation
+findings lost 0, newly throwing 0, and arm 4 prints `this run introduces 1 writer refusal(s):
+UNSERIALIZABLE_PREFIXED_NAME`. **Those zeros are floors, not proof.** `readings moved 0` says no
+corpus document the base wrote is refused at head, so the new refusal reaches none of them: the
+XML corpus is FHIR-rooted, and the one mutation that carries a colon-bearing name
+(`vendor-div-prefixed`) is refused at both ends on `DROPPED_ELEMENT_TEXT`, which is raised first.
+The corpus says nothing about how often a real vendor feed will draw this refusal.
+
 ## The foreign root laundering, closed (2026-08-27)
 
 The third of the three residuals `test/xml.test.ts` pins under "declared residuals, pinned so they
@@ -58,16 +163,18 @@ module docblock's own sentence already covers the case: `breaksTag` and `assertX
 name a document of their own that reads with zero issues and is refused anyway. This is the third.
 The cost is bounded to the class and the bound is pinned: a FHIR-rooted document still round-trips
 byte-identically, a root declaring **no** namespace is still read as FHIR and still written, an
-**unbound**-prefix root is still modeled under its verbatim tag and still written, and
-`serializeResource` emits every one of them, this class included.
+**unbound**-prefix root is still modeled under its verbatim tag and was still written (its write is
+refused since 2026-09-24, on `UNSERIALIZABLE_PREFIXED_NAME` at the tag sites and never by this
+refusal), and `serializeResource` emits every one of them, this class included.
 
 ### The class, which is one of the two arms of the root's own flag
 
 `rootVocabularyIsForeign` fires when the root RESOLVED to a namespace that is neither FHIR's nor
 none at all, by a default declaration or a bound prefix. It deliberately does not cover the other
 arm of `rootIsForeign`, the unbound prefix: that root reads differently in every respect and closing
-its round trip is `FHIR-UNBOUND-PREFIX-ROUNDTRIP`, whose deferral holds and whose own pins must red
-before it moves. **The read is untouched.** Nothing was widened: the marker records, on the model, a
+its round trip is `FHIR-UNBOUND-PREFIX-ROUNDTRIP`, whose deferral held until 2026-09-24, when its
+tag-site route closed and its own pins went red in the same change (the section above this one).
+**The read is untouched.** Nothing was widened: the marker records, on the model, a
 position the reader was already reporting, so the read window and the report window are still the
 same window.
 
@@ -792,8 +899,9 @@ the report is raised again, so refusing them would withdraw a round trip that wo
 finding. The refusal is raised **last** of the seven, so nothing that already reported another code
 moves onto it. **`readObservationValue` still reads nothing out of the wrapper**, and that is the
 remedy, not a limitation: picking a member is authoring a dose. `serializeResource` is untouched and
-that route stays open. The phase's **unbound-prefix** residual is NOT touched by this and stays open
-with its own remedy; (b) the JSON reader still does not model a nested array **as an
+that route stays open. The phase's **unbound-prefix** residual was NOT touched by this; its
+tag-site route CLOSED 2026-09-24 with its own remedy (`UNSERIALIZABLE_PREFIXED_NAME`, the first
+section of this file) and its `div`-value route stays open; (b) the JSON reader still does not model a nested array **as an
 element**, and deliberately never will, but `[["x"]]` no longer loses the inner value: it is kept
 as text and read with `nestedArrayContent()` (`FHIR-NESTED-ARRAY-PRESERVATION`, above). (c) The
 **THE ARRAY ROUTE** does not launder read -> write -> read **through the JSON writer**: the writer
@@ -1178,7 +1286,9 @@ than claimed closed; the **unbound**-prefix root is a different arm and is untou
 compares the expanded name, so the merge is reported rather than silent, but `serializeResourceXml`
 drops the bindings and the report is gone on the re-read. The merge itself still happens,
 deliberately; see
-[`#fhir-writer-authors-values-2026-08-05`](#fhir-writer-authors-values-2026-08-05).
+[`#fhir-writer-authors-values-2026-08-05`](#fhir-writer-authors-values-2026-08-05). **The round
+trip CLOSED 2026-09-24**: that write is refused on `UNSERIALIZABLE_PREFIXED_NAME`, so no output is
+left to re-read without the report (the first section of this file).
 **(iii) AND (iv) WERE PINNED BY TESTS (2026-08-05), AND THE REASON THEY NEEDED TO BE IS THE
 LESSON.** An audit of this file against the test tree found three residuals whose prose said
 "pinned by a test" or read as though it did, with no test anywhere: (iv) here, (iii) here (only the
@@ -1245,7 +1355,8 @@ which is **not namespace-well-formed**, so a conformant parser rejects the write
 binding was never modeled, so the remedies are (a) carry namespaces in the model or (b) refuse any
 property name with a colon, which withdraws a capability for a shape that reads `valid: true`. Both
 are larger decisions than the defect, and this item's standing instruction was not to let the remedy
-outgrow it. **Still open.**
+outgrow it. **Still open.** (**CLOSED 2026-09-24 by (b)**, on a code of its own,
+`UNSERIALIZABLE_PREFIXED_NAME`: the first section of this file. (a) is not taken.)
 
 **AND IT REOPENS THE REBOUND-PREFIX HALF, RESIDUAL (iv), ACROSS ONE ROUND TRIP. NOT ROUTE 3, WHICH
 SURVIVES.** Measured: the narrative `div` is carried opaquely by `narrativeSource`, which
@@ -1472,7 +1583,9 @@ Still open, and none of them moved here: a scalar beside a nested array (**still
 since 2026-08-05 its text is preserved and handed back, so the finding survives a **JSON** round
 trip; through the XML writer it is still `<name/>` and both the value and the finding go), a
 `_`-sibling discarded whole, a foreign child of a valued primitive, character data at the two
-`flagStrayText` sites that have no value slot, an unbound prefix, and a `<DIV>` wrapper. The
+`flagStrayText` sites that have no value slot, an unbound prefix (still read under its verbatim tag;
+since 2026-09-24 its XML write is refused at the tag sites rather than emitted unbound, and the
+`div`-value route of it is still written), and a `<DIV>` wrapper. The
 `String.trim()` whitespace gap is unchanged too: character data made only of U+00A0, U+FEFF and
 their neighbours is still dropped with neither a flag nor a marker, so nothing here reads it either.
 
@@ -1538,6 +1651,10 @@ whose VALUE this reader drops (`<comparator>&lt;</comparator>` still reports the
 presence of the KEY is the trigger). Pinned per element in `test/modifier-elements-xml.test.ts`.
 
 ### `FHIR-UNBOUND-PREFIX-ROUNDTRIP` (2026-08-07)
+
+**Superseded on one route, 2026-09-24:** the deferral below held until then; the tag-site route is
+now refused on `UNSERIALIZABLE_PREFIXED_NAME` (remedy (b)), recorded in the first section of this
+file. What follows is left as it was taken.
 
 **THE DEFERRAL STANDS, AND MEASURING IT FOUND A STRICTLY WORSE DEFECT IN THE SAME FUNCTION.** The
 item asked whether `#59`'s deferral of the unbound prefix still holds. It does, unchanged, on the
@@ -1735,7 +1852,10 @@ universal.** A sentence about "the writer" is a claim over every branch it has.
 - **The named residual itself.** Group 1 above, `#59`'s deferral, unchanged. Pinned in
   `test/xml-tag-name.test.ts` ("declared gap, still written") as a characterization test over the
   gap, and still pinned in `test/xml.test.ts` for the rebound-prefix round trip. Closing it MUST red
-  both.
+  both. **CLOSED 2026-09-24 for the names in group 1 that carry a colon (`p:x`, `:x`, `a:b:c`), and
+  both went red in that change**: those rows moved out of "declared gap, still written" and are
+  asserted refused on `UNSERIALIZABLE_PREFIXED_NAME`, and the rebound-prefix test is rewritten over
+  the same document. The colon-free rows of group 1 are still written and still pinned.
 - **🔴 A `div` PROPERTY IS WRITTEN BACK AS RAW MARKUP, AND IT IS A FABRICATION ROUTE STRICTLY WORSE
   THAN THE ONE THIS SLICE CLOSED. `PRE-EXISTING`, byte-identical at `e2e5965`, STOP-THE-LINE, its own
   item.** Found by the pass-1 gate while refuting this slice's prose, which had claimed the writer
@@ -1784,6 +1904,15 @@ universal.** A sentence about "the writer" is a claim over every branch it has.
   re-reads differently. Untouched.
 
 ### Singleton-wrapper laundering
+
+**CLOSED, on both of its forms, and this section read `PRE-EXISTING` after both closures until
+2026-09-24.** The tree is the evidence, not the paragraph that follows. (e) is refused by
+`UNSERIALIZABLE_ARRAY_WRAPPER` (2026-08-08), pinned the other way in
+`test/array-wrapped-scalar.test.ts` ("no longer launders it across the format boundary: the XML
+writer refuses"). Its `value[x]` form, which that window did not reach, is refused by
+`UNSERIALIZABLE_CHOICE_WRAPPER` (2026-09-22), pinned in `test/array-wrapped-scalar.test.ts`
+(describe "an array-wrapped `value[x]` choice") and `test/xml-array-wrapper.test.ts` ("refuses the
+write on its own stable code, naming the position"). What the section said before, as it was taken:
 
 (e) `PRE-EXISTING`, and the one to pick up first: `serializeResourceXml` **normalizes a singleton
 wrapper away** (JSON `{"status":["entered-in-error"]}` -> `<status value="entered-in-error"/>` ->

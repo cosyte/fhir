@@ -856,9 +856,9 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   report is the one that covers the narrative case.
 - **`serializeResourceXml`** emits compact FHIR XML that round-trips a spec-clean document
   **byte-for-byte** (decimals byte-exact, never through a `number`). **Its output is not
-  _unconditionally_ spec-clean**: a prefixed name is written with no declaration to bind it and a
-  non-conformant name verbatim, so `<v:x value="1"/>`, `<a&b/>` and `<1abc/>` are all emitted, and the
-  byte-for-byte claim is scoped to a spec-clean input (a `<div>x</div>` carrying no XHTML namespace
+  _unconditionally_ spec-clean**: a name with no colon that is not a conformant XML name is written
+  verbatim, so `<a&b/>` and `<1abc/>` are emitted (a name carrying a colon is refused instead, below),
+  and the byte-for-byte claim is scoped to a spec-clean input (a `<div>x</div>` carrying no XHTML namespace
   comes back as `<div xmlns="http://hl7.org/fhir">x</div>`, the FHIR namespace rather than the XHTML
   one the conformant repair would use). It throws `FhirSerializeError`
   rather than emit a model the reader marked as having lost character data, so that finding cannot
@@ -876,8 +876,9 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   not the line**: `<status value="final"/>` is one well-formed element, and writing it for a property
   named `div` authors a status. `serializeResource` carries the string as a string and is the route
   that stays open. Passing the check is not a claim that the round trip is lossless from there: a
-  root whose prefix nothing binds is accepted and re-reads as a different property, the same
-  unbound-prefix gap named above for element names.
+  root whose prefix nothing binds (`<v:div>x</v:div>`) is accepted and re-reads as a different
+  property. That is the unbound-prefix gap reached through a value, and it stays open: the colon
+  refusal below checks names at tag positions, and this branch writes a string.
 - **A shape only FHIR JSON can spell is refused rather than emitted as an empty element**
   (`UNSERIALIZABLE_JSON_ONLY_SHAPE`). The JSON reader marks four positions FHIR JSON gives no meaning
   to and keeps what the sender wrote there, so `serializeResource` hands it back and re-reading the
@@ -986,6 +987,27 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   trip. `serializeResource` emits a non-string `resourceType` through its ordinary path and is the
   route that stays open. **Not** closed by it: a JSON decimal still comes back from XML as a string,
   and `Observation.value[x]` is still outside the array-wrapper window.
+- **A name carrying a colon is refused rather than written with its prefix unbound**
+  (`UNSERIALIZABLE_PREFIXED_NAME`). XML reads a colon in an element name as a namespace prefix, and
+  Namespaces in XML 1.0 requires every prefix other than `xml` and `xmlns` to be declared. The model
+  carries no namespace bindings, so this writer has nothing to declare one with, and it used to write
+  the name verbatim: `<v:x value="1"/>`, `<:x/>`, `<a:b:c/>`, `<xmlns:x/>`, and a root read as
+  `<v:Observation>` written back as `<v:Observation xmlns="http://hl7.org/fhir">`. A conformant parser
+  rejects every one of those documents. This library's own re-read accepted them, and lost something
+  on the way: a prefix rebound between siblings (`<p:x xmlns:p="urn:a"/>` beside
+  `<p:x xmlns:p="urn:b"/>`) reads with `MIXED_XML_SPELLING`, and after one write and one re-read that
+  report was gone. The check runs at every tag position at every depth, including a resource
+  composed into `contained` or `Bundle.entry.resource` after it was read. **One exemption**: `xml:`
+  followed by a local part with no colon in it is written, because the `xml` prefix is bound by
+  definition; `xmlns:x` is refused. **It withdraws an XML write from documents that read
+  `valid: true`**, which the foreign-root refusal already does: `{"resourceType":"Patient","p:x":"v"}`
+  reads with an empty issue list, validates `valid: true`, and is refused. Declaring a binding instead would author a namespace the sender
+  never sent, and for a root whose prefix nothing bound there is no namespace to declare at all.
+  Every earlier refusal is raised first, so a name that both carries a colon and breaks the tag stays
+  `UNSERIALIZABLE_ELEMENT_NAME`. The read is unchanged, and `serializeResource` writes these names
+  as JSON strings and is the route that stays open. **Not** closed by it: a name with no colon that is
+  not a conformant XML name (`a&b`, `1abc`) is still written, and a `div` string whose own markup
+  carries an unbound prefix is still written by the `div` branch, as above.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).
