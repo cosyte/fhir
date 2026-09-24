@@ -8,11 +8,42 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **A model name carrying a colon is now REFUSED by the XML writer rather than written with its
+  prefix bound to nothing** (the unbound-prefix residual, at the tag sites; its route through a
+  `div` value is not taken here and stays open and pinned). XML reads a colon in an element name as a
+  namespace prefix and the model carries no namespace bindings, so `serializeResourceXml` wrote the
+  name verbatim with nothing to declare it: `<v:x value="1"/>`, `<:x/>`, `<a:b:c/>`, `<xmlns:x/>`,
+  and a root read as `<v:Observation>` written back as `<v:Observation xmlns="http://hl7.org/fhir">`.
+  A conformant parser rejects every one of those documents (Namespaces in XML 1.0 §3, §5, §7). This
+  library's own re-read accepted them and lost a finding on the way: a prefix rebound between
+  siblings reads with `MIXED_XML_SPELLING`, and after one write and one re-read that report was gone.
+  `serializeResourceXml` now throws `FhirSerializeError` with the new
+  `UNSERIALIZABLE_PREFIXED_NAME`, checked at every tag position at every depth, including a resource
+  composed into `contained` or `Bundle.entry.resource` after it was read, and raised after every
+  refusal the writer already raised, so no model that drew one of those moves onto it and a name that
+  both carries a colon and breaks the tag stays `UNSERIALIZABLE_ELEMENT_NAME`, whose meaning is
+  unchanged. **One exemption**: `xml:` followed by a colon-free local part is written, because that
+  prefix is bound by definition; `xmlns:x` is refused. The message carries no colon and the
+  locations withhold the name, so no prefix, namespace URI or value reaches a log. **Refusing, not
+  declaring**: a root whose prefix nothing bound has no namespace to declare, and writing one would
+  author a vocabulary the sender never sent; carrying the source's bindings in the model is not taken
+  and stays available. **This withdraws an XML write from documents that read `valid: true`**, the
+  cost the foreign-root refusal already pays: `{"resourceType":"Patient","p:x":"v"}` reads with an
+  empty issue list and is refused. The read path is unchanged and `serializeResource` is
+  byte-identical, the route that stays open. Still written, and declared: a colon-free name that is
+  not a conformant XML name (`a&b`, `1abc`), and a narrative `div` whose own markup carries an
+  unbound prefix. The characterization tests that pinned the gap as written, in `test/xml.test.ts`
+  and `test/xml-tag-name.test.ts`, went red in this change and were rewritten over the same
+  documents. Measured against the base pin over the read differential: no `valid` or
+  `safeToSummarize` false-to-true flip, no retraction, negation, read diagnostic or validation finding
+  lost, nothing newly throwing, and no reading moved. **Those zeros are a floor and not a proof**:
+  the corpus holds no document the base wrote that reaches the new refusal, so what grades this
+  change are the tests above, observed red before green.
 - **An array wrapper around an `Observation.value[x]` choice is now REPORTED on a stable code and
   REFUSED by the XML writer, so a dose that reads as unreadable in JSON is no longer laundered into a
   confident number by one write and one re-read** (`fhir#XML-RESIDUAL-1`, the array-wrapped `value[x]`
-  residual; the unbound-prefix one that phase also covers is not taken here and stays open and
-  pinned). Array-wrapping every element is ordinary generic XML-to-JSON converter output, so this is
+  residual; the unbound-prefix one that phase also covers is not taken here, and is taken at its tag
+  sites by the entry above). Array-wrapping every element is ordinary generic XML-to-JSON converter output, so this is
   not exotic input.
   `{"resourceType":"Observation","status":"final","valueQuantity":[{"value":5,"system":"http://unitsofmeasure.org","code":"mg"}]}`
   read with the variant reported and `quantity` undefined, which failed **safe** as far as it went,
@@ -118,7 +149,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   reads `valid: true`**, which is a cost two refusals beside it already pay and which is bounded to
   this class: a FHIR-rooted document still round-trips byte-identically, a root declaring no
   namespace at all is still read as FHIR and still written, an unbound-prefix root is still modeled
-  under its verbatim tag and still written, and `serializeResource` emits every one of them
+  under its verbatim tag and is outside this refusal (its XML write is refused by
+  `UNSERIALIZABLE_PREFIXED_NAME`, above, not by this code), and `serializeResource` emits every one of them
   unchanged. That last point is a statement about the JSON writer's output and **not** a claim that
   the JSON channel keeps the flag: it does not, and that half stays declared open. The
   characterization test that pinned the gap was rewritten to pin the refusal and was observed red in

@@ -154,20 +154,23 @@ Unless noted:
   rule is the comparison, and this line used to break it with an enumeration of its own. **Do not
   narrow it back to `element.name`**, and **state the predicate, not which documents come out of
   it**: three gate passes running refuted a summary of that set, which depends on the parent's
-  namespace. Closed for the READ only: `serializeResourceXml` drops the bindings.
+  namespace. Closed for the READ; `serializeResourceXml` still has no bindings to write, so since
+  2026-09-24 it **refuses** that write (`UNSERIALIZABLE_PREFIXED_NAME`) rather than lose the report.
   [`#fhir-writer-authors-values-2026-08-05`](documentation/agent-notes.md#fhir-writer-authors-values-2026-08-05)
 - **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
   slice, and do not restate a gap as a claim. **Pinned by a test:** the **empty** `_`-sibling and a
   `_`-object's unreadable member,
-  the **unbound** prefix, the `<DIV>` wrapper, `.@name`, the §2.6.1
+  the **unbound** prefix through a `div` VALUE (`test/xml-tag-name.test.ts`; its tag-site route is
+  CLOSED below), the `<DIV>` wrapper, `.@name`, the §2.6.1
   value-absent primitive (`test/xml.test.ts`, "declared residuals, pinned so they cannot move in
   silence"). **Each of those is a characterization test over a gap:
   CLOSING one MUST red it, in the same change.** Not theoretical: every closure below red one.
   **"Pinned by a test" is load-bearing prose, so never write it without opening the test**: such
   sentences have been false for days here, and the next reader does not re-check.
   - **CLOSED 2026-08-05:** the scalar beside a nested array, and the prefix rebound between siblings
-    **on the read**. The rebound prefix keeps a characterization test over the half still open: the
-    report does not survive `serializeResourceXml`, which drops the binding.
+    **on the read**. The rebound prefix kept a characterization test over the half left open (the
+    report did not survive `serializeResourceXml`, which drops the binding), and that half CLOSED
+    2026-09-24 by refusing the write: the test went red and was rewritten, in the same change.
   - **CLOSED 2026-08-07: the `div` FORGERY.** A `div` string is written only when it spells exactly
     one element named `div`, checked at the branch splicing it in. **THE CHECK IS ON THE WRITE; the
     reader is unchanged, so no XML document reaches it and the read differential cannot grade it**
@@ -202,17 +205,33 @@ Unless noted:
     `FhirComplex.foreignRoot`). The model carries a **marker, never the namespace**: the URI is the
     document content this residual is about, and a marker cannot leak it. **XML ONLY, and that is not
     a claim the JSON channel keeps the flag** - it does not, `serializeResource` is byte-identical to
-    base, and that leg is declared open. **DO NOT WIDEN IT** to the other arm of `rootIsForeign`: an
-    **unbound**-prefix root and a **no-namespace** root are each accepted on purpose and each stay
-    written. It **withdraws a round trip from a document that reads `valid: true`**, the third
+    base, and that leg is declared open. **DO NOT WIDEN IT** to the other arm of `rootIsForeign`: a
+    **no-namespace** root is accepted on purpose and stays written, and an **unbound**-prefix root is
+    outside this refusal too: its write is refused since 2026-09-24, but at the TAG SITES on
+    `UNSERIALIZABLE_PREFIXED_NAME` (below), never through the marker. It **withdraws a round trip
+    from a document that reads `valid: true`**, the third
     refusal to pay that (`breaksTag` and the untaggable type are the others), and it is raised
     **last** so nothing that already reported another code moves onto it.
     [`#foreign-root-laundering`](documentation/agent-notes.md#the-foreign-root-laundering-closed-2026-08-27)
-  - **STILL OPEN; deferral RE-MEASURED 2026-08-07 and it HOLDS.** Only ONE of the two remedies
-    withdraws a capability. **Beside it,
+  - **CLOSED 2026-09-24: the unbound-prefix round trip AT THE TAG SITES**
+    (`UNSERIALIZABLE_PREFIXED_NAME`). The deferral RE-MEASURED 2026-08-07 held until then, and only
+    ONE of its two remedies withdraws a capability: that one, (b) refuse the shape, is what shipped;
+    (a) model the binding is NOT taken (it cannot close an unbound root without AUTHORING a namespace)
+    and stays available. **ANY colon at a tag position, ONE exemption: `xml:` + a colon-free local
+    part** (bound by definition); `xmlns:x`, `:x`, `a:b:c` are refused. **A NEW CODE, NOT A WIDER
+    `UNSERIALIZABLE_ELEMENT_NAME`**, whose line below is untouched. **CHECKED IN `tag()`, NEVER A
+    PRE-PASS; RAISED LAST OF ALL**, so nothing that drew a code before moves onto it (`a b:c` stays
+    the name code). It **withdraws a write from `valid: true` models**, the fourth refusal to pay
+    that. Read path and `serializeResource` untouched.
+    [`#unbound-prefix-closed`](documentation/agent-notes.md#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24)
+  - **STILL OPEN: the same residual through a `div` VALUE.** The `div` branch writes a string, not a
+    name, so `<v:div>x</v:div>` is still written and re-reads as a property named `v:div`. **DO NOT
+    fold it into the tag-site check.** A colon-free non-name (`a&b`, `1abc`) is still written too,
+    and is a separate gap. **Beside it,
     `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as
     **different elements** and forged a `status`). **The line is "does OUR round trip survive it",
-    NOT the XML `Name` production. DO NOT WIDEN IT:** `p:x`, `a&b`, `1abc` round-trip today.
+    NOT the XML `Name` production. DO NOT WIDEN IT:** `a&b`, `1abc` round-trip today; `p:x` did too,
+    and is refused on its OWN code (above), not this one.
     **"Unreachable from XML" is FALSE: a stripped prefix fronts a `!`.**
     [`#fhir-unbound-prefix-roundtrip-2026-08-07`](documentation/agent-notes.md#fhir-unbound-prefix-roundtrip-2026-08-07) ·
     [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open) ·
