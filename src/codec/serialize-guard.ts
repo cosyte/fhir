@@ -7,8 +7,8 @@
  * harm is a name reaching a tag position, and JSON escapes a member name so no name reaches this
  * refusal there. {@link carriesUndeclarablePrefix} is XML-only for the same reason: a colon is a
  * namespace prefix only in an XML name, and JSON spells the member name as a string.
- * {@link refuseUnserializableDivMarkup} is raised by the XML writer for the same
- * reason, at its one raw-markup site: JSON carries the string as a string.
+ * {@link refuseUnserializableDivMarkup} and {@link refuseUnboundDivPrefixes} are raised by the XML
+ * writer for the same reason, at its one raw-markup site: JSON carries the string as a string.
  * {@link assertXmlSerializable}, {@link assertXmlArrayWrapper}, {@link assertXmlValueChoiceWrapper}
  * and {@link assertXmlResourceType} are
  * XML-only for the mirror-image reason: the shapes they refuse are ones the JSON writer writes, and
@@ -23,12 +23,14 @@
  * recognises anything new or invents a value. **It is NOT true that none of them changes a document
  * that reads clean** -- `breaksTag`, {@link assertXmlResourceType} and
  * {@link carriesUndeclarablePrefix} each name a document of their own that reads with zero issues and
- * is refused anyway; that clause was carried here as a universal and is cut rather than reworded.
+ * is refused anyway, and so does {@link refuseUnboundDivPrefixes}; that clause was carried here as a
+ * universal and is cut rather than reworded.
  *
  * **This module is a list of the refusals it implements, NOT a closed account of what a writer can
  * author.** Two of the predicates deliberately live somewhere else rather than being copied here,
  * because a copy would be free to disagree with the thing it copies: `emitsOneDivElement` sits in
- * `../xml/write.js` next to the code that emits the markup, and the cardinality window
+ * `../xml/write.js` next to the code that emits the markup (and `bindsEveryPrefix`, the question that
+ * branch asks of the same parse next, sits beside it for the same reason), and the cardinality window
  * {@link assertXmlArrayWrapper} refuses on is the safety layer's own walk in `../safety/status.js`,
  * the same walk that reports it to a caller. {@link assertXmlValueChoiceWrapper} follows that rule
  * at the one position the safety layer's walk does not reach: its window is the value layer's own,
@@ -198,6 +200,44 @@ export const SERIALIZE_ERROR_CODES = {
    * leaves.
    */
   UNSERIALIZABLE_PREFIXED_NAME: "UNSERIALIZABLE_PREFIXED_NAME",
+  /**
+   * The model holds, at one or more `div` locations, a string the XML writer would splice in as raw
+   * markup that spells the one `div` element the property names, and whose markup names a namespace
+   * prefix, on an element or on an attribute, that no declaration inside the string binds. **XML
+   * only**: `serializeResource` carries the string as a string, so this refusal never reaches it and
+   * that route stays open.
+   *
+   * Written anyway, `<v:div>x</v:div>` put a prefix nothing declared into the output, which a
+   * conformant XML parser rejects, and this library's own re-read of that output turned the narrative
+   * into a property named `v:div`: the narrative gone after one write and one read, with no
+   * diagnostic at either end. **Not {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME}**,
+   * whose published meaning is a name at a tag position, and **not
+   * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP}**, whose question is which elements the
+   * string contributes: a string that fails that question keeps that code whatever prefix it names.
+   *
+   * See `bindsEveryPrefix` in `../xml/write.js` for the exact predicate and what it leaves.
+   *
+   * @example
+   * ```ts
+   * import {
+   *   FhirSerializeError,
+   *   SERIALIZE_ERROR_CODES,
+   *   parseResource,
+   *   serializeResourceXml,
+   * } from "@cosyte/fhir";
+   * const { resource } = parseResource(
+   *   '{"resourceType":"Patient","text":{"status":"generated","div":"<v:div>x</v:div>"}}',
+   * );
+   * try {
+   *   serializeResourceXml(resource);
+   * } catch (err) {
+   *   if (err instanceof FhirSerializeError && err.code === SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_PREFIX) {
+   *     err.locations; // ["Patient.text.div"]
+   *   }
+   * }
+   * ```
+   */
+  UNSERIALIZABLE_DIV_PREFIX: "UNSERIALIZABLE_DIV_PREFIX",
 } as const;
 
 /** Discriminant union of every {@link SERIALIZE_ERROR_CODES} value. */
@@ -920,8 +960,9 @@ const XML_PREFIX = "xml:";
  * colon that is still not a conformant XML name (`a&b`, `1abc`) is written as it always was, and so
  * is the local part after `xml:` (`xml:1abc` is written). It is checked at tag positions only: a
  * `div` property is written as its own raw string at a different site, so a narrative whose markup
- * carries an unbound prefix (`<v:div>x</v:div>`) is still written, and re-reads as a different
- * property.
+ * carries an unbound prefix (`<v:div>x</v:div>`) never reaches this predicate. That route is refused
+ * at the `div` branch instead, on {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_PREFIX} and by a
+ * predicate of its own that reads the declarations inside the string, which this one has none of.
  *
  * @param name - The tag name about to be written.
  * @returns `true` when the name must be refused.
@@ -944,10 +985,11 @@ export function carriesUndeclarablePrefix(name: string): boolean {
  * is reported at the element wrapping it, as the name refusal reports one, so there it has no
  * segment at all.
  *
- * **Raised last**, after every refusal the XML writer raised before it existed, so a model that also
+ * **Raised after every refusal the XML writer raised before it existed**, so a model that also
  * trips one of those keeps the code it already reported and no case moves onto this one: a name
  * that carries a colon AND breaks the tag stays
- * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}.
+ * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}. Only {@link refuseUnboundDivPrefixes}
+ * is raised after it.
  *
  * @param locations - The bounded locations whose name is refused, deduplicated, in walk order.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME}.
@@ -957,6 +999,34 @@ export function refuseUndeclarablePrefixes(locations: readonly string[]): never 
   throw new FhirSerializeError(
     `cannot serialize to XML, because ${String(locations.length)} location(s) carry a name with a colon, which XML reads as a namespace prefix and this model carries no binding to declare, so the output would not be namespace-well-formed; this refusal does not reach serializeResource`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME,
+    locations,
+  );
+}
+
+/**
+ * Refuse to serialize a model whose `div` property carries a string that passed the one-element
+ * check and whose markup names, on an element or on an attribute, a prefix no declaration inside the
+ * string binds.
+ *
+ * **Neither the message nor a location echoes the string or its prefix, and the message carries no
+ * colon, no `<` and no `>`.** The string is document content, and so is its prefix, which on a
+ * document read from XML stands for a vendor namespace. A `div` location is built from names the
+ * model already carries, bounded by `childPath` exactly as every other write-path location is, so
+ * the string never reaches one. A segment whose name fails the published shape still renders as
+ * `WITHHELD`, the library's own marker for a name it will not echo, which is not document content.
+ *
+ * **Raised last of all**, after every refusal the XML writer raised before it existed, the colon
+ * refusal at the tag sites included, so a model that also trips one of those keeps the code it
+ * already reported and no case moves onto this one.
+ *
+ * @param locations - The bounded `div` locations refused, deduplicated, in walk order.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_PREFIX}.
+ * @internal
+ */
+export function refuseUnboundDivPrefixes(locations: readonly string[]): never {
+  throw new FhirSerializeError(
+    `cannot serialize to XML, because ${String(locations.length)} div location(s) carry markup naming a namespace prefix that no declaration inside the string binds, so the output would not be namespace-well-formed; serializeResource carries the string as a string, so this refusal never reaches it`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_PREFIX,
     locations,
   );
 }

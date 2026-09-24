@@ -8,6 +8,32 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **A narrative `div` whose own markup names a prefix nothing inside it binds is now REFUSED by the
+  XML writer rather than written verbatim** (`fhir#XML-RESIDUAL-1`, the unbound-prefix residual's
+  route through a `div` value, the one the tag-site entry below left open and pinned). The `div`
+  branch splices its string into the document, so
+  `{"resourceType":"Patient","text":{"status":"generated","div":"<v:div>x</v:div>"}}` came back as
+  `…<text><status value="generated"/><v:div>x</v:div></text>…`: a document a conformant parser
+  rejects (Namespaces in XML 1.0 §5), which this library re-read with the narrative turned into a
+  property named `v:div`, no diagnostic at either end. `serializeResourceXml` now throws
+  `FhirSerializeError` with the new `UNSERIALIZABLE_DIV_PREFIX` when a `div` string that passes the
+  existing one-element check names, on any element or attribute, a prefix no declaration inside the
+  string binds; `xml` is bound by definition and `xmlns` / `xmlns:*` attributes are declarations. The
+  check reads the parse the one-element check already made, and a string failing that check keeps
+  `UNSERIALIZABLE_DIV_MARKUP`. **A new code, raised last of all**, after `UNSERIALIZABLE_PREFIXED_NAME`,
+  so no model that drew a code before moves onto it; the message and the `div`'s bounded location
+  carry no colon, no markup and no part of the string. **This withdraws an XML write from documents
+  that read `valid: true`**, and for an inner-element or attribute prefix from a model this library
+  round-tripped; a prefix a conformant document bound on an ancestor of the `div` is not refused,
+  because the reader carries the declaration into the string. The read path, validation and safety
+  layers are unchanged and `serializeResource` is byte-identical, the route that stays open. The two
+  characterization tests that pinned the route as written, in `test/xml-tag-name.test.ts`, went red
+  in this change and were rewritten over the same documents; head's tests over the base pin's `src/`
+  red 28. Measured against the base pin over the read differential: no reading moved, no `valid` or
+  `safeToSummarize` false-to-true flip, no retraction, negation, read diagnostic or validation
+  finding lost, nothing newly throwing, and the one refusal introduced is `UNSERIALIZABLE_DIV_PREFIX`.
+  **Those zeros are a floor**: no corpus document reaches the new refusal. Still open and declared: a
+  colon-free name that is not a conformant XML name (`a&b`, `1abc`).
 - **The quickstart's first example and a new README usage example are executed by the test suite.**
   Until now nothing in this repository ran a documented example. The quickstart's first step now
   reads its synthetic Observation in a runnable block with the `DECIMAL_PRECISION_AT_RISK`

@@ -9,12 +9,126 @@ used to sit in `CLAUDE.md`, in its original order, with headings added so it can
 section here that carries the incident it came from. These are clinical-safety lessons that each
 cost a defect or a refuted gate pass to learn: **relocate them, never delete them.**
 
+## The unbound-prefix round trip, closed through a `div` value (2026-09-24)
+
+The route of the unbound-prefix residual that the tag-site closure below left declared open: a
+narrative `div` VALUE whose own markup names a prefix nothing in the string binds. Closed by a write
+refusal on a code of its own, `UNSERIALIZABLE_DIV_PREFIX`. The colon-free non-name gap beside it is
+a different gap and is not touched.
+
+### The defect, measured at `da87697` before anything was changed
+
+`serializeResourceXml` splices a `div` string in verbatim once it passes the one-`div`-element
+check (`emitsOneDivElement`), and that check compares the root's local name only. So:
+
+    in  {"resourceType":"Patient","text":{"status":"generated","div":"<v:div>x</v:div>"}}
+    out <Patient xmlns="…fhir"><text><status value="generated"/><v:div>x</v:div></text></Patient>
+
+A conformant parser rejects that document, because `v` is bound to nothing, and this library's own
+re-read of it carries a property named `v:div` under `text` where `Narrative.div` was: the narrative
+gone after one write and one read, with no diagnostic at either end.
+`<div xmlns="…xhtml"><v:p>x</v:p></div>` and `<div xmlns="…xhtml"><p v:a="1">x</p></div>` were
+written the same way; this library's re-read returned each string unchanged, and a conformant parser
+rejects each output. All three read with an empty issue list, `valid: true` and
+`safeToSummarize: true`. The inner-prefix string read from XML
+(`<Patient xmlns="…fhir"><text><status value="generated"/><div xmlns="…xhtml"><v:p>x</v:p></div></text></Patient>`,
+zero issues) was written back verbatim as well.
+
+### The remedy, and where the line is
+
+**Namespace-well-formedness of the spliced markup, the line the tag-site closure drew.** Namespaces
+in XML 1.0 §5 (a prefix other than `xml` or `xmlns` MUST have been declared on the element or an
+ancestor), §7 (zero or one colon), §3 (`xml` bound by definition; no element name with the prefix
+`xmlns`). The ancestors that count are the ones INSIDE the string, because the string is all the
+branch splices in and the skeleton the writer authors around it declares no prefix.
+`bindsEveryPrefix` in `src/xml/write.ts` walks the tree `readRawXml` already parsed for the
+one-element check, which now hands that root back instead of a boolean so the string is parsed once:
+every element and attribute name carrying a colon must split at its one colon into a non-empty local
+part and a prefix that is `xml` or that an `xmlns:p` attribute on that element or an enclosing one
+binds. `xmlns` and `xmlns:*` attributes are declarations and are not asked. A declaration with an
+empty value binds nothing (1.0 forbids it, 1.1 reads it as undeclaring), `xmlns` is never accepted as
+a prefix even when declared, and an empty prefix, an empty local part or a second colon is refused.
+An unbound prefix on an inner element or an attribute is refused as well as one on the root.
+
+**Asked only of a string that already passed the one-element check.** `<v:div>x</v:div><x/>` and
+`<v:p>x</v:p>` stay `UNSERIALIZABLE_DIV_MARKUP` at `Patient.text.div`, exactly as at the pin.
+
+**A new code, raised last of all.** Reusing `UNSERIALIZABLE_DIV_MARKUP` would move models onto an
+earlier code (it is raised second), and `UNSERIALIZABLE_PREFIXED_NAME`'s published meaning is a
+name at a tag position, which a published code may not stop meaning. The locations are collected at
+the `div` branch during the same walk and raised after the tag-site colon refusal, so every model
+that drew a code at the pin keeps it with the same locations: measured at the pin and asserted at
+head beside a colon-bearing name, a tag-breaking name, a second failing `div`, a JSON-only shape, an
+array wrapper, an untaggable type, a foreign root in the same Bundle and a `value[x]` wrapper, each
+with all three unbound strings. The message and the locations carry no colon, no `<`, no `>` and no
+part of the string; a location is the `div`'s bounded path, deduplicated, in walk order.
+
+### What it costs
+
+**It withdraws an XML write from models that read `valid: true`**, the fifth refusal to pay that
+(`breaksTag`, the untaggable type, the foreign root and the tag-site colon are the others), and for
+the inner-element and attribute spellings from models this library itself round-tripped. **An
+ANCESTOR-bound prefix is NOT withdrawn, and that rests on the reader**: `parseResourceXml` writes
+the declarations the `div` inherited and uses into the string it hands back, so
+`<Patient xmlns="…fhir" xmlns:h="…xhtml"><text><status value="generated"/><h:div>ok</h:div></text></Patient>`
+reads to `<h:div xmlns:h="…xhtml">ok</h:div>`, which binds its own prefix and is written and re-read
+as `Narrative.div`. Measured the same for a prefix an ancestor binds and an inner element or an
+attribute uses. **Change that reader behaviour and this refusal starts withdrawing conformant round
+trips.** `serializeResource` is byte-identical to the pin on every model above and is the route that
+stays open. The read path, validation, safety, profiles and terminology are untouched:
+`git diff --stat da87697 -- src/xml/read.ts src/validate src/safety src/profiles src/terminology`
+prints nothing.
+
+### Still open, and not folded in
+
+- **A colon-free name that is not a conformant XML name** (`a&b`, `1abc`, and the rest of that list
+  below), and the local part after `xml:` (`xml:1abc`). A different gap, still written;
+  `UNSERIALIZABLE_ELEMENT_NAME` is not widened onto it.
+- **The other accepted-is-not-lossless counterexamples of the `div` check**: the depth budget, the
+  inserted `xmlns` on an undeclared `<div>`, an XML declaration, a comment beside the root. Each is
+  written exactly as at the pin.
+- **What the new check does not ask**: whether a bound prefix names the namespace the sender meant,
+  two attributes expanding to one name (§6.3), a malformed declaration (`xmlns:` alone), and a local
+  part beyond its being non-empty and colon-free.
+- **Modeling namespace bindings on the model** (remedy (a)) is not taken, and **the JSON leg of the
+  foreign-root laundering** stays declared open.
+
+### What graded it
+
+The two characterization tests that pinned this route as written, in `test/xml-tag-name.test.ts`,
+were rewritten over the same documents: "AC-7(d): writes every div string in this block exactly as
+the pin did" keeps every row but `<v:div>x</v:div>`, which it now asserts refused, and "accepts a
+root whose prefix nothing binds, which re-reads as a different property" now asserts the refusal. No
+other test pinned an unbound-prefix `div` as written: the full suite was green at head with no
+further rewrite. Head's tests run over `da87697`'s `src/` in a scratch tree: **28 red**, exactly the
+two rewritten tests and the 26 added refusal and location tests (15 for the refusal, 11 for the
+locations). The 195 others pass there, including all 65 pin-comparison tests (the admitted set, the
+ancestor-bound read and write, the one-element-check precedence, the 24 precedence rows and the JSON
+byte-identity rows). A mutation matrix of 18 edits (the check removed, children or attributes not
+walked, raised before the tag-site or the JSON-only refusal, routed onto the markup code, asked
+before the local-name check, no dedup, no `xml` exemption, declarations ignored or not inherited, a
+colon in the message, the string in a location, an empty declaration binding, and each of the four
+name-shape guards) reddens the suite for all 18. The empty-declaration and empty-prefix mutations
+each survived a first run, and are graded by the test over the spellings no declaration can bind.
+
+`pnpm differential:read --base da87697`: 1195 documents, `readings moved 0`, `valid false -> true`
+0, `safeToSummarize false -> true` 0, retractions, negations, read diagnostics and validation
+findings lost 0, newly throwing 0. The same run with `--json` reports `refusalsIntroduced` as
+`["UNSERIALIZABLE_DIV_PREFIX"]`, and the text report's arm 4 prints `this run introduces 1 writer
+refusal(s): UNSERIALIZABLE_DIV_PREFIX`. **Those zeros are floors, not proof.** `readings moved 0`
+says no corpus document the pin wrote is refused at head, so the new refusal reaches none of them.
+The corpus does carry prefixed narratives (`escape-lt-in-uri` binds `V` on the root and uses it
+inside the `div`); the reader carries each binding into the string, so each is written as before,
+which is corpus evidence for the cost section above and not for the refusal. The corpus says nothing
+about how often a real vendor feed will draw this refusal.
+
 ## The unbound-prefix round trip, closed at the tag sites (2026-09-24)
 
 The last residual `test/xml.test.ts` still pinned as open under "declared residuals, pinned so they
 cannot move in silence", closed on its **tag-site** route by a write refusal,
 `UNSERIALIZABLE_PREFIXED_NAME`. Its **`div`-value** route is not closed and stays declared open
-(below). Remedy (b) of the two `FHIR-UNBOUND-PREFIX-ROUNDTRIP` re-measured; (a) is not taken.
+(below). **Closed since, on a code of its own: the section above.** Remedy (b) of the two
+`FHIR-UNBOUND-PREFIX-ROUNDTRIP` re-measured; (a) is not taken.
 
 ### The defect, measured at `49364a3` before anything was changed
 
@@ -85,7 +199,8 @@ a colon, which neither `elementName` nor `resourceTypeName` admits, so its own s
 - **The same residual through a `div` VALUE.** `<v:div>x</v:div>` is written by the `div` branch,
   which splices a string rather than writing a name at a tag position, so the colon refusal does not
   reach it; it re-reads as a property named `v:div`. Pinned in `test/xml-tag-name.test.ts` ("accepts
-  a root whose prefix nothing binds", and the `AC-7(d)` row), byte-identical to `49364a3`.
+  a root whose prefix nothing binds", and the `AC-7(d)` row), byte-identical to `49364a3`. **Closed
+  since**, on `UNSERIALIZABLE_DIV_PREFIX`, and both tests rewritten: the section above.
 - **A colon-free name that is not a conformant XML name** (`a&b`, `1abc`, `-lead`, `.lead`, `a"b`,
   `a'b`, `\v`, `\f`, `U+00A0`), and the local part after `xml:`. A different gap, still written.
 - **The JSON leg of the foreign-root laundering**, declared open by that closure; untouched.
@@ -900,8 +1015,10 @@ finding. The refusal is raised **last** of the seven, so nothing that already re
 moves onto it. **`readObservationValue` still reads nothing out of the wrapper**, and that is the
 remedy, not a limitation: picking a member is authoring a dose. `serializeResource` is untouched and
 that route stays open. The phase's **unbound-prefix** residual was NOT touched by this; its
-tag-site route CLOSED 2026-09-24 with its own remedy (`UNSERIALIZABLE_PREFIXED_NAME`, the first
-section of this file) and its `div`-value route stays open; (b) the JSON reader still does not model a nested array **as an
+tag-site route CLOSED 2026-09-24 with its own remedy (`UNSERIALIZABLE_PREFIXED_NAME`,
+[`#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24`](#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24))
+and its `div`-value route CLOSED after it (`UNSERIALIZABLE_DIV_PREFIX`,
+[`#the-unbound-prefix-round-trip-closed-through-a-div-value-2026-09-24`](#the-unbound-prefix-round-trip-closed-through-a-div-value-2026-09-24)); (b) the JSON reader still does not model a nested array **as an
 element**, and deliberately never will, but `[["x"]]` no longer loses the inner value: it is kept
 as text and read with `nestedArrayContent()` (`FHIR-NESTED-ARRAY-PRESERVATION`, above). (c) The
 **THE ARRAY ROUTE** does not launder read -> write -> read **through the JSON writer**: the writer
@@ -1288,7 +1405,8 @@ drops the bindings and the report is gone on the re-read. The merge itself still
 deliberately; see
 [`#fhir-writer-authors-values-2026-08-05`](#fhir-writer-authors-values-2026-08-05). **The round
 trip CLOSED 2026-09-24**: that write is refused on `UNSERIALIZABLE_PREFIXED_NAME`, so no output is
-left to re-read without the report (the first section of this file).
+left to re-read without the report
+([`#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24`](#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24)).
 **(iii) AND (iv) WERE PINNED BY TESTS (2026-08-05), AND THE REASON THEY NEEDED TO BE IS THE
 LESSON.** An audit of this file against the test tree found three residuals whose prose said
 "pinned by a test" or read as though it did, with no test anywhere: (iv) here, (iii) here (only the
@@ -1356,7 +1474,9 @@ binding was never modeled, so the remedies are (a) carry namespaces in the model
 property name with a colon, which withdraws a capability for a shape that reads `valid: true`. Both
 are larger decisions than the defect, and this item's standing instruction was not to let the remedy
 outgrow it. **Still open.** (**CLOSED 2026-09-24 by (b)**, on a code of its own,
-`UNSERIALIZABLE_PREFIXED_NAME`: the first section of this file. (a) is not taken.)
+`UNSERIALIZABLE_PREFIXED_NAME`:
+[`#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24`](#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24).
+(a) is not taken.)
 
 **AND IT REOPENS THE REBOUND-PREFIX HALF, RESIDUAL (iv), ACROSS ONE ROUND TRIP. NOT ROUTE 3, WHICH
 SURVIVES.** Measured: the narrative `div` is carried opaquely by `narrativeSource`, which
@@ -1475,6 +1595,9 @@ model tripping both keeps the code base already reported.
   whose prefix nothing binds IS accepted, and the emitted document re-reads it as a property named
   `v:div`: that is the separately declared unbound-prefix residual reached through a value, not this
   defect, and folding it in would have made this slice the fix for a class it had not measured.
+  (That residual CLOSED 2026-09-24 by a SECOND check at the same branch, on its own code, never by
+  widening this one:
+  [`#the-unbound-prefix-round-trip-closed-through-a-div-value-2026-09-24`](#the-unbound-prefix-round-trip-closed-through-a-div-value-2026-09-24).)
 - **Refusing rather than repairing**, for the same reason as a name: escaping authors a text node
   where the sender wrote markup, splicing authors elements, and `serializeResource` carries the
   string as a string, so the capability is routed rather than lost.
@@ -1652,9 +1775,12 @@ presence of the KEY is the trigger). Pinned per element in `test/modifier-elemen
 
 ### `FHIR-UNBOUND-PREFIX-ROUNDTRIP` (2026-08-07)
 
-**Superseded on one route, 2026-09-24:** the deferral below held until then; the tag-site route is
-now refused on `UNSERIALIZABLE_PREFIXED_NAME` (remedy (b)), recorded in the first section of this
-file. What follows is left as it was taken.
+**Superseded on both routes, 2026-09-24:** the deferral below held until then; the tag-site route is
+now refused on `UNSERIALIZABLE_PREFIXED_NAME` (remedy (b)),
+[`#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24`](#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24),
+and the `div`-value route on `UNSERIALIZABLE_DIV_PREFIX`,
+[`#the-unbound-prefix-round-trip-closed-through-a-div-value-2026-09-24`](#the-unbound-prefix-round-trip-closed-through-a-div-value-2026-09-24).
+What follows is left as it was taken.
 
 **THE DEFERRAL STANDS, AND MEASURING IT FOUND A STRICTLY WORSE DEFECT IN THE SAME FUNCTION.** The
 item asked whether `#59`'s deferral of the unbound prefix still holds. It does, unchanged, on the

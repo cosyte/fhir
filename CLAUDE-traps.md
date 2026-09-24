@@ -160,8 +160,7 @@ Unless noted:
 - **Declared open residuals**, among others recorded in the notes. Do not fold one into an unrelated
   slice, and do not restate a gap as a claim. **Pinned by a test:** the **empty** `_`-sibling and a
   `_`-object's unreadable member,
-  the **unbound** prefix through a `div` VALUE (`test/xml-tag-name.test.ts`; its tag-site route is
-  CLOSED below), the `<DIV>` wrapper, `.@name`, the §2.6.1
+  the `<DIV>` wrapper, `.@name`, the §2.6.1
   value-absent primitive (`test/xml.test.ts`, "declared residuals, pinned so they cannot move in
   silence"). **Each of those is a characterization test over a gap:
   CLOSING one MUST red it, in the same change.** Not theoretical: every closure below red one.
@@ -175,8 +174,9 @@ Unless noted:
     one element named `div`, checked at the branch splicing it in. **THE CHECK IS ON THE WRITE; the
     reader is unchanged, so no XML document reaches it and the read differential cannot grade it**
     (its own control is stale, firing on a clean tree). **DO NOT WIDEN IT** to the namespace or a
-    prefix bound in the string: an unbound-prefix root is accepted on purpose, the same residual
-    through a value. [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
+    prefix bound in the string: it passes an unbound-prefix root on purpose, and that residual is
+    refused by a SECOND check at the same branch, on its own code (CLOSED 2026-09-24, below).
+    [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
   - **CLOSED 2026-08-08: the array-wrapped `0..1` laundering** (`UNSERIALIZABLE_ARRAY_WRAPPER`).
     **THE WRITE PATH TAKES ITS CARDINALITY FROM `arrayWrappedScalars`' OWN WALK, NEVER A SECOND
     TABLE**, and refuses only what XML cannot spell back: **fewer than 2 items, plus ANY wrapper on
@@ -224,10 +224,22 @@ Unless noted:
     the name code). It **withdraws a write from `valid: true` models**, the fourth refusal to pay
     that. Read path and `serializeResource` untouched.
     [`#unbound-prefix-closed`](documentation/agent-notes.md#the-unbound-prefix-round-trip-closed-at-the-tag-sites-2026-09-24)
-  - **STILL OPEN: the same residual through a `div` VALUE.** The `div` branch writes a string, not a
-    name, so `<v:div>x</v:div>` is still written and re-reads as a property named `v:div`. **DO NOT
-    fold it into the tag-site check.** A colon-free non-name (`a&b`, `1abc`) is still written too,
-    and is a separate gap. **Beside it,
+  - **CLOSED 2026-09-24: the same residual through a `div` VALUE** (`UNSERIALIZABLE_DIV_PREFIX`).
+    The `div` branch writes a string, not a name, so `tag()` never saw `<v:div>x</v:div>`, which was
+    written and re-read as a property named `v:div`. The branch now asks a SECOND question of the
+    parse `emitsOneDivElement` already made (`bindsEveryPrefix`): every element and attribute prefix
+    bound by a declaration INSIDE the string, `xml` exempt, `xmlns`/`xmlns:*` attributes being
+    declarations. **NOT folded into the tag-site check, and NOT a wider `UNSERIALIZABLE_DIV_MARKUP`
+    or `UNSERIALIZABLE_PREFIXED_NAME`** (the first is raised second, so reusing it moves codes; the
+    second means a tag position). Asked only of a string the one-element check passed, and **RAISED
+    LAST OF ALL**, after the tag-site colon code. An inner-element or attribute prefix is refused too,
+    so it **withdraws a write from `valid: true` models this library round-tripped**, the fifth
+    refusal to pay that. **An ANCESTOR-bound prefix is NOT refused, and that rests on the READER**,
+    which writes the inherited declarations into the `div` string: change that and this refusal
+    starts withdrawing conformant round trips.
+    [`#unbound-prefix-div-value-closed`](documentation/agent-notes.md#the-unbound-prefix-round-trip-closed-through-a-div-value-2026-09-24)
+  - **STILL OPEN: a colon-free non-name** (`a&b`, `1abc`) is still written, and is a separate gap
+    from the one closed above. **Beside it,
     `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as
     **different elements** and forged a `status`). **The line is "does OUR round trip survive it",
     NOT the XML `Name` production. DO NOT WIDEN IT:** `a&b`, `1abc` round-trip today; `p:x` did too,
