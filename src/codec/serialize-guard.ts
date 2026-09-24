@@ -5,7 +5,9 @@
  * {@link assertSerializable} runs in both writers, because a dropped-character-data marker has no
  * conformant encoding in either format. {@link breaksTag} governs the XML writer only, because the
  * harm is a name reaching a tag position, and JSON escapes a member name so no name reaches this
- * refusal there. {@link refuseUnserializableDivMarkup} is raised by the XML writer for the same
+ * refusal there. {@link carriesUndeclarablePrefix} is XML-only for the same reason: a colon is a
+ * namespace prefix only in an XML name, and JSON spells the member name as a string.
+ * {@link refuseUnserializableDivMarkup} is raised by the XML writer for the same
  * reason, at its one raw-markup site: JSON carries the string as a string.
  * {@link assertXmlSerializable}, {@link assertXmlArrayWrapper}, {@link assertXmlValueChoiceWrapper}
  * and {@link assertXmlResourceType} are
@@ -19,9 +21,9 @@
  * member a repeated property name shadowed falls outside both walks, which visit `properties` only,
  * and neither format has a spelling that re-reads as the ambiguity the model holds. No refusal here
  * recognises anything new or invents a value. **It is NOT true that none of them changes a document
- * that reads clean** -- `breaksTag` and {@link assertXmlResourceType} each name a document of their
- * own that reads with zero issues and is refused anyway; that clause was carried here as a universal
- * and is cut rather than reworded.
+ * that reads clean** -- `breaksTag`, {@link assertXmlResourceType} and
+ * {@link carriesUndeclarablePrefix} each name a document of their own that reads with zero issues and
+ * is refused anyway; that clause was carried here as a universal and is cut rather than reworded.
  *
  * **This module is a list of the refusals it implements, NOT a closed account of what a writer can
  * author.** Two of the predicates deliberately live somewhere else rather than being copied here,
@@ -178,6 +180,24 @@ export const SERIALIZE_ERROR_CODES = {
    * See {@link assertXmlForeignRoot} for the window, the two routes weighed, and what it costs.
    */
   UNSERIALIZABLE_FOREIGN_ROOT: "UNSERIALIZABLE_FOREIGN_ROOT",
+  /**
+   * The model holds, at one or more tag positions, a name carrying a colon. XML reads the colon as
+   * a namespace prefix, and the model carries no namespace binding for the writer to declare one
+   * with, so the document would not be namespace-well-formed. **XML only**: `serializeResource`
+   * spells a member name as a JSON string, so this refusal never reaches it and that route stays
+   * open.
+   *
+   * Written anyway, the output named a prefix nothing declared, which a conformant XML parser
+   * rejects, and a prefix rebound between siblings (`<p:x xmlns:p="urn:a"/>` beside
+   * `<p:x xmlns:p="urn:b"/>`) lost its `MIXED_XML_SPELLING` report across one write and one re-read.
+   * **Not {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}**, whose line is whether this
+   * library's own round trip survives a name: a colon-bearing name survives that round trip, so the
+   * two are different questions and keep different codes. A name that trips both keeps that one.
+   *
+   * See {@link carriesUndeclarablePrefix} for the exact predicate, its one exemption, and what it
+   * leaves.
+   */
+  UNSERIALIZABLE_PREFIXED_NAME: "UNSERIALIZABLE_PREFIXED_NAME",
 } as const;
 
 /** Discriminant union of every {@link SERIALIZE_ERROR_CODES} value. */
@@ -375,8 +395,7 @@ export function assertXmlSerializable(node: FhirComplex): void {
  * `resourceType`, where the type is the tag and a tag cannot be repeated (a three-entry one is
  * flattened exactly as a singleton is). A wrapper of two or more items elsewhere emits repeated
  * elements, the re-read groups them into a list, and the location is reported again -- so refusing
- * it would withdraw a round trip that works today **and keeps the finding**, which is the cost the
- * unbound-prefix residual was deferred rather than pay.
+ * it would withdraw a round trip that works today **and keeps the finding**.
  *
  * **This counts ITEMS, and the sentence above reasons about EMITTED ELEMENTS. They are the same
  * number for a model a reader produced and not in general**, which is the limit to read this on: a
@@ -707,7 +726,9 @@ export function assertXmlResourceType(node: FhirComplex): void {
  * `breaksTag` and {@link assertXmlResourceType} each pay that cost already, on documents of their
  * own that read with zero issues; this is the third. It is bounded to the class: a FHIR-rooted
  * document, a document declaring no namespace at all, and a document whose root prefix is bound to
- * nothing are all untouched, and `serializeResource` writes every one of them, this class included.
+ * nothing are all outside it. The last is refused anyway, but at its tag sites and on
+ * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME}, never on this code, and
+ * `serializeResource` writes every one of them, this class included.
  *
  * ## The window, which is the reader's own marker
  *
@@ -766,10 +787,11 @@ const TAG_OPENER_STEALING = new Set(["!", "?"]);
  * name", and the difference is the whole reason this refusal is narrow.** The strictly tidier rule
  * would be the `Name` production (XML 1.0 §2.3), but `a&b`, `1abc`, `-lead` and `a"b` all fail that
  * production while `serializeResourceXml` -> `parseResourceXml` returns them **unchanged today**.
- * Refusing those would withdraw a working round trip from models that read `valid: true`, which is
- * the cost the unbound-prefix residual was deferred rather than pay. So they are NOT refused here,
- * and they remain part of the same declared gap: a conformant third-party parser rejects them, and
- * this library keeps writing them.
+ * Refusing those would withdraw a working round trip from models that read `valid: true`. So they
+ * are NOT refused here, and they remain a declared gap: a conformant third-party parser rejects
+ * them, and this library keeps writing them. A name carrying a colon used to sit in the same gap and
+ * is refused now, on a code of its own and by {@link carriesUndeclarablePrefix} rather than here,
+ * because a colon is a namespace prefix and the model has no binding to declare one with.
  *
  * **What IS refused is the subset where nothing works today**, measured over 2,350 sampled names
  * (every code point `U+0001`-`U+02FF` at three positions, plus eight higher ones and a hand-written
@@ -860,6 +882,81 @@ export function refuseUnserializableDivMarkup(locations: readonly string[]): nev
   throw new FhirSerializeError(
     `cannot serialize to XML: ${String(locations.length)} div location(s) carry markup that would not be written as the one div element the model names; serializeResource carries the string as a string`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_MARKUP,
+    locations,
+  );
+}
+
+/** The one prefix an element name may carry that Namespaces in XML 1.0 §3 binds by definition. */
+const XML_PREFIX = "xml:";
+
+/**
+ * Whether writing `name` in an XML tag position would put a colon in the output that no namespace
+ * declaration this writer can make would bind, so the document would not be namespace-well-formed.
+ *
+ * **The line is any colon, with one exemption.** Namespaces in XML 1.0 (Third Edition) requires, of
+ * a namespace-well-formed document, that "All element and attribute names contain either zero or
+ * one colon" (§7); that "The namespace prefix, unless it is xml or xmlns, MUST have been declared in
+ * a namespace declaration attribute" (§5, Prefix Declared); and that "Element names MUST NOT have the
+ * prefix xmlns" (§3). The model carries no namespace binding at all, so this writer has nothing to
+ * declare a prefix with, and every colon it writes is undeclared except under `xml`, which "is by
+ * definition bound" (§3). So `xml:` followed by a non-empty local part with no colon in it answers
+ * `false` and is written; every other name carrying a colon answers `true`: `p:x`, a leading colon
+ * (`:x`), two colons (`a:b:c`), `xmlns:x`, and `xml:` alone.
+ *
+ * **Refusing rather than declaring.** Declaring a binding means authoring one. A root read as
+ * `<v:Observation>` with `v` bound to nothing carries no namespace to declare, so any URI the writer
+ * picked would be a vocabulary the sender never sent, which is the fabrication class. Carrying the
+ * source's bindings in the model instead would put a vendor URI within reach of every walker and
+ * every diagnostic, the reason {@link assertXmlForeignRoot} keys on a marker rather than the
+ * vocabulary; that route is not refuted, only not taken. Refusing invents nothing.
+ *
+ * **What it costs, stated rather than implied: it withdraws an XML write from models that read
+ * `valid: true`.** `{"resourceType":"Patient","p:x":"v"}` reads with zero issues, and a root whose
+ * prefix nothing binds reads `valid: true`. `breaksTag`, {@link assertXmlResourceType} and
+ * {@link assertXmlForeignRoot} each pay that cost already; this is the fourth. `serializeResource`
+ * spells a member name as a JSON string and is the route that stays open.
+ *
+ * **What it does NOT cover, each a separate declared gap rather than an oversight.** A name with no
+ * colon that is still not a conformant XML name (`a&b`, `1abc`) is written as it always was, and so
+ * is the local part after `xml:` (`xml:1abc` is written). It is checked at tag positions only: a
+ * `div` property is written as its own raw string at a different site, so a narrative whose markup
+ * carries an unbound prefix (`<v:div>x</v:div>`) is still written, and re-reads as a different
+ * property.
+ *
+ * @param name - The tag name about to be written.
+ * @returns `true` when the name must be refused.
+ * @internal
+ */
+export function carriesUndeclarablePrefix(name: string): boolean {
+  if (!name.includes(":")) return false;
+  const local = name.slice(XML_PREFIX.length);
+  return !(name.startsWith(XML_PREFIX) && local !== "" && !local.includes(":"));
+}
+
+/**
+ * Refuse to serialize a model whose tag positions hold a name {@link carriesUndeclarablePrefix}
+ * answers `true` for.
+ *
+ * **`locations` never echoes the name, and the message carries no colon at all.** The name is
+ * document content, and so is its prefix, which on a document read from XML stands for a vendor
+ * namespace. Every name refused here carries a colon, which neither the `elementName` nor the
+ * `resourceTypeName` shape admits, so its own segment renders `WITHHELD`; a nested resource's type
+ * is reported at the element wrapping it, as the name refusal reports one, so there it has no
+ * segment at all.
+ *
+ * **Raised last**, after every refusal the XML writer raised before it existed, so a model that also
+ * trips one of those keeps the code it already reported and no case moves onto this one: a name
+ * that carries a colon AND breaks the tag stays
+ * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}.
+ *
+ * @param locations - The bounded locations whose name is refused, deduplicated, in walk order.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME}.
+ * @internal
+ */
+export function refuseUndeclarablePrefixes(locations: readonly string[]): never {
+  throw new FhirSerializeError(
+    `cannot serialize to XML, because ${String(locations.length)} location(s) carry a name with a colon, which XML reads as a namespace prefix and this model carries no binding to declare, so the output would not be namespace-well-formed; this refusal does not reach serializeResource`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME,
     locations,
   );
 }

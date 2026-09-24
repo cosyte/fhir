@@ -203,8 +203,9 @@ export interface FhirComplex {
    *
    * **Set at a document root and nowhere else.** An element that merely inherits a foreign namespace
    * from its parent is flagged where the document leaves the vocabulary and is not marked here, and
-   * a root whose prefix resolves to **nothing** is not marked either: that is the separate
-   * unbound-prefix residual, which reads under its verbatim tag and is deferred. A root declaring no
+   * a root whose prefix resolves to **nothing** is not marked either: that root reads under its
+   * verbatim tag, and its XML write is refused at the tag sites on a code of its own rather than
+   * through this marker. A root declaring no
    * namespace at all is read as FHIR, unflagged and unmarked. Absent on every conformant document
    * and on every document read from JSON. See {@link isForeignRoot}.
    */
@@ -525,7 +526,8 @@ export function markDroppedText(node: FhirComplex | FhirPrimitive): FhirComplex 
  * vocabulary. The document's own namespace URI is content, and a marker cannot leak content.
  *
  * `false` for a root that declares no namespace (read as FHIR on purpose), for a root whose prefix
- * resolves to nothing (the deferred unbound-prefix residual, modeled under its verbatim tag), for
+ * resolves to nothing (modeled under its verbatim tag, and refused by the XML writer at its tag
+ * sites rather than through this marker), for
  * foreign content below a root, for every document read from JSON, and for every conformant document.
  *
  * @param node - Any model node.

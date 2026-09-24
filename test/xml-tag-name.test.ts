@@ -218,19 +218,17 @@ const COLON_MODELS: readonly (readonly [string, ColonCase])[] = [
       jsonNames: ["resourceType", "status", "v:x"],
     },
   ],
-  ...COLON_BEARING.map(
-    ([label, name]): readonly [string, ColonCase] => [
-      `M1, ${label}`,
-      {
-        build: () => withName(name),
-        names: [name],
-        content: [],
-        locations: [`Patient.${WITHHELD}`],
-        json: JSON.stringify({ resourceType: "Patient", [name]: "v" }),
-        jsonNames: ["resourceType", name],
-      },
-    ],
-  ),
+  ...COLON_BEARING.map(([label, name]): readonly [string, ColonCase] => [
+    `M1, ${label}`,
+    {
+      build: () => withName(name),
+      names: [name],
+      content: [],
+      locations: [`Patient.${WITHHELD}`],
+      json: JSON.stringify({ resourceType: "Patient", [name]: "v" }),
+      jsonNames: ["resourceType", name],
+    },
+  ]),
   [
     "a property named xmlns:x, a prefix no element name may carry",
     {
@@ -281,7 +279,9 @@ const COLON_MODELS: readonly (readonly [string, ColonCase])[] = [
     "the resourceType of a contained resource",
     {
       build: () =>
-        model('{"resourceType":"Patient","contained":[{"resourceType":"v:Observation","id":"c1"}]}'),
+        model(
+          '{"resourceType":"Patient","contained":[{"resourceType":"v:Observation","id":"c1"}]}',
+        ),
       names: ["v:Observation"],
       content: ["c1"],
       locations: ["Patient.contained[0]"],
@@ -506,16 +506,19 @@ describe("a model name at an XML tag position", () => {
    * that used to sit here are rewritten below, as the refusals they are now.
    */
   describe("declared gap, still written: a name this library round-trips and XML does not admit", () => {
-    it.each(DEFERRED_AND_STILL_WRITTEN)("AC-7(a): writes %s verbatim, as the pin did", (_label, name) => {
-      expect(refusal(withName(name))).toBeUndefined();
-      const xml = serializeResourceXml(withName(name));
-      expect(xml).toBe(`<Patient ${FHIR_NS}><${name} value="v"/></Patient>`);
-      // And it comes back as the same one property, which is the capability being preserved.
-      expect(parseResourceXml(xml).resource.properties.map((p) => p.name)).toEqual([
-        "resourceType",
-        name,
-      ]);
-    });
+    it.each(DEFERRED_AND_STILL_WRITTEN)(
+      "AC-7(a): writes %s verbatim, as the pin did",
+      (_label, name) => {
+        expect(refusal(withName(name))).toBeUndefined();
+        const xml = serializeResourceXml(withName(name));
+        expect(xml).toBe(`<Patient ${FHIR_NS}><${name} value="v"/></Patient>`);
+        // And it comes back as the same one property, which is the capability being preserved.
+        expect(parseResourceXml(xml).resource.properties.map((p) => p.name)).toEqual([
+          "resourceType",
+          name,
+        ]);
+      },
+    );
   });
 
   /**
@@ -529,12 +532,15 @@ describe("a model name at an XML tag position", () => {
    * `serializeResource` spells a member name as a JSON string and is the route that stays open.
    */
   describe("a colon at a tag position is refused rather than written with its prefix unbound", () => {
-    it.each(COLON_BEARING)("AC-1, AC-3: refuses %s rather than writing it verbatim", (_label, name) => {
-      const err = refusal(withName(name));
-      expect(err).toBeInstanceOf(FhirSerializeError);
-      expect(err?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME);
-      expect(err?.locations).toEqual([`Patient.${WITHHELD}`]);
-    });
+    it.each(COLON_BEARING)(
+      "AC-1, AC-3: refuses %s rather than writing it verbatim",
+      (_label, name) => {
+        const err = refusal(withName(name));
+        expect(err).toBeInstanceOf(FhirSerializeError);
+        expect(err?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME);
+        expect(err?.locations).toEqual([`Patient.${WITHHELD}`]);
+      },
+    );
 
     it("AC-1, AC-3: refuses a prefixed foreign property rather than emitting its prefix unbound", () => {
       // The read is unchanged: the foreign child keeps its verbatim tag as its model name.
@@ -561,7 +567,9 @@ describe("a model name at an XML tag position", () => {
       expect(Object.values(SERIALIZE_ERROR_CODES)).toContain("UNSERIALIZABLE_PREFIXED_NAME");
       expect(CODES_AT_PIN).not.toContain("UNSERIALIZABLE_PREFIXED_NAME");
       // Every code the pin published is still published, so none was renamed to make room.
-      expect(Object.values(SERIALIZE_ERROR_CODES)).toEqual(expect.arrayContaining([...CODES_AT_PIN]));
+      expect(Object.values(SERIALIZE_ERROR_CODES)).toEqual(
+        expect.arrayContaining([...CODES_AT_PIN]),
+      );
       expect(codes.has(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME)).toBe(false);
     });
 
@@ -584,7 +592,10 @@ describe("a model name at an XML tag position", () => {
       expect(surface).not.toContain(":");
       for (const name of c.names) {
         expect(surface).not.toContain(name);
-        const localParts = [name.slice(name.indexOf(":") + 1), name.slice(name.lastIndexOf(":") + 1)];
+        const localParts = [
+          name.slice(name.indexOf(":") + 1),
+          name.slice(name.lastIndexOf(":") + 1),
+        ];
         for (const location of locations) {
           for (const segment of location.split(".")) {
             expect(localParts).not.toContain(segment.replace(/(?:\[\d+\])+$/u, ""));
