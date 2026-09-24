@@ -12,10 +12,16 @@
  * refusal rather than a loss: the name is still writable, in the format that can express it. It is
  * not a claim that the JSON output is spec-clean, which that writer's own exception list governs.
  *
- * **What is deliberately NOT refused is asserted just as hard as what is.** A prefixed name with no
- * declaration to bind it, and a name that is not a conformant XML name, are both written verbatim
- * and both re-read through this library unchanged. Those are declared gaps, and the tests over them
- * are characterization tests: if you close one, they go red and you update them in the same change.
+ * **What is deliberately NOT refused is asserted just as hard as what is.** A name that carries no
+ * colon and is still not a conformant XML name is written verbatim and re-reads through this library
+ * unchanged. That is a declared gap, and the tests over it are characterization tests: if you close
+ * it, they go red and you update them in the same change.
+ *
+ * **A name carrying a colon used to sit in that same gap and no longer does.** XML reads the colon as
+ * a namespace prefix, the model carries no binding to declare one with, so the output was not
+ * namespace-well-formed and the report that two vendor vocabularies were merged did not survive one
+ * write and one re-read. It is refused now, on a code of its own, and the characterization tests
+ * that pinned it as written were rewritten over the same documents in the change that closed it.
  *
  * **THE LAST TWO BLOCKS ARE THE OTHER MARKUP-EMITTING SITE**, the `div` branch, which writes a
  * VALUE into markup position rather than a name. It used to carry whole elements into the document
@@ -23,6 +29,8 @@
  * one for what is still written. **Two sites are covered here. Do not read that as a statement about
  * every branch `serializeResourceXml` has.**
  */
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 
@@ -30,8 +38,11 @@ import {
   FhirSerializeError,
   SERIALIZE_ERROR_CODES,
   WITHHELD,
+  complex,
+  list,
   parseResource,
   parseResourceXml,
+  primitive,
   readSafety,
   serializeResource,
   serializeResourceXml,
@@ -94,12 +105,10 @@ const FABRICATES_ELEMENTS = [
  *
  * A conformant third-party parser rejects all of them. That is the declared gap, and it is not
  * closed here, because closing it means refusing a document that reads `valid: true` and writing it
- * back is something callers can do today.
+ * back is something callers can do today. **None of them carries a colon**: the three rows that did
+ * moved to {@link COLON_BEARING} when that half of the gap closed.
  */
 const DEFERRED_AND_STILL_WRITTEN = [
-  ["a prefix nothing declares", "p:x"],
-  ["a leading colon", ":x"],
-  ["two colons", "a:b:c"],
   ["an ampersand", "a&b"],
   ["a leading digit", "1abc"],
   ["a leading hyphen", "-lead"],
@@ -110,6 +119,319 @@ const DEFERRED_AND_STILL_WRITTEN = [
   ["a form feed, which is not XML whitespace", "a\fb"],
   ["a non-breaking space, which is not XML whitespace", "a b"],
 ] as const;
+
+/**
+ * The three rows the declared gap above used to hold that carry a colon, labels unchanged. The
+ * writer wrote each verbatim (`<Patient xmlns="http://hl7.org/fhir"><p:x value="v"/></Patient>`)
+ * with nothing declaring the prefix, which a conformant parser rejects. Each is refused now.
+ */
+const COLON_BEARING = [
+  ["a prefix nothing declares", "p:x"],
+  ["a leading colon", ":x"],
+  ["two colons", "a:b:c"],
+] as const;
+
+/** Every code `SERIALIZE_ERROR_CODES` held at the pin this change was measured against (AC-4). */
+const CODES_AT_PIN = [
+  "DROPPED_ELEMENT_TEXT",
+  "UNSERIALIZABLE_ELEMENT_NAME",
+  "UNSERIALIZABLE_DIV_MARKUP",
+  "UNSERIALIZABLE_JSON_ONLY_SHAPE",
+  "UNSERIALIZABLE_ARRAY_WRAPPER",
+  "UNSERIALIZABLE_CHOICE_WRAPPER",
+  "UNSERIALIZABLE_SHADOWED_PROPERTY",
+  "UNSERIALIZABLE_RESOURCE_TYPE",
+  "UNSERIALIZABLE_FOREIGN_ROOT",
+] as const;
+
+/** D1: a prefix rebound between siblings, two vendor vocabularies merged into one model name. */
+const D1 =
+  `<Observation ${FHIR_NS}><status value="final"/>` +
+  `<p:x xmlns:p="urn:a" value="1"/><p:x xmlns:p="urn:b" value="2"/></Observation>`;
+/** D2: a root whose prefix nothing binds, modeled under its verbatim tag. */
+const D2 = `<v:Observation><v:id value="o1"/><v:status value="final"/></v:Observation>`;
+/** D3: a foreign child whose prefix IS bound in the source, and whose binding the model drops. */
+const D3 =
+  `<Observation ${FHIR_NS}><status value="final"/>` +
+  `<v:x xmlns:v="urn:vendor" value="1"/></Observation>`;
+
+/** `resource` composed into `Bundle.entry.resource` after parsing, as a caller builds one. */
+function inBundle(resource: FhirComplex): FhirComplex {
+  return complex([
+    { name: "resourceType", value: primitive("Bundle") },
+    { name: "type", value: primitive("collection") },
+    { name: "entry", value: list([complex([{ name: "resource", value: resource }])]) },
+  ]);
+}
+
+/** One model holding a colon-bearing name at a tag site, with what was measured for it. */
+interface ColonCase {
+  /** Builds the model afresh, so no test can share a node with another. */
+  readonly build: () => FhirComplex;
+  /** Every colon-bearing name the model holds at a tag site. */
+  readonly names: readonly string[];
+  /** Other document content the refusal must not echo: namespace URIs and values. */
+  readonly content: readonly string[];
+  /** The refusal's locations, in walk order. */
+  readonly locations: readonly string[];
+  /** What `serializeResource` returned for this model at the pin, measured there. */
+  readonly json: string;
+  /** The property names `parseResource` read back from that string at the pin. */
+  readonly jsonNames: readonly string[];
+}
+
+/**
+ * Every model AC-3 names. Each one wrote a document at the pin (measured, and recorded with the
+ * change), so none of them drew a refusal there, which is what AC-4 keys on.
+ */
+const COLON_MODELS: readonly (readonly [string, ColonCase])[] = [
+  [
+    "D1, a prefix rebound between siblings",
+    {
+      build: () => parseResourceXml(D1).resource,
+      names: ["p:x"],
+      content: ["urn:a", "urn:b", "final"],
+      locations: [`Observation.${WITHHELD}[0]`, `Observation.${WITHHELD}[1]`],
+      json: '{"resourceType":"Observation","status":"final","p:x":["1","2"]}',
+      jsonNames: ["resourceType", "status", "p:x"],
+    },
+  ],
+  [
+    "D2, a root whose prefix nothing binds",
+    {
+      build: () => parseResourceXml(D2).resource,
+      names: ["v:Observation", "v:id", "v:status"],
+      content: ["o1", "final"],
+      locations: [WITHHELD, `${WITHHELD}.${WITHHELD}`],
+      json: '{"resourceType":"v:Observation","v:id":"o1","v:status":"final"}',
+      jsonNames: ["resourceType", "v:id", "v:status"],
+    },
+  ],
+  [
+    "D3, a foreign child whose prefix the source bound",
+    {
+      build: () => parseResourceXml(D3).resource,
+      names: ["v:x"],
+      content: ["urn:vendor", "final"],
+      locations: [`Observation.${WITHHELD}`],
+      json: '{"resourceType":"Observation","status":"final","v:x":"1"}',
+      jsonNames: ["resourceType", "status", "v:x"],
+    },
+  ],
+  ...COLON_BEARING.map(
+    ([label, name]): readonly [string, ColonCase] => [
+      `M1, ${label}`,
+      {
+        build: () => withName(name),
+        names: [name],
+        content: [],
+        locations: [`Patient.${WITHHELD}`],
+        json: JSON.stringify({ resourceType: "Patient", [name]: "v" }),
+        jsonNames: ["resourceType", name],
+      },
+    ],
+  ),
+  [
+    "a property named xmlns:x, a prefix no element name may carry",
+    {
+      build: () => withName("xmlns:x"),
+      names: ["xmlns:x"],
+      content: [],
+      locations: [`Patient.${WITHHELD}`],
+      json: '{"resourceType":"Patient","xmlns:x":"v"}',
+      jsonNames: ["resourceType", "xmlns:x"],
+    },
+  ],
+  [
+    "a name inside a backbone element",
+    {
+      build: () => model('{"resourceType":"Patient","name":[{"p:x":"x"}]}'),
+      names: ["p:x"],
+      content: [],
+      locations: [`Patient.name[0].${WITHHELD}`],
+      json: '{"resourceType":"Patient","name":[{"p:x":"x"}]}',
+      jsonNames: ["resourceType", "name"],
+    },
+  ],
+  [
+    "a name on an extension",
+    {
+      build: () =>
+        model('{"resourceType":"Patient","_gender":{"extension":[{"url":"http://e","p:x":"x"}]}}'),
+      names: ["p:x"],
+      content: [],
+      locations: [`Patient.gender.extension[0].${WITHHELD}`],
+      json: '{"resourceType":"Patient","_gender":{"extension":[{"url":"http://e","p:x":"x"}]}}',
+      jsonNames: ["resourceType", "gender"],
+    },
+  ],
+  [
+    "a name inside a contained resource",
+    {
+      build: () =>
+        model('{"resourceType":"Patient","contained":[{"resourceType":"Observation","p:x":"1"}]}'),
+      names: ["p:x"],
+      content: [],
+      locations: [`Patient.contained[0].${WITHHELD}`],
+      json: '{"resourceType":"Patient","contained":[{"resourceType":"Observation","p:x":"1"}]}',
+      jsonNames: ["resourceType", "contained"],
+    },
+  ],
+  [
+    "the resourceType of a contained resource",
+    {
+      build: () =>
+        model('{"resourceType":"Patient","contained":[{"resourceType":"v:Observation","id":"c1"}]}'),
+      names: ["v:Observation"],
+      content: ["c1"],
+      locations: ["Patient.contained[0]"],
+      json: '{"resourceType":"Patient","contained":[{"resourceType":"v:Observation","id":"c1"}]}',
+      jsonNames: ["resourceType", "contained"],
+    },
+  ],
+  [
+    "the wrapper name of a resource-valued element",
+    {
+      build: () =>
+        model('{"resourceType":"Patient","c:d":{"resourceType":"Observation","status":"final"}}'),
+      names: ["c:d"],
+      content: ["final"],
+      locations: [`Patient.${WITHHELD}`],
+      json: '{"resourceType":"Patient","c:d":{"resourceType":"Observation","status":"final"}}',
+      jsonNames: ["resourceType", "c:d"],
+    },
+  ],
+  [
+    "D3 composed into Bundle.entry.resource after parsing",
+    {
+      build: () => inBundle(parseResourceXml(D3).resource),
+      names: ["v:x"],
+      content: ["urn:vendor", "final", "collection"],
+      locations: [`Bundle.entry[0].resource.${WITHHELD}`],
+      json: '{"resourceType":"Bundle","type":"collection","entry":[{"resource":{"resourceType":"Observation","status":"final","v:x":"1"}}]}',
+      jsonNames: ["resourceType", "type", "entry"],
+    },
+  ],
+  [
+    "D2 composed into Bundle.entry.resource after parsing",
+    {
+      build: () => inBundle(parseResourceXml(D2).resource),
+      names: ["v:Observation", "v:id", "v:status"],
+      content: ["o1", "final", "collection"],
+      locations: ["Bundle.entry[0].resource", `Bundle.entry[0].resource.${WITHHELD}`],
+      json: '{"resourceType":"Bundle","type":"collection","entry":[{"resource":{"resourceType":"v:Observation","v:id":"o1","v:status":"final"}}]}',
+      jsonNames: ["resourceType", "type", "entry"],
+    },
+  ],
+];
+
+/**
+ * Models that drew a refusal at the pin AND carry a colon-bearing name, with the code and the
+ * locations the pin raised, measured there (AC-5). One per refusal the pin could raise.
+ */
+const REFUSED_AT_THE_PIN: readonly (readonly [
+  string,
+  () => FhirComplex,
+  string,
+  readonly string[],
+])[] = [
+  [
+    "a tag-breaking name beside a colon-bearing one",
+    () => model('{"resourceType":"Patient","a b":"1","contact":[{"p:x":"2"}]}'),
+    "UNSERIALIZABLE_ELEMENT_NAME",
+    [`Patient.${WITHHELD}`],
+  ],
+  [
+    "one name carrying both a colon and a tag-breaking character",
+    () => withName("a b:c"),
+    "UNSERIALIZABLE_ELEMENT_NAME",
+    [`Patient.${WITHHELD}`],
+  ],
+  [
+    "a div string the pin refused beside a colon-bearing name",
+    () => model('{"resourceType":"Patient","div":"<p>a</p>","p:x":"v"}'),
+    "UNSERIALIZABLE_DIV_MARKUP",
+    ["Patient.div"],
+  ],
+  [
+    "dropped element text beside a colon-bearing foreign element",
+    () =>
+      parseResourceXml(
+        `<Observation ${FHIR_NS}><status>final</status>` +
+          `<v:x xmlns:v="urn:vendor" value="1"/></Observation>`,
+      ).resource,
+    "DROPPED_ELEMENT_TEXT",
+    ["Observation.status"],
+  ],
+  [
+    "a JSON-only shape beside a colon-bearing name",
+    () => model('{"resourceType":"Patient","name":[[{"family":"X"}]],"p:x":"v"}'),
+    "UNSERIALIZABLE_JSON_ONLY_SHAPE",
+    ["Patient.name[0]"],
+  ],
+  [
+    "an array wrapper beside a colon-bearing name",
+    () => model('{"resourceType":"Observation","status":["final"],"p:x":"v"}'),
+    "UNSERIALIZABLE_ARRAY_WRAPPER",
+    ["Observation.status"],
+  ],
+  [
+    "a shadowed member beside a colon-bearing name",
+    () =>
+      model(
+        '{"resourceType":"Observation","status":"final","status":"entered-in-error","p:x":"v"}',
+      ),
+    "UNSERIALIZABLE_SHADOWED_PROPERTY",
+    ["Observation.status"],
+  ],
+  [
+    "an untaggable resourceType beside a colon-bearing name",
+    () => model('{"resourceType":"Patient","contained":[{"resourceType":42,"p:x":"v"}]}'),
+    "UNSERIALIZABLE_RESOURCE_TYPE",
+    ["Patient.contained[0].resourceType"],
+  ],
+  [
+    "a foreign root holding a colon-bearing child",
+    () =>
+      parseResourceXml(
+        `<v:Observation xmlns:v="urn:vendor"><v:status value="final"/>` +
+          `<w:x xmlns:w="urn:w" value="1"/></v:Observation>`,
+      ).resource,
+    "UNSERIALIZABLE_FOREIGN_ROOT",
+    ["Observation"],
+  ],
+  [
+    "a value[x] wrapper beside a colon-bearing name",
+    () => model('{"resourceType":"Observation","status":"final","valueString":["a"],"p:x":"v"}'),
+    "UNSERIALIZABLE_CHOICE_WRAPPER",
+    ["Observation.valueString"],
+  ],
+];
+
+/** The paired golden fixtures `test/xml.test.ts` round-trips, for AC-7(e). */
+const PAIRS = [
+  "patient",
+  "observation-decimals",
+  "primitive-extensions",
+  "value-absent",
+  "extension-only-list",
+  "bundle",
+  "patient-narrative",
+] as const;
+
+/**
+ * Every element name in `xml`: what follows `<` or `</` up to XML whitespace, `/` or `>`, skipping
+ * a comment, a declaration or a processing instruction. Attribute values cannot hold a `<` here,
+ * because the writer escapes it there.
+ */
+function elementNames(xml: string): string[] {
+  return [...xml.matchAll(/<(?![!?])\/?([^ \t\n\r/>]+)/gu)].map((match) => match[1] ?? "");
+}
+
+/** Whether a written element name is namespace-well-formed with no declaration in scope. */
+function needsNoDeclaration(name: string): boolean {
+  return !name.includes(":") || /^xml:[^:]+$/u.test(name);
+}
 
 describe("a model name at an XML tag position", () => {
   describe("the route that decided the remedy: markup that re-reads as DIFFERENT elements", () => {
@@ -177,13 +499,14 @@ describe("a model name at an XML tag position", () => {
    *
    * Not a claim that writing these is right. A conformant parser rejects every one, so the output
    * is not portable, and that limit is stated on `serializeResourceXml`. What these assert is that
-   * the refusal above did not quietly widen into them, because widening it would take away writing
-   * back a document that reads `valid: true` and round-trips through this library today.
+   * neither refusal above or below quietly widened into them, because widening one would take away
+   * writing back a document that reads `valid: true` and round-trips through this library today.
    *
-   * **Characterization tests: closing this gap MUST red them, in the same change.**
+   * **Characterization tests: closing this gap MUST red them, in the same change.** The colon rows
+   * that used to sit here are rewritten below, as the refusals they are now.
    */
   describe("declared gap, still written: a name this library round-trips and XML does not admit", () => {
-    it.each(DEFERRED_AND_STILL_WRITTEN)("writes %s verbatim", (_label, name) => {
+    it.each(DEFERRED_AND_STILL_WRITTEN)("AC-7(a): writes %s verbatim, as the pin did", (_label, name) => {
       expect(refusal(withName(name))).toBeUndefined();
       const xml = serializeResourceXml(withName(name));
       expect(xml).toBe(`<Patient ${FHIR_NS}><${name} value="v"/></Patient>`);
@@ -193,29 +516,129 @@ describe("a model name at an XML tag position", () => {
         name,
       ]);
     });
+  });
 
-    /**
-     * The named residual, unchanged: the binding a prefix needs is not in the model, so the writer
-     * has nothing to declare it with, and the report that two vendor namespaces were involved does
-     * not survive a write. Closing it means the model carrying the binding, which is a new model
-     * capability, or refusing the shape, which is the capability withdrawal the test above forbids.
-     */
-    it("emits a prefixed foreign property with the prefix still unbound", () => {
-      const doc =
-        `<Observation ${FHIR_NS}><status value="final"/>` +
-        `<v:x xmlns:v="urn:vendor" value="1"/></Observation>`;
-      const { resource } = parseResourceXml(doc);
-      const emitted = serializeResourceXml(resource);
-      expect(emitted).toBe(
-        `<Observation ${FHIR_NS}><status value="final"/><v:x value="1"/></Observation>`,
+  /**
+   * THE HALF OF THE GAP THAT CLOSED: A COLON AT A TAG POSITION.
+   *
+   * XML reads a colon in an element name as a namespace prefix (Namespaces in XML 1.0 §5, "The
+   * namespace prefix, unless it is xml or xmlns, MUST have been declared"), and the model carries no
+   * binding, so every such name the writer emitted was undeclared. The output was not
+   * namespace-well-formed, and on D1 the one report that said two vendor vocabularies were merged
+   * (`MIXED_XML_SPELLING`) was gone after one write and one re-read. Refused now rather than written;
+   * `serializeResource` spells a member name as a JSON string and is the route that stays open.
+   */
+  describe("a colon at a tag position is refused rather than written with its prefix unbound", () => {
+    it.each(COLON_BEARING)("AC-1, AC-3: refuses %s rather than writing it verbatim", (_label, name) => {
+      const err = refusal(withName(name));
+      expect(err).toBeInstanceOf(FhirSerializeError);
+      expect(err?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME);
+      expect(err?.locations).toEqual([`Patient.${WITHHELD}`]);
+    });
+
+    it("AC-1, AC-3: refuses a prefixed foreign property rather than emitting its prefix unbound", () => {
+      // The read is unchanged: the foreign child keeps its verbatim tag as its model name.
+      const { resource } = parseResourceXml(D3);
+      expect(resource.properties.map((p) => p.name)).toEqual(["resourceType", "status", "v:x"]);
+      // The pin emitted `<v:x value="1"/>` with `v` bound to nothing; nothing is emitted now.
+      const err = refusal(resource);
+      expect(err).toBeInstanceOf(FhirSerializeError);
+      expect(err?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME);
+      expect(err?.locations).toEqual([`Observation.${WITHHELD}`]);
+    });
+
+    it.each(COLON_MODELS)("AC-3: refuses %s, at every location in walk order", (_label, c) => {
+      const node = c.build();
+      expect(() => serializeResourceXml(node)).toThrow(FhirSerializeError);
+      const err = refusal(node);
+      expect(err?.code).toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME);
+      expect(err?.locations).toEqual(c.locations);
+    });
+
+    it("AC-4: carries one code for every such model, new at head and not the name code", () => {
+      const codes = new Set(COLON_MODELS.map(([, c]) => refusal(c.build())?.code));
+      expect([...codes]).toEqual(["UNSERIALIZABLE_PREFIXED_NAME"]);
+      expect(Object.values(SERIALIZE_ERROR_CODES)).toContain("UNSERIALIZABLE_PREFIXED_NAME");
+      expect(CODES_AT_PIN).not.toContain("UNSERIALIZABLE_PREFIXED_NAME");
+      // Every code the pin published is still published, so none was renamed to make room.
+      expect(Object.values(SERIALIZE_ERROR_CODES)).toEqual(expect.arrayContaining([...CODES_AT_PIN]));
+      expect(codes.has(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME)).toBe(false);
+    });
+
+    it.each(REFUSED_AT_THE_PIN)(
+      "AC-5: keeps the pin's code and locations for %s",
+      (_label, build, code, locations) => {
+        const err = refusal(build());
+        expect(err).toBeInstanceOf(FhirSerializeError);
+        expect(err?.code).toBe(code);
+        expect(err?.locations).toEqual(locations);
+      },
+    );
+
+    it.each(COLON_MODELS)("AC-6: echoes no document content for %s", (_label, c) => {
+      const err = refusal(c.build());
+      expect(err).toBeInstanceOf(FhirSerializeError);
+      const locations = err?.locations ?? [];
+      const surface = `${String(err?.message)}\n${locations.join("\n")}`;
+      // No colon anywhere, which covers every colon-bearing name and every prefix followed by one.
+      expect(surface).not.toContain(":");
+      for (const name of c.names) {
+        expect(surface).not.toContain(name);
+        const localParts = [name.slice(name.indexOf(":") + 1), name.slice(name.lastIndexOf(":") + 1)];
+        for (const location of locations) {
+          for (const segment of location.split(".")) {
+            expect(localParts).not.toContain(segment.replace(/(?:\[\d+\])+$/u, ""));
+          }
+        }
+      }
+      for (const content of c.content) expect(surface).not.toContain(content);
+      for (const location of locations) {
+        for (const segment of location.split(".")) {
+          expect(segment).toMatch(/^(?:[A-Za-z][A-Za-z0-9]*|<withheld>)(?:\[\d+\])*$/u);
+        }
+      }
+      expect(new Set(locations).size).toBe(locations.length);
+      expect(err?.message).toContain(`${String(locations.length)} location(s)`);
+    });
+
+    it("AC-6: echoes none of the strings named for D1, D2 and D3", () => {
+      const named = [
+        [D1, ["p:x", "urn:a", "urn:b"]],
+        [D2, ["v:Observation", "v:", "o1", "final"]],
+        [D3, ["v:x", "urn:vendor"]],
+      ] as const;
+      for (const [doc, strings] of named) {
+        const err = refusal(parseResourceXml(doc).resource);
+        expect(err).toBeInstanceOf(FhirSerializeError);
+        const surface = `${String(err?.message)}\n${(err?.locations ?? []).join("\n")}`;
+        for (const content of strings) expect(surface).not.toContain(content);
+      }
+    });
+
+    it("AC-7(b): writes a name under the xml prefix, which Namespaces in XML binds by definition", () => {
+      expect(serializeResourceXml(withName("xml:x"))).toBe(
+        `<Patient ${FHIR_NS}><xml:x value="v"/></Patient>`,
       );
-      // Well-formed XML 1.0, not namespace-well-formed. This library reads it back; a conformant
-      // parser does not.
-      expect(parseResourceXml(emitted).resource.properties.map((p) => p.name)).toEqual([
-        "resourceType",
-        "status",
-        "v:x",
-      ]);
+    });
+
+    it("AC-7(c): writes a FHIR element read under a prefix bound to FHIR, as the pin did", () => {
+      const { resource } = parseResourceXml(
+        `<Patient ${FHIR_NS} xmlns:f="http://hl7.org/fhir"><f:active value="true"/></Patient>`,
+      );
+      expect(serializeResourceXml(resource)).toBe(
+        `<Patient ${FHIR_NS}><active value="true"/></Patient>`,
+      );
+    });
+
+    it.each(PAIRS)("AC-7(e): still round-trips the %s golden pair byte for byte", (name) => {
+      const source = readFileSync(new URL(`./__fixtures__/${name}.xml`, import.meta.url), "utf8");
+      expect(serializeResourceXml(parseResourceXml(source).resource)).toBe(source);
+    });
+
+    it.each(COLON_MODELS)("AC-9: the JSON writer returns the pin's string for %s", (_label, c) => {
+      const json = serializeResource(c.build());
+      expect(json).toBe(c.json);
+      expect(parseResource(json).resource.properties.map((p) => p.name)).toEqual(c.jsonNames);
     });
   });
 
@@ -384,8 +807,12 @@ describe("a model name at an XML tag position", () => {
      * counterexample to the invariant as stated: `{"div":"v"}` emits `<Patient>v</Patient>` and the
      * property is gone on the re-read, because that name takes the raw-string branch rather than a
      * tag. That gap is pinned directly, below, rather than hidden by an alphabet that avoids it.
+     *
+     * The alphabet spells `:`, so a refusal here may carry either of the two name codes, and a
+     * document the writer does return is also held to carrying no element name that needs a
+     * namespace declaration, which is what the colon refusal buys.
      */
-    it("either refuses, or its output re-reads as the same property names", () => {
+    it("AC-11: either refuses on a name code, or its output re-reads as the same property names", () => {
       const alphabet = [..."ab19-._:&\"'/<>= \t\n\r!?", " ", "", "\f", "é"];
       fc.assert(
         fc.property(
@@ -406,10 +833,16 @@ describe("a model name at an XML tag position", () => {
               xml = serializeResourceXml(node);
             } catch (err) {
               expect(err).toBeInstanceOf(FhirSerializeError);
-              expect((err as FhirSerializeError).code).toBe(
+              expect([
                 SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME,
-              );
+                SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME,
+              ]).toContain((err as FhirSerializeError).code);
               return;
+            }
+            // Every element name the writer wrote is namespace-well-formed with no declaration: no
+            // colon, or the `xml` prefix bound by definition.
+            for (const written of elementNames(xml)) {
+              expect(needsNoDeclaration(written)).toBe(true);
             }
             expect(
               parseResourceXml(xml)
@@ -630,6 +1063,34 @@ describe("a model name at an XML tag position", () => {
       );
       expect(refusal(again)).toBeUndefined();
       expect(serializeResourceXml(again)).toContain(String(value));
+    });
+
+    /**
+     * The `div` branch writes a VALUE into markup position, not a name, so the colon refusal does
+     * not reach it: a narrative whose own markup carries an unbound prefix is written exactly as the
+     * pin wrote it. That route of the same residual stays open, and this pins it so it cannot move
+     * in silence either way.
+     */
+    it("AC-7(d): writes every div string in this block exactly as the pin did", () => {
+      const nest = (n: number): string =>
+        `<div xmlns="http://www.w3.org/1999/xhtml">${"<p>".repeat(n)}x${"</p>".repeat(n)}</div>`;
+      const divs = [
+        ...NARRATIVES.map(([, div]) => div),
+        "<v:div>x</v:div>",
+        nest(253),
+        nest(254),
+        "<div>x</div>",
+        '<?xml version="1.0"?><div xmlns="http://www.w3.org/1999/xhtml">x</div>',
+        '<!--c--><div xmlns="http://www.w3.org/1999/xhtml"/>',
+      ];
+      for (const div of divs) {
+        const node = model(
+          JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } }),
+        );
+        expect(serializeResourceXml(node)).toBe(
+          `<Patient ${FHIR_NS}><text><status value="generated"/>${div}</text></Patient>`,
+        );
+      }
     });
 
     /**
