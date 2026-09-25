@@ -30,15 +30,19 @@
  * THE CORPUS
  * ----------
  * The corpus is declared in `corpus/corpus.json` and is no longer ten in-tree fixtures. It is
- * **three corpora**, and only the first was written here:
+ * **four corpora**, and only the first was written here:
  *
  *   - this repository's own synthetic **spec-clean** and **Tier-2 quirk** fixtures
  *     (`test/__fixtures__/`, MIT), which is what the ten-fixture corpus used to be, kept in full;
  *   - **`FHIR/fhir-test-cases`** at tag `1.7.67` (Apache-2.0), the shared corpus the reference
  *     validator's own `pom.xml` pins itself against;
- *   - the **FHIR R4 (4.0.1) specification's own published examples** (CC0-1.0).
+ *   - the **FHIR R4 (4.0.1) specification's own published examples** (CC0-1.0);
+ *   - the **US Core 6.1.0 and 9.0.0 packages' own published examples** (CC0-1.0), the US Core
+ *     pass: each is validated with exactly the US Core profiles it declares and the oracle runs it
+ *     with that US Core version loaded (`scripts/differential/uscore.mjs`). The first three are
+ *     validated with no profile supplied and asked with the argv they always were.
  *
- * **266 declared, 179 compared, 87 excluded**, 169 of the 179 third party. The third-party documents
+ * **300 declared, 213 compared, 87 excluded**, 203 of the 213 third party. The third-party documents
  * are **fetched, never committed** (`pnpm corpus:fetch`, materialised into the git-ignored
  * `corpus/documents/`), each verified against the SHA-256 the declaration records.
  * `scripts/differential/corpus.mjs` carries the reasoning; the short version is that committing
@@ -57,15 +61,21 @@
  * verdict. An oracle `error`/`fatal` outside that class, on a document this library reports clean,
  * is still a false valid and still fails the run.
  *
- * **THE EXCLUSION RATE IS PART OF THE RESULT, NOT A FOOTNOTE TO IT.** 87 of the 266 declared
+ * **THE EXCLUSION RATE IS PART OF THE RESULT, NOT A FOOTNOTE TO IT.** 87 of the 300 declared
  * documents are held out, each with the reason measured and recorded in `corpus/corpus.json` and
  * printed on every run, and the classes are almost entirely one thing: the reference validator
  * resolves canonical URLs (`identifier.system`, `url`, `instantiatesUri`, `library`,
  * `relatedArtifact.resource`, `Attachment.url`) and this library does neither and says so. The six
  * exclusions whose measured reason was ONLY a terminology finding are no longer exclusions: they are
  * compared, under the terminology class above, because a rule beats a snapshot of what a remote
- * service answered on one date. So the number is "179 documents on which the two were SHOWN to
+ * service answered on one date. So the number is "213 documents on which the two were SHOWN to
  * agree", beside "87 on which they were shown not to". Reading only the first is reading half of it.
+ *
+ * THE US CORE PASS PRINTS REACH, NOT ONLY AGREEMENT. For every constraint row the FHIRPath subset
+ * newly evaluates, the run prints how many compared US Core documents reach it, or that none does
+ * and why (`slice-scoped`, `no compared document`), and an answer that is only
+ * `INVARIANT_UNCHECKED` is printed as unchecked and never counted as agreement. A run in which no
+ * compared US Core 9.0.0 document decides `us-core-3` over a `valueQuantity` fails.
  *
  * What the number does NOT buy, separately: over resource types this library does not model, it
  * emits an informational `RESOURCE_NOT_MODELED` and no error, so agreement at scale mostly means "we
@@ -112,6 +122,11 @@ import {
 } from "./differential/oracle.mjs";
 import { canonicalJson, formatRunRecord } from "./differential/record.mjs";
 import { corpusSummaryLines, runComparison } from "./differential/run.mjs";
+import {
+  formatReachReport,
+  formatUsCoreDocuments,
+  ucumShortfall,
+} from "./differential/uscore.mjs";
 import {
   formatTerminologyInputs,
   resolveTerminologyInputs,
@@ -194,7 +209,7 @@ function main() {
     return;
   }
 
-  const { records, summary, runRecord, resolved } = outcome;
+  const { records, summary, runRecord, resolved, usCore } = outcome;
 
   for (const record of records) {
     const line = formatRecord(record);
@@ -204,12 +219,27 @@ function main() {
       for (const f of findings) {
         // Severity, location and CODES. Never the diagnostic text: the oracle echoes document
         // values and this log is public. The codes are what make a violation classifiable.
-        const kind = [f.code, f.messageId].filter(Boolean).join("/");
+        const kind = [f.code, f.messageId, f.constraint].filter(Boolean).join("/");
         console.error(`    ${f.severity} @ ${f.location || "(root)"}${kind ? ` [${kind}]` : ""}`);
       }
     } else {
       console.log(line);
     }
+  }
+
+  // The US Core pass: its document-level accounting, then the reach of every newly evaluated row. A
+  // row nothing reached, and a document this library only reported unchecked, are printed as such
+  // and never counted as agreement; no compared 9.0.0 document deciding the UCUM rule fails the run.
+  let usCoreShortfall = null;
+  if (usCore !== undefined) {
+    console.log("");
+    for (const line of formatUsCoreDocuments(records, usCore.documents.map((d) => d.id))) {
+      console.log(line);
+    }
+    // The report's closing line already names the UCUM condition when it holds; it is repeated once
+    // more beside the summary, on stderr, where a failing run's reader looks.
+    for (const line of formatReachReport(usCore.report)) console.log(line);
+    usCoreShortfall = ucumShortfall(usCore.report);
   }
 
   console.log("");
@@ -218,6 +248,7 @@ function main() {
     if (summary.violations.length > 0 || !summary.meetsFloor) console.error(line);
     else console.log(line);
   }
+  if (usCoreShortfall !== null) console.error(usCoreShortfall);
   for (const line of formatRunRecord(runRecord)) console.log(line);
 
   // The full record, for a reader who wants to diff two of them by hand. Opt-in, because the
@@ -228,14 +259,19 @@ function main() {
     console.log(`run record: written to ${recordPath}`);
   }
 
-  if (summary.compared > 0 && summary.violations.length === 0 && summary.meetsFloor) {
+  if (
+    summary.compared > 0 &&
+    summary.violations.length === 0 &&
+    summary.meetsFloor &&
+    usCoreShortfall === null
+  ) {
     const sample = resolved[0];
     console.log(
       `differential: the corpora above agree with the oracle within documented deltas ` +
         `(provenance, first document: ${provenanceLine(declaration, sample.document)}).`,
     );
   }
-  process.exitCode = exitCodeFor(summary);
+  process.exitCode = usCoreShortfall === null ? exitCodeFor(summary) : 1;
 }
 
 main();

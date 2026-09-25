@@ -30,7 +30,9 @@
     "hl7-fhir-r4-examples/medicinalproductmanufactured-example.json",
     "hl7-fhir-r4-examples/relatedperson-example-f001-sarah.json",
     "hl7-fhir-r4-examples/task-example-fm-cancel.json",
-    "hl7-fhir-r4-examples/visionprescription-example-1.json"
+    "hl7-fhir-r4-examples/visionprescription-example-1.json",
+    "hl7-fhir-us-core-examples/6.1.0/Observation-serum-sodium.json",
+    "hl7-fhir-us-core-examples/9.0.0/Observation-serum-sodium.json"
   ],
   "corpora": [
     {
@@ -77,6 +79,32 @@
       },
       "licenceText": "licences/hl7-fhir-r4-examples-LICENSE.txt",
       "notice": "licences/hl7-fhir-r4-examples-NOTICE.txt"
+    },
+    {
+      "id": "hl7-fhir-us-core-examples",
+      "title": "HL7 FHIR US Core published examples, from the US Core package tarballs",
+      "version": "6.1.0 and 9.0.0",
+      "licence": "CC0-1.0",
+      "authored": "third-party",
+      "origin": "https://hl7.org/fhir/us/core/",
+      "acquisition": {
+        "kind": "packages",
+        "format": "tgz",
+        "packages": {
+          "6.1.0": {
+            "url": "https://packages.fhir.org/hl7.fhir.us.core/6.1.0",
+            "bytes": 1606342,
+            "sha256": "ec096f29bc4ce8f04117dfc4ef82e7289c67a7e2188892e86288c45389d158d9"
+          },
+          "9.0.0": {
+            "url": "https://packages.fhir.org/hl7.fhir.us.core/9.0.0",
+            "bytes": 2749959,
+            "sha256": "d7b54d2ec2a48cea94ffea5d939ad67a681f80b94d69594a08cebac36da9e059"
+          }
+        }
+      },
+      "licenceText": "licences/hl7-fhir-us-core-LICENSE.txt",
+      "notice": "licences/hl7-fhir-us-core-NOTICE.txt"
     }
   ],
   "documents": [
@@ -2044,6 +2072,346 @@
       "bytes": 2172,
       "sha256": "0263e6229888c21c57ecdf1ce04daba4fb56ab7b78b6828ac918a4397b3d25e6",
       "note": "returned to the compared set: the exclusion measured on 2026-08-25 recorded ONLY code-invalid findings, which the reference validator emits when it checks a code against terminology content this library declaredly does not vendor. Such a finding is now classified out of both differential invariants under the terminology class, counted and printed per document, so the document is compared on everything else rather than held out on a snapshot of what a remote terminology service answered on one date."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-serum-sodium.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-serum-sodium.json",
+      "bytes": 3156,
+      "sha256": "9ba5770f94f9976d5e4a89ef6adfe0d43f11cdbe0743466f17afe41526ca606e",
+      "note": "US Core 6.1.0 laboratory result Observation, valueQuantity; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-serum-glucose.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-serum-glucose.json",
+      "bytes": 3148,
+      "sha256": "9bad0cfe2712304b29ecefb892a790012864982ac6a829caab461625e0658f27",
+      "note": "US Core 6.1.0 laboratory result Observation, valueQuantity; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-cbc-hemoglobin.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-cbc-hemoglobin.json",
+      "bytes": 2843,
+      "sha256": "2d7244924c2ff6a85fa28531530387c3df0551f87fd7b269f3594aad8ece1a80",
+      "note": "US Core 6.1.0 laboratory result Observation, valueQuantity; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-urobilinogen.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-urobilinogen.json",
+      "bytes": 2698,
+      "sha256": "6a329473917d4f8afc73ed110ee82009d5cc6c0749dc9b1e3035236fe0cb7f9d",
+      "note": "US Core 6.1.0 laboratory result Observation, valueQuantity; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-at-home-in-vitro-test.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-at-home-in-vitro-test.json",
+      "bytes": 2344,
+      "sha256": "3bf31fb0dcc9171df039959c097b5392d1cbb9eb1992b7e688e2202a7402a359",
+      "note": "US Core 6.1.0 laboratory result Observation, valueCodeableConcept; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-capillary-refill-time-nail-bed.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-capillary-refill-time-nail-bed.json",
+      "bytes": 2130,
+      "sha256": "267c23772ce98a1ddb93110dc63263b40ffa3c143c2125054646db2ac3ebbae6",
+      "note": "US Core 6.1.0 clinical result Observation, valueQuantity; declares us-core-observation-clinical-result."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-jugular-vein-distension.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-jugular-vein-distension.json",
+      "bytes": 2185,
+      "sha256": "a5c36854e3e9391f3816db5687734742d8a5202b50041ba8eb7a22be46c9f8d7",
+      "note": "US Core 6.1.0 clinical result Observation, valueCodeableConcept; declares us-core-observation-clinical-result."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-ekg-impression.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-ekg-impression.json",
+      "bytes": 1949,
+      "sha256": "967ef6fc3db386730040b69ae62e596ce221fdf8cc27b6a272fa0baac8ed45ed",
+      "note": "US Core 6.1.0 clinical result Observation, valueString; declares us-core-observation-clinical-result."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-10-minute-apgar-score.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-10-minute-apgar-score.json",
+      "bytes": 2201,
+      "sha256": "a01f6e59faad4f137211adbfa6a4836bf30369c56798725b53eb5c38584be2ae",
+      "note": "US Core 6.1.0 screening and assessment Observation, valueQuantity; declares us-core-observation-screening-assessment."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-PHQ9-item-example-44250-9.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-PHQ9-item-example-44250-9.json",
+      "bytes": 2928,
+      "sha256": "8026de099bcb411bb514f2d364fd9553190c2b2dfb332f10daf1662ac7e26348",
+      "note": "US Core 6.1.0 screening and assessment Observation, valueCodeableConcept; declares us-core-observation-screening-assessment."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Observation-some-day-smoker.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Observation-some-day-smoker.json",
+      "bytes": 2169,
+      "sha256": "1bb873b09bbc7de93395cc96e92245d587fbae612ad5151ac72eb824b7c1d474",
+      "note": "US Core 6.1.0 smoking status Observation, valueCodeableConcept; declares us-core-smokingstatus."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Organization-acme-lab.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Organization-acme-lab.json",
+      "bytes": 1748,
+      "sha256": "f0a19be9bd08d4a5aa3b899e4f3b6c9cc1b921d2c8215fd13a3724dac06e201d",
+      "note": "US Core 6.1.0 organization, identifier systems as published; declares us-core-organization."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Organization-acme-payer.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Organization-acme-payer.json",
+      "bytes": 1617,
+      "sha256": "7fc01127ddde561b88d799c87e66e532cd56a9cd7e589939e25f2f6eddde1474",
+      "note": "US Core 6.1.0 organization, identifier systems as published; declares us-core-organization."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Organization-holy-healthcare.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Organization-holy-healthcare.json",
+      "bytes": 1701,
+      "sha256": "c420bca68497ef7ac9ca92e75d2efbdde4f083a342026f9a9e17c4b7506da347",
+      "note": "US Core 6.1.0 organization, identifier systems as published; declares us-core-organization."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/6.1.0/Practitioner-practitioner-1.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "6.1.0",
+      "licence": "CC0-1.0",
+      "path": "6.1.0/package/example/Practitioner-practitioner-1.json",
+      "bytes": 1371,
+      "sha256": "74585a2fe35d4e9ac8e1ec4547538b2a810de082c3f5ecdbd55cc830b0869ba6",
+      "note": "US Core 6.1.0 practitioner, identifier systems as published; declares us-core-practitioner."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-serum-sodium.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-serum-sodium.json",
+      "bytes": 3359,
+      "sha256": "0b97e8926eeaa9044019d5408dbeada6777e5f0674a68fb3c79e75e5f801c4aa",
+      "note": "US Core 9.0.0 laboratory result Observation, valueQuantity; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-serum-glucose.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-serum-glucose.json",
+      "bytes": 3347,
+      "sha256": "01ca753378cb7de408be05785c8ae0d6e0cd8f0077babe74aef81e7705831044",
+      "note": "US Core 9.0.0 laboratory result Observation, valueQuantity; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-cbc-hemoglobin.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-cbc-hemoglobin.json",
+      "bytes": 3401,
+      "sha256": "00a5283246a6ef7725a063919193ce4276229b6267dee214bc14ab485c84d1ba",
+      "note": "US Core 9.0.0 laboratory result Observation, valueQuantity; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-urobilinogen.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-urobilinogen.json",
+      "bytes": 3105,
+      "sha256": "745930ea8ef078f5c8270e1e5e36db86daa6f906d204271146a65fd2ffb638a2",
+      "note": "US Core 9.0.0 laboratory result Observation, valueQuantity; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-at-home-in-vitro-test.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-at-home-in-vitro-test.json",
+      "bytes": 2586,
+      "sha256": "f6df7baacd352a594dd7b69ac006223c42f76b32b9dd236741e60509935cbae2",
+      "note": "US Core 9.0.0 laboratory result Observation, valueCodeableConcept; declares us-core-observation-lab."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-capillary-refill-time-nail-bed.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-capillary-refill-time-nail-bed.json",
+      "bytes": 2102,
+      "sha256": "d08b5d5fb0b69a20cae5d7454f3c2e3a87b0caf37cac2ca89cf51f78b3d12e5b",
+      "note": "US Core 9.0.0 clinical result Observation, valueQuantity; declares us-core-observation-clinical-result."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-jugular-vein-distension.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-jugular-vein-distension.json",
+      "bytes": 2060,
+      "sha256": "77bc699903ecc2fbf96b851b7bd6e52a864dfdba0174f8f5453e9502d6abed9c",
+      "note": "US Core 9.0.0 clinical result Observation, valueCodeableConcept; declares us-core-observation-clinical-result."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-ekg-impression.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-ekg-impression.json",
+      "bytes": 1905,
+      "sha256": "439b859a804ac82c25a0b552620836417354b1897e31e2bd1681217295ec3d88",
+      "note": "US Core 9.0.0 clinical result Observation, valueString; declares us-core-observation-clinical-result."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-10-minute-apgar-score.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-10-minute-apgar-score.json",
+      "bytes": 3200,
+      "sha256": "938cf09e779b131e81b9ccc411f53703357a88a23236b0418e8bc86ce103e445",
+      "note": "US Core 9.0.0 screening and assessment Observation, valueQuantity; declares us-core-observation-screening-assessment."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-PHQ9-item-example-44250-9.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-PHQ9-item-example-44250-9.json",
+      "bytes": 2816,
+      "sha256": "cc566142883d974eb822ce9db171a656b7ea7c01ad1bbbf2acbc15d6fc46b94f",
+      "note": "US Core 9.0.0 screening and assessment Observation, valueCodeableConcept; declares us-core-observation-screening-assessment."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-PRAPARE-item-example-63512-8.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-PRAPARE-item-example-63512-8.json",
+      "bytes": 2603,
+      "sha256": "6a1330a4fed5e90daba42810c8c4291f81c163e90d68c9fb48fef23b4fb805b7",
+      "note": "US Core 9.0.0 screening and assessment Observation, valueQuantity; declares us-core-observation-screening-assessment."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-some-day-smoker.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-some-day-smoker.json",
+      "bytes": 2065,
+      "sha256": "e0be975602bde2627e555c509ac8a74bfa117eea909652870f32288fd45c3291",
+      "note": "US Core 9.0.0 smoking status Observation, valueCodeableConcept; declares us-core-smokingstatus."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-pack-years-example.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-pack-years-example.json",
+      "bytes": 2087,
+      "sha256": "647f0ecc6eb272707927d69d8b859896d4f79be6a0acee87a7fbe0c80a120a7d",
+      "note": "US Core 9.0.0 smoking status Observation, valueQuantity; declares us-core-smokingstatus."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Observation-e-cig-user.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Observation-e-cig-user.json",
+      "bytes": 2015,
+      "sha256": "e5ae88e92fc7a0458d2b3a490b32e032ce8251cc829ee5a51d041ae879116ccf",
+      "note": "US Core 9.0.0 smoking status Observation, valueCodeableConcept; declares us-core-smokingstatus."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Organization-acme-lab.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Organization-acme-lab.json",
+      "bytes": 3078,
+      "sha256": "e91cdd15e7ddf058d0e9cafb84304bac1147ae137ff22217bf64ffa25d33c0f5",
+      "note": "US Core 9.0.0 organization, identifier systems as published; declares us-core-organization."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Organization-acme-payer.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Organization-acme-payer.json",
+      "bytes": 2174,
+      "sha256": "f063c75ba62517adbcfe7a964d8d3d0dce659e387367e91b49327cc923981aee",
+      "note": "US Core 9.0.0 organization, identifier systems as published; declares us-core-organization."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Organization-holy-healthcare.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Organization-holy-healthcare.json",
+      "bytes": 1771,
+      "sha256": "0ee6f5a06e47aa2427a085566ee000683439921c482645124f47f05f2c50d413",
+      "note": "US Core 9.0.0 organization, identifier systems as published; declares us-core-organization."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Practitioner-practitioner-1.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Practitioner-practitioner-1.json",
+      "bytes": 1589,
+      "sha256": "65cc27072d05d9598a9596888a45969544bba5e472f609717a69c3a17d647dba",
+      "note": "US Core 9.0.0 practitioner, identifier systems as published; declares us-core-practitioner."
+    },
+    {
+      "id": "hl7-fhir-us-core-examples/9.0.0/Practitioner-practitioner-3.json",
+      "corpus": "hl7-fhir-us-core-examples",
+      "version": "9.0.0",
+      "licence": "CC0-1.0",
+      "path": "9.0.0/package/example/Practitioner-practitioner-3.json",
+      "bytes": 2783,
+      "sha256": "dc5c2b8f360e330d288cf8cf8d84bd702cd25fe6feea33235dd2694df36d88f6",
+      "note": "US Core 9.0.0 practitioner, identifier systems as published; declares us-core-practitioner."
     }
   ]
 }

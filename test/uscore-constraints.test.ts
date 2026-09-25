@@ -463,3 +463,42 @@ describe("AC-12: a US Core expression still outside the subset is reported unche
     });
   });
 });
+
+describe("differential pass AC-3: every declined row the profile layer reaches is INVARIANT_UNCHECKED through validateResource", () => {
+  // The occurrence the profile layer reaches for each declined key: a complex occurrence of the
+  // element the row anchors on. A slice-scoped row (us-core-17) is not reached by that layer at
+  // all, and a primitive effectiveDateTime is not an occurrence it anchors on; both limits are
+  // declared, and neither is an occurrence this criterion is about.
+  const reaching: Readonly<Record<string, () => FhirComplex>> = {
+    "Observation.effective[x]": () =>
+      observation({
+        effectivePeriod: { start: "2020-01-01T08:00:00Z", end: "2020-01-01T09:00:00Z" },
+      }),
+    "Provenance.agent": () =>
+      parse({
+        resourceType: "Provenance",
+        target: [{ reference: "Observation/syn-1" }],
+        recorded: "2020-01-01T08:00:00Z",
+        agent: [{ who: { reference: "Practitioner/syn-2" } }],
+      }),
+  };
+  const declined = classifyProjection(PROJECTION).filter((r) => r.head !== "evaluated");
+  const reached = declined.filter((r) => !r.element.includes(":"));
+
+  it("names an occurrence for every declined row that is not slice-scoped", () => {
+    expect(new Set(declined.filter((r) => r.element.includes(":")).map((r) => r.key))).toEqual(
+      new Set(["us-core-17"]),
+    );
+    for (const r of reached) expect(reaching[r.element], r.element).toBeDefined();
+    expect(reached.length).toBeGreaterThan(0);
+  });
+
+  for (const r of reached) {
+    it(`${r.version} ${r.profile} ${r.key} draws INVARIANT_UNCHECKED at information, never satisfied`, () => {
+      const make = reaching[r.element];
+      if (make === undefined) throw new Error(`no occurrence for ${r.element}`);
+      const profile = profileFrom([row(r.version, r.profile, r.element, r.key)]);
+      expect(findingsFor(make(), profile, r.key)).toEqual([["INVARIANT_UNCHECKED", "information"]]);
+    });
+  }
+});

@@ -16,7 +16,16 @@ import { describe, expect, it } from "vitest";
 
 import { STATUS } from "../scripts/differential/compare.mjs";
 import type { Record_ } from "../scripts/differential/compare.mjs";
-import { REPO_ROOT, sha256 } from "../scripts/differential/corpus.mjs";
+import {
+  corpusOf,
+  includedDocuments,
+  loadDeclaration,
+  REPO_ROOT,
+  sha256,
+} from "../scripts/differential/corpus.mjs";
+import { runComparison } from "../scripts/differential/run.mjs";
+import type { OwnOptions } from "../scripts/differential/run.mjs";
+import { isPackageCorpus } from "../scripts/differential/uscore.mjs";
 import {
   attributeOutcome,
   FHIR_VERSION,
@@ -43,6 +52,7 @@ import {
   resolveTerminologyInputs,
   TERMINOLOGY_INPUTS,
 } from "../scripts/differential/terminology.mjs";
+import { observation, QUANTITY, recordingOracle, US_CORE, usCoreWorld } from "./_uscore-world.js";
 
 function scratch(): string {
   return mkdtempSync(join(tmpdir(), "fhir-oracle-test-"));
@@ -545,5 +555,71 @@ describe("a document without a readable outcome is not agreement between two run
   it("demonstrates determinism only when every repeated document was actually compared", () => {
     const both = [record({ id: "corpus/a.json" }), record({ id: "corpus/b.json" })];
     expect(determinismVerdict(runRecord(both), runRecord(both)).demonstrated).toBe(true);
+  });
+});
+
+describe("AC-11: the three pre-existing corpora are compared exactly as before the US Core pass", () => {
+  it("validates their documents with no profile supplied and asks the oracle with the pinned argv", () => {
+    const patient = '{"resourceType":"Patient","id":"syn-1"}';
+    const world = usCoreWorld({
+      documents: [
+        {
+          version: "9.0.0",
+          file: "lab.json",
+          body: observation([`${US_CORE}us-core-observation-lab|9.0.0`], QUANTITY),
+        },
+      ],
+      existing: [patient],
+    });
+    const oracle = recordingOracle();
+    const calls: { text: string; arity: number; options: OwnOptions | undefined }[] = [];
+    runComparison({
+      jar: world.jar,
+      identity: world.identity,
+      declaration: world.declaration,
+      terminology: world.terminology,
+      ourFindings: (...args: [string, OwnOptions?]) => {
+        calls.push({ text: args[0], arity: args.length, options: args[1] });
+        return { ok: true, issues: [], parseRefused: false };
+      },
+      location: { documentsRoot: world.documentsRoot },
+      exec: oracle.exec,
+      read: oracle.read,
+    });
+    // This library is asked about the pre-existing document with the document alone: no profile
+    // option at all, which is how it was asked before the US Core pass existed.
+    const own = calls.filter((c) => c.text === patient);
+    expect(own).toEqual([{ text: patient, arity: 1, options: undefined }]);
+    // The oracle is asked about it with the argv it received before, spelled here in full rather
+    // than rebuilt through the function under test.
+    const batch = oracle.calls.find((args) => args.some((a) => a.endsWith("-doc-0.json")));
+    const staged = batch?.find((a) => a.endsWith("-doc-0.json"));
+    const output = batch?.[batch.length - 1];
+    expect(batch).toEqual([
+      "-jar",
+      world.jar,
+      staged,
+      "-version",
+      "4.0.1",
+      "-ig",
+      "hl7.fhir.us.core#6.1.0",
+      "-tx",
+      "n/a",
+      "-txCache",
+      "n/a",
+      "-output",
+      output,
+    ]);
+  });
+
+  it("does not let the compared count of those three corpora fall below what they compared before", () => {
+    const committed = loadDeclaration();
+    const preExisting = includedDocuments(committed).filter(
+      (d) => !isPackageCorpus(corpusOf(committed, d)),
+    );
+    expect(new Set(preExisting.map((d) => d.corpus))).toEqual(
+      new Set(["cosyte-fhir-fixtures", "fhir-test-cases", "hl7-fhir-r4-examples"]),
+    );
+    expect(preExisting.length).toBeGreaterThanOrEqual(179);
   });
 });

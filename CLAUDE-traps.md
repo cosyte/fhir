@@ -307,7 +307,7 @@ Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
   meta-repo needs no change and must not be touched.**
   [`#attw-false-green-port`](documentation/agent-notes.md#attw-false-green-port)
 - **The differential corpus is DECLARED (`corpus/corpus.json`), FETCHED, and never committed.** It
-  is no longer ten in-tree fixtures; it is three corpora and only one of them was written here. **Do
+  is no longer ten in-tree fixtures; it is four corpora and only one of them was written here. **Do
   not vendor third-party documents to make them handy**: real FHIR examples spell `family` /
   `given` / `birthDate` / `line`, the scanner sweeps what git carries repo-wide, and its allow-lists
   are declarations about OUR synthetic fixtures. **CHANGE THE LAYOUT, NEVER THE ALLOW-LISTS**, and
@@ -315,7 +315,15 @@ Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
   every run; a disagreement is NEVER closed by loosening what the validator reports**, and a
   hand-authored document to reach the floor is forbidden (ADR 0018). **A missing answer is not
   agreement**: no readable oracle outcome means uncounted AND not clean. The oracle is pinned to a
-  release and identified by the **jar's own bytes**, so a substituted artifact shows.
+  release and identified by the **jar's own bytes**, so a substituted artifact shows. **The US Core
+  pass (`scripts/differential/uscore.mjs`) is the only place a profile is supplied**: an example is
+  validated with EXACTLY the profiles its `meta.profile` declares, out of the digest-verified package
+  of its version (never fewer: an unresolvable one is no readable outcome), the oracle gets that
+  version's `-ig`, and the other three corpora keep no profile and their old argv. **Reach is printed
+  per newly evaluated row; `unchecked`, `not evaluated (primitive occurrence)`,
+  `not evaluated (document refused)` (the reader failed closed, so no constraint ran) and
+  `not reached` are NEVER agreement and never exercise the UCUM rule, and a US Core exclusion whose
+  only class is `invariant` reds the corpus suite.**
   [`#the-differential-corpus-is-no-longer-ten-fixtures-2026-08-25`](documentation/agent-notes.md#the-differential-corpus-is-no-longer-ten-fixtures-2026-08-25)
 - **A PINNED RELEASE WAS NOT A PINNED ORACLE: `-tx` DEFAULTS TO `https://tx.fhir.org` AND THE
   VERDICT WAS A FUNCTION OF THE WEATHER** (three documents in the `FALSE VALID` bucket on one run

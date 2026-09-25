@@ -6,6 +6,9 @@
  * Every branch below is graded in a container with no Java, which is where this suite runs.
  */
 
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -24,6 +27,29 @@ import {
   TX_ISSUE_TYPE_SYSTEM,
 } from "../scripts/differential/compare.mjs";
 import type { Record_ } from "../scripts/differential/compare.mjs";
+import { CorpusError } from "../scripts/differential/corpus.mjs";
+import { runComparison } from "../scripts/differential/run.mjs";
+import type { OwnAnswer, OwnOptions } from "../scripts/differential/run.mjs";
+import {
+  formatReachReport,
+  loadNewlyEvaluatedRows,
+  NOT_REACHED,
+  ROW_ANSWER,
+  ucumExercised,
+  ucumShortfall,
+} from "../scripts/differential/uscore.mjs";
+import type { UsCoreRow } from "../scripts/differential/uscore.mjs";
+import {
+  CONCEPT,
+  CORPUS,
+  observation,
+  QUANTITY,
+  recordingOracle,
+  STRING,
+  US_CORE,
+  usCoreWorld,
+} from "./_uscore-world.js";
+import type { World, WorldOptions } from "./_uscore-world.js";
 
 const err = (location = "Patient.gender") => ({ severity: "error", location });
 const fatal = (location = "") => ({ severity: "fatal", location });
@@ -514,4 +540,513 @@ describe("the run prints the count and the oracle identity, and exits on both fa
     expect(summary.clean).toBe(1);
     expect(summary.compared).toBe(2);
   });
+});
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────────
+ * The US Core pass, end to end through the real harness, over a synthetic package built in
+ * `test/_uscore-world.ts`. The oracle and this library are functions in this file: the oracle stands
+ * in for the JVM and the library for `dist/`, which is where this suite's boundary is.
+ * ──────────────────────────────────────────────────────────────────────────────────────────────── */
+
+const LAB_9 = `${US_CORE}us-core-observation-lab|9.0.0`;
+const CLINICAL_9 = `${US_CORE}us-core-observation-clinical-result|9.0.0`;
+const ORGANIZATION_9 = `${US_CORE}us-core-organization|9.0.0`;
+
+const clean: OwnAnswer = { ok: true, issues: [], parseRefused: false };
+
+/** This library, stood in for by the answer it would give; every call is recorded with its options. */
+function recordingLibrary(answer: (text: string) => OwnAnswer = () => clean) {
+  const calls: { text: string; options: OwnOptions | undefined; arity: number }[] = [];
+  return {
+    calls,
+    ourFindings: (...args: [string, OwnOptions?]): OwnAnswer => {
+      calls.push({ text: args[0], options: args[1], arity: args.length });
+      return answer(args[0]);
+    },
+  };
+}
+
+function compareWorld(
+  world: World,
+  options: {
+    readonly library?: ReturnType<typeof recordingLibrary>;
+    readonly oracle?: ReturnType<typeof recordingOracle>;
+  } = {},
+) {
+  const oracle = options.oracle ?? recordingOracle();
+  const library = options.library ?? recordingLibrary();
+  const outcome = runComparison({
+    jar: world.jar,
+    identity: world.identity,
+    declaration: world.declaration,
+    terminology: world.terminology,
+    ourFindings: library.ourFindings,
+    location: { documentsRoot: world.documentsRoot },
+    exec: oracle.exec,
+    read: oracle.read,
+  });
+  return { outcome, oracle, library };
+}
+
+const doc = (version: string, file: string, body: string) => ({ version, file, body });
+const idOf = (version: string, file: string) => `${CORPUS}/${version}/${file}`;
+
+function reportOf(outcome: ReturnType<typeof compareWorld>["outcome"]): string[] {
+  const usCore = outcome.usCore;
+  if (usCore === undefined) throw new Error("the US Core pass did not run");
+  return formatReachReport(usCore.report);
+}
+
+function rowLine(lines: readonly string[], label: string): string {
+  const found = lines.filter((l) => l.startsWith(`  ${label}:`));
+  expect(found, label).toHaveLength(1);
+  return found[0] ?? "";
+}
+
+describe("AC-15: a US Core document is validated with exactly the profiles it declares, from its own version", () => {
+  const options: WorldOptions = {
+    documents: [
+      doc("9.0.0", "lab.json", observation([LAB_9, CLINICAL_9], QUANTITY)),
+      doc("6.1.0", "lab.json", observation([`${US_CORE}us-core-observation-lab`], QUANTITY)),
+    ],
+    existing: ['{"resourceType":"Patient","id":"syn-1"}'],
+  };
+
+  it("hands this library the verbatim profile of every meta.profile entry, read from that version's package", () => {
+    const world = usCoreWorld(options);
+    const { library } = compareWorld(world);
+    const lab9 = library.calls.find((c) => c.text === options.documents[0]?.body);
+    const lab6 = library.calls.find((c) => c.text === options.documents[1]?.body);
+    expect(lab9?.options?.profiles).toEqual([
+      world.profileText("9.0.0", "us-core-observation-lab"),
+      world.profileText("9.0.0", "us-core-observation-clinical-result"),
+    ]);
+    // The 6.1.0 document is validated with the 6.1.0 package's profile, not the 9.0.0 one.
+    expect(lab6?.options?.profiles).toEqual([
+      world.profileText("6.1.0", "us-core-observation-lab"),
+    ]);
+    expect(world.profileText("6.1.0", "us-core-observation-lab")).not.toBe(
+      world.profileText("9.0.0", "us-core-observation-lab"),
+    );
+  });
+
+  it("runs the oracle for each US Core version with exactly that version loaded, in a batch of its own", () => {
+    const world = usCoreWorld(options);
+    const { oracle } = compareWorld(world);
+    const igOf = (args: readonly string[]) => args[args.indexOf("-ig") + 1];
+    const staged = (args: readonly string[]) =>
+      args.filter((a) => a.endsWith(".json") && !a.endsWith("outcome.json"));
+    const nine = oracle.calls.filter((args) => igOf(args) === "hl7.fhir.us.core#9.0.0");
+    expect(nine).toHaveLength(1);
+    expect(staged(nine[0] ?? []).map((f) => f.slice(f.lastIndexOf("/") + 1))).toEqual([
+      "0001-lab.json",
+    ]);
+    const six = oracle.calls.filter(
+      (args) =>
+        igOf(args) === "hl7.fhir.us.core#6.1.0" &&
+        staged(args).some((f) => f.endsWith("-lab.json")),
+    );
+    expect(six).toHaveLength(1);
+    expect(staged(six[0] ?? [])).toHaveLength(1);
+    // Neither US Core batch carries the pre-existing corpus's document.
+    for (const args of [...nine, ...six]) {
+      expect(staged(args).some((f) => f.endsWith("-doc-0.json"))).toBe(false);
+    }
+  });
+});
+
+describe("AC-9: a package or a document that is not what the declaration records compares nothing", () => {
+  const options: WorldOptions = {
+    documents: [doc("9.0.0", "lab.json", observation([LAB_9], QUANTITY))],
+    existing: ['{"resourceType":"Patient","id":"syn-1"}'],
+  };
+
+  it("refuses a package whose byte count or digest differs, before any document is asked about", () => {
+    const tampers = [
+      (bytes: Buffer) => Buffer.concat([bytes, Buffer.from([0])]),
+      (bytes: Buffer) => {
+        const same = Buffer.from(bytes);
+        same[same.length - 1] = (same[same.length - 1] ?? 0) ^ 0xff;
+        return same;
+      },
+    ];
+    for (const tamper of tampers) {
+      const world = usCoreWorld(options);
+      const file = join(world.documentsRoot, CORPUS, "9.0.0", "package.tgz");
+      writeFileSync(file, tamper(world.packages["9.0.0"] ?? Buffer.alloc(0)));
+      const oracle = recordingOracle();
+      const library = recordingLibrary();
+      expect(() => compareWorld(world, { oracle, library })).toThrow(CorpusError);
+      expect(() => compareWorld(world, { oracle, library })).toThrow(
+        /US Core 9\.0\.0 package is \d+ bytes with sha256 [0-9a-f]{64}.*not the package this corpus was declared against/,
+      );
+      expect(oracle.calls).toHaveLength(0);
+      expect(library.calls).toHaveLength(0);
+    }
+  });
+
+  it("refuses a package that is not there at all", () => {
+    const world = usCoreWorld(options);
+    writeFileSync(join(world.documentsRoot, CORPUS, "9.0.0", "package.tgz"), "");
+    expect(() => compareWorld(world)).toThrow(CorpusError);
+  });
+
+  it("refuses a US Core document that differs from its declaration, before any document is asked about", () => {
+    const world = usCoreWorld(options);
+    writeFileSync(
+      join(world.documentsRoot, CORPUS, "9.0.0", "package", "example", "lab.json"),
+      observation([LAB_9], CONCEPT),
+    );
+    const oracle = recordingOracle();
+    expect(() => compareWorld(world, { oracle })).toThrow(/uscore\/9\.0\.0\/lab\.json/);
+    expect(oracle.calls).toHaveLength(0);
+  });
+});
+
+describe("AC-10: a document declaring no profile, or one its package lacks, has no readable outcome", () => {
+  const bodies = {
+    none: observation(undefined, QUANTITY),
+    missing: observation([LAB_9, `${US_CORE}us-core-not-in-this-package|9.0.0`], QUANTITY),
+    otherVersion: observation([`${US_CORE}us-core-observation-lab|6.1.0`], QUANTITY),
+    // An Organization profile on an Observation: validateResource would pass over it in silence.
+    otherType: observation([LAB_9, `${US_CORE}us-core-organization|9.0.0`], QUANTITY),
+    fine: observation([LAB_9], QUANTITY),
+  };
+
+  it("is neither compared nor clean, and is never validated with fewer profiles than it declares", () => {
+    const world = usCoreWorld({
+      documents: [
+        doc("9.0.0", "none.json", bodies.none),
+        doc("9.0.0", "missing.json", bodies.missing),
+        doc("9.0.0", "other-version.json", bodies.otherVersion),
+        doc("9.0.0", "other-type.json", bodies.otherType),
+        doc("9.0.0", "fine.json", bodies.fine),
+      ],
+    });
+    const { outcome, library } = compareWorld(world);
+    for (const file of ["none.json", "missing.json", "other-version.json", "other-type.json"]) {
+      const record = outcome.records.find((r) => r.id === idOf("9.0.0", file));
+      expect(record?.status, file).toBe(STATUS.NO_OWN_FINDINGS);
+      expect(record?.compared, file).toBe(false);
+      expect(record?.clean, file).toBe(false);
+      if (record !== undefined) {
+        expect(formatRecord(record), file).toContain("Not counted, and not reported clean");
+      }
+    }
+    // This library was asked about the one document whose every declared profile resolved, and
+    // about no other: not with the profiles that did resolve, and not with none.
+    expect(library.calls.map((c) => c.text)).toEqual([bodies.fine]);
+    expect(outcome.records.find((r) => r.id === idOf("9.0.0", "fine.json"))?.compared).toBe(true);
+    expect(outcome.summary.compared).toBe(1);
+    expect(outcome.summary.unusable).toHaveLength(4);
+    expect(
+      outcome.records.find((r) => r.id === idOf("9.0.0", "other-type.json"))?.detail,
+    ).toContain("declares meta.profile[1], a profile of another resource type");
+  });
+
+  it("names why: no declared profile, a profile the package lacks, a version it is not", () => {
+    const world = usCoreWorld({
+      documents: [
+        doc("9.0.0", "none.json", bodies.none),
+        doc("9.0.0", "missing.json", bodies.missing),
+        doc("9.0.0", "other-version.json", bodies.otherVersion),
+      ],
+    });
+    const { outcome } = compareWorld(world);
+    const detail = (file: string) =>
+      outcome.records.find((r) => r.id === idOf("9.0.0", file))?.detail;
+    expect(detail("none.json")).toContain("declares no profile in meta.profile");
+    expect(detail("missing.json")).toContain(
+      "declares meta.profile[1], which the US Core 9.0.0 package does not contain",
+    );
+    expect(detail("other-version.json")).toContain(
+      "declares meta.profile[0] at a version other than the US Core 9.0.0 package",
+    );
+    // By position, never by what the entry spells: meta.profile is document content.
+    expect(detail("missing.json")).not.toContain("us-core-not-in-this-package");
+    expect(detail("other-version.json")).not.toContain("6.1.0");
+  });
+});
+
+describe("AC-5: every newly evaluated row prints its reach, or not reached with the reason", () => {
+  const world = () =>
+    usCoreWorld({
+      documents: [
+        doc("9.0.0", "lab.json", observation([LAB_9], QUANTITY)),
+        doc("9.0.0", "clinical-string.json", observation([CLINICAL_9], STRING)),
+        doc(
+          "9.0.0",
+          "organization.json",
+          JSON.stringify({
+            resourceType: "Organization",
+            meta: { profile: [ORGANIZATION_9] },
+            identifier: [{ system: "http://hl7.org/fhir/sid/us-npi", value: "0000000000" }],
+          }),
+        ),
+      ],
+    });
+
+  it("reports on exactly the rows the committed classification newly evaluates", () => {
+    const rows = loadNewlyEvaluatedRows();
+    expect(rows).toHaveLength(18);
+    expect(rows.filter((r) => r.version === "6.1.0")).toHaveLength(8);
+    expect(rows.filter((r) => r.version === "9.0.0")).toHaveLength(10);
+    expect([...new Set(rows.map((r) => r.key))].sort()).toEqual(
+      [
+        "us-core-16",
+        "us-core-18",
+        "us-core-19",
+        "us-core-24",
+        "us-core-25",
+        "us-core-27",
+        "us-core-3",
+        "us-core-4",
+      ].sort(),
+    );
+  });
+
+  it("prints one line per row: how many compared documents reach it, or not reached and why", () => {
+    const { outcome } = compareWorld(world());
+    const lines = reportOf(outcome);
+    for (const row of loadNewlyEvaluatedRows()) {
+      rowLine(lines, `${row.version}  ${row.profile}  ${row.element}  ${row.key}`);
+    }
+    // The lab document reaches us-core-4 on its own profile.
+    expect(
+      rowLine(lines, "9.0.0  us-core-observation-lab  Observation.value[x]  us-core-4"),
+    ).toContain("reached by 1 compared document(s): 1 agree");
+    // us-core-3 is carried by the clinical-result profile AND inherited by the lab profile, so both
+    // Observations reach it; the one whose value is a primitive is not evaluated there.
+    const us3 = rowLine(
+      lines,
+      "9.0.0  us-core-observation-clinical-result  Observation.value[x]  us-core-3",
+    );
+    expect(us3).toContain("reached by 2 compared document(s): 1 agree");
+    expect(us3).toContain(`1 ${ROW_ANSWER.NOT_EVALUATED}`);
+    expect(lines).toContain(
+      `    ${ROW_ANSWER.NOT_EVALUATED}: ${idOf("9.0.0", "clinical-string.json")}; not counted as agreement.`,
+    );
+    // A slice-scoped row is not reached even where a document carries the sliced element.
+    expect(
+      rowLine(lines, "9.0.0  us-core-organization  Organization.identifier:NPI  us-core-16"),
+    ).toContain(
+      `not reached (${NOT_REACHED.SLICE_SCOPED}); 1 compared document(s) declare a profile carrying it`,
+    );
+    // A row no compared document declares is not reached, and says so.
+    expect(rowLine(lines, "9.0.0  us-core-smokingstatus  Observation  us-core-24")).toContain(
+      `not reached (${NOT_REACHED.NO_COMPARED_DOCUMENT})`,
+    );
+  });
+
+  it("does not count a not-reached row, or a document that was not compared, as agreement", () => {
+    const { outcome } = compareWorld(world());
+    const closing = reportOf(outcome).find((l) => l.includes("newly evaluated row(s) agree"));
+    expect(closing).toContain(
+      "2 of 18 newly evaluated row(s) agree on at least one compared document",
+    );
+    expect(closing).toContain(`not reached (${NOT_REACHED.SLICE_SCOPED})`);
+    // The same world with the oracle silent on the lab document: it is not compared, so it reaches
+    // nothing, and the two rows it alone agreed on are no longer counted.
+    const silent = recordingOracle((name) => (name.endsWith("-lab.json") ? null : []));
+    const { outcome: without } = compareWorld(world(), { oracle: silent });
+    const lines = reportOf(without);
+    expect(
+      rowLine(lines, "9.0.0  us-core-observation-lab  Observation.value[x]  us-core-4"),
+    ).toContain(`not reached (${NOT_REACHED.NO_COMPARED_DOCUMENT})`);
+    expect(lines.find((l) => l.includes("newly evaluated row(s) agree"))).toContain(
+      "0 of 18 newly evaluated row(s) agree",
+    );
+  });
+});
+
+describe("AC-8: a row whose only answer is INVARIANT_UNCHECKED is printed as unchecked, never as agreement", () => {
+  const unchecked = (key: string): OwnAnswer => ({
+    ok: true,
+    issues: [
+      {
+        severity: "information",
+        location: "Observation.value[x]",
+        code: "INVARIANT_UNCHECKED",
+        constraint: key,
+      },
+    ],
+    parseRefused: false,
+  });
+  const oracleAnswers: readonly (readonly [string, readonly unknown[]])[] = [
+    ["the oracle is clean", []],
+    [
+      "the oracle errors",
+      [{ severity: "error", expression: ["Observation.value"], code: "invariant" }],
+    ],
+  ];
+
+  for (const [label, oracleIssues] of oracleAnswers) {
+    it(`prints the document as unchecked for that row and does not count it when ${label}`, () => {
+      const world = usCoreWorld({
+        documents: [doc("9.0.0", "lab.json", observation([LAB_9], QUANTITY))],
+      });
+      const { outcome } = compareWorld(world, {
+        library: recordingLibrary(() => unchecked("us-core-4")),
+        oracle: recordingOracle(() => oracleIssues),
+      });
+      const lines = reportOf(outcome);
+      expect(
+        rowLine(lines, "9.0.0  us-core-observation-lab  Observation.value[x]  us-core-4"),
+      ).toContain("reached by 1 compared document(s): 0 agree, 1 unchecked");
+      expect(lines).toContain(
+        `    unchecked: ${idOf("9.0.0", "lab.json")}, this library's only answer for us-core-4 is INVARIANT_UNCHECKED; not counted as agreement.`,
+      );
+      const result = outcome.usCore?.report.rows.find(
+        (r) => r.row.version === "9.0.0" && r.row.key === "us-core-4",
+      );
+      expect(result?.documents.map((d) => [d.answer, d.agrees])).toEqual([
+        [ROW_ANSWER.UNCHECKED, false],
+      ]);
+    });
+  }
+
+  it("keeps the rows this library did decide on the same document apart from the unchecked one", () => {
+    const world = usCoreWorld({
+      documents: [doc("9.0.0", "lab.json", observation([LAB_9], QUANTITY))],
+    });
+    const { outcome } = compareWorld(world, {
+      library: recordingLibrary(() => unchecked("us-core-4")),
+    });
+    expect(
+      rowLine(
+        reportOf(outcome),
+        "9.0.0  us-core-observation-clinical-result  Observation.value[x]  us-core-3",
+      ),
+    ).toContain("reached by 1 compared document(s): 1 agree, 0 unchecked");
+  });
+});
+
+describe("AC-7: no compared 9.0.0 document deciding us-core-3 over a valueQuantity is named, and fails", () => {
+  const reportFor = (
+    documents: WorldOptions["documents"],
+    answer?: (text: string) => OwnAnswer,
+  ) => {
+    const { outcome } = compareWorld(usCoreWorld({ documents }), {
+      library: recordingLibrary(answer),
+    });
+    const usCore = outcome.usCore;
+    if (usCore === undefined) throw new Error("the US Core pass did not run");
+    return usCore.report;
+  };
+
+  it("is satisfied by one compared 9.0.0 document with a valueQuantity that this library decided", () => {
+    const report = reportFor([doc("9.0.0", "lab.json", observation([LAB_9], QUANTITY))]);
+    expect(ucumExercised(report)).toEqual([idOf("9.0.0", "lab.json")]);
+    expect(ucumShortfall(report)).toBeNull();
+  });
+
+  it("names the condition when the only reaching documents are another value type, or another version", () => {
+    const report = reportFor([
+      doc("9.0.0", "concept.json", observation([LAB_9], CONCEPT)),
+      doc("6.1.0", "lab.json", observation([`${US_CORE}us-core-observation-lab`], QUANTITY)),
+    ]);
+    expect(ucumExercised(report)).toEqual([]);
+    const condition = ucumShortfall(report);
+    expect(condition).toContain(
+      "no compared US Core 9.0.0 document reaches us-core-3 with a valueQuantity",
+    );
+    expect(condition).toContain("This run fails.");
+    expect(formatReachReport(report)).toContain(condition);
+  });
+
+  it("does not count a valueQuantity document whose only us-core-3 answer was unchecked", () => {
+    const report = reportFor([doc("9.0.0", "lab.json", observation([LAB_9], QUANTITY))], () => ({
+      ok: true,
+      issues: [
+        {
+          severity: "information",
+          location: "Observation.value[x]",
+          code: "INVARIANT_UNCHECKED",
+          constraint: "us-core-3",
+        },
+      ],
+      parseRefused: false,
+    }));
+    expect(ucumShortfall(report)).not.toBeNull();
+  });
+
+  it("names the condition over a pass that reached nothing, rather than passing it", () => {
+    const rows: readonly UsCoreRow[] = loadNewlyEvaluatedRows();
+    const report = {
+      rows: rows.map((row) => ({ row, reached: false, declaring: 0, documents: [] })),
+      comparedDocuments: 0,
+    };
+    expect(ucumShortfall(report)).not.toBeNull();
+  });
+});
+
+describe("AC-5 / AC-7: a document this library refused to read reaches its rows and decided none of them", () => {
+  // What `findings.mjs` returns when the reader fails closed: `validateResource` never ran, so no
+  // constraint was evaluated, and the harness compares the document (safe refusal, or agreement
+  // when the oracle errors too).
+  const refused: OwnAnswer = {
+    ok: true,
+    issues: [{ severity: "fatal", location: "Observation.meta.profile" }],
+    parseRefused: true,
+  };
+  const oracleAnswers: readonly (readonly [string, string, readonly unknown[]])[] = [
+    ["the oracle is clean", STATUS.SAFE_REFUSAL, []],
+    [
+      "the oracle errors too",
+      STATUS.AGREE,
+      [{ severity: "error", expression: ["Observation.value"], code: "invariant" }],
+    ],
+  ];
+  const refusedWorld = (oracleIssues: readonly unknown[]) =>
+    compareWorld(
+      usCoreWorld({ documents: [doc("9.0.0", "lab.json", observation([LAB_9], QUANTITY))] }),
+      {
+        library: recordingLibrary(() => refused),
+        oracle: recordingOracle(() => oracleIssues),
+      },
+    ).outcome;
+
+  for (const [label, status, oracleIssues] of oracleAnswers) {
+    it(`AC-7: names the UCUM condition when the only valueQuantity document was refused and ${label}`, () => {
+      const outcome = refusedWorld(oracleIssues);
+      // The document IS compared, so the reach report considers it.
+      expect(outcome.records.map((r) => [r.status, r.compared])).toEqual([[status, true]]);
+      const report = outcome.usCore?.report;
+      if (report === undefined) throw new Error("the US Core pass did not run");
+      expect(ucumExercised(report)).toEqual([]);
+      expect(ucumShortfall(report)).toContain(
+        "no compared US Core 9.0.0 document reaches us-core-3 with a valueQuantity",
+      );
+    });
+
+    it(`AC-5: prints the refused document as not evaluated on every row it reaches, never satisfied or agreement, when ${label}`, () => {
+      const outcome = refusedWorld(oracleIssues);
+      const results = (outcome.usCore?.report.rows ?? []).filter((r) => r.reached);
+      // us-core-3 (inherited from clinical-result) and the lab profile's own us-core-4.
+      expect(results.map((r) => `${r.row.profile} ${r.row.key}`).sort()).toEqual([
+        "us-core-observation-clinical-result us-core-3",
+        "us-core-observation-lab us-core-4",
+      ]);
+      for (const result of results) {
+        expect(result.documents.map((d) => [d.answer, d.agrees])).toEqual([
+          [ROW_ANSWER.NOT_VALIDATED, false],
+        ]);
+      }
+      const lines = reportOf(outcome);
+      expect(
+        rowLine(
+          lines,
+          "9.0.0  us-core-observation-clinical-result  Observation.value[x]  us-core-3",
+        ),
+      ).toContain(
+        `reached by 1 compared document(s): 0 agree, 0 unchecked, 0 ${ROW_ANSWER.NOT_EVALUATED}, 1 ${ROW_ANSWER.NOT_VALIDATED}`,
+      );
+      expect(lines).toContain(
+        `    ${ROW_ANSWER.NOT_VALIDATED}: ${idOf("9.0.0", "lab.json")}, this library refused to read it, so no constraint was evaluated on it; not counted as agreement.`,
+      );
+      expect(lines.find((l) => l.includes("newly evaluated row(s) agree"))).toContain(
+        "0 of 18 newly evaluated row(s) agree",
+      );
+    });
+  }
 });

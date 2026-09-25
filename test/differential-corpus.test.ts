@@ -23,6 +23,7 @@ import { dirname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { formatExclusions } from "../scripts/differential/compare.mjs";
 import {
   CorpusError,
   corpusOf,
@@ -30,8 +31,10 @@ import {
   declaredDocuments,
   determinismSubset,
   documentLocation,
+  exclusionClasses,
   exclusions,
   includedDocuments,
+  isInvariantOnlyExclusion,
   loadDeclaration,
   LICENCES_ROOT,
   parseDeclaration,
@@ -42,6 +45,12 @@ import {
   shortfall,
 } from "../scripts/differential/corpus.mjs";
 import type { Declaration, DocumentRecord } from "../scripts/differential/corpus.mjs";
+import {
+  isPackageCorpus,
+  packageEntryOf,
+  packageLocation,
+  PROJECTION_PATH,
+} from "../scripts/differential/uscore.mjs";
 import { extractNamed, readCentralDirectory, ZipError } from "../scripts/differential/zip.mjs";
 
 const declaration = loadDeclaration();
@@ -611,5 +620,148 @@ describe("the archive reader the CC0 corpus is materialised through", () => {
 
   it("refuses bytes that are not a zip archive at all", () => {
     expect(() => readCentralDirectory(Buffer.alloc(64))).toThrow(ZipError);
+  });
+});
+
+describe("AC-4: every US Core document is declared with its version, licence, path, bytes and digest", () => {
+  const usCore = declaration.corpora.filter(isPackageCorpus);
+  const usCoreDocuments = declaredDocuments(declaration).filter((d) =>
+    usCore.some((c) => c.id === d.corpus),
+  );
+
+  it("declares one US Core corpus, third party and CC0-1.0, whose documents each carry all five facts", () => {
+    expect(usCore).toHaveLength(1);
+    const corpus = usCore[0];
+    expect(corpus?.authored).toBe("third-party");
+    expect(corpus?.licence).toBe("CC0-1.0");
+    expect(usCoreDocuments.length).toBeGreaterThan(0);
+    for (const document of usCoreDocuments) {
+      expect(["6.1.0", "9.0.0"], document.id).toContain(document.version);
+      expect(document.licence, document.id).toBe("CC0-1.0");
+      expect(Number.isInteger(document.bytes) && document.bytes > 0, document.id).toBe(true);
+      expect(document.sha256, document.id).toMatch(/^[0-9a-f]{64}$/);
+      expect(document.path, document.id).toMatch(
+        /^(?:6\.1\.0|9\.0\.0)\/package\/example\/[^/]+\.json$/,
+      );
+    }
+    // Both versions are compared, so neither version's constraints go unexercised by construction.
+    expect(
+      new Set(
+        includedDocuments(declaration)
+          .filter((d) => d.corpus === corpus?.id)
+          .map((d) => d.version),
+      ),
+    ).toEqual(new Set(["6.1.0", "9.0.0"]));
+  });
+
+  it("records each version's package by the URL, byte count and digest the constraint rows were projected from", () => {
+    const projection = JSON.parse(readFileSync(PROJECTION_PATH, "utf8")) as {
+      packages: Record<string, { url: string; bytes: number; sha256: string }>;
+    };
+    const corpus = usCore[0];
+    expect(corpus?.acquisition.format).toBe("tgz");
+    expect(corpus?.acquisition.packages).toEqual(projection.packages);
+  });
+
+  it("names, for every document, an example file inside that version's recorded package, fetched and never committed", () => {
+    for (const document of usCoreDocuments) {
+      const corpus = corpusOf(declaration, document);
+      // Not hand-authored: the path is an entry of the package's own example directory, and the
+      // only way the bytes reach the harness is out of the digest-verified package.
+      expect(packageEntryOf(document), document.id).toMatch(/^package\/example\/[^/]+\.json$/);
+      expect(corpus.acquisition.packages?.[String(document.version)], document.id).toBeDefined();
+      expect(documentLocation(declaration, document), document.id).toContain(
+        join("corpus", "documents"),
+      );
+      expect(packageLocation(corpus, String(document.version)), document.id).toContain(
+        join("corpus", "documents"),
+      );
+    }
+  });
+
+  it("refuses the declaration, and so fails this suite, on a US Core entry missing or misstating any of them", () => {
+    const base = JSON.parse(readFileSync(DECLARATION_PATH, "utf8")) as {
+      documents: Record<string, unknown>[];
+    };
+    const at = base.documents.findIndex((d) => usCoreDocuments.some((u) => u.id === d["id"]));
+    expect(at).toBeGreaterThanOrEqual(0);
+    const withEntry = (change: (entry: Record<string, unknown>) => void): string => {
+      const copy = JSON.parse(JSON.stringify(base)) as typeof base;
+      const entry = copy.documents[at];
+      if (entry === undefined) throw new Error("no US Core entry");
+      change(entry);
+      return JSON.stringify(copy);
+    };
+    for (const field of ["version", "licence", "path", "bytes", "sha256"]) {
+      expect(
+        () =>
+          parseDeclaration(
+            withEntry((entry) => {
+              delete entry[field];
+            }),
+          ),
+        field,
+      ).toThrow(CorpusError);
+    }
+    expect(() => parseDeclaration(withEntry((e) => (e["version"] = "7.0.0")))).toThrow(
+      /not a package/,
+    );
+    expect(() => parseDeclaration(withEntry((e) => (e["licence"] = "MIT")))).toThrow(
+      /package it comes out of is CC0-1.0/,
+    );
+    expect(() =>
+      parseDeclaration(withEntry((e) => (e["path"] = "9.0.0/package/StructureDefinition-x.json"))),
+    ).toThrow(/one example file/);
+  });
+});
+
+describe("AC-12: a US Core exclusion prints its reason every run, and never rests on an invariant alone", () => {
+  const base = JSON.parse(readFileSync(DECLARATION_PATH, "utf8")) as {
+    determinismSubset: string[];
+    documents: Record<string, unknown>[];
+  };
+  const usCoreIds = new Set(
+    declaredDocuments(declaration)
+      .filter((d) => isPackageCorpus(corpusOf(declaration, d)))
+      .map((d) => d.id),
+  );
+
+  it("prints an excluded US Core document with the reason recorded for it", () => {
+    const copy = JSON.parse(JSON.stringify(base)) as typeof base;
+    // One the determinism subset does not repeat: the subset may only name compared documents.
+    const entry = copy.documents.find(
+      (d) => usCoreIds.has(String(d["id"])) && !copy.determinismSubset.includes(String(d["id"])),
+    );
+    if (entry === undefined) throw new Error("no US Core entry");
+    entry["exclude"] =
+      "measured against validator_cli 6.10.2: the reference validator reports 1 error(s) this " +
+      "library does not - 1x invalid (a URL or canonical reference the reference validator " +
+      "resolves and this library does not)";
+    const lines = formatExclusions(exclusions(parseDeclaration(JSON.stringify(copy)))).join("\n");
+    expect(lines).toContain(String(entry["id"]));
+    expect(lines).toContain("1x invalid (a URL or canonical reference");
+    expect(lines).toContain("not counted toward the compared count");
+  });
+
+  it("reads the recorded classes off a measured reason, and knows an invariant-only one", () => {
+    const invariantOnly =
+      "measured: the reference validator reports 1 error(s) this library does not - 1x invariant " +
+      "(a constraint the reference validator evaluates); first at Observation.value";
+    const mixed = `${invariantOnly}, and 2x invalid (a canonical reference it resolves)`;
+    expect(exclusionClasses(invariantOnly)).toEqual(["invariant"]);
+    expect(isInvariantOnlyExclusion(invariantOnly)).toBe(true);
+    expect(exclusionClasses(mixed)).toEqual(["invalid", "invariant"]);
+    expect(isInvariantOnlyExclusion(mixed)).toBe(false);
+    expect(isInvariantOnlyExclusion("recorded with no measured class at all, a label")).toBe(false);
+  });
+
+  it("fails on any US Core exclusion whose only recorded class is invariant", () => {
+    for (const entry of exclusions(declaration)) {
+      if (!usCoreIds.has(entry.id)) continue;
+      expect(
+        isInvariantOnlyExclusion(entry.reason),
+        `${entry.id} is excluded for an invariant disagreement alone, which the US Core pass exists to find`,
+      ).toBe(false);
+    }
   });
 });

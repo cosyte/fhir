@@ -24,6 +24,15 @@
  * reaches the run record: `record.mjs` copies named fields only, and the documents are keyed by
  * their DECLARED id. That is the whole reason two runs can produce byte-identical records.
  *
+ * THE US CORE PASS RIDES THE SAME COMPARISON, AND LEAVES THE OTHER THREE CORPORA'S PATH ALONE
+ * ------------------------------------------------------------------------------------------
+ * A document of a packages corpus (`uscore.mjs`) is validated with exactly the profiles its
+ * `meta.profile` declares, read out of the package of the version it is declared under, and the
+ * oracle runs it in a batch of its own with THAT US Core version loaded. Every other document is
+ * validated with no profile supplied and asked of the oracle with the argv it has always been asked
+ * with. Every recorded package is verified BEFORE any document is resolved or staged, so a package
+ * that is not the one declared means nothing is compared at all.
+ *
  * @packageDocumentation
  */
 
@@ -36,6 +45,15 @@ import { corpusOf, exclusions, resolveCorpus } from "./corpus.mjs";
 import { oracleArgs, runOracleBatch } from "./oracle.mjs";
 import { buildRunRecord } from "./record.mjs";
 import { auditTerminologyArgv } from "./terminology.mjs";
+import {
+  declaredProfiles,
+  isPackageCorpus,
+  loadNewlyEvaluatedRows,
+  loadPackage,
+  packageCorpora,
+  reachReport,
+  usCoreIg,
+} from "./uscore.mjs";
 
 /** How many documents go through one JVM start. Amortises ~30s of startup over a batch. */
 export const BATCH_SIZE = Number(process.env.DIFFERENTIAL_BATCH_SIZE ?? "40");
@@ -60,7 +78,11 @@ function chunk(items, size) {
   return out;
 }
 
-/** Ask the oracle about every staged document, batch by batch, under the declared inputs. */
+/**
+ * Ask the oracle about every staged document, batch by batch, under the declared inputs. `ig` is
+ * the US Core release the oracle loads for these documents; `undefined` leaves the argv exactly as
+ * the three pre-existing corpora have always been asked with.
+ */
 function askOracle(jar, staged, options) {
   const answers = new Map();
   for (const batch of chunk(staged, Math.max(1, options.batchSize))) {
@@ -68,6 +90,7 @@ function askOracle(jar, staged, options) {
     const result = runOracleBatch(jar, batch.map((s) => s.staged), outputPath, {
       timeoutMs: options.timeoutMs,
       terminology: options.terminology,
+      ...(options.ig === undefined ? {} : { ig: options.ig }),
       ...(options.exec === undefined ? {} : { exec: options.exec }),
       ...(options.read === undefined ? {} : { read: options.read }),
     });
@@ -103,6 +126,8 @@ function askOracle(jar, staged, options) {
  * @param input.scope        what the record calls this comparison: `full` or `subset`
  * @param input.exec         process launcher, injectable so the plumbing is gradeable with no JVM
  * @param input.read         output reader, injectable for the same reason
+ * @param input.rows         the US Core rows the reach report covers; the committed newly evaluated
+ *                           rows when omitted
  */
 export function runComparison(input) {
   const {
@@ -120,24 +145,96 @@ export function runComparison(input) {
     location = {},
   } = input;
 
-  // Before a document is staged: the argv the oracle will be invoked with, audited. Throws a
+  const packaged = packageCorpora(declaration);
+  const versions = [
+    ...new Set(packaged.flatMap((corpus) => Object.keys(corpus.acquisition.packages))),
+  ];
+
+  // Before a document is staged: every argv the oracle will be invoked with, audited. Throws a
   // TerminologyError the caller turns into "compared nothing, exit non-zero, named the condition".
   auditTerminologyArgv(oracleArgs(jar, ["<corpus>"], "<output>", { terminology }), terminology);
+  for (const version of versions) {
+    auditTerminologyArgv(
+      oracleArgs(jar, ["<corpus>"], "<output>", { terminology, ig: usCoreIg(version) }),
+      terminology,
+    );
+  }
+
+  // Before a document is resolved: every recorded package, verified and indexed. A package that is
+  // not the one the declaration records throws a CorpusError, and nothing is compared.
+  const indexes = new Map();
+  for (const corpus of packaged) {
+    for (const version of Object.keys(corpus.acquisition.packages)) {
+      indexes.set(`${corpus.id}@${version}`, loadPackage(corpus, version, location));
+    }
+  }
 
   const resolved = resolveCorpus(declaration, only === undefined ? location : { ...location, only });
   const staged = stage(resolved);
-  const answers = askOracle(jar, staged, { batchSize, timeoutMs, terminology, exec, read });
 
-  const records = staged.map((entry) =>
-    compareDocument({
+  // One oracle configuration per group: the pre-existing corpora first, exactly as before, then
+  // each US Core version with that version loaded.
+  const groups = new Map();
+  for (const entry of staged) {
+    const corpus = corpusOf(declaration, entry.document);
+    const ig = isPackageCorpus(corpus) ? usCoreIg(entry.document.version) : undefined;
+    const key = ig ?? "";
+    if (!groups.has(key)) groups.set(key, { ig, entries: [] });
+    groups.get(key).entries.push(entry);
+  }
+  const answers = new Map();
+  for (const { ig, entries } of groups.values()) {
+    const got = askOracle(jar, entries, { batchSize, timeoutMs, terminology, exec, read, ig });
+    for (const [id, answer] of got) answers.set(id, answer);
+  }
+
+  const usCoreDocuments = [];
+  const records = staged.map((entry) => {
+    const corpus = corpusOf(declaration, entry.document);
+    let ours;
+    let usCore;
+    if (isPackageCorpus(corpus)) {
+      const version = entry.document.version;
+      const index = indexes.get(`${corpus.id}@${version}`);
+      const declared = declaredProfiles(entry.text, version, index);
+      ours = declared.ok
+        ? ourFindings(entry.text, { profiles: declared.profiles })
+        : { ok: false, reason: declared.reason };
+      usCore = {
+        id: entry.document.id,
+        version,
+        text: entry.text,
+        index,
+        profiles: declared.ok ? declared.urls : undefined,
+        ours,
+      };
+    } else {
+      ours = ourFindings(entry.text);
+    }
+    const record = compareDocument({
       id: entry.document.id,
       oracle: answers.get(entry.document.id) ?? {
         ok: false,
         reason: "the oracle was never asked about this document",
       },
-      ours: ourFindings(entry.text),
-    }),
-  );
+      ours,
+    });
+    if (usCore !== undefined) usCoreDocuments.push({ ...usCore, record });
+    return record;
+  });
+
+  // Present whenever the declaration names a packages corpus, even if no document of it was
+  // resolved: an empty pass reports every row as not reached, it does not disappear from the log.
+  const usCore =
+    packaged.length === 0
+      ? undefined
+      : {
+          documents: usCoreDocuments,
+          report: reachReport({
+            rows: input.rows ?? loadNewlyEvaluatedRows(),
+            documents: usCoreDocuments,
+          }),
+        };
 
   const declaredExclusions = exclusions(declaration);
   const summary = summarize({
@@ -165,7 +262,7 @@ export function runComparison(input) {
     records,
     summary,
   });
-  return { records, summary, runRecord, resolved };
+  return { records, summary, runRecord, resolved, usCore };
 }
 
 /** The per-corpus declared/compared breakdown printed at the top of every run. */
