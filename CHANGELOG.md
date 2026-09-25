@@ -8,6 +8,31 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **`use` on Identifier, HumanName, Address and ContactPoint is surfaced on the safety readout**
+  (`fhir#SAFETY-MODIFIER-4`, S0369). R4 4.0.1 flags `use` Is Modifier on all four datatypes, so that
+  an old or temporary entry is not mistaken for a current one, and binds each to its own value set at
+  required strength; yet a `Patient` carrying `"use": "old"` on an identifier, a name, an address or
+  a telecom entry read `safeToSummarize: true` with nothing surfaced, because `use` reached the
+  readout only on a `Practitioner`'s identifiers. The new `datatypeUses` field pairs each readable
+  code, matched exactly against the value set of the position's own datatype, with the location of
+  its `use`, at every covered position of the eight modeled types: every `identifier` and
+  `groupIdentifier` at any depth (a Reference's included) and a `Patient`'s `name`, `telecom` and
+  `address`, on the patient and on each `contact`, wherever the resource sits. A readable `use`
+  leaves `safeToSummarize` standing, `old` and `temp` included, because refusing on presence would
+  refuse nearly every Patient and refusing on which code was written would be interpreting the
+  modifier; this follows the `MedicationRequest.intent` ruling. A `use` present and outside its
+  value set, or in a shape that cannot be read, surfaces nothing, puts its location on the new
+  `unreadableDatatypeUses` channel and refuses; nothing is case-folded, trimmed or mapped. A position
+  belongs to its nearest enclosing resource root, so a contained `Practitioner` keeps the presence
+  rule on `modifierElements` exactly as before and draws nothing new, and a contained resource of a
+  type outside the eight (an `Organization`) is not read, a declared limit alongside `use` carried in
+  an extension value. The XML read path reads the same. Two type-only exports join the certified
+  surface, `DatatypeUseCode` and `DatatypeUseReport`. The JSON base-versus-head differential is
+  re-based at `e3dc1fa`, its previous allowances replaced by this change's, each asserted exercised:
+  no finding, no `valid`, no `modifierElements` report and no intent moved, and `safeToSummarize`
+  moved only true to false beside a new unreadable-use location. The XML read differential against
+  the same pin moved no reading and crossed none of its no-suppression bars; its reading does not
+  carry the two new channels, so XML parity is graded by the suite instead.
 - **Three more R4 modifier elements reach the safety readout, and `MedicationRequest.intent` is
   surfaced** (`fhir#SAFETY-MODIFIER-3`, S0364). A deceased `Patient`, a `Patient` whose `link` says
   the record was replaced by another, an `Immunization` marked `isSubpotent` and a

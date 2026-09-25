@@ -29,7 +29,8 @@
  *   `resourceType` is the exact string `Patient`, top-level or contained or a Bundle entry, and
  *   nowhere else;
  * - `use`: a member named `use` or `_use` on any entry of the `identifier` array on the ROOT object
- *   of a resource whose `resourceType` is the exact string `Practitioner`, and nowhere else;
+ *   of a resource whose `resourceType` is the exact string `Practitioner`, and nowhere else. On the
+ *   eight types this library models, `use` is surfaced as a code rather than reported (see below);
  * - `deceased`: a member whose name, less a leading `_`, begins `deceased`, on the ROOT object of a
  *   `Patient`, and nowhere else. The element is the R4 choice `deceased[x]`, so the stem is the key:
  *   `deceasedBoolean` and `deceasedDateTime` are the two members R4 defines, and a member it does not
@@ -86,6 +87,48 @@
  * nothing and refuses nothing, because a missing mandatory element is the validator's verdict.
  *
  * No meaning is read out of the code: whether a `proposal` is an order is the caller's question.
+ *
+ * ## `use` on Identifier, HumanName, Address and ContactPoint, which is SURFACED rather than reported
+ *
+ * R4 flags `use` a modifier on all four datatypes, so that an old or temporary identifier, name,
+ * address or contact point is not mistaken for a current one, and binds each `0..1` `use` to its
+ * own value set at required strength. It is optional and written on most real records, so reporting
+ * it on presence would refuse nearly every Patient; and refusing on WHICH code was written would be
+ * interpreting the modifier. It is surfaced instead, the way `intent` is ({@link DatatypeUseReport}):
+ * the code paired with the location of the `use` element, one pair per covered position.
+ *
+ * A covered position is an object entry (an array entry or a lone object) at one of these, below a
+ * resource root of one of the eight types in {@link USE_ROOT_TYPES} and not below a nested resource
+ * root of any type:
+ *
+ * - every member named `identifier` or `groupIdentifier`, at any depth, read as an Identifier. R4
+ *   types every element of the eight types with those names as Identifier, and `Reference.identifier`
+ *   is one too, so a Reference's identifier and an Identifier's `assigner.identifier` are covered;
+ * - on a `Patient` root: `name` (HumanName), `telecom` (ContactPoint) and `address` (Address), and
+ *   the same three on each `contact` entry. R4 types no other Patient element as one of the four.
+ *
+ * Readability is decided against the value set of the position's OWN datatype, so `temp` reads on
+ * all four and `maiden` on a HumanName only. The code is surfaced only when the document wrote
+ * exactly one `use` member holding one JSON string equal to a code of that set; anything else
+ * written there (a case or whitespace variant, the empty string, a code from a sibling set, a JSON
+ * `null`, a value of another JSON type, the `_use` form with no value, an array wrapper, the name
+ * written twice) surfaces nothing and its location is reported as unreadable, which lowers the
+ * verdict. Nothing is case-folded, trimmed or mapped to a nearby code, and no meaning is read out of
+ * a code: nothing here says an `old` entry is not current, and nothing is filtered or reordered. A
+ * position carrying neither `use` nor `_use` draws nothing.
+ *
+ * **A `Practitioner` root is outside this read, and that is the rule rather than a gap.**
+ * `Practitioner.identifier.use` keeps its own rule above, reported on presence, and a root naming
+ * `Practitioner` among its types surfaces and locates nothing here, so a Practitioner identifier is
+ * never on both channels. Every position belongs to its NEAREST enclosing resource root, so a
+ * Practitioner contained in a Patient is governed by the Practitioner rule alone.
+ *
+ * **Declared limits.** `use` on these datatypes carried as an extension VALUE (`valueIdentifier`,
+ * `valueHumanName`, `valueAddress`, `valueContactPoint`) is not read, because the member is not
+ * named `identifier`; and a nested resource root whose type is not one of the eight (a contained
+ * `Organization`'s `identifier` or `telecom`) is not read, because the position table is known only
+ * for the eight and a key-name guess inside an unmodeled resource could surface a same-named element
+ * that is not one of these datatypes.
  *
  * The location is the one place document text can reach a report, and it is bounded twice:
  *
@@ -195,6 +238,62 @@ export interface IntentReport {
   readonly location: string;
 }
 
+/**
+ * A `use` code this library surfaces on an Identifier, a HumanName, an Address or a ContactPoint:
+ * the union of the four R4 4.0.1 value sets those elements bind to at required strength, and
+ * nothing else. Which of them a given position may carry is decided by that position's own
+ * datatype (IdentifierUse `usual` `official` `temp` `secondary` `old`; NameUse `usual` `official`
+ * `temp` `nickname` `anonymous` `old` `maiden`; AddressUse `home` `work` `temp` `old` `billing`;
+ * ContactPointUse `home` `work` `temp` `old` `mobile`).
+ *
+ * @example
+ * ```ts
+ * import { parseResource, readSafety, type DatatypeUseCode } from "@cosyte/fhir";
+ * const { resource } = parseResource('{"resourceType":"Patient","name":[{"use":"old"}]}');
+ * const codes: DatatypeUseCode[] = readSafety(resource).datatypeUses.map((u) => u.code);
+ * codes; // ["old"]
+ * ```
+ */
+export type DatatypeUseCode =
+  | "usual"
+  | "official"
+  | "temp"
+  | "secondary"
+  | "old"
+  | "nickname"
+  | "anonymous"
+  | "maiden"
+  | "home"
+  | "work"
+  | "billing"
+  | "mobile";
+
+/**
+ * One surfaced `use` on an Identifier, a HumanName, an Address or a ContactPoint: the code exactly
+ * as the document wrote it, and the location of the `use` element it was read from, one per covered
+ * position.
+ *
+ * The code is one of the {@link DatatypeUseCode} values of that position's own value set, matched
+ * exactly, so this carries no text the library did not spell itself. The location follows the same
+ * bound and the same root rule as {@link ModifierElementReport}'s.
+ *
+ * @example
+ * ```ts
+ * import { parseResource, readSafety, type DatatypeUseReport } from "@cosyte/fhir";
+ * const { resource } = parseResource(
+ *   '{"resourceType":"Patient","identifier":[{"use":"old","value":"S1"}]}',
+ * );
+ * const uses: readonly DatatypeUseReport[] = readSafety(resource).datatypeUses;
+ * uses; // [{ code: "old", location: "Patient.identifier[0].use" }]
+ * ```
+ */
+export interface DatatypeUseReport {
+  /** The `use` code, exactly as written. */
+  readonly code: DatatypeUseCode;
+  /** The FHIRPath location of the `use` element it was read from, bounded. */
+  readonly location: string;
+}
+
 /** The `resourceType` a `Patient`-gated rule requires, spelled once. */
 const PATIENT = "Patient";
 
@@ -231,6 +330,97 @@ const INTENT_CODES: ReadonlySet<string> = new Set<MedicationRequestIntent>([
   "option",
 ]);
 
+/** The element surfaced on the four datatypes. */
+const USE = "use";
+
+/**
+ * The resource types whose covered positions {@link collectDatatypeUses} reads: the eight types this
+ * library's safety layer models, written out here rather than derived from another set, because the
+ * position table below is known for exactly these eight and a set that grew elsewhere would widen
+ * it to a type nobody checked. `Practitioner` is deliberately not among them.
+ */
+const USE_ROOT_TYPES: ReadonlySet<string> = new Set([
+  "AllergyIntolerance",
+  "Condition",
+  "DiagnosticReport",
+  "Immunization",
+  "MedicationRequest",
+  "MedicationStatement",
+  "Observation",
+  PATIENT,
+]);
+
+/** IdentifierUse, R4 4.0.1. */
+const IDENTIFIER_USE: ReadonlySet<string> = new Set<DatatypeUseCode>([
+  "usual",
+  "official",
+  "temp",
+  "secondary",
+  "old",
+]);
+
+/** NameUse, R4 4.0.1, the value set of `HumanName.use`. */
+const NAME_USE: ReadonlySet<string> = new Set<DatatypeUseCode>([
+  "usual",
+  "official",
+  "temp",
+  "nickname",
+  "anonymous",
+  "old",
+  "maiden",
+]);
+
+/** AddressUse, R4 4.0.1. */
+const ADDRESS_USE: ReadonlySet<string> = new Set<DatatypeUseCode>([
+  "home",
+  "work",
+  "temp",
+  "old",
+  "billing",
+]);
+
+/** ContactPointUse, R4 4.0.1. */
+const CONTACT_POINT_USE: ReadonlySet<string> = new Set<DatatypeUseCode>([
+  "home",
+  "work",
+  "temp",
+  "old",
+  "mobile",
+]);
+
+/** The members read as an Identifier wherever they sit below a covered root. */
+const IDENTIFIER_MEMBERS: ReadonlySet<string> = new Set(["identifier", "groupIdentifier"]);
+
+/**
+ * The members read on a `Patient` root and on each of its `contact` entries, keyed to the value set
+ * of the datatype R4 gives each one there.
+ */
+const PATIENT_MEMBERS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["name", NAME_USE],
+  ["telecom", CONTACT_POINT_USE],
+  ["address", ADDRESS_USE],
+]);
+
+/** The Patient backbone element whose entries carry the same three members. */
+const CONTACT = "contact";
+
+/**
+ * Where below a covered root the walk in {@link readUsesUnder} stands, which decides whether the
+ * three Patient members are covered positions there.
+ */
+type UsePlace = "patient-root" | "patient-contact" | "other";
+
+/**
+ * One reading of one covered position, before readings that share a location are resolved: the
+ * code when the `use` was readable, `undefined` when it was not.
+ *
+ * @internal
+ */
+export interface DatatypeUseReading {
+  readonly location: string;
+  readonly code: DatatypeUseCode | undefined;
+}
+
 /** The two elements recognised by key name alone, wherever the walk reaches them. */
 const UNGATED_ELEMENTS: readonly ModifierElementName[] = ["implicitRules", "comparator"];
 
@@ -249,7 +439,8 @@ const UNGATED_ELEMENTS: readonly ModifierElementName[] = ["implicitRules", "comp
  * - `Bundle`, which the validator branches on by name when it checks entries.
  *
  * The surfaced `MedicationRequest.intent` locations ({@link IntentReport}) and the unreadable ones
- * are rooted by the same rule, since they are read by this module at the same window.
+ * are rooted by the same rule, since they are read by this module at the same window, and so are the
+ * surfaced and the unreadable `use` locations on the four datatypes ({@link DatatypeUseReport}).
  *
  * The set is the union, and it is derived from source constants only. **It is never derived from
  * the input**: a type name is a member because this package wrote it down, not because a document
@@ -429,6 +620,151 @@ export function collectIntent(
 /** Whether `value` is exactly one of the eight intent codes. */
 function isIntentCode(value: string): value is MedicationRequestIntent {
   return INTENT_CODES.has(value);
+}
+
+/**
+ * Read `use` at every covered position below THIS node when it is a resource root of one of the
+ * eight {@link USE_ROOT_TYPES}, gated off the node's own `resourceType` as the reports above are.
+ * Called once per complex node the safety walk reaches, so it runs once at every such root, and it
+ * reads that root's own subtree only: a nested resource root is left to its own call, which is what
+ * makes every position belong to its nearest enclosing root.
+ *
+ * A root naming `Practitioner` among its types reads nothing here: `Practitioner.identifier.use`
+ * keeps the presence rule in {@link collectModifierElements}, and a Practitioner identifier is never
+ * surfaced.
+ *
+ * Each position yields one {@link DatatypeUseReading}, in walk order (document order within a root,
+ * a member a repeated property name shadowed after the surviving ones). Readings that land on one
+ * location are resolved by {@link resolveDatatypeUses}.
+ *
+ * @internal
+ */
+export function collectDatatypeUses(
+  node: FhirComplex,
+  path: string,
+  out: DatatypeUseReading[],
+): void {
+  const types = typesOf(node);
+  if (types.includes(PRACTITIONER)) return;
+  if (!types.some((type) => USE_ROOT_TYPES.has(type))) return;
+  readUsesUnder(node, path, types.includes(PATIENT) ? "patient-root" : "other", out);
+}
+
+/**
+ * Visit every member of one complex node below a covered root: read `use` on each entry of a member
+ * that is a covered position here, then descend into the member. The node itself has already been
+ * established as not a nested resource root (or is the covered root itself).
+ */
+function readUsesUnder(
+  node: FhirComplex,
+  path: string,
+  place: UsePlace,
+  out: DatatypeUseReading[],
+): void {
+  for (const property of [...node.properties, ...(node.duplicates ?? [])]) {
+    const at = childPath(path, property.name);
+    const codes = coveredCodes(property.name, place);
+    if (codes !== undefined) {
+      eachEntry(property.value, at, (entry, entryPath) => {
+        readUse(entry, entryPath, codes, out);
+      });
+    }
+    const next: UsePlace =
+      place === "patient-root" && property.name === CONTACT ? "patient-contact" : "other";
+    descendForUses(property.value, at, next, out);
+  }
+}
+
+/**
+ * Descend one value below a covered root. A list is walked entry by entry at the walk's own indices;
+ * a primitive's `extension` metadata is walked too, since a Reference inside an extension there is
+ * still below the root; and a complex node that carries its own `resourceType` is a nested resource
+ * root, which this read stops at.
+ */
+function descendForUses(
+  value: FhirNode,
+  path: string,
+  place: UsePlace,
+  out: DatatypeUseReading[],
+): void {
+  if (isList(value)) {
+    value.items.forEach((item, index) => {
+      descendForUses(item, `${path}[${String(index)}]`, place, out);
+    });
+    return;
+  }
+  if (isPrimitive(value)) {
+    (value.extension ?? []).forEach((extension, index) => {
+      descendForUses(extension, `${path}.extension[${String(index)}]`, "other", out);
+    });
+    return;
+  }
+  if (getAllProperties(value, "resourceType").length > 0) return;
+  readUsesUnder(value, path, place, out);
+}
+
+/** The value set a member named `name` is read against at `place`, or `undefined` when not covered. */
+function coveredCodes(name: string, place: UsePlace): ReadonlySet<string> | undefined {
+  if (IDENTIFIER_MEMBERS.has(name)) return IDENTIFIER_USE;
+  if (place === "other") return undefined;
+  return PATIENT_MEMBERS.get(name);
+}
+
+/**
+ * Read one covered position's `use`, decided exactly as `intent` is: a code only when the entry
+ * wrote exactly one `use` member holding one JSON string that is a member of `codes`, and otherwise
+ * an unreadable reading at the element's location. An entry carrying neither `use` nor `_use` reads
+ * nothing.
+ */
+function readUse(
+  entry: FhirComplex,
+  at: string,
+  codes: ReadonlySet<string>,
+  out: DatatypeUseReading[],
+): void {
+  const written = getAllProperties(entry, USE);
+  if (written.length === 0 && getAllProperties(entry, `_${USE}`).length === 0) return;
+  const only = written.length === 1 ? written[0] : undefined;
+  const value = only !== undefined && isPrimitive(only) ? only.value : undefined;
+  const code = typeof value === "string" && isUseCode(value, codes) ? value : undefined;
+  out.push({ location: childPath(at, USE), code });
+}
+
+/** Whether `value` is exactly one of `codes`, a subset of the {@link DatatypeUseCode} values. */
+function isUseCode(value: string, codes: ReadonlySet<string>): value is DatatypeUseCode {
+  return codes.has(value);
+}
+
+/**
+ * Resolve the readings the walk made into the two channels: one surfaced code per location, in the
+ * order the location was first read, and one unreadable location per location that is not.
+ *
+ * A location is surfaced only when every reading at it is the same readable code. Two readings can
+ * share a location when a repeated property name puts two members at one path, or when two withheld
+ * segments render alike; FHIRPath cannot address them apart, so a location holding two different
+ * codes, or a readable code beside an unreadable one, has no single code a caller could be handed
+ * and is reported as unreadable instead.
+ *
+ * @internal
+ */
+export function resolveDatatypeUses(readings: readonly DatatypeUseReading[]): {
+  readonly uses: DatatypeUseReport[];
+  readonly unreadable: string[];
+} {
+  const byLocation = new Map<string, Set<DatatypeUseCode | undefined>>();
+  for (const reading of readings) {
+    const codes = byLocation.get(reading.location) ?? new Set<DatatypeUseCode | undefined>();
+    codes.add(reading.code);
+    byLocation.set(reading.location, codes);
+  }
+  const uses: DatatypeUseReport[] = [];
+  const unreadable: string[] = [];
+  for (const [location, codes] of byLocation) {
+    const [only] = [...codes];
+    if (codes.size === 1 && only !== undefined) uses.push({ code: only, location });
+    else unreadable.push(location);
+  }
+  return { uses, unreadable };
 }
 
 /**
