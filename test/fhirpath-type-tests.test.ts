@@ -134,6 +134,8 @@ describe("AC-10: a FHIR-type test the instance establishes is answered", () => {
     expect(answer("code.ofType(Boolean).empty()", quantityObs)).toBe(true);
   });
 
+  // AC-10's boundary with AC-13: R3 answers a complex node, and nothing else about the System
+  // primitives moves.
   it("keeps a System-primitive test over a primitive exactly as before", () => {
     expect(answer("gender is String", male)).toBe(true);
     expect(answer("gender.ofType(Boolean).empty()", male)).toBe(true);

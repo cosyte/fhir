@@ -297,8 +297,8 @@ describe("validateResource: Phase 7 invariant layer wiring", () => {
           path: "Observation",
           constraint: [
             { key: "us-core-obs-1", severity: "error", expression: "code.exists()" },
-            // `matches()` is inside the subset now (row T17 of the coverage record's FHIR-type
-            // test table); `toString()` is still outside it, whatever its input.
+            // AC-13: `matches()` is inside the subset now (row T17 of the coverage record's
+            // FHIR-type test table); `toString()` is still outside it, whatever its input.
             { key: "info-1", severity: "error", expression: "text.div.toString().exists()" },
           ],
         },

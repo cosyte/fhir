@@ -255,7 +255,7 @@ const MOVEMENTS: readonly Movement[] = [
     over: male,
     shipped: "VIOLATED",
     now: "UNCHECKED",
-    today: "VIOLATED",
+    today: "VIOLATED", // AC-13 / AC-10: decided again from the node's kind, row T1
     why: "a type name the generic model cannot decide: a CORRECT finding withdrawn, restored as row T1",
   },
   {
@@ -265,7 +265,7 @@ const MOVEMENTS: readonly Movement[] = [
     over: male,
     shipped: "VIOLATED",
     now: "UNCHECKED",
-    today: "VIOLATED",
+    today: "VIOLATED", // AC-13 / AC-10: decided again from the node's kind, row T2
     why: "as row 11, through `ofType`, which routes to the same predicate, restored as row T2",
   },
   {
