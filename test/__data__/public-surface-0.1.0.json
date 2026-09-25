@@ -8,7 +8,7 @@
   },
   "counts": {
     "values": 170,
-    "types": 102,
+    "types": 104,
     "exportSubpaths": 2
   },
   "values": [
@@ -219,12 +219,14 @@
     "FhirProperty",
     "FpColl",
     "FpItem",
+    "IntentReport",
     "InvariantOptions",
     "InvariantResult",
     "IssueCode",
     "IssueSeverity",
     "IssueType",
     "LocatedDoseQuantity",
+    "MedicationRequestIntent",
     "ModifierElementName",
     "ModifierElementReport",
     "NdjsonError",

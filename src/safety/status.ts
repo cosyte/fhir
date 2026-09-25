@@ -129,9 +129,12 @@ import {
   typesOf,
 } from "./codes.js";
 import {
+  collectIntent,
   collectModifierElements,
   dedupeModifierElements,
+  modifierLocationRebaser,
   rebaseModifierElements,
+  type IntentReport,
   type ModifierElementReport,
 } from "./modifier-elements.js";
 import { collectAbsence, type AbsenceMarker } from "./absence.js";
@@ -249,11 +252,12 @@ const NEGATION_ORDER: readonly NegationKind[] = [
  * reasons given there.
  *
  * **Two groups of fields, and the difference is which question they answer.** The location channels
- * (`unhandledModifierExtensions`, `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`,
- * `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`, `unreadableNegationCodes`,
- * `absenceMarkers`, `unreadableAbsenceMarkers`, `conflictingAbsenceMarkers`) and the
- * `safeToSummarize` derived from them (from all but `absenceMarkers`, which discloses rather than
- * refuses) are **document-wide**: they carry FHIRPath locations, so a nested finding has an address to name, and
+ * (`unhandledModifierExtensions`, `modifierElements`, `intents`, `shadowedProperties`,
+ * `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
+ * `nearMissNegationCodes`, `unreadableNegationCodes`, `unreadableIntents`, `absenceMarkers`,
+ * `unreadableAbsenceMarkers`, `conflictingAbsenceMarkers`) and the
+ * `safeToSummarize` derived from them (from all but `absenceMarkers` and `intents`, which disclose
+ * rather than refuse) are **document-wide**: they carry FHIRPath locations, so a nested finding has an address to name, and
  * `assertSafeToSummarize` refuses over a `Bundle`'s entries. The **single-valued** fields
  * (`resourceType` / `status` / `clinicalStatus` / `verificationStatus` / `doNotPerform` / `retracted`
  * / `noKnownAllergy`) answer about **the resource handed in** and nothing nested inside it, because
@@ -350,9 +354,20 @@ export interface SafetyReadout {
    * element and where it is. R4 flags several ordinary base elements `Is Modifier: true` because
    * they change how the value beside them must be read, and this is the channel that surfaces them:
    * `comparator` wherever the walk reaches a node carrying it, `implicitRules` likewise,
-   * `Patient.active`, and `use` on a `Practitioner`'s `identifier` entries. Every one of them
-   * lowers {@link safeToSummarize}, because a bounded quantity summarized as a point value is a
-   * wrong clinical number delivered under a clean verdict.
+   * `Patient.active`, `Patient.deceased[x]` (element `deceased`, located at the member as written,
+   * `deceasedBoolean` or `deceasedDateTime`), `Patient.link` (once, at `link`, however many entries),
+   * `Immunization.isSubpotent`, and `use` on a `Practitioner`'s `identifier` entries. Every one of
+   * them lowers {@link safeToSummarize} **on presence, at any value**: a bounded quantity summarized
+   * as a point value is a wrong clinical number delivered under a clean verdict, a deceased patient
+   * or a record replaced by another is not the live record a summary would present, and a
+   * subpotent dose does not protect the way the record would otherwise say. `deceasedBoolean: false`
+   * and `isSubpotent: false` report too, as `active: true` does, because deciding from the value
+   * would be interpreting the modifier; an unreadable value (a `null`, a wrong JSON type, the `_`
+   * form alone, an array wrapper, a name written twice, a `deceased` member R4 does not define) is
+   * reported the same way and never read.
+   *
+   * `MedicationRequest.intent` is not here: it is mandatory, so it is surfaced on {@link intents}
+   * instead.
    *
    * **Distinct from {@link unhandledModifierExtensions}, and the two never double-report.** A
    * modifier EXTENSION stays on that channel and draws nothing here, so one modifier extension is
@@ -367,6 +382,22 @@ export interface SafetyReadout {
    * did.
    */
   readonly modifierElements: readonly ModifierElementReport[];
+  /**
+   * `MedicationRequest.intent`, surfaced at **every `MedicationRequest` root** the document carries
+   * (the resource handed in, a `contained` one, a `Bundle.entry`): the code exactly as written,
+   * paired with the location of that root's `intent`, one pair per root, in walk order.
+   *
+   * R4 flags `intent` a modifier (a `proposal` is not an `order`) and makes it mandatory, so it is
+   * surfaced the way `status` is rather than refused on presence, and a readable one **does not
+   * lower {@link safeToSummarize}**. Only the eight codes of the R4 value set can appear here,
+   * matched exactly and case-sensitively, so this field carries no text the library did not spell.
+   * An `intent` that is present and not one of them is on {@link unreadableIntents} instead, and its
+   * root surfaces nothing here. A root with no `intent` at all surfaces nothing and refuses nothing:
+   * a missing mandatory element is the validator's verdict, not this readout's.
+   *
+   * No meaning is read from the code: nothing here says whether a request is in force.
+   */
+  readonly intents: readonly IntentReport[];
   /**
    * FHIRPath locations where the document wrote a property name more than once, so the element has
    * several values and no rule says which one the sender meant (fail-closed). Empty on every
@@ -532,6 +563,21 @@ export interface SafetyReadout {
    */
   readonly unreadableNegationCodes: readonly string[];
   /**
+   * FHIRPath locations of a `MedicationRequest.intent` this library could not read as one of the
+   * eight R4 codes, at any `MedicationRequest` root: a string outside them (including a case or
+   * surrounding-whitespace variant of one, and the empty string), a JSON `null`, a value of another
+   * JSON type, the `_` form with no value, an array wrapper, or the name written twice.
+   *
+   * `intent` is a modifier bound to its value set at required strength, so a value outside it says
+   * something this library cannot establish, and **nothing is case-folded, trimmed or mapped to a
+   * nearby code**: the root surfaces no code on {@link intents}, its location is here, and the
+   * resource is not {@link safeToSummarize}. Value-free: the text that failed is carried nowhere.
+   *
+   * Located by the same bound and the same root rule as {@link modifierElements}. Empty for every
+   * conformant document.
+   */
+  readonly unreadableIntents: readonly string[];
+  /**
    * Every element the document declares an absence for, with the reason the sender spelled and the
    * FHIRPath location of the element it sits on. This is the read that separates "we asked and
    * nobody knows" from "we never sent this": both leave the element value-absent, and before this
@@ -602,7 +648,8 @@ export interface SafetyReadout {
    * character data on an element was dropped, a boolean-valued safety element carries a written
    * value this layer cannot read, a `code`-valued negation element carries a value that spells a
    * negation code bar its case or its surrounding whitespace, such an element holds content at a
-   * position no `code` read can reach, an element declares an absence in a reason this library
+   * position no `code` read can reach, a `MedicationRequest.intent` is not one of the eight R4
+   * codes, an element declares an absence in a reason this library
    * cannot read, or an element declares an absence and carries a value. Each is a case where a
    * summary would have to assert something this library cannot establish (for the negation pair,
    * that no negation was asserted; for the absence pair, which of two contradictory answers the
@@ -611,7 +658,8 @@ export interface SafetyReadout {
    * **A readable, non-conflicting absence marker does NOT move this**, and that exception is the
    * point of the channel rather than a hole in the rule: the declaration is read, carried and
    * addressable, so nothing about the document is unestablished. See
-   * {@link SafetyReadout.absenceMarkers}.
+   * {@link SafetyReadout.absenceMarkers}. **Nor does a readable `intent`**, which is surfaced on
+   * {@link SafetyReadout.intents} for the caller to read.
    */
   readonly safeToSummarize: boolean;
 }
@@ -1189,6 +1237,10 @@ interface SafetyWalk {
    * channel's locations pass through the rule.
    */
   readonly modifierElements: ModifierElementReport[];
+  /** Surfaced `MedicationRequest.intent` codes, rooted like {@link SafetyWalk.modifierElements}. */
+  readonly intents: IntentReport[];
+  /** `MedicationRequest.intent` locations the read could not take one of the eight codes from. */
+  readonly unreadableIntent: string[];
   readonly shadowed: string[];
   readonly arrayWrapped: string[];
   /** The subset of {@link SafetyWalk.arrayWrapped} FHIR XML has no repetition to spell back. */
@@ -1224,6 +1276,8 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
   const out: SafetyWalk = {
     modifiers: [],
     modifierElements: [],
+    intents: [],
+    unreadableIntent: [],
     shadowed: [],
     arrayWrapped: [],
     unspellableInXml: [],
@@ -1235,7 +1289,20 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
   walkComplex(resource, path, out, true);
   // One element at one location is one report, however many members a repeated property name or a
   // `_` sibling left there. Collapsed once, here, so every caller of the walk sees the same list.
-  return { ...out, modifierElements: dedupeModifierElements(out.modifierElements) };
+  // The intent channels collapse by the same rule: a member a repeated name shadowed is walked at
+  // the same path, and saying the same thing twice at one location says nothing new.
+  const intentKeys = new Set<string>();
+  return {
+    ...out,
+    modifierElements: dedupeModifierElements(out.modifierElements),
+    intents: out.intents.filter((read) => {
+      const key = `${read.code} ${read.location}`;
+      if (intentKeys.has(key)) return false;
+      intentKeys.add(key);
+      return true;
+    }),
+    unreadableIntent: [...new Set(out.unreadableIntent)],
+  };
 }
 
 /**
@@ -1567,6 +1634,9 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
   // Reported at the path the walk already built, so the report window IS the read window and the
   // array indices are the walk's own.
   collectModifierElements(node, path, out.modifierElements);
+  // `MedicationRequest.intent`, gated off this node's own `resourceType` exactly as the reports
+  // above are, so it is read at every MedicationRequest root the walk reaches and nowhere else.
+  collectIntent(node, path, out.intents, out.unreadableIntent);
   for (const property of node.properties) visitProperty(property, path, out);
   const reported = new Set<string>();
   for (const property of node.duplicates ?? []) {
@@ -1692,10 +1762,16 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
 
   const { modifiers, shadowed, arrayWrapped, unreadableBoolean, nearMissCode, unreadableCode } =
     walk;
-  // The one channel whose root is not the walk's prefix: a resource type name roots a
-  // modifier-element location only when this library defines the name (see
-  // `./modifier-elements.js`). Applied here, to this channel's locations and to no other's.
+  // The channels whose root is not the walk's prefix: a resource type name roots a
+  // modifier-element or intent location only when this library defines the name (see
+  // `./modifier-elements.js`). Applied here, to those channels' locations and to no other's.
   const modifierElementReports = rebaseModifierElements(walk.modifierElements, prefix, types);
+  const rebase = modifierLocationRebaser(prefix, types);
+  const intents = walk.intents.map((read) => ({
+    code: read.code,
+    location: rebase(read.location),
+  }));
+  const unreadableIntents = walk.unreadableIntent.map(rebase);
   const nested = nestedArrays(resource, prefix);
   const dropped = droppedText(resource, prefix);
   // One walk feeds all three absence channels, so a marker cannot be recognised by one of them and
@@ -1714,6 +1790,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     negations,
     unhandledModifierExtensions: modifiers,
     modifierElements: modifierElementReports,
+    intents,
     shadowedProperties: shadowed,
     arrayWrappedScalars: arrayWrapped,
     nestedArrays: nested,
@@ -1721,6 +1798,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     unreadableBooleans: unreadableBoolean,
     nearMissNegationCodes: nearMissCode,
     unreadableNegationCodes: unreadableCode,
+    unreadableIntents,
     absenceMarkers: absence.markers,
     unreadableAbsenceMarkers: absence.unreadable,
     conflictingAbsenceMarkers: absence.conflicting,
@@ -1734,6 +1812,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
       unreadableBoolean.length === 0 &&
       nearMissCode.length === 0 &&
       unreadableCode.length === 0 &&
+      unreadableIntents.length === 0 &&
       absence.unreadable.length === 0 &&
       absence.conflicting.length === 0,
   };
@@ -1749,7 +1828,8 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
  * was dropped, a boolean-valued safety element carries a written value outside the datatype's
  * lexical space, a `code`-valued negation element carries a value that spells a negation code bar
  * its case or its surrounding whitespace, such an element holds content at a position no `code`
- * read can reach, an element declares an absence in a reason this library cannot read, or an element
+ * read can reach, a `MedicationRequest.intent` is not one of the eight R4 codes, an element
+ * declares an absence in a reason this library cannot read, or an element
  * declares an absence and carries a value. Every way the safe move is to **refuse**, value-free,
  * carrying only the locations. A **readable, non-conflicting** absence marker is not on that list
  * and never refuses: it is a declaration the caller can now read, so summarizing over it asserts
@@ -1795,9 +1875,10 @@ export class FhirSafetyError extends Error {
  * array inside an array, dropped XML element text, a boolean-valued safety element holding a written
  * value outside the datatype's lexical space, or a `code`-valued negation element holding a value
  * that spells a negation code bar its case or its surrounding whitespace, or content at a position
- * no `code` read can reach, or an element declaring an absence in a reason this library cannot read,
+ * no `code` read can reach, or a `MedicationRequest.intent` that is not one of the eight R4 codes,
+ * or an element declaring an absence in a reason this library cannot read,
  * or an element declaring an absence beside a value of its own. A readable, non-conflicting declared
- * absence throws nothing. This is the executable
+ * absence throws nothing, and neither does a readable `intent`. This is the executable
  * form of "carries status
  * **or refuses**": a summary helper calls it first, and never silently drops a modifier it cannot
  * honor, nor summarizes an element whose value the document left ambiguous or whose content the codec
@@ -1824,6 +1905,9 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     ...readout.unreadableBooleans,
     ...readout.nearMissNegationCodes,
     ...readout.unreadableNegationCodes,
+    // `intents` is deliberately absent, exactly as it is absent from `safeToSummarize`'s
+    // conjunction: a readable intent is surfaced for the caller, and only an unreadable one refuses.
+    ...readout.unreadableIntents,
     // The two absence channels that withdraw the affirmation. `absenceMarkers` is deliberately
     // absent from this list, exactly as it is absent from `safeToSummarize`'s conjunction: a
     // declaration the caller can read is a disclosure, not a loss.

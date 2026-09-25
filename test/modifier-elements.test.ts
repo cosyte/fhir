@@ -611,6 +611,473 @@ describe("the refusal and the readout are one verdict", () => {
   });
 });
 
+// S0364-fhir-safety-modifier-3: Patient.deceased[x], Patient.link and Immunization.isSubpotent join
+// this channel, and MedicationRequest.intent is surfaced per root. The document tables below are
+// shared by the criteria that re-read them (AC-9, AC-10), so every refusal is asserted over exactly
+// the documents its own criterion names.
+
+/** One document and the single `modifierElements` report it must draw. */
+interface ExpectedReport {
+  readonly json: string;
+  readonly report: ModifierElementReport;
+}
+
+/** AC-1: a Patient root carrying `deceased[x]`, as `true`, `false`, a dateTime and the `_` form. */
+const AC1_DOCUMENTS: readonly ExpectedReport[] = [
+  {
+    json: '{"resourceType":"Patient","deceasedBoolean":true}',
+    report: { element: "deceased", location: "Patient.deceasedBoolean" },
+  },
+  {
+    json: '{"resourceType":"Patient","deceasedBoolean":false}',
+    report: { element: "deceased", location: "Patient.deceasedBoolean" },
+  },
+  {
+    json: '{"resourceType":"Patient","deceasedDateTime":"1970-01-01"}',
+    report: { element: "deceased", location: "Patient.deceasedDateTime" },
+  },
+  {
+    json:
+      '{"resourceType":"Patient","_deceasedDateTime":' +
+      '{"extension":[{"url":"http://example.org/x","valueCode":"masked"}]}}',
+    report: { element: "deceased", location: "Patient.deceasedDateTime" },
+  },
+  {
+    json: '{"resourceType":"Patient","deceasedBoolean":true,"_deceasedBoolean":{"id":"d1"}}',
+    report: { element: "deceased", location: "Patient.deceasedBoolean" },
+  },
+  {
+    json:
+      '{"resourceType":"Observation","status":"final","contained":' +
+      '[{"resourceType":"Patient","deceasedDateTime":"1970-01-01"}]}',
+    report: { element: "deceased", location: "Observation.contained[0].deceasedDateTime" },
+  },
+  {
+    json:
+      '{"resourceType":"Bundle","type":"collection","entry":' +
+      '[{"resource":{"resourceType":"Patient","deceasedBoolean":false}}]}',
+    report: { element: "deceased", location: "Bundle.entry[0].resource.deceasedBoolean" },
+  },
+];
+
+/** AC-2: a Patient root carrying `link`, one entry or several, whatever each `link.type` says. */
+const AC2_DOCUMENTS: readonly ExpectedReport[] = [
+  {
+    json: '{"resourceType":"Patient","link":[{"other":{"reference":"Patient/p2"},"type":"replaced-by"}]}',
+    report: { element: "link", location: "Patient.link" },
+  },
+  {
+    json:
+      '{"resourceType":"Patient","link":[{"other":{"reference":"Patient/p2"},"type":"replaces"},' +
+      '{"other":{"reference":"Patient/p3"},"type":"seealso"},' +
+      '{"other":{"reference":"RelatedPerson/r1"},"type":"refer"}]}',
+    report: { element: "link", location: "Patient.link" },
+  },
+  {
+    json: '{"resourceType":"Patient","_link":{"id":"l1"}}',
+    report: { element: "link", location: "Patient.link" },
+  },
+  {
+    json:
+      '{"resourceType":"Bundle","type":"collection","entry":[{"resource":{"resourceType":"Patient",' +
+      '"link":[{"other":{"reference":"Patient/p2"},"type":"replaced-by"}]}}]}',
+    report: { element: "link", location: "Bundle.entry[0].resource.link" },
+  },
+];
+
+/** AC-3: an Immunization root carrying `isSubpotent`, `true`, `false` or the `_` form alone. */
+const AC3_DOCUMENTS: readonly ExpectedReport[] = [
+  {
+    json: '{"resourceType":"Immunization","status":"completed","isSubpotent":true}',
+    report: { element: "isSubpotent", location: "Immunization.isSubpotent" },
+  },
+  {
+    json: '{"resourceType":"Immunization","status":"completed","isSubpotent":false}',
+    report: { element: "isSubpotent", location: "Immunization.isSubpotent" },
+  },
+  {
+    json: '{"resourceType":"Immunization","_isSubpotent":{"id":"s1"}}',
+    report: { element: "isSubpotent", location: "Immunization.isSubpotent" },
+  },
+  {
+    json: '{"resourceType":"Patient","contained":[{"resourceType":"Immunization","isSubpotent":true}]}',
+    report: { element: "isSubpotent", location: "Patient.contained[0].isSubpotent" },
+  },
+];
+
+/** AC-5: each of the three present in a form whose value cannot be read. */
+const AC5_DOCUMENTS: readonly ExpectedReport[] = [
+  ...[
+    '"deceasedBoolean":null',
+    '"deceasedBoolean":"yes"',
+    '"deceasedBoolean":1',
+    '"deceasedBoolean":[true]',
+    '"deceasedBoolean":{"value":true}',
+    '"deceasedBoolean":true,"deceasedBoolean":false',
+  ].map((members) => ({
+    json: `{"resourceType":"Patient",${members}}`,
+    report: { element: "deceased", location: "Patient.deceasedBoolean" } as const,
+  })),
+  {
+    json: '{"resourceType":"Patient","deceasedDateTime":true}',
+    report: { element: "deceased", location: "Patient.deceasedDateTime" },
+  },
+  {
+    json: '{"resourceType":"Patient","deceasedString":"unknown"}',
+    report: { element: "deceased", location: "Patient.deceasedString" },
+  },
+  {
+    json: '{"resourceType":"Patient","_deceasedString":{"id":"d1"}}',
+    report: { element: "deceased", location: "Patient.deceasedString" },
+  },
+  ...[
+    '"link":null',
+    '"link":"replaced-by"',
+    '"link":{"other":{"reference":"Patient/p2"},"type":"replaced-by"}',
+    '"link":[null]',
+    '"link":[{"type":"seealso"}],"link":[{"type":"replaced-by"}]',
+  ].map((members) => ({
+    json: `{"resourceType":"Patient",${members}}`,
+    report: { element: "link", location: "Patient.link" } as const,
+  })),
+  ...[
+    '"isSubpotent":null',
+    '"isSubpotent":1',
+    '"isSubpotent":"yes"',
+    '"isSubpotent":[true]',
+    '"isSubpotent":{"value":true}',
+    '"isSubpotent":false,"isSubpotent":true',
+  ].map((members) => ({
+    json: `{"resourceType":"Immunization",${members}}`,
+    report: { element: "isSubpotent", location: "Immunization.isSubpotent" } as const,
+  })),
+];
+
+/** The eight R4 4.0.1 `MedicationRequest.intent` codes (valueset-medicationrequest-intent). */
+const INTENT_CODES = [
+  "proposal",
+  "plan",
+  "order",
+  "original-order",
+  "reflex-order",
+  "filler-order",
+  "instance-order",
+  "option",
+] as const;
+
+/** AC-8: a MedicationRequest `intent` that is not one of those codes, written as one JSON string. */
+const AC8_DOCUMENTS: readonly string[] = [
+  '"intent":null',
+  '"intent":1',
+  '"intent":true',
+  '"intent":{"value":"order"}',
+  '"_intent":{"extension":[{"url":"http://example.org/x","valueCode":"masked"}]}',
+  '"intent":["order"]',
+  '"intent":["order","plan"]',
+  '"intent":"order","intent":"order"',
+  '"intent":"order","intent":"plan"',
+  '"intent":"PROPOSAL"',
+  '"intent":"Order"',
+  '"intent":" order"',
+  '"intent":"order "',
+  '"intent":""',
+  '"intent":"draft"',
+].map((members) => `{"resourceType":"MedicationRequest","status":"active",${members}}`);
+
+describe("AC-1: Patient.deceased[x] is reported at the member as written, at any value", () => {
+  for (const { json, report } of AC1_DOCUMENTS) {
+    it(`AC-1: ${json}`, () => {
+      const safety = safetyOf(json);
+
+      expect(safety.modifierElements).toEqual([report]);
+      expect(safety.safeToSummarize).toBe(false);
+    });
+  }
+});
+
+describe("AC-2: Patient.link is reported once, at link, whatever its entries say", () => {
+  for (const { json, report } of AC2_DOCUMENTS) {
+    it(`AC-2: ${json}`, () => {
+      const safety = safetyOf(json);
+
+      expect(safety.modifierElements).toEqual([report]);
+      expect(safety.safeToSummarize).toBe(false);
+    });
+  }
+});
+
+describe("AC-3: Immunization.isSubpotent is reported, whether true or false", () => {
+  for (const { json, report } of AC3_DOCUMENTS) {
+    it(`AC-3: ${json}`, () => {
+      const safety = safetyOf(json);
+
+      expect(safety.modifierElements).toEqual([report]);
+      expect(safety.safeToSummarize).toBe(false);
+    });
+  }
+});
+
+describe("AC-4: several roots in one Bundle each report at their own entry", () => {
+  it("AC-4: two deceased Patients and a subpotent Immunization draw three reports", () => {
+    const safety = safetyOf(
+      '{"resourceType":"Bundle","type":"collection","entry":[' +
+        '{"resource":{"resourceType":"Patient","deceasedBoolean":true}},' +
+        '{"resource":{"resourceType":"Patient","deceasedBoolean":true}},' +
+        '{"resource":{"resourceType":"Immunization","status":"completed","isSubpotent":true}}]}',
+    );
+
+    expect(safety.modifierElements).toEqual([
+      { element: "deceased", location: "Bundle.entry[0].resource.deceasedBoolean" },
+      { element: "deceased", location: "Bundle.entry[1].resource.deceasedBoolean" },
+      { element: "isSubpotent", location: "Bundle.entry[2].resource.isSubpotent" },
+    ]);
+    expect(safety.safeToSummarize).toBe(false);
+  });
+});
+
+describe("AC-5: an unreadable value is still reported, and never read, coerced or repaired", () => {
+  for (const { json, report } of AC5_DOCUMENTS) {
+    it(`AC-5: ${json}`, () => {
+      const safety = safetyOf(json);
+
+      expect(safety.modifierElements).toEqual([report]);
+      expect(safety.safeToSummarize).toBe(false);
+    });
+  }
+});
+
+describe("AC-6: the three are gated to their own resource type, at a resource root", () => {
+  it("AC-6: draws nothing for deceased[x] or link on a root that is not a Patient", () => {
+    for (const json of [
+      '{"resourceType":"Observation","deceasedBoolean":true}',
+      '{"resourceType":"RelatedPerson","deceasedDateTime":"1970-01-01"}',
+      '{"resourceType":"Bundle","type":"searchset","link":[{"relation":"self","url":"http://x"}]}',
+      '{"resourceType":"Person","link":[{"target":{"reference":"Patient/p1"}}]}',
+      '{"resourceType":"Immunization","deceasedBoolean":true,"link":[{"type":"replaced-by"}]}',
+    ]) {
+      expect(reportsOf(json), json).toEqual([]);
+    }
+  });
+
+  it("AC-6: draws nothing for isSubpotent on a root that is not an Immunization", () => {
+    for (const json of [
+      '{"resourceType":"Patient","isSubpotent":true}',
+      '{"resourceType":"MedicationAdministration","isSubpotent":true}',
+      '{"resourceType":"ImmunizationEvaluation","isSubpotent":true}',
+    ]) {
+      expect(reportsOf(json), json).toEqual([]);
+    }
+  });
+
+  it("AC-6: draws nothing for the three below a root, off the element R4 defines them on", () => {
+    for (const json of [
+      '{"resourceType":"Patient","contact":[{"deceasedBoolean":true,"link":[{"type":"refer"}]}]}',
+      '{"resourceType":"Immunization","protocolApplied":[{"isSubpotent":true}]}',
+    ]) {
+      expect(reportsOf(json), json).toEqual([]);
+    }
+  });
+});
+
+describe("AC-7: MedicationRequest.intent is surfaced exactly as written, per root", () => {
+  for (const code of INTENT_CODES) {
+    it(`AC-7: surfaces ${code} at MedicationRequest.intent and leaves the verdict standing`, () => {
+      const safety = safetyOf(
+        `{"resourceType":"MedicationRequest","status":"active","intent":${JSON.stringify(code)}}`,
+      );
+
+      expect(safety.intents).toEqual([{ code, location: "MedicationRequest.intent" }]);
+      expect(safety.unreadableIntents).toEqual([]);
+      expect(safety.modifierElements).toEqual([]);
+      expect(safety.safeToSummarize).toBe(true);
+    });
+  }
+
+  it("AC-7: surfaces one pair per root, each at its own entry, in a Bundle", () => {
+    const safety = safetyOf(
+      '{"resourceType":"Bundle","type":"collection","entry":[' +
+        '{"resource":{"resourceType":"MedicationRequest","status":"active","intent":"proposal"}},' +
+        '{"resource":{"resourceType":"MedicationRequest","status":"active","intent":"order"}}]}',
+    );
+
+    expect(safety.intents).toEqual([
+      { code: "proposal", location: "Bundle.entry[0].resource.intent" },
+      { code: "order", location: "Bundle.entry[1].resource.intent" },
+    ]);
+    expect(safety.safeToSummarize).toBe(true);
+  });
+
+  it("AC-7: surfaces a contained MedicationRequest's intent at its own root", () => {
+    const safety = safetyOf(
+      '{"resourceType":"MedicationRequest","status":"active","intent":"order","contained":' +
+        '[{"resourceType":"MedicationRequest","status":"active","intent":"plan"}]}',
+    );
+
+    expect(safety.intents).toEqual([
+      { code: "order", location: "MedicationRequest.intent" },
+      { code: "plan", location: "MedicationRequest.contained[0].intent" },
+    ]);
+    expect(safety.safeToSummarize).toBe(true);
+  });
+
+  it("AC-7: surfaces a readable intent beside its primitive-extension metadata", () => {
+    const safety = safetyOf(
+      '{"resourceType":"MedicationRequest","status":"active","intent":"plan","_intent":{"id":"i1"}}',
+    );
+
+    expect(safety.intents).toEqual([{ code: "plan", location: "MedicationRequest.intent" }]);
+    expect(safety.safeToSummarize).toBe(true);
+  });
+
+  it("AC-7: surfaces no intent for a root that is not a MedicationRequest", () => {
+    // Gated exactly as the three reports above are, off the root's own `resourceType`.
+    expect(safetyOf('{"resourceType":"ServiceRequest","intent":"order"}').intents).toEqual([]);
+    expect(
+      safetyOf('{"resourceType":"Observation","intent":"PROPOSAL"}').unreadableIntents,
+    ).toEqual([]);
+  });
+});
+
+describe("AC-8: an intent that is not one of the eight codes refuses, is located and is not surfaced", () => {
+  for (const json of AC8_DOCUMENTS) {
+    it(`AC-8: ${json}`, () => {
+      const safety = safetyOf(json);
+
+      expect(safety.intents).toEqual([]);
+      expect(safety.unreadableIntents).toEqual(["MedicationRequest.intent"]);
+      expect(safety.safeToSummarize).toBe(false);
+    });
+  }
+
+  it("AC-8: locates an unreadable intent at its own root, beside a readable one", () => {
+    const safety = safetyOf(
+      '{"resourceType":"Bundle","type":"collection","entry":[' +
+        '{"resource":{"resourceType":"MedicationRequest","intent":"order"}},' +
+        '{"resource":{"resourceType":"MedicationRequest","intent":"Order"}}]}',
+    );
+
+    expect(safety.intents).toEqual([
+      { code: "order", location: "Bundle.entry[0].resource.intent" },
+    ]);
+    expect(safety.unreadableIntents).toEqual(["Bundle.entry[1].resource.intent"]);
+    expect(safety.safeToSummarize).toBe(false);
+  });
+});
+
+describe("AC-9: the readout carries none of the document's text beyond the eight intent codes", () => {
+  // Sentinels seeded at every position the criterion names. A dateTime is still a date, so its
+  // sentinel is shaped like one; the rest are strings nobody else writes.
+  const DECEASED = "1980-01-01T13:14:15+09:30";
+  const OTHER_REFERENCE = "Patient/SENTINEL-OTHER-REFERENCE-5501";
+  const OTHER_DISPLAY = "SENTINEL-OTHER-DISPLAY-5502";
+  const LINK_TYPE = "SENTINEL-LINK-TYPE-5503";
+  const INTENT = "SENTINEL-INTENT-5504";
+  const SUBPOTENT = "SENTINEL-SUBPOTENT-5505";
+
+  const patient = {
+    resourceType: "Patient",
+    deceasedDateTime: DECEASED,
+    link: [
+      { other: { reference: OTHER_REFERENCE, display: OTHER_DISPLAY }, type: LINK_TYPE },
+      { other: { reference: OTHER_REFERENCE }, type: "replaced-by" },
+    ],
+  };
+  const request = { resourceType: "MedicationRequest", status: "active", intent: INTENT };
+  const readable = { resourceType: "MedicationRequest", status: "active", intent: "proposal" };
+  const immunization = {
+    resourceType: "Immunization",
+    status: "completed",
+    isSubpotent: SUBPOTENT,
+  };
+
+  for (const [name, document] of Object.entries({
+    patient,
+    request,
+    readable,
+    immunization,
+    bundle: {
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [patient, request, readable, immunization].map((resource) => ({ resource })),
+    },
+  })) {
+    it(`AC-9: ${name}`, () => {
+      const safety = safetyOf(JSON.stringify(document));
+      const serialized = JSON.stringify(safety);
+
+      expect(safety.safeToSummarize).toBe(name === "readable");
+      for (const sentinel of [
+        DECEASED,
+        "13:14:15",
+        OTHER_REFERENCE,
+        "SENTINEL-OTHER-REFERENCE-5501",
+        OTHER_DISPLAY,
+        LINK_TYPE,
+        INTENT,
+        SUBPOTENT,
+      ]) {
+        expect(serialized, `${sentinel} must not reach the readout`).not.toContain(sentinel);
+      }
+    });
+  }
+});
+
+describe("AC-10: assertSafeToSummarize refuses over the new shapes and passes a readable intent", () => {
+  const refused = [
+    ...AC1_DOCUMENTS.map((entry) => entry.json),
+    ...AC2_DOCUMENTS.map((entry) => entry.json),
+    ...AC3_DOCUMENTS.map((entry) => entry.json),
+    ...AC5_DOCUMENTS.map((entry) => entry.json),
+    ...AC8_DOCUMENTS,
+  ];
+  for (const json of refused) {
+    it(`AC-10: throws on ${json}`, () => {
+      const { resource } = parseResource(json);
+
+      expect(() => {
+        assertSafeToSummarize(resource);
+      }).toThrow(FhirSafetyError);
+    });
+  }
+
+  it("AC-10: carries the intent location on the refusal, and no intent text", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"MedicationRequest","status":"active","intent":"SENTINEL-INTENT-5506"}',
+    );
+    try {
+      assertSafeToSummarize(resource);
+      expect.unreachable("an unreadable intent must refuse a summary");
+    } catch (err) {
+      expect(err).toBeInstanceOf(FhirSafetyError);
+      const safetyError = err as FhirSafetyError;
+      expect(safetyError.locations).toEqual(["MedicationRequest.intent"]);
+      expect(safetyError.message).not.toContain("SENTINEL-INTENT-5506");
+    }
+  });
+
+  for (const code of INTENT_CODES) {
+    it(`AC-10: does not throw on an active MedicationRequest whose intent is ${code}`, () => {
+      const { resource } = parseResource(
+        `{"resourceType":"MedicationRequest","status":"active","intent":${JSON.stringify(code)}}`,
+      );
+
+      expect(() => {
+        assertSafeToSummarize(resource);
+      }).not.toThrow();
+    });
+  }
+});
+
+describe("AC-11: an absent intent surfaces nothing and does not refuse", () => {
+  it("AC-11: a MedicationRequest with neither intent nor _intent reads safeToSummarize true", () => {
+    const safety = safetyOf('{"resourceType":"MedicationRequest","status":"active"}');
+
+    expect(safety.intents).toEqual([]);
+    expect(safety.unreadableIntents).toEqual([]);
+    expect(safety.safeToSummarize).toBe(true);
+  });
+});
+
 describe("declared non-reach residuals on the JSON read path, pinned so they cannot move in silence", () => {
   // Each of these is a Scope element the READ PATH drops before the safety walk sees it. Closing one
   // must red the test that pins it, in the same change. They are recorded with the repo's other

@@ -8,13 +8,26 @@
  * script at the same base and the file must come back byte-identical; that is what makes the
  * expectation re-derivable rather than hand-written.
  *
- * IT PASSES WHEN THE ONLY DIFFERENCE IS THE ONE THE CHANGE UNDER THE PIN IS FOR: a resource type
- * this library treats as SAFETY-CRITICAL gains an element table, so the informational note saying it
- * had none disappears at a root of that type, and findings ABOUT ITS OWN ELEMENTS appear. Everything
- * else is asserted identical, field by field: no finding removed, re-severitied or relocated
- * anywhere, no document of any other type changed at all, the negations and the retraction the same,
- * `safeToSummarize` the same, and every other location channel byte-identical, its
- * `unhandledModifierExtensions` included.
+ * IT PASSES WHEN THE ONLY DIFFERENCE IS THE ONE THE CHANGE UNDER THE PIN IS FOR: three more modifier
+ * elements R4 defines on the types this library reads a verdict from (`Patient.deceased[x]`,
+ * `Patient.link`, `Immunization.isSubpotent`) are reported, `MedicationRequest.intent` is surfaced
+ * as its code, and an `intent` this library cannot read is located and refuses. So exactly these
+ * may move, and nothing else:
+ *
+ * - `modifierElements` may GAIN a report whose element is `deceased`, `link` or `isSubpotent`, and
+ *   every report base made is still made at head;
+ * - `unreadableIntents` may GAIN a location at an `intent` element, and every location base had is
+ *   still there;
+ * - `intents` may GAIN a surfaced code, one of the eight R4 codes at an `intent` element, and every
+ *   pair base surfaced is still surfaced;
+ * - `safeToSummarize` may move TRUE TO FALSE, and only on a document whose head readout gained one
+ *   of those reports or one of those locations.
+ *
+ * Everything else is asserted identical, field by field: every validator finding at the same code,
+ * severity and location, the parse issues, the negations and the retraction, and every other
+ * location channel byte-identical, its `unhandledModifierExtensions` included. This change touches
+ * no validator, so the finding list is held IDENTICAL; the two bars below are what no allowance may
+ * ever relax, and they grant nothing of their own.
  *
  * TWO BARS RUN IN OPPOSITE DIRECTIONS AND BOTH ARE HERE. A finding may be ADDED freely, which is the
  * whole point of modeling a type; it may never be withdrawn, moved or made less severe, and `valid`
@@ -24,15 +37,13 @@
  * to change WHAT they may do, and if closing a gap ever seemed to need one of these two relaxed, the
  * thing that is wrong is an element table.
  *
- * THE ALLOWANCE IS NARROW BY CONSTRUCTION AND CANNOT GO STALE UNNOTICED. Its two halves are keyed to
- * `SAFETY_RESOURCE_TYPES`, the set this library already gates on, rather than to a list written down
- * here; that set's size and membership are asserted below, so a type added to it reds this suite
- * instead of silently widening what may move. Both halves are asserted actually exercised: an
- * allowance no document reaches is a hole, not a pass.
+ * EVERY ALLOWANCE IS ASSERTED EXERCISED: an allowance no corpus document reaches is a hole, not a
+ * pass. The corpus carries one document per shape the change decides for that reason.
  *
- * The previous allowance (a `safeToSummarize` that moved true to false for a document carrying a
- * modifier element) is GONE, and not because it was relaxed: the base was re-captured at the ref
- * that shipped that behaviour, so both trees now carry it and the channel is asserted identical.
+ * The previous allowance (the informational note that a safety-critical type had no element table,
+ * removed when the type gained one) is GONE, and not because it was relaxed: the base was
+ * re-captured at the ref that shipped that behaviour, so both trees now carry it and the findings
+ * are asserted identical.
  *
  * WHAT THIS IS NOT. The oracle differential (`scripts/differential.mjs`) compares this package
  * against the reference validator, so the base pin's output is not one of its operands and it
@@ -49,12 +60,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import {
-  parseResource,
-  readSafety,
-  SAFETY_RESOURCE_TYPES,
-  validateResource,
-} from "../src/index.js";
+import { parseResource, readSafety, validateResource } from "../src/index.js";
 import { corpus, readDocument, type Readout, type ReadoutCodec } from "./_readout-corpus.js";
 
 interface CapturedFile {
@@ -76,6 +82,7 @@ const HEAD: ReadoutCodec = {
 /** The channels that must be byte-identical between the two trees. */
 const IDENTICAL_CHANNELS = [
   "issues",
+  "findings",
   "negations",
   "unhandledModifierExtensions",
   "shadowedProperties",
@@ -87,28 +94,29 @@ const IDENTICAL_CHANNELS = [
   "unreadableNegationCodes",
 ] as const;
 
-/**
- * The ONE KIND of finding this change is allowed to remove, spelled exactly as the readout renders
- * it: the informational note that the resource type had no element table, at a ROOT of one of the
- * safety-critical types. Its removal is the point of the change; every other removal is a
- * withdrawal, whatever the type.
- */
-function notModeledNoteAt(type: string): string {
-  return `RESOURCE_NOT_MODELED/information at ${type}`;
-}
+/** The modifier elements this change adds to `modifierElements`, and no other. */
+const ADDED_ELEMENTS: ReadonlySet<string> = new Set(["deceased", "link", "isSubpotent"]);
 
-/** Every spelling of that note the allowance covers, one per safety-critical type. */
-const DECLARED_REMOVALS = new Set([...SAFETY_RESOURCE_TYPES].map(notModeledNoteAt));
+/** The eight R4 4.0.1 `MedicationRequest.intent` codes, the only ones head may surface. */
+const INTENT_CODES: ReadonlySet<string> = new Set([
+  "proposal",
+  "plan",
+  "order",
+  "original-order",
+  "reflex-order",
+  "filler-order",
+  "instance-order",
+  "option",
+]);
 
-/** The location half of a `code/severity at location` readout string. */
-function locationOf(finding: string): string {
-  const at = finding.lastIndexOf(" at ");
-  return at === -1 ? "" : finding.slice(at + " at ".length);
+/** Whether a location names an `intent` element. */
+function atIntent(location: string): boolean {
+  return location.endsWith(".intent");
 }
 
 /**
  * Multiset difference: the entries of `a` that `b` does not also carry, occurrence by occurrence. A
- * set difference would hide a finding that went from two occurrences to one, which is a removal.
+ * set difference would hide an entry that went from two occurrences to one, which is a removal.
  */
 function missingFrom(a: readonly string[], b: readonly string[]): string[] {
   const remaining = [...b];
@@ -121,39 +129,46 @@ function missingFrom(a: readonly string[], b: readonly string[]): string[] {
   return out;
 }
 
-/** What moved in the `findings` channel for one document, in both directions. */
-function findingDelta(
-  base: Readout,
-  head: Readout,
+/** What moved in one list-valued field, in both directions. */
+function delta(
+  base: readonly string[],
+  head: readonly string[],
 ): { readonly removed: string[]; readonly added: string[] } {
+  return { removed: missingFrom(base, head), added: missingFrom(head, base) };
+}
+
+/** A modifier-element report as one comparable string, `element at location`. */
+function reportKeys(readout: Readout): string[] {
+  return readout.modifierElements.map((report) => `${report.element} at ${report.location}`);
+}
+
+/** A surfaced intent as one comparable string, `code at location`. */
+function intentKeys(readout: Readout): string[] {
+  return readout.intents.map((read) => `${read.code} at ${read.location}`);
+}
+
+/** The first word of a `word at location` key. */
+function headOf(key: string): string {
+  return key.slice(0, key.indexOf(" at "));
+}
+
+/** The location half of a `word at location` key. */
+function locationOf(key: string): string {
+  return key.slice(key.indexOf(" at ") + " at ".length);
+}
+
+/** Everything that moved for one document on the fields this change is allowed to move. */
+function movement(base: Readout, head: Readout) {
   return {
-    removed: missingFrom(base.findings, head.findings),
-    added: missingFrom(head.findings, base.findings),
+    reports: delta(reportKeys(base), reportKeys(head)),
+    intents: delta(intentKeys(base), intentKeys(head)),
+    unreadableIntents: delta(base.unreadableIntents, head.unreadableIntents),
+    findings: delta(base.findings, head.findings),
   };
 }
 
-/** Whether the readout is of a document this change is allowed to move at all. */
-function isSafetyType(readout: Readout): boolean {
-  return readout.resourceType !== undefined && SAFETY_RESOURCE_TYPES.has(readout.resourceType);
-}
-
-describe("base versus head: the read differential over the JSON corpus", () => {
-  it("keys its allowance to the seven safety-critical types, by the set and not by a list here", () => {
-    // If the set ever grows, this reds rather than the allowance quietly widening with it.
-    expect(SAFETY_RESOURCE_TYPES.size).toBe(7);
-    expect([...SAFETY_RESOURCE_TYPES].sort()).toEqual([
-      "AllergyIntolerance",
-      "Condition",
-      "DiagnosticReport",
-      "Immunization",
-      "MedicationRequest",
-      "MedicationStatement",
-      "Observation",
-    ]);
-    expect(DECLARED_REMOVALS.size).toBe(7);
-  });
-
-  it("compares the corpus the base capture was taken over, with nothing added or dropped", () => {
+describe("AC-14: base versus head, the read differential over the JSON corpus", () => {
+  it("AC-14: compares the corpus the base capture was taken over, with nothing added or dropped", () => {
     // A fixture added without re-running the capture would otherwise be silently uncompared.
     expect(
       corpus()
@@ -168,7 +183,7 @@ describe("base versus head: the read differential over the JSON corpus", () => {
       const base = captured.documents[document.name];
       const head = readDocument(HEAD, document.json);
 
-      it("reads the same, in every channel but the one this change adds", () => {
+      it("AC-14: reads the same in every field this change does not move", () => {
         expect(base, "no base capture for this document").toBeDefined();
         const captured2 = base as Readout;
         expect(head.thrown).toEqual(captured2.thrown);
@@ -176,106 +191,96 @@ describe("base versus head: the read differential over the JSON corpus", () => {
         expect(head.status).toEqual(captured2.status);
         expect(head.retracted).toBe(captured2.retracted);
         expect(head.noKnownAllergy).toBe(captured2.noKnownAllergy);
-        expect(head.safeToSummarize, "safeToSummarize moved").toBe(captured2.safeToSummarize);
         for (const channel of IDENTICAL_CHANNELS) {
-          expect(head[channel], `${channel} moved`).toEqual(captured2[channel] ?? []);
+          expect(head[channel], `${channel} moved`).toEqual(captured2[channel]);
         }
       });
 
-      it("withdraws no finding, and adds one only about a safety type's own element", () => {
+      it("AC-14: withdraws no finding, and moves valid one way only", () => {
         const captured2 = base as Readout;
-        const { removed, added } = findingDelta(captured2, head);
-
-        if (!isSafetyType(head)) {
-          // No document of any other type moves at all, in either direction.
-          expect(removed, "a finding was withdrawn from a document outside the allowance").toEqual(
-            [],
-          );
-          expect(added, "a finding was added to a document outside the allowance").toEqual([]);
-          return;
-        }
-
-        // The single declared removal for THIS document's own type, and nothing else. A
-        // re-severitied or relocated finding shows up here as a removal beside its replacement, so
-        // this arm refuses both. Keyed to `head.resourceType` rather than to the whole set, so a
-        // note removed at the wrong root is still a withdrawal.
-        const declared = notModeledNoteAt(head.resourceType ?? "");
-        expect(DECLARED_REMOVALS.has(declared), "the declared removal is not in the set").toBe(
-          true,
-        );
-        expect(
-          removed.filter((finding) => finding !== declared),
-          "a finding was removed, re-severitied or relocated",
-        ).toEqual([]);
-        expect(removed.length, "the declared removal can only occur once").toBeLessThanOrEqual(1);
-
-        // Everything added is about an element OF this resource, never about the resource root and
-        // never about another document's element.
-        expect(
-          added.filter((finding) => !locationOf(finding).startsWith(`${head.resourceType ?? ""}.`)),
-          "a finding was added somewhere other than this resource's own element",
-        ).toEqual([]);
-      });
-
-      it("moves valid one way only, and only with an added finding to explain it", () => {
-        const captured2 = base as Readout;
+        const { removed } = delta(captured2.findings, head.findings);
+        expect(removed, "a finding was removed, re-severitied or relocated").toEqual([]);
         if (head.valid === captured2.valid) return;
         expect(captured2.valid, "valid moved false to true").toBe(true);
         expect(head.valid).toBe(false);
-        expect(isSafetyType(head), "a document outside the allowance changed verdict").toBe(true);
         expect(
-          findingDelta(captured2, head).added.length,
+          delta(captured2.findings, head.findings).added.length,
           "the verdict moved with no added finding to explain it",
+        ).toBeGreaterThan(0);
+      });
+
+      it("AC-14: keeps every report, code and location base made, and adds only the new shapes", () => {
+        const moved = movement(base as Readout, head);
+        expect(moved.reports.removed, "a modifier-element report was withdrawn").toEqual([]);
+        expect(
+          moved.reports.added.filter((key) => !ADDED_ELEMENTS.has(headOf(key))),
+          "a report was added for an element this change does not add",
+        ).toEqual([]);
+        expect(
+          moved.unreadableIntents.removed,
+          "an unreadable-intent location was withdrawn",
+        ).toEqual([]);
+        expect(
+          moved.unreadableIntents.added.filter((location) => !atIntent(location)),
+          "an unreadable-intent location was added somewhere other than an intent element",
+        ).toEqual([]);
+        expect(moved.intents.removed, "a surfaced intent was withdrawn").toEqual([]);
+        expect(
+          moved.intents.added.filter(
+            (key) => !INTENT_CODES.has(headOf(key)) || !atIntent(locationOf(key)),
+          ),
+          "an intent was surfaced that is not one of the eight codes at an intent element",
+        ).toEqual([]);
+      });
+
+      it("AC-14: moves safeToSummarize true to false only, and only with a new report or location", () => {
+        const captured2 = base as Readout;
+        if (head.safeToSummarize === captured2.safeToSummarize) return;
+        expect(captured2.safeToSummarize, "safeToSummarize moved false to true").toBe(true);
+        expect(head.safeToSummarize).toBe(false);
+        const moved = movement(captured2, head);
+        expect(
+          moved.reports.added.length + moved.unreadableIntents.added.length,
+          "safeToSummarize moved with no added report or unreadable-intent location to explain it",
         ).toBeGreaterThan(0);
       });
     });
   }
 
-  describe("the allowance is exercised rather than merely declared", () => {
-    const deltas = corpus().map((document) => {
+  describe("AC-14: every allowance is exercised rather than merely declared", () => {
+    const moves = corpus().map((document) => {
       const base = captured.documents[document.name] as Readout;
       const head = readDocument(HEAD, document.json);
-      return { name: document.name, type: head.resourceType, ...findingDelta(base, head) };
+      return { name: document.name, base, head, ...movement(base, head) };
     });
 
-    it("removes the informational note at a safety-critical root somewhere in the corpus", () => {
-      const removals = deltas.filter((delta) =>
-        delta.removed.some((finding) => DECLARED_REMOVALS.has(finding)),
-      );
-      expect(removals.length, "the declared removal reaches no document").toBeGreaterThan(0);
+    it("AC-14: adds a report for each of deceased, link and isSubpotent somewhere in the corpus", () => {
+      const reached = new Set(moves.flatMap((move) => move.reports.added.map(headOf)));
+      expect([...reached].sort()).toEqual([...ADDED_ELEMENTS].sort());
     });
 
-    it("adds a finding about a safety type's own element somewhere in the corpus", () => {
-      const additions = deltas.filter((delta) => delta.added.length > 0);
-      expect(additions.length, "the declared addition reaches no document").toBeGreaterThan(0);
+    it("AC-14: adds an unreadable-intent location somewhere in the corpus", () => {
+      expect(
+        moves.filter((move) => move.unreadableIntents.added.length > 0).length,
+      ).toBeGreaterThan(0);
     });
 
-    it("removes nothing but that note, anywhere in the corpus", () => {
-      const withdrawn = deltas.flatMap((delta) =>
-        delta.removed
-          .filter((finding) => !DECLARED_REMOVALS.has(finding))
-          .map((finding) => `${delta.name}: ${finding}`),
-      );
-      expect(withdrawn).toEqual([]);
+    it("AC-14: surfaces an intent code somewhere in the corpus", () => {
+      expect(moves.filter((move) => move.intents.added.length > 0).length).toBeGreaterThan(0);
     });
 
-    it("exercises the allowance on the types this change models, not only on the one it had", () => {
-      // The widening itself, measured. An allowance keyed to seven types whose corpus only ever
-      // reaches one of them is the stale allowance the docblock above warns about, and it would
-      // pass every other assertion in this file.
-      const reached = new Set(
-        deltas
-          .filter(
-            (delta) =>
-              delta.removed.some((finding) => DECLARED_REMOVALS.has(finding)) ||
-              delta.added.length > 0,
-          )
-          .map((delta) => delta.type ?? ""),
-      );
-      for (const type of reached) expect(SAFETY_RESOURCE_TYPES.has(type), type).toBe(true);
-      expect([...reached].sort(), "the corpus reaches these safety types and no others").toEqual(
-        [...SAFETY_RESOURCE_TYPES].sort(),
-      );
+    it("AC-14: moves safeToSummarize true to false somewhere in the corpus", () => {
+      expect(
+        moves.filter((move) => move.base.safeToSummarize && !move.head.safeToSummarize).length,
+      ).toBeGreaterThan(0);
+    });
+
+    it("AC-14: removes and adds no finding anywhere in the corpus", () => {
+      const moved = moves.flatMap((move) => [
+        ...move.findings.removed.map((finding) => `${move.name}: removed ${finding}`),
+        ...move.findings.added.map((finding) => `${move.name}: added ${finding}`),
+      ]);
+      expect(moved).toEqual([]);
     });
   });
 });
