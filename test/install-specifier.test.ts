@@ -8,8 +8,8 @@ import { installSpecifiers } from "./_first-use.js";
 /**
  * The install command a reader copies has to fetch THIS package. The subject is package identity:
  * every registry specifier the two first-use documents print is compared with `package.json`
- * `name`, and a mismatch names both strings. The installation page must print one; the README
- * prints none today, and any it gains is held to the same rule.
+ * `name`, and a mismatch names both strings. The installation page must print one, and every one
+ * the README's Install section prints is held to the same rule.
  */
 const root = join(import.meta.dirname, "..");
 const { name } = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { name: string };

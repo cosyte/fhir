@@ -11,7 +11,8 @@
 > JSON **and XML** codec, and validation, with the same one-line ergonomics as the rest of the
 > `@cosyte/*` parser suite.
 
-**Status: pre-alpha, unpublished.** What is built: the no-data-loss core (a
+**Status: 0.1.** While the package is below 1.0, a breaking change ships in a minor version and is
+called out in the changelog. What is built: the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
@@ -59,7 +60,18 @@ cross-format transcoding** (emitting spec-clean JSON booleans/numbers from an XM
 datatype schema and is not yet done; the XHTML **structure** inside `Narrative.div` is not modeled or
 validated (carried opaquely as a string (the JSON codec's fidelity), never dropped), and RDF/Turtle is
 out of scope. It has no typed per-resource models
-yet, and it **never converts a unit** or evaluates a reference range. Do not depend on this package.
+yet, and it **never converts a unit** or evaluates a reference range.
+
+## Install
+
+```bash
+# pnpm (recommended). Also works with: npm install @cosyte/fhir  |  yarn add @cosyte/fhir
+pnpm add @cosyte/fhir
+```
+
+Requires Node `>=22.0.0`. The package ships dual ESM and CommonJS builds with type declarations for
+both, so `import` and `require` both work and neither needs a compatibility shim. There are zero
+runtime dependencies, and it imports no Node built-in.
 
 ## Usage
 
@@ -1243,8 +1255,9 @@ pnpm lint
 pnpm test
 ```
 
-Every meaningful change gets a Changeset (`pnpm changeset`, `patch` on the `0.0.x` ladder) and a
-`CHANGELOG.md` `[Unreleased]` entry. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Every meaningful change gets a Changeset (`pnpm changeset`: `minor` for new capability or a breaking
+change while the version is below 1.0, `patch` for a fix) and a `CHANGELOG.md` `[Unreleased]`
+entry. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 
