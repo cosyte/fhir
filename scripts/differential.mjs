@@ -236,9 +236,10 @@ function main() {
     for (const line of formatUsCoreDocuments(records, usCore.documents.map((d) => d.id))) {
       console.log(line);
     }
+    // The report's closing line already names the UCUM condition when it holds; it is repeated once
+    // more beside the summary, on stderr, where a failing run's reader looks.
     for (const line of formatReachReport(usCore.report)) console.log(line);
     usCoreShortfall = ucumShortfall(usCore.report);
-    if (usCoreShortfall !== null) console.error(usCoreShortfall);
   }
 
   console.log("");
