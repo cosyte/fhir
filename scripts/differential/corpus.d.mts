@@ -3,14 +3,22 @@
  * with no loader; this file is what lets `test/differential-corpus.test.ts` type-check against it.
  */
 
+export interface PackageRecord {
+  readonly url: string;
+  readonly bytes: number;
+  readonly sha256: string;
+}
+
 export interface CorpusAcquisition {
-  readonly kind: "in-tree" | "files" | "archive";
+  readonly kind: "in-tree" | "files" | "archive" | "packages";
   readonly root?: string;
   readonly baseUrl?: string;
   readonly url?: string;
   readonly format?: string;
   readonly sha256?: string;
   readonly bytes?: number;
+  /** A packages corpus: one pinned package tarball per version. */
+  readonly packages?: Readonly<Record<string, PackageRecord>>;
 }
 
 export interface CorpusRecord {
@@ -33,6 +41,10 @@ export interface DocumentRecord {
   readonly sha256: string;
   readonly exclude?: string;
   readonly note?: string;
+  /** A packages-corpus document: the package version it is an example file of. */
+  readonly version?: string;
+  /** A packages-corpus document: the licence of the package it comes out of. */
+  readonly licence?: string;
 }
 
 export interface Declaration {
@@ -99,5 +111,7 @@ export declare function resolveCorpus(
   declaration: Declaration,
   options?: ResolveCorpusOptions,
 ): readonly ResolvedDocument[];
+export declare function exclusionClasses(reason: string): string[];
+export declare function isInvariantOnlyExclusion(reason: string): boolean;
 export declare function provenanceLine(declaration: Declaration, document: DocumentRecord): string;
 export declare function shortfall(compared: number, floor: number): string | null;

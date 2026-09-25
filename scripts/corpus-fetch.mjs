@@ -34,6 +34,13 @@ import {
   loadDeclaration,
   sha256,
 } from "./differential/corpus.mjs";
+import {
+  packageEntries,
+  packageEntryOf,
+  packageLocation,
+  packageMismatch,
+  packageRecord,
+} from "./differential/uscore.mjs";
 import { extractNamed } from "./differential/zip.mjs";
 
 const RETRIES = 3;
@@ -48,7 +55,7 @@ const CONCURRENCY = 8;
  * script's credentials-free-but-real network access at an arbitrary host. Adding a corpus means
  * adding its host here, in review, on purpose.
  */
-const ALLOWED_HOSTS = new Set(["raw.githubusercontent.com", "hl7.org"]);
+const ALLOWED_HOSTS = new Set(["raw.githubusercontent.com", "hl7.org", "packages.fhir.org"]);
 
 /** The URL, parsed and bounded, or a refusal. Never returns something unchecked. */
 function allowedUrl(candidate) {
@@ -154,6 +161,57 @@ async function fetchArchiveCorpus(corpus, documents, root) {
   return { fetched: pending.length, cached: documents.length - pending.length };
 }
 
+/**
+ * A packages corpus: one FHIR package tarball per version, each verified against the byte count and
+ * digest the declaration records, KEPT beside that version's examples (the differential reads the
+ * declared profiles out of it, and verifies it again before it does), and every declared example
+ * extracted from it and verified against its own digest. The tarball is written only once verified,
+ * and like the documents it is git-ignored and never committed.
+ */
+async function fetchPackagesCorpus(corpus, documents, root) {
+  let fetched = 0;
+  const byVersion = new Map();
+  for (const document of documents) {
+    if (!byVersion.has(document.version)) byVersion.set(document.version, []);
+    byVersion.get(document.version).push(document);
+  }
+  for (const version of Object.keys(corpus.acquisition.packages)) {
+    const file = packageLocation(corpus, version, { documentsRoot: root });
+    let tarball;
+    try {
+      tarball = readFileSync(file);
+      if (packageMismatch(corpus, version, tarball) !== null) tarball = undefined;
+    } catch {
+      tarball = undefined;
+    }
+    if (tarball === undefined) {
+      tarball = await getBytes(packageRecord(corpus, version).url);
+      const mismatch = packageMismatch(corpus, version, tarball);
+      if (mismatch !== null) throw new CorpusError(`${mismatch}. NOT written.`);
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, tarball);
+    }
+    const pending = (byVersion.get(version) ?? []).filter(
+      (d) => !onDiskWithDeclaredDigest(join(root, corpus.id, d.path), d),
+    );
+    if (pending.length === 0) continue;
+    const entries = packageEntries(tarball);
+    for (const document of pending) {
+      const entry = packageEntryOf(document);
+      const bytes = entry === null ? undefined : entries.get(entry);
+      if (bytes === undefined) {
+        throw new CorpusError(
+          `${document.id}: the US Core ${version} package does not carry ${String(entry)}, so it is ` +
+            `not the package this document was declared against.`,
+        );
+      }
+      place(join(root, corpus.id, document.path), bytes, document);
+      fetched += 1;
+    }
+  }
+  return { fetched, cached: documents.length - fetched };
+}
+
 async function main() {
   const declaration = loadDeclaration();
   const root = DOCUMENTS_ROOT;
@@ -166,10 +224,13 @@ async function main() {
   }
 
   for (const { corpus, documents } of byCorpus.values()) {
+    const kind = corpus.acquisition.kind;
     const result =
-      corpus.acquisition.kind === "archive"
+      kind === "archive"
         ? await fetchArchiveCorpus(corpus, documents, root)
-        : await fetchFilesCorpus(corpus, documents, root);
+        : kind === "packages"
+          ? await fetchPackagesCorpus(corpus, documents, root)
+          : await fetchFilesCorpus(corpus, documents, root);
     console.log(
       `corpus:fetch ${corpus.id} @ ${corpus.version} (${corpus.licence}): ` +
         `${String(result.fetched)} retrieved, ${String(result.cached)} already present, ` +

@@ -60,7 +60,13 @@ export function sha256(buf) {
 
 const ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const HEX64_RE = /^[0-9a-f]{64}$/;
-const ACQUISITION_KINDS = new Set(["in-tree", "files", "archive"]);
+const ACQUISITION_KINDS = new Set(["in-tree", "files", "archive", "packages"]);
+
+/** A FHIR package version as a packages corpus records it: an exact release, never a range. */
+const PACKAGE_VERSION_RE = /^\d+\.\d+\.\d+$/;
+
+/** The one directory of a FHIR package that holds its published examples. */
+const EXAMPLE_PREFIX = "package/example/";
 
 function requireString(value, what) {
   if (typeof value !== "string" || value.length === 0) {
@@ -110,6 +116,7 @@ function validateCorpus(entry, index) {
       throw new CorpusError(`${at}.acquisition.sha256 must be a sha-256 hex digest`);
     }
   }
+  if (acquisition.kind === "packages") validatePackages(acquisition, at);
   // Third-party content is only ever obtained through this repository if its licence text and the
   // attribution it requires travel with the declaration that names it.
   if (entry.authored === "third-party") {
@@ -119,13 +126,72 @@ function validateCorpus(entry, index) {
   return entry;
 }
 
-function validateDocument(entry, index, corpusIds) {
+/**
+ * A packages corpus: its documents are example files inside FHIR package tarballs, one tarball per
+ * version, each recorded by URL, byte count and SHA-256. The tarball is fetched and verified, never
+ * committed, exactly like the documents it carries.
+ */
+function validatePackages(acquisition, at) {
+  if (acquisition.format !== "tgz") throw new CorpusError(`${at}.acquisition.format must be "tgz"`);
+  const packages = acquisition.packages;
+  if (packages === null || typeof packages !== "object" || Array.isArray(packages)) {
+    throw new CorpusError(`${at}.acquisition.packages must map each package version to its record`);
+  }
+  const versions = Object.keys(packages);
+  if (versions.length === 0) throw new CorpusError(`${at}.acquisition.packages records no package`);
+  for (const version of versions) {
+    const where = `${at}.acquisition.packages["${version}"]`;
+    if (!PACKAGE_VERSION_RE.test(version)) {
+      throw new CorpusError(`${where}: a package version must be an exact release, not ${version}`);
+    }
+    const record = packages[version];
+    if (record === null || typeof record !== "object") throw new CorpusError(`${where} must be an object`);
+    requireString(record.url, `${where}.url`);
+    if (!Number.isInteger(record.bytes) || record.bytes <= 0) {
+      throw new CorpusError(`${where}.bytes must be a positive integer`);
+    }
+    if (!HEX64_RE.test(String(record.sha256))) {
+      throw new CorpusError(`${where}.sha256 must be a sha-256 hex digest`);
+    }
+  }
+}
+
+/**
+ * The three facts a packages-corpus document carries beyond every other document's: the package
+ * version it comes out of, the licence of that package, and a path naming one of that version's
+ * example files (`<version>/package/example/<file>.json`). A document missing any of them is a
+ * document whose provenance cannot be stated, and the declaration is refused.
+ */
+function validatePackageDocument(entry, corpus, at) {
+  const version = requireString(entry.version, `${at}.version`);
+  if (corpus.acquisition.packages[version] === undefined) {
+    throw new CorpusError(
+      `${at}.version names ${version}, which is not a package ${corpus.id} records ` +
+        `(${Object.keys(corpus.acquisition.packages).join(", ")})`,
+    );
+  }
+  const licence = requireString(entry.licence, `${at}.licence`);
+  if (licence !== corpus.licence) {
+    throw new CorpusError(`${at}.licence is ${licence}, and the package it comes out of is ${corpus.licence}`);
+  }
+  const prefix = `${version}/${EXAMPLE_PREFIX}`;
+  const file = entry.path.startsWith(prefix) ? entry.path.slice(prefix.length) : "";
+  if (file === "" || file.includes("/") || !file.endsWith(".json")) {
+    throw new CorpusError(
+      `${at}.path must name one example file of the ${version} package, as ${prefix}<file>.json: ${entry.path}`,
+    );
+  }
+}
+
+function validateDocument(entry, index, corpora) {
   const at = `documents[${String(index)}]`;
   if (entry === null || typeof entry !== "object") throw new CorpusError(`${at} must be an object`);
   requireString(entry.id, `${at}.id`);
   const corpus = requireString(entry.corpus, `${at}.corpus`);
-  if (!corpusIds.has(corpus)) throw new CorpusError(`${at}.corpus names no declared corpus: ${corpus}`);
+  if (!corpora.has(corpus)) throw new CorpusError(`${at}.corpus names no declared corpus: ${corpus}`);
   requireSafeRelativePath(entry.path, `${at}.path`);
+  const record = corpora.get(corpus);
+  if (record.acquisition.kind === "packages") validatePackageDocument(entry, record, at);
   if (!Number.isInteger(entry.bytes) || entry.bytes <= 0) {
     throw new CorpusError(`${at}.bytes must be a positive integer`);
   }
@@ -167,15 +233,15 @@ export function parseDeclaration(text, where = "the corpus declaration") {
   if (!Array.isArray(raw.documents) || raw.documents.length === 0) {
     throw new CorpusError(`${where}.documents must be a non-empty array`);
   }
-  const corpusIds = new Set();
+  const corpora = new Map();
   for (const [index, entry] of raw.corpora.entries()) {
     validateCorpus(entry, index);
-    if (corpusIds.has(entry.id)) throw new CorpusError(`${where}: duplicate corpus id ${entry.id}`);
-    corpusIds.add(entry.id);
+    if (corpora.has(entry.id)) throw new CorpusError(`${where}: duplicate corpus id ${entry.id}`);
+    corpora.set(entry.id, entry);
   }
   const documentIds = new Set();
   for (const [index, entry] of raw.documents.entries()) {
-    validateDocument(entry, index, corpusIds);
+    validateDocument(entry, index, corpora);
     if (documentIds.has(entry.id)) {
       throw new CorpusError(`${where}: duplicate document id ${entry.id}`);
     }
@@ -348,6 +414,27 @@ export function resolveCorpus(declaration, options = {}) {
     }
   }
   return resolved;
+}
+
+/**
+ * The classes an exclusion reason records, in the form every measured reason spells them:
+ * `<count>x <class> (<what the class means>)`. A reason that records none returns an empty list.
+ */
+export function exclusionClasses(reason) {
+  const classes = new Set();
+  for (const match of String(reason).matchAll(/\d+x ([a-z][a-z-]*) \(/g)) classes.add(match[1]);
+  return [...classes].sort();
+}
+
+/**
+ * Whether an exclusion's ONLY recorded class is `invariant`. For a document of a packages corpus
+ * that is the one exclusion that may not stand: the US Core pass exists to compare the constraints
+ * this library newly evaluates, and an exclusion recording nothing but an invariant disagreement
+ * would hide exactly the disagreement the pass is there to find.
+ */
+export function isInvariantOnlyExclusion(reason) {
+  const classes = exclusionClasses(reason);
+  return classes.length === 1 && classes[0] === "invariant";
 }
 
 /** A one-line provenance record for a document: corpus, pinned version, licence. */

@@ -1,0 +1,34 @@
+NOTICE for the differential corpus documents obtained from the HL7 FHIR US Core packages
+=====================================================================================
+
+Corpus:   The HL7 FHIR US Core Implementation Guide's own published examples
+Origin:   https://hl7.org/fhir/us/core/ (the package tarballs served at
+          https://packages.fhir.org/hl7.fhir.us.core/6.1.0 and
+          https://packages.fhir.org/hl7.fhir.us.core/9.0.0)
+Version:  US Core 6.1.0 and US Core 9.0.0, each pinned by byte count and SHA-256
+Licence:  CC0 1.0 Universal (SPDX: CC0-1.0). Each package's own package.json
+          carries "license": "CC0-1.0", and that field is checked before a
+          profile is projected out of either package. The full CC0 1.0 legal
+          code is beside this file in hl7-fhir-us-core-LICENSE.txt.
+
+TRADEMARK, WHICH CC0 DOES NOT COVER
+-----------------------------------
+HL7(R), HEALTH LEVEL SEVEN(R), FHIR(R) and the FHIR (flame image)(R) are
+trademarks owned by Health Level Seven International, registered with the
+United States Patent and Trademark Office. Use of the examples as validation
+input carries no claim to those marks, and nothing here is endorsed by or
+affiliated with HL7.
+
+WHAT THIS REPOSITORY CARRIES, AND WHAT IT DOES NOT
+--------------------------------------------------
+This repository does NOT redistribute the example documents or the packages
+that carry them. `corpus/corpus.json` records each package by URL, byte count
+and SHA-256, and declares each example by its path inside that package, its
+byte count and its SHA-256 digest. `scripts/corpus-fetch.mjs` retrieves each
+package at run time, refuses it if its byte count or digest does not match,
+and refuses any extracted example whose digest does not match. The package and
+the materialised examples land in `corpus/documents/`, which is git-ignored,
+so no third-party document content and no package byte enters this
+repository's history. The examples carry names, dates of birth and addresses
+that are the Implementation Guide's own illustrations; they are read as
+validation input only, and nothing from them is printed by the differential.

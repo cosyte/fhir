@@ -113,6 +113,11 @@ import {
 import { canonicalJson, formatRunRecord } from "./differential/record.mjs";
 import { corpusSummaryLines, runComparison } from "./differential/run.mjs";
 import {
+  formatReachReport,
+  formatUsCoreDocuments,
+  ucumShortfall,
+} from "./differential/uscore.mjs";
+import {
   formatTerminologyInputs,
   resolveTerminologyInputs,
   TERMINOLOGY_INPUTS,
@@ -194,7 +199,7 @@ function main() {
     return;
   }
 
-  const { records, summary, runRecord, resolved } = outcome;
+  const { records, summary, runRecord, resolved, usCore } = outcome;
 
   for (const record of records) {
     const line = formatRecord(record);
@@ -204,12 +209,26 @@ function main() {
       for (const f of findings) {
         // Severity, location and CODES. Never the diagnostic text: the oracle echoes document
         // values and this log is public. The codes are what make a violation classifiable.
-        const kind = [f.code, f.messageId].filter(Boolean).join("/");
+        const kind = [f.code, f.messageId, f.constraint].filter(Boolean).join("/");
         console.error(`    ${f.severity} @ ${f.location || "(root)"}${kind ? ` [${kind}]` : ""}`);
       }
     } else {
       console.log(line);
     }
+  }
+
+  // The US Core pass: its document-level accounting, then the reach of every newly evaluated row. A
+  // row nothing reached, and a document this library only reported unchecked, are printed as such
+  // and never counted as agreement; no compared 9.0.0 document deciding the UCUM rule fails the run.
+  let usCoreShortfall = null;
+  if (usCore !== undefined) {
+    console.log("");
+    for (const line of formatUsCoreDocuments(records, usCore.documents.map((d) => d.id))) {
+      console.log(line);
+    }
+    for (const line of formatReachReport(usCore.report)) console.log(line);
+    usCoreShortfall = ucumShortfall(usCore.report);
+    if (usCoreShortfall !== null) console.error(usCoreShortfall);
   }
 
   console.log("");
@@ -218,6 +237,7 @@ function main() {
     if (summary.violations.length > 0 || !summary.meetsFloor) console.error(line);
     else console.log(line);
   }
+  if (usCoreShortfall !== null) console.error(usCoreShortfall);
   for (const line of formatRunRecord(runRecord)) console.log(line);
 
   // The full record, for a reader who wants to diff two of them by hand. Opt-in, because the
@@ -228,14 +248,19 @@ function main() {
     console.log(`run record: written to ${recordPath}`);
   }
 
-  if (summary.compared > 0 && summary.violations.length === 0 && summary.meetsFloor) {
+  if (
+    summary.compared > 0 &&
+    summary.violations.length === 0 &&
+    summary.meetsFloor &&
+    usCoreShortfall === null
+  ) {
     const sample = resolved[0];
     console.log(
       `differential: the corpora above agree with the oracle within documented deltas ` +
         `(provenance, first document: ${provenanceLine(declaration, sample.document)}).`,
     );
   }
-  process.exitCode = exitCodeFor(summary);
+  process.exitCode = usCoreShortfall === null ? exitCodeFor(summary) : 1;
 }
 
 main();
