@@ -17,7 +17,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { parseResourceXml, readSafety, validateResource } from "../src/index.js";
+import { parseResource, parseResourceXml, readSafety, validateResource } from "../src/index.js";
 
 const NS = 'xmlns="http://hl7.org/fhir"';
 
@@ -161,5 +161,190 @@ describe("XML read path: Practitioner.identifier.use", () => {
     );
 
     expect(safety.modifierElements).toEqual([]);
+  });
+});
+
+// S0364-fhir-safety-modifier-3, AC-12: the documents of AC-1, AC-2, AC-3, AC-7 and AC-8 written
+// as FHIR XML read exactly as their JSON spelling does. A nested resource is written as a
+// two-entry Bundle in both spellings: FHIR XML spells a repeat by repeating the element, so a
+// single `<entry>` or `<contained>` is not an array in the model and carries no index (pinned for
+// `identifier` above), which is a property of the reader and not of this channel.
+
+/** One document in both spellings. */
+interface Spelled {
+  readonly json: string;
+  readonly xml: string;
+}
+
+/** The JSON and XML readouts of one document, and the fields AC-12 holds equal. */
+function expectSameReading({ json, xml }: Spelled): ReturnType<typeof readSafety> {
+  const fromJson = readSafety(parseResource(json).resource);
+  const fromXml = safetyOfXml(xml);
+  expect(fromXml.modifierElements, "modifierElements").toEqual(fromJson.modifierElements);
+  expect(fromXml.intents, "intents").toEqual(fromJson.intents);
+  expect(fromXml.unreadableIntents, "unreadableIntents").toEqual(fromJson.unreadableIntents);
+  expect(fromXml.safeToSummarize, "safeToSummarize").toBe(fromJson.safeToSummarize);
+  return fromXml;
+}
+
+const MASKED = '<extension url="http://example.org/x"><valueCode value="masked"/></extension>';
+
+describe("AC-12: deceased[x], link and isSubpotent read the same from XML as from JSON", () => {
+  const documents: readonly Spelled[] = [
+    {
+      json: '{"resourceType":"Patient","deceasedBoolean":true}',
+      xml: `<Patient ${NS}><deceasedBoolean value="true"/></Patient>`,
+    },
+    {
+      json: '{"resourceType":"Patient","deceasedBoolean":false}',
+      xml: `<Patient ${NS}><deceasedBoolean value="false"/></Patient>`,
+    },
+    {
+      json: '{"resourceType":"Patient","deceasedDateTime":"1970-01-01"}',
+      xml: `<Patient ${NS}><deceasedDateTime value="1970-01-01"/></Patient>`,
+    },
+    {
+      json: `{"resourceType":"Patient","_deceasedDateTime":{"extension":[{"url":"http://example.org/x","valueCode":"masked"}]}}`,
+      xml: `<Patient ${NS}><deceasedDateTime>${MASKED}</deceasedDateTime></Patient>`,
+    },
+    {
+      json: '{"resourceType":"Patient","deceasedBoolean":true,"_deceasedBoolean":{"id":"d1"}}',
+      xml: `<Patient ${NS}><deceasedBoolean id="d1" value="true"/></Patient>`,
+    },
+    {
+      json: '{"resourceType":"Patient","link":[{"other":{"reference":"Patient/p2"},"type":"replaced-by"}]}',
+      xml:
+        `<Patient ${NS}><link><other><reference value="Patient/p2"/></other>` +
+        `<type value="replaced-by"/></link></Patient>`,
+    },
+    {
+      json:
+        '{"resourceType":"Patient","link":[{"other":{"reference":"Patient/p2"},"type":"replaces"},' +
+        '{"other":{"reference":"Patient/p3"},"type":"seealso"},' +
+        '{"other":{"reference":"RelatedPerson/r1"},"type":"refer"}]}',
+      xml:
+        `<Patient ${NS}>` +
+        `<link><other><reference value="Patient/p2"/></other><type value="replaces"/></link>` +
+        `<link><other><reference value="Patient/p3"/></other><type value="seealso"/></link>` +
+        `<link><other><reference value="RelatedPerson/r1"/></other><type value="refer"/></link>` +
+        `</Patient>`,
+    },
+    {
+      json: '{"resourceType":"Immunization","status":"completed","isSubpotent":true}',
+      xml: `<Immunization ${NS}><status value="completed"/><isSubpotent value="true"/></Immunization>`,
+    },
+    {
+      json: '{"resourceType":"Immunization","status":"completed","isSubpotent":false}',
+      xml: `<Immunization ${NS}><status value="completed"/><isSubpotent value="false"/></Immunization>`,
+    },
+    {
+      json: '{"resourceType":"Immunization","_isSubpotent":{"id":"s1"}}',
+      xml: `<Immunization ${NS}><isSubpotent id="s1"/></Immunization>`,
+    },
+    {
+      json:
+        '{"resourceType":"Bundle","type":"collection","entry":[' +
+        '{"resource":{"resourceType":"Patient","deceasedBoolean":false,' +
+        '"link":[{"other":{"reference":"Patient/p2"},"type":"replaced-by"}]}},' +
+        '{"resource":{"resourceType":"Immunization","isSubpotent":true}}]}',
+      xml:
+        `<Bundle ${NS}><type value="collection"/>` +
+        `<entry><resource><Patient><deceasedBoolean value="false"/>` +
+        `<link><other><reference value="Patient/p2"/></other><type value="replaced-by"/></link>` +
+        `</Patient></resource></entry>` +
+        `<entry><resource><Immunization><isSubpotent value="true"/></Immunization></resource></entry>` +
+        `</Bundle>`,
+    },
+  ];
+
+  for (const document of documents) {
+    it(`AC-12: ${document.xml}`, () => {
+      const safety = expectSameReading(document);
+
+      expect(safety.modifierElements.length).toBeGreaterThan(0);
+      expect(safety.safeToSummarize).toBe(false);
+    });
+  }
+});
+
+describe("AC-12: MedicationRequest.intent reads the same from XML as from JSON", () => {
+  const codes = [
+    "proposal",
+    "plan",
+    "order",
+    "original-order",
+    "reflex-order",
+    "filler-order",
+    "instance-order",
+    "option",
+  ];
+  for (const code of codes) {
+    it(`AC-12: surfaces ${code} from its value attribute`, () => {
+      const safety = expectSameReading({
+        json: `{"resourceType":"MedicationRequest","status":"active","intent":"${code}"}`,
+        xml: `<MedicationRequest ${NS}><status value="active"/><intent value="${code}"/></MedicationRequest>`,
+      });
+
+      expect(safety.intents).toEqual([{ code, location: "MedicationRequest.intent" }]);
+      expect(safety.safeToSummarize).toBe(true);
+    });
+  }
+
+  it("AC-12: surfaces one pair per root in a Bundle", () => {
+    const safety = expectSameReading({
+      json:
+        '{"resourceType":"Bundle","type":"collection","entry":[' +
+        '{"resource":{"resourceType":"MedicationRequest","intent":"proposal"}},' +
+        '{"resource":{"resourceType":"MedicationRequest","intent":"order"}}]}',
+      xml:
+        `<Bundle ${NS}><type value="collection"/>` +
+        `<entry><resource><MedicationRequest><intent value="proposal"/></MedicationRequest></resource></entry>` +
+        `<entry><resource><MedicationRequest><intent value="order"/></MedicationRequest></resource></entry>` +
+        `</Bundle>`,
+    });
+
+    expect(safety.intents).toHaveLength(2);
+  });
+
+  const unreadable: readonly Spelled[] = [
+    ...["PROPOSAL", "Order", " order", "order ", "", "draft", "1"].map((written) => ({
+      json: `{"resourceType":"MedicationRequest","status":"active","intent":${JSON.stringify(written)}}`,
+      xml: `<MedicationRequest ${NS}><status value="active"/><intent value="${written}"/></MedicationRequest>`,
+    })),
+    {
+      json: `{"resourceType":"MedicationRequest","status":"active","_intent":{"extension":[{"url":"http://example.org/x","valueCode":"masked"}]}}`,
+      xml: `<MedicationRequest ${NS}><status value="active"/><intent>${MASKED}</intent></MedicationRequest>`,
+    },
+    {
+      json: '{"resourceType":"MedicationRequest","status":"active","intent":["order","plan"]}',
+      xml:
+        `<MedicationRequest ${NS}><status value="active"/>` +
+        `<intent value="order"/><intent value="plan"/></MedicationRequest>`,
+    },
+    {
+      json: '{"resourceType":"MedicationRequest","status":"active","intent":{"value":"order"}}',
+      xml: `<MedicationRequest ${NS}><status value="active"/><intent><value value="order"/></intent></MedicationRequest>`,
+    },
+  ];
+  for (const document of unreadable) {
+    it(`AC-12: refuses ${document.xml}`, () => {
+      const safety = expectSameReading(document);
+
+      expect(safety.intents).toEqual([]);
+      expect(safety.unreadableIntents).toEqual(["MedicationRequest.intent"]);
+      expect(safety.safeToSummarize).toBe(false);
+    });
+  }
+
+  it("AC-12: an intent written as element text reads safeToSummarize false", () => {
+    // The reader's element-text tolerance recovers the text as the value, exactly as it does for
+    // `status`, so the code is surfaced; the dropped-text channel is what refuses the document.
+    const safety = safetyOfXml(
+      `<MedicationRequest ${NS}><status value="active"/><intent>proposal</intent></MedicationRequest>`,
+    );
+
+    expect(safety.safeToSummarize).toBe(false);
+    expect(safety.droppedText).toEqual(["MedicationRequest.intent"]);
+    expect(safety.intents).toEqual([{ code: "proposal", location: "MedicationRequest.intent" }]);
   });
 });
