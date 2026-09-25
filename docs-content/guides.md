@@ -53,6 +53,31 @@ safety.negations; // => ["entered-in-error"]
 and `retracted`, describe the resource you handed in, while `negations` covers every resource inside
 it too, so a retracted entry in a Bundle is visible there and nowhere else.
 
+Some elements change the meaning of a record without being a status. A patient recorded as deceased,
+a patient record replaced by another (`link`), and a subpotent immunization dose are each reported on
+`modifierElements` with their location, whatever value they carry, and each makes the resource unsafe
+to summarize. A medication request's `intent` is mandatory, so it is surfaced instead: `intents`
+pairs the code with its location, and only an `intent` that is not one of the eight R4 codes refuses.
+
+```ts
+import { parseResource, readSafety } from "@cosyte/fhir";
+
+const patient = readSafety(
+  parseResource('{"resourceType":"Patient","deceasedBoolean":true}').resource,
+);
+
+patient.modifierElements; // => [{ element: "deceased", location: "Patient.deceasedBoolean" }]
+patient.safeToSummarize; // => false
+
+const request = readSafety(
+  parseResource('{"resourceType":"MedicationRequest","status":"active","intent":"proposal"}')
+    .resource,
+);
+
+request.intents; // => [{ code: "proposal", location: "MedicationRequest.intent" }]
+request.safeToSummarize; // => true
+```
+
 When a summary must refuse rather than warn, `assertSafeToSummarize` is the executable form of the
 same rule: it throws for an unhandled modifier, a value the document left ambiguous, and the other
 shapes that make an affirmative summary unsafe.

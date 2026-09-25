@@ -8,6 +8,34 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **Three more R4 modifier elements reach the safety readout, and `MedicationRequest.intent` is
+  surfaced** (`fhir#SAFETY-MODIFIER-3`, S0364). A deceased `Patient`, a `Patient` whose `link` says
+  the record was replaced by another, an `Immunization` marked `isSubpotent` and a
+  `MedicationRequest` whose `intent` is a `proposal` each read `safeToSummarize: true` with
+  `modifierElements` empty, although R4 4.0.1 flags all four elements Is Modifier.
+  `Patient.deceased[x]`, `Patient.link` and `Immunization.isSubpotent` now report on
+  `modifierElements` (elements `deceased`, `link`, `isSubpotent`) at every resource root of their
+  type, **on presence and at any value**, as `Patient.active` does, so `deceasedBoolean: false` and
+  `isSubpotent: false` now refuse too: deciding from the value would be interpreting the modifier.
+  `deceased` is located at the member as written; `link` reports once at `link`, and no entry and no
+  `link.type` is read. `MedicationRequest.intent` is `1..1`, so it is surfaced rather than refused:
+  the new `intents` field pairs one of the eight R4 codes, matched exactly, with the location of
+  each `MedicationRequest` root's `intent`, and a readable one leaves `safeToSummarize` standing. An
+  `intent` present and outside the eight codes, or in a shape that cannot be read, surfaces no code,
+  puts its location on the new `unreadableIntents` channel and refuses; nothing is case-folded,
+  trimmed or mapped, and an absent `intent` refuses nothing (a missing mandatory element is the
+  validator's verdict). The XML read path reads the same; an `intent` written as element text is
+  refused by the element-text channel as before. Two type-only exports join the certified surface,
+  `IntentReport` and `MedicationRequestIntent`, and `ModifierElementName` widens. A committed
+  projection of the R4 4.0.1 StructureDefinitions, `test/__data__/r4-modifier-elements.json`, drives
+  a table-driven test that fails if any of the 31 resource-level modifier elements of the eight
+  modeled types reaches no readout channel; at the base pin it went red on exactly these four. The JSON
+  base-versus-head differential is re-based at the pin, its not-modeled-note allowance replaced by
+  the allowances this change needs, each asserted exercised, its two bars unchanged: no finding
+  moved, no `valid` moved, and `safeToSummarize` moved only true to false beside a new report or an
+  unreadable-intent location. The XML read differential against the pin moved no reading and
+  crossed none of its no-suppression bars. Validation, the other location channels,
+  `unhandledModifierExtensions` and the negation reads are unchanged.
 - **A narrative `div` whose own markup names a prefix nothing inside it binds is now REFUSED by the
   XML writer rather than written verbatim** (`fhir#XML-RESIDUAL-1`, the unbound-prefix residual's
   route through a `div` value, the one the tag-site entry below left open and pinned). The `div`

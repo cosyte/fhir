@@ -216,11 +216,12 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   reported for them either. Those same reads run at **every resource root**, so a retracted
   `Observation`, a `Procedure` recorded as not performed or an order marked "do not perform" inside a
   `Bundle` entry or `contained` reaches `negations` too. **The readout's location channels
-  (`unhandledModifierExtensions`, `modifierElements`, `shadowedProperties`, `arrayWrappedScalars`,
-  `nestedArrays`, `droppedText`, `unreadableBooleans`, `nearMissNegationCodes`,
-  `unreadableNegationCodes`, `absenceMarkers`, `unreadableAbsenceMarkers`,
-  `conflictingAbsenceMarkers`) and
-  `safeToSummarize` are document-wide.** The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
+  (`unhandledModifierExtensions`, `modifierElements`, `intents`, `shadowedProperties`,
+  `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
+  `nearMissNegationCodes`, `unreadableNegationCodes`, `unreadableIntents`, `absenceMarkers`,
+  `unreadableAbsenceMarkers`, `conflictingAbsenceMarkers`) and
+  `safeToSummarize` are document-wide.** Every one of them but `absenceMarkers` and `intents`, which
+  disclose rather than refuse, sets `safeToSummarize` to `false` when it is not empty. The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
   and the rest) answer about the resource you handed in, because one value cannot say which resource
   it came from, so branch on `negations` whenever a resource may carry others.
   `no-known-allergy` is the exception and
@@ -231,12 +232,19 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
 - **A modifier is not only a `modifierExtension`, and the ordinary base elements R4 flags `?!` reach
   the readout too.** `modifierElements` carries one entry per location, each
   `{ element, location }`: `comparator` wherever a node the walk reaches carries it, `implicitRules`
-  likewise, `active` on a `Patient` root, and `use` on a `Practitioner`'s `identifier` entries. Each
-  sets `safeToSummarize` to `false` and makes `assertSafeToSummarize` throw, because
-  `{"valueQuantity":{"value":0.01,"comparator":"<","unit":"mg"}}` summarized as a point value is
-  `0.01 mg` reported for a result the sender wrote as `< 0.01 mg`. **Reporting only:** the element is
-  surfaced and never interpreted, so no bound, range or inequality is read out of a `comparator` and
-  no unit is ever converted. Recognition is by KEY NAME (and, for the two path-gated elements, by
+  likewise, `active`, `deceased` (R4's `deceased[x]`, located at the member as written, such as
+  `Patient.deceasedDateTime`) and `link` (once, at `link`, however many entries) on a `Patient` root,
+  `isSubpotent` on an `Immunization` root, and `use` on a `Practitioner`'s `identifier` entries. Each
+  sets `safeToSummarize` to `false` and makes `assertSafeToSummarize` throw, **on presence and at any
+  value**, because `{"valueQuantity":{"value":0.01,"comparator":"<","unit":"mg"}}` summarized as a
+  point value is `0.01 mg` reported for a result the sender wrote as `< 0.01 mg`, a deceased patient
+  or a record replaced by another is not the live record a summary would show, and a subpotent dose
+  does not protect the way a potent one does. So `"deceasedBoolean": false` and
+  `"isSubpotent": false` refuse too, exactly as `"active": true` does: deciding from the value would
+  be interpreting the modifier. **Reporting only:** the element is
+  surfaced and never interpreted, so no bound, range or inequality is read out of a `comparator`, no
+  unit is ever converted, no death date is read and no `link` is followed or its `type` read.
+  Recognition is by KEY NAME (and, for the type-gated elements, by
   literal `resourceType` equality), which OVER-reports by construction: any object carrying a
   `comparator` member is an occurrence, a vendor payload that reuses the name included. That trade is
   deliberate, since a false positive costs a refusal and a false negative costs a wrong clinical
@@ -245,6 +253,17 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   library defines (`MODIFIER_ELEMENT_ROOT_TYPES`), so an unmodeled type reads as a constant token.
   `modifierElements(resource)` is the standalone collector, and a modifier EXTENSION stays on
   `unhandledModifierExtensions` and draws nothing here, so one of those is still one report.
+- **`MedicationRequest.intent` is surfaced as its code, because it is mandatory.** R4 flags it a
+  modifier (a `proposal` is not an `order`) and makes it `1..1`, so refusing on presence would refuse
+  every MedicationRequest. `intents` carries one `{ code, location }` per `MedicationRequest` root,
+  the resource handed in, `contained` or a `Bundle` entry alike, and a readable one leaves
+  `safeToSummarize` standing. Only the eight codes of the R4 value set (`proposal`, `plan`, `order`,
+  `original-order`, `reflex-order`, `filler-order`, `instance-order`, `option`) are surfaced, matched
+  exactly. Anything else written at `intent` (`"PROPOSAL"`, `" order"`, `"draft"`, a `null`, a
+  number, the `_intent` form with no value, an array wrapper, the name written twice) surfaces no
+  code: its location is on `unreadableIntents`, `safeToSummarize` is `false`, and
+  `assertSafeToSummarize` throws. Nothing is case-folded, trimmed or mapped. An absent `intent`
+  surfaces nothing and refuses nothing, since a missing mandatory element is the validator's verdict.
 - **A safety verdict is never asserted over a value the document left ambiguous.** Each negation read
   runs over every coding on a `CodeableConcept` and every value written for the element it reads
   (`resourceType`, `status`, `verificationStatus`, `code`, `doNotPerform`), **including through an
