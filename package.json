@@ -57,10 +57,11 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "README.md",
-    "LICENSE",
-    "CHANGELOG.md"
+    "dist/index.mjs",
+    "dist/index.cjs",
+    "dist/index.d.ts",
+    "dist/index.d.cts",
+    "LICENSE"
   ],
   "sideEffects": false,
   "publishConfig": {

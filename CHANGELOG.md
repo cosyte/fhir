@@ -93,6 +93,14 @@ of XML, unit conversion, and executing a transaction Bundle.
 
 ### Changed
 
+- **The npm package ships the runtime files only, and the README is the short version.** No runtime
+  behaviour changes. The package carries `dist/index.mjs`, `dist/index.cjs`, `dist/index.d.ts`,
+  `dist/index.d.cts`, `LICENSE`, `README.md` and `package.json`: the two sourcemaps and this
+  changelog no longer ship, and the changelog stays in the repository. Both bundles still end in a
+  `sourceMappingURL` comment, and the map it names is not in the package. The README keeps the
+  install command, the quickstart (still executed on every test run), the status, the API outline
+  and a short PHI and safety section, and points to docs.cosyte.com/fhir; the full capability
+  readout moved unchanged to `documentation/capabilities.md`.
 - **The installation page's clone command uses `https://github.com/cosyte/fhir`, without the `.git`
   suffix.** docs.cosyte.com checks every link into a cosyte repository against the repositories its
   manifest marks public, and its matcher reads `https://github.com/cosyte/fhir.git` as a repository
