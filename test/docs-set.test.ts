@@ -15,7 +15,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -54,6 +54,37 @@ function graded(files: Record<string, string>, arms: readonly ArmName[]): Findin
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+/**
+ * Grade a control against a `package.json` that is this repository's own with only its `version`
+ * replaced, so the package-agreement controls say the same thing whatever version the tree is at.
+ * The gate reads a `0.0.x` version as not yet on the public registry and anything later as on it,
+ * so each control is graded on both sides of that line rather than on whichever side the tree
+ * happens to sit.
+ */
+function gradedAtVersion(
+  files: Record<string, string>,
+  arms: readonly ArmName[],
+  version: string,
+): Finding[] {
+  const dir = mkdtempSync(join(tmpdir(), "fhir-docs-control-"));
+  const manifestDir = mkdtempSync(join(tmpdir(), "fhir-docs-manifest-"));
+  try {
+    for (const [name, body] of Object.entries(files)) seed(dir, name, body);
+    const manifest = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as object;
+    const packageJsonPath = join(manifestDir, "package.json");
+    writeFileSync(packageJsonPath, JSON.stringify({ ...manifest, version }));
+    return checkDocsSet(dir, { arms, packageJsonPath });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(manifestDir, { recursive: true, force: true });
+  }
+}
+
+/** A `0.0.x` version, which the gate reads as not on the public registry. */
+const UNPUBLISHED_LINE = "0.0.11";
+/** A version past `0.0.x`, which the gate reads as on the public registry. */
+const PUBLISHED_LINE = "0.1.0";
 
 /**
  * Grade a control against an allow-list that declares nothing.
@@ -234,45 +265,61 @@ describe("every arm goes red on a seeded control", () => {
     expect(messages(findings)).toContain("every sidebar item must be a page id string");
   });
 
+  /** An installation page stating a Node range and exactly one registry claim. */
+  const installationPage = (nodeRange: string, claim: string): Record<string, string> => ({
+    "installation.md": page(
+      "installation",
+      "Installation",
+      [
+        "Install `@cosyte/fhir` with `pnpm add @cosyte/fhir`.",
+        "",
+        `It needs Node \`${nodeRange}\`, ships ESM, and also offers CommonJS.`,
+        "",
+        claim,
+      ].join("\n"),
+    ),
+  });
+  const INSTALLABLE = "The package is installable from the public npm registry today.";
+  const NOT_INSTALLABLE = "The package is not installable from the public npm registry today.";
+
   it("package-agreement: a Node range and a registry claim that disagree with package.json", () => {
-    const findings = graded(
-      {
-        "installation.md": page(
-          "installation",
-          "Installation",
-          [
-            "Install `@cosyte/fhir` with `pnpm add @cosyte/fhir`.",
-            "",
-            "It needs Node `>=18.0.0`, ships ESM, and also offers CommonJS.",
-            "",
-            "The package is installable from the public npm registry today.",
-          ].join("\n"),
-        ),
-      },
+    const findings = gradedAtVersion(
+      installationPage(">=18.0.0", INSTALLABLE),
       ["package-agreement"],
+      UNPUBLISHED_LINE,
     );
     expect(messages(findings)).toContain('does not state the supported Node range ">=22.0.0"');
     expect(messages(findings)).toContain("disagrees with package.json");
   });
 
-  it("package-agreement: the truthful page passes the same arm", () => {
-    const findings = graded(
-      {
-        "installation.md": page(
-          "installation",
-          "Installation",
-          [
-            "Install `@cosyte/fhir` with `pnpm add @cosyte/fhir`.",
-            "",
-            "It needs Node `>=22.0.0`, ships ESM, and also offers CommonJS.",
-            "",
-            "The package is not installable from the public npm registry today.",
-          ].join("\n"),
-        ),
-      },
+  it("package-agreement: the opposite registry claim disagrees once the version leaves 0.0.x", () => {
+    const findings = gradedAtVersion(
+      installationPage(">=22.0.0", NOT_INSTALLABLE),
       ["package-agreement"],
+      PUBLISHED_LINE,
     );
-    expect(messages(findings)).toBe("");
+    expect(messages(findings)).toContain("disagrees with package.json");
+  });
+
+  it("package-agreement: the truthful page passes the same arm", () => {
+    expect(
+      messages(
+        gradedAtVersion(
+          installationPage(">=22.0.0", NOT_INSTALLABLE),
+          ["package-agreement"],
+          UNPUBLISHED_LINE,
+        ),
+      ),
+    ).toBe("");
+    expect(
+      messages(
+        gradedAtVersion(
+          installationPage(">=22.0.0", INSTALLABLE),
+          ["package-agreement"],
+          PUBLISHED_LINE,
+        ),
+      ),
+    ).toBe("");
   });
 
   it("synthetic-identifiers: every identifying element is graded against the declaration", () => {
