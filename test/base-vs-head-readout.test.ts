@@ -8,37 +8,33 @@
  * script at the same base and the file must come back byte-identical; that is what makes the
  * expectation re-derivable rather than hand-written.
  *
- * IT PASSES WHEN THE ONLY DIFFERENCE IS THE ONE THE CHANGE UNDER THE PIN IS FOR: `use` on an
- * Identifier, a HumanName, an Address or a ContactPoint is surfaced as its code at the covered
- * positions of the eight modeled resource types, and a `use` this library cannot read as a code of
- * its position's value set is located and refuses. So exactly these may move, and nothing else:
+ * IT PASSES WHEN THE ONLY DIFFERENCE IS THE ONE THE CHANGE UNDER THE PIN IS FOR: the error-severity
+ * constraints R4 4.0.1 declares on the eight modeled types and on their DomainResource, Element and
+ * Extension base are evaluated with no profile supplied. So exactly these may move, and nothing
+ * else:
  *
- * - `datatypeUses` may GAIN an entry, and only one whose code is one of the twelve R4 4.0.1 codes
- *   the four value sets hold between them, at a location naming a `use` element;
- * - `unreadableDatatypeUses` may GAIN a location, and only one naming a `use` element;
- * - `safeToSummarize` may move TRUE TO FALSE, and only on a document whose head readout gained an
- *   unreadable-use location. A readable `use` never moves it.
+ * - the validator's findings may GAIN an `INVARIANT_VIOLATED` or an `INVARIANT_UNCHECKED`, and only
+ *   one carrying one of the 19 constraint keys, at that key's R4 severity for a violation and at
+ *   `information` for an unchecked one;
+ * - `valid` may move TRUE TO FALSE, and only on a document that gained such a violation.
  *
- * Everything else is asserted identical, field by field: the throw, the parse issues, every
- * validator finding at the same code, severity and location and so `valid`, the negations, the
- * convenience fields (`resourceType`, `status`, `retracted`, `noKnownAllergy`), and every other
- * location channel byte-identical, `modifierElements`, `intents`, `unreadableIntents` and
- * `unhandledModifierExtensions` included. This change touches no validator and does not move what
- * `modifierElements` reports for any document (`Practitioner.identifier.use` keeps its presence
- * rule), so those are held IDENTICAL rather than allowed to grow.
+ * Everything else is asserted identical, field by field: the throw, the parse issues, the
+ * negations, the convenience fields (`resourceType`, `status`, `retracted`, `noKnownAllergy`),
+ * `safeToSummarize`, and every location channel byte-identical, `modifierElements`, `intents`,
+ * `datatypeUses` and their unreadable twins included. This change touches no readout channel.
  *
- * TWO BARS RUN IN OPPOSITE DIRECTIONS AND BOTH ARE STILL HERE, though with the finding list held
- * identical they can no longer fire on their own: a finding may never be withdrawn, moved or made
- * less severe, and `valid` may never move false to true, which is the fail-safe direction. They grant
- * nothing and no allowance relaxes them.
+ * TWO BARS RUN IN OPPOSITE DIRECTIONS AND BOTH ARE STILL HERE: a finding may never be withdrawn,
+ * moved or made less severe, and `valid` may never move false to true, which is the fail-safe
+ * direction. They grant nothing and no allowance relaxes them.
  *
- * EVERY ALLOWANCE IS ASSERTED EXERCISED: an allowance no corpus document reaches is a hole, not a
- * pass. The corpus carries one document per shape the change decides for that reason.
+ * THE ADDED FINDINGS ARE WRITTEN OUT IN FULL below (`ADDED_FINDINGS`), so an addition nobody listed
+ * fails, and so does a listed one that stopped happening. EVERY ALLOWANCE IS ASSERTED EXERCISED: an
+ * allowance no corpus document reaches is a hole, not a pass. The corpus carries one document per
+ * key the change decides for that reason.
  *
- * The previous allowance set (three modifier elements added to `modifierElements`, and
- * `MedicationRequest.intent` surfaced and located) is GONE, and not because it was relaxed: the base
- * was re-captured at the ref that shipped that behaviour, so both trees now carry it and those
- * channels are asserted identical.
+ * The previous allowance set (`use` surfaced on four datatypes, and the unreadable-`use` refusal)
+ * is GONE, and not because it was relaxed: the base was re-captured at the ref that shipped that
+ * behaviour, so both trees now carry it and those channels are asserted identical.
  *
  * WHAT THIS IS NOT. The oracle differential (`scripts/differential.mjs`) compares this package
  * against the reference validator, so the base pin's output is not one of its operands and it
@@ -67,8 +63,8 @@ const captured = JSON.parse(
   readFileSync(new URL("./__data__/base-readouts.json", import.meta.url), "utf8"),
 ) as CapturedFile;
 
-/** The pin the base half was captured at, named by AC-10. */
-const BASE_PIN = "e3dc1fab818fec45b4ec71fceb661e8e8c712885";
+/** The pin the base half was captured at, named by AC-13. */
+const BASE_PIN = "8330359c1345d8f55dae5852f41385260fb08803";
 
 /** Head's own tree, behind the same narrow surface the capture script called base through. */
 const HEAD: ReadoutCodec = {
@@ -81,16 +77,16 @@ const HEAD: ReadoutCodec = {
 const IDENTICAL_CHANNELS = [
   "thrown",
   "issues",
-  "valid",
-  "findings",
   "resourceType",
   "status",
   "retracted",
   "noKnownAllergy",
   "negations",
+  "safeToSummarize",
   "unhandledModifierExtensions",
   "modifierElements",
   "intents",
+  "datatypeUses",
   "shadowedProperties",
   "arrayWrappedScalars",
   "nestedArrays",
@@ -99,27 +95,88 @@ const IDENTICAL_CHANNELS = [
   "nearMissNegationCodes",
   "unreadableNegationCodes",
   "unreadableIntents",
+  "unreadableDatatypeUses",
 ] as const;
 
-/** The twelve codes the four R4 4.0.1 `use` value sets hold between them, the only ones head may surface. */
-const USE_CODES: ReadonlySet<string> = new Set([
-  "usual",
-  "official",
-  "temp",
-  "secondary",
-  "old",
-  "nickname",
-  "anonymous",
-  "maiden",
-  "home",
-  "work",
-  "billing",
-  "mobile",
-]);
+/** The 19 constraint keys and the severity R4 4.0.1 declares for each. */
+const KEY_SEVERITY: Readonly<Record<string, "error" | "warning">> = {
+  "ait-1": "error",
+  "ait-2": "error",
+  "con-1": "error",
+  "con-2": "error",
+  "con-3": "warning",
+  "con-4": "error",
+  "con-5": "error",
+  "dom-2": "error",
+  "dom-3": "error",
+  "dom-4": "error",
+  "dom-5": "error",
+  "dom-6": "warning",
+  "ele-1": "error",
+  "ext-1": "error",
+  "imm-1": "error",
+  "obs-3": "error",
+  "obs-6": "error",
+  "obs-7": "error",
+  "pat-1": "error",
+};
 
-/** Whether a location names a `use` element. */
-function atUse(location: string): boolean {
-  return location.endsWith(".use");
+/** The keys AC-3 and AC-6 name, each of which the corpus must reach with a violation. */
+const DECIDED_KEYS = [
+  "pat-1",
+  "obs-3",
+  "con-1",
+  "con-2",
+  "imm-1",
+  "dom-2",
+  "dom-4",
+  "dom-5",
+  "ext-1",
+  "ele-1",
+] as const;
+
+/**
+ * Every finding head adds over base, `document: finding`, in corpus order. Written out rather than
+ * derived, so an addition that is not listed here fails, and a listed one that stops happening
+ * fails too.
+ */
+const ADDED_FINDINGS: readonly string[] = [
+  "fixture:extension-only-list.json: INVARIANT_VIOLATED/error at Patient.name[0].given[1] for ele-1",
+  "added:modifier-extension-only: INVARIANT_VIOLATED/error at Patient.modifierExtension[0] for ext-1",
+  "added:patient-contained-practitioner-identifier-use: INVARIANT_UNCHECKED/information at Patient for dom-3",
+  "added:patient-contained-organization-use: INVARIANT_UNCHECKED/information at Patient for dom-3",
+  "added:base-pat-1-contact-without-contact-detail: INVARIANT_VIOLATED/error at Patient.contact[0] for pat-1",
+  "added:base-obs-3-reference-range-without-bound: INVARIANT_VIOLATED/error at Observation.referenceRange[0] for obs-3",
+  "added:base-con-1-stage-without-summary: INVARIANT_VIOLATED/error at Condition.stage[0] for con-1",
+  "added:base-con-2-evidence-without-code-or-detail: INVARIANT_VIOLATED/error at Condition.evidence[0] for con-2",
+  "added:base-imm-1-education-without-document: INVARIANT_VIOLATED/error at Immunization.education[0] for imm-1",
+  "added:base-dom-2-nested-contained: INVARIANT_UNCHECKED/information at Patient for dom-3",
+  "added:base-dom-2-nested-contained: INVARIANT_VIOLATED/error at Patient for dom-2",
+  "added:base-dom-4-contained-version: INVARIANT_UNCHECKED/information at Patient for dom-3",
+  "added:base-dom-4-contained-version: INVARIANT_VIOLATED/error at Patient for dom-4",
+  "added:base-dom-5-contained-security: INVARIANT_UNCHECKED/information at Patient for dom-3",
+  "added:base-dom-5-contained-security: INVARIANT_VIOLATED/error at Patient for dom-5",
+  "added:base-ext-1-extension-without-value: INVARIANT_VIOLATED/error at Patient.extension[0] for ext-1",
+  "added:base-ext-1-extension-with-value-and-extensions: INVARIANT_VIOLATED/error at Patient.extension[0] for ext-1",
+  "added:base-ele-1-empty-datatype: INVARIANT_VIOLATED/error at Patient.maritalStatus for ele-1",
+  "added:base-dom-3-referenced-contained: INVARIANT_UNCHECKED/information at Patient for dom-3",
+];
+
+/** `CODE/severity at location for key`, the shape an invariant finding string takes. */
+const INVARIANT_FINDING =
+  /^(INVARIANT_VIOLATED|INVARIANT_UNCHECKED)\/(\w+) at .+ for ([a-z]+-\d+)$/;
+
+/**
+ * Whether one added finding is one this change may add: an invariant code, one of the 19 keys, at
+ * that key's severity when violated and at `information` when unchecked.
+ */
+function allowedAddition(finding: string): boolean {
+  const match = INVARIANT_FINDING.exec(finding);
+  if (match === null) return false;
+  const [, code, severity, key] = match;
+  const declared = KEY_SEVERITY[key ?? ""];
+  if (declared === undefined) return false;
+  return code === "INVARIANT_VIOLATED" ? severity === declared : severity === "information";
 }
 
 /**
@@ -145,32 +202,8 @@ function delta(
   return { removed: missingFrom(base, head), added: missingFrom(head, base) };
 }
 
-/** A surfaced `use` as one comparable string, `code at location`. */
-function useKeys(readout: Readout): string[] {
-  return readout.datatypeUses.map((read) => `${read.code} at ${read.location}`);
-}
-
-/** The first word of a `word at location` key. */
-function headOf(key: string): string {
-  return key.slice(0, key.indexOf(" at "));
-}
-
-/** The location half of a `word at location` key. */
-function locationOf(key: string): string {
-  return key.slice(key.indexOf(" at ") + " at ".length);
-}
-
-/** Everything that moved for one document on the fields this change is allowed to move. */
-function movement(base: Readout, head: Readout) {
-  return {
-    uses: delta(useKeys(base), useKeys(head)),
-    unreadableUses: delta(base.unreadableDatatypeUses, head.unreadableDatatypeUses),
-    findings: delta(base.findings, head.findings),
-  };
-}
-
-describe("AC-10: base versus head, the read differential over the JSON corpus", () => {
-  it("AC-10: compares the corpus the base capture was taken over, at the named pin", () => {
+describe("AC-13: base versus head, the read differential over the JSON corpus", () => {
+  it("AC-13: compares the corpus the base capture was taken over, at the named pin", () => {
     // A fixture added without re-running the capture would otherwise be silently uncompared.
     expect(captured.base).toBe(BASE_PIN);
     expect(
@@ -186,7 +219,7 @@ describe("AC-10: base versus head, the read differential over the JSON corpus", 
       const base = captured.documents[document.name];
       const head = readDocument(HEAD, document.json);
 
-      it("AC-10: reads the same in every field this change does not move", () => {
+      it("AC-13: reads the same in every channel this change does not move", () => {
         expect(base, "no base capture for this document").toBeDefined();
         const captured2 = base as Readout;
         for (const channel of IDENTICAL_CHANNELS) {
@@ -194,72 +227,67 @@ describe("AC-10: base versus head, the read differential over the JSON corpus", 
         }
       });
 
-      it("AC-10: withdraws no finding, and moves valid one way only", () => {
-        const captured2 = base as Readout;
-        const { removed } = delta(captured2.findings, head.findings);
+      it("AC-13: withdraws, relocates and re-severities no finding", () => {
+        const { removed } = delta((base as Readout).findings, head.findings);
         expect(removed, "a finding was removed, re-severitied or relocated").toEqual([]);
+      });
+
+      it("AC-13: adds only an invariant finding carrying one of the 19 keys at its severity", () => {
+        const { added } = delta((base as Readout).findings, head.findings);
+        expect(added.filter((finding) => !allowedAddition(finding))).toEqual([]);
+      });
+
+      it("AC-13: moves valid true to false only, and only with an added violation", () => {
+        const captured2 = base as Readout;
         if (head.valid === captured2.valid) return;
         expect(captured2.valid, "valid moved false to true").toBe(true);
-      });
-
-      it("AC-10: keeps every code and location base made, and adds only the allowed shapes", () => {
-        const moved = movement(base as Readout, head);
-        expect(moved.uses.removed, "a surfaced use was withdrawn").toEqual([]);
         expect(
-          moved.uses.added.filter((key) => !USE_CODES.has(headOf(key)) || !atUse(locationOf(key))),
-          "a use was surfaced that is not one of the twelve codes at a use element",
-        ).toEqual([]);
-        expect(moved.unreadableUses.removed, "an unreadable-use location was withdrawn").toEqual(
-          [],
-        );
-        expect(
-          moved.unreadableUses.added.filter((location) => !atUse(location)),
-          "an unreadable-use location was added somewhere other than a use element",
-        ).toEqual([]);
-      });
-
-      it("AC-10: moves safeToSummarize true to false only, and only with a new unreadable use", () => {
-        const captured2 = base as Readout;
-        if (head.safeToSummarize === captured2.safeToSummarize) return;
-        expect(captured2.safeToSummarize, "safeToSummarize moved false to true").toBe(true);
-        expect(head.safeToSummarize).toBe(false);
-        expect(
-          movement(captured2, head).unreadableUses.added.length,
-          "safeToSummarize moved with no added unreadable-use location to explain it",
-        ).toBeGreaterThan(0);
+          delta(captured2.findings, head.findings).added.some((finding) =>
+            finding.startsWith("INVARIANT_VIOLATED/error "),
+          ),
+          "valid moved with no added error-severity violation to explain it",
+        ).toBe(true);
       });
     });
   }
 
-  describe("AC-10: every allowance is exercised rather than merely declared", () => {
+  describe("AC-13: the whole of what moved, and every allowance exercised", () => {
     const moves = corpus().map((document) => {
       const base = captured.documents[document.name] as Readout;
       const head = readDocument(HEAD, document.json);
-      return { name: document.name, base, head, ...movement(base, head) };
+      return { name: document.name, base, head, ...delta(base.findings, head.findings) };
+    });
+    const added = moves.flatMap((move) => move.added.map((finding) => `${move.name}: ${finding}`));
+
+    it("AC-13: adds exactly the findings written out, and no other", () => {
+      expect(added).toEqual(ADDED_FINDINGS);
     });
 
-    it("AC-10: surfaces a use code somewhere in the corpus", () => {
-      expect(moves.filter((move) => move.uses.added.length > 0).length).toBeGreaterThan(0);
-    });
+    for (const key of DECIDED_KEYS) {
+      it(`AC-13: the corpus reaches a ${key} violation`, () => {
+        expect(
+          added.some(
+            (line) => line.includes("INVARIANT_VIOLATED/error ") && line.endsWith(` for ${key}`),
+          ),
+        ).toBe(true);
+      });
+    }
 
-    it("AC-10: adds an unreadable-use location somewhere in the corpus", () => {
-      expect(moves.filter((move) => move.unreadableUses.added.length > 0).length).toBeGreaterThan(
-        0,
-      );
-    });
-
-    it("AC-10: moves safeToSummarize true to false somewhere in the corpus", () => {
+    it("AC-13: the corpus reaches dom-3 unchecked over a contained resource", () => {
       expect(
-        moves.filter((move) => move.base.safeToSummarize && !move.head.safeToSummarize).length,
-      ).toBeGreaterThan(0);
+        added.some(
+          (line) =>
+            line.includes("INVARIANT_UNCHECKED/information ") && line.endsWith(" for dom-3"),
+        ),
+      ).toBe(true);
     });
 
-    it("AC-10: removes and adds no finding anywhere in the corpus", () => {
-      const moved = moves.flatMap((move) => [
-        ...move.findings.removed.map((finding) => `${move.name}: removed ${finding}`),
-        ...move.findings.added.map((finding) => `${move.name}: added ${finding}`),
-      ]);
-      expect(moved).toEqual([]);
+    it("AC-13: moves valid true to false somewhere in the corpus", () => {
+      expect(moves.filter((move) => move.base.valid && !move.head.valid).length).toBeGreaterThan(0);
+    });
+
+    it("AC-13: removes no finding anywhere in the corpus", () => {
+      expect(moves.flatMap((move) => move.removed.map((f) => `${move.name}: ${f}`))).toEqual([]);
     });
   });
 });

@@ -55,9 +55,15 @@ at the edge of your program.
 Both of these are findings the validator emits rather than silently letting something through. If
 you treat any non-error finding as a pass, you will misread them.
 
-- `INVARIANT_UNCHECKED`: a profile constraint whose FHIRPath expression is outside the bounded
-  expression subset this library evaluates. It is reported as informational, and it means the
-  invariant was **not** evaluated, not that it held.
+- `INVARIANT_UNCHECKED`: a constraint whose FHIRPath expression is outside the bounded expression
+  subset this library evaluates, whether a profile supplied it or R4 declares it on the resource
+  type. It is reported as informational, and it means the invariant was **not** evaluated, not that
+  it held. With no profile, the one base constraint reported this way is `dom-3` on a resource that
+  carries a contained resource: checking that every contained resource is referenced needs
+  reference resolution the subset does not have. With nothing contained, `dom-3` holds by its own
+  terms and nothing is reported, also when a supplied profile carries R4's `dom-3` as written. A
+  profile's constraint under that key written any other way is its own expression, and is reported
+  unchecked like any other the subset cannot evaluate.
 - `PROFILE_SLICE_UNCHECKED`: a slice whose discriminator this library cannot apply, including the
   `position` discriminator, which is not part of the R4 discriminator set. Again, it means the slice
   membership was not decided, not that it matched.

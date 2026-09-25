@@ -144,6 +144,27 @@ Two things to read off that result. Must-support is reported as informational, b
 is an obligation on a system, not a requirement that an instance carry the element. The cardinality
 finding is the error, and it is the one that moves the verdict.
 
+You do not need a profile for the constraints R4 itself declares. On the eight modeled resource
+types, `validateResource` evaluates them with no options at all: a patient contact with no name,
+telecom, address or organization breaks `pat-1`, an extension with both a value and nested
+extensions breaks `ext-1`, and an element with no value and no children breaks `ele-1`:
+
+```ts
+import { parseResource, validateResource } from "@cosyte/fhir";
+
+const { resource } = parseResource('{"resourceType":"Patient","contact":[{"gender":"other"}]}');
+
+const outcome = validateResource(resource);
+
+outcome.valid; // => false
+outcome.issues.map((issue) => issue.constraint); // => ["pat-1"]
+```
+
+A profile that carries one of those constraints again does not double the finding: each violation
+is reported once per occurrence. And a profile carrying R4's `dom-3` as written, as every R4-derived
+snapshot does, draws no finding for it on a resource with nothing contained, because that
+constraint holds there by its own terms.
+
 A starter kit of small, specification-grounded profiles ships with the package as worked examples.
 They are built through the same public authoring call you would use, so there is nothing privileged
 about them:

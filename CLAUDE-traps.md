@@ -271,6 +271,9 @@ Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
 - **Any FHIRPath expression outside the vendored subset emits `INVARIANT_UNCHECKED`**: surfaced,
   **never assumed to pass.** The seven named safety invariants (`ait`/`con`/`obs`) stay owned by the
   always-on Phase-3 safety layer.
+- **R4 base constraints run with NO profile (`validate/base-invariants.ts`): `dom-3` is DECIDED when
+  nothing is contained (a profile's VERBATIM copy too) and UNCHECKED otherwise, never skipped; `dom-6`
+  is NOT evaluated; a contained resource's own content is a DECLARED GAP, via `dom-2` to `dom-5`.**
 - **The machine-actionable unit is the UCUM `code`, not the `unit` string**, shape-checked but
   **never converted**. `readObservationValue` branches on the present `value[x]` type: a
   `"POSITIVE"` string or a `1:64` titer is never read as a number.

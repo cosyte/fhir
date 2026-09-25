@@ -512,7 +512,10 @@ describe("a conformant document is untouched", () => {
     expect(v.nested).toEqual([]);
     expect(v.read).toEqual([]);
     expect(v.safe).toBe(true);
-    expect(v.valid).toBe(true);
+    // AC-6 (S0374): an element with no value and no children violates the R4 base constraint
+    // ele-1, which is the one finding gained here; no nested-array code is drawn.
+    expect(v.vcodes).toEqual(["INVARIANT_VIOLATED"]);
+    expect(v.valid).toBe(false);
   });
 
   it("says nothing about a null slot in a repeating primitive", () => {

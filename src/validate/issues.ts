@@ -213,17 +213,26 @@ export const VALIDATION_CODES = {
    */
   RETRACTED_RESOURCE: "RETRACTED_RESOURCE",
   /**
-   * Safety, a named resource invariant failed (`ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`,
-   * `obs-6`/`obs-7`). The specific constraint key travels in {@link ValidationIssue.constraint}, and
-   * the severity mirrors the constraint's own (`error`, except the best-practice `con-3` → `warning`).
+   * Invariant, a resource constraint failed. Three sources raise it, each with or without the
+   * others: the safety layer's named invariants (`ait-1`/`ait-2`, `con-3`/`con-4`/`con-5`,
+   * `obs-6`/`obs-7`); the base-constraint layer, which evaluates the other error-severity
+   * constraints R4 declares on the eight modeled types and their `DomainResource` / `Element` /
+   * `Extension` base (`pat-1`, `obs-3`, `con-1`, `con-2`, `imm-1`, `dom-2` to `dom-5`, `ele-1`,
+   * `ext-1`) with no profile supplied; and a supplied profile's own `constraint`s. The specific
+   * constraint key travels in {@link ValidationIssue.constraint}, and the severity mirrors the
+   * constraint's own (`error`, except a `warning` constraint such as the best-practice `con-3`).
    */
   INVARIANT_VIOLATED: "INVARIANT_VIOLATED",
   /**
-   * Invariant, a profile `constraint`'s FHIRPath `expression` is **outside the bounded
+   * Invariant, a `constraint`'s FHIRPath `expression`, from a supplied profile or from the R4 base
+   * constraints the base-constraint layer evaluates, is **outside the bounded
    * engine's subset** and could not be evaluated. Always `information` (`informational`):
    * the constraint is reported **unchecked, never assumed to pass** (fail-safe), the
    * library does not claim conformance to an invariant it could not test. The constraint `key` travels
    * in {@link ValidationIssue.constraint}. Value-free (the location + key, never an instance value).
+   * A profile's verbatim copy of an R4 base constraint that the base-constraint layer decided at the
+   * same occurrence is not reported this way, because that constraint was evaluated: R4's `dom-3`
+   * on a resource with nothing contained draws nothing, with or without a profile.
    */
   INVARIANT_UNCHECKED: "INVARIANT_UNCHECKED",
   /**

@@ -109,7 +109,7 @@ which is how a negation or a retraction gets lost.
 import { parseResource, readSafety, validateResource } from "@cosyte/fhir";
 
 const { resource } = parseResource(
-  '{"resourceType":"Patient","modifierExtension":[{"url":"http://example.org/local-flag"}]}',
+  '{"resourceType":"Patient","modifierExtension":[{"url":"http://example.org/local-flag","valueBoolean":true}]}',
 );
 
 validateResource(resource).issues.map((issue) => issue.code); // => ["UNHANDLED_MODIFIER_EXTENSION"]

@@ -535,6 +535,25 @@ completeness**, and no revision of this section will carry one again: it is the 
 off the diff, each measured on both trees. Anything a later reader measures that is not in it belongs
 in it.
 
+## A fifth correction, forced by `ele-1` rather than by the corpus: `children()` of a primitive
+
+`children()` over a primitive returned its extensions and nothing else, while `id` navigation on the
+same primitive returns its `id`. `ele-1` is `hasValue() or (children().count() > id.count())`, so it
+counted a primitive's `id` on the right and not on the left, and reported a value-absent primitive
+carrying an `id` and an extension (`"_given":[{"id":"a","extension":[...]}]`, which R4 allows) as
+violating it. A primitive's children are now its `id` and then its extensions, the two `Element`
+members the engine already navigates on it. This is a correction to an answer the subset already
+claimed to give, not a widening: no construct moves in or out of the subset.
+
+**What it moves.** The counts block above is unchanged (`190 / 710 / 0 / 35`), measured with and
+without the correction: no case in the shared corpus changes its answer. Under `validateResource` with no
+profile, the base-constraint layer evaluates `ele-1` on every primitive, so a value-absent primitive
+carrying an `id` and an extension no longer draws an `ele-1` violation, and a primitive carrying only
+an `id` still does. A supplied profile's own `ele-1` is evaluated only at complex occurrences, so it
+never meets this case at its focus. Any other expression that calls `children()` over a primitive
+carrying an `id` now counts one more child, which can move its answer in either direction; that is
+stated here rather than measured, because nothing in the shared corpus reaches it.
+
 ## What vendoring the corpus cost the PHI gate
 
 Nothing here is deleted or bypassed and no file is subtracted from the scanner's sweep: the corpus

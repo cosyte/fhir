@@ -26,9 +26,11 @@
  * coerces exactly as `false` does and so leaves every finding where it was.
  * `where`/`select`/`all`
  * evaluate their criteria *lazily per item*, so an unsupported sub-term inside a filter over an empty
- * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires,
- * exactly the common case that lets base constraints like `dom-3` pass without implementing their full
- * machinery.
+ * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires.
+ * R4's own `dom-3` still does not parse here as written (it calls `as()` in function form and ends
+ * in `trace()`), so the base-constraint layer ({@link ../validate/base-invariants.js}) decides it by
+ * that same reading, an empty `contained` selection making the whole filter empty, and reports it
+ * unchecked whenever something is contained.
  *
  * A constraint is **satisfied** iff {@link convertToBoolean} of the result is `true`, matching the
  * reference validator's coercion (empty → false, a single non-boolean item → true), so an unmet or
@@ -244,7 +246,15 @@ function resolveTypeQualifier(name: string, focus: FpColl): FpColl {
   throw new UnsupportedFhirPathError(`type-qualified path head '${name}'`);
 }
 
-/** The immediate child nodes of an item (used by `children()`, resourceType is type info, not a child). */
+/**
+ * The immediate child nodes of an item (used by `children()`, resourceType is type info, not a child).
+ *
+ * A primitive's children are its `Element` members, `id` and then `extension`, which are exactly
+ * the two members {@link navigateItem} reaches on it; a bare leaf has none. Leaving the `id` out
+ * made `ele-1` (`hasValue() or (children().count() > id.count())`) count the `id` on one side and
+ * not the other, so a value-absent primitive carrying an `id` and an extension, which R4 allows,
+ * was reported as violating it.
+ */
 function childrenOf(item: FpItem): FpItem[] {
   if (item.t !== "node") return [];
   if (isComplex(item.node)) {
@@ -252,9 +262,13 @@ function childrenOf(item: FpItem): FpItem[] {
       .filter((p) => p.name !== "resourceType")
       .flatMap((p) => wrap(p.value));
   }
-  // A primitive's children are its extensions; a bare leaf has none.
   if (isPrimitive(item.node)) {
-    return (item.node.extension ?? []).map((ext) => ({ t: "node", node: ext }));
+    const id: FpItem[] = item.node.id === undefined ? [] : [{ t: "str", value: item.node.id }];
+    const extensions: FpItem[] = (item.node.extension ?? []).map((ext) => ({
+      t: "node",
+      node: ext,
+    }));
+    return [...id, ...extensions];
   }
   return [];
 }

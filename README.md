@@ -15,7 +15,9 @@
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
-fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants), **Quantity / UCUM
+fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants), the **R4 base
+constraints of the eight modeled resource types** (`pat-1`, `obs-3`, `con-1`, `con-2`, `imm-1`,
+`dom-2` to `dom-5`, `ele-1`, `ext-1`), evaluated with no profile supplied, **Quantity / UCUM
 fidelity** (the 11-way `Observation.value[x]` discrimination, UCUM-`code` unit fidelity, vital-signs
 required-unit conformance, dose quantities), **strength-aware, content-free terminology binding
 validation** (a frozen known-systems registry, binding-strength severity, the multi-system allergy /
@@ -647,6 +649,19 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   exact R4 FHIRPath by the always-on safety layer. This layer surfaces and enforces. It
   never reconciles contradictions or infers clinical meaning. Every **other** profile `constraint[]`
   invariant is evaluated by the FHIRPath engine (below).
+- **Base constraints, with no profile**: every other error-severity constraint R4 4.0.1 declares on
+  the eight modeled types (`AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`,
+  `MedicationRequest`, `MedicationStatement`, `Observation`, `Patient`) and on their
+  `DomainResource`, `Element` and `Extension` base: `pat-1`, `obs-3`, `con-1`, `con-2`, `imm-1`,
+  `dom-2` to `dom-5`, `ele-1` and `ext-1`, each transcribed verbatim and evaluated by the same
+  FHIRPath engine. A violation is `INVARIANT_VIOLATED` at `error`, located at the violating
+  occurrence. `dom-3` is decided by its own terms when nothing is contained, a supplied profile
+  carrying R4's `dom-3` as written included, and reported `INVARIANT_UNCHECKED` when something is,
+  because checking that every contained resource is referenced needs reference resolution the
+  subset does not have. `dom-6` (a narrative SHOULD be
+  present, a `warning`) is not evaluated without a profile. A contained resource is checked only
+  through `dom-2` to `dom-5`; its own type's constraints and its elements' `ele-1` / `ext-1` are not.
+  Any other resource type draws none of these.
 
 And Quantity / UCUM fidelity: read a measured value by the type it actually is, and its unit by the
 UCUM **`code`** a machine may act on (never the display string, and **never converted**):
@@ -766,6 +781,9 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   `warning`); an expression outside the subset raises `UnsupportedFhirPathError` and is reported
   `INVARIANT_UNCHECKED` (`information`): **surfaced, never assumed to pass**. The seven named safety
   invariants stay owned by the always-on safety layer; the engine covers every other constraint.
+  The R4 base constraints are evaluated whether or not a profile is supplied (above), and a profile
+  whose snapshot repeats one is reported once per occurrence, not twice. `collectInvariantIssues`,
+  called directly, still reports every constraint the profile carries, base ones included.
 - **Deferred:** the bundled multi-version US Core IG corpus and the `validator_cli.jar` differential
   (a JVM dev/CI job); the `type` / `profile` slicing discriminators and reslicing (still
   `PROFILE_SLICE_UNCHECKED`: a genuine fail-safe deferral, they need per-occurrence type carriage /

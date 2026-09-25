@@ -514,8 +514,11 @@ describe("reporting only: nothing already emitted moves", () => {
 
     expect(safety.unhandledModifierExtensions).toEqual(["Patient.modifierExtension[0]"]);
     expect(safety.modifierElements).toEqual([]);
+    // AC-6 (S0374): the extension carries neither a value nor nested extensions, so it also
+    // violates the R4 base constraint ext-1, a finding gained beside the one pinned here.
     expect(findingsOf(json)).toEqual([
       "UNHANDLED_MODIFIER_EXTENSION/error at Patient.modifierExtension[0]",
+      "INVARIANT_VIOLATED/error at Patient.modifierExtension[0]",
     ]);
   });
 

@@ -26,6 +26,19 @@
  * the resource types {@link ./schema.js} enumerates; other resource types validate only when the
  * caller supplies a schema.
  *
+ * **Invariants run with or without a profile.** {@link validateResource} runs the layers above and
+ * then the others in turn: the safety layer ({@link ./safety.js}), whose seven named invariants
+ * fire for every AllergyIntolerance, Condition and Observation; the base-constraint layer
+ * ({@link ./base-invariants.js}), which evaluates every other error-severity constraint R4 declares
+ * on the eight modeled types (AllergyIntolerance, Condition, DiagnosticReport, Immunization,
+ * MedicationRequest, MedicationStatement, Observation, Patient) and on their `DomainResource`,
+ * `Element` and `Extension` base, `pat-1`, `ext-1` and `ele-1` among them, with no profile supplied;
+ * and, for each supplied profile whose `type` matches, that profile's own `constraint`s
+ * ({@link ../profiles/invariants.js}). A violation both a profile and the base-constraint layer
+ * find at one occurrence is reported once, and a base constraint the base-constraint layer decides
+ * at an occurrence is never also reported unevaluated there because a profile's verbatim copy of
+ * it lies outside the subset. A resource type outside the eight draws no base-constraint finding.
+ *
  * @packageDocumentation
  */
 
@@ -47,7 +60,8 @@ import { typesOf } from "../safety/codes.js";
 import { nestedArrays } from "../safety/status.js";
 import { collectTerminologyIssues } from "./terminology.js";
 import { collectProfileIssues, collectProfileVersionIssues } from "../profiles/validate-profile.js";
-import { collectInvariantIssues } from "../profiles/invariants.js";
+import { invariantFindings } from "../profiles/invariants.js";
+import { collectBaseInvariantFindings, type BaseInvariantFinding } from "./base-invariants.js";
 import type { BaseResolver } from "../profiles/snapshot.js";
 import type { StructureDefinition } from "../profiles/structure-definition.js";
 import type { TerminologyBinding } from "../terminology/bindings.js";
@@ -305,6 +319,14 @@ export function validateResource(
   // the layer's contract directly, avoids re-spreading optional fields under exactOptionalPropertyTypes.
   for (const issue of collectTerminologyIssues(resource, rt, options)) ctx.issues.push(issue);
 
+  // Base-constraint layer: the error-severity constraints R4 declares on the eight modeled types and
+  // on their DomainResource / Element / Extension base, whether or not a profile is supplied. A type
+  // outside the eight draws nothing here. The seven named safety invariants stay with the safety
+  // layer above, so each is reported once.
+  const base = collectBaseInvariantFindings(resource, rt);
+  for (const finding of base.findings) ctx.issues.push(finding.issue);
+  const reportedByBase = alreadyReported(base.findings);
+
   // Profile layer (Phase 6): validate against each supplied StructureDefinition whose `type` matches
   // (fixed/pattern, must-support-as-obligation, profile cardinality, slicing), plus the resource's
   // `meta.profile` version pins against the supplied set. No profile content is bundled, a caller
@@ -319,9 +341,24 @@ export function validateResource(
       }
       // Invariant layer (Phase 7): evaluate the profile's FHIRPath `constraint`s via the bounded
       // engine. An unevaluable expression is surfaced INVARIANT_UNCHECKED (never a silent pass); the
-      // seven named safety invariants are left to the always-on Phase-3 safety layer.
-      for (const issue of collectInvariantIssues(resource, profile, profileOptions)) {
-        ctx.issues.push(issue);
+      // seven named safety invariants are left to the always-on Phase-3 safety layer. A profile's
+      // snapshot inherits the base constraints, so a finding the base-constraint layer already made
+      // at the same occurrence, for the same key and code, is not reported a second time; the two
+      // spell a location differently (the profile layer drops the index of a lone occurrence), so
+      // the occurrence is compared as a node, never as a location string. And where the base layer
+      // DECIDED a base constraint at an occurrence (held or not held) that the profile carries with
+      // the same expression, the profile layer's INVARIANT_UNCHECKED for it would say "not
+      // evaluated" about a constraint that was: dom-3 over a resource with no `contained` entry,
+      // which the subset cannot parse but the base layer decides by the expression's own semantics.
+      for (const finding of invariantFindings(resource, profile, profileOptions)) {
+        if (reportedByBase(finding.focus, finding.issue)) continue;
+        if (
+          finding.issue.code === "INVARIANT_UNCHECKED" &&
+          base.decides(finding.focus, finding.issue.constraint ?? "", finding.expression)
+        ) {
+          continue;
+        }
+        ctx.issues.push(finding.issue);
       }
     }
     for (const issue of collectProfileVersionIssues(resource, options.profiles)) {
@@ -330,6 +367,23 @@ export function validateResource(
   }
 
   return finalize(ctx);
+}
+
+/**
+ * A predicate over (occurrence, issue): whether the base-constraint layer already made a finding of
+ * the same code, for the same constraint key, at that very node.
+ */
+function alreadyReported(
+  base: readonly BaseInvariantFinding[],
+): (focus: FhirNode, issue: ValidationIssue) => boolean {
+  const byFocus = new Map<FhirNode, Set<string>>();
+  for (const { focus, issue } of base) {
+    const seen = byFocus.get(focus) ?? new Set<string>();
+    seen.add(`${issue.code} ${issue.constraint ?? ""}`);
+    byFocus.set(focus, seen);
+  }
+  return (focus, issue) =>
+    byFocus.get(focus)?.has(`${issue.code} ${issue.constraint ?? ""}`) === true;
 }
 
 /** Freeze the accumulator into an immutable {@link ValidationResult}. */
