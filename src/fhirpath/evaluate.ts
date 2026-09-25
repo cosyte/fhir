@@ -658,15 +658,16 @@ function functionFormTypeTest(
  * extended to a spelling that never had it, exactly as {@link functionFormTypeTest} does not extend
  * it to `is()` / `as()`. Over a complex node the qualified System name is answered (R3), and a
  * qualified FHIR name is answered wherever the unqualified one is.
+ *
+ * "Qualified" is the argument's shape, a chain of two or more names, never a dot in the text: a
+ * delimited identifier (`` `System.Boolean` ``) is one name whose text holds a dot, `ofType` has
+ * always read it off the item's value, and it still does.
  */
 function ofTypeKeeps(item: FpItem, arg: Expr, ctx: EvalCtx): boolean {
   const typeName = typeNameOf(arg);
+  const qualified = arg.kind === "member" && arg.target !== null;
   const complexNode = item.t === "node" && isComplex(item.node);
-  if (
-    typeName.includes(".") &&
-    resolveTypeSpecifier(typeName)?.model === "System" &&
-    !complexNode
-  ) {
+  if (qualified && resolveTypeSpecifier(typeName)?.model === "System" && !complexNode) {
     throw new UnsupportedFhirPathError(`qualified type test '${typeName}' on a primitive`);
   }
   return itemIsType(item, typeName, ctx);

@@ -605,7 +605,9 @@ A type name may be written qualified in every form (`ofType(FHIR.Quantity)`, `is
 kept for the same reason: `ofType(System.String)` over a primitive or a computed value, which
 `ofType` refused before while it answered `ofType(String)` off the value, stays refused, because the
 corpus reads a FHIR primitive as not being of a System type through the function forms
-(`Patient.active.is(System.Boolean).not()` is `true` there).
+(`Patient.active.is(System.Boolean).not()` is `true` there). Qualified there means a chain of two
+or more names; a delimited identifier is one name whatever its text holds, so
+``ofType(`System.Boolean`)`` over a primitive is still read off the value, as it always was.
 
 **`matches(regex)`** is answered over a single string input and a pattern in a portable subset:
 literal characters, `.`, `^` and `$` (the start and end of the input), a character class of literal
@@ -705,8 +707,10 @@ over an empty input was `{}` before and still is), `identifier.value.matches('\\
 on both: outside the portable subset), `text.div.toString().exists()` (`UNCHECKED` on both),
 `gender.ofType(System.String).exists()` (`UNCHECKED` on both over `gender: "male"`, a qualified
 System name over a primitive; `VIOLATED` on both over a Patient with no `gender`, `ofType` over an
-empty input) and `$this.is(System.Patient)` (`UNCHECKED` on both: the name resolves in neither
-model). Every
+empty input), ``gender.ofType(`System.Boolean`).exists()`` (`VIOLATED` on both over `gender:
+"male"`) and ``gender.ofType(`System.String`).exists()`` (no finding on both: a delimited
+identifier is one name, read off the value) and `$this.is(System.Patient)` (`UNCHECKED` on both:
+the name resolves in neither model). Every
 control the four remedies above table is unchanged too, `gender is FHIR.String` and
 `gender.ofType(FHIR.String).exists()` among them.
 

@@ -7,7 +7,10 @@
  * dispatches on, the variables it binds, and, for a type test, whether the type name resolves in
  * the FHIR or the System model. `evaluated` therefore means no construct lies outside the subset.
  * It does not mean every instance decides the constraint: a type test is answered only where the
- * instance establishes the item's type, and is reported unchecked where it does not.
+ * instance establishes the item's type, and is reported unchecked where it does not. The same holds
+ * for a System type in a function form, `is(String)`, `as(String)` or `ofType(System.String)`
+ * written as a chain of names: it resolves, so it classifies `evaluated`, but the engine answers it
+ * over a complex node only and reports it unchecked over a primitive. No projected row spells one.
  *
  * Two subsets are described. HEAD is read off the evaluator itself (`SUBSET_FUNCTIONS`,
  * `SUBSET_OPERATORS`, `TYPE_ARGUMENT_FUNCTIONS`, `resolveTypeSpecifier`), so it cannot drift from

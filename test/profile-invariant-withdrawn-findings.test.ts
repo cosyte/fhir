@@ -848,6 +848,18 @@ const TYPE_TEST_CONTROLS: readonly Control[] = [
     why: "and over an empty input it is `{}`, lazily, as at the pin",
   },
   {
+    expression: "gender.ofType(`System.Boolean`).exists()",
+    over: male,
+    both: "VIOLATED",
+    why: "a delimited identifier is one name, however many dots its text holds: read off the value, as at the pin",
+  },
+  {
+    expression: "gender.ofType(`System.String`).exists()",
+    over: male,
+    both: "none",
+    why: "the same one-name spelling's match, read off the value, as at the pin",
+  },
+  {
     expression: "$this.is(System.Patient)",
     over: bare,
     both: "UNCHECKED",
