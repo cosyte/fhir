@@ -41,6 +41,14 @@
  * - the ordering rows are reduced to the same comparison between two String **literals**, which
  *   `compare` still decides lexically at this commit, exactly as the pre-change engine decided it
  *   for a model value.
+ *
+ * **A later change moved two of those rows again.** FHIR-type tests and `matches()` (AC-13, the
+ * table headed "FHIR-type tests and matches()" in the same record) decide rows 11 and 12 once more,
+ * from the node's kind, so each carries a `today` column beside its `now`: `now` is what the change
+ * that tabled the row answered, `today` what the engine answers, and the assertion is on `today`.
+ * That change's own movements are `TYPE_TEST_MOVEMENTS` below, each measured against the pin it was
+ * written on (`0d75c80`) with this file's probe, the `pin` column recorded rather than asserted for
+ * the same reason `shipped` is, and every one of them moves from `UNCHECKED` to a determination.
  */
 import { describe, expect, it } from "vitest";
 
@@ -57,19 +65,19 @@ function parse(obj: unknown) {
   return parseResource(JSON.stringify(obj)).resource;
 }
 
-/** A caller-supplied Patient profile carrying one root constraint at `error`. */
-function profileWith(expression: string): StructureDefinition {
+/** A caller-supplied profile (Patient unless named) carrying one root constraint at `error`. */
+function profileWith(expression: string, type = "Patient"): StructureDefinition {
   return req(
     loadStructureDefinition(
       parse({
         resourceType: "StructureDefinition",
         url: "http://example.org/StructureDefinition/withdrawn-findings",
-        type: "Patient",
+        type,
         snapshot: {
           element: [
             {
-              id: "Patient",
-              path: "Patient",
+              id: type,
+              path: type,
               constraint: [{ key: "wf-1", severity: "error", human: "probe", expression }],
             },
           ],
@@ -82,11 +90,24 @@ function profileWith(expression: string): StructureDefinition {
 /** `[code, severity]` pairs plus `valid`: what "a finding" means at this layer. */
 function findings(resource: unknown, expression: string) {
   const doc = parse(resource);
-  const profile = profileWith(expression);
+  const profile = profileWith(expression, resourceTypeOf(resource));
   return {
     issues: collectInvariantIssues(doc, profile).map((i) => [i.code, i.severity]),
     valid: validateResource(doc, { profiles: [profile] }).valid,
   };
+}
+
+/** The `resourceType` a probe document names, which is the type its profile constrains. */
+function resourceTypeOf(resource: unknown): string {
+  if (
+    typeof resource === "object" &&
+    resource !== null &&
+    "resourceType" in resource &&
+    typeof resource.resourceType === "string"
+  ) {
+    return resource.resourceType;
+  }
+  throw new Error("a probe document names its resourceType");
 }
 
 /** The three outcomes the record's tables abbreviate. */
@@ -129,8 +150,10 @@ interface Movement {
   readonly over: unknown;
   /** What the published package answers. Measured, not asserted here; see the docblock. */
   readonly shipped: Outcome;
-  /** What this change answers. Asserted. */
+  /** What the change that tabled the row answered. */
   readonly now: Outcome;
+  /** What the engine answers today, where a later change moved the row again. Asserted when set. */
+  readonly today?: Outcome;
   readonly why: string;
 }
 
@@ -232,7 +255,8 @@ const MOVEMENTS: readonly Movement[] = [
     over: male,
     shipped: "VIOLATED",
     now: "UNCHECKED",
-    why: "a type name the generic model cannot decide: a CORRECT finding withdrawn",
+    today: "VIOLATED", // AC-13 / AC-10: decided again from the node's kind, row T1
+    why: "a type name the generic model cannot decide: a CORRECT finding withdrawn, restored as row T1",
   },
   {
     row: 12,
@@ -241,7 +265,8 @@ const MOVEMENTS: readonly Movement[] = [
     over: male,
     shipped: "VIOLATED",
     now: "UNCHECKED",
-    why: "as row 11, through `ofType`, which routes to the same predicate",
+    today: "VIOLATED", // AC-13 / AC-10: decided again from the node's kind, row T2
+    why: "as row 11, through `ofType`, which routes to the same predicate, restored as row T2",
   },
   {
     row: 13,
@@ -529,8 +554,355 @@ describe("the movement table in documentation/fhirpath-coverage.md, pinned row b
   });
 
   for (const movement of MOVEMENTS) {
-    it(`row ${String(movement.row)} (remedy ${String(movement.remedy)}): \`${movement.expression}\` is ${movement.shipped} on the published package and ${movement.now} here - ${movement.why}`, () => {
+    const today = movement.today === undefined ? "" : ` (${movement.today} today)`;
+    it(`row ${String(movement.row)} (remedy ${String(movement.remedy)}): \`${movement.expression}\` is ${movement.shipped} on the published package and ${movement.now} here${today} - ${movement.why}`, () => {
+      expect(findings(movement.over, movement.expression)).toEqual(
+        OUTCOME[movement.today ?? movement.now],
+      );
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// AC-13: FHIR-type tests and matches(), measured against the pin they were written on.
+// ---------------------------------------------------------------------------------------------
+
+/** Which part of the widened subset moves a row. */
+type TypeTestRule = "R1" | "R2" | "R3" | "is()/as()" | "matches()";
+
+interface TypeTestMovement {
+  /** The row label in `documentation/fhirpath-coverage.md`'s "FHIR-type tests and matches()" table. */
+  readonly row: string;
+  readonly rule: TypeTestRule;
+  readonly expression: string;
+  readonly over: unknown;
+  /** What the engine at the pin answers. Measured with this file's probe, not asserted here. */
+  readonly pin: Outcome;
+  /** What this change answers. Asserted. */
+  readonly now: Outcome;
+  readonly why: string;
+}
+
+const deceasedFalse = { resourceType: "Patient", deceasedBoolean: false };
+const identified = (value: string) => ({
+  resourceType: "Patient",
+  identifier: [{ system: "http://example.org/ids", value }],
+});
+const quantityObservation = {
+  resourceType: "Observation",
+  status: "final",
+  code: { text: "synthetic" },
+  valueQuantity: { value: 1, unit: "mg", system: "http://unitsofmeasure.org", code: "mg" },
+};
+const textlessObservation = {
+  resourceType: "Observation",
+  status: "final",
+  code: { text: "synthetic" },
+};
+
+const TYPE_TEST_MOVEMENTS: readonly TypeTestMovement[] = [
+  {
+    row: "T1",
+    rule: "R3",
+    expression: "gender is Quantity",
+    over: male,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "a model primitive is never a complex FHIR type: row 11's correct finding, decided again",
+  },
+  {
+    row: "T2",
+    rule: "R3",
+    expression: "gender.ofType(Quantity).exists()",
+    over: male,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "as T1, through `ofType`: row 12's correct finding, decided again",
+  },
+  {
+    row: "T3",
+    rule: "R3",
+    expression: "gender.ofType(Quantity).empty()",
+    over: male,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "T2's other face: an UNCHECKED removed into a satisfied constraint",
+  },
+  {
+    row: "T4",
+    rule: "R3",
+    expression: "name is String",
+    over: namedPatient,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "a complex node is never a System primitive",
+  },
+  {
+    row: "T5",
+    rule: "R3",
+    expression: "name.ofType(String).empty()",
+    over: namedPatient,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "T4's other face",
+  },
+  {
+    row: "T6",
+    rule: "R2",
+    expression: "$this is Patient",
+    over: bare,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "the resource root is the type its resourceType names",
+  },
+  {
+    row: "T7",
+    rule: "R2",
+    expression: "$this is Observation",
+    over: bare,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "a Patient root is not an Observation",
+  },
+  {
+    row: "T8",
+    rule: "R1",
+    expression: "deceased is boolean",
+    over: deceasedFalse,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "a choice variant R4 declares on Patient is its variant's type",
+  },
+  {
+    row: "T9",
+    rule: "R1",
+    expression: "value is Quantity",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "`valueQuantity` on an Observation root is a Quantity",
+  },
+  {
+    row: "T10",
+    rule: "R1",
+    expression: "value is CodeableConcept",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "and it is not a CodeableConcept",
+  },
+  {
+    row: "T11",
+    rule: "is()/as()",
+    expression: "gender.is(Quantity)",
+    over: male,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "the function form, refused outright at the pin, answers as the operator form does",
+  },
+  {
+    row: "T12",
+    rule: "is()/as()",
+    expression: "deceased.is(boolean)",
+    over: bare,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "ADDED: over an absent element the function form is `{}`, which is not satisfied",
+  },
+  {
+    row: "T13",
+    rule: "is()/as()",
+    expression: "value.as(Quantity).exists()",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "`as()` keeps the item that is of the type",
+  },
+  {
+    row: "T14",
+    rule: "matches()",
+    expression: "identifier.value.matches('^SYN-[0-9]{4}$')",
+    over: identified("SYN-0001"),
+    pin: "UNCHECKED",
+    now: "none",
+    why: "a matching value satisfies the constraint",
+  },
+  {
+    row: "T15",
+    rule: "matches()",
+    expression: "identifier.value.matches('^SYN-[0-9]{4}$')",
+    over: identified("SYN-01"),
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "a non-matching value violates it",
+  },
+  {
+    row: "T16",
+    rule: "matches()",
+    expression: "gender.matches('^male$')",
+    over: male,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "any string-valued primitive is matched on its value",
+  },
+  {
+    row: "T17",
+    rule: "matches()",
+    expression: "text.div.matches('.*').exists()",
+    over: textlessObservation,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "ADDED: over an absent element `matches()` is `{}`, so `exists()` is false; test/invariants.test.ts carried this constraint as its unchecked probe and now carries `toString()`",
+  },
+  {
+    row: "T18",
+    rule: "R2",
+    expression: "$this.is(FHIR.Patient)",
+    over: bare,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "a qualified type name in function form is read as the operator form reads it",
+  },
+  {
+    row: "T19",
+    rule: "R1",
+    expression: "value.ofType(FHIR.Quantity).exists()",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "`ofType` refused every qualified name at the pin; `FHIR.Quantity` is `Quantity`",
+  },
+  {
+    row: "T20",
+    rule: "R1",
+    expression: "value.as(FHIR.CodeableConcept).exists()",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "the qualified name's non-match, through `as()`",
+  },
+  {
+    row: "T21",
+    rule: "R3",
+    expression: "name.ofType(System.String).exists()",
+    over: namedPatient,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "a complex node is never a System primitive, however the System name is written",
+  },
+  {
+    row: "T22",
+    rule: "R1",
+    expression: "value.ofType(`FHIR.Quantity`).exists()",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "a delimited identifier is one name, read as the specifier its text spells, as the operator form reads it",
+  },
+  {
+    row: "T23",
+    rule: "R1",
+    expression: "value is FHIR.Quantity",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "a qualified name in the operator form, answered as the unqualified one",
+  },
+];
+
+const TYPE_TEST_CONTROLS: readonly Control[] = [
+  {
+    expression: "gender is code",
+    over: male,
+    both: "UNCHECKED",
+    why: "a primitive not reached through a choice element: the instance does not establish `code`",
+  },
+  {
+    expression: "name is HumanName",
+    over: namedPatient,
+    both: "UNCHECKED",
+    why: "a complex element not reached through a choice element and not the root",
+  },
+  {
+    expression: "deceased is dateTime",
+    over: deceasedFalse,
+    both: "UNCHECKED",
+    why: "two different FHIR primitives are never related here",
+  },
+  {
+    expression: "$this is Resource",
+    over: bare,
+    both: "UNCHECKED",
+    why: "a relation to an abstract type is never established",
+  },
+  {
+    expression: "gender.ofType(Quantity).exists()",
+    over: bare,
+    both: "VIOLATED",
+    why: "`ofType` over an empty input was `{}` at the pin and still is",
+  },
+  {
+    expression: "identifier.value.matches('\\\\d')",
+    over: identified("SYN-0001"),
+    both: "UNCHECKED",
+    why: "a pattern outside the portable subset is refused",
+  },
+  {
+    expression: "text.div.toString().exists()",
+    over: textlessObservation,
+    both: "UNCHECKED",
+    why: "a function still outside the subset is refused whatever its input",
+  },
+  {
+    expression: "gender.ofType(System.String).exists()",
+    over: male,
+    both: "UNCHECKED",
+    why: "a qualified System name over a primitive stays refused in `ofType`, as at the pin",
+  },
+  {
+    expression: "gender.ofType(System.String).exists()",
+    over: bare,
+    both: "VIOLATED",
+    why: "and over an empty input it is `{}`, lazily, as at the pin",
+  },
+  {
+    expression: "gender.ofType(`System.Boolean`).exists()",
+    over: male,
+    both: "VIOLATED",
+    why: "a delimited identifier is one name, however many dots its text holds: read off the value, as at the pin",
+  },
+  {
+    expression: "gender.ofType(`System.String`).exists()",
+    over: male,
+    both: "none",
+    why: "the same one-name spelling's match, read off the value, as at the pin",
+  },
+  {
+    expression: "$this.is(System.Patient)",
+    over: bare,
+    both: "UNCHECKED",
+    why: "a qualified name that resolves in neither model is refused",
+  },
+];
+
+describe("AC-13: the FHIR-type test and matches() movements, pinned row by row", () => {
+  it("tables only rows that actually move, and only from UNCHECKED to a determination", () => {
+    expect(TYPE_TEST_MOVEMENTS.filter((m) => m.pin === m.now)).toEqual([]);
+    expect(TYPE_TEST_MOVEMENTS.filter((m) => m.pin !== "UNCHECKED")).toEqual([]);
+    expect(TYPE_TEST_MOVEMENTS.map((m) => m.row)).toEqual(
+      TYPE_TEST_MOVEMENTS.map((_, i) => `T${String(i + 1)}`),
+    );
+  });
+
+  for (const movement of TYPE_TEST_MOVEMENTS) {
+    it(`row ${movement.row} (${movement.rule}): \`${movement.expression}\` is ${movement.pin} at the pin and ${movement.now} here - ${movement.why}`, () => {
       expect(findings(movement.over, movement.expression)).toEqual(OUTCOME[movement.now]);
+    });
+  }
+
+  for (const control of TYPE_TEST_CONTROLS) {
+    it(`\`${control.expression}\` is ${control.both} at the pin and here - ${control.why}`, () => {
+      expect(findings(control.over, control.expression)).toEqual(OUTCOME[control.both]);
     });
   }
 });

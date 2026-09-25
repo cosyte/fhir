@@ -1,0 +1,663 @@
+{
+  "note": "Committed TEST DATA, never shipped: the FHIRPath constraints carried by the US Core 6.1.0 and 9.0.0 resource profiles, projected from the package tarballs named under packages. Do not hand-edit: re-derive it with scripts/uscore-projection.ts, which refuses bytes whose count or sha256 differs from the value recorded here.",
+  "rule": "One row per constraint in the differential of every StructureDefinition at the top level of the package (package/*.json) with kind 'resource' and derivation 'constraint', keyed by (version, profile id, element id, key). key, severity and expression are copied verbatim, never rewritten. sliceName is carried when the element is a slice. Packages in the order listed under packages; profiles in ascending id order; within one, the differential's element order and each element's constraint order.",
+  "licence": "CC0-1.0",
+  "fhirVersion": "4.0.1",
+  "packages": {
+    "6.1.0": {
+      "url": "https://packages.fhir.org/hl7.fhir.us.core/6.1.0",
+      "bytes": 1606342,
+      "sha256": "ec096f29bc4ce8f04117dfc4ef82e7289c67a7e2188892e86288c45389d158d9"
+    },
+    "9.0.0": {
+      "url": "https://packages.fhir.org/hl7.fhir.us.core/9.0.0",
+      "bytes": 2749959,
+      "sha256": "d7b54d2ec2a48cea94ffea5d939ad67a681f80b94d69594a08cebac36da9e059"
+    }
+  },
+  "constraints": [
+    {
+      "version": "6.1.0",
+      "profile": "us-core-coverage",
+      "type": "Coverage",
+      "element": "Coverage",
+      "path": "Coverage",
+      "key": "us-core-15",
+      "severity": "error",
+      "expression": "identifier.type.coding.where(system='http://terminology.hl7.org/CodeSystem/v2-0203' and code='MB').exists() or subscriberId.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-diagnosticreport-lab",
+      "type": "DiagnosticReport",
+      "element": "DiagnosticReport",
+      "path": "DiagnosticReport",
+      "key": "us-core-8",
+      "severity": "error",
+      "expression": "(status='partial' or status='preliminary' or status='final' or status='amended' or status='corrected' or status='appended' ) implies effective.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-diagnosticreport-lab",
+      "type": "DiagnosticReport",
+      "element": "DiagnosticReport",
+      "path": "DiagnosticReport",
+      "key": "us-core-9",
+      "severity": "error",
+      "expression": "(status='partial' or status='preliminary' or status='final' or status='amended' or status='corrected' or status='appended' ) implies issued.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-diagnosticreport-note",
+      "type": "DiagnosticReport",
+      "element": "DiagnosticReport",
+      "path": "DiagnosticReport",
+      "key": "us-core-10",
+      "severity": "error",
+      "expression": "(status='partial' or status='preliminary' or status='final' or status='amended' or status='corrected' or status='appended' ) implies effective.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-documentreference",
+      "type": "DocumentReference",
+      "element": "DocumentReference.content.attachment",
+      "path": "DocumentReference.content.attachment",
+      "key": "us-core-6",
+      "severity": "error",
+      "expression": "url.exists() or data.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-immunization",
+      "type": "Immunization",
+      "element": "Immunization",
+      "path": "Immunization",
+      "key": "us-core-5",
+      "severity": "warning",
+      "expression": "vaccineCode.coding.where(system='http://hl7.org/fhir/sid/ndc').empty()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-medicationdispense",
+      "type": "MedicationDispense",
+      "element": "MedicationDispense",
+      "path": "MedicationDispense",
+      "key": "us-core-20",
+      "severity": "error",
+      "expression": "status='completed' implies whenHandedOver.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-medicationrequest",
+      "type": "MedicationRequest",
+      "element": "MedicationRequest",
+      "path": "MedicationRequest",
+      "key": "us-core-21",
+      "severity": "error",
+      "expression": "(intent='order' or intent='original-order' or intent='reflex-order'or intent='filler-order' or intent='instance-order') implies requester.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-clinical-result",
+      "type": "Observation",
+      "element": "Observation",
+      "path": "Observation",
+      "key": "us-core-2",
+      "severity": "error",
+      "expression": "(component.empty() and hasMember.empty()) implies (dataAbsentReason.exists() or value.exists())"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-clinical-result",
+      "type": "Observation",
+      "element": "Observation.effective[x]",
+      "path": "Observation.effective[x]",
+      "key": "us-core-1",
+      "severity": "error",
+      "expression": "$this is DateTime implies $this.toString().length() >= 10"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-clinical-result",
+      "type": "Observation",
+      "element": "Observation.value[x]",
+      "path": "Observation.value[x]",
+      "key": "us-core-3",
+      "severity": "error",
+      "expression": "value.ofType(Quantity).system.empty() or value.ofType(Quantity).system = 'http://unitsofmeasure.org'"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-lab",
+      "type": "Observation",
+      "element": "Observation.value[x]",
+      "path": "Observation.value[x]",
+      "key": "us-core-4",
+      "severity": "warning",
+      "expression": "value.ofType(CodeableConcept).coding.system.empty() or value.ofType(CodeableConcept).coding.system = 'http://snomed.info/sct'"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-screening-assessment",
+      "type": "Observation",
+      "element": "Observation",
+      "path": "Observation",
+      "key": "us-core-2",
+      "severity": "error",
+      "expression": "(component.empty() and hasMember.empty()) implies (dataAbsentReason.exists() or value.exists())"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-screening-assessment",
+      "type": "Observation",
+      "element": "Observation",
+      "path": "Observation",
+      "key": "us-core-3",
+      "severity": "error",
+      "expression": "value.ofType(Quantity).system.empty() or value.ofType(Quantity).system = 'http://unitsofmeasure.org'"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-screening-assessment",
+      "type": "Observation",
+      "element": "Observation.effective[x]",
+      "path": "Observation.effective[x]",
+      "key": "us-core-1",
+      "severity": "error",
+      "expression": "$this is DateTime implies $this.toString().length() >= 10"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-sexual-orientation",
+      "type": "Observation",
+      "element": "Observation",
+      "path": "Observation",
+      "key": "us-core-2",
+      "severity": "error",
+      "expression": "(component.empty() and hasMember.empty()) implies (dataAbsentReason.exists() or value.exists())"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-organization",
+      "type": "Organization",
+      "element": "Organization.identifier:NPI",
+      "path": "Organization.identifier",
+      "sliceName": "NPI",
+      "key": "us-core-16",
+      "severity": "error",
+      "expression": "value.matches('^[0-9]{10}$')"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-organization",
+      "type": "Organization",
+      "element": "Organization.identifier:NPI",
+      "path": "Organization.identifier",
+      "sliceName": "NPI",
+      "key": "us-core-17",
+      "severity": "error",
+      "expression": "(((select(value.substring(0,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(1,1).toInteger())+(select(value.substring(2,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(3,1).toInteger())+(select(value.substring(4,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(5,1).toInteger())+(select(value.substring(6,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(7,1).toInteger())+(select(value.substring(8,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(9,1).toInteger()) + 24)mod 10=0)"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-organization",
+      "type": "Organization",
+      "element": "Organization.identifier:CLIA",
+      "path": "Organization.identifier",
+      "sliceName": "CLIA",
+      "key": "us-core-18",
+      "severity": "error",
+      "expression": "value.matches('^[0-9]{2}D[0-9]{7}$')"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-organization",
+      "type": "Organization",
+      "element": "Organization.identifier:NAIC",
+      "path": "Organization.identifier",
+      "sliceName": "NAIC",
+      "key": "us-core-19",
+      "severity": "error",
+      "expression": "value.matches('^[0-9]{5}$')"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-patient",
+      "type": "Patient",
+      "element": "Patient.name",
+      "path": "Patient.name",
+      "key": "us-core-6",
+      "severity": "error",
+      "expression": "(family.exists() or given.exists()) xor extension.where(url='http://hl7.org/fhir/StructureDefinition/data-absent-reason').exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-practitioner",
+      "type": "Practitioner",
+      "element": "Practitioner.identifier:NPI",
+      "path": "Practitioner.identifier",
+      "sliceName": "NPI",
+      "key": "us-core-16",
+      "severity": "error",
+      "expression": "value.matches('^[0-9]{10}$')"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-practitioner",
+      "type": "Practitioner",
+      "element": "Practitioner.identifier:NPI",
+      "path": "Practitioner.identifier",
+      "sliceName": "NPI",
+      "key": "us-core-17",
+      "severity": "error",
+      "expression": "(((select(value.substring(0,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(1,1).toInteger())+(select(value.substring(2,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(3,1).toInteger())+(select(value.substring(4,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(5,1).toInteger())+(select(value.substring(6,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(7,1).toInteger())+(select(value.substring(8,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(9,1).toInteger()) + 24)mod 10=0)"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-practitionerrole",
+      "type": "PractitionerRole",
+      "element": "PractitionerRole",
+      "path": "PractitionerRole",
+      "key": "pd-1",
+      "severity": "error",
+      "expression": "telecom or endpoint"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-practitionerrole",
+      "type": "PractitionerRole",
+      "element": "PractitionerRole",
+      "path": "PractitionerRole",
+      "key": "us-core-13",
+      "severity": "error",
+      "expression": "practitioner or organization or healthcareService or location"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-procedure",
+      "type": "Procedure",
+      "element": "Procedure",
+      "path": "Procedure",
+      "key": "us-core-7",
+      "severity": "error",
+      "expression": "(status='completed' or status='in-progress') implies performed.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-provenance",
+      "type": "Provenance",
+      "element": "Provenance.agent",
+      "path": "Provenance.agent",
+      "key": "provenance-1",
+      "severity": "error",
+      "expression": "who.exists((resolve() is Practitioner) or (resolve() is Device)) implies onBehalfOf.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-relatedperson",
+      "type": "RelatedPerson",
+      "element": "RelatedPerson",
+      "path": "RelatedPerson",
+      "key": "us-core-14",
+      "severity": "error",
+      "expression": "name.exists() or relationship.exists()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-smokingstatus",
+      "type": "Observation",
+      "element": "Observation.value[x]",
+      "path": "Observation.value[x]",
+      "key": "us-core-3",
+      "severity": "error",
+      "expression": "value.ofType(Quantity).system.empty() or value.ofType(Quantity).system = 'http://unitsofmeasure.org'"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-adi-documentreference",
+      "type": "DocumentReference",
+      "element": "DocumentReference.content.attachment",
+      "path": "DocumentReference.content.attachment",
+      "key": "us-core-6",
+      "severity": "error",
+      "expression": "url.exists() or data.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-average-blood-pressure",
+      "type": "Observation",
+      "element": "Observation.component",
+      "path": "Observation.component",
+      "key": "us-core-26",
+      "severity": "error",
+      "expression": "value.exists() or dataAbsentReason.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-coverage",
+      "type": "Coverage",
+      "element": "Coverage",
+      "path": "Coverage",
+      "key": "us-core-15",
+      "severity": "error",
+      "expression": "identifier.type.coding.where(system='http://terminology.hl7.org/CodeSystem/v2-0203' and code='MB').exists() or subscriberId.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-diagnosticreport-lab",
+      "type": "DiagnosticReport",
+      "element": "DiagnosticReport",
+      "path": "DiagnosticReport",
+      "key": "us-core-8",
+      "severity": "error",
+      "expression": "(status='partial' or status='preliminary' or status='final' or status='amended' or status='corrected' or status='appended' ) implies effective.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-diagnosticreport-lab",
+      "type": "DiagnosticReport",
+      "element": "DiagnosticReport",
+      "path": "DiagnosticReport",
+      "key": "us-core-9",
+      "severity": "error",
+      "expression": "(status='partial' or status='preliminary' or status='final' or status='amended' or status='corrected' or status='appended' ) implies issued.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-diagnosticreport-note",
+      "type": "DiagnosticReport",
+      "element": "DiagnosticReport",
+      "path": "DiagnosticReport",
+      "key": "us-core-10",
+      "severity": "error",
+      "expression": "(status='partial' or status='preliminary' or status='final' or status='amended' or status='corrected' or status='appended' ) implies effective.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-documentreference",
+      "type": "DocumentReference",
+      "element": "DocumentReference.content.attachment",
+      "path": "DocumentReference.content.attachment",
+      "key": "us-core-6",
+      "severity": "error",
+      "expression": "url.exists() or data.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-immunization",
+      "type": "Immunization",
+      "element": "Immunization",
+      "path": "Immunization",
+      "key": "us-core-5",
+      "severity": "warning",
+      "expression": "vaccineCode.coding.where(system='http://hl7.org/fhir/sid/cvx').exists() implies vaccineCode.coding.where(system='http://hl7.org/fhir/sid/ndc').exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-medicationdispense",
+      "type": "MedicationDispense",
+      "element": "MedicationDispense",
+      "path": "MedicationDispense",
+      "key": "us-core-20",
+      "severity": "error",
+      "expression": "status='completed' implies whenHandedOver.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-medicationrequest",
+      "type": "MedicationRequest",
+      "element": "MedicationRequest",
+      "path": "MedicationRequest",
+      "key": "us-core-21",
+      "severity": "error",
+      "expression": "(intent='order' or intent='original-order' or intent='reflex-order'or intent='filler-order' or intent='instance-order') implies requester.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-clinical-result",
+      "type": "Observation",
+      "element": "Observation",
+      "path": "Observation",
+      "key": "us-core-2",
+      "severity": "error",
+      "expression": "(component.empty() and hasMember.empty()) implies (dataAbsentReason.exists() or value.exists())"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-clinical-result",
+      "type": "Observation",
+      "element": "Observation.effective[x]",
+      "path": "Observation.effective[x]",
+      "key": "us-core-1",
+      "severity": "error",
+      "expression": "$this is dateTime implies $this.toString().length() >= 10"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-clinical-result",
+      "type": "Observation",
+      "element": "Observation.value[x]",
+      "path": "Observation.value[x]",
+      "key": "us-core-3",
+      "severity": "error",
+      "expression": "ofType(Quantity).system.empty() or ofType(Quantity).system = 'http://unitsofmeasure.org'"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-lab",
+      "type": "Observation",
+      "element": "Observation.value[x]",
+      "path": "Observation.value[x]",
+      "key": "us-core-4",
+      "severity": "warning",
+      "expression": "ofType(CodeableConcept).coding.system.empty() or (ofType(CodeableConcept).coding.system contains 'http://snomed.info/sct')"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-lab",
+      "type": "Observation",
+      "element": "Observation.referenceRange",
+      "path": "Observation.referenceRange",
+      "key": "us-core-22",
+      "severity": "error",
+      "expression": "(low.system.empty() or low.system = 'http://unitsofmeasure.org') and (high.system.empty() or high.system = 'http://unitsofmeasure.org')"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-screening-assessment",
+      "type": "Observation",
+      "element": "Observation",
+      "path": "Observation",
+      "key": "us-core-2",
+      "severity": "error",
+      "expression": "(component.empty() and hasMember.empty()) implies (dataAbsentReason.exists() or value.exists())"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-screening-assessment",
+      "type": "Observation",
+      "element": "Observation.effective[x]",
+      "path": "Observation.effective[x]",
+      "key": "us-core-1",
+      "severity": "error",
+      "expression": "$this is dateTime implies $this.toString().length() >= 10"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-screening-assessment",
+      "type": "Observation",
+      "element": "Observation.value[x]",
+      "path": "Observation.value[x]",
+      "key": "us-core-3",
+      "severity": "error",
+      "expression": "ofType(Quantity).system.empty() or ofType(Quantity).system = 'http://unitsofmeasure.org'"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-sexual-orientation",
+      "type": "Observation",
+      "element": "Observation",
+      "path": "Observation",
+      "key": "us-core-2",
+      "severity": "error",
+      "expression": "(component.empty() and hasMember.empty()) implies (dataAbsentReason.exists() or value.exists())"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-organization",
+      "type": "Organization",
+      "element": "Organization.identifier:NPI",
+      "path": "Organization.identifier",
+      "sliceName": "NPI",
+      "key": "us-core-16",
+      "severity": "error",
+      "expression": "value.matches('^[0-9]{10}$')"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-organization",
+      "type": "Organization",
+      "element": "Organization.identifier:NPI",
+      "path": "Organization.identifier",
+      "sliceName": "NPI",
+      "key": "us-core-17",
+      "severity": "error",
+      "expression": "(((select(value.substring(0,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(1,1).toInteger())+(select(value.substring(2,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(3,1).toInteger())+(select(value.substring(4,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(5,1).toInteger())+(select(value.substring(6,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(7,1).toInteger())+(select(value.substring(8,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(9,1).toInteger()) + 24)mod 10=0)"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-organization",
+      "type": "Organization",
+      "element": "Organization.identifier:CLIA",
+      "path": "Organization.identifier",
+      "sliceName": "CLIA",
+      "key": "us-core-18",
+      "severity": "error",
+      "expression": "value.matches('^[0-9]{2}D[0-9]{7}$')"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-organization",
+      "type": "Organization",
+      "element": "Organization.identifier:NAIC",
+      "path": "Organization.identifier",
+      "sliceName": "NAIC",
+      "key": "us-core-19",
+      "severity": "error",
+      "expression": "value.matches('^[0-9]{5}$')"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-patient",
+      "type": "Patient",
+      "element": "Patient.name",
+      "path": "Patient.name",
+      "key": "us-core-6",
+      "severity": "error",
+      "expression": "(family.exists() or given.exists()) xor extension.where(url='http://hl7.org/fhir/StructureDefinition/data-absent-reason').exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitioner",
+      "type": "Practitioner",
+      "element": "Practitioner.identifier:NPI",
+      "path": "Practitioner.identifier",
+      "sliceName": "NPI",
+      "key": "us-core-16",
+      "severity": "error",
+      "expression": "value.matches('^[0-9]{10}$')"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitioner",
+      "type": "Practitioner",
+      "element": "Practitioner.identifier:NPI",
+      "path": "Practitioner.identifier",
+      "sliceName": "NPI",
+      "key": "us-core-17",
+      "severity": "error",
+      "expression": "(((select(value.substring(0,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(1,1).toInteger())+(select(value.substring(2,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(3,1).toInteger())+(select(value.substring(4,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(5,1).toInteger())+(select(value.substring(6,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(7,1).toInteger())+(select(value.substring(8,1).toInteger()).select(iif($this<5, $this*2, (($this*2)-9))))+(value.substring(9,1).toInteger()) + 24)mod 10=0)"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitioner",
+      "type": "Practitioner",
+      "element": "Practitioner.identifier:NCSBNID",
+      "path": "Practitioner.identifier",
+      "sliceName": "NCSBNID",
+      "key": "us-core-27",
+      "severity": "error",
+      "expression": "value.matches('^[0-8]{8}$')"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitionerrole",
+      "type": "PractitionerRole",
+      "element": "PractitionerRole",
+      "path": "PractitionerRole",
+      "key": "pd-1",
+      "severity": "error",
+      "expression": "telecom.exists() or endpoint.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitionerrole",
+      "type": "PractitionerRole",
+      "element": "PractitionerRole",
+      "path": "PractitionerRole",
+      "key": "us-core-13",
+      "severity": "error",
+      "expression": "practitioner.exists() or organization.exists() or healthcareService.exists() or location.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-procedure",
+      "type": "Procedure",
+      "element": "Procedure",
+      "path": "Procedure",
+      "key": "us-core-7",
+      "severity": "error",
+      "expression": "(status='completed' or status='in-progress') implies performed.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-provenance",
+      "type": "Provenance",
+      "element": "Provenance.agent",
+      "path": "Provenance.agent",
+      "key": "provenance-1",
+      "severity": "error",
+      "expression": "who.exists((resolve() is Practitioner) or (resolve() is Device)) implies onBehalfOf.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-relatedperson",
+      "type": "RelatedPerson",
+      "element": "RelatedPerson",
+      "path": "RelatedPerson",
+      "key": "us-core-14",
+      "severity": "error",
+      "expression": "name.exists() or relationship.exists()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-smokingstatus",
+      "type": "Observation",
+      "element": "Observation",
+      "path": "Observation",
+      "key": "us-core-24",
+      "severity": "error",
+      "expression": "code.coding.where(code in '72166-2'|'11367-0').exists() implies value.is(CodeableConcept)"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-smokingstatus",
+      "type": "Observation",
+      "element": "Observation",
+      "path": "Observation",
+      "key": "us-core-25",
+      "severity": "warning",
+      "expression": "code.coding.where(code in '401201003'|'782516008').exists() implies value.is(Quantity)"
+    }
+  ]
+}

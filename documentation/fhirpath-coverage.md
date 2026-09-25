@@ -67,8 +67,8 @@ suite asserts all three numbers, so neither the byte count nor the live count ca
 
 | bucket | cases | what it means |
 |---|---|---|
-| evaluated | 190 | the engine produced an answer and it matches the corpus |
-| unsupported | 710 | the engine itself raised `UnsupportedFhirPathError` |
+| evaluated | 210 | the engine produced an answer and it matches the corpus |
+| unsupported | 690 | the engine itself raised `UnsupportedFhirPathError` |
 | wrongly answered | 0 | the engine produced an answer that disagrees, or one the harness cannot compare, **outside a declared mode difference** |
 | marked invalid by the corpus | 35 | the corpus expects a syntax / semantic / execution error, so the case gets no credit either way |
 | **total** | **935** | every live `<test>` element, each in exactly one bucket |
@@ -81,8 +81,8 @@ invalid *solely* under a strictness mode this engine does not implement. **The r
 answered count excludes those two declared mode differences**, which is why the count is qualified
 everywhere it appears rather than published bare.
 
-**The engine answers 20.3% of the whole corpus** (190 of 935), or **21.1%** of the cases it is
-expected to evaluate at all (190 of 900: the same numerator over a denominator with the 35 cases in
+**The engine answers 22.5% of the whole corpus** (210 of 935), or **23.3%** of the cases it is
+expected to evaluate at all (210 of 900: the same numerator over a denominator with the 35 cases in
 the invalid bucket removed). Both fractions are stated because they answer different questions, and
 quoting one as the other is how a coverage number drifts.
 
@@ -101,12 +101,12 @@ corpus_tag: 1.7.67
 raw_test_tag_occurrences: 937
 commented_out_cases: 2
 total_cases: 935
-evaluated: 190
-unsupported: 710
+evaluated: 210
+unsupported: 690
 wrong: 0
 invalid: 35
-answered_fraction: 20.3%
-answered_fraction_of_valid: 21.1%
+answered_fraction: 22.5%
+answered_fraction_of_valid: 23.3%
 type_qualified_head_cases: 154
 type_qualified_head_names: Appointment, Encounter, Observation, Parameters, Patient, Questionnaire, ValueSet
 ```
@@ -115,11 +115,13 @@ type_qualified_head_names: Appointment, Encounter, Observation, Parameters, Pati
 
 **A large unsupported bucket is the measurement, not a defect.** The engine's declared scope is
 navigation and choice access, `$this`, `%resource` / `%context`, existence and filtering, three
-valued logic, comparison, membership, union, and type tests on the System primitives. The shared
-corpus is a conformance suite for the whole language, so it spends most of its cases on arithmetic,
-string functions, date and time arithmetic, `descendants()`, `resolve()`, aggregates, and FHIR type
-reflection, all of which are outside the bound on purpose. A refusal there is the engine behaving as
-designed.
+valued logic, comparison, membership, union, type tests on the System primitives, FHIR-type tests
+where the instance itself establishes the item's type, and `matches()` over a portable pattern
+subset ([below](#fhir-type-tests-and-matches-what-the-subset-grew-by-and-what-it-moves)). The
+shared corpus is a conformance suite for the whole language, so it spends most of its cases on
+arithmetic, other string functions, date and time arithmetic, `descendants()`, `resolve()`,
+aggregates, and FHIR type reflection the instance does not establish, all of which are outside the
+bound on purpose. A refusal there is the engine behaving as designed.
 
 **A wrongly answered case is a defect, and the suite fails on one.** The bar this file holds is that
 the engine never answers a shared case wrongly rather than refusing it. `wrong` is **0**, and it
@@ -269,7 +271,11 @@ reaches, which is why they are declared as a mode difference rather than fixed.
    collection rather than `false`, which is what FHIRPath says and what the corpus reads
    (`testPolymorphismIsA3` is wrongly answered without it, measured by removing the rule and
    re-running). What that second half moves is set out below: `{}` and `false` coerce alike taken
-   alone, and they do not compose alike.
+   alone, and they do not compose alike. **A later widening answers part of what this remedy
+   refused**, where the instance itself establishes the type: `gender is Quantity` is `false` again,
+   decided from the node's kind this time.
+   `Observation.issued is instant` and `Patient.gender.ofType(code)` are still refused. See
+   [FHIR-type tests and `matches()`](#fhir-type-tests-and-matches-what-the-subset-grew-by-and-what-it-moves).
 
 4. **An ordering comparison no longer guesses a model value's type from its text.** The model is generic, so a
    string-valued primitive is the FHIR lexical form of an element whose type it does not carry: a
@@ -421,7 +427,11 @@ already.
 
 **Rows 11 and 12 withdraw a correct finding**, for the same reason rows 1 and 2 do: a FHIR `code`
 really is not a `Quantity`, but the shipped engine reached that by comparing `systemTypeOf(item)` of
-`"String"` against `"Quantity"`, which is not the question `is Quantity` asks.
+`"String"` against `"Quantity"`, which is not the question `is Quantity` asks. **Both are `VIOLATED`
+again today**, decided rather than reached by accident: a model primitive is never a complex FHIR
+type (rows T1 and T2 of the
+[FHIR-type test table](#fhir-type-tests-and-matches-what-the-subset-grew-by-and-what-it-moves),
+where `test/profile-invariant-withdrawn-findings.test.ts` asserts the `today` column).
 
 **Rows 13 and 14 are the `FHIR.` prefix, and they are tabled deliberately rather than left to the
 generalisation.** `itemIsType` no longer strips a leading `FHIR.`, so a name in FHIR's own type
@@ -502,7 +512,8 @@ naming the constraint, so the caller is told the constraint was not evaluated ra
 passed: the whole of the difference between a refusal and a wrong answer, and the reason ADR 0002
 makes refusal this engine's declared fallback. A reader who needs those constraints decided needs an
 engine that carries FHIR type information, which is a wider subset than this package has chosen to
-ship.
+ship. (Rows 11 and 12 are the exception since the FHIR-type test widening, which decides them from
+the node's kind; the other four still land on `UNCHECKED`.)
 
 **Rows 6, 7, 17 and 18 remove a finding into SILENCE, and the sentence above is not available for
 them.** There is no `INVARIANT_UNCHECKED` on the other side of these four: the caller is told the
@@ -545,14 +556,177 @@ violating it. A primitive's children are now its `id` and then its extensions, t
 members the engine already navigates on it. This is a correction to an answer the subset already
 claimed to give, not a widening: no construct moves in or out of the subset.
 
-**What it moves.** The counts block above is unchanged (`190 / 710 / 0 / 35`), measured with and
-without the correction: no case in the shared corpus changes its answer. Under `validateResource` with no
+**What it moves.** The counts block was unchanged by it (`190 / 710 / 0 / 35` at the time), measured
+with and without the correction: no case in the shared corpus changes its answer. Under `validateResource` with no
 profile, the base-constraint layer evaluates `ele-1` on every primitive, so a value-absent primitive
 carrying an `id` and an extension no longer draws an `ele-1` violation, and a primitive carrying only
 an `id` still does. A supplied profile's own `ele-1` is evaluated only at complex occurrences, so it
 never meets this case at its focus. Any other expression that calls `children()` over a primitive
 carrying an `id` now counts one more child, which can move its answer in either direction; that is
 stated here rather than measured, because nothing in the shared corpus reaches it.
+
+## FHIR-type tests and `matches()`: what the subset grew by, and what it moves
+
+This one is a **widening**, not a correction, and it was made for one caller: someone validating
+against the regulated US Core profiles, whose own constraints (`us-core-3`, the UCUM rule, first
+among them) this engine used to report `INVARIANT_UNCHECKED`. Two constructs came in, and nothing
+else.
+
+**FHIR-type tests** (`is` / `as` / `ofType`, operator and function forms) are answered where the
+instance itself establishes the item's type, by exactly three rules, and refused everywhere else:
+
+- **R1, a choice variant.** The item is the value of a `<base><Suffix>` property of the resource the
+  engine was handed, where this package's own element tables (`src/validate/schema.ts`) declare
+  `<base>[x]` a choice on that resource type. Its type is the variant: `valueQuantity` on an
+  Observation is a `Quantity`, `deceasedBoolean` on a Patient a `boolean`. This is decided by where
+  the node sits in the resource, found by identity, so it holds alike for an item the engine
+  navigated to and for the occurrence a profile constraint was anchored to.
+- **R2, the resource root.** The item is the resource the engine was handed, and its `resourceType`
+  names a resource type those tables describe.
+- **R3, kind.** A model primitive is never a complex FHIR type or a resource, and a complex node is
+  never a FHIR primitive or a System primitive type. That answers a non-match on its own.
+
+An established type matches the tested type when they are the same, or when the established type is
+one of R4's four specializations of `Quantity` (`Age`, `Count`, `Distance`, `Duration`) and the
+tested type is `Quantity`. **Still refused**: an element not reached through a known choice element
+and not the root (`Observation.issued is instant`, `Patient.gender.ofType(code)`,
+`Patient.name.ofType(HumanName)`); a choice this package's tables do not model (`component.value`,
+`Extension.value`); a list-wrapped choice value; a property whose type-name suffix contradicts the
+node's own shape (a primitive under `valueQuantity`); a type name that resolves in neither the FHIR
+nor the System model (`string1`, `SimpleQuantity`, which R4 says "is not a type"); two different
+FHIR primitives (R4 specializes some, `code` from `string`, and the corpus answers such a pair
+differently through `is` and through `ofType`); an abstract type (`Resource`); a FHIR type over a
+value the engine computed; and a focus found nowhere in the resource. The System-primitive tests keep
+exactly the answers they had over a primitive and a computed value, and their function forms
+(`is()` / `as()`, refused outright before) stay refused there: the value-based reading the operator
+keeps answers `1 is Decimal` with `true`, and the corpus grades `1.is(Decimal)` `false`.
+A type name may be written qualified in every form (`ofType(FHIR.Quantity)`, `is(FHIR.Patient)`,
+`$this is FHIR.Quantity`), and is answered exactly as the unqualified name is, with one exception
+kept for the same reason: `ofType(System.String)` over a primitive or a computed value, which
+`ofType` refused before while it answered `ofType(String)` off the value, stays refused, because the
+corpus reads a FHIR primitive as not being of a System type through the function forms
+(`Patient.active.is(System.Boolean).not()` is `true` there). Qualified there means a chain of two
+or more names; a delimited identifier is one name whatever its text holds, so
+``ofType(`System.Boolean`)`` over a primitive is still read off the value, as it always was.
+
+**`matches(regex)`** is answered over a single string input and a pattern in a portable subset:
+literal characters, `.`, `^` and `$` (the start and end of the input), a character class of literal
+characters and ranges, a group, alternation, and greedy `*`, `+`, `?`, `{n}`, `{n,}` and `{n,m}` (at
+most 1000), compiled case-sensitive, single line and Unicode, and not anchored. FHIRPath names no
+dialect, so everything whose meaning depends on one is refused: `\d`, `\w`, `\s`, `\b`,
+back-references, lookaround, named and non-capturing groups, inline flags, lazy and possessive
+quantifiers, POSIX classes and class set operations. So is a quantified group containing a quantifier
+or an alternation, which could backtrack exponentially. A pattern inside the subset can still
+backtrack polynomially, a run of variable-length repetitions (`^a*a*a*a*b`) taking time that grows
+with the value's length to a power rising with each one; fixed counts, as US Core's are, do not.
+More than one input item, a non-string input
+and a pattern argument that is not one string are refused too; an empty input or pattern is `{}`.
+"Empty" is the empty collection: `''` is a String, so `matches('')` is a pattern that matches every
+value, as it does in every dialect. The model carries no datatype name, so "a string" is any
+string-valued primitive, the same reading the System test `is String` has always made: a `code`, a
+`uri`, and a `date` or `instant` too, matched on its lexical form.
+`$` is the end of the input, so `1234567893` followed by a line feed does not match
+`^[0-9]{10}$`: the reading of every dialect that matches the whole input, and the one that reports
+rather than passes such a value.
+
+**What it decides for US Core.** `pnpm uscore:constraints` runs every constraint the US Core 6.1.0
+and 9.0.0 resource profiles carry through the subset and prints each one evaluated or declined with
+the construct that declined it: **24 of 29** (6.1.0) and **29 of 34** (9.0.0) are evaluated, where
+the engine before this widening evaluated 16 and 19 of the same rows. Still declined: `us-core-1`
+(`toString()`), `us-core-17` (`substring()`) and `provenance-1` (`resolve()`).
+`test/uscore-constraints.test.ts` holds the committed classification and decides the UCUM rule
+through `validateResource`. Two limits that sit in the profile layer and not here: a constraint on a
+**slice** (`Organization.identifier:NPI`, which is where `us-core-16` to `us-core-19` and
+`us-core-27` sit) is evaluated by the profile layer neither as a finding nor as unchecked, so those
+patterns are decided only through `evaluateInvariant` today; and a constraint anchored on a
+**primitive** occurrence (`us-core-1` on `effectiveDateTime`) is likewise not evaluated there. And
+US Core 6.1.0's `us-core-3`, anchored on `Observation.value[x]`, **checks nothing about UCUM as
+written**: from the anchored Quantity, `value` selects its decimal, which is never a Quantity, so
+the constraint holds for every unit system. That is the published expression evaluated faithfully;
+9.0.0's rewrite (`ofType(Quantity).system...`) is the one that checks the system. 6.1.0's
+`us-core-4` on the same element is the same case: from the anchored CodeableConcept, `value`
+selects nothing, so it holds for every coding system, where 9.0.0's rewrite checks for SNOMED CT.
+
+### What moved in the shared corpus
+
+Twenty cases moved from `unsupported` to `evaluated`, and none to `wrong`, so the counts block
+above reads `210 / 690 / 0 / 35`, measured against the engine before the widening
+(`190 / 710 / 0 / 35`) on the same vendored corpus:
+
+- R1 over `observation-example.xml`'s `valueQuantity`: `testPolymorphismIsA1`
+  (`Observation.value.is(Quantity)`), `testPolymorphismIsA2` (`Observation.value is Quantity`),
+  `testPolymorphismIsB` (`Observation.value.is(Period).not()`), `testPolymorphismAsA`
+  (`Observation.value.as(Quantity).unit`), `testPolymorphismAsAFunction`
+  (`(Observation.value as Quantity).unit`) and `testPolymorphismAsBFunction`
+  (`Observation.value.as(Period).start`);
+- R2: `testType17` (`Patient.is(Patient)`), and the same test with the name written qualified,
+  `testType18` (`Patient.is(FHIR.Patient)`) and `testType19` (``Patient.is(FHIR.`Patient`)``);
+- `matches()`: the eleven cases of the `testMatches` group (`testMatchesCaseSensitive1` and `2`,
+  `testMatchesEmpty`, `2` and `3`, `testMatchesSingleLineMode1`, and `testMatchesWithinUrl1`, `2`,
+  `3`, `1a` and `4`). `matchesFull()` is not in the subset, so its five cases stay unsupported.
+
+### The findings it moves
+
+Measured the same way as every table above, at `collectInvariantIssues` / `validateResource` over a
+caller-supplied profile carrying one root constraint at `error`, once against the engine before the
+widening and once against this change, the two outputs diffed; `test/profile-invariant-withdrawn-findings.test.ts`
+pins every "this change" cell (`TYPE_TEST_MOVEMENTS`). **Every row moves from `UNCHECKED` to a
+determination, in both directions, and none moves the other way**: no `INVARIANT_VIOLATED`, error or
+warning the engine reported before is withdrawn, re-severitied or relocated, because every path this
+widening answers is one that raised `UnsupportedFhirPathError` before it.
+
+| # | rule | constraint expression | over | before | this change |
+|---|---|---|---|---|---|
+| T1 | R3 | `gender is Quantity` | `gender: "male"` | `UNCHECKED` | `VIOLATED` |
+| T2 | R3 | `gender.ofType(Quantity).exists()` | `gender: "male"` | `UNCHECKED` | `VIOLATED` |
+| T3 | R3 | `gender.ofType(Quantity).empty()` | `gender: "male"` | `UNCHECKED` | `(none)` |
+| T4 | R3 | `name is String` | a Patient with one `name` | `UNCHECKED` | `VIOLATED` |
+| T5 | R3 | `name.ofType(String).empty()` | a Patient with one `name` | `UNCHECKED` | `(none)` |
+| T6 | R2 | `$this is Patient` | a Patient | `UNCHECKED` | `(none)` |
+| T7 | R2 | `$this is Observation` | a Patient | `UNCHECKED` | `VIOLATED` |
+| T8 | R1 | `deceased is boolean` | `deceasedBoolean: false` | `UNCHECKED` | `(none)` |
+| T9 | R1 | `value is Quantity` | an Observation with a `valueQuantity` | `UNCHECKED` | `(none)` |
+| T10 | R1 | `value is CodeableConcept` | the same Observation | `UNCHECKED` | `VIOLATED` |
+| T11 | `is()` / `as()` | `gender.is(Quantity)` | `gender: "male"` | `UNCHECKED` | `VIOLATED` |
+| T12 | `is()` / `as()` | `deceased.is(boolean)` | a Patient with no `deceased[x]` | `UNCHECKED` | `VIOLATED` |
+| T13 | `is()` / `as()` | `value.as(Quantity).exists()` | an Observation with a `valueQuantity` | `UNCHECKED` | `(none)` |
+| T14 | `matches()` | `identifier.value.matches('^SYN-[0-9]{4}$')` | an identifier `SYN-0001` | `UNCHECKED` | `(none)` |
+| T15 | `matches()` | `identifier.value.matches('^SYN-[0-9]{4}$')` | an identifier `SYN-01` | `UNCHECKED` | `VIOLATED` |
+| T16 | `matches()` | `gender.matches('^male$')` | `gender: "male"` | `UNCHECKED` | `(none)` |
+| T17 | `matches()` | `text.div.matches('.*').exists()` | an Observation with no `text` | `UNCHECKED` | `VIOLATED` |
+| T18 | R2 | `$this.is(FHIR.Patient)` | a Patient | `UNCHECKED` | `(none)` |
+| T19 | R1 | `value.ofType(FHIR.Quantity).exists()` | an Observation with a `valueQuantity` | `UNCHECKED` | `(none)` |
+| T20 | R1 | `value.as(FHIR.CodeableConcept).exists()` | the same Observation | `UNCHECKED` | `VIOLATED` |
+| T21 | R3 | `name.ofType(System.String).exists()` | a Patient with one `name` | `UNCHECKED` | `VIOLATED` |
+| T22 | R1 | ``value.ofType(`FHIR.Quantity`).exists()`` | an Observation with a `valueQuantity` | `UNCHECKED` | `(none)` |
+| T23 | R1 | `value is FHIR.Quantity` | the same Observation | `UNCHECKED` | `(none)` |
+
+Does not move, measured: `gender is code` and `name is HumanName` (`UNCHECKED` on both: not reached
+through a choice element), `deceased is dateTime` over `deceasedBoolean` (`UNCHECKED` on both: two
+different primitives), `$this is Resource` (`UNCHECKED` on both: abstract),
+`gender.ofType(Quantity).exists()` over a Patient with no `gender` (`VIOLATED` on both: `ofType`
+over an empty input was `{}` before and still is), `identifier.value.matches('\\d')` (`UNCHECKED`
+on both: outside the portable subset), `text.div.toString().exists()` (`UNCHECKED` on both),
+`gender.ofType(System.String).exists()` (`UNCHECKED` on both over `gender: "male"`, a qualified
+System name over a primitive; `VIOLATED` on both over a Patient with no `gender`, `ofType` over an
+empty input), ``gender.ofType(`System.Boolean`).exists()`` and
+``gender.ofType(`System.String`).exists()`` over `gender: "male"` (`VIOLATED` on both and no
+finding on both: a delimited identifier is one name, read off the value) and
+`$this.is(System.Patient)` (`UNCHECKED` on both: the name resolves in neither model). Every
+control the four remedies above table is unchanged too, `gender is FHIR.String` and
+`gender.ofType(FHIR.String).exists()` among them.
+
+**Rows T1, T2 and T11 restore a correct finding** that remedy 3 withdrew (rows 11 and 12 above),
+decided now from the node's kind rather than reached by comparing a System type against a FHIR type
+name. **T4, T7, T10, T15, T20 and T21 add a correct finding** where the engine used to say only that it had not
+evaluated the constraint. **T12 and T17 add a finding over an ABSENT element**: `{}.is(T)` and
+`{}.matches(...)` are `{}`, and a constraint whose result is empty is not satisfied, which is this
+engine's documented coercion (the reference validator's) applied to a construct it now evaluates.
+`test/invariants.test.ts` carried T17's constraint as its example of an unchecked invariant, and now
+carries `text.div.toString().exists()`, which is still outside the subset. **T3, T5, T6, T8, T9,
+T13, T14, T16, T18, T19, T22 and T23 remove an `INVARIANT_UNCHECKED` into a satisfied constraint**: what goes away is a
+notice that the constraint was not evaluated, replaced by an evaluation that holds, and `valid` does
+not move (it was already `true`).
 
 ## What vendoring the corpus cost the PHI gate
 

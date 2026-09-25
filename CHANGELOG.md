@@ -6,6 +6,43 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **FHIR-type tests and `matches()` in the bounded FHIRPath subset, so more of US Core's own
+  constraints are decided instead of reported `INVARIANT_UNCHECKED`.** Over the constraints the US
+  Core 6.1.0 and 9.0.0 resource profiles carry (a committed, digest-verified projection used as test
+  data only, never shipped), the engine now evaluates 24 of 29 (6.1.0) and 29 of 34 (9.0.0), up from
+  16 and 19; `pnpm uscore:constraints` prints each one evaluated or declined with the construct that
+  declined it. A FHIR-type test (`is` / `as` / `ofType`, operator and function forms) is answered
+  only where the instance establishes the type: a choice variant of the resource root that this
+  package's element tables declare (`valueQuantity` on an Observation is a `Quantity`), the resource
+  root by its `resourceType`, or the node's kind (a primitive is never a complex type, a complex node
+  never a primitive); `Age`, `Count`, `Distance` and `Duration` match `Quantity`; a type name may be
+  written qualified (`ofType(FHIR.Quantity)`, `is(FHIR.Patient)`) in every form. `matches()` answers
+  a single string against a pattern in a portable subset, `$` being the end of the input. So US Core
+  9.0.0's `us-core-3` reports a non-UCUM `valueQuantity.system` as `INVARIANT_VIOLATED` at `error`,
+  and its smoking-status `us-core-24` / `us-core-25` are decided from the `value[x]` present.
+  **Limits, stated with the capability**: a type test the instance does not establish is still
+  refused (an element that is not a known choice of the root, `component` and extension choices, two
+  different primitive types, an abstract or unknown type name, a qualified System name such as
+  `ofType(System.String)` over a primitive), as is a `matches()` pattern whose meaning depends on the
+  regex dialect (`\d`, `\w`, `\s`, `\b`, back-references, lookaround, inline flags, lazy quantifiers,
+  a quantified group that repeats); a pattern inside the subset can still backtrack polynomially, a
+  run of variable-length repetitions (`^a*a*a*a*b`) taking time that grows steeply with the value's
+  length, so a profile's pattern is best kept to fixed counts as US Core's are; `us-core-1`, `us-core-17` and
+  `provenance-1` stay unchecked (`toString()`, `substring()`, `resolve()`); the profile layer
+  evaluates neither slice-scoped constraints (the identifier patterns `us-core-16` to `us-core-19`
+  and `us-core-27` are decided only through `evaluateInvariant`) nor constraints anchored on a
+  primitive occurrence (`us-core-1` on `effectiveDateTime`); and US Core 6.1.0's `us-core-3`,
+  evaluated as published on `Observation.value[x]`, does not check UCUM at all, because `value` from
+  the anchored Quantity selects its decimal, and its `us-core-4` likewise does not check the SNOMED
+  system, because `value` from the anchored CodeableConcept selects nothing (9.0.0's versions of both
+  check what they say). Every finding this moves goes from
+  `INVARIANT_UNCHECKED` to a determination, both directions tabled in
+  `documentation/fhirpath-coverage.md` and pinned in
+  `test/profile-invariant-withdrawn-findings.test.ts`; the shared FHIRPath corpus reads
+  `210 / 690 / 0 / 35` (evaluated, unsupported, wrong, invalid), up from `190 / 710 / 0 / 35`.
+
 ### Changed
 
 - **A tag name that is not an XML 1.0 `Name`, and a character outside XML 1.0 `Char`, are now

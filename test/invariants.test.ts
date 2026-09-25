@@ -297,7 +297,9 @@ describe("validateResource: Phase 7 invariant layer wiring", () => {
           path: "Observation",
           constraint: [
             { key: "us-core-obs-1", severity: "error", expression: "code.exists()" },
-            { key: "info-1", severity: "error", expression: "text.div.matches('.*').exists()" },
+            // AC-13: `matches()` is inside the subset now (row T17 of the coverage record's
+            // FHIR-type test table); `toString()` is still outside it, whatever its input.
+            { key: "info-1", severity: "error", expression: "text.div.toString().exists()" },
           ],
         },
       ],
@@ -308,7 +310,7 @@ describe("validateResource: Phase 7 invariant layer wiring", () => {
     const obs = parse({ resourceType: "Observation", status: "final" }); // no code → us-core-obs-1 violated
     const result = validateResource(obs, { profiles: [profile] });
     expect(codes(result.issues)).toContain("INVARIANT_VIOLATED");
-    expect(codes(result.issues)).toContain("INVARIANT_UNCHECKED"); // matches() is outside the subset
+    expect(codes(result.issues)).toContain("INVARIANT_UNCHECKED"); // toString() is outside the subset
     expect(result.valid).toBe(false);
     // The UNCHECKED finding is information, it must never itself flip validity.
     const unchecked = req(result.issues.find((i) => i.code === "INVARIANT_UNCHECKED"));
