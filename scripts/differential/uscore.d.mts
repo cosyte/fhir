@@ -14,7 +14,6 @@ export interface IndexedProfile {
 
 export interface ProfileIndex {
   readonly byUrl: ReadonlyMap<string, IndexedProfile>;
-  readonly byId: ReadonlyMap<string, IndexedProfile>;
 }
 
 export interface UsCoreRow {
@@ -96,7 +95,6 @@ export declare const NOT_REACHED: {
 export declare function usCoreIg(version: string): string;
 export declare function isPackageCorpus(corpus: CorpusRecord | undefined): boolean;
 export declare function packageCorpora(declaration: Declaration): readonly CorpusRecord[];
-export declare function examplePath(version: string, entryName: string): string;
 export declare function packageEntryOf(document: DocumentRecord): string | null;
 export declare function packageLocation(
   corpus: CorpusRecord,

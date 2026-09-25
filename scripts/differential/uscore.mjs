@@ -127,11 +127,6 @@ export function packageCorpora(declaration) {
   return declaration.corpora.filter(isPackageCorpus);
 }
 
-/** The document path a packages corpus declares for one example entry of one version. */
-export function examplePath(version, entryName) {
-  return `${String(version)}/${String(entryName)}`;
-}
-
 /**
  * The package entry a packages-corpus document path names, or `null` when the path is not
  * `<version>/package/example/<file>.json` for the version the document declares.
@@ -250,7 +245,6 @@ function isRecord(value) {
  */
 export function profileIndex(entries) {
   const byUrl = new Map();
-  const byId = new Map();
   for (const [name, data] of entries) {
     if (!/^package\/[^/]+\.json$/.test(name) || name === "package/package.json") continue;
     const text = data.toString("utf8");
@@ -276,9 +270,8 @@ export function profileIndex(entries) {
       text,
     };
     byUrl.set(profile.url, profile);
-    byId.set(profile.id, profile);
   }
-  return { byUrl, byId };
+  return { byUrl };
 }
 
 /** Read, verify and index one version's package. */
