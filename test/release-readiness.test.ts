@@ -1466,19 +1466,54 @@ describe("the exports map publishes exactly the certified subpaths", () => {
 describe("this tree performs no publication and makes none inevitable", () => {
   /**
    * The version measured on this tree when the audit was written. It is asserted rather than
-   * derived so that a bump ANYWHERE reds here: the point is that this change did not move it.
-   * `test/sanity.test.ts` separately asserts VERSION against package.json; this is the different
-   * question of whether either one MOVED, and the two coexist.
+   * derived so that a bump the audit did not certify reds here. `test/sanity.test.ts` separately
+   * asserts VERSION against package.json; this is the different question of whether either one
+   * MOVED, and the two coexist.
    */
   const MEASURED_VERSION = "0.0.11";
 
-  it("leaves package.json at the version this work measured", () => {
-    expect(PACKAGE_JSON.version).toBe(MEASURED_VERSION);
+  /**
+   * The one move the audit sanctions: the release it certified, read from the committed surface
+   * inventory rather than restated, and patches on that release's line. Changesets' version commit
+   * moves `package.json` and the `VERSION` export together, so the release commit reads the
+   * certified version and must pass here. A patch cannot change a public observable under the
+   * classification rule above, and the surface tests hold the certified surface exactly in every
+   * state, so a patch on the certified line keeps the certification. A new minor (or any other
+   * version) is a release the audit never certified, and it reds until the surface is certified
+   * for it.
+   */
+  function isCertifiedMove(version: string): boolean {
+    const certified = /^(\d+)\.(\d+)\.(\d+)$/.exec(INVENTORY.certifiedFor);
+    const candidate = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+    if (certified === null || candidate === null) return false;
+    return (
+      candidate[1] === certified[1] &&
+      candidate[2] === certified[2] &&
+      Number(candidate[3]) >= Number(certified[3])
+    );
+  }
+
+  const accountedFor = (version: string): boolean =>
+    version === MEASURED_VERSION || isCertifiedMove(version);
+
+  it("leaves package.json at the version this work measured, or on the release line it certified", () => {
+    expect(
+      accountedFor(PACKAGE_JSON.version),
+      `package.json reads ${PACKAGE_JSON.version}, which is neither the measured ${MEASURED_VERSION} nor on the ${INVENTORY.certifiedFor} line the audit certified`,
+    ).toBe(true);
   });
 
   it("leaves the VERSION export agreeing with it", () => {
     expect(VERSION).toBe(PACKAGE_JSON.version);
-    expect(VERSION).toBe(MEASURED_VERSION);
+    expect(accountedFor(VERSION)).toBe(true);
+  });
+
+  it("has teeth: a version the audit neither measured nor certified is refused", () => {
+    expect(accountedFor(MEASURED_VERSION)).toBe(true);
+    expect(accountedFor(INVENTORY.certifiedFor)).toBe(true);
+    for (const uncertified of ["0.0.12", "0.0.10", "0.2.0", "1.0.0", "0.1.0-next.0", "0.1"]) {
+      expect(accountedFor(uncertified), uncertified).toBe(false);
+    }
   });
 
   it("leaves every classified changeset still pending in .changeset/", () => {

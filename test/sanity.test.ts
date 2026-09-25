@@ -25,7 +25,10 @@ describe("@cosyte/fhir scaffold", () => {
     expect(VERSION).toBe(pkg.version);
   });
 
-  it("starts on the v0.0.x pre-alpha ladder", () => {
-    expect(VERSION).toMatch(/^0\.0\.\d+$/);
+  it("stays on the 0.x line, where a breaking change bumps the minor version", () => {
+    // The operator moved every package to 0.1.x, so the ladder this pins is the 0.x one: a plain
+    // `0.minor.patch`, never a 1.0, a major or a prerelease. The classification rule in
+    // `test/release-readiness.test.ts` is what keeps a break off the patch position.
+    expect(VERSION).toMatch(/^0\.\d+\.\d+$/);
   });
 });
