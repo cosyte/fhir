@@ -163,7 +163,8 @@ const ADDED_FINDINGS: readonly string[] = [
 ];
 
 /** `CODE/severity at location for key`, the shape an invariant finding string takes. */
-const INVARIANT_FINDING = /^(INVARIANT_VIOLATED|INVARIANT_UNCHECKED)\/(\w+) at .+ for ([a-z]+-\d+)$/;
+const INVARIANT_FINDING =
+  /^(INVARIANT_VIOLATED|INVARIANT_UNCHECKED)\/(\w+) at .+ for ([a-z]+-\d+)$/;
 
 /**
  * Whether one added finding is one this change may add: an invariant code, one of the 19 keys, at
@@ -265,14 +266,19 @@ describe("AC-13: base versus head, the read differential over the JSON corpus", 
     for (const key of DECIDED_KEYS) {
       it(`AC-13: the corpus reaches a ${key} violation`, () => {
         expect(
-          added.some((line) => line.includes("INVARIANT_VIOLATED/error ") && line.endsWith(` for ${key}`)),
+          added.some(
+            (line) => line.includes("INVARIANT_VIOLATED/error ") && line.endsWith(` for ${key}`),
+          ),
         ).toBe(true);
       });
     }
 
     it("AC-13: the corpus reaches dom-3 unchecked over a contained resource", () => {
       expect(
-        added.some((line) => line.includes("INVARIANT_UNCHECKED/information ") && line.endsWith(" for dom-3")),
+        added.some(
+          (line) =>
+            line.includes("INVARIANT_UNCHECKED/information ") && line.endsWith(" for dom-3"),
+        ),
       ).toBe(true);
     });
 

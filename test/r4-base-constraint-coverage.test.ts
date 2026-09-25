@@ -150,7 +150,9 @@ const PROBES: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
     resourceType: "Condition",
     subject: PATIENT_REF,
     clinicalStatus: {
-      coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" }],
+      coding: [
+        { system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" },
+      ],
     },
     abatementDateTime: "2020-01-01",
   },
@@ -158,7 +160,9 @@ const PROBES: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
     resourceType: "Condition",
     subject: PATIENT_REF,
     clinicalStatus: {
-      coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" }],
+      coding: [
+        { system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" },
+      ],
     },
     verificationStatus: {
       coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-ver-status", code: EIE }],

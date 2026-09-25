@@ -321,7 +321,8 @@ export function collectBaseInvariantFindings(
   for (const { row, ast } of COMPILED) {
     const { anchor } = row;
     if (anchor.kind === "root") {
-      const outcome = row.key === "dom-3" ? decideDom3(resource) : outcomeOf(ast, resource, resource);
+      const outcome =
+        row.key === "dom-3" ? decideDom3(resource) : outcomeOf(ast, resource, resource);
       report(outcome, row.key, resource, root);
     } else if (anchor.kind === "element" && anchor.type === rt) {
       const value = getProperty(resource, anchor.element);

@@ -26,9 +26,11 @@
  * coerces exactly as `false` does and so leaves every finding where it was.
  * `where`/`select`/`all`
  * evaluate their criteria *lazily per item*, so an unsupported sub-term inside a filter over an empty
- * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires,
- * exactly the common case that lets base constraints like `dom-3` pass without implementing their full
- * machinery.
+ * collection (e.g. `contained.where(descendants()…)` on a resource with no `contained`) never fires.
+ * R4's own `dom-3` still does not parse here as written (it calls `as()` in function form and ends
+ * in `trace()`), so the base-constraint layer ({@link ../validate/base-invariants.js}) decides it by
+ * that same reading, an empty `contained` selection making the whole filter empty, and reports it
+ * unchecked whenever something is contained.
  *
  * A constraint is **satisfied** iff {@link convertToBoolean} of the result is `true`, matching the
  * reference validator's coercion (empty → false, a single non-boolean item → true), so an unmet or

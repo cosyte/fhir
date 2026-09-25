@@ -138,7 +138,9 @@ const DOMAIN_VIOLATIONS: Readonly<Record<"dom-2" | "dom-4" | "dom-5", Doc>> = {
     ],
   },
   "dom-4": {
-    contained: [{ resourceType: "Practitioner", id: "pr1", meta: { lastUpdated: "2020-01-01T00:00:00Z" } }],
+    contained: [
+      { resourceType: "Practitioner", id: "pr1", meta: { lastUpdated: "2020-01-01T00:00:00Z" } },
+    ],
   },
   "dom-5": {
     contained: [
@@ -166,18 +168,25 @@ const TYPE_KEY_VIOLATIONS: Readonly<Record<string, Doc>> = {
     },
   },
   "con-1": { ...MINIMAL.Condition, stage: [{ type: { text: "synthetic" } }] },
-  "con-2": { ...MINIMAL.Condition, evidence: [{ extension: [{ url: "http://example.org/e", valueString: "x" }] }] },
+  "con-2": {
+    ...MINIMAL.Condition,
+    evidence: [{ extension: [{ url: "http://example.org/e", valueString: "x" }] }],
+  },
   "con-4": {
     ...MINIMAL.Condition,
     clinicalStatus: {
-      coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" }],
+      coding: [
+        { system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" },
+      ],
     },
     abatementDateTime: "2020-01-01",
   },
   "con-5": {
     ...MINIMAL.Condition,
     clinicalStatus: {
-      coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" }],
+      coding: [
+        { system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" },
+      ],
     },
     verificationStatus: {
       coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-ver-status", code: EIE }],
@@ -274,7 +283,10 @@ describe("AC-2 / AC-7: dom-3, outside the subset with contained content, decided
     expect(carrying(validate({ resourceType: "Patient" }), "dom-3")).toEqual([]);
     expect(carrying(validate({ resourceType: "Patient", contained: [] }), "dom-3")).toEqual([]);
     expect(
-      carrying(validate({ resourceType: "Observation", status: "final", code: { text: "x" } }), "dom-3"),
+      carrying(
+        validate({ resourceType: "Observation", status: "final", code: { text: "x" } }),
+        "dom-3",
+      ),
     ).toEqual([]);
   });
 });
@@ -421,7 +433,11 @@ describe("AC-6: ele-1 and ext-1 at every depth outside contained", () => {
     {
       name: "ele-1 at a primitive's _-sibling extension",
       key: "ele-1",
-      doc: { resourceType: "Patient", birthDate: "1970-01-01", _birthDate: { extension: [{ id: "x1" }] } },
+      doc: {
+        resourceType: "Patient",
+        birthDate: "1970-01-01",
+        _birthDate: { extension: [{ id: "x1" }] },
+      },
       at: "Patient.birthDate.extension[0]",
     },
     {
@@ -463,7 +479,11 @@ describe("AC-6: ele-1 and ext-1 at every depth outside contained", () => {
           {
             telecom: [{ system: "url", value: "http://example.org/contact" }],
             extension: [
-              { url: "http://example.org/e", valueString: "x", extension: [{ url: "p", valueString: "y" }] },
+              {
+                url: "http://example.org/e",
+                valueString: "x",
+                extension: [{ url: "p", valueString: "y" }],
+              },
             ],
           },
         ],
@@ -613,7 +633,9 @@ const CONFORMANT: Readonly<Record<(typeof MODELED_TYPES)[number], Doc>> = {
     id: "c1",
     ...COMMON,
     clinicalStatus: {
-      coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" }],
+      coding: [
+        { system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" },
+      ],
     },
     verificationStatus: {
       coding: [
@@ -818,7 +840,11 @@ describe("AC-10: a profile carrying a base constraint does not double its findin
 
   it("AC-10: a lone occurrence written without an array is reported once too", () => {
     const result = validate(
-      { resourceType: "Patient", contact: { gender: "other" }, extension: { url: "http://example.org/e" } },
+      {
+        resourceType: "Patient",
+        contact: { gender: "other" },
+        extension: { url: "http://example.org/e" },
+      },
       { profiles: [baseConstraintProfile()] },
     );
     expect(carrying(result, "pat-1")).toEqual([["INVARIANT_VIOLATED", "error", "Patient.contact"]]);
@@ -832,12 +858,15 @@ describe("AC-10: a profile carrying a base constraint does not double its findin
       url: "http://example.org/StructureDefinition/patient-local",
       type: "Patient",
       snapshot: [
-        { path: "Patient", constraint: [{ key: "local-1", severity: "error", expression: "active.exists()" }] },
+        {
+          path: "Patient",
+          constraint: [{ key: "local-1", severity: "error", expression: "active.exists()" }],
+        },
       ],
     });
-    expect(carrying(validate({ resourceType: "Patient" }, { profiles: [profile] }), "local-1")).toEqual([
-      ["INVARIANT_VIOLATED", "error", "Patient"],
-    ]);
+    expect(
+      carrying(validate({ resourceType: "Patient" }, { profiles: [profile] }), "local-1"),
+    ).toEqual([["INVARIANT_VIOLATED", "error", "Patient"]]);
   });
 });
 
@@ -981,7 +1010,17 @@ describe("AC-14: no finding echoes a value from a violating instance", () => {
           .map((i) => i.constraint),
       ),
     );
-    for (const key of ["pat-1", "obs-3", "con-1", "con-2", "imm-1", "dom-2", "dom-4", "dom-5", "ext-1"]) {
+    for (const key of [
+      "pat-1",
+      "obs-3",
+      "con-1",
+      "con-2",
+      "imm-1",
+      "dom-2",
+      "dom-4",
+      "dom-5",
+      "ext-1",
+    ]) {
       expect(keys.has(key), `${key} is not violated by any sweep document`).toBe(true);
     }
   });
@@ -1007,7 +1046,11 @@ describe("AC-16: an anchor the evaluation cannot read as an element never valida
     element: string;
     conformant: Doc;
   }[] = [
-    { type: "Patient", element: "contact", conformant: { telecom: [{ system: "url", value: "http://example.org/c" }] } },
+    {
+      type: "Patient",
+      element: "contact",
+      conformant: { telecom: [{ system: "url", value: "http://example.org/c" }] },
+    },
     { type: "Observation", element: "referenceRange", conformant: { text: "synthetic range" } },
     { type: "Condition", element: "stage", conformant: { summary: { text: "synthetic" } } },
     { type: "Condition", element: "evidence", conformant: { code: [{ text: "synthetic" }] } },

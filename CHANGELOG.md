@@ -8,6 +8,31 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **The R4 base constraints of the eight modeled types are evaluated with no profile supplied**
+  (`fhir#INVARIANT-BASE-1`, S0374). The FHIRPath invariant layer ran only inside
+  `options.profiles`, and the always-on safety layer hand-evaluates seven keys (`ait-1`, `ait-2`,
+  `con-3`, `con-4`, `con-5`, `obs-6`, `obs-7`), so a violator of `pat-1`, `obs-3`, `con-1`, `con-2`,
+  `imm-1`, `dom-2` to `dom-5`, `ele-1` or `ext-1` validated `valid: true` although R4 calls an
+  error-severity violation non-conformant. A new base-constraint layer transcribes the eleven other
+  keys R4 4.0.1 declares on `AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`,
+  `MedicationRequest`, `MedicationStatement`, `Observation` and `Patient` and on their
+  `DomainResource`, `Element` and `Extension` base, expressions verbatim, and evaluates them through
+  the bounded FHIRPath engine: a violation is `INVARIANT_VIOLATED` at `error` at the violating
+  occurrence, an expression the engine cannot evaluate is `INVARIANT_UNCHECKED`. `ele-1` and `ext-1`
+  run at every element and extension outside `contained`, a primitive's `_`-sibling extensions and
+  `modifierExtension` included. `dom-3` is decided by its own semantics when nothing is contained
+  and reported unchecked when something is; `dom-6` is not evaluated without a profile; a contained
+  resource is checked only through `dom-2` to `dom-5`. A profile whose snapshot repeats a base
+  constraint is reported once per occurrence, compared by node rather than by location string, and
+  `collectInvariantIssues` called directly is unchanged. No validation code and no codec code is
+  added. FHIRPath `children()` over a primitive now includes the primitive's `id`, which `ele-1`
+  needs to hold on a value-absent primitive carrying an `id` and an extension; the shared FHIRPath
+  suite counts do not move. The projection `test/__data__/r4-base-constraints.json` (11
+  StructureDefinitions, URL and sha256 each) is graded by a coverage test against the 19 keys
+  written out independently, `dom-6` the one named exclusion. The JSON base-versus-head differential
+  is re-based at `8330359`, its allowances replaced by this change's and every added finding written
+  out: no finding withdrawn, relocated or re-severitied, `valid` moved only true to false, and every
+  readout channel, `safeToSummarize` included, identical.
 - **`use` on Identifier, HumanName, Address and ContactPoint is surfaced on the safety readout**
   (`fhir#SAFETY-MODIFIER-4`, S0369). R4 4.0.1 flags `use` Is Modifier on all four datatypes, so that
   an old or temporary entry is not mistaken for a current one, and binds each to its own value set at
