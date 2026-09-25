@@ -21,9 +21,15 @@ semantics, and validate it against US Core, without reading the FHIR spec.
   deliberately NARROWED tarball and is `latest`, tagged, with provenance. `0.0.11` restored the
   README, the changelog and the sourcemaps, and on 2026-08-28 it drew the identical bare `E403` on
   `PUT https://registry.npmjs.org/@cosyte%2ffhir`, provenance signed into rekor first
-  (logIndex `2626322912`) exactly as every refusal before it. Still pre-alpha.
-  **Read the version from `package.json`, never infer it from npm**: it runs ahead again, at `0.0.11`
-  unpublished with no tag.
+  (logIndex `2626322912`) exactly as every refusal before it.
+  **Read the version from `package.json`, never infer it from npm**: it runs ahead again, at `0.1.0`
+  unpublished with no tag (`0.0.11` never published either).
+  - **`0.1.0` WAS REFUSED TOO (2026-09-25), BY THE STAGED PUBLISH, AND THE NARROWED SHAPE IS BACK AS
+    THE CONTROL.** The full tarball drew `E403` on
+    `POST https://registry.npmjs.org/-/stage/package/@cosyte%2ffhir`, provenance in rekor first. The
+    next publish ships `files` narrowed to the four runtime artifacts plus `LICENSE` and a slim README
+    free of the XML-security vocabulary, NOT a stub. Detail and what it does and does not separate:
+    [`#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
   - **THE CONTENTS ARE NOW THE LEADING HYPOTHESIS, WHICH IS A REVERSAL, AND IT IS STILL NOT PROVEN.**
     The one publish that succeeded is the one that stripped the tarball; the next one restored it and
     was refused. **The confound is that `0.0.10` CREATED the package and `0.0.11` ADDED A VERSION to

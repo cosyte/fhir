@@ -545,6 +545,31 @@ umbrella's own always-read `CLAUDE.md` and the `work-on` skill state both of the
 
 ## Publish state (`FHIR-NPM-NAME`)
 
+- **`0.1.0` WAS REFUSED ON 2026-09-25, AND THE NARROWED SHAPE IS RESTORED FOR THE NEXT ATTEMPT AS THE
+  CONTROL THE ENTRY BELOW CALLS FOR.** The shared Release run
+  [36193551694](https://github.com/cosyte/fhir/actions/runs/36193551694) staged `@cosyte/fhir@0.1.0`
+  with `npm stage publish` (npm 11.19.0) and drew `E403` on
+  `POST https://registry.npmjs.org/-/stage/package/@cosyte%2ffhir`, the provenance statement reaching
+  rekor first (logIndex `2962104147`), exactly as before. Nothing was published and `0.1.0` is
+  unused. That tarball was the full one: 10 files, 1.2 MB packed, 4.6 MB unpacked, with the README
+  at 99.6 KB, the changelog at 316.9 KB and both sourcemaps.
+  - **The shape now on `main`.** `files` names `dist/index.mjs`, `dist/index.cjs`, `dist/index.d.ts`,
+    `dist/index.d.cts` and `LICENSE`, so the maps and `CHANGELOG.md` stay out: 7 files, 416.4 KB
+    packed, 1.5 MB unpacked, the same file list `0.0.10` shipped. The README is NOT a stub this time:
+    it is a slim page (about 10 KB) with the install block and the executed quickstart, and it
+    carries none of `XXE`, `billion laughs`, `ENTITY`, `DOCTYPE`, `exploit`, `payload`, `attack` or
+    `malicious`, the XML reader being described as accepting plain XML only. The full capability
+    readout moved to `documentation/capabilities.md`, which does not ship. Counted over the packed
+    bytes, the two bundles and the two declaration rollups carry the SAME whole-word counts as
+    `0.0.10`'s did (per rollup 7 `XXE`, 7 `billion-laughs`, 20 `entity`, 5 `DOCTYPE`; per bundle 3,
+    3, 7 and 5), because that vocabulary is in `src/` doc comments and one error message, and
+    stripping it is a regression that was not done.
+  - **What the next attempt separates, and what it does not.** `0.0.10` was a direct `PUT` that
+    created the package; `0.0.11` a direct `PUT` adding a version; `0.1.0` a staged `POST` adding a
+    version. If the narrowed staged publish is accepted, the contents are the variable for adding a
+    version through this path. If it is refused, the contents alone are not the cause, and the
+    operation (adding a version, or staging it) is the live question. Either way it is ONE
+    observation: the rule below about single publishes still binds.
 - **NOT RESOLVED. `0.0.10` PUBLISHED, `0.0.11` WAS REFUSED, AND THIS ENTRY PREVIOUSLY SAID
   "RESOLVED".** That is the first thing to read here, because the wrong version of this paragraph
   was written from a single successful publish and the very next publish refuted it inside 48
