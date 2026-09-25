@@ -103,7 +103,8 @@ describe("a doNotPerform value outside the boolean lexical space is reported", (
           "element, a repeated property name, an array-wrapped single-valued element, an array " +
           "inside an array, dropped XML element text, a boolean value this library cannot read, " +
           "a code that spells a negation bar its case or its surrounding whitespace, content " +
-          "where a code belongs, a declared absence whose reason this library cannot read, or a " +
+          "where a code belongs, a use on an identifier, name, address or contact point this " +
+          "library cannot read, a declared absence whose reason this library cannot read, or a " +
           "declared absence beside a value leaves an element this library must not flatten " +
           "(1 location(s)).",
       );

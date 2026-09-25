@@ -78,6 +78,38 @@ request.intents; // => [{ code: "proposal", location: "MedicationRequest.intent"
 request.safeToSummarize; // => true
 ```
 
+An identifier, a name, an address or a contact point can be marked `old` or `temp`, and FHIR treats
+that `use` as a modifier: an old address is not where the patient lives now. `datatypeUses` pairs each
+`use` with its location, on every `identifier` of the resource types the safety readout models and
+on a patient's `name`, `telecom` and `address`, including those of each `contact`. A readable code
+leaves the resource safe to summarize, `old` included, because which entry to show is your decision:
+nothing is filtered, reordered or marked current for you. A `use` that is not one of the codes FHIR
+defines for that datatype, such as `"OLD"` or `"maiden"` on an identifier, is located on
+`unreadableDatatypeUses` instead and the resource is not safe to summarize.
+
+```ts
+import { parseResource, readSafety } from "@cosyte/fhir";
+
+const person = readSafety(
+  parseResource('{"resourceType":"Patient","address":[{"use":"old","city":"Nowhere"}]}').resource,
+);
+
+person.datatypeUses; // => [{ code: "old", location: "Patient.address[0].use" }]
+person.safeToSummarize; // => true
+
+const unreadable = readSafety(
+  parseResource('{"resourceType":"Patient","identifier":[{"use":"OLD","value":"SYN-0001"}]}').resource,
+);
+
+unreadable.unreadableDatatypeUses; // => ["Patient.identifier[0].use"]
+unreadable.safeToSummarize; // => false
+```
+
+What this does not read: a practitioner's identifiers, names and addresses (a practitioner's
+identifier `use` is reported on `modifierElements` instead, whatever its value), a `use` carried in an
+extension value, a contained resource of a type the safety readout does not model, such as an
+organization, and an ended `period` on an entry whose `use` is current.
+
 When a summary must refuse rather than warn, `assertSafeToSummarize` is the executable form of the
 same rule: it throws for an unhandled modifier, a value the document left ambiguous, and the other
 shapes that make an affirmative summary unsafe.

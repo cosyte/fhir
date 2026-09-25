@@ -112,69 +112,72 @@ describe("AC-9: the AC-1 document reads the same from XML as from JSON", () => {
 });
 
 describe("AC-9: an unreadable use is located alike and refuses alike from XML", () => {
-  const cases: readonly { readonly name: string; readonly document: Spelled; readonly at: string }[] =
-    [
-      {
-        name: "an out-of-set code, mobile on an Address",
-        document: {
-          json: '{"resourceType":"Patient","address":[{"use":"home"},{"use":"mobile"}]}',
-          xml:
-            `<Patient ${NS}><address><use value="home"/></address>` +
-            `<address><use value="mobile"/></address></Patient>`,
-        },
-        at: "Patient.address[1].use",
+  const cases: readonly {
+    readonly name: string;
+    readonly document: Spelled;
+    readonly at: string;
+  }[] = [
+    {
+      name: "an out-of-set code, mobile on an Address",
+      document: {
+        json: '{"resourceType":"Patient","address":[{"use":"home"},{"use":"mobile"}]}',
+        xml:
+          `<Patient ${NS}><address><use value="home"/></address>` +
+          `<address><use value="mobile"/></address></Patient>`,
       },
-      {
-        name: "an out-of-set code, maiden on a groupIdentifier",
-        document: {
-          json: '{"resourceType":"MedicationRequest","intent":"order","groupIdentifier":{"use":"maiden"}}',
-          xml:
-            `<MedicationRequest ${NS}><intent value="order"/>` +
-            `<groupIdentifier><use value="maiden"/></groupIdentifier></MedicationRequest>`,
-        },
-        at: "MedicationRequest.groupIdentifier.use",
+      at: "Patient.address[1].use",
+    },
+    {
+      name: "an out-of-set code, maiden on a groupIdentifier",
+      document: {
+        json: '{"resourceType":"MedicationRequest","intent":"order","groupIdentifier":{"use":"maiden"}}',
+        xml:
+          `<MedicationRequest ${NS}><intent value="order"/>` +
+          `<groupIdentifier><use value="maiden"/></groupIdentifier></MedicationRequest>`,
       },
-      {
-        name: "a case variant, OLD on an Identifier",
-        document: {
-          json: '{"resourceType":"Patient","identifier":[{"use":"old"},{"use":"OLD"}]}',
-          xml:
-            `<Patient ${NS}><identifier><use value="old"/></identifier>` +
-            `<identifier><use value="OLD"/></identifier></Patient>`,
-        },
-        at: "Patient.identifier[1].use",
+      at: "MedicationRequest.groupIdentifier.use",
+    },
+    {
+      name: "a case variant, OLD on an Identifier",
+      document: {
+        json: '{"resourceType":"Patient","identifier":[{"use":"old"},{"use":"OLD"}]}',
+        xml:
+          `<Patient ${NS}><identifier><use value="old"/></identifier>` +
+          `<identifier><use value="OLD"/></identifier></Patient>`,
       },
-      {
-        name: "a case variant, Maiden on a contact's name",
-        document: {
-          json: '{"resourceType":"Patient","contact":[{"name":{"use":"maiden"}},{"name":{"use":"Maiden"}}]}',
-          xml:
-            `<Patient ${NS}><contact><name><use value="maiden"/></name></contact>` +
-            `<contact><name><use value="Maiden"/></name></contact></Patient>`,
-        },
-        at: "Patient.contact[1].name.use",
+      at: "Patient.identifier[1].use",
+    },
+    {
+      name: "a case variant, Maiden on a contact's name",
+      document: {
+        json: '{"resourceType":"Patient","contact":[{"name":{"use":"maiden"}},{"name":{"use":"Maiden"}}]}',
+        xml:
+          `<Patient ${NS}><contact><name><use value="maiden"/></name></contact>` +
+          `<contact><name><use value="Maiden"/></name></contact></Patient>`,
       },
-      {
-        name: "a use carrying only an extension, on a ContactPoint",
-        document: {
-          json: `{"resourceType":"Patient","telecom":[{"use":"work"},{"_use":${MASKED_JSON}}]}`,
-          xml:
-            `<Patient ${NS}><telecom><use value="work"/></telecom>` +
-            `<telecom><use>${MASKED}</use></telecom></Patient>`,
-        },
-        at: "Patient.telecom[1].use",
+      at: "Patient.contact[1].name.use",
+    },
+    {
+      name: "a use carrying only an extension, on a ContactPoint",
+      document: {
+        json: `{"resourceType":"Patient","telecom":[{"use":"work"},{"_use":${MASKED_JSON}}]}`,
+        xml:
+          `<Patient ${NS}><telecom><use value="work"/></telecom>` +
+          `<telecom><use>${MASKED}</use></telecom></Patient>`,
       },
-      {
-        name: "a use carrying only an extension, on a Reference's identifier",
-        document: {
-          json: `{"resourceType":"Observation","status":"final","subject":{"identifier":{"_use":${MASKED_JSON}}}}`,
-          xml:
-            `<Observation ${NS}><status value="final"/>` +
-            `<subject><identifier><use>${MASKED}</use></identifier></subject></Observation>`,
-        },
-        at: "Observation.subject.identifier.use",
+      at: "Patient.telecom[1].use",
+    },
+    {
+      name: "a use carrying only an extension, on a Reference's identifier",
+      document: {
+        json: `{"resourceType":"Observation","status":"final","subject":{"identifier":{"_use":${MASKED_JSON}}}}`,
+        xml:
+          `<Observation ${NS}><status value="final"/>` +
+          `<subject><identifier><use>${MASKED}</use></identifier></subject></Observation>`,
       },
-    ];
+      at: "Observation.subject.identifier.use",
+    },
+  ];
 
   for (const { name, document, at } of cases) {
     it(`AC-9: ${name}`, () => {

@@ -216,12 +216,13 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   reported for them either. Those same reads run at **every resource root**, so a retracted
   `Observation`, a `Procedure` recorded as not performed or an order marked "do not perform" inside a
   `Bundle` entry or `contained` reaches `negations` too. **The readout's location channels
-  (`unhandledModifierExtensions`, `modifierElements`, `intents`, `shadowedProperties`,
-  `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
-  `nearMissNegationCodes`, `unreadableNegationCodes`, `unreadableIntents`, `absenceMarkers`,
-  `unreadableAbsenceMarkers`, `conflictingAbsenceMarkers`) and
-  `safeToSummarize` are document-wide.** Every one of them but `absenceMarkers` and `intents`, which
-  disclose rather than refuse, sets `safeToSummarize` to `false` when it is not empty. The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
+  (`unhandledModifierExtensions`, `modifierElements`, `intents`, `datatypeUses`,
+  `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
+  `nearMissNegationCodes`, `unreadableNegationCodes`, `unreadableIntents`,
+  `unreadableDatatypeUses`, `absenceMarkers`, `unreadableAbsenceMarkers`,
+  `conflictingAbsenceMarkers`) and `safeToSummarize` are document-wide.** Every one of them but
+  `absenceMarkers`, `intents` and `datatypeUses`, which disclose rather than refuse, sets
+  `safeToSummarize` to `false` when it is not empty. The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
   and the rest) answer about the resource you handed in, because one value cannot say which resource
   it came from, so branch on `negations` whenever a resource may carry others.
   `no-known-allergy` is the exception and
@@ -234,7 +235,8 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `{ element, location }`: `comparator` wherever a node the walk reaches carries it, `implicitRules`
   likewise, `active`, `deceased` (R4's `deceased[x]`, located at the member as written, such as
   `Patient.deceasedDateTime`) and `link` (once, at `link`, however many entries) on a `Patient` root,
-  `isSubpotent` on an `Immunization` root, and `use` on a `Practitioner`'s `identifier` entries. Each
+  `isSubpotent` on an `Immunization` root, and `use` on a `Practitioner`'s `identifier` entries
+  (on the eight types below, `use` is surfaced as its code instead). Each
   sets `safeToSummarize` to `false` and makes `assertSafeToSummarize` throw, **on presence and at any
   value**, because `{"valueQuantity":{"value":0.01,"comparator":"<","unit":"mg"}}` summarized as a
   point value is `0.01 mg` reported for a result the sender wrote as `< 0.01 mg`, a deceased patient
@@ -264,6 +266,30 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   code: its location is on `unreadableIntents`, `safeToSummarize` is `false`, and
   `assertSafeToSummarize` throws. Nothing is case-folded, trimmed or mapped. An absent `intent`
   surfaces nothing and refuses nothing, since a missing mandatory element is the validator's verdict.
+- **`use` on an identifier, a name, an address or a contact point is surfaced as its code.** R4 flags
+  it a modifier on all four datatypes, so that an `old` or `temp` entry is not taken for a current
+  one. `datatypeUses` carries one `{ code, location }` per covered position: every `identifier` and
+  `groupIdentifier` at any depth (a Reference's `identifier` included) below a root of
+  `AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`, `MedicationRequest`,
+  `MedicationStatement`, `Observation` or `Patient`, and a `Patient`'s `name`, `telecom` and
+  `address`, on the patient and on each `contact`; the root may be the resource handed in,
+  `contained` or a `Bundle` entry, and a position belongs to its nearest enclosing root. Only a code
+  of the position's own R4 value set is surfaced, matched exactly (identifier `usual` `official`
+  `temp` `secondary` `old`; name `usual` `official` `temp` `nickname` `anonymous` `old` `maiden`;
+  address `home` `work` `temp` `old` `billing`; contact point `home` `work` `temp` `old` `mobile`).
+  **A readable `use` does not lower `safeToSummarize`, `old` and `temp` included:** `use` is written
+  on most records, so refusing on presence would refuse nearly every patient, and refusing on which
+  code was written would be interpreting the modifier. Nothing maps a code to "not current", and no
+  entry is filtered, reordered or picked as the current one; that is the caller's decision. Anything
+  else written at `use` (`"OLD"`, `" old"`, `""`, a code from another datatype's set such as
+  `"maiden"` on an identifier, a `null`, a number, the `_use` form with no value, an array wrapper,
+  the name written twice) surfaces no code: its location is on `unreadableDatatypeUses`,
+  `safeToSummarize` is `false`, and `assertSafeToSummarize` throws. A position with no `use`
+  surfaces nothing. **Limits:** a `Practitioner` is not read here (its `identifier.use` stays on
+  `modifierElements`, reported on presence); a `use` carried in an extension value
+  (`valueIdentifier`, `valueHumanName`, `valueAddress`, `valueContactPoint`) is not read; a nested
+  resource of a type outside the eight, such as a contained `Organization`, is not read; and an
+  ended `period` on an otherwise current entry is a separate element this does not read.
 - **A safety verdict is never asserted over a value the document left ambiguous.** Each negation read
   runs over every coding on a `CodeableConcept` and every value written for the element it reads
   (`resourceType`, `status`, `verificationStatus`, `code`, `doNotPerform`), **including through an
