@@ -337,6 +337,16 @@ export function declaredProfiles(text, version, index) {
           `contain; it is not validated with fewer profiles than it declares`,
       };
     }
+    // `validateResource` applies a supplied profile only to a resource of the profile's own type
+    // and passes over any other in silence, which would be validating with fewer profiles.
+    if (profile.type !== resource.resourceType) {
+      return {
+        ok: false,
+        reason:
+          `the document declares ${at}, a profile of another resource type, which would not be ` +
+          `applied to it; it is not validated with fewer profiles than it declares`,
+      };
+    }
     if (urls.includes(url)) continue;
     urls.push(url);
     profiles.push(profile.text);

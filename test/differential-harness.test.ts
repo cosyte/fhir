@@ -708,6 +708,8 @@ describe("AC-10: a document declaring no profile, or one its package lacks, has 
     none: observation(undefined, QUANTITY),
     missing: observation([LAB_9, `${US_CORE}us-core-not-in-this-package|9.0.0`], QUANTITY),
     otherVersion: observation([`${US_CORE}us-core-observation-lab|6.1.0`], QUANTITY),
+    // An Organization profile on an Observation: validateResource would pass over it in silence.
+    otherType: observation([LAB_9, `${US_CORE}us-core-organization|9.0.0`], QUANTITY),
     fine: observation([LAB_9], QUANTITY),
   };
 
@@ -717,11 +719,12 @@ describe("AC-10: a document declaring no profile, or one its package lacks, has 
         doc("9.0.0", "none.json", bodies.none),
         doc("9.0.0", "missing.json", bodies.missing),
         doc("9.0.0", "other-version.json", bodies.otherVersion),
+        doc("9.0.0", "other-type.json", bodies.otherType),
         doc("9.0.0", "fine.json", bodies.fine),
       ],
     });
     const { outcome, library } = compareWorld(world);
-    for (const file of ["none.json", "missing.json", "other-version.json"]) {
+    for (const file of ["none.json", "missing.json", "other-version.json", "other-type.json"]) {
       const record = outcome.records.find((r) => r.id === idOf("9.0.0", file));
       expect(record?.status, file).toBe(STATUS.NO_OWN_FINDINGS);
       expect(record?.compared, file).toBe(false);
@@ -735,7 +738,10 @@ describe("AC-10: a document declaring no profile, or one its package lacks, has 
     expect(library.calls.map((c) => c.text)).toEqual([bodies.fine]);
     expect(outcome.records.find((r) => r.id === idOf("9.0.0", "fine.json"))?.compared).toBe(true);
     expect(outcome.summary.compared).toBe(1);
-    expect(outcome.summary.unusable).toHaveLength(3);
+    expect(outcome.summary.unusable).toHaveLength(4);
+    expect(
+      outcome.records.find((r) => r.id === idOf("9.0.0", "other-type.json"))?.detail,
+    ).toContain("declares meta.profile[1], a profile of another resource type");
   });
 
   it("names why: no declared profile, a profile the package lacks, a version it is not", () => {
