@@ -29,6 +29,8 @@ export {
 export type { NegationKind, SafetyReadout } from "./status.js";
 export { MODIFIER_ELEMENT_ROOT_TYPES } from "./modifier-elements.js";
 export type {
+  DatatypeUseCode,
+  DatatypeUseReport,
   IntentReport,
   MedicationRequestIntent,
   ModifierElementName,

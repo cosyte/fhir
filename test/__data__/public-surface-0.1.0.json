@@ -8,7 +8,7 @@
   },
   "counts": {
     "values": 170,
-    "types": 104,
+    "types": 106,
     "exportSubpaths": 2
   },
   "values": [
@@ -200,6 +200,8 @@
     "CodeValidationResult",
     "Coded",
     "ContainedIndex",
+    "DatatypeUseCode",
+    "DatatypeUseReport",
     "Derivation",
     "Discriminator",
     "DiscriminatorType",

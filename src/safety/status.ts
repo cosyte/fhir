@@ -129,11 +129,15 @@ import {
   typesOf,
 } from "./codes.js";
 import {
+  collectDatatypeUses,
   collectIntent,
   collectModifierElements,
   dedupeModifierElements,
   modifierLocationRebaser,
   rebaseModifierElements,
+  resolveDatatypeUses,
+  type DatatypeUseReading,
+  type DatatypeUseReport,
   type IntentReport,
   type ModifierElementReport,
 } from "./modifier-elements.js";
@@ -252,12 +256,13 @@ const NEGATION_ORDER: readonly NegationKind[] = [
  * reasons given there.
  *
  * **Two groups of fields, and the difference is which question they answer.** The location channels
- * (`unhandledModifierExtensions`, `modifierElements`, `intents`, `shadowedProperties`,
- * `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
- * `nearMissNegationCodes`, `unreadableNegationCodes`, `unreadableIntents`, `absenceMarkers`,
- * `unreadableAbsenceMarkers`, `conflictingAbsenceMarkers`) and the
- * `safeToSummarize` derived from them (from all but `absenceMarkers` and `intents`, which disclose
- * rather than refuse) are **document-wide**: they carry FHIRPath locations, so a nested finding has an address to name, and
+ * (`unhandledModifierExtensions`, `modifierElements`, `intents`, `datatypeUses`,
+ * `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
+ * `nearMissNegationCodes`, `unreadableNegationCodes`, `unreadableIntents`,
+ * `unreadableDatatypeUses`, `absenceMarkers`, `unreadableAbsenceMarkers`,
+ * `conflictingAbsenceMarkers`) and the `safeToSummarize` derived from them (from all but
+ * `absenceMarkers`, `intents` and `datatypeUses`, which disclose rather than refuse) are
+ * **document-wide**: they carry FHIRPath locations, so a nested finding has an address to name, and
  * `assertSafeToSummarize` refuses over a `Bundle`'s entries. The **single-valued** fields
  * (`resourceType` / `status` / `clinicalStatus` / `verificationStatus` / `doNotPerform` / `retracted`
  * / `noKnownAllergy`) answer about **the resource handed in** and nothing nested inside it, because
@@ -398,6 +403,39 @@ export interface SafetyReadout {
    * No meaning is read from the code: nothing here says whether a request is in force.
    */
   readonly intents: readonly IntentReport[];
+  /**
+   * `use` on an Identifier, a HumanName, an Address or a ContactPoint, surfaced at **every covered
+   * position** the document carries: the code exactly as written, paired with the location of that
+   * `use` element, one pair per position, in walk order.
+   *
+   * The covered positions sit below a resource root of one of the eight types this library's safety
+   * layer models (`AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`,
+   * `MedicationRequest`, `MedicationStatement`, `Observation`, `Patient`), whether that root is the
+   * resource handed in, a `contained` one or a `Bundle.entry`: every member named `identifier` or
+   * `groupIdentifier` at any depth (a Reference's identifier included), and on a `Patient` its
+   * `name`, `telecom` and `address` and the same three on each `contact` entry. A position belongs to
+   * its nearest enclosing resource root, and a root of any other type reads nothing here.
+   *
+   * R4 flags `use` a modifier on all four datatypes, so that an `old` or `temp` entry is not taken
+   * for a current one. It is optional and written on most records, so it is surfaced rather than
+   * refused on presence, and a readable one **does not lower {@link safeToSummarize}**. Only a code
+   * of the value set of the position's OWN datatype is surfaced, matched exactly, so `temp` reads on
+   * all four and `maiden` on a HumanName only, and this field carries no text the library did not
+   * spell. A `use` that is present and not one of those codes is on {@link unreadableDatatypeUses}
+   * instead. A position with no `use` surfaces nothing.
+   *
+   * **Surfaced, never interpreted.** Nothing here maps `old` or `temp` to "not current", and nothing
+   * is filtered, reordered or picked as the current entry: which entry to show is the caller's
+   * decision. `Practitioner.identifier.use` is not here: it keeps its presence rule on
+   * {@link modifierElements}. **Declared limits:** a datatype carried as an extension value
+   * (`valueIdentifier`, `valueHumanName`, `valueAddress`, `valueContactPoint`) is not read, nor is a
+   * position inside a nested resource root whose type is not one of the eight (a contained
+   * `Organization`'s `identifier` or `telecom`); and an ended `period` on an entry is a separate
+   * element this does not read.
+   *
+   * Located by the same bound and the same root rule as {@link modifierElements}.
+   */
+  readonly datatypeUses: readonly DatatypeUseReport[];
   /**
    * FHIRPath locations where the document wrote a property name more than once, so the element has
    * several values and no rule says which one the sender meant (fail-closed). Empty on every
@@ -578,6 +616,24 @@ export interface SafetyReadout {
    */
   readonly unreadableIntents: readonly string[];
   /**
+   * FHIRPath locations of a `use` on an Identifier, a HumanName, an Address or a ContactPoint, at a
+   * covered position ({@link datatypeUses}), that this library could not read as a code of that
+   * position's own R4 value set: a string outside it (a case or surrounding-whitespace variant of a
+   * code, the empty string, or a code from a sibling set, such as `maiden` on an Identifier), a JSON
+   * `null`, a value of another JSON type, the `_use` form with no value, an array wrapper, or the
+   * name written twice.
+   *
+   * Each `use` is a modifier bound to its value set at required strength, so a value outside it says
+   * something this library cannot establish, and **nothing is case-folded, trimmed or mapped to a
+   * nearby code**: the position surfaces no code on {@link datatypeUses}, its location is here, and
+   * the resource is not {@link safeToSummarize}. Value-free: the text that failed is carried
+   * nowhere.
+   *
+   * Located by the same bound and the same root rule as {@link modifierElements}. Empty for every
+   * conformant document.
+   */
+  readonly unreadableDatatypeUses: readonly string[];
+  /**
    * Every element the document declares an absence for, with the reason the sender spelled and the
    * FHIRPath location of the element it sits on. This is the read that separates "we asked and
    * nobody knows" from "we never sent this": both leave the element value-absent, and before this
@@ -649,7 +705,8 @@ export interface SafetyReadout {
    * value this layer cannot read, a `code`-valued negation element carries a value that spells a
    * negation code bar its case or its surrounding whitespace, such an element holds content at a
    * position no `code` read can reach, a `MedicationRequest.intent` is not one of the eight R4
-   * codes, an element declares an absence in a reason this library
+   * codes, a `use` on an Identifier, a HumanName, an Address or a ContactPoint is not a code of its
+   * datatype's R4 value set, an element declares an absence in a reason this library
    * cannot read, or an element declares an absence and carries a value. Each is a case where a
    * summary would have to assert something this library cannot establish (for the negation pair,
    * that no negation was asserted; for the absence pair, which of two contradictory answers the
@@ -659,7 +716,9 @@ export interface SafetyReadout {
    * point of the channel rather than a hole in the rule: the declaration is read, carried and
    * addressable, so nothing about the document is unestablished. See
    * {@link SafetyReadout.absenceMarkers}. **Nor does a readable `intent`**, which is surfaced on
-   * {@link SafetyReadout.intents} for the caller to read.
+   * {@link SafetyReadout.intents} for the caller to read, **nor a readable `use`** on the four
+   * datatypes, which is surfaced on {@link SafetyReadout.datatypeUses}: `old` and `temp` included,
+   * because refusing on WHICH code was written would be interpreting the modifier.
    */
   readonly safeToSummarize: boolean;
 }
@@ -1241,6 +1300,15 @@ interface SafetyWalk {
   readonly intents: IntentReport[];
   /** `MedicationRequest.intent` locations the read could not take one of the eight codes from. */
   readonly unreadableIntent: string[];
+  /**
+   * Every covered position's `use` reading, before readings sharing a location are resolved. The
+   * two fields after it are that resolution, made once in {@link walkSafety}.
+   */
+  readonly useReadings: DatatypeUseReading[];
+  /** Surfaced `use` codes on the four datatypes, rooted like {@link SafetyWalk.modifierElements}. */
+  readonly datatypeUses: DatatypeUseReport[];
+  /** Covered `use` locations the read could not take a code of the position's value set from. */
+  readonly unreadableDatatypeUse: string[];
   readonly shadowed: string[];
   readonly arrayWrapped: string[];
   /** The subset of {@link SafetyWalk.arrayWrapped} FHIR XML has no repetition to spell back. */
@@ -1278,6 +1346,9 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     modifierElements: [],
     intents: [],
     unreadableIntent: [],
+    useReadings: [],
+    datatypeUses: [],
+    unreadableDatatypeUse: [],
     shadowed: [],
     arrayWrapped: [],
     unspellableInXml: [],
@@ -1287,6 +1358,9 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     unreadableCode: [],
   };
   walkComplex(resource, path, out, true);
+  // A location reached by more than one reading (a repeated property name, two withheld segments)
+  // is resolved once, here, into exactly one of the two `use` channels.
+  const uses = resolveDatatypeUses(out.useReadings);
   // One element at one location is one report, however many members a repeated property name or a
   // `_` sibling left there. Collapsed once, here, so every caller of the walk sees the same list.
   // The intent channels collapse by the same rule: a member a repeated name shadowed is walked at
@@ -1302,6 +1376,8 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
       return true;
     }),
     unreadableIntent: [...new Set(out.unreadableIntent)],
+    datatypeUses: uses.uses,
+    unreadableDatatypeUse: uses.unreadable,
   };
 }
 
@@ -1637,6 +1713,10 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
   // `MedicationRequest.intent`, gated off this node's own `resourceType` exactly as the reports
   // above are, so it is read at every MedicationRequest root the walk reaches and nowhere else.
   collectIntent(node, path, out.intents, out.unreadableIntent);
+  // `use` on the four datatypes, gated off this node's own `resourceType` the same way: at a root of
+  // one of the eight modeled types it reads that root's covered positions, down to (and not into)
+  // any nested resource root, which this walk reaches and reads in its own turn.
+  collectDatatypeUses(node, path, out.useReadings);
   for (const property of node.properties) visitProperty(property, path, out);
   const reported = new Set<string>();
   for (const property of node.duplicates ?? []) {
@@ -1772,6 +1852,11 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     location: rebase(read.location),
   }));
   const unreadableIntents = walk.unreadableIntent.map(rebase);
+  const datatypeUses = walk.datatypeUses.map((read) => ({
+    code: read.code,
+    location: rebase(read.location),
+  }));
+  const unreadableDatatypeUses = walk.unreadableDatatypeUse.map(rebase);
   const nested = nestedArrays(resource, prefix);
   const dropped = droppedText(resource, prefix);
   // One walk feeds all three absence channels, so a marker cannot be recognised by one of them and
@@ -1791,6 +1876,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     unhandledModifierExtensions: modifiers,
     modifierElements: modifierElementReports,
     intents,
+    datatypeUses,
     shadowedProperties: shadowed,
     arrayWrappedScalars: arrayWrapped,
     nestedArrays: nested,
@@ -1799,6 +1885,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     nearMissNegationCodes: nearMissCode,
     unreadableNegationCodes: unreadableCode,
     unreadableIntents,
+    unreadableDatatypeUses,
     absenceMarkers: absence.markers,
     unreadableAbsenceMarkers: absence.unreadable,
     conflictingAbsenceMarkers: absence.conflicting,
@@ -1813,6 +1900,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
       nearMissCode.length === 0 &&
       unreadableCode.length === 0 &&
       unreadableIntents.length === 0 &&
+      unreadableDatatypeUses.length === 0 &&
       absence.unreadable.length === 0 &&
       absence.conflicting.length === 0,
   };
@@ -1828,12 +1916,13 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
  * was dropped, a boolean-valued safety element carries a written value outside the datatype's
  * lexical space, a `code`-valued negation element carries a value that spells a negation code bar
  * its case or its surrounding whitespace, such an element holds content at a position no `code`
- * read can reach, a `MedicationRequest.intent` is not one of the eight R4 codes, an element
- * declares an absence in a reason this library cannot read, or an element
+ * read can reach, a `MedicationRequest.intent` is not one of the eight R4 codes, a `use` on an
+ * Identifier, a HumanName, an Address or a ContactPoint is not a code of its datatype's R4 value
+ * set, an element declares an absence in a reason this library cannot read, or an element
  * declares an absence and carries a value. Every way the safe move is to **refuse**, value-free,
  * carrying only the locations. A **readable, non-conflicting** absence marker is not on that list
  * and never refuses: it is a declaration the caller can now read, so summarizing over it asserts
- * nothing this library cannot establish.
+ * nothing this library cannot establish. Neither does a readable `use`, which is surfaced.
  *
  * @example
  * ```ts
@@ -1860,7 +1949,8 @@ export class FhirSafetyError extends Error {
         "a repeated property name, an array-wrapped single-valued element, an array inside an " +
         "array, dropped XML element text, a boolean value this library cannot read, a code that " +
         "spells a negation bar its case or its surrounding whitespace, content where a code " +
-        "belongs, a declared absence whose reason this library cannot read, or a declared absence " +
+        "belongs, a use on an identifier, name, address or contact point this library cannot " +
+        "read, a declared absence whose reason this library cannot read, or a declared absence " +
         "beside a value leaves an element this library must not flatten " +
         `(${String(locations.length)} location(s)).`,
     );
@@ -1876,9 +1966,10 @@ export class FhirSafetyError extends Error {
  * value outside the datatype's lexical space, or a `code`-valued negation element holding a value
  * that spells a negation code bar its case or its surrounding whitespace, or content at a position
  * no `code` read can reach, or a `MedicationRequest.intent` that is not one of the eight R4 codes,
- * or an element declaring an absence in a reason this library cannot read,
+ * or a `use` on an Identifier, a HumanName, an Address or a ContactPoint that is not a code of its
+ * datatype's R4 value set, or an element declaring an absence in a reason this library cannot read,
  * or an element declaring an absence beside a value of its own. A readable, non-conflicting declared
- * absence throws nothing, and neither does a readable `intent`. This is the executable
+ * absence throws nothing, and neither does a readable `intent` or `use`. This is the executable
  * form of "carries status
  * **or refuses**": a summary helper calls it first, and never silently drops a modifier it cannot
  * honor, nor summarizes an element whose value the document left ambiguous or whose content the codec
@@ -1908,6 +1999,9 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     // `intents` is deliberately absent, exactly as it is absent from `safeToSummarize`'s
     // conjunction: a readable intent is surfaced for the caller, and only an unreadable one refuses.
     ...readout.unreadableIntents,
+    // `datatypeUses` is absent for the same reason `intents` is: a readable `use` is surfaced for
+    // the caller, and only one this library cannot read refuses.
+    ...readout.unreadableDatatypeUses,
     // The two absence channels that withdraw the affirmation. `absenceMarkers` is deliberately
     // absent from this list, exactly as it is absent from `safeToSummarize`'s conjunction: a
     // declaration the caller can read is a disclosure, not a loss.

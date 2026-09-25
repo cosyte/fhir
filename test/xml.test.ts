@@ -1619,6 +1619,9 @@ describe("AC-8: reading every document the prefix refusal is measured on is unch
     // S0364-fhir-safety-modifier-3: two readout fields added; none of these documents is a
     // MedicationRequest, so both read empty and nothing measured at the pin moves.
     intents: [],
+    // S0369-fhir-safety-modifier-4: two readout fields added; no covered position in these
+    // documents carries a `use`, so both read empty and nothing measured at the pin moves.
+    datatypeUses: [],
     shadowedProperties: [],
     arrayWrappedScalars: [],
     nestedArrays: [],
@@ -1627,6 +1630,7 @@ describe("AC-8: reading every document the prefix refusal is measured on is unch
     nearMissNegationCodes: [],
     unreadableNegationCodes: [],
     unreadableIntents: [],
+    unreadableDatatypeUses: [],
     absenceMarkers: [],
     unreadableAbsenceMarkers: [],
     conflictingAbsenceMarkers: [],
