@@ -543,8 +543,12 @@ const NESTED_EXTENSION = {
     { url: "part-b", valueCode: "synthetic" },
   ],
 };
-/** A `_`-sibling carrying an extension with a value. */
+/**
+ * A `_`-sibling carrying an `id` and an extension with a value: `ele-1` counts the `id` among the
+ * primitive's children and against it, so the extension is what satisfies it.
+ */
 const PRIMITIVE_EXTENSION = {
+  id: "synthetic-note",
   extension: [
     { url: "http://example.org/fhir/StructureDefinition/synthetic-note", valueString: "synthetic" },
   ],
@@ -557,6 +561,9 @@ const COMMON = {
   text: NARRATIVE,
   contained: [CONTAINED_PRACTITIONER],
   extension: [VALUE_EXTENSION],
+  // A value-absent primitive carrying an `id` and an extension, which R4 allows: ele-1 holds
+  // because the extension is a child other than the `id`.
+  _language: PRIMITIVE_EXTENSION,
 };
 const CONTAINED_REF = { reference: "#pr1" };
 

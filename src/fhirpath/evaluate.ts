@@ -244,7 +244,15 @@ function resolveTypeQualifier(name: string, focus: FpColl): FpColl {
   throw new UnsupportedFhirPathError(`type-qualified path head '${name}'`);
 }
 
-/** The immediate child nodes of an item (used by `children()`, resourceType is type info, not a child). */
+/**
+ * The immediate child nodes of an item (used by `children()`, resourceType is type info, not a child).
+ *
+ * A primitive's children are its `Element` members, `id` and then `extension`, which are exactly
+ * the two members {@link navigateItem} reaches on it; a bare leaf has none. Leaving the `id` out
+ * made `ele-1` (`hasValue() or (children().count() > id.count())`) count the `id` on one side and
+ * not the other, so a value-absent primitive carrying an `id` and an extension, which R4 allows,
+ * was reported as violating it.
+ */
 function childrenOf(item: FpItem): FpItem[] {
   if (item.t !== "node") return [];
   if (isComplex(item.node)) {
@@ -252,9 +260,13 @@ function childrenOf(item: FpItem): FpItem[] {
       .filter((p) => p.name !== "resourceType")
       .flatMap((p) => wrap(p.value));
   }
-  // A primitive's children are its extensions; a bare leaf has none.
   if (isPrimitive(item.node)) {
-    return (item.node.extension ?? []).map((ext) => ({ t: "node", node: ext }));
+    const id: FpItem[] = item.node.id === undefined ? [] : [{ t: "str", value: item.node.id }];
+    const extensions: FpItem[] = (item.node.extension ?? []).map((ext) => ({
+      t: "node",
+      node: ext,
+    }));
+    return [...id, ...extensions];
   }
   return [];
 }

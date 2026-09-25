@@ -15,7 +15,8 @@
  * The reading carries the modifier-element reports, the `MedicationRequest.intent` surfacing and the
  * `use` surfacing on Identifier, HumanName, Address and ContactPoint as well as the location
  * channels, so a report or a surfaced code that moves is compared rather than passed over. A tree
- * whose readout has no such field reads it as empty.
+ * whose readout has no such field reads it as empty. A validator finding that carries a constraint
+ * key is read with its key, so an invariant finding is compared key and all.
  */
 
 import { readFileSync, readdirSync } from "node:fs";
@@ -187,6 +188,56 @@ const ADDED: readonly CorpusDocument[] = [
     name: "added:patient-contained-organization-use",
     json: '{"resourceType":"Patient","contained":[{"resourceType":"Organization","identifier":[{"use":"old","value":"O1"}],"telecom":[{"use":"OLD","system":"phone","value":"000"}]}]}',
   },
+  // S0374-fhir-invariant-base-1: one document per base-constraint key AC-3 and AC-6 name, plus a
+  // contained resource for AC-7, AC-13.
+  {
+    name: "added:base-pat-1-contact-without-contact-detail",
+    json: '{"resourceType":"Patient","contact":[{"gender":"other"}]}',
+  },
+  {
+    name: "added:base-obs-3-reference-range-without-bound",
+    json: '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},"referenceRange":[{"type":{"text":"synthetic"}}]}',
+  },
+  {
+    name: "added:base-con-1-stage-without-summary",
+    json: '{"resourceType":"Condition","subject":{"reference":"Patient/p1"},"stage":[{"type":{"text":"synthetic"}}]}',
+  },
+  {
+    name: "added:base-con-2-evidence-without-code-or-detail",
+    json: '{"resourceType":"Condition","subject":{"reference":"Patient/p1"},"evidence":[{"extension":[{"url":"http://example.org/e","valueString":"x"}]}]}',
+  },
+  {
+    name: "added:base-imm-1-education-without-document",
+    json: '{"resourceType":"Immunization","status":"completed","vaccineCode":{"text":"synthetic"},"patient":{"reference":"Patient/p1"},"occurrenceDateTime":"2020-01-01","education":[{"publicationDate":"2020-01-01"}]}',
+  },
+  {
+    name: "added:base-dom-2-nested-contained",
+    json: '{"resourceType":"Patient","contained":[{"resourceType":"Practitioner","id":"pr1","contained":[{"resourceType":"Organization","id":"org1","active":true}]}]}',
+  },
+  {
+    name: "added:base-dom-4-contained-version",
+    json: '{"resourceType":"Patient","contained":[{"resourceType":"Practitioner","id":"pr1","meta":{"versionId":"2"}}]}',
+  },
+  {
+    name: "added:base-dom-5-contained-security",
+    json: '{"resourceType":"Patient","contained":[{"resourceType":"Practitioner","id":"pr1","meta":{"security":[{"system":"http://example.org/s","code":"x"}]}}]}',
+  },
+  {
+    name: "added:base-ext-1-extension-without-value",
+    json: '{"resourceType":"Patient","extension":[{"url":"http://example.org/e"}]}',
+  },
+  {
+    name: "added:base-ext-1-extension-with-value-and-extensions",
+    json: '{"resourceType":"Patient","extension":[{"url":"http://example.org/e","valueString":"x","extension":[{"url":"part","valueString":"y"}]}]}',
+  },
+  {
+    name: "added:base-ele-1-empty-datatype",
+    json: '{"resourceType":"Patient","maritalStatus":{}}',
+  },
+  {
+    name: "added:base-dom-3-referenced-contained",
+    json: '{"resourceType":"Patient","contained":[{"resourceType":"Practitioner","id":"pr1","active":true}],"generalPractitioner":[{"reference":"#pr1"}]}',
+  },
 ];
 
 /**
@@ -205,7 +256,9 @@ export function corpus(): CorpusDocument[] {
 }
 
 /**
- * Render a list of issue-shaped objects as `code/severity at location` strings, sorted.
+ * Render a list of issue-shaped objects as `code/severity at location` strings, sorted, with
+ * ` for <key>` appended when the issue carries a constraint key, so an invariant finding that moves
+ * from one key to another is a moved finding rather than an identical string.
  *
  * Joined with ` at ` rather than an `@`, and the reason is a gate rather than taste: this package
  * spells a diagnostic `IssueCode@FHIRPath`, which no email recogniser can tell from an address by
@@ -215,8 +268,14 @@ export function corpus(): CorpusDocument[] {
 function issueStrings(issues: readonly unknown[]): string[] {
   return issues
     .map((issue) => {
-      const record = issue as { code?: unknown; severity?: unknown; expression?: unknown };
-      return `${String(record.code)}/${String(record.severity)} at ${String(record.expression)}`;
+      const record = issue as {
+        code?: unknown;
+        severity?: unknown;
+        expression?: unknown;
+        constraint?: unknown;
+      };
+      const at = `${String(record.code)}/${String(record.severity)} at ${String(record.expression)}`;
+      return typeof record.constraint === "string" ? `${at} for ${record.constraint}` : at;
     })
     .sort();
 }
