@@ -314,11 +314,14 @@ export function declaredProfiles(text, version, index) {
   }
   const urls = [];
   const profiles = [];
-  for (const canonical of declared) {
+  // A refusal names the entry by its POSITION, never by what it spells: `meta.profile` is document
+  // content, and this log carries a document's shape, not its values.
+  for (const [position, canonical] of declared.entries()) {
+    const at = `meta.profile[${String(position)}]`;
     if (typeof canonical !== "string" || canonical === "") {
       return {
         ok: false,
-        reason: "the document declares a meta.profile entry that is not a canonical URL",
+        reason: `the document declares ${at}, which is not a canonical URL`,
       };
     }
     const bar = canonical.indexOf("|");
@@ -328,9 +331,8 @@ export function declaredProfiles(text, version, index) {
       return {
         ok: false,
         reason:
-          `the document declares ${url} at version ${pinned}, which is not the US Core ` +
-          `${String(version)} package it is declared under; it is not validated with fewer profiles ` +
-          `than it declares`,
+          `the document declares ${at} at a version other than the US Core ${String(version)} ` +
+          `package it is declared under; it is not validated with fewer profiles than it declares`,
       };
     }
     const profile = index.byUrl.get(url);
@@ -338,7 +340,7 @@ export function declaredProfiles(text, version, index) {
       return {
         ok: false,
         reason:
-          `the document declares ${url}, which the US Core ${String(version)} package does not ` +
+          `the document declares ${at}, which the US Core ${String(version)} package does not ` +
           `contain; it is not validated with fewer profiles than it declares`,
       };
     }

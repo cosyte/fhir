@@ -750,8 +750,15 @@ describe("AC-10: a document declaring no profile, or one its package lacks, has 
     const detail = (file: string) =>
       outcome.records.find((r) => r.id === idOf("9.0.0", file))?.detail;
     expect(detail("none.json")).toContain("declares no profile in meta.profile");
-    expect(detail("missing.json")).toContain("which the US Core 9.0.0 package does not contain");
-    expect(detail("other-version.json")).toContain("at version 6.1.0");
+    expect(detail("missing.json")).toContain(
+      "declares meta.profile[1], which the US Core 9.0.0 package does not contain",
+    );
+    expect(detail("other-version.json")).toContain(
+      "declares meta.profile[0] at a version other than the US Core 9.0.0 package",
+    );
+    // By position, never by what the entry spells: meta.profile is document content.
+    expect(detail("missing.json")).not.toContain("us-core-not-in-this-package");
+    expect(detail("other-version.json")).not.toContain("6.1.0");
   });
 });
 
