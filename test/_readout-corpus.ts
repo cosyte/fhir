@@ -12,9 +12,10 @@
  * on. Everything is a JSON document: the XML read path has its own base-versus-head harness
  * (`scripts/read-differential.ts`), which this does not duplicate.
  *
- * The reading carries the modifier-element reports and the `MedicationRequest.intent` surfacing as
- * well as the location channels, so a report or a surfaced code that moves is compared rather than
- * passed over. A tree whose readout has no such field reads it as empty.
+ * The reading carries the modifier-element reports, the `MedicationRequest.intent` surfacing and the
+ * `use` surfacing on Identifier, HumanName, Address and ContactPoint as well as the location
+ * channels, so a report or a surfaced code that moves is compared rather than passed over. A tree
+ * whose readout has no such field reads it as empty.
  */
 
 import { readFileSync, readdirSync } from "node:fs";
@@ -39,6 +40,12 @@ export interface IntentReading {
   readonly location: string;
 }
 
+/** One surfaced `use` on one of the four datatypes, as either tree renders it. */
+export interface UseReading {
+  readonly code: string;
+  readonly location: string;
+}
+
 /** Everything one tree makes of one document. A throw is a reading too, and a comparable one. */
 export interface Readout {
   readonly thrown: string | undefined;
@@ -54,6 +61,7 @@ export interface Readout {
   readonly unhandledModifierExtensions: readonly string[];
   readonly modifierElements: readonly ModifierReading[];
   readonly intents: readonly IntentReading[];
+  readonly datatypeUses: readonly UseReading[];
   readonly shadowedProperties: readonly string[];
   readonly arrayWrappedScalars: readonly string[];
   readonly nestedArrays: readonly string[];
@@ -62,6 +70,7 @@ export interface Readout {
   readonly nearMissNegationCodes: readonly string[];
   readonly unreadableNegationCodes: readonly string[];
   readonly unreadableIntents: readonly string[];
+  readonly unreadableDatatypeUses: readonly string[];
 }
 
 /** The subset of the package surface a reading needs, so base and head are called identically. */
@@ -148,6 +157,35 @@ const ADDED: readonly CorpusDocument[] = [
   {
     name: "added:medicationrequest-intent-out-of-set",
     json: '{"resourceType":"MedicationRequest","status":"active","intent":"draft"}',
+  },
+  // S0369-fhir-safety-modifier-4: one document per shape the change decides, AC-10.
+  {
+    name: "added:patient-identifier-use-old",
+    json: '{"resourceType":"Patient","identifier":[{"use":"old","value":"S1"}]}',
+  },
+  {
+    name: "added:patient-name-use-temp",
+    json: '{"resourceType":"Patient","name":[{"use":"temp","family":"SynthFamily"}]}',
+  },
+  {
+    name: "added:patient-address-use-old",
+    json: '{"resourceType":"Patient","address":[{"use":"old","city":"Nowhere"}]}',
+  },
+  {
+    name: "added:patient-telecom-use-old",
+    json: '{"resourceType":"Patient","telecom":[{"use":"old","system":"phone","value":"000"}]}',
+  },
+  {
+    name: "added:patient-identifier-use-out-of-set",
+    json: '{"resourceType":"Patient","identifier":[{"use":"maiden","value":"S1"}]}',
+  },
+  {
+    name: "added:patient-contained-practitioner-identifier-use",
+    json: '{"resourceType":"Patient","contained":[{"resourceType":"Practitioner","identifier":[{"use":"official","value":"X"}]}]}',
+  },
+  {
+    name: "added:patient-contained-organization-use",
+    json: '{"resourceType":"Patient","contained":[{"resourceType":"Organization","identifier":[{"use":"old","value":"O1"}],"telecom":[{"use":"OLD","system":"phone","value":"000"}]}]}',
   },
 ];
 
@@ -244,6 +282,10 @@ export function readDocument(codec: ReadoutCodec, json: string): Readout {
         code: record.key,
         location: record.location,
       })),
+      datatypeUses: records(safety, "datatypeUses", "code").map((record) => ({
+        code: record.key,
+        location: record.location,
+      })),
       shadowedProperties: locations(safety, "shadowedProperties"),
       arrayWrappedScalars: locations(safety, "arrayWrappedScalars"),
       nestedArrays: locations(safety, "nestedArrays"),
@@ -252,6 +294,7 @@ export function readDocument(codec: ReadoutCodec, json: string): Readout {
       nearMissNegationCodes: locations(safety, "nearMissNegationCodes"),
       unreadableNegationCodes: locations(safety, "unreadableNegationCodes"),
       unreadableIntents: locations(safety, "unreadableIntents"),
+      unreadableDatatypeUses: locations(safety, "unreadableDatatypeUses"),
     };
   } catch (error) {
     return {
@@ -271,6 +314,7 @@ export function readDocument(codec: ReadoutCodec, json: string): Readout {
       unhandledModifierExtensions: [],
       modifierElements: [],
       intents: [],
+      datatypeUses: [],
       shadowedProperties: [],
       arrayWrappedScalars: [],
       nestedArrays: [],
@@ -279,6 +323,7 @@ export function readDocument(codec: ReadoutCodec, json: string): Readout {
       nearMissNegationCodes: [],
       unreadableNegationCodes: [],
       unreadableIntents: [],
+      unreadableDatatypeUses: [],
     };
   }
 }
