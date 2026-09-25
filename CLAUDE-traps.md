@@ -320,8 +320,10 @@ Layer-by-layer detail, incl. the binding-strength severity table and the 11-way
   validated with EXACTLY the profiles its `meta.profile` declares, out of the digest-verified package
   of its version (never fewer: an unresolvable one is no readable outcome), the oracle gets that
   version's `-ig`, and the other three corpora keep no profile and their old argv. **Reach is printed
-  per newly evaluated row; `unchecked`, `not evaluated (primitive occurrence)` and `not reached` are
-  NEVER agreement, and a US Core exclusion whose only class is `invariant` reds the corpus suite.**
+  per newly evaluated row; `unchecked`, `not evaluated (primitive occurrence)`,
+  `not evaluated (document refused)` (the reader failed closed, so no constraint ran) and
+  `not reached` are NEVER agreement and never exercise the UCUM rule, and a US Core exclusion whose
+  only class is `invariant` reds the corpus suite.**
   [`#the-differential-corpus-is-no-longer-ten-fixtures-2026-08-25`](documentation/agent-notes.md#the-differential-corpus-is-no-longer-ten-fixtures-2026-08-25)
 - **A PINNED RELEASE WAS NOT A PINNED ORACLE: `-tx` DEFAULTS TO `https://tx.fhir.org` AND THE
   VERDICT WAS A FUNCTION OF THE WEATHER** (three documents in the `FALSE VALID` bucket on one run

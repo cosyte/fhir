@@ -979,3 +979,74 @@ describe("AC-7: no compared 9.0.0 document deciding us-core-3 over a valueQuanti
     expect(ucumShortfall(report)).not.toBeNull();
   });
 });
+
+describe("AC-5 / AC-7: a document this library refused to read reaches its rows and decided none of them", () => {
+  // What `findings.mjs` returns when the reader fails closed: `validateResource` never ran, so no
+  // constraint was evaluated, and the harness compares the document (safe refusal, or agreement
+  // when the oracle errors too).
+  const refused: OwnAnswer = {
+    ok: true,
+    issues: [{ severity: "fatal", location: "Observation.meta.profile" }],
+    parseRefused: true,
+  };
+  const oracleAnswers: readonly (readonly [string, string, readonly unknown[]])[] = [
+    ["the oracle is clean", STATUS.SAFE_REFUSAL, []],
+    [
+      "the oracle errors too",
+      STATUS.AGREE,
+      [{ severity: "error", expression: ["Observation.value"], code: "invariant" }],
+    ],
+  ];
+  const refusedWorld = (oracleIssues: readonly unknown[]) =>
+    compareWorld(
+      usCoreWorld({ documents: [doc("9.0.0", "lab.json", observation([LAB_9], QUANTITY))] }),
+      {
+        library: recordingLibrary(() => refused),
+        oracle: recordingOracle(() => oracleIssues),
+      },
+    ).outcome;
+
+  for (const [label, status, oracleIssues] of oracleAnswers) {
+    it(`AC-7: names the UCUM condition when the only valueQuantity document was refused and ${label}`, () => {
+      const outcome = refusedWorld(oracleIssues);
+      // The document IS compared, so the reach report considers it.
+      expect(outcome.records.map((r) => [r.status, r.compared])).toEqual([[status, true]]);
+      const report = outcome.usCore?.report;
+      if (report === undefined) throw new Error("the US Core pass did not run");
+      expect(ucumExercised(report)).toEqual([]);
+      expect(ucumShortfall(report)).toContain(
+        "no compared US Core 9.0.0 document reaches us-core-3 with a valueQuantity",
+      );
+    });
+
+    it(`AC-5: prints the refused document as not evaluated on every row it reaches, never satisfied or agreement, when ${label}`, () => {
+      const outcome = refusedWorld(oracleIssues);
+      const results = (outcome.usCore?.report.rows ?? []).filter((r) => r.reached);
+      // us-core-3 (inherited from clinical-result) and the lab profile's own us-core-4.
+      expect(results.map((r) => `${r.row.profile} ${r.row.key}`).sort()).toEqual([
+        "us-core-observation-clinical-result us-core-3",
+        "us-core-observation-lab us-core-4",
+      ]);
+      for (const result of results) {
+        expect(result.documents.map((d) => [d.answer, d.agrees])).toEqual([
+          [ROW_ANSWER.NOT_VALIDATED, false],
+        ]);
+      }
+      const lines = reportOf(outcome);
+      expect(
+        rowLine(
+          lines,
+          "9.0.0  us-core-observation-clinical-result  Observation.value[x]  us-core-3",
+        ),
+      ).toContain(
+        `reached by 1 compared document(s): 0 agree, 0 unchecked, 0 ${ROW_ANSWER.NOT_EVALUATED}, 1 ${ROW_ANSWER.NOT_VALIDATED}`,
+      );
+      expect(lines).toContain(
+        `    ${ROW_ANSWER.NOT_VALIDATED}: ${idOf("9.0.0", "lab.json")}, this library refused to read it, so no constraint was evaluated on it; not counted as agreement.`,
+      );
+      expect(lines.find((l) => l.includes("newly evaluated row(s) agree"))).toContain(
+        "0 of 18 newly evaluated row(s) agree",
+      );
+    });
+  }
+});

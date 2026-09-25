@@ -37,15 +37,21 @@ export interface OwnIssueLike {
   readonly severity: string;
 }
 
+export type OwnAnswerLike =
+  | {
+      readonly ok: true;
+      readonly issues: readonly OwnIssueLike[];
+      readonly parseRefused?: boolean;
+    }
+  | { readonly ok: false; readonly reason: string };
+
 export interface UsCoreDocument {
   readonly id: string;
   readonly version: string;
   readonly text: string;
   readonly index: ProfileIndex;
   readonly profiles: readonly string[] | undefined;
-  readonly ours:
-    | { readonly ok: true; readonly issues: readonly OwnIssueLike[] }
-    | { readonly ok: false; readonly reason: string };
+  readonly ours: OwnAnswerLike;
   readonly record: Record_;
 }
 
@@ -86,6 +92,7 @@ export declare const ROW_ANSWER: {
   readonly SATISFIED: string;
   readonly UNCHECKED: string;
   readonly NOT_EVALUATED: string;
+  readonly NOT_VALIDATED: string;
 };
 export declare const NOT_REACHED: {
   readonly SLICE_SCOPED: string;
@@ -138,6 +145,7 @@ export declare function anchorOccurrences(
   resource: unknown,
   row: UsCoreRow,
 ): { readonly complex: number; readonly primitive: number };
+export declare function wasValidated(ours: OwnAnswerLike | undefined): boolean;
 export declare function rowAnswer(
   issues: readonly OwnIssueLike[],
   row: UsCoreRow,

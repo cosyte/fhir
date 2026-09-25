@@ -43,12 +43,14 @@ Practitioners), each declared by its path inside that version's package tarball.
   library decided it and the document-level comparison is not a violation. An answer that is only
   `INVARIANT_UNCHECKED` is printed `unchecked`, and an anchor present only as a primitive (a
   `valueString` under `us-core-3`) is printed `not evaluated (primitive occurrence)`; neither is
-  counted. Measured against `validator_cli` 6.10.2: 9 of the 18 rows agree on at least one compared
+  counted. A document this library refused to read (the reader failed closed, which the comparison
+  still counts as compared) had no constraint evaluated, so every row it reaches is printed
+  `not evaluated (document refused)` for it and is not counted either. Measured against `validator_cli` 6.10.2: 9 of the 18 rows agree on at least one compared
   document, and the other 9 are the slice-scoped identifier rules, which the profile layer does not
   evaluate and which are therefore printed not reached.
 - **The UCUM rule must be exercised.** A run in which no compared US Core 9.0.0 document reaches
-  `us-core-3` with a `valueQuantity` that this library decided names that condition and fails. Seven
-  do today.
+  `us-core-3` with a `valueQuantity` that this library decided names that condition and fails. A
+  document this library refused to read decided nothing, so it never meets this. Seven do today.
 - **An exclusion may not hide an invariant disagreement.** A US Core exclusion needs a reason like
   any other, printed every run, and `test/differential-corpus.test.ts` fails on one whose only
   recorded class is `invariant`: disagreement on a constraint is what this pass exists to find. No

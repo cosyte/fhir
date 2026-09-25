@@ -43,7 +43,10 @@
  * layer does not evaluate a constraint scoped to a slice, and a row anchored on an element present
  * only as a primitive occurrence is printed `not evaluated (primitive occurrence)` for that document,
  * because the profile layer anchors a nested constraint on complex occurrences only. Both limits are
- * declared, and neither is counted as agreement.
+ * declared, and neither is counted as agreement. A document this library refused to read (the
+ * reader's fail-closed refusal, which the comparison still counts as compared) had no constraint
+ * evaluated at all, so every row it reaches is printed `not evaluated (document refused)` for it:
+ * no finding there is not a decision, never agreement, and never exercises the UCUM rule.
  *
  * This module is pure apart from reading files through an injectable `read`: no process, no network,
  * no `dist/` import, so `test/differential-harness.test.ts` grades every branch with no build, no JVM
@@ -101,6 +104,11 @@ export const ROW_ANSWER = Object.freeze({
   UNCHECKED: "unchecked",
   /** The anchor is present only as a primitive occurrence, which the profile layer does not reach. */
   NOT_EVALUATED: "not evaluated (primitive occurrence)",
+  /**
+   * This library refused to read the document, so `validateResource` never ran on it and no
+   * constraint was evaluated. The absence of a finding is not a decision.
+   */
+  NOT_VALIDATED: "not evaluated (document refused)",
 });
 
 /** Why a row reached no document. Printed words, and stable. */
@@ -502,8 +510,19 @@ function atAnchor(location, row) {
 }
 
 /**
+ * Whether this library's answer on a document came out of `validateResource`: a readable answer
+ * that is not the reader's fail-closed refusal. Only such an answer can have decided a constraint,
+ * because only then was any constraint evaluated.
+ */
+export function wasValidated(ours) {
+  return ours?.ok === true && ours.parseRefused !== true;
+}
+
+/**
  * This library's answer for one row on one document that reaches it, from the findings it made
- * (`{ code, constraint, location }` each) and how the anchor occurs.
+ * (`{ code, constraint, location }` each) and how the anchor occurs. Call it only for a document
+ * {@link wasValidated} holds for: over a refused document no finding carrying the key is not a
+ * decision, and {@link reachReport} answers {@link ROW_ANSWER.NOT_VALIDATED} there instead.
  */
 export function rowAnswer(issues, row, occurrences) {
   const carrying = issues.filter((i) => i.constraint === row.key && atAnchor(i.location, row));
@@ -514,7 +533,7 @@ export function rowAnswer(issues, row, occurrences) {
   return occurrences.complex > 0 ? ROW_ANSWER.SATISFIED : ROW_ANSWER.NOT_EVALUATED;
 }
 
-/** Whether an answer is a decision this library made. `unchecked` and `not evaluated` are not. */
+/** Whether an answer is a decision this library made. `unchecked` and either `not evaluated` are not. */
 export function isDecided(answer) {
   return answer === ROW_ANSWER.VIOLATED || answer === ROW_ANSWER.SATISFIED;
 }
@@ -556,8 +575,9 @@ export function reachReport(input) {
       if (occurrences.complex + occurrences.primitive === 0) continue;
       declaring += 1;
       if (isSliceScoped(row)) continue;
-      const issues = d.ours?.ok === true ? d.ours.issues : [];
-      const answer = rowAnswer(issues, row, occurrences);
+      const answer = wasValidated(d.ours)
+        ? rowAnswer(d.ours.issues, row, occurrences)
+        : ROW_ANSWER.NOT_VALIDATED;
       const violation = VIOLATION_STATUSES.has(String(d.record.status));
       reaching.push({
         id: d.id,
@@ -658,6 +678,7 @@ export function formatReachReport(report) {
       `  ${label}: reached by ${String(result.documents.length)} compared document(s): ` +
         `${String(agree)} agree, ${String(count(ROW_ANSWER.UNCHECKED))} unchecked, ` +
         `${String(count(ROW_ANSWER.NOT_EVALUATED))} ${ROW_ANSWER.NOT_EVALUATED}, ` +
+        `${String(count(ROW_ANSWER.NOT_VALIDATED))} ${ROW_ANSWER.NOT_VALIDATED}, ` +
         `${String(violated)} in a document-level violation.`,
     );
     for (const d of result.documents) {
@@ -667,6 +688,10 @@ export function formatReachReport(report) {
         );
       } else if (d.answer === ROW_ANSWER.NOT_EVALUATED) {
         lines.push(`    ${ROW_ANSWER.NOT_EVALUATED}: ${d.id}; not counted as agreement.`);
+      } else if (d.answer === ROW_ANSWER.NOT_VALIDATED) {
+        lines.push(
+          `    ${ROW_ANSWER.NOT_VALIDATED}: ${d.id}, this library refused to read it, so no constraint was evaluated on it; not counted as agreement.`,
+        );
       } else if (d.violation) {
         lines.push(`    violation: ${d.id}; not counted as agreement.`);
       }

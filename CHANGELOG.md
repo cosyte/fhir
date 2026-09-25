@@ -26,7 +26,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   exclusion. For each of the 18 newly evaluated constraint rows the run prints how many compared
   documents reach it, or `not reached (slice-scoped)` / `not reached (no compared document)`; an
   answer that is only `INVARIANT_UNCHECKED` is printed `unchecked` and a primitive anchor
-  `not evaluated (primitive occurrence)`, and neither counts as agreement. 9 of the 18 rows agree on
+  `not evaluated (primitive occurrence)`, and neither counts as agreement. A document this library
+  refused to read is still compared, but no constraint ran on it, so every row it reaches is printed
+  `not evaluated (document refused)` for it, is never counted as agreement, and never exercises the
+  UCUM rule. 9 of the 18 rows agree on
   at least one compared document; the 9 slice-scoped rows are not reached. A run in which no compared
   9.0.0 document decides `us-core-3` over a `valueQuantity` fails (seven do). The corpus suite fails
   on a US Core exclusion whose only recorded class is `invariant`. **Limits, stated with the

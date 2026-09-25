@@ -13,7 +13,8 @@ unchanged, and nothing here ships in the published artifact.
 - For each constraint the FHIRPath subset newly decides, the run prints how many compared documents
   reach it, or that none does and why, so a constraint no real document exercised is never read as
   agreement. A document on which this package could only report a constraint unchecked is printed
-  as such and not counted as agreement either. US Core 9.0.0's UCUM rule (`us-core-3` over a
+  as such and not counted as agreement either, and neither is a document this package refused to
+  read, on which no constraint was evaluated. US Core 9.0.0's UCUM rule (`us-core-3` over a
   `valueQuantity`) is decided on seven of the compared documents, and a run in which no compared
   document exercises it fails.
 - The examples and the packages they come from are downloaded and checked against a recorded byte
