@@ -43,6 +43,27 @@ jobs:
           FUZZ_RUNS: "20000"
         run: pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts
 
+  # The runnable examples under examples/: each imports @cosyte/fhir by name, which resolves through
+  # this package's own `exports` to the built dist/, so the job builds first. Each example checks
+  # its own output and exits non-zero on a mismatch; `pnpm examples` fails if any of them does, or
+  # if it finds none to run. The examples read only the synthetic fixtures under test/__fixtures__,
+  # which the ci job's PHI scan already covers; phi-scan:examples scans the example sources.
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck:examples
+      - run: pnpm lint:examples
+      - run: pnpm examples
+      - run: pnpm phi-scan:examples
+
   # Differential vs the official validator (`org.hl7.fhir.core` / validator_cli.jar), roadmap §6.
   # AUTHORED, NOT YET PROVEN: the oracle is a JVM program, so this gate can only run here (never in the
   # dev container). The corpus is declared in corpus/corpus.json and is no longer ten in-tree

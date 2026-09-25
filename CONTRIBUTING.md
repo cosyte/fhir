@@ -4,9 +4,9 @@ Thanks for considering a contribution. This library grows faster when real integ
 FHIR quirks from the servers and EHRs they connect to, and contribute profiles for the systems they
 work with.
 
-> **Note:** `@cosyte/fhir` is a **pre-alpha scaffold**: the parser itself is not built yet. The
-> most useful early contributions are grounded, de-identified real-world FHIR samples and issues
-> that sharpen the roadmap. See the phased plan in the meta-repo's `operations/roadmaps/fhir.md`.
+> **Note:** `@cosyte/fhir` is at `0.1`. The most useful contributions are grounded, de-identified
+> real-world FHIR samples and issues that show a document the reader, the validator or the safety
+> readout gets wrong.
 
 ## Filing an issue
 
@@ -23,8 +23,9 @@ Before filing, please:
 1. Fork and branch from `main`.
 2. Run the full pipeline locally before pushing. See [Dev setup](#dev-setup).
 3. If your change is user-visible, add a bullet under the `## [Unreleased]` section of
-   [CHANGELOG.md](./CHANGELOG.md), and add a Changeset (`pnpm changeset`, pick **patch** on the
-   pre-alpha `0.0.x` ladder).
+   [CHANGELOG.md](./CHANGELOG.md), and add a Changeset (`pnpm changeset`). While the version is
+   below 1.0, pick **minor** for new capability or a breaking change and **patch** for a fix that
+   changes no public observable.
 4. Keep PRs focused: one logical change per PR. Large refactors should start as an issue for
    discussion.
 5. Write a descriptive commit message. Imperative mood (`feat(codec): ...`, `fix(model): ...`) is

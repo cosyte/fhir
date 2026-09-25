@@ -1,10 +1,29 @@
 # Changelog
 
 All notable changes to `@cosyte/fhir` are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project stays on the
-**v0.0.x-until-first-alpha** ladder (meta-repo ADR 0001) until its first alpha.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). While the version is below 1.0, a breaking
+change bumps the minor version and is called out here; a fix that changes no public observable ships
+as a patch.
 
 ## [Unreleased]
+
+**What 0.1 means for you.** This is the first release whose public API we treat as settled: the
+exported names, options, result shapes and issue codes are the surface we keep stable. It covers
+reading and writing FHIR R4 JSON into an immutable model that keeps every `decimal` and `integer64`
+exactly as written, an XML codec over the same model that refuses any DTD, validation in layers
+(structure, cardinality, value domains, R4's own constraints on the eight modeled resource types,
+Quantity and UCUM, binding strength, and profiles you supply or author with `defineProfile`,
+including their FHIRPath invariants), the `readSafety` / `assertSafeToSummarize` safety readout, and
+Bundles, references and streaming Bulk Data NDJSON. While the package is below 1.0, a breaking change
+bumps the minor version and is called out here; new capability also ships in a minor, and a fix that
+changes no public observable ships as a patch. Upgrading from 0.0.10, the last version on npm,
+changes verdicts: R4's own constraints are now evaluated with no profile supplied, so a document that
+read valid can read invalid, and a `use` outside its R4 value set now stops a summary, as the entries
+below set out. Not covered yet: typed per-resource models (the built-in structural schemas cover the
+base elements plus `Patient`), `type` and `profile` slicing discriminators and reslicing (reported
+`PROFILE_SLICE_UNCHECKED`), FHIRPath outside the supported subset (reported `INVARIANT_UNCHECKED`,
+never passed), bundled terminology or US Core content, spec-clean JSON written from a model read out
+of XML, unit conversion, and executing a transaction Bundle.
 
 ### Added
 
