@@ -77,10 +77,13 @@ function isWs(c: string): boolean {
  */
 class RawXmlReader {
   readonly #src: string;
+  /** Told the code point of each numeric character reference as it is decoded; never alters the parse. */
+  readonly #onReference: ((codePoint: number) => void) | undefined;
   #pos = 0;
 
-  public constructor(src: string) {
+  public constructor(src: string, onReference?: (codePoint: number) => void) {
     this.#src = src;
+    this.#onReference = onReference;
   }
 
   /** Parse the whole document: optional prolog, exactly one root element, optional trailing misc. */
@@ -357,6 +360,7 @@ class RawXmlReader {
         start,
       );
     }
+    this.#onReference?.(code);
     return String.fromCodePoint(code);
   }
 
@@ -382,4 +386,35 @@ class RawXmlReader {
  */
 export function readRawXml(src: string): XmlElement {
   return new RawXmlReader(src).parse();
+}
+
+/**
+ * {@link readRawXml}, also handing back the code point each numeric character reference the parse
+ * decoded denotes: one entry per reference, in document order, where the reference is recognised
+ * (text and attribute values; never a comment or a processing instruction). The tree is the one
+ * {@link readRawXml} returns for the same text, and it throws what {@link readRawXml} throws.
+ *
+ * **Why the decoded tree is not enough on its own**: each reference is decoded with
+ * `String.fromCodePoint`, so `&#xD83D;&#xDE00;`, two references to a surrogate code point, decodes
+ * to the same well-formed UTF-16 pair as `&#x1F600;` or the raw character, and a question asked of
+ * the decoded text cannot tell them apart. XML 1.0's Legal Character constraint is about what each
+ * reference refers to, so the question has to be asked of each reference.
+ *
+ * @param src - The XML text.
+ * @returns The root element, and the code point of every numeric character reference decoded.
+ * @example
+ * ```ts
+ * readRawXmlReferences("<p>&#233;&#x1F600;</p>").references; // [233, 0x1f600]
+ * ```
+ * @internal
+ */
+export function readRawXmlReferences(src: string): {
+  readonly root: XmlElement;
+  readonly references: readonly number[];
+} {
+  const references: number[] = [];
+  const root = new RawXmlReader(src, (codePoint) => {
+    references.push(codePoint);
+  }).parse();
+  return { root, references };
 }

@@ -284,7 +284,8 @@ export const SERIALIZE_ERROR_CODES = {
    * string it would splice in, carrying a code point outside XML 1.0 `Char` (production [2]): U+0000
    * to U+0008, U+000B, U+000C, U+000E to U+001F, an unpaired surrogate, U+FFFE or U+FFFF. In a `div`
    * string that includes a numeric character reference denoting one (`&#0;`), which the Legal
-   * Character constraint makes as fatal as the raw character. **XML only**: `serializeResource`
+   * Character constraint makes as fatal as the raw character; each reference is judged on its own, so
+   * `&#xD83D;&#xDE00;` is two unpaired surrogates, not one character. **XML only**: `serializeResource`
    * writes these values as JSON strings, so this refusal never reaches it and that route stays open.
    *
    * Written anyway, a U+0000 went into the output raw and a conforming processor rejected the
@@ -1191,16 +1192,18 @@ const NON_XML_CHARACTER = /[^\t\n\r\u{20}-\u{D7FF}\u{E000}-\u{FFFD}\u{10000}-\u{
  *
  * Asked of every value the XML writer emits as an attribute value (a primitive's `value`, an `id`
  * written as an attribute, an `Extension.url`), at the site that writes it, and of a `div` string
- * that passed both of the `div` branch's checks, over the raw string and over every value the
- * branch's parse of it decoded, so a numeric character reference to a non-`Char` (`&#0;`) is refused
- * as the raw character is. The Legal Character constraint makes either a fatal error. The discouraged
- * code points `Char` still admits (U+007F to U+009F, U+FDD0 to U+FDEF) are not refused.
+ * that passed both of the `div` branch's checks, over the raw string and over the code point each
+ * numeric character reference the branch's parse of it decoded refers to, one reference at a time,
+ * so a reference to a non-`Char` (`&#0;`, or `&#xD83D;` beside `&#xDE00;`) is refused as the raw
+ * character is. The Legal Character constraint makes either a fatal error. The discouraged code
+ * points `Char` still admits (U+007F to U+009F, U+FDD0 to U+FDEF) are not refused.
  *
  * **Refusing rather than repairing.** A character reference cannot carry it (a reference to a
  * non-`Char` is itself a fatal error), and replacing or dropping it changes a value the sender
  * wrote. So the value is left as it is, and no document is returned.
  *
- * @param text - A value about to be written, or a `div` string, or a value its parse decoded.
+ * @param text - A value about to be written, or a `div` string, or the one code point a reference
+ *   in it refers to.
  * @returns `true` when the text must be refused.
  * @internal
  */

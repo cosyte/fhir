@@ -462,6 +462,19 @@ export const DIV_MODELS: readonly NamedModel[] = [
       ["&#xFFFE; in an attribute value", `<div xmlns="${XHTML}" title="a&#xFFFE;b">x</div>`],
       ["&#8; in a nested element", `<div xmlns="${XHTML}"><p><b>a&#8;b</b></p></div>`],
       ["&#xD800; in the text", `<div xmlns="${XHTML}">a&#xD800;b</div>`],
+      // Each reference refers to an unpaired surrogate; decoded together they read as one U+1F600.
+      [
+        "a surrogate pair spelled as two hex references in the text",
+        `<div xmlns="${XHTML}">a&#xD83D;&#xDE00;b</div>`,
+      ],
+      [
+        "a surrogate pair spelled as two decimal references in the text",
+        `<div xmlns="${XHTML}">a&#55357;&#56832;b</div>`,
+      ],
+      [
+        "a surrogate pair spelled as two hex references in an attribute value",
+        `<div xmlns="${XHTML}" title="&#xD800;&#xDC00;">x</div>`,
+      ],
       ["&#xFFFF; in the text", `<div xmlns="${XHTML}">a&#xFFFF;b</div>`],
       ["&#x0B; under a prefix the string binds", `<h:div xmlns:h="${XHTML}">a&#x0B;b</h:div>`],
     ] as const

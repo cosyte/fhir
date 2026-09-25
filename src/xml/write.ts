@@ -64,7 +64,7 @@ import {
 } from "../codec/serialize-guard.js";
 import { childPath, rootPath } from "../model/path.js";
 import { FHIR_XML_NAMESPACE } from "./read.js";
-import { readRawXml, type XmlElement } from "./raw-xml.js";
+import { readRawXmlReferences, type XmlElement } from "./raw-xml.js";
 
 /**
  * The one mutable thing the writer carries: the locations it refuses, by reason.
@@ -128,17 +128,28 @@ function attributeValue(text: string, path: string, sink: RefusalSink): string {
 }
 
 /**
- * Whether any text or attribute value the parse of a `div` string decoded carries a code point
- * outside XML 1.0 `Char`. Asked after the raw string itself passed that question, so what this finds
- * came from a numeric character reference (`&#0;`, `&#x1F;`), which XML 1.0's Legal Character
- * constraint makes a fatal error. A comment or a processing instruction is not decoded by the parse
- * and does not reach this, which is right: a reference is not recognised inside either.
+ * Whether any numeric character reference the parse of a `div` string decoded refers to a code
+ * point outside XML 1.0 `Char` (`&#0;`, `&#x1F;`), which XML 1.0's Legal Character constraint makes a
+ * fatal error: "Characters referred to using character references MUST match the production for
+ * Char."
+ *
+ * **Each reference is asked on its own, never the text it decoded to.** The parse decodes a
+ * reference with `String.fromCodePoint`, so two references to the two halves of a surrogate pair
+ * (`&#xD83D;&#xDE00;`) decode to the same well-formed pair as `&#x1F600;`, and a question asked of the
+ * decoded text reads one `Char` there. Each of those two references refers to an unpaired surrogate,
+ * and each is refused. A comment or a processing instruction is not decoded by the parse and does
+ * not reach this, which is right: a reference is not recognised inside either.
+ *
+ * @param references - The code point of every numeric character reference the parse decoded.
  */
-function decodesNonXmlCharacter(element: XmlElement): boolean {
-  if (element.attributes.some(({ value }) => carriesNonXmlCharacter(value))) return true;
-  return element.children.some((child) =>
-    child.type === "text" ? carriesNonXmlCharacter(child.value) : decodesNonXmlCharacter(child),
-  );
+function refersToNonXmlCharacter(references: readonly number[]): boolean {
+  return references.some((codePoint) => carriesNonXmlCharacter(String.fromCodePoint(codePoint)));
+}
+
+/** A `div` string as its parse read it: the root element, and what each reference referred to. */
+interface DivParse {
+  readonly root: XmlElement;
+  readonly references: readonly number[];
 }
 
 /**
@@ -169,10 +180,10 @@ function decodesNonXmlCharacter(element: XmlElement): boolean {
  * of a string that passes here, by {@link bindsEveryPrefix}, on a code of its own: an unbound prefix
  * is the value route of the residual the colon refusal closes at the tag sites, which that refusal
  * cannot reach because this site writes a value, not a name. The third is asked after that, of the
- * raw string and of what this parse decoded ({@link decodesNonXmlCharacter}), on a code of its own
- * again. A string that fails here keeps `UNSERIALIZABLE_DIV_MARKUP` whatever prefix or character it
- * carries. Comments and processing instructions around the root parse as prolog/misc and are
- * accepted: neither is an element.
+ * raw string and of each numeric character reference this parse decoded
+ * ({@link refersToNonXmlCharacter}), on a code of its own again. A string that fails here keeps
+ * `UNSERIALIZABLE_DIV_MARKUP` whatever prefix or character it carries. Comments and processing
+ * instructions around the root parse as prolog/misc and are accepted: neither is an element.
  *
  * **THE STRUCTURE IS WHAT THIS SETTLES. IT SETTLES NOTHING ELSE, AND THE COUNTEREXAMPLES BELOW ARE
  * ASSERTED RATHER THAN LEFT AS A CAVEAT. They are examples, not an enumeration.** `readRawXml`
@@ -187,19 +198,21 @@ function decodesNonXmlCharacter(element: XmlElement): boolean {
  * document is rejected by a conformant third-party parser. All three are `PRE-EXISTING`.
  *
  * @param value - The raw string a `div` property carries.
- * @returns The string's root element when the string spells the one `div` element the property
- *   names, so the branch can ask its next question ({@link bindsEveryPrefix}) of the same parse;
- *   `undefined` when it does not.
+ * @returns The string's parse (its root element and the code point of each numeric character
+ *   reference it decoded) when the string spells the one `div` element the property names, so the
+ *   branch can ask its next questions ({@link bindsEveryPrefix}, {@link refersToNonXmlCharacter}) of
+ *   the same parse; `undefined` when it does not.
  */
-function emitsOneDivElement(value: string): XmlElement | undefined {
-  let root: XmlElement;
+function emitsOneDivElement(value: string): DivParse | undefined {
+  let parse: DivParse;
   try {
-    root = readRawXml(value);
+    parse = readRawXmlReferences(value);
   } catch {
     return undefined; // not one well-formed element: unbalanced, multi-root, a DTD, an undefined entity.
   }
-  const colon = root.name.indexOf(":");
-  return (colon === -1 ? root.name : root.name.slice(colon + 1)) === "div" ? root : undefined;
+  const { name } = parse.root;
+  const colon = name.indexOf(":");
+  return (colon === -1 ? name : name.slice(colon + 1)) === "div" ? parse : undefined;
 }
 
 /** The prefix Namespaces in XML 1.0 §3 binds by definition, so a name may use it undeclared. */
@@ -392,16 +405,16 @@ function writeItem(
   // A string that passes both is asked a third, on a code of its own again: whether it carries a
   // code point outside XML 1.0 `Char`, raw or denoted by a reference its parse decoded.
   if (name === "div" && node.kind === "primitive" && typeof node.value === "string") {
-    const root = emitsOneDivElement(node.value);
-    if (root === undefined) {
+    const parse = emitsOneDivElement(node.value);
+    if (parse === undefined) {
       sink.refusedDivs.push(path);
       return "";
     }
-    if (!bindsEveryPrefix(root)) {
+    if (!bindsEveryPrefix(parse.root)) {
       sink.refusedDivPrefixes.push(path);
       return "";
     }
-    if (carriesNonXmlCharacter(node.value) || decodesNonXmlCharacter(root)) {
+    if (carriesNonXmlCharacter(node.value) || refersToNonXmlCharacter(parse.references)) {
       sink.refusedCharacters.push(path);
       return "";
     }
@@ -523,8 +536,9 @@ function writeElement(
  * when every prefix its markup names is bound by a declaration inside it (`bindsEveryPrefix`); one
  * that is not raises `UNSERIALIZABLE_DIV_PREFIX` below. A string that passes both is written only
  * when it carries no code point outside XML 1.0 `Char`, neither raw nor denoted by a numeric
- * character reference its parse decoded; one that does raises `UNSERIALIZABLE_XML_CHARACTER`
- * below, and a reference inside a comment, which is never decoded, is not one. The shape the first
+ * character reference its parse decoded, each reference judged on its own; one that does raises
+ * `UNSERIALIZABLE_XML_CHARACTER` below, and a reference inside a comment, which is never decoded, is
+ * not one. The shape the first
  * check exists for is
  * `<div xmlns="…xhtml">ok</div></text><code><coding>…716186003…</coding></code><text>` on an
  * `AllergyIntolerance`: it used to be spliced in whole, and the emitted document re-read with
@@ -694,8 +708,10 @@ function writeElement(
  *   (production [2]): U+0000 to U+0008, U+000B, U+000C, U+000E to U+001F, an unpaired surrogate,
  *   U+FFFE or U+FFFF. In a `div` string a numeric character reference denoting one (`&#0;`,
  *   `&#x1F;`) counts as the raw character does, because the Legal Character constraint makes it as
- *   fatal; a reference inside a comment is never decoded and does not. A U+0000 used to be written
- *   raw into its `value` attribute. **Refused, never repaired**: the character is not written raw,
+ *   fatal; each reference is judged on its own, so two references to the halves of a surrogate pair
+ *   (`&#xD83D;&#xDE00;`) are refused although they decode to one `Char`, while `&#x1F600;` is
+ *   written. A reference inside a comment is never decoded and does not count. A U+0000 used to be
+ *   written raw into its `value` attribute. **Refused, never repaired**: the character is not written raw,
  *   as a reference or replaced, and neither it nor its value is dropped, so the model is left as it
  *   was. The location is the value's (`Patient.gender`, `Patient.gender.id`,
  *   `Patient.extension[0].url`, `Patient.text.div`), every one once, in walk order; neither the
