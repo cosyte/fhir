@@ -77,14 +77,21 @@ export declare const EXAMPLE_DIRECTORY: string;
 export declare const PACKAGE_FILE: string;
 export declare const PROJECTION_PATH: string;
 export declare const CLASSIFICATION_PATH: string;
-export declare const UCUM_RULE: { readonly version: string; readonly key: string; readonly variant: string };
+export declare const UCUM_RULE: {
+  readonly version: string;
+  readonly key: string;
+  readonly variant: string;
+};
 export declare const ROW_ANSWER: {
   readonly VIOLATED: string;
   readonly SATISFIED: string;
   readonly UNCHECKED: string;
   readonly NOT_EVALUATED: string;
 };
-export declare const NOT_REACHED: { readonly SLICE_SCOPED: string; readonly NO_COMPARED_DOCUMENT: string };
+export declare const NOT_REACHED: {
+  readonly SLICE_SCOPED: string;
+  readonly NO_COMPARED_DOCUMENT: string;
+};
 
 export declare function usCoreIg(version: string): string;
 export declare function isPackageCorpus(corpus: CorpusRecord | undefined): boolean;
@@ -96,7 +103,11 @@ export declare function packageLocation(
   version: string,
   options?: LocationOptions,
 ): string;
-export declare function packageMismatch(corpus: CorpusRecord, version: string, buf: Buffer): string | null;
+export declare function packageMismatch(
+  corpus: CorpusRecord,
+  version: string,
+  buf: Buffer,
+): string | null;
 export declare function readVerifiedPackage(
   corpus: CorpusRecord,
   version: string,
@@ -109,8 +120,15 @@ export declare function loadPackage(
   version: string,
   options?: LocationOptions,
 ): ProfileIndex;
-export declare function declaredProfiles(text: string, version: string, index: ProfileIndex): DeclaredProfiles;
-export declare function newlyEvaluatedRows(projection: unknown, classification: unknown): UsCoreRow[];
+export declare function declaredProfiles(
+  text: string,
+  version: string,
+  index: ProfileIndex,
+): DeclaredProfiles;
+export declare function newlyEvaluatedRows(
+  projection: unknown,
+  classification: unknown,
+): UsCoreRow[];
 export declare function loadNewlyEvaluatedRows(options?: {
   readonly read?: (path: string) => string;
   readonly projectionPath?: string;
@@ -136,4 +154,7 @@ export declare function agreeingCount(result: RowResult): number;
 export declare function ucumExercised(report: ReachReport): string[];
 export declare function ucumShortfall(report: ReachReport): string | null;
 export declare function formatReachReport(report: ReachReport): string[];
-export declare function formatUsCoreDocuments(records: readonly Record_[], ids: readonly string[]): string[];
+export declare function formatUsCoreDocuments(
+  records: readonly Record_[],
+  ids: readonly string[],
+): string[];

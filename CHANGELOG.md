@@ -8,6 +8,32 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Added
 
+- **A US Core pass in the reference-validator differential, so the constraints the FHIRPath subset
+  newly decides are compared against `validator_cli` on real documents** (`fhir#FHIRPATH-USCORE-1`,
+  S0384). A fourth corpus, `hl7-fhir-us-core-examples`, declares 34 published US Core examples (15
+  from 6.1.0, 19 from 9.0.0: laboratory, clinical-result, screening-assessment and smoking-status
+  Observations, Organizations and Practitioners) by version, `CC0-1.0`, path, bytes and SHA-256,
+  each an example file inside that version's package; `pnpm corpus:fetch` downloads both packages
+  from `packages.fhir.org`, refuses either unless its byte count and SHA-256 match the declaration
+  (the same record the constraint projection was derived from), and extracts the examples into the
+  git-ignored `corpus/documents/`. Nothing of either package is committed, and the PHI allow-lists
+  are unchanged. The harness validates each example with exactly the profiles its `meta.profile`
+  declares, read from the re-verified package of its declared version, and runs the oracle for it
+  with `-ig hl7.fhir.us.core#<that version>`; a document declaring no profile, or one its package
+  does not carry, has no readable outcome and is neither compared nor clean. The three existing
+  corpora are validated and asked exactly as before. Measured against `validator_cli` 6.10.2: 213
+  compared (179 before), 0 false valid, 0 spurious error, and the 34 US Core examples agree with no
+  exclusion. For each of the 18 newly evaluated constraint rows the run prints how many compared
+  documents reach it, or `not reached (slice-scoped)` / `not reached (no compared document)`; an
+  answer that is only `INVARIANT_UNCHECKED` is printed `unchecked` and a primitive anchor
+  `not evaluated (primitive occurrence)`, and neither counts as agreement. 9 of the 18 rows agree on
+  at least one compared document; the 9 slice-scoped rows are not reached. A run in which no compared
+  9.0.0 document decides `us-core-3` over a `valueQuantity` fails (seven do). The corpus suite fails
+  on a US Core exclusion whose only recorded class is `invariant`. **Limits, stated with the
+  capability, and unchanged by this entry because `src/profiles` is held**: the profile layer still
+  evaluates no slice-scoped constraint (`us-core-16` to `us-core-19`, `us-core-27`) and no constraint
+  anchored on a primitive occurrence (`us-core-1` on `effectiveDateTime`, `us-core-3` on
+  `valueString`).
 - **FHIR-type tests and `matches()` in the bounded FHIRPath subset, so more of US Core's own
   constraints are decided instead of reported `INVARIANT_UNCHECKED`.** Over the constraints the US
   Core 6.1.0 and 9.0.0 resource profiles carry (a committed, digest-verified projection used as test

@@ -46,12 +46,15 @@ jobs:
   # Differential vs the official validator (`org.hl7.fhir.core` / validator_cli.jar), roadmap §6.
   # AUTHORED, NOT YET PROVEN: the oracle is a JVM program, so this gate can only run here (never in the
   # dev container). The corpus is declared in corpus/corpus.json and is no longer ten in-tree
-  # fixtures. Three corpora, only the first written here: this repository's own synthetic spec-clean
+  # fixtures. Four corpora, only the first written here: this repository's own synthetic spec-clean
   # + Tier-2 quirk fixtures (P11 / P10b, provenance in test/quirk-corpus.test.ts); FHIR/fhir-test-cases
-  # at tag 1.7.67 (Apache-2.0), the shared corpus the reference validator pins itself against; and the
-  # FHIR R4 4.0.1 specification's own published examples (CC0-1.0). The third-party documents are
-  # FETCHED, never committed: `pnpm corpus:fetch` materialises them into the git-ignored
-  # corpus/documents/ and verifies a SHA-256 per document. A genuinely vendor-proprietary quirk absent
+  # at tag 1.7.67 (Apache-2.0), the shared corpus the reference validator pins itself against; the
+  # FHIR R4 4.0.1 specification's own published examples (CC0-1.0); and the US Core 6.1.0 and 9.0.0
+  # packages' own published examples (CC0-1.0), the US Core pass, each validated with exactly the US
+  # Core profiles it declares while the oracle runs it with that US Core version loaded. The
+  # third-party documents are FETCHED, never committed: `pnpm corpus:fetch` materialises them (and
+  # the two US Core package tarballs, from packages.fhir.org) into the git-ignored corpus/documents/
+  # and verifies a SHA-256 per document and per package. A genuinely vendor-proprietary quirk absent
   # from every public sample stays grounded-only and is not in the corpus (inventing one is forbidden),
   # and no document here was hand-authored to reach the count (ADR 0018).
   #
@@ -78,8 +81,10 @@ jobs:
   # class, on a document this library reports clean, is still a false valid and still fails the job.
   differential:
     runs-on: ubuntu-latest
-    # A DECLARED TIME BOUND, NOT THE RUNNER DEFAULT. ~180 documents through a JVM oracle is minutes,
+    # A DECLARED TIME BOUND, NOT THE RUNNER DEFAULT. ~210 documents through a JVM oracle is minutes,
     # not seconds, and a corpus that cannot finish must fail visibly rather than sit for six hours.
+    # Measured locally with the US Core pass in: the differential in under five minutes and the
+    # determinism check in under five more, so the bound is not raised.
     # The determinism step below fits inside this same bound by repeating a DECLARED SUBSET
     # (corpus/corpus.json, `determinismSubset`) rather than the whole corpus: the full corpus does
     # not go through the oracle three times in thirty minutes. The check prints every repeated
@@ -104,7 +109,7 @@ jobs:
         run: |
           curl -fsSL -o "$RUNNER_TEMP/validator_cli.jar" \
             "https://github.com/hapifhir/org.hl7.fhir.core/releases/download/${ORACLE_RELEASE}/validator_cli.jar"
-      - name: Differential (three corpora, >= 100 documents, count + oracle identity + terminology inputs printed)
+      - name: Differential (four corpora incl. the US Core pass, >= 100 documents, count + oracle identity + terminology inputs + US Core reach printed)
         # ubuntu-latest ships a Temurin JDK; $JAVA_HOME_21_X64 is set by the runner image. The
         # differential harness invokes `java` from PATH, no unpinned setup-java action needed.
         env:

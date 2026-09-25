@@ -4,7 +4,10 @@
  *
  * Reads `corpus/corpus.json`, retrieves every declared third-party document from the pinned source
  * the declaration names, verifies it against the declared SHA-256, and writes it under
- * `corpus/documents/`, which is git-ignored.
+ * `corpus/documents/`, which is git-ignored. A packages corpus (the US Core examples) is retrieved as
+ * its package tarballs, each verified against the byte count and SHA-256 the declaration records and
+ * kept, git-ignored, beside the examples extracted from it, because the differential reads the
+ * declared profiles out of the same verified package.
  *
  * ────────────────────────────────────────────────────────────────────────────────────────────────
  * WHY FETCH RATHER THAN VENDOR

@@ -74,10 +74,19 @@ export const PACKAGE_FILE = "package.tgz";
 export const PROJECTION_PATH = join(REPO_ROOT, "test", "__data__", "uscore-constraints.json");
 
 /** The committed classification of those rows, `head` and `pin`. */
-export const CLASSIFICATION_PATH = join(REPO_ROOT, "test", "__data__", "uscore-classification.json");
+export const CLASSIFICATION_PATH = join(
+  REPO_ROOT,
+  "test",
+  "__data__",
+  "uscore-classification.json",
+);
 
 /** The US Core version and constraint key whose reach a green run must show on a real document. */
-export const UCUM_RULE = Object.freeze({ version: "9.0.0", key: "us-core-3", variant: "valueQuantity" });
+export const UCUM_RULE = Object.freeze({
+  version: "9.0.0",
+  key: "us-core-3",
+  variant: "valueQuantity",
+});
 
 /**
  * What one reaching document's own answer for one row was. Printed words, and stable: a caller of
@@ -150,7 +159,9 @@ export function packageLocation(corpus, version, options = {}) {
 export function packageRecord(corpus, version) {
   const record = corpus.acquisition?.packages?.[version];
   if (record === undefined || record === null || typeof record !== "object") {
-    throw new CorpusError(`${corpus.id}: the declaration records no package for US Core ${String(version)}`);
+    throw new CorpusError(
+      `${corpus.id}: the declaration records no package for US Core ${String(version)}`,
+    );
   }
   return record;
 }
@@ -221,7 +232,8 @@ export function packageEntries(tgz) {
     const prefix = text(345, 500, at);
     const name = prefix === "" ? text(0, 100, at) : `${prefix}/${text(0, 100, at)}`;
     const kind = String.fromCharCode(header[156] ?? 0);
-    if (kind === "0" || kind === "\0") out.set(name, Buffer.from(archive.subarray(at + 512, at + 512 + size)));
+    if (kind === "0" || kind === "\0")
+      out.set(name, Buffer.from(archive.subarray(at + 512, at + 512 + size)));
     at += 512 + Math.ceil(size / 512) * 512;
   }
   return out;
@@ -250,14 +262,16 @@ export function profileIndex(entries) {
     }
     if (!isRecord(resource) || resource.resourceType !== "StructureDefinition") continue;
     if (typeof resource.url !== "string" || typeof resource.id !== "string") continue;
-    const snapshot = isRecord(resource.snapshot) && Array.isArray(resource.snapshot.element)
-      ? resource.snapshot.element
-      : [];
+    const snapshot =
+      isRecord(resource.snapshot) && Array.isArray(resource.snapshot.element)
+        ? resource.snapshot.element
+        : [];
     const profile = {
       id: resource.id,
       url: resource.url,
       type: String(resource.type ?? ""),
-      baseDefinition: typeof resource.baseDefinition === "string" ? resource.baseDefinition : undefined,
+      baseDefinition:
+        typeof resource.baseDefinition === "string" ? resource.baseDefinition : undefined,
       snapshot,
       text,
     };
@@ -283,9 +297,13 @@ export function declaredProfiles(text, version, index) {
   try {
     resource = JSON.parse(text);
   } catch {
-    return { ok: false, reason: "the document is not readable JSON, so the profiles it declares cannot be read" };
+    return {
+      ok: false,
+      reason: "the document is not readable JSON, so the profiles it declares cannot be read",
+    };
   }
-  const declared = isRecord(resource) && isRecord(resource.meta) ? resource.meta.profile : undefined;
+  const declared =
+    isRecord(resource) && isRecord(resource.meta) ? resource.meta.profile : undefined;
   if (!Array.isArray(declared) || declared.length === 0) {
     return {
       ok: false,
@@ -298,7 +316,10 @@ export function declaredProfiles(text, version, index) {
   const profiles = [];
   for (const canonical of declared) {
     if (typeof canonical !== "string" || canonical === "") {
-      return { ok: false, reason: "the document declares a meta.profile entry that is not a canonical URL" };
+      return {
+        ok: false,
+        reason: "the document declares a meta.profile entry that is not a canonical URL",
+      };
     }
     const bar = canonical.indexOf("|");
     const url = bar < 0 ? canonical : canonical.slice(0, bar);
@@ -390,7 +411,8 @@ function lineage(profile, index) {
   while (current !== undefined && !seen.has(current.url)) {
     seen.add(current.url);
     out.push(current);
-    current = current.baseDefinition === undefined ? undefined : index.byUrl.get(current.baseDefinition);
+    current =
+      current.baseDefinition === undefined ? undefined : index.byUrl.get(current.baseDefinition);
   }
   return out;
 }
@@ -469,7 +491,9 @@ export function anchorOccurrences(resource, row) {
 function atAnchor(location, row) {
   const loc = String(location ?? "");
   const anchor = String(row.path);
-  return loc === anchor || (loc.startsWith(`${anchor}[`) && /^\[\d+\]$/.test(loc.slice(anchor.length)));
+  return (
+    loc === anchor || (loc.startsWith(`${anchor}[`) && /^\[\d+\]$/.test(loc.slice(anchor.length)))
+  );
 }
 
 /**
@@ -500,7 +524,9 @@ export function isDecided(answer) {
  */
 export function reachReport(input) {
   const { rows, documents } = input;
-  const compared = documents.filter((d) => d.record?.compared === true && Array.isArray(d.profiles));
+  const compared = documents.filter(
+    (d) => d.record?.compared === true && Array.isArray(d.profiles),
+  );
   const parsed = new Map();
   const resourceOf = (d) => {
     if (!parsed.has(d.id)) {
@@ -540,7 +566,13 @@ export function reachReport(input) {
       return { row, reached: false, reason: NOT_REACHED.SLICE_SCOPED, declaring, documents: [] };
     }
     if (reaching.length === 0) {
-      return { row, reached: false, reason: NOT_REACHED.NO_COMPARED_DOCUMENT, declaring, documents: [] };
+      return {
+        row,
+        reached: false,
+        reason: NOT_REACHED.NO_COMPARED_DOCUMENT,
+        declaring,
+        documents: [],
+      };
     }
     return { row, reached: true, declaring, documents: reaching };
   });
@@ -607,7 +639,9 @@ export function formatReachReport(report) {
           ? `; ${String(result.declaring)} compared document(s) declare a profile carrying it with the ` +
             `sliced element present, and the profile layer does not evaluate a slice-scoped constraint`
           : "";
-      lines.push(`  ${label}: not reached (${result.reason})${declared}. Not counted as agreement.`);
+      lines.push(
+        `  ${label}: not reached (${result.reason})${declared}. Not counted as agreement.`,
+      );
       continue;
     }
     const count = (answer) => result.documents.filter((d) => d.answer === answer).length;
@@ -623,7 +657,9 @@ export function formatReachReport(report) {
     );
     for (const d of result.documents) {
       if (d.answer === ROW_ANSWER.UNCHECKED) {
-        lines.push(`    unchecked: ${d.id}, this library's only answer for ${result.row.key} is INVARIANT_UNCHECKED; not counted as agreement.`);
+        lines.push(
+          `    unchecked: ${d.id}, this library's only answer for ${result.row.key} is INVARIANT_UNCHECKED; not counted as agreement.`,
+        );
       } else if (d.answer === ROW_ANSWER.NOT_EVALUATED) {
         lines.push(`    ${ROW_ANSWER.NOT_EVALUATED}: ${d.id}; not counted as agreement.`);
       } else if (d.violation) {

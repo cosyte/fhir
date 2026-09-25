@@ -1,23 +1,62 @@
 # The differential corpus
 
 `corpus/corpus.json` is the declaration the `validator_cli.jar` differential runs over. It is not
-ten in-tree fixtures any more. It is **three corpora, and only the first was written here**:
+ten in-tree fixtures any more. It is **four corpora, and only the first was written here**:
 
-| corpus                 | version                          | licence      | authored    | declared | compared |
-| ---------------------- | -------------------------------- | ------------ | ----------- | -------- | -------- |
-| `cosyte-fhir-fixtures` | in-tree at the commit under test | `MIT`        | this repo   | 10       | 10       |
-| `fhir-test-cases`      | tag `1.7.67` (`0d7196d7`)        | `Apache-2.0` | third party | 73       | 43       |
-| `hl7-fhir-r4-examples` | FHIR R4 `4.0.1`                  | `CC0-1.0`    | third party | 183      | 126      |
+| corpus                      | version                                  | licence      | authored    | declared | compared |
+| --------------------------- | ---------------------------------------- | ------------ | ----------- | -------- | -------- |
+| `cosyte-fhir-fixtures`      | in-tree at the commit under test         | `MIT`        | this repo   | 10       | 10       |
+| `fhir-test-cases`           | tag `1.7.67` (`0d7196d7`)                | `Apache-2.0` | third party | 73       | 43       |
+| `hl7-fhir-r4-examples`      | FHIR R4 `4.0.1`                          | `CC0-1.0`    | third party | 183      | 126      |
+| `hl7-fhir-us-core-examples` | US Core `6.1.0` and `9.0.0` (by sha256)  | `CC0-1.0`    | third party | 34       | 34       |
 
-**266 declared, 179 compared, 87 excluded**, and 169 of the 179 are third party, so the floor of one
+**300 declared, 213 compared, 87 excluded**, and 203 of the 213 are third party, so the floor of one
 hundred clears without counting a single document written here. Every declared document records
 which corpus it came from, that corpus's exact pinned version, that corpus's licence identifier, its
-byte count and its SHA-256. Licence texts and the attribution each corpus requires are in
-`licences/`.
+byte count and its SHA-256; a US Core document also records its own US Core version and licence.
+Licence texts and the attribution each corpus requires are in `licences/`.
+
+## The US Core pass
+
+The first three corpora are validated with no profile supplied, so no US Core constraint is asked
+anything there. The fourth is where US Core's own constraints meet the reference validator on real
+documents: 15 published US Core 6.1.0 examples and 19 published US Core 9.0.0 examples (laboratory,
+clinical-result, screening-assessment and smoking-status Observations, Organizations and
+Practitioners), each declared by its path inside that version's package tarball.
+
+- **Validated with exactly the profiles it declares.** Each example is validated by this library
+  against the US Core profiles its `meta.profile` names, read out of the package of the version it
+  is declared under, and the oracle runs it with `-ig hl7.fhir.us.core#<that version>` in a batch of
+  its own. A document that declares no profile, or one its package does not carry, is never
+  validated with fewer profiles than it declares: it has no readable outcome, neither compared nor
+  clean.
+- **The package is verified before anything is compared.** Both package tarballs are recorded in
+  the declaration by URL, byte count and SHA-256, the same record `test/__data__/uscore-constraints.json`
+  was projected from. `pnpm corpus:fetch` refuses a package that differs and keeps the verified one
+  beside its examples, git-ignored; the differential verifies it again and compares nothing if it
+  differs.
+- **Reach is printed, and a green run over constraints nothing exercised is not agreement.** For
+  each of the 18 constraint rows the FHIRPath subset newly evaluates, the run prints how many
+  compared US Core documents reach it (the document declares a profile carrying the row, directly or
+  inherited, and the element the row anchors on is present), or `not reached (slice-scoped)` or
+  `not reached (no compared document)`. A row counts as agreement only on a document where this
+  library decided it and the document-level comparison is not a violation. An answer that is only
+  `INVARIANT_UNCHECKED` is printed `unchecked`, and an anchor present only as a primitive (a
+  `valueString` under `us-core-3`) is printed `not evaluated (primitive occurrence)`; neither is
+  counted. Measured against `validator_cli` 6.10.2: 9 of the 18 rows agree on at least one compared
+  document, and the other 9 are the slice-scoped identifier rules, which the profile layer does not
+  evaluate and which are therefore printed not reached.
+- **The UCUM rule must be exercised.** A run in which no compared US Core 9.0.0 document reaches
+  `us-core-3` with a `valueQuantity` that this library decided names that condition and fails. Seven
+  do today.
+- **An exclusion may not hide an invariant disagreement.** A US Core exclusion needs a reason like
+  any other, printed every run, and `test/differential-corpus.test.ts` fails on one whose only
+  recorded class is `invariant`: disagreement on a constraint is what this pass exists to find. No
+  US Core document is excluded today.
 
 ## The exclusion rate is the honest headline
 
-**87 of 266 declared documents are excluded, and every one carries the reason it was excluded**,
+**87 of 300 declared documents are excluded, and every one carries the reason it was excluded**,
 printed on every run. They are not noise and they are not a convenience: they were each measured
 against `validator_cli` 6.10.2, and the reason records the release, the date, the error count, the
 class breakdown by `OperationOutcome.issue.code`, and the first locations.
@@ -40,7 +79,7 @@ document this library reports clean, is still a false valid and still fails the 
 naming any non-terminology class are untouched, and `test/differential-corpus.test.ts` fails if an
 exclusion whose only recorded class is `code-invalid` ever reappears.
 
-So the number a consumer can quote is **179 real documents from three public corpora on which this
+So the number a consumer can quote is **213 real documents from four public corpora on which this
 library and the reference validator were shown to agree, within a recorded terminology delta**, next
 to **87 on which they did not, each with the disagreement recorded**. Reading only the first number
 is reading half of this file.
