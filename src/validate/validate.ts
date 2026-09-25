@@ -35,8 +35,9 @@
  * `Element` and `Extension` base, `pat-1`, `ext-1` and `ele-1` among them, with no profile supplied;
  * and, for each supplied profile whose `type` matches, that profile's own `constraint`s
  * ({@link ../profiles/invariants.js}). A violation both a profile and the base-constraint layer
- * find at one occurrence is reported once. A resource type outside the eight draws no
- * base-constraint finding.
+ * find at one occurrence is reported once, and a base constraint the base-constraint layer decides
+ * at an occurrence is never also reported unevaluated there because a profile's verbatim copy of
+ * it lies outside the subset. A resource type outside the eight draws no base-constraint finding.
  *
  * @packageDocumentation
  */
@@ -323,8 +324,8 @@ export function validateResource(
   // outside the eight draws nothing here. The seven named safety invariants stay with the safety
   // layer above, so each is reported once.
   const base = collectBaseInvariantFindings(resource, rt);
-  for (const finding of base) ctx.issues.push(finding.issue);
-  const reportedByBase = alreadyReported(base);
+  for (const finding of base.findings) ctx.issues.push(finding.issue);
+  const reportedByBase = alreadyReported(base.findings);
 
   // Profile layer (Phase 6): validate against each supplied StructureDefinition whose `type` matches
   // (fixed/pattern, must-support-as-obligation, profile cardinality, slicing), plus the resource's
@@ -344,9 +345,19 @@ export function validateResource(
       // snapshot inherits the base constraints, so a finding the base-constraint layer already made
       // at the same occurrence, for the same key and code, is not reported a second time; the two
       // spell a location differently (the profile layer drops the index of a lone occurrence), so
-      // the occurrence is compared as a node, never as a location string.
+      // the occurrence is compared as a node, never as a location string. And where the base layer
+      // DECIDED a base constraint at an occurrence (held or not held) that the profile carries with
+      // the same expression, the profile layer's INVARIANT_UNCHECKED for it would say "not
+      // evaluated" about a constraint that was: dom-3 over a resource with no `contained` entry,
+      // which the subset cannot parse but the base layer decides by the expression's own semantics.
       for (const finding of invariantFindings(resource, profile, profileOptions)) {
         if (reportedByBase(finding.focus, finding.issue)) continue;
+        if (
+          finding.issue.code === "INVARIANT_UNCHECKED" &&
+          base.decides(finding.focus, finding.issue.constraint ?? "", finding.expression)
+        ) {
+          continue;
+        }
         ctx.issues.push(finding.issue);
       }
     }

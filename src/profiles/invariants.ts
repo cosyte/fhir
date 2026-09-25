@@ -26,7 +26,10 @@
  * `ext-1`, `ele-1`, `dom-2` and the rest) included. Under `validateResource` the base-constraint
  * layer ({@link ../validate/base-invariants.js}) evaluates those base constraints on the eight
  * modeled types whether or not a profile is supplied, and a finding this layer makes at the same
- * occurrence, for the same key and code, is reported once rather than twice.
+ * occurrence, for the same key and code, is reported once rather than twice. Where that layer
+ * decided a base constraint at an occurrence and this layer could not evaluate the profile's
+ * verbatim copy of it there (`dom-3`, whose expression lies outside the subset, over a resource
+ * with no `contained` entry), the decision stands and no `INVARIANT_UNCHECKED` is added for it.
  *
  * @packageDocumentation
  */
@@ -125,6 +128,8 @@ export interface InvariantFinding {
   readonly issue: ValidationIssue;
   /** The node the constraint was evaluated against: the resource, or one element occurrence. */
   readonly focus: FhirComplex;
+  /** The constraint's `expression`, exactly as the profile carries it. */
+  readonly expression: string;
 }
 
 /**
@@ -176,11 +181,13 @@ export function invariantFindings(
               constraint.key,
             ),
             focus: focus.node,
+            expression: constraint.expression,
           });
         } else if (!satisfied) {
           findings.push({
             issue: validationIssue("INVARIANT_VIOLATED", severity, focus.path, constraint.key),
             focus: focus.node,
+            expression: constraint.expression,
           });
         }
       }

@@ -24,7 +24,10 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   and reported unchecked when something is; `dom-6` is not evaluated without a profile; a contained
   resource is checked only through `dom-2` to `dom-5`. A profile whose snapshot repeats a base
   constraint is reported once per occurrence, compared by node rather than by location string, and
-  `collectInvariantIssues` called directly is unchanged. No validation code and no codec code is
+  a profile carrying R4's `dom-3` as written no longer draws `INVARIANT_UNCHECKED` for it under
+  `validateResource` on a resource with nothing contained, where the base layer decided it (a
+  profile's differently written `dom-3` is still unchecked); `collectInvariantIssues` called
+  directly is unchanged. No validation code and no codec code is
   added. FHIRPath `children()` over a primitive now includes the primitive's `id`, which `ele-1`
   needs to hold on a value-absent primitive carrying an `id` and an extension; the shared FHIRPath
   suite counts do not move. The projection `test/__data__/r4-base-constraints.json` (11

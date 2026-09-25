@@ -230,6 +230,9 @@ export const VALIDATION_CODES = {
    * the constraint is reported **unchecked, never assumed to pass** (fail-safe), the
    * library does not claim conformance to an invariant it could not test. The constraint `key` travels
    * in {@link ValidationIssue.constraint}. Value-free (the location + key, never an instance value).
+   * A profile's verbatim copy of an R4 base constraint that the base-constraint layer decided at the
+   * same occurrence is not reported this way, because that constraint was evaluated: R4's `dom-3`
+   * on a resource with nothing contained draws nothing, with or without a profile.
    */
   INVARIANT_UNCHECKED: "INVARIANT_UNCHECKED",
   /**

@@ -17,7 +17,10 @@ and no children validated `valid: true` with no finding at all.
 - `dom-3` holds by its own terms on a resource with nothing contained and draws nothing there. On a
   resource that carries a contained resource it is an `INVARIANT_UNCHECKED` finding at `information`,
   because checking that every contained resource is referenced needs reference resolution the
-  bounded FHIRPath subset does not have.
+  bounded FHIRPath subset does not have. A supplied profile whose snapshot carries R4's `dom-3` as
+  written, which every R4-derived snapshot does, used to draw that `INVARIANT_UNCHECKED` on every
+  resource; with nothing contained it now draws nothing, because the constraint was decided. A
+  profile's own expression under that key, written any other way, is still reported unchecked.
 - `dom-6` (a narrative SHOULD be present) is a `warning` and is not evaluated without a profile. A
   contained resource is checked only through `dom-2` to `dom-5`. Any other resource type draws none
   of these findings.

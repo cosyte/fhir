@@ -291,6 +291,63 @@ describe("AC-2 / AC-7: dom-3, outside the subset with contained content, decided
   });
 });
 
+describe("AC-7: a type-matching profile whose snapshot carries R4's dom-3 as written", () => {
+  /** R4 4.0.1 dom-3, verbatim: every R4-derived snapshot carries it at the root. */
+  const DOM3 =
+    "contained.where((('#'+id in (%resource.descendants().reference | %resource.descendants().as(canonical) | %resource.descendants().as(uri) | %resource.descendants().as(url))) or descendants().where(reference = '#').exists() or descendants().where(as(canonical) = '#').exists() or descendants().where(as(canonical) = '#').exists()).not()).trace('unmatched', id).empty()";
+
+  function carryingDom3(type: string, expression: string): ReturnType<typeof defineProfile> {
+    return defineProfile({
+      url: `http://example.org/StructureDefinition/${type}-carries-dom-3`,
+      type,
+      snapshot: [{ path: type, constraint: [{ key: "dom-3", severity: "error", expression }] }],
+    });
+  }
+
+  for (const type of MODELED_TYPES) {
+    it(`AC-7: a ${type} with no contained entry draws no dom-3 finding under the profile`, () => {
+      const profiles = [carryingDom3(type, DOM3)];
+      expect(carrying(validate(MINIMAL[type], { profiles }), "dom-3")).toEqual([]);
+      expect(
+        carrying(validate({ ...MINIMAL[type], contained: [] }, { profiles }), "dom-3"),
+      ).toEqual([]);
+    });
+  }
+
+  it("AC-7: a contained entry still draws exactly one dom-3 INVARIANT_UNCHECKED under the profile", () => {
+    const result = validate(
+      {
+        resourceType: "Patient",
+        contained: [CONTAINED_PRACTITIONER],
+        generalPractitioner: [{ reference: "#pr1" }],
+      },
+      { profiles: [carryingDom3("Patient", DOM3)] },
+    );
+    expect(carrying(result, "dom-3")).toEqual([["INVARIANT_UNCHECKED", "information", "Patient"]]);
+  });
+
+  it("AC-11: collectInvariantIssues, called directly, still reports the profile's dom-3 unchecked", () => {
+    const resource = parseResource('{"resourceType":"Patient"}').resource;
+    expect(collectInvariantIssues(resource, carryingDom3("Patient", DOM3))).toEqual([
+      {
+        code: "INVARIANT_UNCHECKED",
+        severity: "information",
+        type: "informational",
+        expression: "Patient",
+        constraint: "dom-3",
+      },
+    ]);
+  });
+
+  it("AC-2: a profile's dom-3 written otherwise, outside the subset, is still reported unchecked", () => {
+    // Not R4's expression (this is the later spelling, `ofType` for `as`): the base layer's decision
+    // is about R4's own dom-3, so a different expression under the key is never assumed to hold.
+    const other = DOM3.replaceAll("as(", "ofType(");
+    const result = validate(MINIMAL.Patient, { profiles: [carryingDom3("Patient", other)] });
+    expect(carrying(result, "dom-3")).toEqual([["INVARIANT_UNCHECKED", "information", "Patient"]]);
+  });
+});
+
 describe("AC-3: each listed key returns valid false at the violating occurrence", () => {
   const cases: readonly { key: string; doc: Doc; at: string }[] = [
     { key: "pat-1", doc: TYPE_KEY_VIOLATIONS["pat-1"] ?? {}, at: "Patient.contact[0]" },

@@ -161,7 +161,9 @@ outcome.issues.map((issue) => issue.constraint); // => ["pat-1"]
 ```
 
 A profile that carries one of those constraints again does not double the finding: each violation
-is reported once per occurrence.
+is reported once per occurrence. And a profile carrying R4's `dom-3` as written, as every R4-derived
+snapshot does, draws no finding for it on a resource with nothing contained, because that
+constraint holds there by its own terms.
 
 A starter kit of small, specification-grounded profiles ships with the package as worked examples.
 They are built through the same public authoring call you would use, so there is nothing privileged

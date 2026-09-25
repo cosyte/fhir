@@ -33,7 +33,9 @@
  * selection is empty, `where` over an empty collection is empty, `trace` returns its input and
  * `empty()` is `true`, so the constraint holds and nothing is reported. With at least one entry the
  * filter needs `descendants()`, FHIR-type `as()` and string concatenation, which are outside the
- * subset, so it is reported `INVARIANT_UNCHECKED`: never assumed to hold.
+ * subset, so it is reported `INVARIANT_UNCHECKED`: never assumed to hold. A supplied profile whose
+ * snapshot carries `dom-3` with this same expression is answered by this decision too, so a
+ * resource with no `contained` entry draws no `dom-3` finding under that profile either.
  *
  * **Every occurrence the model holds at an anchor is evaluated as the model holds it.** A position
  * where the reader could not place what the sender wrote (a string, number or `null` where an
@@ -183,6 +185,11 @@ const COMPILED: readonly Compiled[] = BASE_CONSTRAINTS.map((row) => ({
   ast: compile(row.expression),
 }));
 
+/** Each key's verbatim expression, to tell a profile's copy of a base constraint from its own. */
+const EXPRESSION_OF: ReadonlyMap<string, string> = new Map(
+  BASE_CONSTRAINTS.map((row) => [row.key, row.expression]),
+);
+
 /** The selection `dom-3` starts from, evaluated on its own by the same engine. */
 const CONTAINED_SELECTION = compile("contained");
 
@@ -229,6 +236,25 @@ export interface BaseInvariantFinding {
   readonly issue: ValidationIssue;
   /** The node the constraint was evaluated against: the resource, or one element occurrence. */
   readonly focus: FhirNode;
+}
+
+/**
+ * What the base-constraint layer found and what it decided.
+ *
+ * @internal
+ */
+export interface BaseInvariantResult {
+  /**
+   * The findings, each with the node it was evaluated against: the resource-level constraints first,
+   * then the element-anchored ones, then `ele-1` / `ext-1` in document order.
+   */
+  readonly findings: readonly BaseInvariantFinding[];
+  /**
+   * Whether this layer decided the base constraint `key`, written exactly as `expression`, at
+   * `focus`: evaluated it there to held or to not held. A constraint it reported unchecked, never
+   * evaluated there, or an expression that is not the base constraint's own, is not decided.
+   */
+  readonly decides: (focus: FhirNode, key: string, expression: string) => boolean;
 }
 
 /** Whether a property name holds `Extension`s: `extension` or `modifierExtension`. */
@@ -296,20 +322,31 @@ function walkChildren(node: FhirComplex, path: string, isExtension: boolean, vis
  *
  * @param resource - The resource model.
  * @param rt - Its `resourceType`, exactly as the document wrote it. Any type outside the eight
- *   yields no finding.
- * @returns The findings, each with the node it was evaluated against: the resource-level constraints
- *   first, then the element-anchored ones, then `ele-1` / `ext-1` in document order.
+ *   yields no finding and decides nothing.
+ * @returns The findings, and which constraints were decided at which node.
  * @internal
  */
 export function collectBaseInvariantFindings(
   resource: FhirComplex,
   rt: string,
-): BaseInvariantFinding[] {
-  if (!BASE_CONSTRAINT_TYPES.has(rt)) return [];
-  const root = rootPath(rt);
+): BaseInvariantResult {
   const findings: BaseInvariantFinding[] = [];
+  // The keys decided (held or not held) at each node; an unchecked outcome is never recorded here.
+  const decided = new Map<FhirNode, Set<string>>();
+  const result: BaseInvariantResult = {
+    findings,
+    decides: (focus, key, expression) =>
+      EXPRESSION_OF.get(key) === expression && decided.get(focus)?.has(key) === true,
+  };
+  if (!BASE_CONSTRAINT_TYPES.has(rt)) return result;
+  const root = rootPath(rt);
 
   const report = (outcome: Outcome, key: string, focus: FhirNode, path: string): void => {
+    if (outcome !== "unchecked") {
+      const keys = decided.get(focus) ?? new Set<string>();
+      keys.add(key);
+      decided.set(focus, keys);
+    }
     if (outcome === "satisfied") return;
     const issue =
       outcome === "violated"
@@ -355,5 +392,5 @@ export function collectBaseInvariantFindings(
       visit,
     );
   }
-  return findings;
+  return result;
 }

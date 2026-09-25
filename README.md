@@ -655,9 +655,10 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `DomainResource`, `Element` and `Extension` base: `pat-1`, `obs-3`, `con-1`, `con-2`, `imm-1`,
   `dom-2` to `dom-5`, `ele-1` and `ext-1`, each transcribed verbatim and evaluated by the same
   FHIRPath engine. A violation is `INVARIANT_VIOLATED` at `error`, located at the violating
-  occurrence. `dom-3` is decided by its own terms when nothing is contained and reported
-  `INVARIANT_UNCHECKED` when something is, because checking that every contained resource is
-  referenced needs reference resolution the subset does not have. `dom-6` (a narrative SHOULD be
+  occurrence. `dom-3` is decided by its own terms when nothing is contained, a supplied profile
+  carrying R4's `dom-3` as written included, and reported `INVARIANT_UNCHECKED` when something is,
+  because checking that every contained resource is referenced needs reference resolution the
+  subset does not have. `dom-6` (a narrative SHOULD be
   present, a `warning`) is not evaluated without a profile. A contained resource is checked only
   through `dom-2` to `dom-5`; its own type's constraints and its elements' `ele-1` / `ext-1` are not.
   Any other resource type draws none of these.
