@@ -28,9 +28,13 @@ a location. `isXmlName` is the third question `tag()` asks at every tag site, af
 code and `1a:b` the colon code. A name carrying a non-`Char` is not a `Name` and draws the name code.
 `carriesNonXmlCharacter` is asked at every site that writes an attribute value (`attributeValue()`:
 a primitive's `value`, an `id` written as an attribute, an `Extension.url`) and of a `div` string
-that passed both `div` checks, over the raw string and over every text and attribute value its parse
-decoded, so `&#0;` is refused as a raw U+0000 is (the Legal Character constraint); a reference inside
-a comment is never decoded and is written. `writeElement` now settles its `id` and `url` attributes
+that passed both `div` checks, over the raw string and over the code point each numeric character
+reference its parse decoded refers to, one reference at a time, so `&#0;` is refused as a raw U+0000
+is (the Legal Character constraint); a reference inside a comment is never decoded and is written.
+The question is asked of each reference and never of the decoded text, because the parse decodes
+with `String.fromCodePoint` and `&#xD83D;&#xDE00;`, two references to unpaired surrogates, decodes to
+the same well-formed pair as `&#x1F600;`; `readRawXmlReferences` is `readRawXml` over the same parse,
+also handing back each reference's code point. `writeElement` now settles its `id` and `url` attributes
 before walking its children, which is the order the output spells them in, so the locations come out
 in walk order; the bytes written are unchanged. The name code is raised after
 `UNSERIALIZABLE_DIV_PREFIX` and the character code last of all. Refused, never repaired: no name is

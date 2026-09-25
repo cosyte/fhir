@@ -245,7 +245,9 @@ Unless noted:
     untouched. The `Name` question is the THIRD at the tag sites, in `tag()`, after tag-breaking and
     colon, a name recorded under the first it fails; the `Char` question is asked AT every site that
     writes an attribute value (`attributeValue()`) and of a `div` string that passed both `div`
-    checks, **its decoded references included** (`&#0;` is as fatal as a raw U+0000). Name code raised
+    checks, **each numeric reference judged ON ITS OWN, NEVER THE TEXT IT DECODED TO** (`&#0;` is as
+    fatal as a raw U+0000; `&#xD83D;&#xDE00;` decodes to one well-formed pair and is still two unpaired
+    surrogates, so `readRawXmlReferences` hands the div branch each code point). Name code raised
     after `UNSERIALIZABLE_DIV_PREFIX`, `Char` code LAST OF ALL, so nothing moves off a pin code.
     Refused, never repaired: no reference, no replacement, no drop. It **withdraws a write from
     `valid: true` models**, the sixth refusal to pay that. **Still written, declared:** `xml:1abc` (a

@@ -21,7 +21,8 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
   colon questions so a name failing either keeps its code; and `UNSERIALIZABLE_XML_CHARACTER` at every
   attribute value the writer emits (a primitive's `value`, an `id` written as an attribute, an
   `Extension.url`) and at every `div` string that passes both `div` checks, where a numeric character
-  reference the string's parse decodes (`&#0;`, `&#x1F;`) counts as the raw character does and a
+  reference the string's parse decodes (`&#0;`, `&#x1F;`) counts as the raw character does, each
+  reference judged on its own (`&#xD83D;&#xDE00;` is refused though it decodes to one character), and a
   reference inside a comment does not. A name carrying a non-`Char` is not a `Name` and draws the name
   code. The name code is raised after `UNSERIALIZABLE_DIV_PREFIX` and the character code last of all,
   so no model moves off the code it drew at the pin. **Refused, never repaired**: no name is mangled,
