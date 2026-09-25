@@ -1,11 +1,15 @@
 {
   "docs": [
     "intro",
-    "installation",
-    "quickstart",
-    "core-concepts",
-    "guides",
-    "limits",
-    "troubleshooting"
+    { "type": "category", "label": "Installation", "items": ["installation"] },
+    { "type": "category", "label": "Quickstart", "items": ["quickstart"] },
+    {
+      "type": "category",
+      "label": "Core Concepts",
+      "collapsed": false,
+      "items": ["core-concepts"]
+    },
+    { "type": "category", "label": "Guides", "items": ["guides"] },
+    { "type": "category", "label": "Troubleshooting", "items": ["troubleshooting", "limits"] }
   ]
 }
