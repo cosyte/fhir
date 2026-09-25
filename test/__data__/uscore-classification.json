@@ -1,0 +1,521 @@
+{
+  "note": "Committed expectation: how the bounded FHIRPath subset classifies each row of uscore-constraints.json, in this tree (head) and at the pin this change was written against (pin). Re-derive with `pnpm uscore:constraints --write-expectation`; the suite fails on any row that moves.",
+  "totals": {
+    "6.1.0": {
+      "rows": 29,
+      "evaluated": 24,
+      "pinEvaluated": 16
+    },
+    "9.0.0": {
+      "rows": 34,
+      "evaluated": 29,
+      "pinEvaluated": 19
+    }
+  },
+  "rows": [
+    {
+      "version": "6.1.0",
+      "profile": "us-core-coverage",
+      "element": "Coverage",
+      "key": "us-core-15",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-diagnosticreport-lab",
+      "element": "DiagnosticReport",
+      "key": "us-core-8",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-diagnosticreport-lab",
+      "element": "DiagnosticReport",
+      "key": "us-core-9",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-diagnosticreport-note",
+      "element": "DiagnosticReport",
+      "key": "us-core-10",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-documentreference",
+      "element": "DocumentReference.content.attachment",
+      "key": "us-core-6",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-immunization",
+      "element": "Immunization",
+      "key": "us-core-5",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-medicationdispense",
+      "element": "MedicationDispense",
+      "key": "us-core-20",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-medicationrequest",
+      "element": "MedicationRequest",
+      "key": "us-core-21",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-clinical-result",
+      "element": "Observation",
+      "key": "us-core-2",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-clinical-result",
+      "element": "Observation.effective[x]",
+      "key": "us-core-1",
+      "head": "declined: toString()",
+      "pin": "declined: is DateTime"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-clinical-result",
+      "element": "Observation.value[x]",
+      "key": "us-core-3",
+      "head": "evaluated",
+      "pin": "declined: ofType(Quantity)"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-lab",
+      "element": "Observation.value[x]",
+      "key": "us-core-4",
+      "head": "evaluated",
+      "pin": "declined: ofType(CodeableConcept)"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-screening-assessment",
+      "element": "Observation",
+      "key": "us-core-2",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-screening-assessment",
+      "element": "Observation",
+      "key": "us-core-3",
+      "head": "evaluated",
+      "pin": "declined: ofType(Quantity)"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-screening-assessment",
+      "element": "Observation.effective[x]",
+      "key": "us-core-1",
+      "head": "declined: toString()",
+      "pin": "declined: is DateTime"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-observation-sexual-orientation",
+      "element": "Observation",
+      "key": "us-core-2",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-organization",
+      "element": "Organization.identifier:NPI",
+      "key": "us-core-16",
+      "head": "evaluated",
+      "pin": "declined: matches()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-organization",
+      "element": "Organization.identifier:NPI",
+      "key": "us-core-17",
+      "head": "declined: substring()",
+      "pin": "declined: substring()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-organization",
+      "element": "Organization.identifier:CLIA",
+      "key": "us-core-18",
+      "head": "evaluated",
+      "pin": "declined: matches()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-organization",
+      "element": "Organization.identifier:NAIC",
+      "key": "us-core-19",
+      "head": "evaluated",
+      "pin": "declined: matches()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-patient",
+      "element": "Patient.name",
+      "key": "us-core-6",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-practitioner",
+      "element": "Practitioner.identifier:NPI",
+      "key": "us-core-16",
+      "head": "evaluated",
+      "pin": "declined: matches()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-practitioner",
+      "element": "Practitioner.identifier:NPI",
+      "key": "us-core-17",
+      "head": "declined: substring()",
+      "pin": "declined: substring()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-practitionerrole",
+      "element": "PractitionerRole",
+      "key": "pd-1",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-practitionerrole",
+      "element": "PractitionerRole",
+      "key": "us-core-13",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-procedure",
+      "element": "Procedure",
+      "key": "us-core-7",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-provenance",
+      "element": "Provenance.agent",
+      "key": "provenance-1",
+      "head": "declined: resolve()",
+      "pin": "declined: resolve()"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-relatedperson",
+      "element": "RelatedPerson",
+      "key": "us-core-14",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "6.1.0",
+      "profile": "us-core-smokingstatus",
+      "element": "Observation.value[x]",
+      "key": "us-core-3",
+      "head": "evaluated",
+      "pin": "declined: ofType(Quantity)"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-adi-documentreference",
+      "element": "DocumentReference.content.attachment",
+      "key": "us-core-6",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-average-blood-pressure",
+      "element": "Observation.component",
+      "key": "us-core-26",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-coverage",
+      "element": "Coverage",
+      "key": "us-core-15",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-diagnosticreport-lab",
+      "element": "DiagnosticReport",
+      "key": "us-core-8",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-diagnosticreport-lab",
+      "element": "DiagnosticReport",
+      "key": "us-core-9",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-diagnosticreport-note",
+      "element": "DiagnosticReport",
+      "key": "us-core-10",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-documentreference",
+      "element": "DocumentReference.content.attachment",
+      "key": "us-core-6",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-immunization",
+      "element": "Immunization",
+      "key": "us-core-5",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-medicationdispense",
+      "element": "MedicationDispense",
+      "key": "us-core-20",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-medicationrequest",
+      "element": "MedicationRequest",
+      "key": "us-core-21",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-clinical-result",
+      "element": "Observation",
+      "key": "us-core-2",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-clinical-result",
+      "element": "Observation.effective[x]",
+      "key": "us-core-1",
+      "head": "declined: toString()",
+      "pin": "declined: is dateTime"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-clinical-result",
+      "element": "Observation.value[x]",
+      "key": "us-core-3",
+      "head": "evaluated",
+      "pin": "declined: ofType(Quantity)"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-lab",
+      "element": "Observation.value[x]",
+      "key": "us-core-4",
+      "head": "evaluated",
+      "pin": "declined: ofType(CodeableConcept)"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-lab",
+      "element": "Observation.referenceRange",
+      "key": "us-core-22",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-screening-assessment",
+      "element": "Observation",
+      "key": "us-core-2",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-screening-assessment",
+      "element": "Observation.effective[x]",
+      "key": "us-core-1",
+      "head": "declined: toString()",
+      "pin": "declined: is dateTime"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-screening-assessment",
+      "element": "Observation.value[x]",
+      "key": "us-core-3",
+      "head": "evaluated",
+      "pin": "declined: ofType(Quantity)"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-observation-sexual-orientation",
+      "element": "Observation",
+      "key": "us-core-2",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-organization",
+      "element": "Organization.identifier:NPI",
+      "key": "us-core-16",
+      "head": "evaluated",
+      "pin": "declined: matches()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-organization",
+      "element": "Organization.identifier:NPI",
+      "key": "us-core-17",
+      "head": "declined: substring()",
+      "pin": "declined: substring()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-organization",
+      "element": "Organization.identifier:CLIA",
+      "key": "us-core-18",
+      "head": "evaluated",
+      "pin": "declined: matches()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-organization",
+      "element": "Organization.identifier:NAIC",
+      "key": "us-core-19",
+      "head": "evaluated",
+      "pin": "declined: matches()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-patient",
+      "element": "Patient.name",
+      "key": "us-core-6",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitioner",
+      "element": "Practitioner.identifier:NPI",
+      "key": "us-core-16",
+      "head": "evaluated",
+      "pin": "declined: matches()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitioner",
+      "element": "Practitioner.identifier:NPI",
+      "key": "us-core-17",
+      "head": "declined: substring()",
+      "pin": "declined: substring()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitioner",
+      "element": "Practitioner.identifier:NCSBNID",
+      "key": "us-core-27",
+      "head": "evaluated",
+      "pin": "declined: matches()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitionerrole",
+      "element": "PractitionerRole",
+      "key": "pd-1",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-practitionerrole",
+      "element": "PractitionerRole",
+      "key": "us-core-13",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-procedure",
+      "element": "Procedure",
+      "key": "us-core-7",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-provenance",
+      "element": "Provenance.agent",
+      "key": "provenance-1",
+      "head": "declined: resolve()",
+      "pin": "declined: resolve()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-relatedperson",
+      "element": "RelatedPerson",
+      "key": "us-core-14",
+      "head": "evaluated",
+      "pin": "evaluated"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-smokingstatus",
+      "element": "Observation",
+      "key": "us-core-24",
+      "head": "evaluated",
+      "pin": "declined: is()"
+    },
+    {
+      "version": "9.0.0",
+      "profile": "us-core-smokingstatus",
+      "element": "Observation",
+      "key": "us-core-25",
+      "head": "evaluated",
+      "pin": "declined: is()"
+    }
+  ]
+}

@@ -11,14 +11,17 @@
  *   `last`, `distinct`, `hasValue`, `children`, `extension`, `intersect`;
  * - **logic**, `and` / `or` / `xor` / `implies` with FHIRPath three-valued (empty-propagating) truth;
  * - **comparison / membership / union**, `=`, `!=`, `<`, `>`, `<=`, `>=`, `in`, `contains`, `|`;
- * - **type tests** on the System primitive types (`is` / `as` / `ofType` for `Boolean` / `String` /
- *   `Integer` / `Decimal`).
+ * - **type tests** (`is` / `as` / `ofType`) on the System primitive types `Boolean` / `String` /
+ *   `Integer` / `Decimal`, and on a FHIR type wherever the instance itself establishes the item's
+ *   type ({@link ./types.js}: a choice variant of the resource, the resource root, or the node's
+ *   kind), in operator and function form;
+ * - **`matches(regex)`** over a pattern in a portable subset ({@link ./matches.js}).
  *
  * A **type-qualified path head** (`Patient.name`) resolves only where the focus is a resource root
  * whose `resourceType` the qualifier names, which is the one place a generic model can check it; see
- * {@link resolveTypeQualifier}. Everything else, arithmetic, string functions, `descendants()`,
- * `resolve()`, FHIR-type `is`/`as` (a generic model carries no datatype name), and a type qualifier
- * that cannot be checked, raises {@link ./errors.js UnsupportedFhirPathError}.
+ * {@link resolveTypeQualifier}. Everything else, arithmetic, other string functions,
+ * `descendants()`, `resolve()`, a FHIR-type test the instance does not establish the answer to, and
+ * a type qualifier that cannot be checked, raises {@link ./errors.js UnsupportedFhirPathError}.
  * That is the whole safety contract: the engine **never guesses**. Refusing is not the only way not
  * to guess, and it is the expensive one, because a refusal makes a constraint *unchecked* and takes
  * a diagnostic away: an ordering comparison the generic model cannot decide (see {@link compare})
@@ -51,7 +54,9 @@ import {
   type PrimitiveValue,
 } from "../model/node.js";
 import { UnsupportedFhirPathError } from "./errors.js";
+import { compileMatchesPattern } from "./matches.js";
 import type { Expr } from "./parser.js";
+import { nodeIsOfType, resolveTypeSpecifier } from "./types.js";
 
 /** One item in a FHIRPath collection: a model node, or an engine-computed primitive. */
 export type FpItem =
@@ -211,8 +216,8 @@ function isTypeQualifier(name: string): boolean {
  * place its generic model can: a **resource root** carries `resourceType`, so `Patient.name` over a
  * focus whose {@link ../model/node.js resourceType} reads `Patient` resolves to that focus without
  * guessing and without widening the subset. Every other shape is refused, because the model carries
- * no datatype name for an element focus (the same reason FHIR-type `is` / `as` is out of scope) and
- * an empty focus has nothing to check the qualifier against at all.
+ * no datatype name for an element focus and an empty focus has nothing to check the qualifier
+ * against at all.
  *
  * The two options this must never take, both of which the corpus caught:
  *
@@ -550,45 +555,128 @@ function systemTypeOf(item: FpItem): string | undefined {
 }
 
 /**
- * The System primitive types this subset can test for. The list is the whole of it: FHIR-type
- * `is` / `as` is out of scope by design, because the model is generic and carries no datatype name,
- * so `code`, `instant`, `HumanName` and every other FHIR type name is a question this engine cannot
- * answer, only refuse.
+ * The System primitive types this subset tests for off the item's own value, on anything but a
+ * complex node. Every other type name is either a FHIR type, answered only where the instance
+ * establishes the item's type ({@link ./types.js nodeIsOfType}), or refused.
  */
 const SYSTEM_TYPE_NAMES: ReadonlySet<string> = new Set(["Boolean", "String", "Integer", "Decimal"]);
 
 /**
- * Whether an item is of a given System-primitive type.
+ * Whether an item is of a given type, for the operator forms `is` / `as` and for `ofType()`.
  *
- * Both halves of the question have to be answerable. An item whose System type the model cannot
- * determine (a complex element, a list, a value-absent primitive) is refused, and so is a **type
- * name outside {@link SYSTEM_TYPE_NAMES}**: `Observation.issued is instant` and
- * `Patient.gender.ofType(code)` are asking about the FHIR type of an element, which a generic model
- * does not carry. Answering `false` there looks like a determination and is not one, which is the
- * wrong-answer-with-no-diagnostic the fail-safe contract exists to prevent (the shared corpus
- * expects `{}` from the first and `male` from the second, and `false` / `{}` is neither).
+ * Two routes, and every other shape is refused:
  *
- * **The cost, which is real and is not hidden:** a caller-supplied constraint that IS such a type
- * test loses the verdict it used to get. `gender is Quantity` over `gender: "male"` reduced to
- * `systemTypeOf(item) === "String"` against `"Quantity"`, answered `false`, and was reported
- * `INVARIANT_VIOLATED` at *error* with `valid: false`; it is now `INVARIANT_UNCHECKED` at
- * *information* with `valid: true`. Tabled in `documentation/fhirpath-coverage.md`, pinned in
- * `test/profile-invariant-withdrawn-findings.test.ts`.
+ * - **A System primitive** in {@link SYSTEM_TYPE_NAMES}, over a computed value or a model primitive,
+ *   is read off the value's own System type. An item whose System type the model cannot determine
+ *   (a value-absent primitive) is refused.
+ * - **Anything else that resolves** (a FHIR type, or a System type over a complex node) is answered
+ *   by {@link ./types.js nodeIsOfType} where the instance establishes the item's type, and refused
+ *   where it does not. `Observation.issued is instant` and `Patient.gender.ofType(code)` ask for the
+ *   FHIR type of an element that is not a choice variant, which this generic model does not carry,
+ *   so both are still refused; answering `false` there would look like a determination and not be
+ *   one. `gender is Quantity` over `gender: "male"` is answered `false`: a model primitive is never a
+ *   complex FHIR type, whatever its FHIR type is.
+ *
+ * A type name that resolves in neither the FHIR nor the System model is refused, and so is a FHIR
+ * type over a value the engine computed itself.
  */
-function itemIsType(item: FpItem, typeName: string): boolean {
-  const normalized = typeName.replace(/^System\./, "");
-  if (!SYSTEM_TYPE_NAMES.has(normalized)) {
-    throw new UnsupportedFhirPathError(
-      `type test '${typeName}' outside the System primitive types`,
-    );
+function itemIsType(item: FpItem, typeName: string, ctx: EvalCtx): boolean {
+  const resolved = resolveTypeSpecifier(typeName);
+  const complexNode = item.t === "node" && isComplex(item.node);
+  if (resolved?.model === "System" && SYSTEM_TYPE_NAMES.has(resolved.name) && !complexNode) {
+    const actual = systemTypeOf(item);
+    if (actual === undefined) {
+      throw new UnsupportedFhirPathError(`type test '${typeName}' on a non-System value`);
+    }
+    // Integer is a sub-type of Decimal for the purpose of `is Decimal`.
+    if (resolved.name === "Decimal" && actual === "Integer") return true;
+    return actual === resolved.name;
   }
-  const actual = systemTypeOf(item);
-  if (actual === undefined) {
-    throw new UnsupportedFhirPathError(`type test '${typeName}' on a non-System value`);
+  return fhirTypeTest(item, typeName, resolved, ctx);
+}
+
+/** A type test answered by the instance ({@link ./types.js nodeIsOfType}), or refused. */
+function fhirTypeTest(
+  item: FpItem,
+  typeName: string,
+  resolved: ReturnType<typeof resolveTypeSpecifier>,
+  ctx: EvalCtx,
+): boolean {
+  if (resolved === undefined) {
+    throw new UnsupportedFhirPathError(`type test '${typeName}' names no known type`);
   }
-  // Integer is a sub-type of Decimal for the purpose of `is Decimal`.
-  if (normalized === "Decimal" && actual === "Integer") return true;
-  return actual === normalized;
+  if (item.t !== "node") {
+    throw new UnsupportedFhirPathError(`type test '${typeName}' on a computed value`);
+  }
+  return nodeIsOfType(item.node, resolved, ctx.resource);
+}
+
+/**
+ * The function forms `is(type)` / `as(type)`, over the single item they accept.
+ *
+ * These answer a FHIR type, and a System type over a complex node, exactly as {@link itemIsType}
+ * does. A System-type test over a computed value or a model primitive is **refused** in function
+ * form: the engine has always refused both functions outright, and the value-based System reading
+ * the operator form keeps (`1 is Decimal` answering `true`) is one the shared corpus grades wrong
+ * through the function (`1.is(Decimal)` is `false` there), so it is not extended to a form that
+ * never had it.
+ *
+ * The type argument is resolved before the input is looked at, so a name that resolves in neither
+ * model is refused even over an empty input, as FHIRPath says an unresolvable type identifier is.
+ *
+ * @returns The input's one item when it is of the type, `undefined` when it is not, and `"empty"`
+ *   when there is no input.
+ */
+function functionFormTypeTest(
+  input: FpColl,
+  arg: Expr | undefined,
+  construct: string,
+  ctx: EvalCtx,
+): FpItem | undefined | "empty" {
+  const typeName = typeNameOf(req(arg));
+  const resolved = resolveTypeSpecifier(typeName);
+  if (resolved === undefined) {
+    throw new UnsupportedFhirPathError(`type test '${typeName}' names no known type`);
+  }
+  if (input.length === 0) return "empty";
+  const item = singleItem(input, construct);
+  if (resolved.model === "System" && !(item.t === "node" && isComplex(item.node))) {
+    throw new UnsupportedFhirPathError(`function-form type test '${typeName}' on a primitive`);
+  }
+  return fhirTypeTest(item, typeName, resolved, ctx) ? item : undefined;
+}
+
+/** The single item a function-form type test or `matches()` accepts, or a refusal. */
+function singleItem(input: FpColl, construct: string): FpItem {
+  if (input.length !== 1) {
+    throw new UnsupportedFhirPathError(`${construct} over more than one item`);
+  }
+  return input[0] as FpItem;
+}
+
+/**
+ * `matches(regex)`: whether the single string input contains a match of the pattern.
+ *
+ * An empty input or an empty pattern yields the empty collection. More than one input item, a
+ * pattern argument that is not one string, an input that is not a string, and a pattern outside
+ * the portable subset ({@link ./matches.js}) are refused, never answered `false`. No refusal message
+ * carries the input or the pattern.
+ */
+function applyMatches(
+  input: FpColl,
+  args: readonly Expr[],
+  callFocus: FpColl,
+  ctx: EvalCtx,
+): FpColl {
+  if (input.length === 0) return [];
+  const patternColl = evaluate(req(args[0]), callFocus, ctx);
+  if (patternColl.length === 0) return [];
+  const value = stringOf(singleItem(input, "matches()"));
+  if (value === undefined) throw new UnsupportedFhirPathError("matches() on a non-string value");
+  const pattern = patternColl.length === 1 ? stringOf(patternColl[0] as FpItem) : undefined;
+  if (pattern === undefined)
+    throw new UnsupportedFhirPathError("matches() needs one string pattern");
+  return [{ t: "bool", value: compileMatchesPattern(pattern).test(value) }];
 }
 
 /** Extract the type name from an `ofType(...)` / `as(...)` argument expression. */
@@ -602,6 +690,73 @@ function filterWhere(focus: FpColl, criteria: Expr, ctx: EvalCtx): FpItem[] {
   return focus.filter((item) => convertToBoolean(evaluate(criteria, [item], ctx)));
 }
 
+/**
+ * Every function this engine evaluates, and nothing else: {@link applyFunction} refuses any name
+ * outside it before dispatching. Read the subset off this set, never off a count in prose.
+ *
+ * @example
+ * ```ts
+ * SUBSET_FUNCTIONS.has("matches"); // true
+ * SUBSET_FUNCTIONS.has("resolve"); // false, refused as unsupported
+ * ```
+ */
+export const SUBSET_FUNCTIONS: ReadonlySet<string> = new Set([
+  "exists",
+  "empty",
+  "not",
+  "where",
+  "select",
+  "all",
+  "count",
+  "first",
+  "last",
+  "distinct",
+  "hasValue",
+  "children",
+  "extension",
+  "intersect",
+  "ofType",
+  "is",
+  "as",
+  "matches",
+]);
+
+/**
+ * The functions whose argument is a type specifier rather than an expression.
+ *
+ * @example
+ * ```ts
+ * TYPE_ARGUMENT_FUNCTIONS.has("ofType"); // true
+ * ```
+ */
+export const TYPE_ARGUMENT_FUNCTIONS: ReadonlySet<string> = new Set(["ofType", "is", "as"]);
+
+/**
+ * Every binary operator this engine evaluates, and nothing else: {@link evaluateBinary} refuses any
+ * operator outside it before dispatching.
+ *
+ * @example
+ * ```ts
+ * SUBSET_OPERATORS.has("implies"); // true
+ * SUBSET_OPERATORS.has("mod"); // false, refused as unsupported
+ * ```
+ */
+export const SUBSET_OPERATORS: ReadonlySet<string> = new Set([
+  "and",
+  "or",
+  "xor",
+  "implies",
+  "=",
+  "!=",
+  "<",
+  ">",
+  "<=",
+  ">=",
+  "|",
+  "in",
+  "contains",
+]);
+
 /** Apply a built-in function to its input collection. */
 function applyFunction(
   name: string,
@@ -610,6 +765,9 @@ function applyFunction(
   callFocus: FpColl,
   ctx: EvalCtx,
 ): FpColl {
+  if (!SUBSET_FUNCTIONS.has(name)) {
+    throw new UnsupportedFhirPathError(`unsupported function '${name}()'`);
+  }
   switch (name) {
     case "exists":
       return [
@@ -653,7 +811,18 @@ function applyFunction(
       return distinctItems(input).filter((item) => other.some((o) => itemsEqual(item, o)));
     }
     case "ofType":
-      return input.filter((item) => itemIsType(item, typeNameOf(req(args[0]))));
+      // The type name is read per item, so an empty input stays `{}` whatever the name is.
+      return input.filter((item) => itemIsType(item, typeNameOf(req(args[0])), ctx));
+    case "is": {
+      const matched = functionFormTypeTest(input, args[0], "is()", ctx);
+      return matched === "empty" ? [] : [{ t: "bool", value: matched !== undefined }];
+    }
+    case "as": {
+      const matched = functionFormTypeTest(input, args[0], "as()", ctx);
+      return matched === "empty" || matched === undefined ? [] : [matched];
+    }
+    case "matches":
+      return applyMatches(input, args, callFocus, ctx);
     default:
       throw new UnsupportedFhirPathError(`unsupported function '${name}()'`);
   }
@@ -695,6 +864,7 @@ function evaluateBinary(
   ctx: EvalCtx,
 ): FpColl {
   // Logical operators need three-valued evaluation of each side.
+  if (!SUBSET_OPERATORS.has(op)) throw new UnsupportedFhirPathError(`unsupported operator '${op}'`);
   if (op === "and" || op === "or" || op === "xor" || op === "implies") {
     const a = toTrit(evaluate(node.left, focus, ctx));
     const b = toTrit(evaluate(node.right, focus, ctx));
@@ -835,9 +1005,9 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
         // both directions rather than leaving the blast radius asserted.
         if (operand.length === 0) return [];
         if (operand.length !== 1) return [{ t: "bool", value: false }];
-        return [{ t: "bool", value: itemIsType(operand[0] as FpItem, expr.type) }];
+        return [{ t: "bool", value: itemIsType(operand[0] as FpItem, expr.type, ctx) }];
       }
-      return operand.filter((item) => itemIsType(item, expr.type)); // `as`
+      return operand.filter((item) => itemIsType(item, expr.type, ctx)); // `as`
     }
   }
 }
