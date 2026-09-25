@@ -698,6 +698,8 @@ widening answers is one that raised `UnsupportedFhirPathError` before it.
 | T19 | R1 | `value.ofType(FHIR.Quantity).exists()` | an Observation with a `valueQuantity` | `UNCHECKED` | `(none)` |
 | T20 | R1 | `value.as(FHIR.CodeableConcept).exists()` | the same Observation | `UNCHECKED` | `VIOLATED` |
 | T21 | R3 | `name.ofType(System.String).exists()` | a Patient with one `name` | `UNCHECKED` | `VIOLATED` |
+| T22 | R1 | ``value.ofType(`FHIR.Quantity`).exists()`` | an Observation with a `valueQuantity` | `UNCHECKED` | `(none)` |
+| T23 | R1 | `value is FHIR.Quantity` | the same Observation | `UNCHECKED` | `(none)` |
 
 Does not move, measured: `gender is code` and `name is HumanName` (`UNCHECKED` on both: not reached
 through a choice element), `deceased is dateTime` over `deceasedBoolean` (`UNCHECKED` on both: two
@@ -707,10 +709,10 @@ over an empty input was `{}` before and still is), `identifier.value.matches('\\
 on both: outside the portable subset), `text.div.toString().exists()` (`UNCHECKED` on both),
 `gender.ofType(System.String).exists()` (`UNCHECKED` on both over `gender: "male"`, a qualified
 System name over a primitive; `VIOLATED` on both over a Patient with no `gender`, `ofType` over an
-empty input), ``gender.ofType(`System.Boolean`).exists()`` (`VIOLATED` on both over `gender:
-"male"`) and ``gender.ofType(`System.String`).exists()`` (no finding on both: a delimited
-identifier is one name, read off the value) and `$this.is(System.Patient)` (`UNCHECKED` on both:
-the name resolves in neither model). Every
+empty input), ``gender.ofType(`System.Boolean`).exists()`` and
+``gender.ofType(`System.String`).exists()`` over `gender: "male"` (`VIOLATED` on both and no
+finding on both: a delimited identifier is one name, read off the value) and
+`$this.is(System.Patient)` (`UNCHECKED` on both: the name resolves in neither model). Every
 control the four remedies above table is unchanged too, `gender is FHIR.String` and
 `gender.ofType(FHIR.String).exists()` among them.
 
@@ -722,7 +724,7 @@ evaluated the constraint. **T12 and T17 add a finding over an ABSENT element**: 
 engine's documented coercion (the reference validator's) applied to a construct it now evaluates.
 `test/invariants.test.ts` carried T17's constraint as its example of an unchecked invariant, and now
 carries `text.div.toString().exists()`, which is still outside the subset. **T3, T5, T6, T8, T9,
-T13, T14, T16, T18 and T19 remove an `INVARIANT_UNCHECKED` into a satisfied constraint**: what goes away is a
+T13, T14, T16, T18, T19, T22 and T23 remove an `INVARIANT_UNCHECKED` into a satisfied constraint**: what goes away is a
 notice that the constraint was not evaluated, replaced by an evaluation that holds, and `valid` does
 not move (it was already `true`).
 

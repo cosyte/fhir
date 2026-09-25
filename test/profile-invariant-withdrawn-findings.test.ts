@@ -790,6 +790,24 @@ const TYPE_TEST_MOVEMENTS: readonly TypeTestMovement[] = [
     now: "VIOLATED",
     why: "a complex node is never a System primitive, however the System name is written",
   },
+  {
+    row: "T22",
+    rule: "R1",
+    expression: "value.ofType(`FHIR.Quantity`).exists()",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "a delimited identifier is one name, read as the specifier its text spells, as the operator form reads it",
+  },
+  {
+    row: "T23",
+    rule: "R1",
+    expression: "value is FHIR.Quantity",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "a qualified name in the operator form, answered as the unqualified one",
+  },
 ];
 
 const TYPE_TEST_CONTROLS: readonly Control[] = [
