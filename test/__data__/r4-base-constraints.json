@@ -1,0 +1,282 @@
+{
+  "note": "Committed expectation data: the constraint keys R4 4.0.1 declares on the eight resource types below and on the DomainResource, Element and Extension definitions those types inherit, projected from the StructureDefinitions named under provenance. Do not hand-edit: re-derive it by the rule.",
+  "rule": "One row per distinct constraint key carried by any snapshot.element of the eight resource StructureDefinitions. key, severity and expression are copied verbatim. declaredOn names the StructureDefinition that introduces the key: the resource type for a key of its own, DomainResource, Element or Extension for a key the snapshot inherits. anchors lists the element paths the key is evaluated at: for a type's own key, each snapshot element carrying it; for a DomainResource key, the root of each of the eight types; for ele-1, Element (every element); for ext-1, each extension and modifierExtension element the eight snapshots list, plus Element.extension and Extension.extension. Rows: each type's own keys in the order its snapshot first carries them, types in the order listed under provenance, then the inherited keys in key order. Each input is checked against the sha256 recorded beside its URL before it is read.",
+  "fhirVersion": "4.0.1",
+  "provenance": {
+    "AllergyIntolerance": {
+      "url": "https://hl7.org/fhir/R4/allergyintolerance.profile.json",
+      "sha256": "9ddd15d35932fee211dedd5268e6b454ea0dc04fc007a2c884255552a7c464df"
+    },
+    "Condition": {
+      "url": "https://hl7.org/fhir/R4/condition.profile.json",
+      "sha256": "bab440ee2496ab53296777c39388c053f0765e324b7b330ade1b5a8bc73a5fb8"
+    },
+    "DiagnosticReport": {
+      "url": "https://hl7.org/fhir/R4/diagnosticreport.profile.json",
+      "sha256": "a2d68a05690261e288f1e292edaf7f458f9bc99052cb26b3e1b79ec75268b616"
+    },
+    "Immunization": {
+      "url": "https://hl7.org/fhir/R4/immunization.profile.json",
+      "sha256": "b882c9127230e8ccc93760c671cb2a96a4060ae79a3a38efb3ff5624a9165cbb"
+    },
+    "MedicationRequest": {
+      "url": "https://hl7.org/fhir/R4/medicationrequest.profile.json",
+      "sha256": "eee87fafe924726c561f323f43341794c1baa9c6a2cb4c42ae2a6da5a3134cdd"
+    },
+    "MedicationStatement": {
+      "url": "https://hl7.org/fhir/R4/medicationstatement.profile.json",
+      "sha256": "c048c8b04fcaee5c929b38d1cb8fe95c62a5be781720b79dafaf6c658d557b3c"
+    },
+    "Observation": {
+      "url": "https://hl7.org/fhir/R4/observation.profile.json",
+      "sha256": "41c731c85517d49c506141606418fdd3cf700a6d448e1d4e4846aac4e7c81c99"
+    },
+    "Patient": {
+      "url": "https://hl7.org/fhir/R4/patient.profile.json",
+      "sha256": "c60e7a581b7b311d37b4baf0edb87183f3f41242ee3ad8d7fffd3ce79f0a5458"
+    },
+    "DomainResource": {
+      "url": "https://hl7.org/fhir/R4/domainresource.profile.json",
+      "sha256": "7aaee51e47614c27934d7782279ffdbc314960476975e30a5fa3a34b954ca697"
+    },
+    "Element": {
+      "url": "https://hl7.org/fhir/R4/element.profile.json",
+      "sha256": "3dfebabf9caacde6ae136fab1523bdb1d07cc25a77c5f82d6d8be35299014172"
+    },
+    "Extension": {
+      "url": "https://hl7.org/fhir/R4/extension.profile.json",
+      "sha256": "b6a85917c184e609ced0de29f9e82f5f5f38431042c5a89192ce1eeab2294ba1"
+    }
+  },
+  "constraints": [
+    {
+      "key": "ait-1",
+      "severity": "error",
+      "declaredOn": ["AllergyIntolerance"],
+      "anchors": ["AllergyIntolerance"],
+      "expression": "verificationStatus.coding.where(system = 'http://terminology.hl7.org/CodeSystem/allergyintolerance-verification' and code = 'entered-in-error').exists() or clinicalStatus.exists()"
+    },
+    {
+      "key": "ait-2",
+      "severity": "error",
+      "declaredOn": ["AllergyIntolerance"],
+      "anchors": ["AllergyIntolerance"],
+      "expression": "verificationStatus.coding.where(system = 'http://terminology.hl7.org/CodeSystem/allergyintolerance-verification' and code = 'entered-in-error').empty() or clinicalStatus.empty()"
+    },
+    {
+      "key": "con-3",
+      "severity": "warning",
+      "declaredOn": ["Condition"],
+      "anchors": ["Condition"],
+      "expression": "clinicalStatus.exists() or verificationStatus.coding.where(system='http://terminology.hl7.org/CodeSystem/condition-ver-status' and code = 'entered-in-error').exists() or category.select($this='problem-list-item').empty()"
+    },
+    {
+      "key": "con-4",
+      "severity": "error",
+      "declaredOn": ["Condition"],
+      "anchors": ["Condition"],
+      "expression": "abatement.empty() or clinicalStatus.coding.where(system='http://terminology.hl7.org/CodeSystem/condition-clinical' and (code='resolved' or code='remission' or code='inactive')).exists()"
+    },
+    {
+      "key": "con-5",
+      "severity": "error",
+      "declaredOn": ["Condition"],
+      "anchors": ["Condition"],
+      "expression": "verificationStatus.coding.where(system='http://terminology.hl7.org/CodeSystem/condition-ver-status' and code='entered-in-error').empty() or clinicalStatus.empty()"
+    },
+    {
+      "key": "con-1",
+      "severity": "error",
+      "declaredOn": ["Condition"],
+      "anchors": ["Condition.stage"],
+      "expression": "summary.exists() or assessment.exists()"
+    },
+    {
+      "key": "con-2",
+      "severity": "error",
+      "declaredOn": ["Condition"],
+      "anchors": ["Condition.evidence"],
+      "expression": "code.exists() or detail.exists()"
+    },
+    {
+      "key": "imm-1",
+      "severity": "error",
+      "declaredOn": ["Immunization"],
+      "anchors": ["Immunization.education"],
+      "expression": "documentType.exists() or reference.exists()"
+    },
+    {
+      "key": "obs-6",
+      "severity": "error",
+      "declaredOn": ["Observation"],
+      "anchors": ["Observation"],
+      "expression": "dataAbsentReason.empty() or value.empty()"
+    },
+    {
+      "key": "obs-7",
+      "severity": "error",
+      "declaredOn": ["Observation"],
+      "anchors": ["Observation"],
+      "expression": "value.empty() or component.code.where(coding.intersect(%resource.code.coding).exists()).empty()"
+    },
+    {
+      "key": "obs-3",
+      "severity": "error",
+      "declaredOn": ["Observation"],
+      "anchors": ["Observation.referenceRange"],
+      "expression": "low.exists() or high.exists() or text.exists()"
+    },
+    {
+      "key": "pat-1",
+      "severity": "error",
+      "declaredOn": ["Patient"],
+      "anchors": ["Patient.contact"],
+      "expression": "name.exists() or telecom.exists() or address.exists() or organization.exists()"
+    },
+    {
+      "key": "dom-2",
+      "severity": "error",
+      "declaredOn": ["DomainResource"],
+      "anchors": [
+        "AllergyIntolerance",
+        "Condition",
+        "DiagnosticReport",
+        "Immunization",
+        "MedicationRequest",
+        "MedicationStatement",
+        "Observation",
+        "Patient"
+      ],
+      "expression": "contained.contained.empty()"
+    },
+    {
+      "key": "dom-3",
+      "severity": "error",
+      "declaredOn": ["DomainResource"],
+      "anchors": [
+        "AllergyIntolerance",
+        "Condition",
+        "DiagnosticReport",
+        "Immunization",
+        "MedicationRequest",
+        "MedicationStatement",
+        "Observation",
+        "Patient"
+      ],
+      "expression": "contained.where((('#'+id in (%resource.descendants().reference | %resource.descendants().as(canonical) | %resource.descendants().as(uri) | %resource.descendants().as(url))) or descendants().where(reference = '#').exists() or descendants().where(as(canonical) = '#').exists() or descendants().where(as(canonical) = '#').exists()).not()).trace('unmatched', id).empty()"
+    },
+    {
+      "key": "dom-4",
+      "severity": "error",
+      "declaredOn": ["DomainResource"],
+      "anchors": [
+        "AllergyIntolerance",
+        "Condition",
+        "DiagnosticReport",
+        "Immunization",
+        "MedicationRequest",
+        "MedicationStatement",
+        "Observation",
+        "Patient"
+      ],
+      "expression": "contained.meta.versionId.empty() and contained.meta.lastUpdated.empty()"
+    },
+    {
+      "key": "dom-5",
+      "severity": "error",
+      "declaredOn": ["DomainResource"],
+      "anchors": [
+        "AllergyIntolerance",
+        "Condition",
+        "DiagnosticReport",
+        "Immunization",
+        "MedicationRequest",
+        "MedicationStatement",
+        "Observation",
+        "Patient"
+      ],
+      "expression": "contained.meta.security.empty()"
+    },
+    {
+      "key": "dom-6",
+      "severity": "warning",
+      "declaredOn": ["DomainResource"],
+      "anchors": [
+        "AllergyIntolerance",
+        "Condition",
+        "DiagnosticReport",
+        "Immunization",
+        "MedicationRequest",
+        "MedicationStatement",
+        "Observation",
+        "Patient"
+      ],
+      "expression": "text.`div`.exists()"
+    },
+    {
+      "key": "ele-1",
+      "severity": "error",
+      "declaredOn": ["Element"],
+      "anchors": ["Element"],
+      "expression": "hasValue() or (children().count() > id.count())"
+    },
+    {
+      "key": "ext-1",
+      "severity": "error",
+      "declaredOn": ["Extension"],
+      "anchors": [
+        "Element.extension",
+        "Extension.extension",
+        "AllergyIntolerance.extension",
+        "AllergyIntolerance.modifierExtension",
+        "AllergyIntolerance.reaction.extension",
+        "AllergyIntolerance.reaction.modifierExtension",
+        "Condition.extension",
+        "Condition.modifierExtension",
+        "Condition.stage.extension",
+        "Condition.stage.modifierExtension",
+        "Condition.evidence.extension",
+        "Condition.evidence.modifierExtension",
+        "DiagnosticReport.extension",
+        "DiagnosticReport.modifierExtension",
+        "DiagnosticReport.media.extension",
+        "DiagnosticReport.media.modifierExtension",
+        "Immunization.extension",
+        "Immunization.modifierExtension",
+        "Immunization.performer.extension",
+        "Immunization.performer.modifierExtension",
+        "Immunization.education.extension",
+        "Immunization.education.modifierExtension",
+        "Immunization.reaction.extension",
+        "Immunization.reaction.modifierExtension",
+        "Immunization.protocolApplied.extension",
+        "Immunization.protocolApplied.modifierExtension",
+        "MedicationRequest.extension",
+        "MedicationRequest.modifierExtension",
+        "MedicationRequest.dispenseRequest.extension",
+        "MedicationRequest.dispenseRequest.modifierExtension",
+        "MedicationRequest.dispenseRequest.initialFill.extension",
+        "MedicationRequest.dispenseRequest.initialFill.modifierExtension",
+        "MedicationRequest.substitution.extension",
+        "MedicationRequest.substitution.modifierExtension",
+        "MedicationStatement.extension",
+        "MedicationStatement.modifierExtension",
+        "Observation.extension",
+        "Observation.modifierExtension",
+        "Observation.referenceRange.extension",
+        "Observation.referenceRange.modifierExtension",
+        "Observation.component.extension",
+        "Observation.component.modifierExtension",
+        "Patient.extension",
+        "Patient.modifierExtension",
+        "Patient.contact.extension",
+        "Patient.contact.modifierExtension",
+        "Patient.communication.extension",
+        "Patient.communication.modifierExtension",
+        "Patient.link.extension",
+        "Patient.link.modifierExtension"
+      ],
+      "expression": "extension.exists() != value.exists()"
+    }
+  ]
+}
