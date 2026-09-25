@@ -28,7 +28,7 @@ pnpm add @cosyte/fhir   # this is the command once the package is published
 Until then, build it from a checkout and depend on that:
 
 ```sh
-git clone https://github.com/cosyte/fhir.git
+git clone https://github.com/cosyte/fhir
 cd fhir
 pnpm install
 pnpm build

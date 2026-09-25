@@ -74,6 +74,13 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **The installation page's clone command uses `https://github.com/cosyte/fhir`, without the `.git`
+  suffix.** docs.cosyte.com checks every link into a cosyte repository against the repositories its
+  manifest marks public, and its matcher reads `https://github.com/cosyte/fhir.git` as a repository
+  named `fhir.git` that the manifest does not list, which fails the site's publish run once fhir is
+  enabled there (seen by building the site with this `docs-content/` staged). `git clone` accepts
+  both forms, so the command a reader copies behaves the same. No runtime change.
+
 - **The documentation sidebar groups its pages into Installation, Quickstart, Core Concepts, Guides
   and Troubleshooting sections**, the form docs.cosyte.com requires before it lists a package's
   installation and quickstart pages: a page listed on its own at the top of the sidebar is not
