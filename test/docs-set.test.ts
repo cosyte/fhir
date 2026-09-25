@@ -180,6 +180,60 @@ describe("every arm goes red on a seeded control", () => {
     expect(messages(findings)).toContain('page "orphan" is not enumerated by sidebars.json');
   });
 
+  it("links: a category enumerates every page it reaches, at any depth", () => {
+    // The docs site counts Installation and Quickstart only as top-level categories, so the
+    // category form is the shape the shipped sidebar has to take. Reading it must not orphan a page.
+    const sidebar = {
+      docs: [
+        "intro",
+        { type: "category", label: "Quickstart", items: ["quickstart"] },
+        {
+          type: "category",
+          label: "Guides",
+          items: [{ type: "category", label: "Formats", items: [{ type: "doc", id: "formats" }] }],
+        },
+      ],
+    };
+    const findings = graded(
+      {
+        "sidebars.json": `${JSON.stringify(sidebar)}\n`,
+        "intro.md": page("intro", "Getting started", "Hello."),
+        "quickstart.md": page("quickstart", "Quickstart", "Hello."),
+        "formats.md": page("formats", "Formats", "Hello."),
+      },
+      ["links"],
+    );
+    expect(messages(findings)).toBe("");
+  });
+
+  it("links: a page id inside a category that lands on nothing is still a finding", () => {
+    const sidebar = {
+      docs: ["intro", { type: "category", label: "Quickstart", items: ["quickstart"] }],
+    };
+    const findings = graded(
+      {
+        "sidebars.json": `${JSON.stringify(sidebar)}\n`,
+        "intro.md": page("intro", "Getting started", "Hello."),
+      },
+      ["links"],
+    );
+    expect(messages(findings)).toContain('sidebar entry "quickstart" resolves to no page');
+  });
+
+  it("links: a sidebar item this check cannot read is refused, not skipped", () => {
+    const sidebar = {
+      docs: ["intro", { type: "link", label: "Elsewhere", href: "https://example.com" }],
+    };
+    const findings = graded(
+      {
+        "sidebars.json": `${JSON.stringify(sidebar)}\n`,
+        "intro.md": page("intro", "Getting started", "Hello."),
+      },
+      ["links"],
+    );
+    expect(messages(findings)).toContain("every sidebar item must be a page id string");
+  });
+
   it("package-agreement: a Node range and a registry claim that disagree with package.json", () => {
     const findings = graded(
       {
