@@ -17,15 +17,17 @@ sidebar_position: 2
 
 ## Availability
 
-`@cosyte/fhir` is not installable from the public npm registry today. The package is pre-alpha, sits
-on the `0.0.x` version line, and no release has reached the registry, so a plain install resolves
-nothing:
+`@cosyte/fhir` is installable from the public npm registry today:
 
 ```sh
-pnpm add @cosyte/fhir   # this is the command once the package is published
+pnpm add @cosyte/fhir
 ```
 
-Until then, build it from a checkout and depend on that:
+npm and yarn work the same way: `npm install @cosyte/fhir` or `yarn add @cosyte/fhir`. While the
+package is below 1.0, a breaking change ships in a minor version and is called out in the changelog,
+so a caret range such as `^0.1.0` takes fixes and never a break.
+
+To build it from source instead, clone the repository and depend on the checkout:
 
 ```sh
 git clone https://github.com/cosyte/fhir
