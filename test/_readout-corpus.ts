@@ -189,7 +189,7 @@ const ADDED: readonly CorpusDocument[] = [
     json: '{"resourceType":"Patient","contained":[{"resourceType":"Organization","identifier":[{"use":"old","value":"O1"}],"telecom":[{"use":"OLD","system":"phone","value":"000"}]}]}',
   },
   // S0374-fhir-invariant-base-1: one document per base-constraint key AC-3 and AC-6 name, plus a
-  // contained resource for AC-7, AC-13.
+  // contained resource for AC-7, AC-13. Every value is synthetic.
   {
     name: "added:base-pat-1-contact-without-contact-detail",
     json: '{"resourceType":"Patient","contact":[{"gender":"other"}]}',
