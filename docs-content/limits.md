@@ -10,11 +10,6 @@ What the package does not do, in its own words. Everything here is a deliberate 
 one is stated because working around a limit you know about is cheap, while discovering one in
 production is not.
 
-## It is not on the public registry
-
-`@cosyte/fhir` is pre-alpha and cannot be installed from npm today. The
-[installation](./installation.md) page has the route that does work.
-
 ## No terminology content is bundled
 
 The library knows code system identities, not their contents. There is no bundled SNOMED CT, LOINC,
