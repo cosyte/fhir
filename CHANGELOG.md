@@ -8,6 +8,37 @@ All notable changes to `@cosyte/fhir` are documented here. The format follows
 
 ### Changed
 
+- **A tag name that is not an XML 1.0 `Name`, and a character outside XML 1.0 `Char`, are now
+  REFUSED by the XML writer rather than written** (`fhir#XML-WELLFORMED-1`, S0378). At `18567b9`
+  `serializeResourceXml` wrote `<a&b/>`, `<1abc/>`, `<-x/>` and a tag carrying U+0000 as element
+  tags, and a U+0000 inside a string value raw into its `value` attribute; a conforming processor
+  rejects each as a fatal error, and this library's own reader read each back, which is why the
+  tag-breaking line ("does our round trip survive it") let them through. The new line is the XML 1.0
+  (Fifth Edition) productions [5] `Name` and [2] `Char`, on **two new codes rather than a wider
+  `UNSERIALIZABLE_ELEMENT_NAME`**: `UNSERIALIZABLE_XML_NAME` at every tag position at every depth
+  (inside `contained`, `Bundle.entry.resource` and extensions, and a `resourceType` naming a root or
+  a nested resource, the last reported at the element wrapping it), asked after the tag-breaking and
+  colon questions so a name failing either keeps its code; and `UNSERIALIZABLE_XML_CHARACTER` at every
+  attribute value the writer emits (a primitive's `value`, an `id` written as an attribute, an
+  `Extension.url`) and at every `div` string that passes both `div` checks, where a numeric character
+  reference the string's parse decodes (`&#0;`, `&#x1F;`) counts as the raw character does and a
+  reference inside a comment does not. A name carrying a non-`Char` is not a `Name` and draws the name
+  code. The name code is raised after `UNSERIALIZABLE_DIV_PREFIX` and the character code last of all,
+  so no model moves off the code it drew at the pin. **Refused, never repaired**: no name is mangled,
+  and no character is escaped into a reference, replaced or dropped. Messages and locations carry no
+  name, value or character, a refused name's own segment renders `WITHHELD`. **This withdraws an XML
+  write from documents that read `valid: true`**, the sixth refusal to pay that. `serializeResource`
+  and the read path are unchanged. Graded against a committed, re-derivable capture of the pin
+  (`scripts/capture-xml-wellformed.ts`, `test/__data__/xml-wellformed-base.json`): the refusal
+  models, every document `corpus()` returns and 1,000 models drawn from `Name` and `Char` with a
+  fixed seed, each committed beside the pin's output, with head byte-identical to the pin wherever
+  the pin wrote a `Name`/`Char` model and keeping the pin's code and locations wherever it refused
+  one. The characterization tests in `test/xml-tag-name.test.ts` that pinned these names as written
+  went red and were rewritten over the same names. Still open and declared: `xml:1abc` (a `Name`,
+  not namespace-well-formed) is written; an element or attribute name inside a `div` string is
+  checked for `Char` and never for `Name`; the reader still reads `<1abc>` back; `validateResource`
+  still returns `valid: true` for a `string` carrying U+0000; and the `div` branch's three
+  `PRE-EXISTING` counterexamples stand.
 - **The R4 base constraints of the eight modeled types are evaluated with no profile supplied**
   (`fhir#INVARIANT-BASE-1`, S0374). The FHIRPath invariant layer ran only inside
   `options.profiles`, and the always-on safety layer hand-evaluates seven keys (`ait-1`, `ait-2`,

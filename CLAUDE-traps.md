@@ -238,12 +238,26 @@ Unless noted:
     which writes the inherited declarations into the `div` string: change that and this refusal
     starts withdrawing conformant round trips.
     [`#unbound-prefix-div-value-closed`](documentation/agent-notes.md#the-unbound-prefix-round-trip-closed-through-a-div-value-2026-09-24)
-  - **STILL OPEN: a colon-free non-name** (`a&b`, `1abc`) is still written, and is a separate gap
-    from the one closed above. **Beside it,
-    `UNSERIALIZABLE_ELEMENT_NAME` now refuses a name that BREAKS the tag** (one shape re-read as
-    **different elements** and forged a `status`). **The line is "does OUR round trip survive it",
-    NOT the XML `Name` production. DO NOT WIDEN IT:** `a&b`, `1abc` round-trip today; `p:x` did too,
-    and is refused on its OWN code (above), not this one.
+  - **CLOSED 2026-09-25: a colon-free non-name AND a non-`Char` character**
+    (`UNSERIALIZABLE_XML_NAME`, `UNSERIALIZABLE_XML_CHARACTER`). The line is the XML 1.0 `Name` and
+    `Char` productions, NOT our round trip: `a&b`, `1abc`, `-x` and a U+0000 tag all re-read here and
+    are refused. **TWO NEW CODES, NOT A WIDER `UNSERIALIZABLE_ELEMENT_NAME`**, whose line below is
+    untouched. The `Name` question is the THIRD at the tag sites, in `tag()`, after tag-breaking and
+    colon, a name recorded under the first it fails; the `Char` question is asked AT every site that
+    writes an attribute value (`attributeValue()`) and of a `div` string that passed both `div`
+    checks, **its decoded references included** (`&#0;` is as fatal as a raw U+0000). Name code raised
+    after `UNSERIALIZABLE_DIV_PREFIX`, `Char` code LAST OF ALL, so nothing moves off a pin code.
+    Refused, never repaired: no reference, no replacement, no drop. It **withdraws a write from
+    `valid: true` models**, the sixth refusal to pay that. **Still written, declared:** `xml:1abc` (a
+    `Name`, not namespace-well-formed); a non-`Name` element or attribute name INSIDE a `div` string
+    (`Char`-checked only); the three `div` `PRE-EXISTING` counterexamples. The reader still reads
+    `<1abc>` back and `validateResource` still says `valid: true` for a U+0000 `string`: separate
+    surfaces. `serializeResource` untouched. The grade is a committed pin capture
+    (`scripts/capture-xml-wellformed.ts`): re-run it at the pin, never hand-edit the data.
+  - **Beside it, `UNSERIALIZABLE_ELEMENT_NAME` refuses a name that BREAKS the tag** (one shape
+    re-read as **different elements** and forged a `status`). **The line is "does OUR round trip
+    survive it", NOT the XML `Name` production. DO NOT WIDEN IT:** `a&b`, `1abc` are refused on their
+    OWN code (above); `p:x` on its own code too, not this one.
     **"Unreachable from XML" is FALSE: a stripped prefix fronts a `!`.**
     [`#fhir-unbound-prefix-roundtrip-2026-08-07`](documentation/agent-notes.md#fhir-unbound-prefix-roundtrip-2026-08-07) ·
     [`#residuals-ii-to-iv-and-three-more-left-open`](documentation/agent-notes.md#residuals-ii-to-iv-and-three-more-left-open) ·

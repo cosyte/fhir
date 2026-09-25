@@ -12,10 +12,11 @@
  * refusal rather than a loss: the name is still writable, in the format that can express it. It is
  * not a claim that the JSON output is spec-clean, which that writer's own exception list governs.
  *
- * **What is deliberately NOT refused is asserted just as hard as what is.** A name that carries no
- * colon and is still not a conformant XML name is written verbatim and re-reads through this library
- * unchanged. That is a declared gap, and the tests over it are characterization tests: if you close
- * it, they go red and you update them in the same change.
+ * **A name that carries no colon and is still not an XML 1.0 `Name` used to be written verbatim**,
+ * and it re-read through this library unchanged, which is why the tag-breaking line let it through.
+ * It is refused now, on `UNSERIALIZABLE_XML_NAME`, and the characterization tests that pinned it as
+ * written were rewritten over the same names in the change that closed it. The full grade of that
+ * refusal is `test/xml-wellformed.test.ts`.
  *
  * **A name carrying a colon used to sit in that same gap and no longer does.** XML reads the colon as
  * a namespace prefix, the model carries no binding to declare one with, so the output was not
@@ -104,15 +105,12 @@ const FABRICATES_ELEMENTS = [
 ] as const;
 
 /**
- * Every name shape the writer must KEEP writing, and the reason each one is a capability rather
- * than an oversight: this library's own round trip returns it unchanged.
- *
- * A conformant third-party parser rejects all of them. That is the declared gap, and it is not
- * closed here, because closing it means refusing a document that reads `valid: true` and writing it
- * back is something callers can do today. **None of them carries a colon**: the three rows that did
- * moved to {@link COLON_BEARING} when that half of the gap closed.
+ * The name shapes the writer used to keep writing because this library's own round trip returned
+ * each unchanged. A conformant third-party parser rejects all of them, since none is an XML 1.0
+ * `Name`, and each is refused now on a code of its own. **None of them carries a colon**: the three
+ * rows that did moved to {@link COLON_BEARING} when that half of the gap closed.
  */
-const DEFERRED_AND_STILL_WRITTEN = [
+const NOT_A_NAME_ONCE_WRITTEN = [
   ["an ampersand", "a&b"],
   ["a leading digit", "1abc"],
   ["a leading hyphen", "-lead"],
@@ -577,25 +575,26 @@ describe("a model name at an XML tag position", () => {
   });
 
   /**
-   * THE DECLARED GAP, PINNED AS THE BEHAVIOUR IT IS.
+   * THE GAP THAT CLOSED: A NAME THIS LIBRARY ROUND-TRIPPED AND XML DOES NOT ADMIT.
    *
-   * Not a claim that writing these is right. A conformant parser rejects every one, so the output
-   * is not portable, and that limit is stated on `serializeResourceXml`. What these assert is that
-   * neither refusal above or below quietly widened into them, because widening one would take away
-   * writing back a document that reads `valid: true` and round-trips through this library today.
-   *
-   * **Characterization tests: closing this gap MUST red them, in the same change.** The colon rows
-   * that used to sit here are rewritten below, as the refusals they are now.
+   * The characterization tests that pinned these as written went red when the gap closed, and are
+   * rewritten here over the same names. The pin wrote each as `<Patient …><NAME value="v"/></Patient>`
+   * and this library's own reader read that back as the same one property, which is the line the
+   * tag-breaking refusal draws; a conformant parser rejects every one, which is the line drawn now.
+   * Neither the tag-breaking code nor the colon code widened to reach them: each draws a code of its
+   * own.
    */
-  describe("declared gap, still written: a name this library round-trips and XML does not admit", () => {
-    it.each(DEFERRED_AND_STILL_WRITTEN)(
-      "AC-7(a): writes %s verbatim, as the pin did",
+  describe("a name this library round-tripped and XML does not admit is refused on its own code", () => {
+    it.each(NOT_A_NAME_ONCE_WRITTEN)(
+      "AC-1: refuses %s on UNSERIALIZABLE_XML_NAME, which the pin wrote verbatim",
       (_label, name) => {
-        expect(refusal(withName(name))).toBeUndefined();
-        const xml = serializeResourceXml(withName(name));
-        expect(xml).toBe(`<Patient ${FHIR_NS}><${name} value="v"/></Patient>`);
-        // And it comes back as the same one property, which is the capability being preserved.
-        expect(parseResourceXml(xml).resource.properties.map((p) => p.name)).toEqual([
+        const err = refusal(withName(name));
+        expect(err?.code).toBe("UNSERIALIZABLE_XML_NAME");
+        expect(err?.locations).toEqual([`Patient.${WITHHELD}`]);
+        // The pin's output, rebuilt by hand, still reads back as the same one property: this
+        // library's round trip survived it, and that is not the line any more.
+        const pin = `<Patient ${FHIR_NS}><${name} value="v"/></Patient>`;
+        expect(parseResourceXml(pin).resource.properties.map((p) => p.name)).toEqual([
           "resourceType",
           name,
         ]);
@@ -901,9 +900,9 @@ describe("a model name at an XML tag position", () => {
      * property is gone on the re-read, because that name takes the raw-string branch rather than a
      * tag. That gap is pinned directly, below, rather than hidden by an alphabet that avoids it.
      *
-     * The alphabet spells `:`, so a refusal here may carry either of the two name codes, and a
-     * document the writer does return is also held to carrying no element name that needs a
-     * namespace declaration, which is what the colon refusal buys.
+     * The alphabet spells `:` and names that are not an XML 1.0 `Name`, so a refusal here may carry
+     * any of the three name codes, and a document the writer does return is also held to carrying no
+     * element name that needs a namespace declaration, which is what the colon refusal buys.
      */
     it("AC-11: either refuses on a name code, or its output re-reads as the same property names", () => {
       const alphabet = [..."ab19-._:&\"'/<>= \t\n\r!?", " ", "", "\f", "é"];
@@ -929,6 +928,7 @@ describe("a model name at an XML tag position", () => {
               expect([
                 SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME,
                 SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME,
+                SERIALIZE_ERROR_CODES.UNSERIALIZABLE_XML_NAME,
               ]).toContain((err as FhirSerializeError).code);
               return;
             }

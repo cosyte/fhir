@@ -1,12 +1,14 @@
 /**
  * The XML write path: the {@link FhirNode} model → compact FHIR XML text (xml.html).
  *
- * **The output is NOT unconditionally spec-clean, and this line used to say it was.** A name with no
- * colon that is not a conformant XML name at all is written verbatim, so `<a&b/>` and `<1abc/>` are
- * emitted, and a conformant third-party parser rejects each. A name carrying a colon is no longer
- * written with its prefix unbound: it is refused, and so is a narrative `div` string whose own markup
- * names a prefix nothing inside it binds. The exceptions are enumerated on
- * {@link serializeResourceXml}, with the refusals, and this header deliberately keeps no second copy.
+ * **The output is NOT unconditionally spec-clean, and this line used to say it was.** A tag name the
+ * writer writes that is not an XML 1.0 `Name` (`a&b`, `1abc`) is refused rather than written, and so
+ * is an attribute value or a spliced `div` string carrying a code point outside `Char`. A name
+ * carrying a colon is refused too, and so is a narrative `div` string whose own markup names a prefix
+ * nothing inside it binds. That is not every way a strict processor can reject the output: an element
+ * or attribute name inside a `div` string is checked for `Char` and never for `Name`, and the `div`
+ * branch carries three more counterexamples. They are enumerated on {@link serializeResourceXml},
+ * with the refusals, and this header deliberately keeps no second copy.
  *
  * The writer is the conservative half of Postel's Law, and for a model read from a conformant
  * document it emits canonical FHIR XML, the exact inverse of {@link ./read.js}:
@@ -50,7 +52,11 @@ import {
   assertXmlSerializable,
   assertXmlValueChoiceWrapper,
   breaksTag,
+  carriesNonXmlCharacter,
   carriesUndeclarablePrefix,
+  isXmlName,
+  refuseNonXmlCharacters,
+  refuseNonXmlNames,
   refuseUnboundDivPrefixes,
   refuseUndeclarablePrefixes,
   refuseUnserializableDivMarkup,
@@ -76,6 +82,10 @@ interface RefusalSink {
   readonly refusedPrefixes: string[];
   /** `div` locations whose markup names a prefix nothing inside the string binds ({@link bindsEveryPrefix}). */
   readonly refusedDivPrefixes: string[];
+  /** Locations whose name is not an XML 1.0 `Name` and failed neither question before ({@link isXmlName}). */
+  readonly refusedXmlNames: string[];
+  /** Locations whose emitted value or `div` string carries a non-`Char` ({@link carriesNonXmlCharacter}). */
+  readonly refusedCharacters: string[];
 }
 
 /**
@@ -87,17 +97,48 @@ interface RefusalSink {
  * are dropped), and that duplicate would be free to disagree. If you add a branch that writes a tag,
  * call this from it.
  *
- * Two questions are asked of the name, and a name is recorded under the first it fails only: does
- * it break the tag ({@link breaksTag}), and does it carry a colon this writer cannot declare a
- * binding for ({@link carriesUndeclarablePrefix}). A name failing both is a tag-breaking name, which
- * is the code it drew before the second question existed.
+ * Three questions are asked of the name, and a name is recorded under the first it fails only: does
+ * it break the tag ({@link breaksTag}), does it carry a colon this writer cannot declare a binding
+ * for ({@link carriesUndeclarablePrefix}), and is it an XML 1.0 `Name` ({@link isXmlName}). A name
+ * failing more than one keeps the code of the earliest, which is the code it drew before the later
+ * questions existed.
  *
  * @returns The name, unchanged, so a caller can write `<${tag(...)}>` inline.
  */
 function tag(name: string, path: string, sink: RefusalSink): string {
   if (breaksTag(name)) sink.refusedNames.push(path);
   else if (carriesUndeclarablePrefix(name)) sink.refusedPrefixes.push(path);
+  else if (!isXmlName(name)) sink.refusedXmlNames.push(path);
   return name;
+}
+
+/**
+ * Test one attribute value, at the site that is about to write it, and return it escaped.
+ *
+ * **Called from every site that writes a value into an attribute and from no other**, for the same
+ * reason {@link tag} is: a pre-pass would have to re-derive which values the writer emits (an `id` is
+ * an attribute on an element and a child element on a resource, a `url` only inside an extension),
+ * and that copy would be free to disagree. A value carrying a code point outside XML 1.0 `Char`
+ * ({@link carriesNonXmlCharacter}) records `path`, the location of the value, and is still escaped
+ * and returned, because the refusal is raised at the root and the string is never returned.
+ */
+function attributeValue(text: string, path: string, sink: RefusalSink): string {
+  if (carriesNonXmlCharacter(text)) sink.refusedCharacters.push(path);
+  return escapeAttr(text);
+}
+
+/**
+ * Whether any text or attribute value the parse of a `div` string decoded carries a code point
+ * outside XML 1.0 `Char`. Asked after the raw string itself passed that question, so what this finds
+ * came from a numeric character reference (`&#0;`, `&#x1F;`), which XML 1.0's Legal Character
+ * constraint makes a fatal error. A comment or a processing instruction is not decoded by the parse
+ * and does not reach this, which is right: a reference is not recognised inside either.
+ */
+function decodesNonXmlCharacter(element: XmlElement): boolean {
+  if (element.attributes.some(({ value }) => carriesNonXmlCharacter(value))) return true;
+  return element.children.some((child) =>
+    child.type === "text" ? carriesNonXmlCharacter(child.value) : decodesNonXmlCharacter(child),
+  );
 }
 
 /**
@@ -121,14 +162,17 @@ function tag(name: string, path: string, sink: RefusalSink): string {
  *   sender never wrote. The **local** name is compared because a prefixed narrative (`<h:div
  *   xmlns:h="…xhtml">`) is a spelling this library reads and round-trips today.
  *
- * **What it does NOT check**, because neither is this defect: which namespace the root is in (an
+ * **What it does NOT check**, because none of it is this defect: which namespace the root is in (an
  * unprefixed `<div>` under no declaration, and a vendor one, both reach `Narrative.div` on the
- * read), and whether a prefix the markup names is bound inside the string. The second is asked next,
- * of this same parse and only of a string that passes here, by {@link bindsEveryPrefix}, on a code
- * of its own: an unbound prefix is the value route of the residual the colon refusal closes at the
- * tag sites, which that refusal cannot reach because this site writes a value, not a name. A string
- * that fails here keeps `UNSERIALIZABLE_DIV_MARKUP` whatever prefix it names. Comments and processing
- * instructions around the root parse as prolog/misc and are accepted: neither is an element.
+ * read), whether a prefix the markup names is bound inside the string, and whether the string
+ * carries a code point outside XML 1.0 `Char`. The second is asked next, of this same parse and only
+ * of a string that passes here, by {@link bindsEveryPrefix}, on a code of its own: an unbound prefix
+ * is the value route of the residual the colon refusal closes at the tag sites, which that refusal
+ * cannot reach because this site writes a value, not a name. The third is asked after that, of the
+ * raw string and of what this parse decoded ({@link decodesNonXmlCharacter}), on a code of its own
+ * again. A string that fails here keeps `UNSERIALIZABLE_DIV_MARKUP` whatever prefix or character it
+ * carries. Comments and processing instructions around the root parse as prolog/misc and are
+ * accepted: neither is an element.
  *
  * **THE STRUCTURE IS WHAT THIS SETTLES. IT SETTLES NOTHING ELSE, AND THE COUNTEREXAMPLES BELOW ARE
  * ASSERTED RATHER THAN LEFT AS A CAVEAT. They are examples, not an enumeration.** `readRawXml`
@@ -296,7 +340,7 @@ function resourceTypeOf(node: FhirComplex): string | undefined {
 
 /** The scalar text of a primitive-valued property, for emission as an attribute (`id` / `url`). */
 function attributeText(node: FhirNode): string | undefined {
-  if (isPrimitive(node) && node.value !== undefined) return escapeAttr(scalarText(node.value));
+  if (isPrimitive(node) && node.value !== undefined) return scalarText(node.value);
   return undefined;
 }
 
@@ -309,8 +353,12 @@ function writePrimitiveElement(
 ): string {
   const tagName = tag(name, path, sink);
   let attrs = "";
-  if (node.id !== undefined) attrs += ` id="${escapeAttr(node.id)}"`;
-  if (node.value !== undefined) attrs += ` value="${escapeAttr(scalarText(node.value))}"`;
+  if (node.id !== undefined) {
+    attrs += ` id="${attributeValue(node.id, childPath(path, "id"), sink)}"`;
+  }
+  if (node.value !== undefined) {
+    attrs += ` value="${attributeValue(scalarText(node.value), path, sink)}"`;
+  }
   const extensions = node.extension ?? [];
   if (extensions.length === 0) return `<${tagName}${attrs}/>`;
   const extensionPath = childPath(path, "extension");
@@ -341,15 +389,23 @@ function writeItem(
   // the forged markup is never built into the returned document. A string that passes is asked one
   // more question, of the same parse, on a code of its own: whether every prefix its markup names is
   // bound inside it, since this branch writes a value and the colon check in `tag()` never sees it.
+  // A string that passes both is asked a third, on a code of its own again: whether it carries a
+  // code point outside XML 1.0 `Char`, raw or denoted by a reference its parse decoded.
   if (name === "div" && node.kind === "primitive" && typeof node.value === "string") {
     const root = emitsOneDivElement(node.value);
     if (root === undefined) {
       sink.refusedDivs.push(path);
       return "";
     }
-    if (bindsEveryPrefix(root)) return node.value;
-    sink.refusedDivPrefixes.push(path);
-    return "";
+    if (!bindsEveryPrefix(root)) {
+      sink.refusedDivPrefixes.push(path);
+      return "";
+    }
+    if (carriesNonXmlCharacter(node.value) || decodesNonXmlCharacter(root)) {
+      sink.refusedCharacters.push(path);
+      return "";
+    }
+    return node.value;
   }
   if (node.kind === "primitive") return writePrimitiveElement(path, name, node, sink);
   if (node.kind === "list")
@@ -385,6 +441,10 @@ function writeProperty(
  * Emit a complex element `<tagName …>…</tagName>`. `isRoot` adds the FHIR default namespace;
  * `inExtension` routes an `Extension.url` property to the `url` attribute. `Element.id` becomes an
  * `id` attribute unless the complex is itself a resource (then `id` is a child element).
+ *
+ * The attributes are settled before the children are walked, which is the order the output spells
+ * them in, so a value the attributes carry is tested before anything inside the element. Where a
+ * name repeats, the last primitive carrying a value is the one written, and only that one is tested.
  */
 function writeElement(
   path: string,
@@ -396,29 +456,32 @@ function writeElement(
 ): string {
   const written = tag(tagName, path, sink);
   const isResource = resourceTypeOf(node) !== undefined;
+  const asId = (name: string): boolean => name === "id" && !isResource;
+  const asUrl = (name: string): boolean => name === "url" && inExtension;
   let attrs = isRoot ? ` xmlns="${FHIR_XML_NAMESPACE}"` : "";
-  let idAttr = "";
-  let urlAttr = "";
-  const children: string[] = [];
+  let idText: string | undefined;
+  let urlText: string | undefined;
+  for (const { name, value } of node.properties) {
+    const text = attributeText(value);
+    if (text === undefined) continue;
+    if (asId(name)) idText = text;
+    else if (asUrl(name)) urlText = text;
+  }
+  if (idText !== undefined) {
+    attrs += ` id="${attributeValue(idText, childPath(path, "id"), sink)}"`;
+  }
+  if (urlText !== undefined) {
+    attrs += ` url="${attributeValue(urlText, childPath(path, "url"), sink)}"`;
+  }
 
-  for (const property of node.properties) {
-    const { name, value } = property;
-    if (name === "resourceType") continue; // it is the tag name, not a child.
-    if (name === "id" && !isResource) {
-      const text = attributeText(value);
-      if (text !== undefined) idAttr = ` id="${text}"`;
-      continue;
-    }
-    if (name === "url" && inExtension) {
-      const text = attributeText(value);
-      if (text !== undefined) urlAttr = ` url="${text}"`;
-      continue;
-    }
+  const children: string[] = [];
+  for (const { name, value } of node.properties) {
+    // `resourceType` is the tag name, and an attribute-routed `id` or `url` was written above.
+    if (name === "resourceType" || asId(name) || asUrl(name)) continue;
     const childInExtension = name === "extension" || name === "modifierExtension";
     children.push(writeProperty(path, name, value, childInExtension, sink));
   }
 
-  attrs += idAttr + urlAttr;
   const inner = children.join("");
   return inner === "" ? `<${written}${attrs}/>` : `<${written}${attrs}>${inner}</${written}>`;
 }
@@ -432,15 +495,24 @@ function writeElement(
  *
  * ## What this output is NOT guaranteed to be, stated rather than implied
  *
- * "Spec-clean" is a claim about the FHIR structure, not about namespace well-formedness, and the
- * gap is real for a model that carries content FHIR cannot spell. A name with no colon that is not a
- * conformant XML name at all is written verbatim (`<a&b/>`, `<1abc/>`): it re-reads through
- * {@link parseResourceXml} exactly as written and is rejected by a conformant third-party parser. It
- * is not refused precisely because this library's own round trip does survive it, and refusing would
- * withdraw that from models it reads as valid. A name carrying a **colon** used to be written the
- * same way, its prefix bound to nothing (`<v:x value="1"/>`), because the binding was never modeled;
- * it is refused now, at the tag sites, on a code of its own (see the `@throws` below). What is
- * refused on a name is otherwise the subset where nothing survives.
+ * "Spec-clean" is a claim about the FHIR structure, and the XML 1.0 grammar for a name and a
+ * character is now held at every site this writer writes one: a tag name that is not a `Name`
+ * (`<a&b/>`, `<1abc/>`) is refused rather than written, although it re-reads through
+ * {@link parseResourceXml} exactly as written, because a conforming third-party processor must
+ * reject it; and a code point outside `Char` in an attribute value or a spliced `div` string is
+ * refused, raw or as a reference (see the `@throws` below). A name carrying a **colon** is refused
+ * on a code of its own, because the model carries no binding to declare. **What is still written,
+ * each a declared residual rather than an oversight**:
+ *
+ * - a `Name` that is not namespace-well-formed after `xml:` (`<xml:1abc/>`), since only the colon
+ *   question reads the `xml:` prefix and it exempts that prefix;
+ * - an element or attribute name inside a `div` string that is not a `Name` (`<p>` spelled `<1p>`):
+ *   the string is asked the `Char` question, never the `Name` question, which is asked at tag
+ *   positions only;
+ * - the three `div` counterexamples below, none of them a name or a character matter.
+ *
+ * The reader is unchanged and still reads `<1abc>` and `<a&b>` back, and `validateResource` still
+ * returns `valid: true` for a `string` carrying U+0000; both are separate surfaces.
  *
  * ## The `div` branch, which writes markup rather than a name
  *
@@ -449,16 +521,20 @@ function writeElement(
  * the string is written only when it parses as exactly one element whose local name is `div`; a
  * string that fails raises `UNSERIALIZABLE_DIV_MARKUP` below. A string that passes is written only
  * when every prefix its markup names is bound by a declaration inside it (`bindsEveryPrefix`); one
- * that is not raises `UNSERIALIZABLE_DIV_PREFIX` below. The shape the first check exists for is
+ * that is not raises `UNSERIALIZABLE_DIV_PREFIX` below. A string that passes both is written only
+ * when it carries no code point outside XML 1.0 `Char`, neither raw nor denoted by a numeric
+ * character reference its parse decoded; one that does raises `UNSERIALIZABLE_XML_CHARACTER`
+ * below, and a reference inside a comment, which is never decoded, is not one. The shape the first
+ * check exists for is
  * `<div xmlns="…xhtml">ok</div></text><code><coding>…716186003…</coding></code><text>` on an
  * `AllergyIntolerance`: it used to be spliced in whole, and the emitted document re-read with
  * `noKnownAllergy: true` and a `no-known-allergy` negation over a record that had asserted nothing,
  * with no diagnostic at either end and `readSafety` affirming it.
  *
- * **What passing both checks does and does not settle, by example rather than by rule.** A string
- * they accept contributes one element, that element is the `div`, and every prefix its markup names
- * is bound inside it; it is not a claim that the round trip is lossless or that the output is
- * well-formed from there. A comment beside the root (`<!--c--><div …/>`) is accepted and does not
+ * **What passing the three checks does and does not settle, by example rather than by rule.** A
+ * string they accept contributes one element, that element is the `div`, every prefix its markup
+ * names is bound inside it, and every character it spells or denotes is a `Char`; it is not a claim
+ * that the round trip is lossless or that the output is well-formed from there. A comment beside the root (`<!--c--><div …/>`) is accepted and does not
  * survive the re-read. `emitsOneDivElement` carries three more counterexamples, each `PRE-EXISTING`
  * and each asserted rather than argued: a depth bound this check spends from a different starting
  * depth than the re-read, an inserted namespace declaration, and an XML declaration a conformant
@@ -570,14 +646,16 @@ function writeElement(
  *   re-read. **It withdraws an XML write from models that read `valid: true`**, the cost the
  *   foreign-root refusal above already pays: a property named `p:x` reads with zero issues. Checked
  *   at every tag position, at every depth, including a resource composed into a `contained` or a
- *   `Bundle.entry.resource` after it was read. Raised last of all, so a model carrying one of these
- *   names beside anything above keeps the code it already reported, and a name that both carries a
- *   colon and breaks the tag stays `UNSERIALIZABLE_ELEMENT_NAME`. **Not covered**: a name with no
- *   colon that is not a conformant XML name, which is still written. A `div` string whose own markup
- *   carries an unbound prefix is written by the `div` branch rather than at a tag position, so this
- *   refusal does not reach it either; that branch refuses it on `UNSERIALIZABLE_DIV_PREFIX`, below.
- *   {@link serializeResource} spells a member name as a JSON string, so this refusal does not reach
- *   it and that route stays open.
+ *   `Bundle.entry.resource` after it was read. Raised after every refusal above, so a model carrying
+ *   one of these names beside anything above keeps the code it already reported, and a name that
+ *   both carries a colon and breaks the tag stays `UNSERIALIZABLE_ELEMENT_NAME`. **Not covered**: a
+ *   name with no colon that is not an XML 1.0 `Name`, which is refused on
+ *   `UNSERIALIZABLE_XML_NAME` below, not on this code; and the local part after `xml:`, which is
+ *   not checked for namespace well-formedness, so `<xml:1abc/>` is still written. A `div` string
+ *   whose own markup carries an unbound prefix is written by the `div` branch rather than at a tag
+ *   position, so this refusal does not reach it either; that branch refuses it on
+ *   `UNSERIALIZABLE_DIV_PREFIX`, below. {@link serializeResource} spells a member name as a JSON
+ *   string, so this refusal does not reach it and that route stays open.
  * @throws {FhirSerializeError} With `UNSERIALIZABLE_DIV_PREFIX` if a `div` property carries a string
  *   that passes the `UNSERIALIZABLE_DIV_MARKUP` check above and whose markup names, on an element or
  *   on an attribute, a namespace prefix no declaration inside the string binds (`xml` is bound by
@@ -591,10 +669,42 @@ function writeElement(
  *   library itself round-tripped, the cost that refusal already pays. A prefix a conformant document
  *   bound on an ANCESTOR of the `div` is not refused, because the reader writes that declaration into
  *   the string it hands back. Checked at the `div` branch at every depth, including a resource
- *   composed into a `contained` or a `Bundle.entry.resource` after it was read, and raised last of
- *   all, so a model that also trips any refusal above keeps the code it already reported. The message
- *   and the locations carry neither the string nor its prefix. {@link serializeResource} carries the
- *   string as a string, so this refusal does not reach it and that route stays open.
+ *   composed into a `contained` or a `Bundle.entry.resource` after it was read, and raised after
+ *   every refusal above, so a model that also trips any of them keeps the code it already reported.
+ *   The message and the locations carry neither the string nor its prefix. {@link serializeResource}
+ *   carries the string as a string, so this refusal does not reach it and that route stays open.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_XML_NAME` if any tag position holds a name that
+ *   is not an XML 1.0 `Name` (production [5]) and that neither breaks the tag nor carries a colon:
+ *   `a&b`, `1abc`, `-x`, `.x`, `a"b`, a name beginning U+00B7, a name carrying U+0000 or an unpaired
+ *   surrogate. Each used to be written verbatim, and this library's own reader read each back
+ *   unchanged, which is why the tag-breaking line above never reached it; a conforming processor must
+ *   reject every one. Checked at every tag position at every depth: a property name, a name inside
+ *   `contained`, `Bundle.entry.resource` or an extension, a resource-valued element's wrapper, and a
+ *   `resourceType` that names a root or a nested resource's tag, the last reported at the location of
+ *   the element wrapping it. Every position once, in walk order; a refused name's own segment renders
+ *   `WITHHELD`, and neither the message nor a location carries the name. **Refused, never repaired**:
+ *   XML has no escape for a name. **It withdraws an XML write from models that read `valid: true`**,
+ *   the cost the colon refusal above already pays: a JSON property named `1abc` reads with zero
+ *   issues. Raised after every refusal above, so a model that trips any of them keeps the code it
+ *   already reported. {@link serializeResource} spells a member name as a JSON string, so this
+ *   refusal does not reach it and that route stays open.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_XML_CHARACTER` if a value this writer emits as an
+ *   attribute value (a primitive's `value`, an `id` written as an attribute, an `Extension.url`) or
+ *   a `div` string that passes both `div` checks above carries a code point outside XML 1.0 `Char`
+ *   (production [2]): U+0000 to U+0008, U+000B, U+000C, U+000E to U+001F, an unpaired surrogate,
+ *   U+FFFE or U+FFFF. In a `div` string a numeric character reference denoting one (`&#0;`,
+ *   `&#x1F;`) counts as the raw character does, because the Legal Character constraint makes it as
+ *   fatal; a reference inside a comment is never decoded and does not. A U+0000 used to be written
+ *   raw into its `value` attribute. **Refused, never repaired**: the character is not written raw,
+ *   as a reference or replaced, and neither it nor its value is dropped, so the model is left as it
+ *   was. The location is the value's (`Patient.gender`, `Patient.gender.id`,
+ *   `Patient.extension[0].url`, `Patient.text.div`), every one once, in walk order; neither the
+ *   message nor a location carries the value or the character. The discouraged code points `Char`
+ *   still admits (U+007F to U+009F, U+FDD0 to U+FDEF) are written. Raised last of all, after
+ *   `UNSERIALIZABLE_XML_NAME`, so a model that trips any refusal above keeps the code it already
+ *   reported and a model carrying both a name that is not a `Name` and a character that is not a
+ *   `Char` draws the name code. {@link serializeResource} writes these values as JSON strings, so
+ *   this refusal does not reach it and that route stays open.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -612,6 +722,8 @@ export function serializeResourceXml(node: FhirComplex): string {
     refusedDivs: [],
     refusedPrefixes: [],
     refusedDivPrefixes: [],
+    refusedXmlNames: [],
+    refusedCharacters: [],
   };
   const xml = writeElement(rootPath(tagName), tagName, node, true, false, sink);
   // Names first, which is the order base raised them in, so a model that trips both keeps the code
@@ -643,11 +755,18 @@ export function serializeResourceXml(node: FhirComplex): string {
   if (sink.refusedPrefixes.length > 0) {
     refuseUndeclarablePrefixes([...new Set(sink.refusedPrefixes)]);
   }
-  // And the `div` prefix refusal at the very end, on the same rule: it is the newest code, collected
+  // And the `div` prefix refusal after that, on the same rule: it was the newest code, collected
   // at the `div` branch during the same walk, so a model that also trips any refusal above, the colon
   // refusal at the tag sites included, keeps the code the writer raised for it before.
   if (sink.refusedDivPrefixes.length > 0) {
     refuseUnboundDivPrefixes([...new Set(sink.refusedDivPrefixes)]);
+  }
+  // Then the two XML 1.0 refusals, both collected during the same walk: the `Name` code first, then
+  // the `Char` code last of all, so every model that drew any code above keeps it, and a model that
+  // carries both a name that is not a `Name` and a character that is not a `Char` draws the name code.
+  if (sink.refusedXmlNames.length > 0) refuseNonXmlNames([...new Set(sink.refusedXmlNames)]);
+  if (sink.refusedCharacters.length > 0) {
+    refuseNonXmlCharacters([...new Set(sink.refusedCharacters)]);
   }
   return xml;
 }

@@ -19,11 +19,12 @@
  * number and the datatype validator reads it as a type mismatch.
  *
  * **The writer's output is not unconditionally spec-clean and its round trip is not unconditionally
- * byte-for-byte**, and both used to be asserted here without a qualifier. A name with no colon that
- * is not a conformant XML name at all is written verbatim (`<a&b/>`, `<1abc/>`), and a name carrying
- * a colon is refused rather than written with its prefix unbound; a narrative `<div>x</div>` comes
- * back as `<div xmlns="http://hl7.org/fhir">x</div>`. The exceptions and the refusals are
- * enumerated on `serializeResourceXml` itself; read them there rather than from a summary here.
+ * byte-for-byte**, and both used to be asserted here without a qualifier. A tag name that is not an
+ * XML 1.0 `Name` (`a&b`, `1abc`), a name carrying a colon, and a value or `div` string carrying a
+ * character outside XML 1.0 `Char` are refused rather than written; `<xml:1abc/>` and a name inside a
+ * `div` string that is not a `Name` are still written, and a narrative `<div>x</div>` comes back as
+ * `<div xmlns="http://hl7.org/fhir">x</div>`. The exceptions and the refusals are enumerated on
+ * `serializeResourceXml` itself; read them there rather than from a summary here.
  *
  * @packageDocumentation
  */
