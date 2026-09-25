@@ -276,11 +276,16 @@ describe("what this deliberately does not do, pinned so it cannot move in silenc
       '{"resourceType":"AllergyIntolerance","clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical","code":null}]}}',
     );
     expect(readSafety(resource).safeToSummarize).toBe(true);
-    expect(
-      validateResource(
-        parseResource('{"resourceType":"Patient","name":[{"given":[null]}]}').resource,
-      ).valid,
-    ).toBe(true);
+    // AC-6 (S0374): this code still moves nothing. `valid` moves because the element the `null`
+    // left behind has no value and no children, which violates the R4 base constraint ele-1; that
+    // finding is added beside this reader warning, never instead of it.
+    const result = validateResource(
+      parseResource('{"resourceType":"Patient","name":[{"given":[null]}]}').resource,
+    );
+    expect(result.issues.map((i) => [i.code, i.constraint, i.expression])).toEqual([
+      ["INVARIANT_VIOLATED", "ele-1", "Patient.name[0].given[0]"],
+    ]);
+    expect(result.valid).toBe(false);
   });
 
   it("leaves a `_`-sibling that is not an object to `UNKNOWN_PROPERTY`, not to this code", () => {

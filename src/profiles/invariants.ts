@@ -21,6 +21,13 @@
  * US Core `us-core-*`, vendor invariants). Its agreement with the reference validator on the named
  * safety expressions is proven directly against {@link ../fhirpath/index.js evaluateInvariant}.
  *
+ * **What {@link collectInvariantIssues} returns does not depend on the base-constraint layer.**
+ * Called directly it reports every constraint the profile carries, the R4 base ones (`pat-1`,
+ * `ext-1`, `ele-1`, `dom-2` and the rest) included. Under `validateResource` the base-constraint
+ * layer ({@link ../validate/base-invariants.js}) evaluates those base constraints on the eight
+ * modeled types whether or not a profile is supplied, and a finding this layer makes at the same
+ * occurrence, for the same key and code, is reported once rather than twice.
+ *
  * @packageDocumentation
  */
 
@@ -105,13 +112,43 @@ export function collectInvariantIssues(
   profile: StructureDefinition,
   options: InvariantOptions = {},
 ): ValidationIssue[] {
+  return invariantFindings(resource, profile, options).map((finding) => finding.issue);
+}
+
+/**
+ * One profile invariant finding with the occurrence it was evaluated against, so the validator can
+ * tell a finding the base-constraint layer already made at that occurrence from a new one.
+ *
+ * @internal
+ */
+export interface InvariantFinding {
+  readonly issue: ValidationIssue;
+  /** The node the constraint was evaluated against: the resource, or one element occurrence. */
+  readonly focus: FhirComplex;
+}
+
+/**
+ * {@link collectInvariantIssues} with each finding's focus kept beside it. The issues, their order
+ * and their locations are exactly the ones {@link collectInvariantIssues} returns.
+ *
+ * @param resource - The resource model.
+ * @param profile - The profile whose `constraint`s to evaluate.
+ * @param options - Optional base resolver for snapshot generation.
+ * @returns The findings, in the order {@link collectInvariantIssues} returns their issues.
+ * @internal
+ */
+export function invariantFindings(
+  resource: FhirComplex,
+  profile: StructureDefinition,
+  options: InvariantOptions = {},
+): InvariantFinding[] {
   const rt = resourceType(resource);
   if (rt === undefined || rt !== profile.type) return [];
   // The profile only applies when the two agree, so the location is bounded once, here.
   const root = rootPath(rt);
 
   const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
-  const issues: ValidationIssue[] = [];
+  const findings: InvariantFinding[] = [];
 
   for (const el of snapshot) {
     if (el.constraint === undefined || el.constraint.length === 0) continue;
@@ -131,19 +168,23 @@ export function collectInvariantIssues(
           resource,
         );
         if (unchecked) {
-          issues.push(
-            validationIssue(
+          findings.push({
+            issue: validationIssue(
               "INVARIANT_UNCHECKED",
               ISSUE_SEVERITIES.INFORMATION,
               focus.path,
               constraint.key,
             ),
-          );
+            focus: focus.node,
+          });
         } else if (!satisfied) {
-          issues.push(validationIssue("INVARIANT_VIOLATED", severity, focus.path, constraint.key));
+          findings.push({
+            issue: validationIssue("INVARIANT_VIOLATED", severity, focus.path, constraint.key),
+            focus: focus.node,
+          });
         }
       }
     }
   }
-  return issues;
+  return findings;
 }

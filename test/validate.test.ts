@@ -174,7 +174,12 @@ describe("validateResource: layer 3 (value-domain)", () => {
     const result = check('{"resourceType":"Patient","birthDate":null,"_birthDate":{"id":"bd"}}');
     // No value to lexically validate, must not produce a PRIMITIVE_INVALID.
     expect(codes(result)).not.toContain("PRIMITIVE_INVALID");
-    expect(result.valid).toBe(true);
+    // AC-6 (S0374): an element carrying only an `id` has no value and no other child, which
+    // violates the R4 base constraint ele-1; that is the one finding gained here.
+    expect(result.issues.map((i) => [i.code, i.constraint, i.expression])).toEqual([
+      ["INVARIANT_VIOLATED", "ele-1", "Patient.birthDate"],
+    ]);
+    expect(result.valid).toBe(false);
   });
 });
 
