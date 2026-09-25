@@ -32,7 +32,7 @@ import {
   SUBSET_OPERATORS,
   TYPE_ARGUMENT_FUNCTIONS,
 } from "../src/fhirpath/evaluate.js";
-import { resolveTypeSpecifier } from "../src/fhirpath/types.js";
+import { resolveTypeSpecifier, typeSpecifierOf } from "../src/fhirpath/types.js";
 
 /** One row of the committed projection, `test/__data__/uscore-constraints.json`. */
 export interface ProjectedConstraint {
@@ -76,6 +76,8 @@ export interface SubsetDescription {
   readonly functions: ReadonlySet<string>;
   readonly operators: ReadonlySet<string>;
   readonly typeArgumentFunctions: ReadonlySet<string>;
+  /** The type specifier a type-argument function's argument spells, or `undefined` for none. */
+  readonly typeArgument: (arg: Expr) => string | undefined;
   /** Whether a type specifier as written resolves to a type the engine tests for. */
   readonly resolvesType: (specifier: string) => boolean;
 }
@@ -85,6 +87,7 @@ export const HEAD_SUBSET: SubsetDescription = {
   functions: SUBSET_FUNCTIONS,
   operators: SUBSET_OPERATORS,
   typeArgumentFunctions: TYPE_ARGUMENT_FUNCTIONS,
+  typeArgument: typeSpecifierOf,
   resolvesType: (specifier) => resolveTypeSpecifier(specifier) !== undefined,
 };
 
@@ -92,7 +95,7 @@ export const HEAD_SUBSET: SubsetDescription = {
  * The engine at the pin this change was written against (`src/fhirpath/evaluate.ts` at
  * `0d75c80`): the fifteen functions its `applyFunction` switch dispatched on, the thirteen
  * operators `evaluateBinary` dispatched on, and type tests on `Boolean`, `String`, `Integer` and
- * `Decimal` only, after stripping a leading `System.`.
+ * `Decimal` only, after stripping a leading `System.`. Its `ofType` read an unqualified name only.
  */
 export const PIN_SUBSET: SubsetDescription = {
   functions: new Set([
@@ -128,6 +131,7 @@ export const PIN_SUBSET: SubsetDescription = {
     "contains",
   ]),
   typeArgumentFunctions: new Set(["ofType"]),
+  typeArgument: (arg) => (arg.kind === "member" && arg.target === null ? arg.name : undefined),
   resolvesType: (specifier) =>
     ["Boolean", "String", "Integer", "Decimal"].includes(specifier.replace(/^System\./, "")),
 };
@@ -174,7 +178,7 @@ function firstOutside(expr: Expr, subset: SubsetDescription): string | undefined
       if (!subset.functions.has(expr.name)) return `${expr.name}()`;
       if (subset.typeArgumentFunctions.has(expr.name)) {
         const arg = expr.args[0];
-        const named = arg?.kind === "member" && arg.target === null ? arg.name : undefined;
+        const named = arg === undefined ? undefined : subset.typeArgument(arg);
         return named !== undefined && subset.resolvesType(named)
           ? undefined
           : `${expr.name}(${named ?? "a non-identifier type argument"})`;

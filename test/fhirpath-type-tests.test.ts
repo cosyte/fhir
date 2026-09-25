@@ -140,6 +140,32 @@ describe("AC-10: a FHIR-type test the instance establishes is answered", () => {
     expect(answer("gender is String", male)).toBe(true);
     expect(answer("gender.ofType(Boolean).empty()", male)).toBe(true);
   });
+
+  it("answers a qualified type name in every form, as the unqualified one (R1, R2, R3)", () => {
+    const valueQuantity = property(quantityObs, "valueQuantity");
+    if (!isComplex(valueQuantity)) throw new Error("expected a complex valueQuantity");
+    for (const form of [
+      "$this is FHIR.Quantity",
+      "($this as FHIR.Quantity).exists()",
+      "ofType(FHIR.Quantity).exists()",
+      "$this.is(FHIR.Quantity)",
+      "$this.as(FHIR.Quantity).exists()",
+    ]) {
+      expect(answer(form, quantityObs, valueQuantity), form).toBe(true);
+      expect(evaluateInvariant(form, valueQuantity, quantityObs), form).toEqual({
+        unchecked: false,
+        satisfied: true,
+      });
+    }
+    expect(answer("value.ofType(FHIR.CodeableConcept).empty()", quantityObs)).toBe(true);
+    expect(answer("value.is(FHIR.Period)", quantityObs)).toBe(false);
+    expect(answer("onset.ofType(FHIR.Quantity).exists()", ageCondition)).toBe(true);
+    expect(answer("$this.is(FHIR.Observation)", quantityObs)).toBe(true);
+    expect(answer("$this.is(FHIR.Patient)", quantityObs)).toBe(false);
+    expect(answer("gender.ofType(FHIR.Quantity).empty()", male)).toBe(true);
+    expect(answer("code.ofType(System.Boolean).empty()", quantityObs)).toBe(true);
+    expect(answer("code.is(System.String)", quantityObs)).toBe(false);
+  });
 });
 
 describe("AC-11: a FHIR-type test the instance does not establish is refused, never answered", () => {
@@ -199,6 +225,16 @@ describe("AC-11: a FHIR-type test the instance does not establish is refused, ne
     expect(refused("gender is FHIR.String", male)).toBe(true);
     // Refused in function form even over an empty input: the name is resolved first.
     expect(refused("multipleBirth.is(string1)", male)).toBe(true);
+    // Qualified: a model neither names, or a name the named model does not carry.
+    expect(refused("value.ofType(HL7.Quantity).exists()", quantityObs)).toBe(true);
+    expect(refused("value.is(FHIR.Quantity.value)", quantityObs)).toBe(true);
+    expect(refused("$this.is(System.Observation)", quantityObs)).toBe(true);
+    expect(refused("value.as(FHIR.String).exists()", quantityObs)).toBe(true);
+  });
+
+  it("refuses a qualified System name over a primitive in function form, as before", () => {
+    expect(refused("gender.ofType(System.String).exists()", male)).toBe(true);
+    expect(refused("gender.is(System.String)", male)).toBe(true);
   });
 
   it("refuses a relation between two types the package cannot establish", () => {

@@ -67,8 +67,8 @@ suite asserts all three numbers, so neither the byte count nor the live count ca
 
 | bucket | cases | what it means |
 |---|---|---|
-| evaluated | 208 | the engine produced an answer and it matches the corpus |
-| unsupported | 692 | the engine itself raised `UnsupportedFhirPathError` |
+| evaluated | 210 | the engine produced an answer and it matches the corpus |
+| unsupported | 690 | the engine itself raised `UnsupportedFhirPathError` |
 | wrongly answered | 0 | the engine produced an answer that disagrees, or one the harness cannot compare, **outside a declared mode difference** |
 | marked invalid by the corpus | 35 | the corpus expects a syntax / semantic / execution error, so the case gets no credit either way |
 | **total** | **935** | every live `<test>` element, each in exactly one bucket |
@@ -81,8 +81,8 @@ invalid *solely* under a strictness mode this engine does not implement. **The r
 answered count excludes those two declared mode differences**, which is why the count is qualified
 everywhere it appears rather than published bare.
 
-**The engine answers 22.2% of the whole corpus** (208 of 935), or **23.1%** of the cases it is
-expected to evaluate at all (208 of 900: the same numerator over a denominator with the 35 cases in
+**The engine answers 22.5% of the whole corpus** (210 of 935), or **23.3%** of the cases it is
+expected to evaluate at all (210 of 900: the same numerator over a denominator with the 35 cases in
 the invalid bucket removed). Both fractions are stated because they answer different questions, and
 quoting one as the other is how a coverage number drifts.
 
@@ -101,12 +101,12 @@ corpus_tag: 1.7.67
 raw_test_tag_occurrences: 937
 commented_out_cases: 2
 total_cases: 935
-evaluated: 208
-unsupported: 692
+evaluated: 210
+unsupported: 690
 wrong: 0
 invalid: 35
-answered_fraction: 22.2%
-answered_fraction_of_valid: 23.1%
+answered_fraction: 22.5%
+answered_fraction_of_valid: 23.3%
 type_qualified_head_cases: 154
 type_qualified_head_names: Appointment, Encounter, Observation, Parameters, Patient, Questionnaire, ValueSet
 ```
@@ -600,6 +600,12 @@ value the engine computed; and a focus found nowhere in the resource. The System
 exactly the answers they had over a primitive and a computed value, and their function forms
 (`is()` / `as()`, refused outright before) stay refused there: the value-based reading the operator
 keeps answers `1 is Decimal` with `true`, and the corpus grades `1.is(Decimal)` `false`.
+A type name may be written qualified in every form (`ofType(FHIR.Quantity)`, `is(FHIR.Patient)`,
+`$this is FHIR.Quantity`), and is answered exactly as the unqualified name is, with one exception
+kept for the same reason: `ofType(System.String)` over a primitive or a computed value, which
+`ofType` refused before while it answered `ofType(String)` off the value, stays refused, because the
+corpus reads a FHIR primitive as not being of a System type through the function forms
+(`Patient.active.is(System.Boolean).not()` is `true` there).
 
 **`matches(regex)`** is answered over a single string input and a pattern in a portable subset:
 literal characters, `.`, `^` and `$` (the start and end of the input), a character class of literal
@@ -608,8 +614,15 @@ most 1000), compiled case-sensitive, single line and Unicode, and not anchored. 
 dialect, so everything whose meaning depends on one is refused: `\d`, `\w`, `\s`, `\b`,
 back-references, lookaround, named and non-capturing groups, inline flags, lazy and possessive
 quantifiers, POSIX classes and class set operations. So is a quantified group containing a quantifier
-or an alternation, which could backtrack without bound. More than one input item, a non-string input
+or an alternation, which could backtrack exponentially. A pattern inside the subset can still
+backtrack polynomially, a run of variable-length repetitions (`^a*a*a*a*b`) taking time that grows
+with the value's length to a power rising with each one; fixed counts, as US Core's are, do not.
+More than one input item, a non-string input
 and a pattern argument that is not one string are refused too; an empty input or pattern is `{}`.
+"Empty" is the empty collection: `''` is a String, so `matches('')` is a pattern that matches every
+value, as it does in every dialect. The model carries no datatype name, so "a string" is any
+string-valued primitive, the same reading the System test `is String` has always made: a `code`, a
+`uri`, and a `date` or `instant` too, matched on its lexical form.
 `$` is the end of the input, so `1234567893` followed by a line feed does not match
 `^[0-9]{10}$`: the reading of every dialect that matches the whole input, and the one that reports
 rather than passes such a value.
@@ -628,12 +641,14 @@ patterns are decided only through `evaluateInvariant` today; and a constraint an
 US Core 6.1.0's `us-core-3`, anchored on `Observation.value[x]`, **checks nothing about UCUM as
 written**: from the anchored Quantity, `value` selects its decimal, which is never a Quantity, so
 the constraint holds for every unit system. That is the published expression evaluated faithfully;
-9.0.0's rewrite (`ofType(Quantity).system...`) is the one that checks the system.
+9.0.0's rewrite (`ofType(Quantity).system...`) is the one that checks the system. 6.1.0's
+`us-core-4` on the same element is the same case: from the anchored CodeableConcept, `value`
+selects nothing, so it holds for every coding system, where 9.0.0's rewrite checks for SNOMED CT.
 
 ### What moved in the shared corpus
 
-Eighteen cases moved from `unsupported` to `evaluated`, and none to `wrong`, so the counts block
-above reads `208 / 692 / 0 / 35`, measured against the engine before the widening
+Twenty cases moved from `unsupported` to `evaluated`, and none to `wrong`, so the counts block
+above reads `210 / 690 / 0 / 35`, measured against the engine before the widening
 (`190 / 710 / 0 / 35`) on the same vendored corpus:
 
 - R1 over `observation-example.xml`'s `valueQuantity`: `testPolymorphismIsA1`
@@ -642,7 +657,8 @@ above reads `208 / 692 / 0 / 35`, measured against the engine before the widenin
   (`Observation.value.as(Quantity).unit`), `testPolymorphismAsAFunction`
   (`(Observation.value as Quantity).unit`) and `testPolymorphismAsBFunction`
   (`Observation.value.as(Period).start`);
-- R2: `testType17` (`Patient.is(Patient)`);
+- R2: `testType17` (`Patient.is(Patient)`), and the same test with the name written qualified,
+  `testType18` (`Patient.is(FHIR.Patient)`) and `testType19` (``Patient.is(FHIR.`Patient`)``);
 - `matches()`: the eleven cases of the `testMatches` group (`testMatchesCaseSensitive1` and `2`,
   `testMatchesEmpty`, `2` and `3`, `testMatchesSingleLineMode1`, and `testMatchesWithinUrl1`, `2`,
   `3`, `1a` and `4`). `matchesFull()` is not in the subset, so its five cases stay unsupported.
@@ -676,25 +692,33 @@ widening answers is one that raised `UnsupportedFhirPathError` before it.
 | T15 | `matches()` | `identifier.value.matches('^SYN-[0-9]{4}$')` | an identifier `SYN-01` | `UNCHECKED` | `VIOLATED` |
 | T16 | `matches()` | `gender.matches('^male$')` | `gender: "male"` | `UNCHECKED` | `(none)` |
 | T17 | `matches()` | `text.div.matches('.*').exists()` | an Observation with no `text` | `UNCHECKED` | `VIOLATED` |
+| T18 | R2 | `$this.is(FHIR.Patient)` | a Patient | `UNCHECKED` | `(none)` |
+| T19 | R1 | `value.ofType(FHIR.Quantity).exists()` | an Observation with a `valueQuantity` | `UNCHECKED` | `(none)` |
+| T20 | R1 | `value.as(FHIR.CodeableConcept).exists()` | the same Observation | `UNCHECKED` | `VIOLATED` |
+| T21 | R3 | `name.ofType(System.String).exists()` | a Patient with one `name` | `UNCHECKED` | `VIOLATED` |
 
 Does not move, measured: `gender is code` and `name is HumanName` (`UNCHECKED` on both: not reached
 through a choice element), `deceased is dateTime` over `deceasedBoolean` (`UNCHECKED` on both: two
 different primitives), `$this is Resource` (`UNCHECKED` on both: abstract),
 `gender.ofType(Quantity).exists()` over a Patient with no `gender` (`VIOLATED` on both: `ofType`
 over an empty input was `{}` before and still is), `identifier.value.matches('\\d')` (`UNCHECKED`
-on both: outside the portable subset) and `text.div.toString().exists()` (`UNCHECKED` on both). Every
+on both: outside the portable subset), `text.div.toString().exists()` (`UNCHECKED` on both),
+`gender.ofType(System.String).exists()` (`UNCHECKED` on both over `gender: "male"`, a qualified
+System name over a primitive; `VIOLATED` on both over a Patient with no `gender`, `ofType` over an
+empty input) and `$this.is(System.Patient)` (`UNCHECKED` on both: the name resolves in neither
+model). Every
 control the four remedies above table is unchanged too, `gender is FHIR.String` and
 `gender.ofType(FHIR.String).exists()` among them.
 
 **Rows T1, T2 and T11 restore a correct finding** that remedy 3 withdrew (rows 11 and 12 above),
 decided now from the node's kind rather than reached by comparing a System type against a FHIR type
-name. **T4, T7, T10 and T15 add a correct finding** where the engine used to say only that it had not
+name. **T4, T7, T10, T15, T20 and T21 add a correct finding** where the engine used to say only that it had not
 evaluated the constraint. **T12 and T17 add a finding over an ABSENT element**: `{}.is(T)` and
 `{}.matches(...)` are `{}`, and a constraint whose result is empty is not satisfied, which is this
 engine's documented coercion (the reference validator's) applied to a construct it now evaluates.
 `test/invariants.test.ts` carried T17's constraint as its example of an unchecked invariant, and now
 carries `text.div.toString().exists()`, which is still outside the subset. **T3, T5, T6, T8, T9,
-T13, T14 and T16 remove an `INVARIANT_UNCHECKED` into a satisfied constraint**: what goes away is a
+T13, T14, T16, T18 and T19 remove an `INVARIANT_UNCHECKED` into a satisfied constraint**: what goes away is a
 notice that the constraint was not evaluated, replaced by an evaluation that holds, and `valid` does
 not move (it was already `true`).
 

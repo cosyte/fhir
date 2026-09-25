@@ -18,7 +18,10 @@
  * groups, inline flags, lazy and possessive quantifiers, POSIX classes, class set operations, and an
  * unescaped `-` in a class other than between the two ends of a range. A
  * quantified group that itself contains a quantifier or an alternation is refused too, so a
- * pattern cannot backtrack exponentially over a long input.
+ * pattern cannot backtrack exponentially over a long input. It can still backtrack polynomially: a
+ * run of variable-length repetitions (`^a*a*a*a*b`) takes time growing with the input's length to
+ * a power that rises with each one. Fixed counts (`^[0-9]{10}$`) do not; the pattern is the
+ * profile author's to keep that way.
  *
  * `$` is end of input: a value ending in a line feed does not match `^[0-9]{10}$`. That is the
  * reading of every dialect that matches the whole input, and it reports such a value rather than

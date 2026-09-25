@@ -10,7 +10,8 @@ evaluates 24 of 29 (16 before), and of those on US Core 9.0.0, 29 of 34 (19 befo
   the resource itself establishes the element's type: a choice element such as `valueQuantity` on an
   Observation is a `Quantity`, the resource is the type its `resourceType` names, and a primitive
   value is never a complex type (so `gender is Quantity` is `false`). `Age`, `Count`, `Distance` and
-  `Duration` count as a `Quantity`. So US Core 9.0.0's `us-core-3` now reports a `valueQuantity`
+  `Duration` count as a `Quantity`, and a type name may be written qualified (`FHIR.Quantity`) in
+  every form. So US Core 9.0.0's `us-core-3` now reports a `valueQuantity`
   whose `system` is not UCUM as `INVARIANT_VIOLATED`, and its smoking-status rules `us-core-24` and
   `us-core-25` are decided from the value present.
 - **`matches()`** is answered over a single string and a pattern made of literal characters, `.`,
@@ -21,8 +22,9 @@ Limits, in the same place as the capability:
 
 - Everything else is still reported `INVARIANT_UNCHECKED`, never treated as passing: a type test on
   an element that is not a choice element of the resource (`Observation.issued is instant`), on a
-  choice inside `component` or an extension, between two different primitive types, or naming a type
-  this package does not know; a `matches()` pattern using `\d`, `\w`, `\s`, `\b`, back-references,
+  choice inside `component` or an extension, between two different primitive types, naming a type
+  this package does not know, or a qualified System type such as `ofType(System.String)` over a
+  primitive value; a `matches()` pattern using `\d`, `\w`, `\s`, `\b`, back-references,
   lookaround, flags, lazy quantifiers or a quantified group that itself repeats; and `toString()`,
   `substring()`, `toInteger()`, `iif()`, arithmetic and `resolve()`, so US Core's `us-core-1`,
   `us-core-17` and `provenance-1` stay unchecked.
@@ -32,7 +34,12 @@ Limits, in the same place as the capability:
   the identifier patterns when called directly.
 - US Core 6.1.0's `us-core-3`, evaluated as published, does not check the unit system: from the
   Quantity it is anchored on, `value` selects the number, which is never a Quantity, so it holds for
-  every `system`. US Core 9.0.0's version of the rule is the one that checks it.
+  every `system`. US Core 9.0.0's version of the rule is the one that checks it. The same holds for
+  6.1.0's `us-core-4`: from the CodeableConcept it is anchored on, `value` selects nothing, so it
+  holds for every coding system, where 9.0.0's version checks for SNOMED CT.
+- A `matches()` pattern inside the subset can still backtrack polynomially: a run of
+  variable-length repetitions such as `^a*a*a*a*b` takes time that grows steeply with the length of
+  the value it is matched against. Patterns with fixed counts, as US Core's are, do not.
 - A constraint that is now decided can report a finding where it used to report `INVARIANT_UNCHECKED`,
   including over an absent element: `deceased.is(boolean)` on a Patient with no `deceased[x]` is not
   satisfied. No finding the validator reported before is withdrawn or changes severity.

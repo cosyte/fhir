@@ -754,6 +754,42 @@ const TYPE_TEST_MOVEMENTS: readonly TypeTestMovement[] = [
     now: "VIOLATED",
     why: "ADDED: over an absent element `matches()` is `{}`, so `exists()` is false; test/invariants.test.ts carried this constraint as its unchecked probe and now carries `toString()`",
   },
+  {
+    row: "T18",
+    rule: "R2",
+    expression: "$this.is(FHIR.Patient)",
+    over: bare,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "a qualified type name in function form is read as the operator form reads it",
+  },
+  {
+    row: "T19",
+    rule: "R1",
+    expression: "value.ofType(FHIR.Quantity).exists()",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "none",
+    why: "`ofType` refused every qualified name at the pin; `FHIR.Quantity` is `Quantity`",
+  },
+  {
+    row: "T20",
+    rule: "R1",
+    expression: "value.as(FHIR.CodeableConcept).exists()",
+    over: quantityObservation,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "the qualified name's non-match, through `as()`",
+  },
+  {
+    row: "T21",
+    rule: "R3",
+    expression: "name.ofType(System.String).exists()",
+    over: namedPatient,
+    pin: "UNCHECKED",
+    now: "VIOLATED",
+    why: "a complex node is never a System primitive, however the System name is written",
+  },
 ];
 
 const TYPE_TEST_CONTROLS: readonly Control[] = [
@@ -798,6 +834,24 @@ const TYPE_TEST_CONTROLS: readonly Control[] = [
     over: textlessObservation,
     both: "UNCHECKED",
     why: "a function still outside the subset is refused whatever its input",
+  },
+  {
+    expression: "gender.ofType(System.String).exists()",
+    over: male,
+    both: "UNCHECKED",
+    why: "a qualified System name over a primitive stays refused in `ofType`, as at the pin",
+  },
+  {
+    expression: "gender.ofType(System.String).exists()",
+    over: bare,
+    both: "VIOLATED",
+    why: "and over an empty input it is `{}`, lazily, as at the pin",
+  },
+  {
+    expression: "$this.is(System.Patient)",
+    over: bare,
+    both: "UNCHECKED",
+    why: "a qualified name that resolves in neither model is refused",
   },
 ];
 

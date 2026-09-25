@@ -35,6 +35,7 @@ import {
   type SchemaRegistry,
 } from "../validate/schema.js";
 import { UnsupportedFhirPathError } from "./errors.js";
+import type { Expr } from "./parser.js";
 
 /**
  * The R4 primitive datatypes, as the R4 data types page names them (datatypes.html, "Primitive
@@ -172,6 +173,33 @@ export function resolveTypeSpecifier(specifier: string): ResolvedType | undefine
   if (fhirKind(specifier) !== undefined) return { model: "FHIR", name: specifier };
   if (SYSTEM_TYPES.has(specifier)) return { model: "System", name: specifier };
   return undefined;
+}
+
+/**
+ * The type specifier a function-form type test's argument spells, as written: a name
+ * (`Quantity`) or a dotted chain of names (`FHIR.Quantity`, `System.String`), the same shape the
+ * operator forms read after `is` / `as`. So `ofType(FHIR.Quantity)` and `$this is FHIR.Quantity`
+ * ask the same question. Whether the specifier names a type is {@link resolveTypeSpecifier}'s to
+ * decide; any other argument expression spells no type specifier at all.
+ *
+ * @param arg - The argument expression of `ofType(...)`, `is(...)` or `as(...)`.
+ * @returns The specifier as written, or `undefined` when the argument is not a name chain.
+ * @example
+ * ```ts
+ * typeSpecifierOf(parseFhirPath("FHIR.Quantity")); // "FHIR.Quantity"
+ * typeSpecifierOf(parseFhirPath("Quantity")); // "Quantity"
+ * typeSpecifierOf(parseFhirPath("'Quantity'")); // undefined
+ * ```
+ */
+export function typeSpecifierOf(arg: Expr): string | undefined {
+  const names: string[] = [];
+  let at: Expr | null = arg;
+  while (at !== null) {
+    if (at.kind !== "member") return undefined;
+    names.unshift(at.name);
+    at = at.target;
+  }
+  return names.join(".");
 }
 
 /** One place a node sits in a resource: the node holding it, and the property it sits under. */

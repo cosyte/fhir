@@ -56,7 +56,7 @@ import {
 import { UnsupportedFhirPathError } from "./errors.js";
 import { compileMatchesPattern } from "./matches.js";
 import type { Expr } from "./parser.js";
-import { nodeIsOfType, resolveTypeSpecifier } from "./types.js";
+import { nodeIsOfType, resolveTypeSpecifier, typeSpecifierOf } from "./types.js";
 
 /** One item in a FHIRPath collection: a model node, or an engine-computed primitive. */
 export type FpItem =
@@ -646,6 +646,32 @@ function functionFormTypeTest(
   return fhirTypeTest(item, typeName, resolved, ctx) ? item : undefined;
 }
 
+/**
+ * Whether `ofType(type)` keeps one item: {@link itemIsType}, with the type specifier read qualified
+ * or not.
+ *
+ * One shape is refused before that: a System type written **qualified** (`ofType(System.Boolean)`)
+ * over a model primitive or a computed value. `ofType` has always answered the unqualified name
+ * there off the item's own value, and keeps doing so, but it refused the qualified spelling outright,
+ * and the corpus reads a FHIR primitive as not being of a System type through the function forms
+ * (`Patient.active.is(System.Boolean).not()` is `true` there). So the value-based reading is not
+ * extended to a spelling that never had it, exactly as {@link functionFormTypeTest} does not extend
+ * it to `is()` / `as()`. Over a complex node the qualified System name is answered (R3), and a
+ * qualified FHIR name is answered wherever the unqualified one is.
+ */
+function ofTypeKeeps(item: FpItem, arg: Expr, ctx: EvalCtx): boolean {
+  const typeName = typeNameOf(arg);
+  const complexNode = item.t === "node" && isComplex(item.node);
+  if (
+    typeName.includes(".") &&
+    resolveTypeSpecifier(typeName)?.model === "System" &&
+    !complexNode
+  ) {
+    throw new UnsupportedFhirPathError(`qualified type test '${typeName}' on a primitive`);
+  }
+  return itemIsType(item, typeName, ctx);
+}
+
 /** The single item a function-form type test or `matches()` accepts, or a refusal. */
 function singleItem(input: FpColl, construct: string): FpItem {
   if (input.length !== 1) {
@@ -679,10 +705,14 @@ function applyMatches(
   return [{ t: "bool", value: compileMatchesPattern(pattern).test(value) }];
 }
 
-/** Extract the type name from an `ofType(...)` / `as(...)` argument expression. */
+/**
+ * Extract the type specifier from an `ofType(...)` / `is(...)` / `as(...)` argument expression,
+ * qualified (`FHIR.Quantity`) or not, exactly as the operator forms read it.
+ */
 function typeNameOf(arg: Expr): string {
-  if (arg.kind === "member" && arg.target === null) return arg.name;
-  throw new UnsupportedFhirPathError("expected a type name argument");
+  const specifier = typeSpecifierOf(arg);
+  if (specifier === undefined) throw new UnsupportedFhirPathError("expected a type name argument");
+  return specifier;
 }
 
 /** Keep the items of `focus` for which `criteria` coerces to `true` (evaluated per item). */
@@ -812,7 +842,7 @@ function applyFunction(
     }
     case "ofType":
       // The type name is read per item, so an empty input stays `{}` whatever the name is.
-      return input.filter((item) => itemIsType(item, typeNameOf(req(args[0])), ctx));
+      return input.filter((item) => ofTypeKeeps(item, req(args[0]), ctx));
     case "is": {
       const matched = functionFormTypeTest(input, args[0], "is()", ctx);
       return matched === "empty" ? [] : [{ t: "bool", value: matched !== undefined }];
