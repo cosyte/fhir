@@ -19,7 +19,6 @@ import {
   parseFhirPath,
   parseResource,
   UnsupportedFhirPathError,
-  type FhirComplex,
   type FpColl,
 } from "../src/index.js";
 import { evaluate } from "../src/fhirpath/evaluate.js";
