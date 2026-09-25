@@ -9,6 +9,9 @@
  * namespace prefix only in an XML name, and JSON spells the member name as a string.
  * {@link refuseUnserializableDivMarkup} and {@link refuseUnboundDivPrefixes} are raised by the XML
  * writer for the same reason, at its one raw-markup site: JSON carries the string as a string.
+ * {@link isXmlName} and {@link carriesNonXmlCharacter} are XML-only too: they are the XML 1.0 `Name`
+ * and `Char` productions, asked of what the XML writer emits as a tag name, an attribute value or a
+ * spliced `div` string, and JSON spells every one of those as a string.
  * {@link assertXmlSerializable}, {@link assertXmlArrayWrapper}, {@link assertXmlValueChoiceWrapper}
  * and {@link assertXmlResourceType} are
  * XML-only for the mirror-image reason: the shapes they refuse are ones the JSON writer writes, and
@@ -23,8 +26,9 @@
  * recognises anything new or invents a value. **It is NOT true that none of them changes a document
  * that reads clean** -- `breaksTag`, {@link assertXmlResourceType} and
  * {@link carriesUndeclarablePrefix} each name a document of their own that reads with zero issues and
- * is refused anyway, and so does {@link refuseUnboundDivPrefixes}; that clause was carried here as a
- * universal and is cut rather than reworded.
+ * is refused anyway, and so do {@link refuseUnboundDivPrefixes}, {@link isXmlName} and
+ * {@link carriesNonXmlCharacter}; that clause was carried here as a universal and is cut rather than
+ * reworded.
  *
  * **This module is a list of the refusals it implements, NOT a closed account of what a writer can
  * author.** Two of the predicates deliberately live somewhere else rather than being copied here,
@@ -238,6 +242,79 @@ export const SERIALIZE_ERROR_CODES = {
    * ```
    */
   UNSERIALIZABLE_DIV_PREFIX: "UNSERIALIZABLE_DIV_PREFIX",
+  /**
+   * The model holds, at one or more tag positions, a name that is not an XML 1.0 `Name` (production
+   * [5]): `a&b`, `1abc`, `-x`, a name carrying U+0000 or an unpaired surrogate. A conforming XML
+   * processor must reject such a document as a fatal error. **XML only**: `serializeResource` spells
+   * a member name as a JSON string, so this refusal never reaches it and that route stays open.
+   *
+   * Written anyway, `<a&b value="v"/>` was a document this library's own reader read back unchanged
+   * and a third-party parser rejected, which is why the tag-breaking refusal, whose line is this
+   * library's own round trip, never reached it. **Not
+   * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}** and **not
+   * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME}**: a name that breaks the tag, or
+   * carries a colon, keeps the code it drew before this one existed, whether or not it is a `Name`.
+   * A name carrying a character outside `Char` is not a `Name`, so it draws this code rather than
+   * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_XML_CHARACTER}.
+   *
+   * See {@link isXmlName} for the exact predicate and what it leaves.
+   *
+   * @example
+   * ```ts
+   * import {
+   *   FhirSerializeError,
+   *   SERIALIZE_ERROR_CODES,
+   *   parseResource,
+   *   serializeResourceXml,
+   * } from "@cosyte/fhir";
+   * const { resource } = parseResource('{"resourceType":"Patient","1abc":"v"}');
+   * try {
+   *   serializeResourceXml(resource);
+   * } catch (err) {
+   *   if (err instanceof FhirSerializeError && err.code === SERIALIZE_ERROR_CODES.UNSERIALIZABLE_XML_NAME) {
+   *     err.locations; // ["Patient.<withheld>"]
+   *   }
+   * }
+   * ```
+   */
+  UNSERIALIZABLE_XML_NAME: "UNSERIALIZABLE_XML_NAME",
+  /**
+   * The model holds, at one or more locations, a value the XML writer would emit as an attribute
+   * value (a primitive's `value`, an `id` written as an attribute, an `Extension.url`), or a `div`
+   * string it would splice in, carrying a code point outside XML 1.0 `Char` (production [2]): U+0000
+   * to U+0008, U+000B, U+000C, U+000E to U+001F, an unpaired surrogate, U+FFFE or U+FFFF. In a `div`
+   * string that includes a numeric character reference denoting one (`&#0;`), which the Legal
+   * Character constraint makes as fatal as the raw character; each reference is judged on its own, so
+   * `&#xD83D;&#xDE00;` is two unpaired surrogates, not one character. **XML only**: `serializeResource`
+   * writes these values as JSON strings, so this refusal never reaches it and that route stays open.
+   *
+   * Written anyway, a U+0000 went into the output raw and a conforming processor rejected the
+   * document. **Refused, never repaired**: a reference to a non-`Char` is itself a fatal error, and
+   * replacing or dropping the character would change a value the sender wrote, so the model is left
+   * exactly as it was and no string is returned. Raised after every other refusal, the name code
+   * included.
+   *
+   * See {@link carriesNonXmlCharacter} for the exact predicate.
+   *
+   * @example
+   * ```ts
+   * import {
+   *   FhirSerializeError,
+   *   SERIALIZE_ERROR_CODES,
+   *   parseResource,
+   *   serializeResourceXml,
+   * } from "@cosyte/fhir";
+   * const { resource } = parseResource('{"resourceType":"Patient","gender":"a\\u0000"}');
+   * try {
+   *   serializeResourceXml(resource);
+   * } catch (err) {
+   *   if (err instanceof FhirSerializeError && err.code === SERIALIZE_ERROR_CODES.UNSERIALIZABLE_XML_CHARACTER) {
+   *     err.locations; // ["Patient.gender"]
+   *   }
+   * }
+   * ```
+   */
+  UNSERIALIZABLE_XML_CHARACTER: "UNSERIALIZABLE_XML_CHARACTER",
 } as const;
 
 /** Discriminant union of every {@link SERIALIZE_ERROR_CODES} value. */
@@ -824,14 +901,14 @@ const TAG_OPENER_STEALING = new Set(["!", "?"]);
  * one element the model holds.
  *
  * **The line is "does this library's own round trip survive it", not "is this a conformant XML
- * name", and the difference is the whole reason this refusal is narrow.** The strictly tidier rule
- * would be the `Name` production (XML 1.0 §2.3), but `a&b`, `1abc`, `-lead` and `a"b` all fail that
- * production while `serializeResourceXml` -> `parseResourceXml` returns them **unchanged today**.
- * Refusing those would withdraw a working round trip from models that read `valid: true`. So they
- * are NOT refused here, and they remain a declared gap: a conformant third-party parser rejects
- * them, and this library keeps writing them. A name carrying a colon used to sit in the same gap and
- * is refused now, on a code of its own and by {@link carriesUndeclarablePrefix} rather than here,
- * because a colon is a namespace prefix and the model has no binding to declare one with.
+ * name", and the difference is why this refusal is narrow and keeps its own code.** `a&b`, `1abc`,
+ * `-lead` and `a"b` all fail the `Name` production (XML 1.0 §2.3) while `serializeResourceXml` ->
+ * `parseResourceXml` returns them unchanged, so they are NOT refused here. **What it does NOT
+ * cover is refused at the same tag sites by two later questions, each on its own code**: a name
+ * carrying a colon by {@link carriesUndeclarablePrefix}, because a colon is a namespace prefix and
+ * the model has no binding to declare one with, and any other name that is not a `Name` by
+ * {@link isXmlName}, because a conforming third-party processor must reject it. A name failing this
+ * question keeps `UNSERIALIZABLE_ELEMENT_NAME` whatever else it fails.
  *
  * **What IS refused is the subset where nothing works today**, measured over 2,350 sampled names
  * (every code point `U+0001`-`U+02FF` at three positions, plus eight higher ones and a hand-written
@@ -956,9 +1033,11 @@ const XML_PREFIX = "xml:";
  * {@link assertXmlForeignRoot} each pay that cost already; this is the fourth. `serializeResource`
  * spells a member name as a JSON string and is the route that stays open.
  *
- * **What it does NOT cover, each a separate declared gap rather than an oversight.** A name with no
- * colon that is still not a conformant XML name (`a&b`, `1abc`) is written as it always was, and so
- * is the local part after `xml:` (`xml:1abc` is written). It is checked at tag positions only: a
+ * **What it does NOT cover, each a separate matter rather than an oversight.** A name with no colon
+ * that is still not an XML 1.0 `Name` (`a&b`, `1abc`) is not this question's; it is refused by the
+ * next one at the same sites, {@link isXmlName}, on `UNSERIALIZABLE_XML_NAME`. The local part after
+ * `xml:` is not checked for namespace well-formedness: `xml:1abc` is a `Name`, so it passes both
+ * questions and is still written, a declared residual. It is checked at tag positions only: a
  * `div` property is written as its own raw string at a different site, so a narrative whose markup
  * carries an unbound prefix (`<v:div>x</v:div>`) never reaches this predicate. That route is refused
  * at the `div` branch instead, on {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_PREFIX} and by a
@@ -988,8 +1067,8 @@ export function carriesUndeclarablePrefix(name: string): boolean {
  * **Raised after every refusal the XML writer raised before it existed**, so a model that also
  * trips one of those keeps the code it already reported and no case moves onto this one: a name
  * that carries a colon AND breaks the tag stays
- * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}. Only {@link refuseUnboundDivPrefixes}
- * is raised after it.
+ * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME}. {@link refuseUnboundDivPrefixes},
+ * {@link refuseNonXmlNames} and {@link refuseNonXmlCharacters} are raised after it, in that order.
  *
  * @param locations - The bounded locations whose name is refused, deduplicated, in walk order.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME}.
@@ -1015,9 +1094,10 @@ export function refuseUndeclarablePrefixes(locations: readonly string[]): never 
  * the string never reaches one. A segment whose name fails the published shape still renders as
  * `WITHHELD`, the library's own marker for a name it will not echo, which is not document content.
  *
- * **Raised last of all**, after every refusal the XML writer raised before it existed, the colon
- * refusal at the tag sites included, so a model that also trips one of those keeps the code it
- * already reported and no case moves onto this one.
+ * **Raised after every refusal the XML writer raised before it existed**, the colon refusal at the
+ * tag sites included, so a model that also trips one of those keeps the code it already reported
+ * and no case moves onto this one. Only the two XML 1.0 refusals, {@link refuseNonXmlNames} and
+ * {@link refuseNonXmlCharacters}, are raised after it.
  *
  * @param locations - The bounded `div` locations refused, deduplicated, in walk order.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_PREFIX}.
@@ -1027,6 +1107,130 @@ export function refuseUnboundDivPrefixes(locations: readonly string[]): never {
   throw new FhirSerializeError(
     `cannot serialize to XML, because ${String(locations.length)} div location(s) carry markup naming a namespace prefix that no declaration inside the string binds, so the output would not be namespace-well-formed; serializeResource carries the string as a string, so this refusal never reaches it`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_DIV_PREFIX,
+    locations,
+  );
+}
+
+/**
+ * XML 1.0 (Fifth Edition) [5] `Name ::= NameStartChar (NameChar)*`, with [4] `NameStartChar` as the
+ * first class and [4a] `NameChar` as the second, each range transcribed from the grammar. The `u`
+ * flag reads the name by code point, so a surrogate pair is one supplementary character and an
+ * unpaired surrogate is a code point no range admits. The combining marks lead the second class only
+ * so that no mark follows another character in the pattern's source.
+ */
+const XML_NAME =
+  /^[:A-Z_a-z\u{C0}-\u{D6}\u{D8}-\u{F6}\u{F8}-\u{2FF}\u{370}-\u{37D}\u{37F}-\u{1FFF}\u{200C}-\u{200D}\u{2070}-\u{218F}\u{2C00}-\u{2FEF}\u{3001}-\u{D7FF}\u{F900}-\u{FDCF}\u{FDF0}-\u{FFFD}\u{10000}-\u{EFFFF}][\u{300}-\u{36F}\-.0-9:A-Z_a-z\u{B7}\u{C0}-\u{D6}\u{D8}-\u{F6}\u{F8}-\u{2FF}\u{370}-\u{37D}\u{37F}-\u{1FFF}\u{200C}-\u{200D}\u{203F}-\u{2040}\u{2070}-\u{218F}\u{2C00}-\u{2FEF}\u{3001}-\u{D7FF}\u{F900}-\u{FDCF}\u{FDF0}-\u{FFFD}\u{10000}-\u{EFFFF}]*$/u;
+
+/**
+ * Whether `name` is an XML 1.0 `Name`, so a conforming processor accepts it in a tag.
+ *
+ * **Asked third, at the same tag sites, after {@link breaksTag} and
+ * {@link carriesUndeclarablePrefix}**, and a name is recorded under the first question it fails, so
+ * a name that breaks the tag or carries a colon keeps the code it drew before this question existed.
+ * What reaches it is every other name: `a&b`, `1abc`, `-x`, `.x`, `a"b`, a name beginning U+00B7 or
+ * a combining mark, and a name carrying a character outside `Char` (U+0000, U+000B, an unpaired
+ * surrogate), since no such character is a `NameChar`. The line is the production, not this
+ * library's round trip: every one of those re-read unchanged through `parseResourceXml` and is
+ * refused anyway, because a third-party parser must reject it.
+ *
+ * **Refusing rather than repairing.** XML has no escape for a name, so the only alternative is to
+ * write a different name, which authors content the sender never wrote. Refusing invents nothing.
+ *
+ * **What it costs, stated rather than implied: it withdraws an XML write from models that read
+ * `valid: true`.** `{"resourceType":"Patient","1abc":"v"}` reads with an empty issue list and was
+ * written before this question existed, the sixth refusal to pay that cost. `serializeResource` is
+ * the route that stays open.
+ *
+ * **What it does NOT cover.** A `Name` that is not namespace-well-formed after `xml:` (`xml:1abc`)
+ * passes here and is still written. Element and attribute names inside a `div` string are not tag
+ * positions and are not asked this question; a character outside `Char` among them is refused with
+ * the rest of the string, by {@link carriesNonXmlCharacter}. The reader still reads `<1abc>` and
+ * `<a&b>` back.
+ *
+ * @param name - The tag name about to be written.
+ * @returns `true` when the name may be written.
+ * @internal
+ */
+export function isXmlName(name: string): boolean {
+  return XML_NAME.test(name);
+}
+
+/**
+ * Refuse to serialize a model whose tag positions hold a name {@link isXmlName} answers `false` for.
+ *
+ * **Neither the message nor a location echoes the name.** Every name refused here fails the
+ * `elementName` and `resourceTypeName` shapes that bound a location (each of those shapes spells
+ * only `Name` characters), so its own segment renders `WITHHELD`; a nested resource's type is
+ * reported at the element wrapping it, where it has no segment at all.
+ *
+ * **Raised after every other name, markup and prefix refusal**, {@link refuseUnboundDivPrefixes}
+ * included, so a model that also trips one of those keeps the code it already reported. Only
+ * {@link refuseNonXmlCharacters} is raised after it.
+ *
+ * @param locations - The bounded locations whose name is refused, deduplicated, in walk order.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_XML_NAME}.
+ * @internal
+ */
+export function refuseNonXmlNames(locations: readonly string[]): never {
+  throw new FhirSerializeError(
+    `cannot serialize to XML, because ${String(locations.length)} location(s) carry a name that is not an XML 1.0 Name, so a conforming XML processor must reject the output; serializeResource escapes a member name, so this refusal never reaches it`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_XML_NAME,
+    locations,
+  );
+}
+
+/**
+ * A code point outside XML 1.0 (Fifth Edition) [2]
+ * `Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]`. The `u` flag
+ * reads by code point, so a surrogate pair is one `Char` and an unpaired surrogate is not.
+ */
+const NON_XML_CHARACTER = /[^\t\n\r\u{20}-\u{D7FF}\u{E000}-\u{FFFD}\u{10000}-\u{10FFFF}]/u;
+
+/**
+ * Whether `text` carries a code point outside XML 1.0 `Char`: U+0000 to U+0008, U+000B, U+000C,
+ * U+000E to U+001F, an unpaired surrogate, U+FFFE or U+FFFF.
+ *
+ * Asked of every value the XML writer emits as an attribute value (a primitive's `value`, an `id`
+ * written as an attribute, an `Extension.url`), at the site that writes it, and of a `div` string
+ * that passed both of the `div` branch's checks, over the raw string and over the code point each
+ * numeric character reference the branch's parse of it decoded refers to, one reference at a time,
+ * so a reference to a non-`Char` (`&#0;`, or `&#xD83D;` beside `&#xDE00;`) is refused as the raw
+ * character is. The Legal Character constraint makes either a fatal error. The discouraged code
+ * points `Char` still admits (U+007F to U+009F, U+FDD0 to U+FDEF) are not refused.
+ *
+ * **Refusing rather than repairing.** A character reference cannot carry it (a reference to a
+ * non-`Char` is itself a fatal error), and replacing or dropping it changes a value the sender
+ * wrote. So the value is left as it is, and no document is returned.
+ *
+ * @param text - A value about to be written, or a `div` string, or the one code point a reference
+ *   in it refers to.
+ * @returns `true` when the text must be refused.
+ * @internal
+ */
+export function carriesNonXmlCharacter(text: string): boolean {
+  return NON_XML_CHARACTER.test(text);
+}
+
+/**
+ * Refuse to serialize a model whose emitted values or `div` strings carry a code point
+ * {@link carriesNonXmlCharacter} answers `true` for.
+ *
+ * **Neither the message nor a location echoes the value or the character.** A location is built
+ * from names the model already carries, bounded by `childPath` exactly as every other write-path
+ * location is, so the value never reaches one.
+ *
+ * **Raised last of all**, after the name refusal too, so a model that also trips any other refusal
+ * keeps the code it already reported, and a name that is not a `Name` wins over a value that is not
+ * `Char`.
+ *
+ * @param locations - The bounded locations whose value is refused, deduplicated, in walk order.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_XML_CHARACTER}.
+ * @internal
+ */
+export function refuseNonXmlCharacters(locations: readonly string[]): never {
+  throw new FhirSerializeError(
+    `cannot serialize to XML, because ${String(locations.length)} location(s) carry a character outside the XML 1.0 Char production, which a conforming XML processor must reject and which this writer neither escapes, replaces nor drops; this refusal does not reach serializeResource`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_XML_CHARACTER,
     locations,
   );
 }

@@ -919,8 +919,9 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   report is the one that covers the narrative case.
 - **`serializeResourceXml`** emits compact FHIR XML that round-trips a spec-clean document
   **byte-for-byte** (decimals byte-exact, never through a `number`). **Its output is not
-  _unconditionally_ spec-clean**: a name with no colon that is not a conformant XML name is written
-  verbatim, so `<a&b/>` and `<1abc/>` are emitted (a name carrying a colon is refused instead, below),
+  _unconditionally_ spec-clean**: a tag name that is not an XML 1.0 `Name` and a character outside
+  XML 1.0 `Char` are refused rather than written (below), but `<xml:1abc/>` and a name inside a `div`
+  string that is not a `Name` are still written,
   and the byte-for-byte claim is scoped to a spec-clean input (a `<div>x</div>` carrying no XHTML namespace
   comes back as `<div xmlns="http://hl7.org/fhir">x</div>`, the FHIR namespace rather than the XHTML
   one the conformant repair would use). It throws `FhirSerializeError`
@@ -1075,9 +1076,35 @@ references, performs no I/O, resolves no URI, and bounds nesting depth. Adversar
   Every earlier refusal is raised first, so a name that both carries a colon and breaks the tag stays
   `UNSERIALIZABLE_ELEMENT_NAME`. The read is unchanged, and `serializeResource` writes these names
   as JSON strings and is the route that stays open. **Not** closed by it: a name with no colon that is
-  not a conformant XML name (`a&b`, `1abc`) is still written. A `div` string whose own markup carries
-  an unbound prefix never reaches this check, and is refused by the `div` branch on
+  not an XML 1.0 `Name` (`a&b`, `1abc`) is refused on a code of its own, below, not this one, and the
+  local part after `xml:` is not checked, so `<xml:1abc/>` is still written. A `div` string whose own
+  markup carries an unbound prefix never reaches this check, and is refused by the `div` branch on
   `UNSERIALIZABLE_DIV_PREFIX` instead, as above.
+- **A tag name that is not an XML 1.0 `Name`, and a character outside XML 1.0 `Char`, are refused
+  rather than written** (`UNSERIALIZABLE_XML_NAME`, `UNSERIALIZABLE_XML_CHARACTER`). The line is the
+  XML 1.0 grammar a conforming processor applies, not this library's own round trip: `<a&b/>`,
+  `<1abc/>`, `<-x/>` and a tag carrying U+0000 all re-read here unchanged and are all rejected by a
+  third-party parser, and a U+0000 in a string value used to be written raw into its `value`
+  attribute. The name check runs at every tag position at every depth (a property name, a name inside
+  `contained`, `Bundle.entry.resource` or an extension, and a `resourceType` naming a root or a
+  nested resource), after the tag-breaking and colon questions, so a name failing one of those keeps
+  its code. The character check runs on every value written as an attribute (a primitive's `value`, an
+  `id` written as an attribute, an `Extension.url`) and on every `div` string that passes both `div`
+  checks, where a numeric character reference to a non-`Char` (`&#0;`) counts as the raw character
+  does and a reference inside a comment, which is never decoded, does not. **Refused, never
+  repaired**: no name is mangled, and no character is escaped into a reference (a reference to a
+  non-`Char` is itself a fatal error), replaced or dropped. The name code is raised after every
+  earlier refusal and the character code last of all, so no model that drew a code before moves off
+  it, and a model carrying both draws the name code. The message and the locations carry no name, no
+  value and no character; a refused name's own segment reads `<withheld>`. **It withdraws an XML
+  write from documents that read `valid: true`**: `{"resourceType":"Patient","1abc":"v"}` reads with
+  an empty issue list and is refused. The discouraged code points `Char` admits (U+007F to U+009F,
+  U+FDD0 to U+FDEF) are written. `serializeResource` is unchanged and is the route that stays open.
+  **Not** closed by it: `<xml:1abc/>` is a `Name` that is not namespace-well-formed and is still
+  written; an element or attribute name inside a `div` string is checked for `Char` and never for
+  `Name`, so `<div xmlns="…xhtml"><1p>x</1p></div>` is still written; the reader still reads `<1abc>`
+  and `<a&b>` back; and `validateResource` still returns `valid: true` for a `string` carrying
+  U+0000.
 - **`nodesEquivalent`** is the JSON↔XML equivalence oracle, equal _modulo_ the two irreducible
   schema-free ambiguities and only those: primitive lexical form (JSON `true`/number tokens ≡ XML
   `value`-attribute strings) and singleton lists (an array-of-one ≡ a single repeated element).

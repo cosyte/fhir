@@ -9,6 +9,65 @@ used to sit in `CLAUDE.md`, in its original order, with headings added so it can
 section here that carries the incident it came from. These are clinical-safety lessons that each
 cost a defect or a refuted gate pass to learn: **relocate them, never delete them.**
 
+## A name that is not an XML 1.0 `Name` and a character outside `Char`, closed at the XML writer (2026-09-25)
+
+### The defect, measured at `18567b9`
+
+`serializeResourceXml` wrote `<a&b value="v"/>`, `<1abc/>`, `<-x/>` and a tag carrying U+0000 as
+element tags, and this library's own reader read each back; a U+0000 inside a string value went raw
+into its `value` attribute. A conforming XML 1.0 processor rejects every one of those documents as a
+fatal error. The tag-breaking refusal never reached them because its line is this library's own
+round trip, and that round trip survived.
+
+### The remedy, and where the line is
+
+**The XML 1.0 (Fifth Edition) productions, [5] `Name` and [2] `Char`**, as two new codes rather than
+a wider `UNSERIALIZABLE_ELEMENT_NAME`, so a caller can tell a bad key from a bad value without reading
+a location. `isXmlName` is the third question `tag()` asks at every tag site, after `breaksTag` and
+`carriesUndeclarablePrefix`, a name recorded under the first it fails, so `a b` stays the element-name
+code and `1a:b` the colon code. A name carrying a non-`Char` is not a `Name` and draws the name code.
+`carriesNonXmlCharacter` is asked at every site that writes an attribute value (`attributeValue()`:
+a primitive's `value`, an `id` written as an attribute, an `Extension.url`) and of a `div` string
+that passed both `div` checks, over the raw string and over the code point each numeric character
+reference its parse decoded refers to, one reference at a time, so `&#0;` is refused as a raw U+0000
+is (the Legal Character constraint); a reference inside a comment is never decoded and is written.
+The question is asked of each reference and never of the decoded text, because the parse decodes
+with `String.fromCodePoint` and `&#xD83D;&#xDE00;`, two references to unpaired surrogates, decodes to
+the same well-formed pair as `&#x1F600;`; `readRawXmlReferences` is `readRawXml` over the same parse,
+also handing back each reference's code point. `writeElement` now settles its `id` and `url` attributes
+before walking its children, which is the order the output spells them in, so the locations come out
+in walk order; the bytes written are unchanged. The name code is raised after
+`UNSERIALIZABLE_DIV_PREFIX` and the character code last of all. Refused, never repaired: no name is
+mangled, and no character is escaped into a reference (itself a fatal error), replaced or dropped.
+
+### What it costs
+
+**It withdraws an XML write from models that read `valid: true`**, the sixth refusal to pay that:
+`{"resourceType":"Patient","1abc":"v"}` reads with an empty issue list. `serializeResource` is
+byte-identical to the pin on every graded model and is the route that stays open.
+
+### Still open, and not folded in
+
+- **`xml:1abc`**: a `Name` that is not namespace-well-formed, still written.
+- **A non-`Name` element or attribute name inside a `div` string** (`<1p>`): the string is asked the
+  `Char` question only, because the `div` criterion routes every non-`Char` in the string to the
+  character code, and the `Name` question is asked at tag positions only. Still written.
+- **The three `div` `PRE-EXISTING` counterexamples** (depth budget, inserted declaration, an XML
+  declaration inside the string): none is a name or a character matter.
+- **The reader** still reads `<1abc>` and `<a&b>` back, and **`validateResource`** still returns
+  `valid: true` for a `string` carrying U+0000: separate surfaces, left to their own decisions.
+
+### What graded it
+
+A committed capture of the pin (`scripts/capture-xml-wellformed.ts`, `git archive` of `src/` at
+`18567b9`, `test/__data__/xml-wellformed-base.json`): every named model and both writers' outcome
+for it, the readout corpus, and 1,000 models drawn from `Name` and `Char` with a fixed seed, each
+recorded beside the pin's output. `test/xml-wellformed.test.ts` grades the refusals and
+`test/xml-wellformed-base.test.ts` what must not move; against the pin's `src/` the new suites red in
+253 of 570 tests, every refusal grade, and the preservation grades pass there. The characterization
+tests in `test/xml-tag-name.test.ts` that pinned the names as written went red and were rewritten
+over the same names.
+
 ## The unbound-prefix round trip, closed through a `div` value (2026-09-24)
 
 The route of the unbound-prefix residual that the tag-site closure below left declared open: a
@@ -83,7 +142,8 @@ prints nothing.
 
 - **A colon-free name that is not a conformant XML name** (`a&b`, `1abc`, and the rest of that list
   below), and the local part after `xml:` (`xml:1abc`). A different gap, still written;
-  `UNSERIALIZABLE_ELEMENT_NAME` is not widened onto it.
+  `UNSERIALIZABLE_ELEMENT_NAME` is not widened onto it. **Closed since** for the colon-free name, on
+  `UNSERIALIZABLE_XML_NAME`: the section above. `xml:1abc` is a `Name` and is still written.
 - **The other accepted-is-not-lossless counterexamples of the `div` check**: the depth budget, the
   inserted `xmlns` on an undeclared `<div>`, an XML declaration, a comment beside the root. Each is
   written exactly as at the pin.
@@ -203,6 +263,8 @@ a colon, which neither `elementName` nor `resourceTypeName` admits, so its own s
   since**, on `UNSERIALIZABLE_DIV_PREFIX`, and both tests rewritten: the section above.
 - **A colon-free name that is not a conformant XML name** (`a&b`, `1abc`, `-lead`, `.lead`, `a"b`,
   `a'b`, `\v`, `\f`, `U+00A0`), and the local part after `xml:`. A different gap, still written.
+  **Closed since** for every one of those names, on `UNSERIALIZABLE_XML_NAME`: the first section of
+  this file. The local part after `xml:` is still written.
 - **The JSON leg of the foreign-root laundering**, declared open by that closure; untouched.
 
 ### What graded it, and what could not
