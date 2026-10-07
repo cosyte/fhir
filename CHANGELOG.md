@@ -102,7 +102,7 @@ of XML, unit conversion, and executing a transaction Bundle.
   and a short PHI and safety section, and points to docs.cosyte.com/fhir; the full capability
   readout moved unchanged to `documentation/capabilities.md`.
 - **The installation page's clone command uses `https://github.com/cosyte/fhir`, without the `.git`
-  suffix.** docs.cosyte.com checks every link into a cosyte repository against the repositories its
+  suffix.** docs.cosyte.com checks every link into a Cosyte repository against the repositories its
   manifest marks public, and its matcher reads `https://github.com/cosyte/fhir.git` as a repository
   named `fhir.git` that the manifest does not list, which fails the site's publish run once fhir is
   enabled there (seen by building the site with this `docs-content/` staged). `git clone` accepts
@@ -2030,7 +2030,7 @@ of XML, unit conversion, and executing a transaction Bundle.
   in an `<a href="https://cosyte.com">`. The `<source>`, the `<img>`, the alt text and both image URLs
   are unchanged, and both URLs were re-checked on the wire before this landed (`200 image/png`).
   **What the anchor does differs by surface, and it was measured rather than assumed**, because the
-  other cosyte READMEs are expected to follow this markup. **On GitHub the anchor works and the theme
+  other Cosyte READMEs are expected to follow this markup. **On GitHub the anchor works and the theme
   switch keeps working**: GitHub's markdown API under `mode: gfm` (with or without a repository
   `context`; the mode is the discriminator, the context is not), handed
   this exact block, returns the `<a>` intact with the `<img>` still a direct child of `<picture>`, so
@@ -2981,7 +2981,7 @@ true`, 0 `valid true -> false`, 0 `safeToSummarize false -> true`, 0 retractions
 
 ### Added
 
-- **Em-dash CI gate (EMDASH-CONFORMANCE, part 1).** The cosyte brand rule bans `U+2014` outright
+- **Em-dash CI gate (EMDASH-CONFORMANCE, part 1).** The Cosyte brand rule bans `U+2014` outright
   (founder directive 2026-07-24; knowledgebase `06-brand/voice-and-tone.md`), and names commit
   messages explicitly. It was enforced in CI in only three repos of ten; this repo was clean but
   ungated, so nothing stopped it regressing. Ported `knowledgebase`'s scanner
@@ -3472,7 +3472,7 @@ terminology, bindings })` supplies a service and/or extra bindings (mirroring Ph
     profile / invariant **validation** (P2, P5–P7): Phase 1 parses and preserves, it does not
     validate; XML (P8); Bundle/reference **resolution** and Bulk NDJSON (P9); typed per-resource
     models and schema-driven `integer64` typing.
-- **Repository bootstrap (P0).** Scaffolded `@cosyte/fhir` from the shared cosyte engineering
+- **Repository bootstrap (P0).** Scaffolded `@cosyte/fhir` from the shared Cosyte engineering
   standard, mirroring the `hl7` reference layout: dual ESM + CJS + `.d.ts` build via `tsup`
   (`@cosyte/tsup-config`), ESLint 10 (`@cosyte/eslint-config`), Vitest 4 with v8 coverage
   (`@cosyte/vitest-config`), TypeScript 5.9 (`@cosyte/tsconfig`), Prettier

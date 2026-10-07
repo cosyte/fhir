@@ -2310,7 +2310,7 @@ the positive control's shape:
 
 The `<picture>` lockup at the top of `README.md` is now wrapped in `<a href="https://cosyte.com">`.
 The block inside it did not change. This section records **what was measured, and how to re-measure
-it**, because the same markup is expected to spread across the other cosyte READMEs and **the answer
+it**, because the same markup is expected to spread across the other Cosyte READMEs and **the answer
 is not the same on the two surfaces it has to survive.**
 
 ### The question

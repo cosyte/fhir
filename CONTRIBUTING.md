@@ -30,7 +30,7 @@ Before filing, please:
    discussion.
 5. Write a descriptive commit message. Imperative mood (`feat(codec): ...`, `fix(model): ...`) is
    encouraged but not enforced.
-6. **No em dashes (`U+2014`), anywhere.** The cosyte brand rule bans the character outright, and it
+6. **No em dashes (`U+2014`), anywhere.** The Cosyte brand rule bans the character outright, and it
    names commit messages explicitly, so the ban covers tracked files, the PR title, the PR body, and
    every commit on the branch. CI enforces all four (`.github/workflows/no-emdash.yml`), and you can
    run the file half locally with `bash scripts/check-no-emdash.sh`. The fix is to rewrite with a
