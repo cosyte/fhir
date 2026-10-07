@@ -15,13 +15,20 @@
  *   `Integer` / `Decimal`, and on a FHIR type wherever the instance itself establishes the item's
  *   type ({@link ./types.js}: a choice variant of the resource, the resource root, or the node's
  *   kind), in operator and function form;
- * - **`matches(regex)`** over a pattern in a portable subset ({@link ./matches.js}).
+ * - **`matches(regex)`** over a pattern in a portable subset ({@link ./matches.js});
+ * - **integer arithmetic**, `+`, `-`, `*` and `mod`, over two Integers the engine computed itself
+ *   (a literal, `count()`, `length()`, `toInteger()`, or arithmetic over those) inside FHIRPath's
+ *   Integer range ({@link arithmetic});
+ * - **string and conversion functions**, `toString()`, `length()`, `substring()` and `toInteger()`,
+ *   each over the inputs whose answer the model establishes, and **`iif()`**, which evaluates only
+ *   the branch its criterion selects.
  *
  * A **type-qualified path head** (`Patient.name`) resolves only where the focus is a resource root
  * whose `resourceType` the qualifier names, which is the one place a generic model can check it; see
- * {@link resolveTypeQualifier}. Everything else, arithmetic, other string functions,
- * `descendants()`, `resolve()`, a FHIR-type test the instance does not establish the answer to, and
- * a type qualifier that cannot be checked, raises {@link ./errors.js UnsupportedFhirPathError}.
+ * {@link resolveTypeQualifier}. Everything else, Decimal arithmetic, `/`, `div`, string
+ * concatenation (`&`, or `+` over strings), other string functions, `descendants()`, `resolve()`, a
+ * FHIR-type test the instance does not establish the answer to, and a type qualifier that cannot be
+ * checked, raises {@link ./errors.js UnsupportedFhirPathError}.
  * That is the whole safety contract: the engine **never guesses**. Refusing is not the only way not
  * to guess, and it is the expensive one, because a refusal makes a constraint *unchecked* and takes
  * a diagnostic away: an ordering comparison the generic model cannot decide (see {@link compare})
@@ -63,7 +70,12 @@ export type FpItem =
   | { readonly t: "node"; readonly node: FhirNode }
   | { readonly t: "bool"; readonly value: boolean }
   | { readonly t: "str"; readonly value: string }
-  | { readonly t: "num"; readonly value: number };
+  /**
+   * A number the engine computed. `decimal` is set when it is a FHIRPath Decimal (a literal written
+   * with a fractional part, or the sign of a decimal applied to it), so that the integer arithmetic
+   * and conversions never take a whole-valued Decimal for an Integer.
+   */
+  | { readonly t: "num"; readonly value: number; readonly decimal?: true };
 
 /** A FHIRPath collection, the value every expression evaluates to. */
 export type FpColl = readonly FpItem[];
@@ -706,6 +718,300 @@ function applyMatches(
   return [{ t: "bool", value: compileMatchesPattern(pattern).test(value) }];
 }
 
+/** The bounds of FHIRPath's Integer: a 32-bit signed integer. */
+const INTEGER_MIN = -2_147_483_648;
+const INTEGER_MAX = 2_147_483_647;
+
+/**
+ * Whether `n` is a whole number inside FHIRPath's Integer range. Every such number, and every sum,
+ * difference, product or remainder of two of them that lands back inside the range, is exactly
+ * representable as a JS number, so integer arithmetic here never approximates.
+ */
+function inIntegerRange(n: number): boolean {
+  return Number.isInteger(n) && n >= INTEGER_MIN && n <= INTEGER_MAX;
+}
+
+/**
+ * The Integer one item carries, for an arithmetic operand or an integer argument, or a refusal.
+ *
+ * Only a number the engine computed as an Integer qualifies: an integer literal, a `count()`, a
+ * `length()`, a `toInteger()`, or integer arithmetic over those, inside the Integer range. A Decimal
+ * is refused rather than computed: a decimal literal, and every decimal a document carries, which
+ * reaches the engine as exact text a binary float cannot hold, so `(0.1 + 0.2) = 0.3` is never
+ * answered from an approximation. A number the document carries is refused too, because the generic
+ * model cannot tell an `integer` element from a `decimal` written without a fraction; and so is every
+ * other kind of item.
+ */
+function integerOf(item: FpItem, construct: string): number {
+  if (item.t === "num" && item.decimal !== true && inIntegerRange(item.value)) return item.value;
+  throw new UnsupportedFhirPathError(`${construct} needs an Integer the engine computed`);
+}
+
+/**
+ * Integer arithmetic, `+`, `-`, `*` and `mod`, over two singleton operands.
+ *
+ * An empty operand yields the empty collection, as FHIRPath says. Each operand must be an Integer
+ * ({@link integerOf}); anything else, more than one item on a side, and a result outside the Integer
+ * range are refused. `mod` is the remainder of truncated division, and a zero divisor yields the
+ * empty collection, as FHIRPath says. `+` over two strings is concatenation in FHIRPath, which is
+ * outside the subset, so it is refused with every other non-Integer operand.
+ */
+function arithmetic(op: string, left: FpColl, right: FpColl): FpColl {
+  if (left.length === 0 || right.length === 0) return [];
+  if (left.length !== 1 || right.length !== 1) {
+    throw new UnsupportedFhirPathError(`operator '${op}' requires singleton operands`);
+  }
+  const a = integerOf(left[0] as FpItem, `operator '${op}'`);
+  const b = integerOf(right[0] as FpItem, `operator '${op}'`);
+  let result: number;
+  if (op === "+") result = a + b;
+  else if (op === "-") result = a - b;
+  else if (op === "*") result = a * b;
+  else if (b === 0) return [];
+  else result = a % b;
+  if (!inIntegerRange(result)) {
+    throw new UnsupportedFhirPathError(`operator '${op}' result outside the Integer range`);
+  }
+  // `+ 0` turns a negative zero (`-4 mod 2`) into the zero FHIRPath's Integer has.
+  return [{ t: "num", value: result + 0 }];
+}
+
+/** FHIRPath's String-to-Integer form, `(\+|-)?\d+`, read with ASCII digits only. */
+const INTEGER_TEXT = /^[+-]?[0-9]+$/;
+
+/** A String converted to an Integer: empty when it is not in the form, refused when out of range. */
+function integerFromText(text: string): FpColl {
+  if (!INTEGER_TEXT.test(text)) return [];
+  const value = Number(text);
+  if (!inIntegerRange(value)) {
+    throw new UnsupportedFhirPathError("toInteger() of a value outside the Integer range");
+  }
+  return [{ t: "num", value: value + 0 }];
+}
+
+/**
+ * `toInteger()` over its single input item.
+ *
+ * Decided, as FHIRPath says: an Integer is itself; a String in the form `(\+|-)?\d+` is that integer
+ * and any other String is the empty collection (`'12A'`, `'1.1'`); a Boolean is `1` or `0`; a
+ * Decimal and a complex element are the empty collection, being none of the three types FHIRPath
+ * converts. An empty input is empty.
+ *
+ * Refused, because the model does not establish the answer: more than one input item; a string
+ * element spelling `true` or `false`, which is a Boolean when read from XML (where every primitive
+ * is text) and converts to `1` or `0`, but a String converting to nothing otherwise; a number the
+ * document carries, which may be an `integer` or a `decimal` written without a fraction; a primitive
+ * with no value; and an Integer outside the Integer range.
+ */
+function toInteger(input: FpColl): FpColl {
+  if (input.length === 0) return [];
+  const item = singleItem(input, "toInteger()");
+  if (item.t === "num") {
+    if (item.decimal === true || !Number.isInteger(item.value)) return [];
+    if (!inIntegerRange(item.value)) {
+      throw new UnsupportedFhirPathError("toInteger() of a value outside the Integer range");
+    }
+    return [item];
+  }
+  if (item.t === "bool") return [{ t: "num", value: item.value ? 1 : 0 }];
+  if (item.t === "str") return integerFromText(item.value);
+  if (isComplex(item.node)) return [];
+  const value = isPrimitive(item.node) ? item.node.value : undefined;
+  if (typeof value === "boolean") return [{ t: "num", value: value ? 1 : 0 }];
+  if (typeof value === "string") {
+    if (value === "true" || value === "false") {
+      throw new UnsupportedFhirPathError("toInteger() of a value that may be a Boolean");
+    }
+    return integerFromText(value);
+  }
+  throw new UnsupportedFhirPathError("toInteger() of a value whose type the model does not carry");
+}
+
+/** A FHIR `decimal` written with an exponent, whose FHIRPath string form is not its lexical form. */
+const EXPONENT_DECIMAL = /^[+-]?[0-9]+(?:\.[0-9]+)?[eE][+-]?[0-9]+$/;
+
+/**
+ * `toString()` over its single input item.
+ *
+ * A string-valued model primitive yields **exactly the lexical form the document carried**: a
+ * `date`, `dateTime` or `instant` keeps its written precision and its written offset, so `2020`
+ * yields the four characters `2020` and is never completed to a day or shifted to another zone. A
+ * String is itself, a Boolean is `true` or `false`, and an Integer the engine computed is its decimal
+ * digits. A complex element that the instance establishes is not a `Quantity` is the empty
+ * collection, since FHIRPath converts no other complex type. An empty input is empty.
+ *
+ * Refused: more than one input item; a Decimal (its FHIRPath rendering is not decided here); a
+ * number the document carries; a string element written like an exponent decimal (`1e2`), which
+ * renders differently when it is a decimal read from XML; a primitive with no value; a `Quantity`;
+ * and a complex element whose type the instance does not establish.
+ */
+function toStringOf(input: FpColl, ctx: EvalCtx): FpColl {
+  if (input.length === 0) return [];
+  const item = singleItem(input, "toString()");
+  if (item.t === "str") return [item];
+  if (item.t === "bool") return [{ t: "str", value: item.value ? "true" : "false" }];
+  if (item.t === "num") {
+    if (item.decimal === true || !inIntegerRange(item.value)) {
+      throw new UnsupportedFhirPathError("toString() of a Decimal");
+    }
+    return [{ t: "str", value: String(item.value) }];
+  }
+  const node = item.node;
+  if (isComplex(node)) {
+    if (nodeIsOfType(node, { model: "FHIR", name: "Quantity" }, ctx.resource)) {
+      throw new UnsupportedFhirPathError("toString() of a Quantity");
+    }
+    return [];
+  }
+  const value = isPrimitive(node) ? node.value : undefined;
+  if (typeof value === "boolean") return [{ t: "str", value: value ? "true" : "false" }];
+  if (typeof value === "string") {
+    if (EXPONENT_DECIMAL.test(value)) {
+      throw new UnsupportedFhirPathError("toString() of a value that may be an exponent decimal");
+    }
+    return [{ t: "str", value }];
+  }
+  throw new UnsupportedFhirPathError(
+    "toString() of a value whose string form the model does not carry",
+  );
+}
+
+/** Whether a string holds a UTF-16 surrogate, the one place characters and code units part ways. */
+function hasSurrogate(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const unit = text.charCodeAt(i);
+    if (unit >= 0xd800 && unit <= 0xdfff) return true;
+  }
+  return false;
+}
+
+/**
+ * The text a string function reads from its single input item: a String the engine computed, or a
+ * string-valued model primitive read as its lexical form, the same reading `matches()` makes. A
+ * value outside the Basic Multilingual Plane is refused, because FHIRPath counts characters and
+ * engines disagree on whether a surrogate pair is one character or two.
+ */
+function textOf(input: FpColl, construct: string): string {
+  const text = stringOf(singleItem(input, construct));
+  if (text === undefined) throw new UnsupportedFhirPathError(`${construct} on a non-string value`);
+  if (hasSurrogate(text)) {
+    throw new UnsupportedFhirPathError(
+      `${construct} on a value outside the Basic Multilingual Plane`,
+    );
+  }
+  return text;
+}
+
+/** Whether an argument expression reads nothing from any focus: literals, and operators over them. */
+function readsNoFocus(expr: Expr): boolean {
+  switch (expr.kind) {
+    case "empty":
+    case "bool":
+    case "string":
+    case "number":
+      return true;
+    case "unary":
+      return readsNoFocus(expr.operand);
+    case "binary":
+      return readsNoFocus(expr.left) && readsNoFocus(expr.right);
+    case "envvar":
+    case "variable":
+    case "member":
+    case "call":
+    case "index":
+    case "typeop":
+      return false;
+  }
+}
+
+/**
+ * Evaluate an argument of `substring()` or `iif()` against the focus the call was made from.
+ *
+ * A call with no target, or on `$this`, has one focus, and its input is that focus. A call with an
+ * explicit target (`value.substring(...)`) has two, and engines differ on which one a path inside
+ * the argument navigates from, so there an argument that reads a focus at all is refused; a literal,
+ * or an operator over literals, reads none and is evaluated.
+ */
+function evaluateArgument(
+  arg: Expr,
+  input: FpColl,
+  callFocus: FpColl,
+  ctx: EvalCtx,
+  construct: string,
+): FpColl {
+  if (input !== callFocus && !readsNoFocus(arg)) {
+    throw new UnsupportedFhirPathError(
+      `${construct} on an explicit target with an argument that reads a focus`,
+    );
+  }
+  return evaluate(arg, callFocus, ctx);
+}
+
+/** One Integer argument, or a refusal: more than one item, or anything {@link integerOf} refuses. */
+function integerArgument(coll: FpColl, construct: string): number {
+  if (coll.length !== 1)
+    throw new UnsupportedFhirPathError(`${construct} needs one Integer argument`);
+  return integerOf(coll[0] as FpItem, construct);
+}
+
+/**
+ * `substring(start [, length])` over the single string input ({@link textOf}).
+ *
+ * As FHIRPath says: the characters from the zero-based `start`, at most `length` of them when it is
+ * given; the empty collection when the input or `start` is empty, or `start` lies outside the
+ * string; an empty `length` is read as no `length`. Refused: a `start` or `length` that is not one
+ * Integer, and a negative `length`, which FHIRPath does not define.
+ */
+function applySubstring(
+  input: FpColl,
+  args: readonly Expr[],
+  callFocus: FpColl,
+  ctx: EvalCtx,
+): FpColl {
+  if (args.length < 1 || args.length > 2) {
+    throw new UnsupportedFhirPathError("substring() takes a start and an optional length");
+  }
+  if (input.length === 0) return [];
+  const text = textOf(input, "substring()");
+  const startColl = evaluateArgument(req(args[0]), input, callFocus, ctx, "substring()");
+  if (startColl.length === 0) return [];
+  const start = integerArgument(startColl, "substring()");
+  const lengthArg = args[1];
+  const lengthColl =
+    lengthArg === undefined
+      ? []
+      : evaluateArgument(lengthArg, input, callFocus, ctx, "substring()");
+  const length = lengthColl.length === 0 ? undefined : integerArgument(lengthColl, "substring()");
+  if (length !== undefined && length < 0) {
+    throw new UnsupportedFhirPathError("substring() with a negative length");
+  }
+  if (start < 0 || start >= text.length) return [];
+  const value = length === undefined ? text.slice(start) : text.slice(start, start + length);
+  return [{ t: "str", value }];
+}
+
+/**
+ * `iif(criterion, true-result [, otherwise-result])`.
+ *
+ * The criterion must be one Boolean or empty; the true-result is evaluated only when it is `true`,
+ * and the otherwise-result (or nothing, when it is absent) only when it is `false` or empty, the
+ * short-circuit FHIRPath requires, so a branch the criterion does not select can never refuse the
+ * expression. Refused: a criterion that is not a Boolean or holds more than one item, more than one
+ * input item, and an argument {@link evaluateArgument} refuses.
+ */
+function applyIif(input: FpColl, args: readonly Expr[], callFocus: FpColl, ctx: EvalCtx): FpColl {
+  if (args.length < 2 || args.length > 3) {
+    throw new UnsupportedFhirPathError(
+      "iif() takes a criterion, a true-result and an optional otherwise-result",
+    );
+  }
+  if (input.length > 1) throw new UnsupportedFhirPathError("iif() over more than one item");
+  const criterion = toTrit(evaluateArgument(req(args[0]), input, callFocus, ctx, "iif()"));
+  if (criterion === true) return evaluateArgument(req(args[1]), input, callFocus, ctx, "iif()");
+  const otherwise = args[2];
+  return otherwise === undefined ? [] : evaluateArgument(otherwise, input, callFocus, ctx, "iif()");
+}
+
 /**
  * Extract the type specifier from an `ofType(...)` / `is(...)` / `as(...)` argument expression,
  * qualified (`FHIR.Quantity`) or not, exactly as the operator forms read it.
@@ -750,6 +1056,11 @@ export const SUBSET_FUNCTIONS: ReadonlySet<string> = new Set([
   "is",
   "as",
   "matches",
+  "toString",
+  "length",
+  "substring",
+  "toInteger",
+  "iif",
 ]);
 
 /**
@@ -769,7 +1080,8 @@ export const TYPE_ARGUMENT_FUNCTIONS: ReadonlySet<string> = new Set(["ofType", "
  * @example
  * ```ts
  * SUBSET_OPERATORS.has("implies"); // true
- * SUBSET_OPERATORS.has("mod"); // false, refused as unsupported
+ * SUBSET_OPERATORS.has("mod"); // true, over two Integers
+ * SUBSET_OPERATORS.has("div"); // false, refused as unsupported
  * ```
  */
 export const SUBSET_OPERATORS: ReadonlySet<string> = new Set([
@@ -786,7 +1098,14 @@ export const SUBSET_OPERATORS: ReadonlySet<string> = new Set([
   "|",
   "in",
   "contains",
+  "+",
+  "-",
+  "*",
+  "mod",
 ]);
+
+/** The operators {@link arithmetic} evaluates, all of them over two Integers. */
+const ARITHMETIC_OPERATORS: ReadonlySet<string> = new Set(["+", "-", "*", "mod"]);
 
 /** Apply a built-in function to its input collection. */
 function applyFunction(
@@ -854,6 +1173,16 @@ function applyFunction(
     }
     case "matches":
       return applyMatches(input, args, callFocus, ctx);
+    case "toString":
+      return toStringOf(input, ctx);
+    case "length":
+      return input.length === 0 ? [] : [{ t: "num", value: textOf(input, "length()").length }];
+    case "substring":
+      return applySubstring(input, args, callFocus, ctx);
+    case "toInteger":
+      return toInteger(input);
+    case "iif":
+      return applyIif(input, args, callFocus, ctx);
     default:
       throw new UnsupportedFhirPathError(`unsupported function '${name}()'`);
   }
@@ -903,6 +1232,7 @@ function evaluateBinary(
   }
   const left = evaluate(node.left, focus, ctx);
   const right = evaluate(node.right, focus, ctx);
+  if (ARITHMETIC_OPERATORS.has(op)) return arithmetic(op, left, right);
   switch (op) {
     case "=":
       return equals(left, right);
@@ -983,7 +1313,11 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
     case "string":
       return [{ t: "str", value: expr.value }];
     case "number":
-      return [{ t: "num", value: expr.value }];
+      return [
+        expr.decimal === true
+          ? { t: "num", value: expr.value, decimal: true }
+          : { t: "num", value: expr.value },
+      ];
     case "envvar":
       if (expr.name === "resource" || expr.name === "rootResource") return wrap(ctx.resource);
       if (expr.name === "context") return ctx.context;
@@ -1013,9 +1347,14 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
       const operand = evaluate(expr.operand, focus, ctx);
       if (operand.length !== 1)
         throw new UnsupportedFhirPathError("unary operator on non-singleton");
-      const n = numberOf(operand[0] as FpItem);
+      const item = operand[0] as FpItem;
+      const n = numberOf(item);
       if (n === undefined) throw new UnsupportedFhirPathError("unary operator on non-number");
-      return [{ t: "num", value: expr.op === "-" ? -n : n }];
+      const value = expr.op === "-" ? -n : n;
+      // A Decimal keeps its type through a sign, and so does a number the document carries (which
+      // `numberOf` reads only from a decimal-typed value), so integer arithmetic refuses both.
+      const decimal = item.t === "node" || (item.t === "num" && item.decimal === true);
+      return [decimal ? { t: "num", value, decimal: true } : { t: "num", value }];
     }
     case "binary":
       return evaluateBinary(expr.op, expr, focus, ctx);

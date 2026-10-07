@@ -13,7 +13,7 @@
  * treats a parse failure exactly like an unsupported evaluation, the invariant is reported
  * *unchecked*, never silently passed.
  *
- * Note the grammar is **broad on purpose**, it parses operators (`*`, `div`, `&`, `~`, …) and
+ * Note the grammar is **broad on purpose**, it parses operators (`/`, `div`, `&`, `~`, …) and
  * functions the *evaluator* does not implement. That is deliberate: parsing them into a well-formed
  * tree and letting the evaluator raise `UnsupportedFhirPathError` at the exact unsupported node keeps
  * the "unchecked, never mis-evaluated" contract precise, rather than rejecting a whole expression at
@@ -30,7 +30,11 @@ export type Expr =
   | { readonly kind: "empty" } // the `{}` empty-collection literal
   | { readonly kind: "bool"; readonly value: boolean }
   | { readonly kind: "string"; readonly value: string }
-  | { readonly kind: "number"; readonly value: number }
+  /**
+   * A number literal. `decimal` is set when it was written with a fractional part (`1.0`), which
+   * makes it a FHIRPath Decimal even where its value is whole.
+   */
+  | { readonly kind: "number"; readonly value: number; readonly decimal?: true }
   | { readonly kind: "envvar"; readonly name: string } // `%resource`
   | { readonly kind: "variable"; readonly name: string } // `$this` / `$index` / `$total`
   /** Member access: `name` navigates from `target` (or the current focus when `target` is null). */
@@ -294,7 +298,9 @@ class Parser {
       this.pos += 1;
       const value = Number(token.value);
       if (!Number.isFinite(value)) throw new UnsupportedFhirPathError("malformed number literal");
-      return { kind: "number", value };
+      return token.value.includes(".")
+        ? { kind: "number", value, decimal: true }
+        : { kind: "number", value };
     }
     if (token.type === "envvar") {
       this.pos += 1;
