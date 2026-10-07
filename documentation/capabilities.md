@@ -1159,7 +1159,7 @@ for await (const record of streamNdjson(readableChunks)) {
 
 FHIR is HL7's modern, resource-oriented interoperability standard, the format behind the US
 regulatory push (ONC HTI-1 binds §170.315(g)(10) to **FHIR R4 + US Core + SMART on FHIR**).
-`@cosyte/fhir` is the FHIR member of the cosyte parser family: a small, zero-runtime-dependency
+`@cosyte/fhir` is the FHIR member of the Cosyte parser family: a small, zero-runtime-dependency
 TypeScript library that reads and writes FHIR, models its resources with correct primitive
 semantics, and validates against structural rules and US Core profiles, mirroring the API shape of
 [`@cosyte/hl7`](https://github.com/cosyte/hl7), the reference parser.
