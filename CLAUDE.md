@@ -8,7 +8,7 @@ bytes. Move narrative there and leave the one-liner here.**
 ## Project
 
 **`@cosyte/fhir`**: a developer-focused FHIR parser + utility library for Node.js/TypeScript.
-The FHIR member of the cosyte parser suite; it mirrors the API shape of `@cosyte/hl7`, the
+The FHIR member of the Cosyte parser suite; it mirrors the API shape of `@cosyte/hl7`, the
 reference parser.
 
 **North star:** A developer can read a real-world FHIR resource, model it with correct primitive

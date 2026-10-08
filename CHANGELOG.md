@@ -3012,7 +3012,7 @@ true`, 0 `valid true -> false`, 0 `safeToSummarize false -> true`, 0 retractions
 - **Security-scaffolding parity with the sibling parsers (FHIR-SCAFFOLD-GAPS).** Registering the 7
   back-filled repos in drift coverage surfaced three `fhir`-only gaps against `config`'s
   `drift-manifest.json` (`requiredScripts` / `requiredWorkflows`), now closed by mirroring what every
-  other cosyte parser already ships:
+  other Cosyte parser already ships:
   - **PHI commit-scanner** (`scripts/phi-scan.ts`, `pnpm phi-scan`): a zero-dependency,
     FHIR-shape-aware detective tripwire. It parses each synthetic fixture (JSON / NDJSON) or scans
     element/`value`-attribute pairs (XML) and inspects only PHI-bearing elements keyed by FHIR element
