@@ -1,157 +1,53 @@
-# @cosyte/fhir: Project Guide for Claude
+# @cosyte/fhir
 
-**▶ The narrative lives in [`documentation/agent-notes.md`](documentation/agent-notes.md)**, verbatim
-and re-headed (2026-08-04, `CLAUDE-MD-AUDIT`, amending the meta-repo's `decisions/0023-doc-budgets.md`).
-Every trap here points at the section there that explains what it cost. **Never delete a trap to save
-bytes. Move narrative there and leave the one-liner here.**
+`@cosyte/fhir` is our FHIR R4 parser and utility library for Node.js and TypeScript, published to npm under MIT from this public repository. It reads FHIR JSON and XML leniently into an immutable model that keeps every `decimal` and `integer64` exactly as written, writes FHIR back or refuses to, and validates in layers (structure, terminology binding, profiles, a bounded FHIRPath subset) beside a fail-closed safety readout, `readSafety`. It has zero runtime dependencies and mirrors the API shape of `@cosyte/hl7`.
 
-## Project
+## Gate
 
-**`@cosyte/fhir`**: a developer-focused FHIR parser + utility library for Node.js/TypeScript.
-The FHIR member of the Cosyte parser suite; it mirrors the API shape of `@cosyte/hl7`, the
-reference parser.
+From the repo root, in this order, with pnpm 10 (the `packageManager` pin). Where `pnpm --version` prints another major, put the pinned one first on PATH, since pnpm 12 refuses the frozen install and a test shells out to bare `pnpm`: `mkdir -p ~/.pnpm10 && corepack enable --install-directory ~/.pnpm10 pnpm && export PATH="$HOME/.pnpm10:$PATH"`.
 
-**North star:** A developer can read a real-world FHIR resource, model it with correct primitive
-semantics, and validate it against US Core, without reading the FHIR spec.
+```sh
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint
+pnpm format:check
+pnpm phi-scan
+pnpm test
+pnpm test:coverage
+pnpm build
+pnpm attw
+FUZZ_RUNS=20000 pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts
+pnpm typecheck:examples
+pnpm lint:examples
+pnpm examples
+pnpm phi-scan:examples
+pnpm check:no-emdash
+pnpm check:no-internal-refs
+```
 
-## Status
+The first nine are the shared `cosyte/.github` CI ladder, run on Node 22 and 24; the fuzz line and the four examples lines are the `fuzz` and `examples` jobs in `.github/workflows/ci.yml`. CI also loads `dist/` as ESM and as CJS, runs actionlint and CodeQL, packs the tree and installs the tarball into a clean directory, and runs the `differential` job (`pnpm corpus:fetch`, then `pnpm differential` and `pnpm differential:determinism`), which needs `java` and the pinned `validator_cli.jar` at `VALIDATOR_CLI_JAR`; CI provides both.
 
-- **`0.0.10` IS ON NPM. `0.0.11` WAS REFUSED. `FHIR-NPM-NAME` IS NOT CLEARED, AND A PRIOR VERSION OF
-  THIS LINE SAYING IT WAS IS THE MISTAKE TO LEARN FROM.** `0.0.10` published 2026-08-26 with a
-  deliberately NARROWED tarball and is `latest`, tagged, with provenance. `0.0.11` restored the
-  README, the changelog and the sourcemaps, and on 2026-08-28 it drew the identical bare `E403` on
-  `PUT https://registry.npmjs.org/@cosyte%2ffhir`, provenance signed into rekor first
-  (logIndex `2626322912`) exactly as every refusal before it.
-  **Read the version from `package.json`, never infer it from npm**: it runs ahead again, at `0.1.0`
-  unpublished with no tag (`0.0.11` never published either).
-  - **`0.1.0` WAS REFUSED TOO (2026-09-25), BY THE STAGED PUBLISH, AND THE NARROWED SHAPE IS BACK AS
-    THE CONTROL.** The full tarball drew `E403` on
-    `POST https://registry.npmjs.org/-/stage/package/@cosyte%2ffhir`, provenance in rekor first. The
-    next publish ships `files` narrowed to the four runtime artifacts plus `LICENSE` and a slim README
-    free of the XML-security vocabulary, NOT a stub. Detail and what it does and does not separate:
-    [`#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
-  - **THE CONTENTS ARE NOW THE LEADING HYPOTHESIS, WHICH IS A REVERSAL, AND IT IS STILL NOT PROVEN.**
-    The one publish that succeeded is the one that stripped the tarball; the next one restored it and
-    was refused. **The confound is that `0.0.10` CREATED the package and `0.0.11` ADDED A VERSION to
-    an existing one, which is a different operation**, so contents and operation both changed. Do not
-    write this up as settled in either direction. The control that separates them is a narrowed
-    republish now that the package exists.
-  - **Do not conclude from one publish.** This trap exists because that is what happened here: the
-    success was written up as the block being over, and the very next publish refuted it.
-    The full sequence and what each attempt controlled for:
-    [`agent-notes.md#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
-  - **The "name-similarity" reading is RETRACTED. DO NOT RENAME OR RESCOPE THE PACKAGE ON IT.** npm
-    has never named similarity or the unscoped `fhir` package in anything it returned. The three
-    evidence clauses moved to the notes 2026-08-07, and are not summarised again here:
-    [`#fhir-npm-name-the-evidence-which-was-duplicated`](documentation/agent-notes.md#fhir-npm-name-the-evidence-which-was-duplicated).
-  - **A SUCCESSFUL PUBLISH IS NOT VISIBLE THE MOMENT IT SUCCEEDS, AND A 404 INSIDE THAT WINDOW IS
-    NOT A FAILURE.** `0.0.10` returned `success` while the PACKAGE document was still `404` and the
-    VERSION document and the tarball were already `200`. The pipeline's own post-publish probe fired
-    inside that window and marked the run failed with `verdict: uninstallable`, which was wrong. It
-    resolved on its own. **Re-check the package document before reading anything into a 404**, and
-    do not act on a single reading taken seconds after a publish.
-  - **Do not generalise the error code across the three affected packages; publish state and
-    installability are independent.** Verbatim:
-    [`#publish-state-fhir-npm-name`](documentation/agent-notes.md#publish-state-fhir-npm-name)
-  - **A PUBLISHED VERSION IS PERMANENT AND CAN NEVER BE RE-FIRED.** `0.0.10` is out and is the floor.
-    The versions npm refused, none of which reached the registry, are `0.0.2`, `0.0.3`, `0.0.7`,
-    `0.0.8` and now `0.0.11`.
-  - **`0.0.10` SHIPPED A 234-BYTE STUB README AND NO CHANGELOG**, because it was a deliberately
-    narrowed diagnostic tarball, and a published version cannot be withdrawn. The restoration is
-    written and merged but **`0.0.11` never published**, so that stub is what a consumer installs
-    today. **Do not read `0.0.10`'s tarball as the intended package shape.**
-  - **This repo is public and the uploaded npm debug-log artifact is downloadable**: re-check it by
-    hand before ever linking one.
-- **Phases 1–9 landed; P10 landed (halves a + b); P11's buildable tiers landed.**
-  **▶ IT IS NOT A NO-DATA-LOSS CLAIM OVER THE WHOLE PACKAGE**: read-path losses remain open and
-  declared. The one that used to qualify "never drops a modifier, status or negation" - a **status**
-  or a dose number written as XML element text, reported but invisible to the safety spine - is
-  **CLOSED**: the reader reads that value back at the one position that has a slot for it, and the
-  report, the marker, the summarise refusal and both write refusals all still stand.
-  The envelope, today's precisely, the losses, what is left open
-  and the per-phase history, all in `agent-notes.md`:
-  [`#the-shipped-envelope-p1-through-p11`](documentation/agent-notes.md#the-shipped-envelope-p1-through-p11) ·
-  [`#p2-p3-and-what-the-package-does-today`](documentation/agent-notes.md#p2-p3-and-what-the-package-does-today) ·
-  [`#open-read-path-losses-enumerated`](documentation/agent-notes.md#open-read-path-losses-enumerated) ·
-  [`#left-open-deliberately-a-through-e`](documentation/agent-notes.md#left-open-deliberately-a-through-e) ·
-  [`#shipped-phase-history-p11-back-to-p1`](documentation/agent-notes.md#shipped-phase-history-p11-back-to-p1)
-- Roadmap: the meta-repo's `operations/roadmaps/fhir.md` (P0…P11).
+## Hazard
 
-## Traps
+Every resource this library reads can carry a patient's identity and clinical record, and callers act on what it returns. The failure that hurts is a read or a write that drops, merges or invents content and still calls the document clean: a retraction lost, a "no known allergy" asserted, a dose changed, all under `valid: true`. When a value cannot be read or written faithfully, report it and refuse; never guess, repair or affirm. Keep document content out of errors, diagnostics and logs.
 
-**▶ The traps live in [`CLAUDE-traps.md`](CLAUDE-traps.md)**, one file over and moved verbatim,
-because this file is held to a 300-line ceiling and they do not fit under it. Read them before you
-touch the model, the safety spine, either codec, the terminology layer, the PHI scan or the
-differential harness. **Nothing was dropped to make room; every line of them is still there.**
+## Rules that bind here
 
-## Tech Stack and the four architecture ADRs
+Each names the failure that put it here; the longer story is in `documentation/agent-notes.md`.
 
-**Relocated 2026-08-07:**
-[`#relocated-out-of-claudemd-on-2026-08-07-to-make-genuine-room-for-a-trap`](documentation/agent-notes.md#relocated-out-of-claudemd-on-2026-08-07-to-make-genuine-room-for-a-trap).
-The toolchain is **inherited** from the published `@cosyte/*` config packages, never copied: read
-the versions off those, never off a copy here. **RUNTIME DEPS ZERO**, TS strict, dual ESM+CJS via
-tsup, per-dir coverage >= 90, MIT. The four ADRs are in `documentation/decisions/`, their source of
-truth: **`0001`** string-backed decimal/`integer64`, **`0002`** a bounded in-repo FHIRPath subset (no
-third-party engine), **`0003`** JSON-first, **`0004`** R4-first (`4.0.1` modeled; R5/DSTU2
-read-tolerance only).
-
-## Engineering Guardrails
-
-- No `any`. No unjustified `as` casts. Use `unknown` and narrow.
-- JSDoc (with `@example`) on every public export: feeds IntelliSense.
-- Immutable by default. Mutation only via explicit methods.
-- No `console.*` in library code. Throw typed errors or return results.
-- Postel's Law: the reader is liberal (lenient default + warnings), the writer is conservative: it
-  authors no value of its own, and emits spec-clean FHIR for every model FHIR can express. It is
-  **not** unconditionally spec-clean; its exceptions are named on `serializeResource`. **Read them
-  there, never from a copy**: this line's copy listed three and had been two short since the `null`
-  and `_`-sibling closures. Repairing one means inventing content or dropping it. Hand a value back
-  (`FhirComplex.nonObjectSource`); **never model it as a primitive**, which would show it to every
-  walker at a complex position. **Every write refusal is EITHER checked AT the site that writes the
-  thing OR a WHOLE-MODEL PRE-PASS RAISED LAST, and two of them run in BOTH writers. Read the list
-  off `SERIALIZE_ERROR_CODES`, never a count or an enumeration here.**
-  [`#div-forges-a-negation`](documentation/agent-notes.md#div-forges-a-negation-2026-08-07)
-- Diagnostics are **value-free by contract**: an `IssueCode` plus a FHIRPath expression. **That is
-  not a claim that a location carries no document content** (a name is echoed when it matches the
-  bounded published form). See the derived-name trap above, and do not widen it into one. **The
-  other half of that claim is scoped too and must stay scoped**: the JSON reader's `expression` no
-  longer carries English prose, NOT that every `expression` is resolvable FHIRPath. A `<withheld>`
-  segment and the XML reader's `.@name` attribute form are deliberately **admitted** by
-  `test/expression-grammar.test.ts` rather than hidden.
-- **Deliberate omissions, each of which reads as an oversight and is not.** `markNestedArray`,
-  `markDroppedText` and `markUndefinedNull` are reader-internal and **not exported**; `typeOf` stays
-  the strict single-value read (**reject** an unreadable type, never guess);
-  the element-text refusal fires even beside a value that arrived, and
-  **do not justify that arm with "content the sender wrote is still missing"** (the gate broke that
-  sentence with `<status value="final">final</status>`) since the rule keys on dropped character data
-  and never compares text to value; and the two defensive `rootPath` calls in the terminology layer
-  and the dose locator are the identity where observable, which the gate **does not pretend to
-  cover**. Each reason, relocated 2026-08-07:
-  [`#deliberate-omissions`](documentation/agent-notes.md#deliberate-omissions).
-- **PHI discipline:** synthetic-only fixtures, redaction in logs. Never commit realistic PHI. The
-  vendor-quirk grounding rule is stated once, under "Terminology, profiles, invariants".
-
-## Standing disciplines (every change)
-
-Disciplines **1 to 3 are the meta-repo's own**, in `documentation/conventions.md`, and bind here
-unchanged; only what is fhir-specific is repeated. **1** docs follow code: this repo's docs, the
-meta-repo's `documentation/repos/fhir.md`, and the `ecosystem-map.md` status table. **2** a Changeset
-(`patch` on the `0.0.x` ladder) plus a `CHANGELOG.md` `[Unreleased]` entry. **3** the crew skill is
-`fhir-resource-design`, plus the KB product doc. The fourth is this repo's own:
-
-4. **No internal project bookkeeping on a public surface** (founder directive, 2026-07-27). Item
-   identifiers (`FHIR-P10`), phase/wave language, ADR numbers and meta-repo paths belong in the
-   changeset, `CHANGELOG.md`, the commit, the PR and the roadmap, never in what a consumer is
-   _shown_. It is a **translation** at the boundary, not a deletion: repair the head of a line you
-   strip an identifier off. Gated by `pnpm check:no-internal-refs`. Why, and what the gate does not
-   cover:
-   [`#no-internal-project-bookkeeping-on-a-public-surface`](documentation/agent-notes.md#no-internal-project-bookkeeping-on-a-public-surface)
-   - Doc comments and string literals are **gated** (they reach the consumer's editor and logs);
-     `//` and `/* */` comments are **not**, and identifiers **belong** there. **Do not justify that
-     boundary from what reaches `dist/`**; measure reach, never grep it. **Removing a doc comment to
-     satisfy the gate is a regression, not a fix.**
-   - **There is deliberately no `slice` rule in this copy**: `slice` is R4 vocabulary here
-     (`ElementDefinition.slicing`), measured at 41 matches with one of them ours. **Do not paste the
-     sibling rule back without re-measuring.**
-   - Two holes are open on purpose (`FHIR-P10b`-style suffixes; trailing `phase`) and `CHANGELOG.md`
-     is deliberately not scanned. The reviewer owns half the rule.
+- A repeated JSON property stays first-wins, is kept on `FhirComplex.duplicates` and reported, and stops `readSafety` affirming. Never switch to last-wins, which only moves the blind spot: a second `status` hid an `entered-in-error` retraction under `safeToSummarize: true` (#32).
+- A read and its report widen together, at one window, in one change: an unwrap inside `codingsOf` that nothing reported erased a true `VITAL_SIGN_UNIT_NONCONFORMANT` and flipped a document to `valid: true`. Count array positions, not strings, and yield at most one value per written member into the `system` x `code` cross-product, since one invented pair is a recorded "no known allergy" (#34).
+- Negation reads take no resource-type gate and run at every resource root: gated reads returned `negations: []` and `safeToSummarize: true` for a conformant `doNotPerform` ServiceRequest, a `not-done` Procedure and a retraction inside a Bundle (#81, #82, #83). `noKnownAllergy` stays gated, because it asserts something positive.
+- Content the model cannot place (an array inside an array, a `_`-sibling that is not an object, a JSON `null` at a primitive) draws a diagnostic and is handed back as inert text, never modeled as an element and never dropped: modeling it erased a true error and asserted `noKnownAllergy`, and dropping it wrote non-conformant documents back clean (#37, #38, #68, #69).
+- The writers author nothing and repair nothing. A model they cannot write faithfully is refused with a code from `SERIALIZE_ERROR_CODES` (read the list there, never from a copy): they once invented a `{}` (#59), authored elements out of a name (#64) and forged a negation out of a `div` (#65).
+- The XML reader compares expanded names (namespace and local name), never a tag or a local name alone: a prefixed FHIR document read as properties named `f:active` (#44), and two spellings of one name merged in silence (#59).
+- Take the narrative by its expanded name `{http://www.w3.org/1999/xhtml}div` before the resource-valued unwrap: `<BR/>` read as a contained resource and deleted the prose beside it under `valid: true` (#46, #47).
+- Diagnostics carry an `IssueCode` and a FHIRPath location, never a value, and a name the document supplies is bounded in `src/model/path.ts` before it reaches a location: a 1 MB property name reached `expression` whole (#43).
+- The PHI scan's scope and its recogniser change together, and it sweeps the git index as well as the tree, so re-run `pnpm phi-scan` after `git add`: a symlink, a staged rename, files under `test/` and a fixture staged then scrubbed each read clean (#50, #56, #60, #90).
+- The differential's oracle answers no terminology over a network (`-tx n/a -txCache n/a`, declared in `scripts/differential/terminology.mjs`), and a disagreement is closed by fixing a fixture or the library, never by loosening the comparison: the default server moved three documents in and out of FALSE VALID (#104), and five FALSE VALIDs on main were incomplete fixtures (#20).
+- A declared gap pinned by a characterization test reds when it closes, so rewrite that test in the same change, and never write "pinned by a test" without opening the test: three such claims had none (#58).
+- `pnpm attw` stays `node scripts/attw.mjs`, never bare `attw` (`node_modules/.bin`, from the `@arethetypeswrong/cli` devDependency): the bare CLI exits 0 on a pack with no types (#49).
+- A change under `src/` adds a changeset and a `CHANGELOG.md` `[Unreleased]` bullet. Pick `minor` for new capability or anything that withdraws or narrows working behaviour (a new write refusal does), `patch` only when every public observable is unchanged: two breaks shipped as `patch` (#111).
+- A changeset's text becomes the permanent release body: keep its first sentence short, and keep out internal identifiers and any claim a sibling changeset makes stale. The release refused such notes and published nothing (#39, #100), and two stale claims nearly froze into a body (#67, #71).
+- `README.md`, `docs-content/` and the `/** */` comments and string literals in `src/` carry no item identifiers, phase language, ADR numbers or private paths. Translate the line; never delete a doc comment to pass `pnpm check:no-internal-refs` (#31).
+- npm refuses new `@cosyte/fhir` versions with a bare `E403` (0.0.11, 0.1.0) and accepted only the narrowed 0.0.10, and the cause is not settled. Keep `files` to the runtime artifacts and the README slim (#134), never rename or rescope the package (#55), read the version from `package.json`, and do not call a publish settled from one result (#107, #109) or failed from a 404 seconds after it (`documentation/agent-notes.md#publish-state-fhir-npm-name`).
