@@ -4,7 +4,7 @@
 
 ## Gate
 
-From the repo root, in this order, with pnpm 10 (the `packageManager` pin). Where `pnpm --version` prints another major, put the pinned one first on PATH, since pnpm 12 refuses the frozen install and a test shells out to bare `pnpm`: `mkdir -p ~/.pnpm10 && corepack enable --install-directory ~/.pnpm10 pnpm && export PATH="$HOME/.pnpm10:$PATH"`.
+From the repo root, in this order, with pnpm 10.34.5 (the `packageManager` pin). Where `pnpm --version` prints another major, put the pinned one first on PATH, since pnpm 12 refuses the frozen install and a test shells out to bare `pnpm`: `mkdir -p ~/.pnpm10 && corepack enable --install-directory ~/.pnpm10 pnpm && export PATH="$HOME/.pnpm10:$PATH"`.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -47,7 +47,7 @@ Each names the failure that put it here; the longer story is in `documentation/a
 - The differential's oracle answers no terminology over a network (`-tx n/a -txCache n/a`, declared in `scripts/differential/terminology.mjs`), and a disagreement is closed by fixing a fixture or the library, never by loosening the comparison: the default server moved three documents in and out of FALSE VALID (#104), and five FALSE VALIDs on main were incomplete fixtures (#20).
 - A declared gap pinned by a characterization test reds when it closes, so rewrite that test in the same change, and never write "pinned by a test" without opening the test: three such claims had none (#58).
 - `pnpm attw` stays `node scripts/attw.mjs`, never bare `attw` (`node_modules/.bin`, from the `@arethetypeswrong/cli` devDependency): the bare CLI exits 0 on a pack with no types (#49).
-- A change under `src/` adds a changeset and a `CHANGELOG.md` `[Unreleased]` bullet. Pick `minor` for new capability or anything that withdraws or narrows working behaviour (a new write refusal does), `patch` only when every public observable is unchanged: two breaks shipped as `patch` (#111).
+- A change under `src/` adds a changeset, whose summary the release writes into `CHANGELOG.md`; never hand-edit that file. Pick `minor` for new capability or anything that withdraws or narrows working behaviour (a new write refusal does), `patch` only when every public observable is unchanged: two breaks shipped as `patch` (#111).
 - A changeset's text becomes the permanent release body: keep its first sentence short, and keep out internal identifiers and any claim a sibling changeset makes stale. The release refused such notes and published nothing (#39, #100), and two stale claims nearly froze into a body (#67, #71).
 - `README.md`, `docs-content/` and the `/** */` comments and string literals in `src/` carry no item identifiers, phase language, ADR numbers or private paths. Translate the line; never delete a doc comment to pass `pnpm check:no-internal-refs` (#31).
 - npm refuses new `@cosyte/fhir` versions with a bare `E403` (0.0.11, 0.1.0) and accepted only the narrowed 0.0.10, and the cause is not settled. Keep `files` to the runtime artifacts and the README slim (#134), never rename or rescope the package (#55), read the version from `package.json`, and do not call a publish settled from one result (#107, #109) or failed from a 404 seconds after it (`documentation/agent-notes.md#publish-state-fhir-npm-name`).

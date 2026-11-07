@@ -1,7 +1,7 @@
 # @cosyte/fhir agent notes
 
 The narrative half of this repo's `CLAUDE.md`, relocated here on 2026-08-04 under `CLAUDE-MD-AUDIT`
-(the 2026-08-04 amendment to the meta-repo's `documentation/decisions/0023-doc-budgets.md`).
+so that `CLAUDE.md` stays a short card that every session reads in full.
 
 **Nothing was deleted and nothing was rewritten.** Every paragraph below is the verbatim text that
 used to sit in `CLAUDE.md`, in its original order, with headings added so it can be found.
@@ -2155,8 +2155,8 @@ passing it (P7), and reads & writes **FHIR XML** into the shared model (the two 
 XXE/billion-laughs-proof by refusal, P8) but with **no** `type`·`profile`
 slicing discriminators / reslicing (still `PROFILE_SLICE_UNCHECKED`), no bundled US Core IG corpus or
 `validator_cli.jar` differential (P11), no code-validity / value-set-membership guarantee without a supplied
-terminology service, and no typed per-resource models. The roadmap lives in
-the meta-repo: `operations/roadmaps/fhir.md` (P0…P11).
+terminology service, and no typed per-resource models. The plans live in the umbrella's `plans/`
+directory; the standards every repo is held to are its `plans/standards.md`.
 
 ## `ATTW-FALSE-GREEN-PORT`
 
@@ -2644,7 +2644,8 @@ rising entry is a rubber stamp.
 ### Tech Stack (the shared `@cosyte/*` standard)
 
 fhir inherits the canonical toolchain by depending on the published `@cosyte/*` config packages, not
-by copying files. Source of truth: the meta-repo's `documentation/conventions.md`.
+by copying files. The standard is the umbrella's `plans/standards.md` (EN4: the shared configs at
+`^0.1`).
 
 - **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
   `@cosyte/tsconfig`. **ES2023**, `NodeNext`.

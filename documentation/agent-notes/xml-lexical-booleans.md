@@ -1,7 +1,7 @@
 # The XML boolean, read (2026-08-09, `FHIR-XML-BOOLEAN-NEGATION-LOST`)
 
-Split out of `documentation/agent-notes.md` under the meta-repo's `decisions/0023-doc-budgets.md`
-(that file is at its 250,000-byte archive cap, and `CLAUDE.md` is at its own). The cursor stays
+Split out of `documentation/agent-notes.md` when that file was at the 250,000-byte cap it was then
+held to, and `CLAUDE.md` at its own. The cursor stays
 there; this is the narrative. Sibling: [`xml-magnitude.md`](xml-magnitude.md), the same root class
 one datatype over.
 

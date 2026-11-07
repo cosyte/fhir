@@ -34,6 +34,7 @@ jobs:
   # OOMs, always a typed error or a bounded rejection, and no value ever reaches a diagnostic.
   fuzz:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -54,6 +55,7 @@ jobs:
   # which the ci job's PHI scan already covers; phi-scan:examples scans the example sources.
   examples:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -68,7 +70,7 @@ jobs:
       - run: pnpm examples
       - run: pnpm phi-scan:examples
 
-  # Differential vs the official validator (`org.hl7.fhir.core` / validator_cli.jar), roadmap §6.
+  # Differential vs the official validator (`org.hl7.fhir.core` / validator_cli.jar).
   # AUTHORED, NOT YET PROVEN: the oracle is a JVM program, so this gate can only run here (never in the
   # dev container). The corpus is declared in corpus/corpus.json and is no longer ten in-tree
   # fixtures. Four corpora, only the first written here: this repository's own synthetic spec-clean
@@ -81,7 +83,7 @@ jobs:
   # the two US Core package tarballs, from packages.fhir.org) into the git-ignored corpus/documents/
   # and verifies a SHA-256 per document and per package. A genuinely vendor-proprietary quirk absent
   # from every public sample stays grounded-only and is not in the corpus (inventing one is forbidden),
-  # and no document here was hand-authored to reach the count (ADR 0018).
+  # and no document here was hand-authored to reach the count.
   #
   # THE ORACLE IS PINNED TO A RELEASE, NOT TO `releases/latest`. A moving pointer means two runs of
   # the same commit can disagree about what they compared against and neither log says why. The

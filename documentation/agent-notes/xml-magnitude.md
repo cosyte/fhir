@@ -1,7 +1,7 @@
 # The XML magnitude, read (2026-08-09, `FHIR-XML-WRITE-RESIDUALS`)
 
-Split out of `documentation/agent-notes.md` under the meta-repo's `decisions/0023-doc-budgets.md`
-(that file is at its 250,000-byte archive cap). The cursor stays there; this is the narrative.
+Split out of `documentation/agent-notes.md` when that file was at the 250,000-byte cap it was then
+held to. The cursor stays there; this is the narrative.
 
 ## The filed line was half right, and the halves disagree
 
