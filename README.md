@@ -180,6 +180,6 @@ entry in `CHANGELOG.md`. See [`CONTRIBUTING.md`](https://github.com/cosyte/fhir/
 
 ## License
 
-MIT, copyright Cosyte. See [LICENSE](https://github.com/cosyte/fhir/blob/main/LICENSE). The names of
+MIT, copyright Cosyte LLC. See [LICENSE](https://github.com/cosyte/fhir/blob/main/LICENSE). The names of
 the standards and code systems this package works with belong to their owners; see
 [TRADEMARKS.md](https://github.com/cosyte/fhir/blob/main/TRADEMARKS.md).
