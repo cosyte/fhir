@@ -1,5 +1,5 @@
 /**
- * The layered structural / cardinality / value-domain validator (validation layers 1–3).
+ * The layered structural / cardinality / value-domain validator (validation layers 1 to 3).
  *
  * Given a resource model (from `parseResource`) and a schema ({@link ./schema.js}), the validator
  * walks the resource once and produces value-free {@link ValidationIssue}s across three layers:

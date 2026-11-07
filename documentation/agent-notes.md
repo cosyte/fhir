@@ -672,7 +672,7 @@ umbrella's own always-read `CLAUDE.md` and the `work-on` skill state both of the
 
 ## Shipped-phase history, P11 back to P1
 
-- **Phases 1–9 landed; P10 landed (halves a + b); P11 buildable
+- **Phases 1 to 9 landed; P10 landed (halves a + b); P11 buildable
   tiers landed.** P11 (buildable portion; roadmap §6): conformance hardening as gating tests: a
   **JSON+XML+NDJSON fuzz tier** (`test/fuzz.test.ts`, `FUZZ_RUNS`-tunable, a dedicated `fuzz` CI job)
   proving adversarial input never crashes/hangs/OOMs: only a **typed** `FhirCodecError`/`FhirXmlError`

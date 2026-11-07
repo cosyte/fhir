@@ -30,7 +30,7 @@ That makes deferral cheap to reverse and expensive to pre-pay.
 **JSON-first.** The resource model and the **JSON codec** are the product through Phase 7. **XML is
 deferred to Phase 8**, and when it arrives it is **read-first** (ingesting XML feeds) before emit.
 
-- Phases 1–7 build model, JSON read/write, validation, and profiles against JSON only.
+- Phases 1 to 7 build model, JSON read/write, validation, and profiles against JSON only.
 - The model layer stays strictly **wire-agnostic**: no JSON-specific shapes leak into the model, so
   the XML codec in Phase 8 is purely additive (a new reader/writer over the same model), not a
   refactor.
