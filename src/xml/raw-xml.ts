@@ -374,7 +374,7 @@ class RawXmlReader {
  * decoding the five predefined entities and numeric character references. **Refuses** any DTD
  * (`DTD_FORBIDDEN`) or non-predefined entity (`UNDEFINED_ENTITY`), and bounds nesting depth, so it
  * is XXE- and billion-laughs-safe and never crashes on adversarial input. Throws
- * {@link FhirXmlError} on any refusal or well-formedness error, with a byte `offset` and no snippet.
+ * {@link FhirXmlError} on any refusal or well-formedness error, with an `offset` and no snippet.
  *
  * @param src - The XML text.
  * @example

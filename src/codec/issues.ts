@@ -14,7 +14,7 @@
  * **PHI discipline.** A FHIR resource is PHI by default, and diagnostics are the leak
  * vector. Every issue and every error here is **value-free by construction**: it carries a coded
  * `code`, a `severity`, and an `expression` (a FHIRPath *location* such as `Patient.name[0].given[1]`),
- * never the offending value. The `FhirCodecError` for malformed JSON carries a byte `offset`, not
+ * never the offending value. The `FhirCodecError` for malformed JSON carries an `offset`, not
  * the surrounding text.
  *
  * @packageDocumentation
@@ -372,7 +372,7 @@ export const FATAL_CODES = {
    * JSON nested deeper than the reader's fixed bound. Well-formed but pathological input (a tower of
    * `[[[[…]]]]` / `{"a":{"a":…}}`) is refused as a **DoS guard**, turning what would otherwise be a
    * V8 stack overflow (`RangeError`, environment-dependent, untyped) into a typed, value-free fatal
-   * carrying a byte `offset`. Mirrors the XML reader's `MAX_DEPTH_EXCEEDED` (fuzzing: deep
+   * carrying an `offset`. Mirrors the XML reader's `MAX_DEPTH_EXCEEDED` (fuzzing: deep
    * nesting must never crash/hang/OOM, always a typed error or a bounded rejection).
    */
   MAX_DEPTH_EXCEEDED: "MAX_DEPTH_EXCEEDED",
@@ -402,13 +402,17 @@ export class FhirCodecError extends Error {
   public readonly code: FatalCode;
   /** FHIRPath location of the failure, when it has one (misalignment). */
   public readonly expression: string | undefined;
-  /** Byte offset into the input, when it has one (malformed JSON). */
+  /**
+   * Where in the input the failure was detected, when it has one (malformed JSON), as an index into
+   * the input string in UTF-16 code units (JavaScript string indexing), not a byte offset: the two
+   * differ once a non-ASCII character precedes the failure.
+   */
   public readonly offset: number | undefined;
 
   /**
    * @param code - The fatal reason.
    * @param message - A PHI-safe description, must not embed any input value.
-   * @param location - Either a FHIRPath `expression` or a byte `offset`.
+   * @param location - Either a FHIRPath `expression` or a string-index `offset`.
    * @internal
    */
   public constructor(

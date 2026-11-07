@@ -9,7 +9,7 @@
  *
  * The output is a raw JSON tree ({@link RawJson}) that preserves member order (FHIR allows
  * `resourceType` in any position) and number literals verbatim. Malformed input throws a value-free
- * {@link FhirCodecError} carrying a byte offset, never a snippet (the snippet could be PHI).
+ * {@link FhirCodecError} carrying an offset, never a snippet (the snippet could be PHI).
  *
  * @packageDocumentation
  */
@@ -373,7 +373,7 @@ class RawJsonReader {
  * Parse a JSON document into a {@link RawJson} tree that preserves number literals verbatim and
  * member order. Throws {@link FhirCodecError} (`MALFORMED_JSON`) on invalid input, or
  * (`MAX_DEPTH_EXCEEDED`) when nesting passes the reader's fixed depth bound, both value-free, with a
- * byte `offset` and no snippet.
+ * `offset` and no snippet.
  *
  * @param src - The JSON text.
  * @example

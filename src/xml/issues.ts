@@ -24,7 +24,7 @@
  * {@link XML_FATAL_CODES.MAX_DEPTH_EXCEEDED} so adversarial input yields a typed error, never a stack
  * overflow.
  *
- * Every message is **value-free**: it carries a coded reason and a byte `offset`, never
+ * Every message is **value-free**: it carries a coded reason and an `offset`, never
  * a slice of the offending document, because that slice could be PHI.
  *
  * @packageDocumentation
@@ -58,7 +58,7 @@ export type XmlFatalCode = (typeof XML_FATAL_CODES)[keyof typeof XML_FATAL_CODES
 /**
  * Thrown by the XML reader on an unrecoverable failure, a well-formedness error, a **refused** DTD
  * or entity (the safety refusals), or nesting past the depth bound. Carries the coded reason and a
- * byte `offset`, and, by design, **no** slice of the offending input, because that slice could be
+ * `offset` into the input, and, by design, **no** slice of the offending input, because that slice could be
  * PHI.
  *
  * @example
@@ -75,13 +75,17 @@ export type XmlFatalCode = (typeof XML_FATAL_CODES)[keyof typeof XML_FATAL_CODES
  */
 export class FhirXmlError extends Error {
   public readonly code: XmlFatalCode;
-  /** Byte offset into the input where the failure was detected. */
+  /**
+   * Where in the input the failure was detected, as an index into the input string in UTF-16 code
+   * units (JavaScript string indexing), not a byte offset: the two differ once a non-ASCII character
+   * precedes the failure.
+   */
   public readonly offset: number;
 
   /**
    * @param code - The fatal reason.
    * @param message - A PHI-safe description, must not embed any input value.
-   * @param offset - The byte offset where the failure was detected.
+   * @param offset - The string index (UTF-16 code units) where the failure was detected.
    * @internal
    */
   public constructor(code: XmlFatalCode, message: string, offset: number) {
