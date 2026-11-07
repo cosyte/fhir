@@ -107,7 +107,9 @@ function fociFor(resource: FhirComplex, rt: string, root: string, elementPath: s
  * ```ts
  * import { collectInvariantIssues, loadStructureDefinition, parseResource } from "@cosyte/fhir";
  * const profile = loadStructureDefinition(parseResource(usCoreProfileJson).resource);
- * const issues = collectInvariantIssues(parseResource(instanceJson).resource, profile);
+ * if (profile !== undefined) {
+ *   const issues = collectInvariantIssues(parseResource(instanceJson).resource, profile);
+ * }
  * ```
  */
 export function collectInvariantIssues(

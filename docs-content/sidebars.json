@@ -5,7 +5,7 @@
     { "type": "category", "label": "Quickstart", "items": ["quickstart"] },
     {
       "type": "category",
-      "label": "Core Concepts",
+      "label": "Core concepts",
       "collapsed": false,
       "items": ["core-concepts"]
     },

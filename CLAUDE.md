@@ -2,6 +2,8 @@
 
 `@cosyte/fhir` is our FHIR R4 parser and utility library for Node.js and TypeScript, published to npm under MIT from this public repository. It reads FHIR JSON and XML leniently into an immutable model that keeps every `decimal` and `integer64` exactly as written, writes FHIR back or refuses to, and validates in layers (structure, terminology binding, profiles, a bounded FHIRPath subset) beside a fail-closed safety readout, `readSafety`. It has zero runtime dependencies and mirrors the API shape of `@cosyte/hl7`.
 
+@AGENTS.md
+
 ## Gate
 
 From the repo root, in this order, with pnpm 10.34.5 (the `packageManager` pin). Where `pnpm --version` prints another major, put the pinned one first on PATH, since pnpm 12 refuses the frozen install and a test shells out to bare `pnpm`: `mkdir -p ~/.pnpm10 && corepack enable --install-directory ~/.pnpm10 pnpm && export PATH="$HOME/.pnpm10:$PATH"`.

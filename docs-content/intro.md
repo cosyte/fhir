@@ -2,6 +2,7 @@
 id: intro
 title: Getting started
 sidebar_position: 1
+description: What @cosyte/fhir is, what it covers against FHIR R4, and where to start reading.
 ---
 
 # @cosyte/fhir
@@ -12,7 +13,8 @@ JSON **and** XML codec, and layered validation, with the same one-line ergonomic
 [`@cosyte/hl7`](https://github.com/cosyte/hl7), the reference parser.
 
 What it is for, in one sentence: read a real-world FHIR resource, model it with correct primitive
-semantics, and validate it against US Core, without reading the FHIR specification first.
+semantics, and validate it against the profiles you supply, such as US Core, without reading the FHIR
+specification first.
 
 ## Status
 
@@ -25,9 +27,9 @@ worth reading before you plan around it.
 
 - **[Installation](./installation.md)**: runtime requirements, module formats, and how to get the
   package today.
-- **[Quickstart](./quickstart.md)**: an unparsed document to a parsed resource, a clinical value and
-  a validation verdict, in three steps.
-- **[Core concepts](./core-concepts.md)**: the schema-free model, exact primitives, the two codecs
+- **[Quickstart](./quickstart.md)**: an unparsed document to a parsed resource, a clinical value,
+  and a validation verdict, in three steps.
+- **[Core concepts](./core-concepts.md)**: the schema-free model, exact primitives, the two codecs,
   and the validation layers.
 - **[Guides](./guides.md)**: the tasks readers arrive with, from accepting both wire formats to
   validating against your own profiles.
@@ -45,11 +47,11 @@ Against FHIR R4 (`4.0.1`), the package can already:
   kept as its exact lexical text and never routed through a JavaScript number, so a dose or an
   identifier cannot be silently corrupted. The XML reader refuses any `DOCTYPE` or non-predefined
   entity rather than resolving it.
-- **Validate** across structural, cardinality and value-domain layers, emitting a value-free
+- **Validate** across structural, cardinality, and value-domain layers, emitting a value-free
   `OperationOutcome`: a finding carries a coded reason and a location, never the value it was raised
   over.
 - **Surface the safety-critical status and negation model**: it fails closed on an unknown
-  `modifierExtension` and does not drop a status, a modifier or a negation on the paths it reads.
+  `modifierExtension` and does not drop a status, a modifier, or a negation on the paths it reads.
 - **Report measured values by their true type** with UCUM unit fidelity, never the display string
   and never converted, validate code systems and binding strength without vendoring any terminology
   content, validate against caller-supplied US Core or vendor profiles, and evaluate their FHIRPath

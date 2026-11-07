@@ -2,6 +2,7 @@
 id: guides
 title: Guides
 sidebar_position: 5
+description: Accept JSON and XML, decide whether a resource is safe to summarize, validate against your own profiles, check codes, and keep what you cannot interpret.
 ---
 
 # Guides
@@ -31,7 +32,7 @@ Both readers hand back diagnostics on the same channel, so one logging path cove
 
 ## Decide whether a resource is safe to summarize
 
-Before a resource is rolled into a summary, a card or a feed, ask whether anything in it changes the
+Before a resource is rolled into a summary, a card, or a feed, ask whether anything in it changes the
 meaning of what you are about to show. `readSafety` answers that in one call, over the whole
 document rather than its root alone:
 
@@ -78,12 +79,12 @@ request.intents; // => [{ code: "proposal", location: "MedicationRequest.intent"
 request.safeToSummarize; // => true
 ```
 
-An identifier, a name, an address or a contact point can be marked `old` or `temp`, and FHIR treats
+An identifier, a name, an address, or a contact point can be marked `old` or `temp`, and FHIR treats
 that `use` as a modifier: an old address is not where the patient lives now. `datatypeUses` pairs each
 `use` with its location, on every `identifier` of the resource types the safety readout models and
-on a patient's `name`, `telecom` and `address`, including those of each `contact`. A readable code
+on a patient's `name`, `telecom`, and `address`, including those of each `contact`. A readable code
 leaves the resource safe to summarize, `old` included, because which entry to show is your decision:
-nothing is filtered, reordered or marked current for you. A `use` that is not one of the codes FHIR
+nothing is filtered, reordered, or marked current for you. A `use` that is not one of the codes FHIR
 defines for that datatype, such as `"OLD"` or `"maiden"` on an identifier, is located on
 `unreadableDatatypeUses` instead and the resource is not safe to summarize.
 
@@ -105,7 +106,7 @@ unreadable.unreadableDatatypeUses; // => ["Patient.identifier[0].use"]
 unreadable.safeToSummarize; // => false
 ```
 
-What this does not read: a practitioner's identifiers, names and addresses (a practitioner's
+What this does not read: a practitioner's identifiers, names, and addresses (a practitioner's
 identifier `use` is reported on `modifierElements` instead, whatever its value), a `use` carried in an
 extension value, a contained resource of a type the safety readout does not model, such as an
 organization, and an ended `period` on an entry whose `use` is current.
@@ -146,7 +147,7 @@ finding is the error, and it is the one that moves the verdict.
 
 You do not need a profile for the constraints R4 itself declares. On the eight modeled resource
 types, `validateResource` evaluates them with no options at all: a patient contact with no name,
-telecom, address or organization breaks `pat-1`, an extension with both a value and nested
+telecom, address, or organization breaks `pat-1`, an extension with both a value and nested
 extensions breaks `ext-1`, and an element with no value and no children breaks `ele-1`:
 
 ```ts
@@ -184,7 +185,7 @@ outcome.issues.some((issue) => issue.code === "CARDINALITY_MIN"); // => true
 ## Check codes without a terminology server
 
 Terminology checks are content-free by default. The library knows code system identities, not their
-contents, so with no service supplied it verifies that a coding names a system it recognises and
+contents, so with no service supplied it verifies that a coding names a system it recognizes and
 that a binding's strength is respected, and it never invents a membership answer:
 
 ```ts

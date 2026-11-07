@@ -2,6 +2,7 @@
 id: troubleshooting
 title: Troubleshooting
 sidebar_position: 7
+description: Every refusal and degraded reading, the coded reason it carries, and what to do about it.
 ---
 
 # Troubleshooting
@@ -66,11 +67,11 @@ legitimate sender trips it, the shape of what they are sending is worth a conver
 
 ## The JSON reader refuses the input outright
 
-You get a thrown error whose code is `MALFORMED_JSON`, carrying a byte offset and no slice of the
-input.
+You get a thrown error whose code is `MALFORMED_JSON`, carrying an offset into the input string (in
+UTF-16 code units, not bytes) and no slice of the input.
 
 **What to do**: check the transport before the document. Truncation at a proxy, a doubled response
-body and a mis-set encoding all arrive looking like this. The offset tells you where the reader
+body, and a mis-set encoding all arrive looking like this. The offset tells you where the reader
 stopped, and the absence of a quoted fragment is deliberate: the bytes around a parse failure are as
 likely to be patient data as anything else in the document.
 
@@ -164,12 +165,13 @@ see it: check the findings.
 
 You get a `PROFILE_SLICE_UNCHECKED` finding at informational severity.
 
-The slicing discriminator on that element is one this library cannot apply. The `position`
-discriminator is the common cause: it is not part of the R4 discriminator set at all.
+The slicing discriminator on that element is one this library cannot apply: a `type` or `profile`
+discriminator, which needs a FHIRPath engine, or a `position` discriminator, which is not part of
+the R4 discriminator set at all.
 
 **What to do**: the same as the previous entry. It means the slice membership was not decided, not
-that it matched. If the profile is yours, an equivalent slice expressed with a value, pattern, type
-or profile discriminator will be evaluated.
+that it matched. If the profile is yours, an equivalent slice expressed with a value, pattern, or
+exists discriminator will be evaluated.
 
 ## An element is not in the base definition
 
@@ -181,14 +183,16 @@ document, and strict is the right mode for checking your own before you send it.
 **What to do**: on a read, look at whether the element is a vendor extension you should be handling.
 On a write, treat it as an error and fix the element before sending.
 
-## XML element text disappeared
+## Text written directly on an XML element
 
-You get an `UNEXPECTED_XML_CONTENT` finding, and the text is not in the model.
+You get an `UNEXPECTED_XML_CONTENT` finding on the read. On a primitive element, validation also
+raises `DROPPED_ELEMENT_TEXT` at error severity.
 
-FHIR XML carries a primitive's value in a `value` attribute. Character data written directly on an
-element has no slot in the model, so it is dropped. What the library guarantees is that the drop is
-reported, and nothing more. This is worth taking seriously: a status or a dose written as element
-text is a value that a summary will not see.
+FHIR XML carries a primitive's value in a `value` attribute, so character data written directly on
+an element is non-conformant. On a primitive element the reader takes the text as the value, so the
+safety readout still sees a status, a negation, or a dose written that way, and it reports the
+shape: the resource is not safe to summarize, and both writers refuse it. On a complex element the
+text has no slot in the model and is dropped, with the same finding.
 
 **What to do**: fix the sender. In the meantime, treat a resource carrying this finding as
 incomplete rather than as read successfully, and do not compare it against the same document in
