@@ -111,7 +111,9 @@ function parentGroups(
  * ```ts
  * import { collectProfileIssues, loadStructureDefinition, parseResource } from "@cosyte/fhir";
  * const profile = loadStructureDefinition(parseResource(usCoreAllergyJson).resource);
- * const issues = collectProfileIssues(parseResource(allergyJson).resource, profile);
+ * if (profile !== undefined) {
+ *   const issues = collectProfileIssues(parseResource(allergyJson).resource, profile);
+ * }
  * ```
  */
 export function collectProfileIssues(

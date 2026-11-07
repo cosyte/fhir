@@ -66,8 +66,8 @@ legitimate sender trips it, the shape of what they are sending is worth a conver
 
 ## The JSON reader refuses the input outright
 
-You get a thrown error whose code is `MALFORMED_JSON`, carrying a byte offset and no slice of the
-input.
+You get a thrown error whose code is `MALFORMED_JSON`, carrying an offset into the input string (in
+UTF-16 code units, not bytes) and no slice of the input.
 
 **What to do**: check the transport before the document. Truncation at a proxy, a doubled response
 body and a mis-set encoding all arrive looking like this. The offset tells you where the reader
@@ -164,12 +164,13 @@ see it: check the findings.
 
 You get a `PROFILE_SLICE_UNCHECKED` finding at informational severity.
 
-The slicing discriminator on that element is one this library cannot apply. The `position`
-discriminator is the common cause: it is not part of the R4 discriminator set at all.
+The slicing discriminator on that element is one this library cannot apply: a `type` or `profile`
+discriminator, which needs a FHIRPath engine, or a `position` discriminator, which is not part of
+the R4 discriminator set at all.
 
 **What to do**: the same as the previous entry. It means the slice membership was not decided, not
-that it matched. If the profile is yours, an equivalent slice expressed with a value, pattern, type
-or profile discriminator will be evaluated.
+that it matched. If the profile is yours, an equivalent slice expressed with a value, pattern or
+exists discriminator will be evaluated.
 
 ## An element is not in the base definition
 

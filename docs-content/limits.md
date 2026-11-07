@@ -59,9 +59,9 @@ you treat any non-error finding as a pass, you will misread them.
   terms and nothing is reported, also when a supplied profile carries R4's `dom-3` as written. A
   profile's constraint under that key written any other way is its own expression, and is reported
   unchecked like any other the subset cannot evaluate.
-- `PROFILE_SLICE_UNCHECKED`: a slice whose discriminator this library cannot apply, including the
-  `position` discriminator, which is not part of the R4 discriminator set. Again, it means the slice
-  membership was not decided, not that it matched.
+- `PROFILE_SLICE_UNCHECKED`: a slice whose discriminator this library cannot apply: a `type` or
+  `profile` discriminator, or the `position` discriminator, which is not part of the R4 discriminator
+  set. Again, it means the slice membership was not decided, not that it matched.
 
 Both exist because the alternative, staying quiet, is indistinguishable from a pass to every
 consumer downstream.

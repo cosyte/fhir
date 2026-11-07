@@ -47,10 +47,10 @@ and DSTU2 documents can be read, since the model is schema-free, but they are no
 their own definitions.
 
 Not covered yet: typed per-resource models (the built-in structural schemas cover the base elements
-plus `Patient`), `type` and `profile` slicing discriminators and reslicing (reported
-`PROFILE_SLICE_UNCHECKED`), FHIRPath outside the supported subset (reported `INVARIANT_UNCHECKED`,
-never passed), bundled terminology or US Core content, spec-clean JSON written from a model read out
-of XML, unit conversion, and executing a transaction Bundle.
+plus the eight modeled resource types), `type` and `profile` slicing discriminators and reslicing
+(reported `PROFILE_SLICE_UNCHECKED`), FHIRPath outside the supported subset (reported
+`INVARIANT_UNCHECKED`, never passed), bundled terminology or US Core content, spec-clean JSON written
+from a model read out of XML, unit conversion, and executing a transaction Bundle.
 
 ## Install
 
@@ -137,9 +137,9 @@ as PHI.
   was raised over. A location can repeat an element name the document supplied when that name has
   the published form of a FHIR name, so treat a location as derived from the document.
 - **The XML reader accepts plain XML only.** Anything else is refused with a typed `FhirXmlError`
-  that carries a code and a byte offset, never a slice of the document. The reader performs no I/O
-  and resolves no URI. The troubleshooting pages on
-  [docs.cosyte.com/fhir](https://docs.cosyte.com/fhir) list each refusal and its code.
+  that carries a code and an offset into the input string (in UTF-16 code units, not bytes), never a
+  slice of the document. The reader performs no I/O and resolves no URI. The troubleshooting pages
+  on [docs.cosyte.com/fhir](https://docs.cosyte.com/fhir) list each refusal and its code.
 - **Nesting is bounded.** Both readers stop at a fixed depth with a typed error, so a deeply nested
   document fails cleanly rather than exhausting the stack.
 - **A status or a negation is not skipped silently.** `assertSafeToSummarize` refuses a resource

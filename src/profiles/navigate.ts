@@ -3,8 +3,8 @@
  *
  * Profile validation and slicing discriminators are expressed as **element paths** relative to a
  * resource or a slice element (e.g. `clinicalStatus.coding.code`, `value[x]`, `$this`). This module
- * resolves such a path to the set of model nodes it selects, flattening repeating elements and
- * honoring `[x]` choice variants. It is a deliberately small, FHIRPath-*shaped* navigator, not the
+ * resolves such a path to the set of model nodes it selects, flattening the repeating elements it
+ * walks through and honoring `[x]` choice variants. It is a deliberately small, FHIRPath-*shaped* navigator, not the
  * FHIRPath engine: it walks dotted member access and choice suffixes,
  * which is exactly what StructureDefinition discriminator paths and fixed/pattern locations use, and
  * nothing more (no functions, no filters, no arithmetic).
@@ -20,8 +20,11 @@ const CHOICE_SUFFIX = /^[A-Z]/;
 /**
  * Resolve an element path against a node, returning every node it selects (empty when nothing
  * matches). `$this` (or the empty path) selects the node itself. A `[x]` segment matches any concrete
- * choice variant (`value[x]` → `valueQuantity`, `valueString`, …). Repeating elements are flattened,
- * so `coding.code` on a `CodeableConcept` with three codings yields three nodes.
+ * choice variant (`value[x]` → `valueQuantity`, `valueString`, …). A repeating element the path
+ * walks through is flattened, so `coding.code` on a `CodeableConcept` with three codings yields three
+ * nodes. A repeating element in the last segment is not: it comes back as its list node
+ * (`kind: "list"`, members on `items`), so `name` on a Patient with two names yields one node.
+ * Flatten it with `isList(node) ? node.items : [node]`.
  *
  * @param node - The starting node (a resource, a slice element instance, …).
  * @param path - A dotted element path relative to `node` (`""` / `"$this"` selects `node`).

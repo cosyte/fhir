@@ -20,7 +20,7 @@ changes no public observable ships as a patch. Upgrading from 0.0.10, the last v
 changes verdicts: R4's own constraints are now evaluated with no profile supplied, so a document that
 read valid can read invalid, and a `use` outside its R4 value set now stops a summary, as the entries
 below set out. Not covered yet: typed per-resource models (the built-in structural schemas cover the
-base elements plus `Patient`), `type` and `profile` slicing discriminators and reslicing (reported
+base elements plus the eight modeled resource types), `type` and `profile` slicing discriminators and reslicing (reported
 `PROFILE_SLICE_UNCHECKED`), FHIRPath outside the supported subset (reported `INVARIANT_UNCHECKED`,
 never passed), bundled terminology or US Core content, spec-clean JSON written from a model read out
 of XML, unit conversion, and executing a transaction Bundle.
@@ -93,6 +93,14 @@ of XML, unit conversion, and executing a transaction Bundle.
 
 ### Changed
 
+- **The README, the docs pages and several doc comments now agree with the code.** No code, type
+  or behaviour changes. The built-in structural schemas cover the base elements plus the eight
+  modeled resource types, not `Patient` alone. A `FhirXmlError` or `FhirCodecError` `offset` is an
+  index into the input string in UTF-16 code units, not a byte offset. A `type` or `profile` slicing
+  discriminator is reported `PROFILE_SLICE_UNCHECKED`, as the README says, so the troubleshooting
+  page no longer offers one as an alternative that is evaluated. `resolvePath` returns a repeating
+  last segment as its list node, which its doc comment now says. The `collectProfileIssues` and
+  `collectInvariantIssues` examples check for an `undefined` profile, so they compile.
 - **Doc comments for the validator write its layer range as 1 to 3, not with an en dash.** The
   comments ship in the published type declarations; no code, type or behaviour changes. Earlier
   entries in this changelog were edited the same way for the brand rule, with no other change to
