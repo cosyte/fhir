@@ -13,6 +13,12 @@
 # repo starts tracking binaries: see the "no -I" note below for what that
 # would change.
 #
+# WIDENED 2026-11-07 TO THE EN DASH (U+2013). The brand rule bans em and en dashes
+# alike, and the operator chose to sweep both out of every repo and widen every
+# gate. Every arm below that matches U+2014 now has a U+2013 twin, the self-test
+# proves both characters match, and the messages name both. A range is written
+# with "to" ("2 to 3"), never with either dash.
+#
 # The fix is never to re-encode the character: rewrite the sentence with a
 # period, a colon, a comma, or parentheses.
 #
@@ -44,15 +50,23 @@ export LC_ALL=C.UTF-8
 
 # Matches U+2014 as the literal character and as its encodings: %E2%80%94 (URL),
 # the JS backslash-u escape, and the &mdash; / &#8212; / &#x2014; HTML entities.
-PATTERN='\x{2014}|%E2%80%94|\\u2014|&mdash;|&#8212;|&#x2014;'
+# Matches U+2013 the same way: %E2%80%93, its backslash-u escape, and the
+# &ndash; / &#8211; / &#x2013; HTML entities.
+PATTERN='\x{2014}|%E2%80%94|\\u2014|&mdash;|&#8212;|&#x2014;|\x{2013}|%E2%80%93|\\u2013|&ndash;|&#8211;|&#x2013;'
 
 # SELF-TEST: prove the scanner can still see what it is meant to catch before any
-# clean result is believed. `printf` emits U+2014 as its UTF-8 bytes, so this file
-# still never contains the literal character.
+# clean result is believed. `printf` emits U+2014 and U+2013 as their UTF-8 bytes,
+# so this file still never contains either literal character.
 if ! printf 'a\xe2\x80\x94b\n' | grep -qP "$PATTERN"; then
   echo "ERROR: check-no-emdash - the scanner cannot match a known em dash." >&2
   echo "       grep -P is unavailable or not in UTF-8 mode (LC_ALL=${LC_ALL})." >&2
   echo "       Refusing to report a clean tree on a scanner that cannot see." >&2
+  exit 1
+fi
+if ! printf 'a\xe2\x80\x93b\n' | grep -qP "$PATTERN"; then
+  echo "ERROR: check-no-emdash - the scanner cannot match a known en dash." >&2
+  echo "       The pattern has lost its U+2013 arm, or grep -P is not in UTF-8 mode" >&2
+  echo "       (LC_ALL=${LC_ALL}). Refusing to report a clean tree on a scanner that cannot see." >&2
   exit 1
 fi
 
@@ -60,9 +74,9 @@ fail_with_hits() {
   local what="$1" hits="$2"
   echo "$hits" >&2
   echo "" >&2
-  echo "ERROR: check-no-emdash - em dash (U+2014, or an encoded form) found in ${what}." >&2
-  echo "       cosyte never uses em dashes (founder directive; knowledgebase 06-brand/voice-and-tone.md)." >&2
-  echo "       Rewrite with a period, colon, comma, or parentheses." >&2
+  echo "ERROR: check-no-emdash - em or en dash (U+2014 or U+2013, or an encoded form) found in ${what}." >&2
+  echo "       Cosyte never uses em or en dashes (founder directive; knowledgebase 06-brand/voice-and-tone.md)." >&2
+  echo "       Rewrite with a period, colon, comma, or parentheses, and write a range with \"to\"." >&2
   exit 1
 }
 
@@ -90,7 +104,7 @@ if [ "${1:-}" = "--stdin" ]; then
   HITS=$(grep -nP -e "$PATTERN" - 2>>"$ERRLOG" || true)
   refuse_if_incomplete
   [ -n "$HITS" ] && fail_with_hits "$LABEL" "$HITS"
-  echo "check-no-emdash: OK (no em dashes in ${LABEL})"
+  echo "check-no-emdash: OK (no em or en dashes in ${LABEL})"
   exit 0
 fi
 
@@ -158,4 +172,4 @@ refuse_if_incomplete
 
 [ -n "$HITS" ] && fail_with_hits "the tracked files listed above" "$HITS"
 
-echo "check-no-emdash: OK (no em dashes in the tracked files; this script is excluded)"
+echo "check-no-emdash: OK (no em or en dashes in the tracked files; this script is excluded)"

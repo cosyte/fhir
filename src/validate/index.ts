@@ -1,6 +1,6 @@
 /**
  * FHIR validation, the layered structural / cardinality / value-domain validator and its
- * `OperationOutcome` output (validation layers 1–3).
+ * `OperationOutcome` output (validation layers 1 to 3).
  *
  * Postel's Law holds here too: a lenient read warns-and-preserves an unknown element while a strict
  * emit errors on it. Every finding is **value-free**, a coded reason plus a FHIRPath location, and

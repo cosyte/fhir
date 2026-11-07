@@ -464,7 +464,7 @@ throwaway git repository rather than this one.
   narrative prose is not caught structurally (the same limitation the HL7 scanner
   documents for `OBX-5` / `NTE` free text). Keep narrative synthetic.
 - **MRN detection** is deliberately limited to the 9-digit (SSN-strength) shape;
-  short (6–8 digit) synthetic MRNs are common and numeric-noisy in FHIR, so they
+  short (6- to 8-digit) synthetic MRNs are common and numeric-noisy in FHIR, so they
   are not gated. Declare a realistic MRN in the `ID` allow-list if a fixture
   needs one, or prefix it (`MRN-…`).
 - The **XML** pass is regex-based over `<element value="…"/>` pairs (tolerant of

@@ -4,7 +4,7 @@
  *
  * This is deliberately *not* a FHIR `StructureDefinition` and not a snapshot generator, that engine
  * (loading StructureDefinitions, generating snapshots from differentials, slicing, US Core profiles)
- * is separate ({@link ../profiles/index.js}). This layer needs only enough shape to run layers 1–3,
+ * is separate ({@link ../profiles/index.js}). This layer needs only enough shape to run layers 1 to 3,
  * so it uses a hand-authored, hierarchy-free record; the schema type is the seam between the two.
  *
  * **What ships built-in here is a named, deliberately short list:** the base `Resource` /
