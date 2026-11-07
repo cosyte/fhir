@@ -1,7 +1,7 @@
 # The untaggable `resourceType` (2026-08-09, `#77`)
 
-Split out of `documentation/agent-notes.md` under the meta-repo's `decisions/0023-doc-budgets.md`:
-that file is at its 250,000-byte archive cap, and a later slice needed the room. **Relocated
+Split out of `documentation/agent-notes.md` when that file was at the 250,000-byte cap it was then
+held to, and a later slice needed the room. **Relocated
 verbatim, nothing dropped**: the heading below is this section's original one. The cursor stays in
 `agent-notes.md`.
 

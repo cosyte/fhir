@@ -1,11 +1,78 @@
 # Changelog
 
-All notable changes to `@cosyte/fhir` are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). While the version is below 1.0, a breaking
-change bumps the minor version and is called out here; a fix that changes no public observable ships
-as a patch.
+## 0.1.1
 
-## [Unreleased]
+### Patch Changes
+
+- Doc comments for the validator now write its layer range as 1 to 3 instead of using an en dash.
+
+## 0.1.0
+
+### Minor Changes
+
+- **R4's own constraints run with no profile supplied** on the eight modeled resource types, so `pat-1`, `obs-3`, `con-1` and the rest are checked by default.
+- **Element-level validation for the safety-critical types**: `AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`, `MedicationRequest` and `MedicationStatement` now have complete element tables derived from the R4 4.0.1 definitions.
+- **More of the safety readout.** `use` on identifiers, names, addresses and contact points is reported (an `old` address is not a current one), `Patient.deceased[x]`, `Patient.link` and `Immunization.isSubpotent` reach the modifier list, and `MedicationRequest.intent` is surfaced.
+- **A larger FHIRPath subset.** Type tests (`is`, `as`, `ofType`) and `matches()` are evaluated, so the engine now decides 24 of the 29 constraints on the US Core 6.1.0 resource profiles and 29 of 34 on 9.0.0, up from 16 and 19. Anything outside the subset is reported `INVARIANT_UNCHECKED`, never passed.
+- **Checked against the HL7 reference validator.** The differential test suite now includes 34 published US Core examples, compared against `validator_cli`.
+- **Terminology answers name their release.** A terminology service can declare which code-system release it consulted, and a membership finding carries it as `codeSystemVersion`.
+- **XML input that used to be misread is now read or refused**: a primitive written as element text, an array-wrapped `Observation.value[x]`, a root in another XML vocabulary, and names that are not valid XML.
+- **Upgrading from 0.0.10: verdicts change.** With R4's own constraints evaluated by default, a document that read valid can read invalid. A `use` outside its R4 value set now stops a summary, and the new modifier elements can turn `safeToSummarize` false. Re-run your fixtures and read the new findings before you upgrade.
+
+## 0.0.10
+
+### Patch Changes
+
+- Read every negation at every resource root, instead of reading all but one only at the top-level resource.
+- Report a JSON `null` at a primitive position, and write it back instead of deleting it.
+- Refuse a `resourceType` with no string in it instead of deleting it and naming the element `Resource`.
+- Model `Observation`, so `validateResource` checks its own elements instead of reporting that it has none.
+- Correct which warning a discarded `_`-sibling draws.
+- `serializeResourceXml` no longer emits a name that authors elements the sender never wrote.
+- Report a code that spells a negation bar its case or its surrounding whitespace, instead of declining it in silence.
+- Cut a claim about what a build produces from an internal gate's rationale.
+- The profile loader reads an `ElementDefinition.min` the XML reader kept as lexical text, so an XML-sourced profile's required elements are enforced instead of silently ignored.
+- `readQuantity` reads a magnitude the XML reader kept as lexical text, instead of reporting it absent.
+- The PHI commit-gate reads the bytes git carries as a union with its working-tree walk, so a staged blob and a tracked file outside the walk roots are no longer reported clean over.
+- The `UNSERIALIZABLE_ELEMENT_NAME` refusal no longer tells the caller that the JSON writer encodes the model correctly.
+- Surface the modifier ELEMENTS on the safety readout, so a caller who trusts `safeToSummarize` can no longer be handed a bounded value as though it were a point value.
+- Refuse a member a repeated property name shadowed, in both writers, instead of dropping it.
+- Report a `doNotPerform` value this library cannot read, instead of returning the same answer as its opposite.
+- `readSafety` reads a `doNotPerform` the XML reader kept as lexical text, instead of reporting it absent.
+- Report content written where a `code` belongs, instead of reading the element as absent.
+- Report a `Coding` array wrapper wherever the negation read decided on one, instead of only on the resource types the cardinality table knows.
+- Measure the bounded FHIRPath engine against HL7's shared R4 conformance suite, and fix the four constructs it was answering wrongly.
+- `serializeResourceXml` no longer emits an empty element for a shape only FHIR JSON can spell.
+- Slice resolution no longer discards a prohibition it also holds a requirement for, so a profile that forbids what it requires stops admitting the occurrences it excludes.
+- Read a `doNotPerform` wherever a resource writes it, instead of only on a `MedicationRequest` root.
+- Name the writer whose exception list the `UNSERIALIZABLE_ELEMENT_NAME` `@throws` is about.
+- Refuse an array wrapper the XML writer would flatten away, instead of emitting a document the finding does not survive.
+- `serializeResourceXml` no longer splices a `div` string into the document unexamined.
+- Narrow the published tarball to the runtime files only, as a diagnostic probe for the standing npm publish refusal, at npm support's request of 2026-08-26.
+- Read a `status` of `not-done` / `not-taken` wherever a resource writes it, instead of only on an `Immunization` or a `MedicationStatement`.
+- Report a `_`-sibling that is not an object, and write it back instead of deleting it.
+- A caller reading a US Core instance can now tell an element the source system explicitly does not know from one it simply did not send.
+
+## Released before this file was generated
+
+Every release section above this heading is in the format [Changesets](https://github.com/changesets/changesets)
+writes, newest release first. From 2026-11-07 a release writes its own section here from the
+changesets in `.changeset/`, so nothing above this line is maintained by hand, and a change is
+recorded by adding a changeset rather than by editing this file. The three sections for 0.0.10,
+0.1.0 and 0.1.1 were backfilled from their GitHub releases the day generation was turned on, so that
+every version on npm has a section here; they keep each release's own list and drop only internal
+item identifiers.
+
+Everything below this heading was maintained by hand. It sat under a single `[Unreleased]` heading
+that no release ever rolled over, which is why it went on describing shipped code as unreleased
+after 0.0.10, 0.1.0 and 0.1.1 were on npm. It is left as it was written rather than re-sorted into
+version sections: the file never recorded which release each entry went out in. Only two things were
+dropped, both scaffolding for the hand-written workflow that no longer runs: the `[Unreleased]`
+heading itself and its link definition at the foot of the file. No entry was reworded.
+
+The entries below follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). While the
+version is below 1.0, a breaking change bumps the minor version and is called out; new capability
+also ships in a minor, and a fix that changes no public observable ships as a patch.
 
 **What 0.1 means for you.** This is the first release whose public API we treat as settled: the
 exported names, options, result shapes and issue codes are the surface we keep stable. It covers
@@ -3494,5 +3561,3 @@ terminology, bindings })` supplies a service and/or extra bindings (mirroring Ph
   - `0003`: JSON-first; XML serialization is deferred to Phase 8.
   - `0004`: R4 (`4.0.1`) is the modeled version (the ONC HTI-1 / §170.315(g)(10) anchor); R5 and
     DSTU2 are read-tolerance only.
-
-[Unreleased]: https://github.com/cosyte/fhir/commits/main

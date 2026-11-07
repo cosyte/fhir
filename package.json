@@ -33,7 +33,7 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "packageManager": "pnpm@10.0.0+sha512.b8fef5494bd3fe4cbd4edabd0745df2ee5be3e4b0b8b08fa643aa3e4c6702ccc0f00d68fa8a8c9858a735a0032485a44990ed2810526c875e416f001b17df12b",
+  "packageManager": "pnpm@10.34.5",
   "pnpm": {
     "overrides": {
       "esbuild@>=0.27.3 <0.28.1": "0.28.1",
@@ -110,12 +110,12 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.4",
     "@changesets/cli": "2.31.0",
-    "@cosyte/eslint-config": "^0.0.3",
-    "@cosyte/prettier-config": "^0.0.2",
-    "@cosyte/test-utils": "^0.0.2",
-    "@cosyte/tsconfig": "^0.0.2",
-    "@cosyte/tsup-config": "^0.0.1",
-    "@cosyte/vitest-config": "^0.0.2",
+    "@cosyte/eslint-config": "^0.1.1",
+    "@cosyte/prettier-config": "^0.1.1",
+    "@cosyte/test-utils": "^0.1.1",
+    "@cosyte/tsconfig": "^0.1.1",
+    "@cosyte/tsup-config": "^0.1.1",
+    "@cosyte/vitest-config": "^0.1.1",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "4.1.4",
     "eslint": "10.5.0",

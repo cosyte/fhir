@@ -1,7 +1,7 @@
 # The unreadable boolean, reported (2026-08-09, `FHIR-XML-UNREADABLE-BOOLEAN-IS-SILENT`)
 
-Split out of `documentation/agent-notes.md` under the meta-repo's `decisions/0023-doc-budgets.md`
-(that file is at its 250,000-byte archive cap, and `CLAUDE.md` is at its own). The cursor stays
+Split out of `documentation/agent-notes.md` when that file was at the 250,000-byte cap it was then
+held to, and `CLAUDE.md` at its own. The cursor stays
 there; this is the narrative. Siblings: [`xml-lexical-booleans.md`](xml-lexical-booleans.md), the
 slice immediately before this one, and [`xml-magnitude.md`](xml-magnitude.md), the same root class
 one datatype over.
