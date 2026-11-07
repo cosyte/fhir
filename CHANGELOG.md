@@ -93,6 +93,10 @@ of XML, unit conversion, and executing a transaction Bundle.
 
 ### Changed
 
+- **Doc comments for the validator write its layer range as 1 to 3, not with an en dash.** The
+  comments ship in the published type declarations; no code, type or behaviour changes. Earlier
+  entries in this changelog were edited the same way for the brand rule, with no other change to
+  their wording.
 - **The npm package ships the runtime files only, and the README is the short version.** No runtime
   behaviour changes. The package carries `dist/index.mjs`, `dist/index.cjs`, `dist/index.d.ts`,
   `dist/index.d.cts`, `LICENSE`, `README.md` and `package.json`: the two sourcemaps and this
@@ -3469,7 +3473,7 @@ terminology, bindings })` supplies a service and/or extra bindings (mirroring Ph
     preservation suites (`fast-check`), immutability, a stable issue/fatal-code snapshot, and a
     PHI-in-diagnostics sweep. Per-directory ≥90 coverage gates (held at 0 during P0) are restored.
   - **Deferred to later phases (read-only surface today):** structural / cardinality / terminology /
-    profile / invariant **validation** (P2, P5–P7): Phase 1 parses and preserves, it does not
+    profile / invariant **validation** (P2, P5 to P7): Phase 1 parses and preserves, it does not
     validate; XML (P8); Bundle/reference **resolution** and Bulk NDJSON (P9); typed per-resource
     models and schema-driven `integer64` typing.
 - **Repository bootstrap (P0).** Scaffolded `@cosyte/fhir` from the shared Cosyte engineering
