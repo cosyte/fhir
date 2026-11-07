@@ -2,6 +2,7 @@
 id: core-concepts
 title: Core concepts
 sidebar_position: 4
+description: The schema-free model, exact decimals and 64-bit integers, the JSON and XML codecs, the validation layers, and value-free diagnostics.
 ---
 
 # Core concepts
@@ -129,7 +130,7 @@ findings, and none of them can withdraw another's:
    minimum and maximum occurrences a modeled element declares.
 2. **Primitive value domains**: the lexical space of each primitive type, and required code
    enumerations.
-3. **Safety**: unknown `modifierExtension`s, retraction, negation and status codes. Always on, for
+3. **Safety**: unknown `modifierExtension`s, retraction, negation, and status codes. Always on, for
    every resource type, whether or not you supply a profile.
 4. **Quantity and units**: which `value[x]` is present, UCUM code shape, and the units a vital sign
    is required to use. Units are checked, never converted.
@@ -139,7 +140,7 @@ findings, and none of them can withdraw another's:
    checks degrade to the system level and never produce a false error.
 7. **Base constraints**: the error-severity constraints R4 itself declares on the eight modeled
    resource types and on the definitions they inherit, such as `pat-1` on a patient contact,
-   `ext-1` on every extension and `ele-1` on every element. Always on for those eight types,
+   `ext-1` on every extension, and `ele-1` on every element. Always on for those eight types,
    whether or not you supply a profile. A contained resource is checked only through the
    constraints its container declares about it (`dom-2` to `dom-5`), and the narrative best-practice
    warning `dom-6` is not evaluated without a profile.
@@ -170,7 +171,7 @@ finding?.expression; // => "Patient.modifierExtension[0]"
 ```
 
 The reason this is a contract rather than a style is that findings travel. They go into logs,
-support tickets, dashboards and bug reports, all of which are less protected than the resource
+support tickets, dashboards, and bug reports, all of which are less protected than the resource
 store, and a diagnostic that quotes the value it complained about is a diagnostic that copies
 patient data into every one of them.
 

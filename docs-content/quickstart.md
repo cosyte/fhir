@@ -2,6 +2,7 @@
 id: quickstart
 title: Quickstart
 sidebar_position: 3
+description: Read a FHIR R4 document, read a clinical value off it, and get a validation verdict, in three steps.
 ---
 
 # Quickstart
@@ -119,7 +120,7 @@ is a contract, not a coincidence, and [core concepts](./core-concepts.md) explai
 
 ## Where to go next
 
-- [Core concepts](./core-concepts.md) for the model, the two codecs and the validation layers.
+- [Core concepts](./core-concepts.md) for the model, the two codecs, and the validation layers.
 - [Guides](./guides.md) for profiles, safety readouts and cross-format work.
 - [Current limits](./limits.md) for what the package deliberately does not do.
 - [Troubleshooting](./troubleshooting.md) when a document is refused or read in a degraded way.

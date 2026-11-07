@@ -2,14 +2,15 @@
 id: installation
 title: Installation
 sidebar_position: 2
+description: Install @cosyte/fhir from npm, with its Node.js and TypeScript requirements and its ESM and CommonJS entry points.
 ---
 
 # Installation
 
 ## Requirements
 
-- **Node `>=22.0.0`**, the range the package declares in its `engines` field. Older runtimes are not
-  supported and are not tested against.
+- **Node.js 22 or later, tested on 22 and 24.** The package declares `>=22.0.0` in its `engines`
+  field. Older runtimes are not supported and are not tested against.
 - **A package manager.** The repository uses **pnpm**, and the instructions below are written for it.
   npm and yarn work the same way.
 - **TypeScript 5 or newer**, if you consume the types. The package ships its own declarations, so

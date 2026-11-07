@@ -1,69 +1,39 @@
 # Contributing to @cosyte/fhir
 
-Thanks for considering a contribution. This library grows faster when real integration teams surface
-FHIR quirks from the servers and EHRs they connect to, and contribute profiles for the systems they
-work with.
+The org-wide guide applies here: https://github.com/cosyte/.github/blob/main/CONTRIBUTING.md. This
+file adds only what is specific to @cosyte/fhir.
 
-> **Note:** `@cosyte/fhir` is at `0.1`. The most useful contributions are grounded, de-identified
-> real-world FHIR samples and issues that show a document the reader, the validator or the safety
-> readout gets wrong.
+## What helps most
+
+FHIR quirks from the servers and EHRs you connect to, each shown with a synthetic document: a
+resource the reader, the validator, or the safety readout gets wrong. Use fabricated identifiers and
+values only; fixtures live in this public repository.
 
 ## Filing an issue
 
-Before filing, please:
+Say which FHIR version the document claims. R4 (`4.0.1`) is the modeled target; R5 and DSTU2
+documents are read, but they are not validated against their own definitions. Name the server or
+EHR that produced it, and say what you expected beside what happened.
 
-1. Search existing issues. Chances are your quirk is already logged.
-2. Reduce to the smallest reproducing FHIR resource. Use **synthetic identifiers only, no PHI**.
-   We keep fixtures in the public repo.
-3. Include the FHIR version (R4 `4.0.1` is the modeled target; R5 / DSTU2 are read-tolerance only),
-   the source server/EHR, and what you expected vs. what happened.
+## Before you open a pull request
 
-## Opening a PR
-
-1. Fork and branch from `main`.
-2. Run the full pipeline locally before pushing. See [Dev setup](#dev-setup).
-3. If your change is user-visible, add a bullet under the `## [Unreleased]` section of
-   [CHANGELOG.md](./CHANGELOG.md), and add a Changeset (`pnpm changeset`). While the version is
-   below 1.0, pick **minor** for new capability or a breaking change and **patch** for a fix that
-   changes no public observable.
-4. Keep PRs focused: one logical change per PR. Large refactors should start as an issue for
-   discussion.
-5. Write a descriptive commit message. Imperative mood (`feat(codec): ...`, `fix(model): ...`) is
-   encouraged but not enforced.
-6. **No em or en dashes (`U+2014`, `U+2013`), anywhere.** The Cosyte brand rule bans both characters
-   outright, and it names commit messages explicitly, so the ban covers tracked files, the PR title,
-   the PR body, and every commit on the branch. CI enforces all four
-   (`.github/workflows/no-emdash.yml`), and you can run the file half locally with
-   `bash scripts/check-no-emdash.sh`. The fix is to rewrite with a period, colon, comma, or
-   parentheses. Re-encoding is not a way around the rule: the gate also matches the usual
-   URL-escaped, backslash-u, and HTML-entity spellings. It matches those literally, though, so an
-   unusual casing or a dropped semicolon can pass the gate and is still a violation. The gate is a
-   floor, not the definition of the rule.
-
-## Dev setup
-
-The project uses **pnpm** (not npm or yarn). All commands run from the repo root.
-
-```bash
-pnpm install
-pnpm build       # dual ESM + CJS + .d.ts via tsup
-pnpm typecheck   # tsc --noEmit
-pnpm lint        # eslint, --max-warnings=0
-pnpm test        # vitest run
-
-bash scripts/check-no-emdash.sh   # brand gate: no U+2014 or U+2013 in any tracked file
-```
+- Run the full gate in [AGENTS.md](AGENTS.md), in order. It adds to the org guide's five commands:
+  the format check, the PHI scan, coverage, the type-export check, the fuzz tier, the examples, and
+  the dash and public-surface checks. CI also runs a differential against the HL7 reference
+  validator, which needs `java` and the pinned `validator_cli.jar`.
+- Add a changeset (`pnpm changeset`). The Changesets changelog generator is on in this repository,
+  so the changeset summary is the `CHANGELOG.md` entry; do not edit `CHANGELOG.md` by hand. While
+  the version is below 1.0, pick `minor` for new capability or for any change that withdraws or
+  narrows working behavior (a new write refusal does), and `patch` only when every public observable
+  is unchanged.
+- Use no em or en dashes (U+2014, U+2013) anywhere: in tracked files, the PR title, the PR body, or
+  any commit message. CI checks all four (`.github/workflows/no-emdash.yml`), and
+  `pnpm check:no-emdash` runs the file half locally. Rewrite with a period, colon, comma, or
+  parentheses.
 
 ## Architecture decisions
 
-Substantive design choices are recorded as ADRs under
-[`documentation/decisions/`](documentation/decisions/). Read the four bootstrap ADRs before working
-on the model or codec. They bind the primitive representation, the FHIRPath posture, the XML scope,
-and the version strategy. New binding choices get a new ADR in the same format (context / decision /
-consequences).
-
-## PHI
-
-This is healthcare software. **Never commit realistic PHI**: fixtures are synthetic or properly
-de-identified, and logs redact. A vendor quirk is encoded only when a real de-identified resource
-grounds it, never invented.
+The choices that bind the model and the codecs are recorded under
+[`documentation/decisions/`](documentation/decisions/): the primitive representation, the FHIRPath
+posture, the XML scope, and the version strategy. Read them before working on the model or a codec;
+a new binding choice gets a new record in the same format (context, decision, consequences).

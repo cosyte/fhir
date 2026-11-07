@@ -2,6 +2,7 @@
 id: limits
 title: Current limits
 sidebar_position: 6
+description: What @cosyte/fhir deliberately does not do, such as bundle terminology or profiles or offer typed per-resource models, and the findings that mean a check did not run.
 ---
 
 # Current limits
@@ -13,12 +14,12 @@ production is not.
 ## No terminology content is bundled
 
 The library knows code system identities, not their contents. There is no bundled SNOMED CT, LOINC,
-CPT, RxNorm or ICD content, and there never will be: those are licensed distributions, and vendoring
+CPT, RxNorm, or ICD content, and there never will be: those are licensed distributions, and vendoring
 them into a parser is both a licensing problem and a staleness problem.
 
 What that means in practice:
 
-- a coding is checked for a system this library recognises, and for the binding strength the element
+- a coding is checked for a system this library recognizes, and for the binding strength the element
   declares;
 - membership of a code in a value set is not answered unless you supply a terminology service;
 - with no service supplied, the checks degrade to that content-free level and never produce a false
@@ -75,9 +76,12 @@ data recovery, not conformance.
 ## Reported, not repaired
 
 Several non-conformant shapes are read, reported, and deliberately not fixed. Character data written
-directly on an element in XML is the clearest example: FHIR carries a value in an attribute, so text
-in that position has no slot on the model and is dropped, with a finding. The package reports the
-drop rather than guessing what the sender meant.
+directly on an element in XML is the clearest example. FHIR carries a primitive's value in an
+attribute, so text in that position is non-conformant. On a primitive element the reader takes the
+text as the value, so the safety readout still sees a status or a dose written that way, and the
+read is reported: validation raises an error, the resource is not safe to summarize, and both
+writers refuse it. On a complex element the text has no slot in the model and is dropped, with a
+finding. Either way the package reports the shape rather than guessing what the sender meant.
 
 The same posture governs the writers. When a model cannot be spelled back into the target format
 without inventing or losing content, the write is refused with a coded reason instead of emitting
