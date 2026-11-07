@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2
+
+### Patch Changes
+
+- e7f1751: Corrected README, docs and doc comment statements that disagreed with the code.
+
+  The built-in structural schemas cover eight resource types, not `Patient` alone; an error `offset` is a string index in UTF-16 code units, not a byte offset; `type` and `profile` slicing discriminators are reported unchecked; and `resolvePath` returns a repeating last segment as its list node. No code, type or behaviour changes.
+
+- e7f1751: The README and docs pages name the Node.js versions we test on, link the license and a new trademarks page by absolute URL, and the license names Cosyte LLC as the copyright holder.
+
+  They also describe how text written directly on an XML element is read today: on a primitive element the text is taken as the value and reported, and on a complex element it is dropped and reported. No code, type or behavior changes.
+
 ## 0.1.1
 
 ### Patch Changes
