@@ -2196,7 +2196,13 @@ directory; the standards every repo is held to are its `plans/standards.md`.
 
 ## `ATTW-FALSE-GREEN-PORT`
 
-**The `attw` script is `node scripts/attw.mjs`, NOT the bare CLI, and it must stay that way
+**Today (2026-11-07):** the `attw` script is `cosyte-attw`, the shared gate from
+`@cosyte/script-utils`, and never the bare CLI. It carries the nets below and more (its own
+docblock says what each catches), and `scripts/attw.mjs` and `test/scripts/attw-gate.test.ts`, the
+local copy and its tests described below, were deleted when it moved. What follows is that local
+copy's history, kept because the failure it records is the reason the gate exists.
+
+**The `attw` script was `node scripts/attw.mjs`, NOT the bare CLI
 (`ATTW-FALSE-GREEN-PORT`, ported from `terminology`).** `@arethetypeswrong/cli@0.18.4`
 `dist/getExitCode.js` opens with `if (!analysis.types) return 0`, so it prints "This package does
 not contain types." and exits **0**, before the problem list is read. An untyped npm package is
@@ -2686,7 +2692,8 @@ by copying files. The standard is the umbrella's `plans/standards.md` (EN4: the 
 - **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
   `@cosyte/tsconfig`. **ES2023**, `NodeNext`.
 - **Build:** dual ESM + CJS + `.d.ts` via `tsup` (`@cosyte/tsup-config`); `attw` is a publish gate,
-  run through `scripts/attw.mjs` (trap above).
+  run through `cosyte-attw` from `@cosyte/script-utils` (`scripts/attw.mjs` until 2026-11-07; trap
+  above).
 - **Node >= 22, pnpm@10.** **Runtime deps: zero.**
 - **Lint/format:** **ESLint 10** + Prettier (`@cosyte/eslint-config`, `@cosyte/prettier-config`),
   at `--max-warnings=0`.

@@ -264,7 +264,7 @@
 #          exactly like prose. That is deliberate (a reader sees it either way), but it
 #          means a legitimate quotation of an internal path in an example would have to be
 #          rewritten rather than escaped.
-#   (v)    This gate does not check the em dash. `scripts/check-no-emdash.sh` owns that
+#   (v)    This gate does not check the em dash. `pnpm check:no-emdash` owns that
 #          rule and scans a wider surface; duplicating it here would put the same red in
 #          two places with two wordings.
 #   (vi)   IT CATCHES IDENTIFIERS, NOT PROSE ABOUT OUR PROCESS. The founder's rule bans

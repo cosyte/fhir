@@ -6,12 +6,15 @@ name: Em-dash gate
 # explicitly. This workflow is the CI half of that rule for this repo: the tracked
 # files, and the text that is not a file.
 #
-# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-emdash`, which is this
-# repository's own gate script. The jobs below delegate the plumbing (checkout, pnpm,
-# Node) to the shared gate workflow, and that workflow carries no pattern, no allow-list
-# and no file selection of its own: it prepares the tree, runs the command, and lets the
-# command's exit status decide the job. So the rule and every measurement above stay in
-# this repository, and only the harness is shared.
+# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-emdash`, which runs
+# `cosyte-no-emdash`, the one dash gate every Cosyte repository shares, from the
+# `@cosyte/script-utils` devDependency. It reads every tracked file and every tracked file
+# name for both dashes as characters and in every encoded form. This repository excludes
+# nothing, so it carries no scripts/check-no-emdash.exclude. The jobs below delegate the
+# plumbing (checkout, pnpm, Node, and the install the gate needs, since it lives in
+# node_modules) to the shared gate workflow, which carries no pattern, no allow-list and
+# no file selection of its own: it prepares the tree, installs from the lockfile, runs
+# the command, and lets the command's exit status decide the job.
 #
 # TWO CONTEXTS, NOT ONE, AND THE JOB ID IS LOAD-BEARING. A called job's check run is named
 # `<caller job id> / <inner job id>`, so the job id `no-emdash` below publishes
@@ -38,21 +41,14 @@ name: Em-dash gate
 # {node 22, 24, 26} matrix, plus a fuzz job at FUZZ_RUNS=20000, plus a differential
 # job that downloads validator_cli.jar and runs a JVM oracle over four corpora.
 # Re-running all of it every time someone fixes a typo in a PR description buys
-# no extra safety and costs a great deal. This workflow is a checkout and one
-# bash script, so it can afford the noisier trigger. Same call website made
+# no extra safety and costs a great deal. This workflow is a checkout, an install
+# and one command, so it can afford the noisier trigger. Same call website made
 # (website#52) and the same reason.
-#
-# WHY NOT IN THE REUSABLE PIPELINE (cosyte/.github). The gate needs
-# scripts/check-no-emdash.sh present in the calling repo, and the correct variant
-# of that script differs per repo: text-only repos use knowledgebase's, repos that
-# track binaries need website's NUL-partition variant. A job in the shared
-# pipeline would break every caller that has neither. The gate is per-repo until
-# every caller carries the script.
 #
 # Both halves live in one workflow rather than two, so one file carries the whole
 # rule and one file is one thing to read.
 #
-# Run the file half locally with:  bash scripts/check-no-emdash.sh
+# Run the file half locally with:  pnpm check:no-emdash
 
 on:
   push:
@@ -71,7 +67,7 @@ jobs:
     # Named by the published reference, as its release notes show. That release is
     # immutable, so its tag cannot be moved or deleted, and every workflow caller in
     # this repository names the same reference and moves to the next one together.
-    uses: cosyte/.github/.github/workflows/gate-no-emdash.yml@workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/gate-no-emdash-install.yml@workflows-2026-11-07-498c7c13c886
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:
