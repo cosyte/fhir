@@ -24,7 +24,11 @@
  * children included, so a `value` or `pattern` discriminator can be decided by a re-slice's value.
  * That is how the R4 blood-pressure profile tells its components apart: the component slicing
  * discriminates on `code.coding.code`, and only the required `SBPCode` re-slice fixes it. Only the
- * unsatisfiable-`exists` record below is scoped to the slice's own descendants.
+ * unsatisfiable-`exists` record below is scoped to the slice's own descendants. A slice is matched to
+ * its sliced element by id (`Observation.component:SystolicBP.code.coding:SBPCode` is a slice of
+ * `Observation.component:SystolicBP.code.coding` alone), so a re-slice under one slice is never read
+ * as a slice of a different slice's copy of the same path. The profile layer then checks a re-slice
+ * within its parent slice's members.
  *
  * @packageDocumentation
  */
@@ -70,6 +74,19 @@ export interface SliceDefinition {
   readonly unsatisfiableExists: ReadonlySet<string>;
 }
 
+/**
+ * Whether `el` is a slice of the sliced element `sliced`: it shares the path, and its id is the
+ * sliced element's id with its slice name appended. An element whose id was not given (it defaults
+ * to the path) is matched on the path alone, the only thing such a profile says.
+ *
+ * @internal
+ */
+export function isSliceOf(el: ElementDefinition, sliced: ElementDefinition): boolean {
+  if (el.sliceName === undefined || el.path !== sliced.path) return false;
+  if (el.id === el.path) return true;
+  return el.id === `${sliced.id}:${el.sliceName}`;
+}
+
 /** A discriminator, as modeled on {@link ../profiles/structure-definition.js Slicing}. */
 interface Discriminator {
   readonly type: string;
@@ -106,7 +123,7 @@ export function resolveSlices(
   const prefix = `${slicedElement.path}.`;
   const slices: SliceDefinition[] = [];
   for (const el of snapshot) {
-    if (el.sliceName === undefined || el.path !== slicedElement.path) continue;
+    if (el.sliceName === undefined || !isSliceOf(el, slicedElement)) continue;
     const constraints: SliceConstraint[] = [];
     const existsExpectations = new Map<string, boolean>();
     const unsatisfiableExists = new Set<string>();
@@ -142,9 +159,9 @@ export function resolveSlices(
       // descendant is under that prefix too and flattens onto the same relative path. Recording a
       // re-slice's contradiction here made the satisfiable OUTER slice unmatchable and drew a
       // `PROFILE_SLICE_UNMATCHED` plus a slice `CARDINALITY_MIN` on a CONFORMANT document: it
-      // blamed the instance for a statement belonging to a different slice. Re-slicing is a declared
-      // deferral of this module, so a contradiction carried only by a re-slice is left reading as it
-      // did before rather than guessed at from the outer slice's position.
+      // blamed the instance for a statement belonging to a different slice. A re-slice decides
+      // membership within its own sliced element, under the outer slice's members, so a
+      // contradiction carried only by a re-slice is left out of the outer slice's membership.
       if (desc.sliceName === undefined && desc.min !== undefined && desc.min >= 1 && desc.max === 0)
         unsatisfiableExists.add(rel);
       else if (desc.min !== undefined && desc.min >= 1) existsExpectations.set(rel, true);

@@ -156,13 +156,15 @@ describe("a contradictory slice descendant assigns no occurrence", () => {
 
   it("draws both findings the ordered read used to retire, under closed slicing", () => {
     // The closure, stated as the whole issue list rather than a `toContain`: the two findings named
-    // in the defect are the two that arrive. RED at base, where this list is one entry long.
+    // in the defect are the two that arrive, and nothing else. The list once carried a third entry,
+    // a `CARDINALITY_MAX` on the component's `dataAbsentReason` drawn by applying the slice's own
+    // descendant to a component the slicing did not assign to the slice. A slice's descendants
+    // constrain its members alone, so that entry went with the defect that drew it.
     const profile = load(json(slicedProfile({ min: 1, max: "0" })));
 
     expect(issues(componentWithReason(), profile)).toEqual([
       "error:PROFILE_SLICE_UNMATCHED at Observation.component[0]",
       "error:CARDINALITY_MIN at Observation.component:Missing",
-      "error:CARDINALITY_MAX at Observation.component.dataAbsentReason",
     ]);
   });
 
@@ -199,7 +201,6 @@ describe("a contradictory slice descendant assigns no occurrence", () => {
     expect(issues(componentWithReason(), load(xml(serializeResourceXml(resource))))).toEqual([
       "error:PROFILE_SLICE_UNMATCHED at Observation.component[0]",
       "error:CARDINALITY_MIN at Observation.component:Missing",
-      "error:CARDINALITY_MAX at Observation.component.dataAbsentReason",
     ]);
   });
 
@@ -276,7 +277,6 @@ describe("a contradictory slice descendant assigns no occurrence", () => {
     ).toEqual([
       "error:PROFILE_SLICE_UNMATCHED at Observation.component[0]",
       "error:CARDINALITY_MIN at Observation.component:Missing",
-      "error:CARDINALITY_MAX at Observation.component.dataAbsentReason",
     ]);
   });
 });
@@ -404,21 +404,26 @@ describe("the neighbours of the contradiction, unchanged in both states", () => 
  * `CARDINALITY_MAX` fired by the wrongful count, and a LATER slice's `CARDINALITY_MIN` and
  * `MUST_SUPPORT_ABSENT` that the contradictory slice had been shadowing in the match loop.
  *
- * Where the contradiction is on the slice's OWN descendant, that descendant is also checked at
- * element level, and `min 1 / max 0` is unsatisfiable for every count, so an error stands on each
- * present parent occurrence whichever way the instance goes. Both polarities are asserted below.
- * **That is not a general bound and must not be written as one.** The accuracy gate refuted the
- * general form: `collectProfileIssues` skips slice elements, so a contradiction carried by a
- * RE-SLICE is never element-checked at all, and through that route the retirement DID move a
- * verdict to `valid`. The record is scoped away from re-slices instead, which is what closes that
- * route, and two rows here name it.
+ * These rows once also pinned an element-level error standing behind every retirement: the slice's
+ * own contradictory descendant was checked against every component, so `min 1 / max 0` fired on each
+ * present component whichever way it went. That was the scoping defect, not a bound: a slice's
+ * descendants constrain the occurrences the slicing assigned to the slice, and no other. A slice
+ * whose discriminator path is contradictory has no members, so its descendants constrain nothing,
+ * and an occurrence it does not admit is judged by the slicing alone: unmatched under `closed`
+ * rules (`PROFILE_SLICE_UNMATCHED`), allowed under `open` ones, with a required slice left empty
+ * still drawing its `CARDINALITY_MIN`. An optional contradictory slice under `open` rules therefore
+ * draws nothing, which is what the profile says: the occurrence is an open slicing's unmatched
+ * extra. Both polarities are asserted below, beside the required-slice rows that still draw an
+ * error. The record stays scoped away from re-slices, and two rows here name that route.
  */
 describe("the bound on what the change can retire", () => {
   it("retires a slice CARDINALITY_MAX that only fired on a wrongful admission", () => {
-    // RED at base, and it is a cost, not a capability: at base this list carries
+    // A cost, not a capability: before the contradiction was recorded this list carried
     // `error:CARDINALITY_MAX at Observation.component:Missing` from two occurrences admitted into a
     // `max 1` slice. Under `open` rules nothing replaces it at the slice, because an unmatched
-    // occurrence is only a finding under `closed`. What is left is the element-level pair below.
+    // occurrence is only a finding under `closed`. The element-level pair that used to stand here
+    // was the slice's descendant applied to two components the slice does not hold, so the list is
+    // empty: two unmatched components under an open slicing, beside an optional slice.
     const profile = load(json(slicedProfile({ min: 1, max: "0" }, "open", { min: 0, max: "1" })));
     const twoComponents = json({
       resourceType: "Observation",
@@ -430,10 +435,7 @@ describe("the bound on what the change can retire", () => {
       ],
     });
 
-    expect(issues(twoComponents, profile)).toEqual([
-      "error:CARDINALITY_MAX at Observation.component[0].dataAbsentReason",
-      "error:CARDINALITY_MAX at Observation.component[1].dataAbsentReason",
-    ]);
+    expect(issues(twoComponents, profile)).toEqual([]);
   });
 
   it("retires a later slice's findings that existed only because a contradictory slice shadowed it", () => {
@@ -446,7 +448,9 @@ describe("the bound on what the change can retire", () => {
     // de-shadowing through a control-flow arm this module already owns. Here that is a
     // slice `CARDINALITY_MIN` (the very code this change exists to draw elsewhere) and a slice
     // `MUST_SUPPORT_ABSENT`. Head is the more correct reading - both were artefacts of the wrongful
-    // admission - but the count is a disclosure, so it is pinned rather than described.
+    // admission - but the count is a disclosure, so it is pinned rather than described. The
+    // component is `B`'s member and meets `B`'s `dataAbsentReason 1..1`; `A`'s contradictory
+    // descendant constrains `A`'s members, of which there are none, so nothing is left.
     const profile = load(
       json({
         resourceType: "StructureDefinition",
@@ -497,9 +501,7 @@ describe("the bound on what the change can retire", () => {
       }),
     );
 
-    expect(issues(componentWithReason(), profile)).toEqual([
-      "error:CARDINALITY_MAX at Observation.component.dataAbsentReason",
-    ]);
+    expect(issues(componentWithReason(), profile)).toEqual([]);
   });
 
   it("does not move a verdict to valid through a re-slice the element check never sees", () => {
@@ -575,22 +577,30 @@ describe("the bound on what the change can retire", () => {
     ]);
   });
 
-  it("leaves an error standing when the forbidden element is present", () => {
+  it("draws nothing for an optional slice under open rules when the forbidden element is present", () => {
     const profile = load(json(slicedProfile({ min: 1, max: "0" }, "open", { min: 0, max: "1" })));
 
-    expect(issues(componentWithReason(), profile)).toEqual([
-      "error:CARDINALITY_MAX at Observation.component.dataAbsentReason",
-    ]);
+    expect(issues(componentWithReason(), profile)).toEqual([]);
   });
 
-  it("leaves an error standing when the forbidden element is absent", () => {
-    // The other polarity: `min 1` is unsatisfiable downward too, so the element-level check fires
-    // whichever way the instance goes. There is no instance under a contradictory descendant that
-    // this library calls clean at that location.
+  it("draws nothing for an optional slice under open rules when the forbidden element is absent", () => {
+    // The other polarity: `min 1` is unsatisfiable downward too, so no component is the slice's
+    // member either way, and the slice's descendant constrains no component.
     const profile = load(json(slicedProfile({ min: 1, max: "0" }, "open", { min: 0, max: "1" })));
 
+    expect(issues(componentWithoutReason(), profile)).toEqual([]);
+  });
+
+  it("leaves an error standing at a required slice, whichever way the instance goes", () => {
+    // No instance satisfies a required slice whose discriminator path is contradictory, and the
+    // slice's own cardinality says so in both polarities, under open rules as under closed ones.
+    const profile = load(json(slicedProfile({ min: 1, max: "0" }, "open", { min: 1, max: "1" })));
+
+    expect(issues(componentWithReason(), profile)).toEqual([
+      "error:CARDINALITY_MIN at Observation.component:Missing",
+    ]);
     expect(issues(componentWithoutReason(), profile)).toEqual([
-      "error:CARDINALITY_MIN at Observation.component.dataAbsentReason",
+      "error:CARDINALITY_MIN at Observation.component:Missing",
     ]);
   });
 });

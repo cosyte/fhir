@@ -44,8 +44,8 @@ structurally validates, never drops a modifier / status / negation, surfaces mea
 true type with the UCUM `code`** (never the display string, never converted), **validates code systems
 and binding strength without vendoring any SNOMED / CPT / LOINC content, validates against US Core
 profiles you supply, and evaluates their FHIRPath invariants** (failing safe to `INVARIANT_UNCHECKED`
-on any unsupported expression); it does **not** yet do `type`·`profile` slicing discriminator or
-reslicing validation (still `PROFILE_SLICE_UNCHECKED`), and it bundles **no** US Core
+on any unsupported expression); it does **not** yet do `type`·`profile` slicing discriminator
+validation (still `PROFILE_SLICE_UNCHECKED`), and it bundles **no** US Core
 IG corpus. The `validator_cli.jar` **differential is authored but CI-only** (a JVM oracle job: there is
 no Java in the dev container, so it has not been observed green there) and now runs over **both** the
 synthetic spec-clean corpus **and** the real-world quirk corpus. The built-in structural schema set is the base-resource elements plus
@@ -723,9 +723,13 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   supplies the base via a resolver; a profile that already ships a snapshot is used as-is.
 - **Slicing** matches each occurrence of a sliced element to a slice by its discriminators. The R4
   set is `value | exists | pattern | type | profile` (**`position` is R5-only** and excluded). What
-  needs a FHIRPath engine (`type` / `profile` discriminators, reslicing) is reported
+  needs a FHIRPath engine (`type` / `profile` discriminators) is reported
   `PROFILE_SLICE_UNCHECKED` (`information`): **never silently passed**. An unmatched occurrence under
   `closed` slicing is `PROFILE_SLICE_UNMATCHED` (error); a missing required slice is `CARDINALITY_MIN`.
+  A slice's own constraints (the elements under its id: fixed and pattern values, cardinalities,
+  invariants) apply only to the occurrences assigned to it; the sliced element's own constraints
+  apply to every occurrence. A re-slice nests the same way, checked within its parent slice's
+  members, and its fixed and pattern values decide the parent slice's membership.
 - **`fixed[x]` vs `pattern[x]`** (`matchesFixed` / `matchesPattern`): `fixed` is exact equality
   (nothing extra), `pattern` is a subset (extras allowed); decimals compared precision-exactly, never
   via a float. A mismatch is `PROFILE_FIXED_MISMATCH` / `PROFILE_PATTERN_MISMATCH` (error).

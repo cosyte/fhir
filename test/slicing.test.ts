@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  collectInvariantIssues,
   collectProfileIssues,
   complex,
   list,
@@ -159,8 +160,12 @@ describe("matchSlices", () => {
  * re-slice's included, so a `value` discriminator can be decided by a re-slice. That is the shape of
  * the R4 blood-pressure profile (`bp.profile.json`), where the component slicing discriminates on
  * `code.coding.code` and `code.coding.system`, and only the required `SBPCode` / `DBPCode` re-slices
- * fix those values. Reporting it unchecked would stop the library telling the two components apart,
- * so the documentation was corrected rather than the code, and these rows pin what the code does.
+ * fix those values. Reporting it unchecked would stop the library telling the two components apart.
+ *
+ * The re-slice is also checked within its parent slice's members alone: `SBPCode` constrains the
+ * codings of the component assigned to `SystolicBP`, never the diastolic one. A conformant
+ * blood-pressure Observation draws no finding at all, where it used to draw six errors, each slice's
+ * fixed values and re-slice cardinality applied to the other slice's component.
  */
 describe("a re-slice decides its parent slice's membership", () => {
   /** One blood-pressure component slice, with the `code.coding` re-slice that fixes its code. */
@@ -261,23 +266,215 @@ describe("a re-slice decides its parent slice's membership", () => {
     expect(result.assignments).toEqual(["SystolicBP", "DiastolicBP", undefined]);
   });
 
-  it("draws no PROFILE_SLICE_UNCHECKED for the component slicing", () => {
-    const observation = req(
+  /** A blood-pressure Observation whose components carry these LOINC codings, one list each. */
+  function bpObservation(...codings: string[][]) {
+    return req(
       parseResource(
         JSON.stringify({
           resourceType: "Observation",
           status: "final",
           code: { text: "blood pressure" },
-          component: [
-            { code: { coding: [{ system: "http://loinc.org", code: "8480-6" }] } },
-            { code: { coding: [{ system: "http://loinc.org", code: "8462-4" }] } },
-          ],
+          component: codings.map((codes) => ({
+            code: { coding: codes.map((code) => ({ system: "http://loinc.org", code })) },
+          })),
         }),
       ).resource,
     );
-    const findings = collectProfileIssues(observation, bp);
+  }
 
-    expect(findings.filter((f) => f.code === "PROFILE_SLICE_UNCHECKED")).toEqual([]);
-    expect(findings.some((f) => f.expression.startsWith("Observation.component:"))).toBe(false);
+  it("draws no finding at all on a conformant blood-pressure Observation", () => {
+    expect(collectProfileIssues(bpObservation(["8480-6"], ["8462-4"]), bp)).toEqual([]);
+  });
+
+  it("checks a re-slice's cardinality within its parent slice's member, once", () => {
+    const findings = collectProfileIssues(bpObservation(["8480-6", "8480-6"], ["8462-4"]), bp);
+
+    expect(findings.map((f) => [f.code, f.expression])).toEqual([
+      ["CARDINALITY_MAX", "Observation.component[0].code.coding:SBPCode"],
+    ]);
+  });
+
+  it("reports a required slice whose member is missing at that slice", () => {
+    const findings = collectProfileIssues(bpObservation(["8480-6"], ["1111-1"]), bp);
+
+    expect(findings.map((f) => [f.code, f.expression])).toEqual([
+      ["CARDINALITY_MIN", "Observation.component:DiastolicBP"],
+    ]);
+  });
+});
+
+/**
+ * A slice's own constraints apply to its members alone.
+ *
+ * Every element under a slice's id (`Observation.component:S.code`, and a re-slice's elements under
+ * it) constrains only the occurrences the slicing assigned to that slice. The elements of the
+ * sliced element itself (`Observation.component.code`) still apply to every occurrence. Applying a
+ * slice's elements to every occurrence put each slice's fixed and pattern values on the other
+ * slices' members, so a conformant two-component Observation drew a `PROFILE_PATTERN_MISMATCH` per
+ * component.
+ */
+describe("a slice's constraints apply only to the occurrences assigned to it", () => {
+  const LOINC = "http://loinc.org";
+  const UCUM = "http://unitsofmeasure.org";
+
+  /** One component slice, discriminated by a `code` pattern, whose value must be in mm[Hg]. */
+  function patternSlice(slice: string, code: string): unknown[] {
+    const id = `Observation.component:${slice}`;
+    return [
+      { id, path: "Observation.component", sliceName: slice, min: 1, max: "1" },
+      {
+        id: `${id}.code`,
+        path: "Observation.component.code",
+        min: 1,
+        max: "1",
+        patternCodeableConcept: { coding: [{ system: LOINC, code }] },
+      },
+      {
+        id: `${id}.value[x]`,
+        path: "Observation.component.value[x]",
+        min: 1,
+        max: "1",
+        patternQuantity: { system: UCUM, code: "mm[Hg]" },
+      },
+      {
+        id: `${id}.value[x].value`,
+        path: "Observation.component.value[x].value",
+        min: 1,
+        max: "1",
+      },
+    ];
+  }
+
+  const twoSlices = loadSd({
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/two-component",
+    type: "Observation",
+    kind: "resource",
+    derivation: "constraint",
+    snapshot: {
+      element: [
+        { id: "Observation", path: "Observation" },
+        {
+          id: "Observation.component",
+          path: "Observation.component",
+          min: 2,
+          max: "*",
+          slicing: { discriminator: [{ type: "pattern", path: "code" }], rules: "open" },
+        },
+        { id: "Observation.component.code", path: "Observation.component.code", min: 1, max: "1" },
+        ...patternSlice("S", "8480-6"),
+        ...patternSlice("D", "8462-4"),
+      ],
+    },
+  });
+
+  /** A component with one LOINC coding and, unless `unit` is `null`, a Quantity value. */
+  function comp(code: string, unit: string | null = "mm[Hg]", value = 120): unknown {
+    const c: Record<string, unknown> = { code: { coding: [{ system: LOINC, code }] } };
+    if (unit !== null) c["valueQuantity"] = { value, system: UCUM, code: unit };
+    return c;
+  }
+
+  function observation(...components: unknown[]) {
+    return req(
+      parseResource(
+        JSON.stringify({
+          resourceType: "Observation",
+          status: "final",
+          code: { text: "blood pressure" },
+          component: components,
+        }),
+      ).resource,
+    );
+  }
+
+  function findings(resource: ReturnType<typeof observation>, profile: StructureDefinition) {
+    return collectProfileIssues(resource, profile).map((f) => [f.code, f.expression]);
+  }
+
+  it("draws nothing on a conformant two-component Observation", () => {
+    expect(findings(observation(comp("8480-6"), comp("8462-4", "mm[Hg]", 80)), twoSlices)).toEqual(
+      [],
+    );
+  });
+
+  it("reports a member's wrong value once, at that member", () => {
+    expect(findings(observation(comp("8480-6"), comp("8462-4", "kPa", 10)), twoSlices)).toEqual([
+      ["PROFILE_PATTERN_MISMATCH", "Observation.component[1].value[x]"],
+    ]);
+  });
+
+  it("reports a member's missing required descendant at that member", () => {
+    expect(findings(observation(comp("8480-6", null), comp("8462-4")), twoSlices)).toEqual([
+      ["CARDINALITY_MIN", "Observation.component[0].value[x]"],
+    ]);
+  });
+
+  it("reports a required slice with no member at the slice", () => {
+    expect(findings(observation(comp("8462-4"), comp("9999-9")), twoSlices)).toEqual([
+      ["CARDINALITY_MIN", "Observation.component:S"],
+    ]);
+  });
+
+  it("still applies the sliced element's own constraints to every occurrence", () => {
+    const noCode = observation(comp("8480-6"), comp("8462-4"), { valueString: "free text" });
+    expect(findings(noCode, twoSlices)).toEqual([
+      ["CARDINALITY_MIN", "Observation.component[2].code"],
+    ]);
+  });
+
+  it("does not apply a slice's descendants when the slicing is unchecked", () => {
+    const unchecked = loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/unchecked",
+      type: "Observation",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          {
+            id: "Observation.component",
+            path: "Observation.component",
+            slicing: { discriminator: [{ type: "type", path: "value[x]" }], rules: "open" },
+          },
+          ...patternSlice("S", "8480-6"),
+        ],
+      },
+    });
+    expect(findings(observation(comp("8462-4", "kPa", 10)), unchecked)).toEqual([
+      ["PROFILE_SLICE_UNCHECKED", "Observation.component"],
+    ]);
+  });
+
+  it("evaluates a slice descendant's invariant on that slice's members alone", () => {
+    const withInvariant = loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/slice-invariant",
+      type: "Observation",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          {
+            id: "Observation.component",
+            path: "Observation.component",
+            slicing: { discriminator: [{ type: "pattern", path: "code" }], rules: "open" },
+          },
+          ...patternSlice("S", "8480-6").map((e: unknown) =>
+            (e as { id: string }).id === "Observation.component:S.value[x]"
+              ? {
+                  ...(e as object),
+                  constraint: [{ key: "sys-1", severity: "error", expression: "value > 100" }],
+                }
+              : e,
+          ),
+        ],
+      },
+    });
+    const ok = observation(comp("8480-6", "mm[Hg]", 120), comp("8462-4", "mm[Hg]", 80));
+    expect(collectInvariantIssues(ok, withInvariant)).toEqual([]);
+
+    const low = observation(comp("8480-6", "mm[Hg]", 90), comp("8462-4", "mm[Hg]", 80));
+    expect(
+      collectInvariantIssues(low, withInvariant).map((f) => [f.code, f.expression, f.constraint]),
+    ).toEqual([["INVARIANT_VIOLATED", "Observation.component[0].value[x]", "sys-1"]]);
   });
 });
