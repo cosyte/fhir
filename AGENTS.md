@@ -17,7 +17,7 @@ pnpm test
 
 ## The gate
 
-Run these from the repository root, in this order, before you push. CI runs them on Node.js 22 and 24.
+Run these from the repository root, in this order, before you push. CI runs them on Node.js 22, 24, and 26.
 
 ```sh
 pnpm install --frozen-lockfile

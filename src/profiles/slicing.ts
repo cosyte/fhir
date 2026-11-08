@@ -172,7 +172,7 @@ function discriminatorHolds(
     // though: an occurrence no longer admitted stops counting toward the slice, and stops shadowing
     // later slices in the match loop, so a finding that existed only because of the wrongful
     // admission goes. That is measured rather than claimed away, in
-    // `documentation/agent-notes/profile-slice-contradiction.md`.
+    // `documentation/agent-notes.md#narrative-a-contradictory-slice-descendant-assigns-no-occurrence-resolveslices`.
     if (slice.unsatisfiableExists.has(path)) return "no";
     const expected = slice.existsExpectations.get(path);
     if (expected === undefined) return "unevaluable";

@@ -43,7 +43,7 @@ const TSX_BIN = join(REPO_ROOT, "node_modules", ".bin", "tsx");
  *     below still spawns `tsx` and asserts byte-for-byte agreement with the
  *     `node` runner. Delete it and a tsx-only breakage ships green.
  *   - node's type stripping is on by default from Node 22.18, while
- *     `engines.node` here is `>=22`. CI runs the 22 + 24 matrix, both above
+ *     `engines.node` here is `>=22`. CI runs the 22, 24, and 26 matrix, all above
  *     that; a developer on 22.0 to 22.17 would need a newer 22. The scanner uses
  *     no TypeScript construct needing emit, which the tsx-pinned case reds if it
  *     ever stops being true.
