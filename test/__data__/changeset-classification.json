@@ -6,6 +6,11 @@
       "level": "patch",
       "breakCandidate": false,
       "reason": "its own text states 'No runtime change: nothing under `src/` was touched and the public API is unchanged', and what it does change is the documentation set under docs-content/ plus the test-run gate over it, neither of which reaches the published artifact: package.json's `files` allow list publishes dist, README.md, LICENSE and CHANGELOG.md and nothing else. Every public observable is identical, which is the classification rule's `patch` arm"
+    },
+    "readme-house-layout.md": {
+      "level": "patch",
+      "breakCandidate": false,
+      "reason": "it changes reader-facing text only: README.md (a one-line tagline, the Node badge the README gate derives from engines, the Node.js line naming 22, 24, and 26, and new Support and Security sections), docs-content/installation.md (the same Node.js line), and in-repo notes and comments. README.md ships in the tarball as text, and no code under `src/` changed (one `//` comment's pointer, which the build does not emit). Every public observable of the API is identical, which is the classification rule's `patch` arm"
     }
   }
 }

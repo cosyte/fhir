@@ -7,13 +7,12 @@
 
 # @cosyte/fhir
 
-> Read real-world FHIR R4, keep every value exactly as it was written, and validate it against your
-> profiles.
+> Read real-world FHIR R4, keep every value exactly as it was written, and validate it against your profiles.
 
 [![npm version](https://img.shields.io/npm/v/@cosyte/fhir.svg)](https://www.npmjs.com/package/@cosyte/fhir)
 [![CI](https://img.shields.io/github/actions/workflow/status/cosyte/fhir/ci.yml?branch=main&label=CI)](https://github.com/cosyte/fhir/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/cosyte/fhir/blob/main/LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org)
 
 FHIR R4 for Node.js and TypeScript: a resource model that keeps every value exactly as written, JSON and XML codecs, layered validation, and a safety readout for status and negation.
 
@@ -59,9 +58,9 @@ from a model read out of XML, unit conversion, and executing a transaction Bundl
 pnpm add @cosyte/fhir
 ```
 
-Requires Node.js 22 or later, tested on 22 and 24. The package ships dual ESM and CommonJS builds
-with type declarations for both, so `import` and `require` both work and neither needs a
-compatibility shim. There are zero runtime dependencies, and it imports no Node built-in.
+Node.js 22 or later, tested on 22, 24, and 26. The package ships dual ESM and CommonJS builds with
+type declarations for both, so `import` and `require` both work and neither needs a compatibility
+shim. There are zero runtime dependencies, and it imports no Node built-in.
 
 ## Usage
 
@@ -160,11 +159,25 @@ as PHI.
 - [`CHANGELOG.md`](https://github.com/cosyte/fhir/blob/main/CHANGELOG.md): every change, with the
   breaking ones called out.
 
+## Support
+
+Bug reports, questions, and FHIR quirks from the servers and EHRs you connect to belong in
+[GitHub issues](https://github.com/cosyte/fhir/issues), with a minimal reproduction that uses
+synthetic data only. Ideas and open questions can also go to
+[Discussions](https://github.com/cosyte/.github/discussions). Our
+[support page](https://github.com/cosyte/.github/blob/main/SUPPORT.md) lists every route.
+
+## Security
+
+Report a vulnerability privately, never in a public issue: through GitHub's
+[private vulnerability reporting](https://github.com/cosyte/fhir/security/advisories/new) on this
+repository, or by email to [security@cosyte.com](mailto:security@cosyte.com). Use synthetic data
+only. Our [security policy](https://github.com/cosyte/.github/blob/main/SECURITY.md) says what is in
+scope and which versions we support.
+
 ## Contributing
 
-Questions, bug reports, and FHIR quirks from the servers and EHRs you connect to all belong in
-[GitHub issues](https://github.com/cosyte/fhir/issues). Pull requests are welcome; every fixture
-must be synthetic, never a real patient's data.
+Pull requests are welcome; every fixture must be synthetic, never a real patient's data.
 
 ```bash
 pnpm install

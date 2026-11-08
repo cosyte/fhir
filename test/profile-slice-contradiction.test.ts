@@ -291,7 +291,7 @@ describe("a contradictory slice descendant assigns no occurrence", () => {
  * states is not evidence, so each was checked by mutating the guard until it moved: widening it to
  * `max 0`
  * alone, to `max < min`, to `min >= 1` alone, and to every descendant. Every row here reds under at
- * least one. The runs are recorded in `documentation/agent-notes/profile-slice-contradiction.md`.
+ * least one. The runs are recorded in `documentation/agent-notes.md#narrative-a-contradictory-slice-descendant-assigns-no-occurrence-resolveslices`.
  */
 describe("the neighbours of the contradiction, unchanged in both states", () => {
   it("still expects presence from a plainly required descendant", () => {

@@ -9,6 +9,42 @@ used to sit in `CLAUDE.md`, in its original order, with headings added so it can
 section here that carries the incident it came from. These are clinical-safety lessons that each
 cost a defect or a refuted gate pass to learn: **relocate them, never delete them.**
 
+The sections headed "Narrative:" at the end were separate files until 2026-11-07, when the notes
+became this one file; they are folded in as written, so where one says "this file" it means the
+file it was then.
+
+## The card in full (2026-11-07)
+
+On 2026-11-07 `CLAUDE.md` became a card of at most 60 lines, 100 characters a line, and 5,120
+bytes (the card spec, `documentation/claude-card.md` in cosyte/config). Its gate notes and its
+sixteen rules, as they stood that day, are kept here as written; the card keeps a short form of
+each rule.
+
+### The gate notes
+
+From the repo root, in this order, with pnpm 10.34.5 (the `packageManager` pin). Where `pnpm --version` prints another major, put the pinned one first on PATH, since pnpm 12 refuses the frozen install and a test shells out to bare `pnpm`: `mkdir -p ~/.pnpm10 && corepack enable --install-directory ~/.pnpm10 pnpm && export PATH="$HOME/.pnpm10:$PATH"`.
+
+The first nine are the shared `cosyte/.github` CI ladder, run on Node 22 and 24; the fuzz line and the four examples lines are the `fuzz` and `examples` jobs in `.github/workflows/ci.yml`. CI also loads `dist/` as ESM and as CJS, runs actionlint and CodeQL, packs the tree and installs the tarball into a clean directory, and runs the `differential` job (`pnpm corpus:fetch`, then `pnpm differential` and `pnpm differential:determinism`), which needs `java` and the pinned `validator_cli.jar` at `VALIDATOR_CLI_JAR`; CI provides both.
+
+### The sixteen rules
+
+- A repeated JSON property stays first-wins, is kept on `FhirComplex.duplicates` and reported, and stops `readSafety` affirming. Never switch to last-wins, which only moves the blind spot: a second `status` hid an `entered-in-error` retraction under `safeToSummarize: true` (#32).
+- A read and its report widen together, at one window, in one change: an unwrap inside `codingsOf` that nothing reported erased a true `VITAL_SIGN_UNIT_NONCONFORMANT` and flipped a document to `valid: true`. Count array positions, not strings, and yield at most one value per written member into the `system` x `code` cross-product, since one invented pair is a recorded "no known allergy" (#34).
+- Negation reads take no resource-type gate and run at every resource root: gated reads returned `negations: []` and `safeToSummarize: true` for a conformant `doNotPerform` ServiceRequest, a `not-done` Procedure and a retraction inside a Bundle (#81, #82, #83). `noKnownAllergy` stays gated, because it asserts something positive.
+- Content the model cannot place (an array inside an array, a `_`-sibling that is not an object, a JSON `null` at a primitive) draws a diagnostic and is handed back as inert text, never modeled as an element and never dropped: modeling it erased a true error and asserted `noKnownAllergy`, and dropping it wrote non-conformant documents back clean (#37, #38, #68, #69).
+- The writers author nothing and repair nothing. A model they cannot write faithfully is refused with a code from `SERIALIZE_ERROR_CODES` (read the list there, never from a copy): they once invented a `{}` (#59), authored elements out of a name (#64) and forged a negation out of a `div` (#65).
+- The XML reader compares expanded names (namespace and local name), never a tag or a local name alone: a prefixed FHIR document read as properties named `f:active` (#44), and two spellings of one name merged in silence (#59).
+- Take the narrative by its expanded name `{http://www.w3.org/1999/xhtml}div` before the resource-valued unwrap: `<BR/>` read as a contained resource and deleted the prose beside it under `valid: true` (#46, #47).
+- Diagnostics carry an `IssueCode` and a FHIRPath location, never a value, and a name the document supplies is bounded in `src/model/path.ts` before it reaches a location: a 1 MB property name reached `expression` whole (#43).
+- The PHI scan's scope and its recogniser change together, and it sweeps the git index as well as the tree, so re-run `pnpm phi-scan` after `git add`: a symlink, a staged rename, files under `test/` and a fixture staged then scrubbed each read clean (#50, #56, #60, #90).
+- The differential's oracle answers no terminology over a network (`-tx n/a -txCache n/a`, declared in `scripts/differential/terminology.mjs`), and a disagreement is closed by fixing a fixture or the library, never by loosening the comparison: the default server moved three documents in and out of FALSE VALID (#104), and five FALSE VALIDs on main were incomplete fixtures (#20).
+- A declared gap pinned by a characterization test reds when it closes, so rewrite that test in the same change, and never write "pinned by a test" without opening the test: three such claims had none (#58).
+- `pnpm attw` stays `node scripts/attw.mjs`, never bare `attw` (`node_modules/.bin`, from the `@arethetypeswrong/cli` devDependency): the bare CLI exits 0 on a pack with no types (#49).
+- A change under `src/` adds a changeset, whose summary the release writes into `CHANGELOG.md`; never hand-edit that file. Pick `minor` for new capability or anything that withdraws or narrows working behaviour (a new write refusal does), `patch` only when every public observable is unchanged: two breaks shipped as `patch` (#111).
+- A changeset's text becomes the permanent release body: keep its first sentence short, and keep out internal identifiers and any claim a sibling changeset makes stale. The release refused such notes and published nothing (#39, #100), and two stale claims nearly froze into a body (#67, #71).
+- `README.md`, `docs-content/` and the `/** */` comments and string literals in `src/` carry no item identifiers, phase language, ADR numbers or private paths. Translate the line; never delete a doc comment to pass `pnpm check:no-internal-refs` (#31).
+- npm refuses new `@cosyte/fhir` versions with a bare `E403` (0.0.11, 0.1.0) and accepted only the narrowed 0.0.10, and the cause is not settled. Keep `files` to the runtime artifacts and the README slim (#134), never rename or rescope the package (#55), read the version from `package.json`, and do not call a publish settled from one result (#107, #109) or failed from a 404 seconds after it (`documentation/agent-notes.md#publish-state-fhir-npm-name`).
+
 ## A name that is not an XML 1.0 `Name` and a character outside `Char`, closed at the XML writer (2026-09-25)
 
 ### The defect, measured at `18567b9`
@@ -929,7 +965,7 @@ reduce fail-safety). (i) The read window is **not** the report window: `checkArr
 coding-level report on `isSafetyType` while `isRetracted`'s `verificationStatus` scan and
 `readSafety`'s `clinicalStatus`/`verificationStatus` convenience reads are **not** type-gated. **The
 `verificationStatus` terms are CLOSED 2026-08-10**
-([`negation-coding-wrapper-scope.md`](agent-notes/negation-coding-wrapper-scope.md)). **`clinicalStatus`
+([the `Coding` wrapper narrative](#narrative-the-coding-wrapper-report-moves-to-the-negation-reads-own-window)). **`clinicalStatus`
 IS STILL OPEN and a gate caught a slice claiming otherwise**: `clinicalSystemFor` picks a preferred
 system, gating nothing, so that field alone unwraps at any root with no location. **Do not "fix" a
 window gap by type-gating `isRetracted`.** (ii) The
@@ -2278,7 +2314,7 @@ on any non-zero step, and it lists `attw` as a REQUIRED script, so the script na
 
 `PHI-SCAN-WALK-ROOT-SCOPE` and `PHI-SCAN-OBSERVED-NOTHING-IS-GLOBAL`, closed together because closing
 either alone ships a gate that reads green over what it did not read. **Relocated VERBATIM to
-[`agent-notes/phi-scan-scope.md`](agent-notes/phi-scan-scope.md) on 2026-08-11 when this file reached
+[the PHI scan scope narrative](#narrative-phi-scan-scope-2026-08-05) on 2026-08-11 when this file reached
 its budget; nothing dropped.** The rules that survive it, each paid for:
 
 - **The scope and the RECOGNISER move together.** Enumerating a file buys the SSN / email floor and
@@ -2304,7 +2340,7 @@ ordinary blob modes at stages 1/2/3 and taking the first record scans the merge 
 escape shapes a sibling reproduced at exit 0 were ALREADY CLOSED here**: the dispatch premise was
 wrong and the re-measurement is the finding. Every count, the two reviewed allow-list additions and
 the positive control's shape:
-[`agent-notes/phi-scan-union.md`](agent-notes/phi-scan-union.md).
+[the PHI scan union narrative](#narrative-the-bytes-git-carries-as-a-union-with-the-walk-2026-08-11).
 
 ## The README lockup link, and what npm does with it (2026-08-06)
 
@@ -2621,9 +2657,9 @@ UNGRADED**, in the same shape `#65` and `#66` recorded their post-verdict edits.
 budget**, twenty-one bytes, which is why the preceding unit could not record its residual there at
 all. The three blocks below moved here **verbatim and in their original order**, exactly as the
 2026-08-04 relocation moved everything above them. **Nothing was deleted and no trap was touched**;
-`CLAUDE.md` keeps a one-line cursor pointing at each. The budget entry itself lives in the meta-repo
-and was **not** raised: `doc-budget.mjs` states the rule in its own comment, lower on shrink, and a
-rising entry is a rubber stamp.
+`CLAUDE.md` keeps a one-line cursor pointing at each. The budget was **not** raised: a budget moves
+lower when a file shrinks, and a rising one is a rubber stamp. (The card spec in cosyte/config,
+`documentation/claude-card.md`, sets the card's limits now.)
 
 ### The shipped envelope, P1 through P11
 
@@ -3698,7 +3734,7 @@ correction rather than a saving.
 
 ## The untaggable `resourceType` (2026-08-09)
 
-**Narrative relocated** (cap): [`agent-notes/untaggable-resource-type.md`](agent-notes/untaggable-resource-type.md).
+**Narrative relocated** (cap): [the untaggable `resourceType` narrative](#narrative-the-untaggable-resourcetype-2026-08-09-77).
 Cursor: a `resourceType` with **no string to name a tag with** was DELETED by the XML writer rather
 than refused. Closed by `UNSERIALIZABLE_RESOURCE_TYPE`. Read the file before touching `typeOf` or
 either writer's root branch.
@@ -3706,7 +3742,7 @@ either writer's root branch.
 ## The XML magnitude, read (2026-08-09)
 
 **Narrative relocated** (this file is at its archive cap):
-[`agent-notes/xml-magnitude.md`](agent-notes/xml-magnitude.md). The cursors, so you need not open it:
+[the XML magnitude narrative](#narrative-the-xml-magnitude-read-2026-08-09-fhir-xml-write-residuals). The cursors, so you need not open it:
 _"a JSON decimal returns from XML as a string"_ is a **declared limit**, but **`readQuantity` read
 only the JSON shape**, so an XML dose surfaced as the **bare-unit shape** under `issues: []`. Fixed.
 **FOUR residuals pinned by `test/xml-quantity-magnitude.test.ts`**, one of them **the narrowed
@@ -3716,7 +3752,7 @@ the gate refuted both, and `#p2-p3` above was the fifth carrier a phrase sweep m
 
 ## The XML boolean, read (2026-08-09): STOP-THE-LINE
 
-**Narrative relocated** (cap): [`agent-notes/xml-lexical-booleans.md`](agent-notes/xml-lexical-booleans.md).
+**Narrative relocated** (cap): [the XML boolean narrative](#narrative-the-xml-boolean-read-2026-08-09-fhir-xml-boolean-negation-lost).
 Cursors: an XML `<doNotPerform value="true"/>` read as **absence**, so a negation vanished across
 **our own** round trip under `issues: []`. Fixed at `primitiveBooleans`, the **safety** read, never
 the reader. **3 booleans found, 1 changed: widening the CONVENIENCE read RETIRED a
@@ -3725,7 +3761,7 @@ OF THE CONSUMERS.**
 
 ## The unreadable boolean, reported (2026-08-09): STOP-THE-LINE
 
-**Narrative relocated** (cap): [`agent-notes/xml-unreadable-boolean.md`](agent-notes/xml-unreadable-boolean.md).
+**Narrative relocated** (cap): [the unreadable boolean narrative](#narrative-the-unreadable-boolean-reported-2026-08-09-fhir-xml-unreadable-boolean-is-silent).
 Cursors: `<doNotPerform value="1"/>` and `="Y"` (**ordinary v2/C-CDA converter output**) read
 **identically to `="0"` / `="N"`** under `issues: []` and `safeToSummarize: true`. **🛑 DO NOT WIDEN
 `booleanOf` TO ACCEPT THEM**: that authors a value and launders `="0"` to a JS `false` the writer
@@ -3739,7 +3775,7 @@ the conformant `value="true"` too.
 
 ## The negation read, blind by SCOPE (2026-08-09): STOP-THE-LINE
 
-**Narrative relocated** (cap): [`agent-notes/negation-read-scope.md`](agent-notes/negation-read-scope.md).
+**Narrative relocated** (cap): [the negation read scope narrative](#narrative-the-negation-read-was-blind-by-scope-2026-08-09-stop-the-line).
 Cursors: **plain conformant JSON** `{"resourceType":"ServiceRequest","doNotPerform":true}` read
 `negations: []` / `safeToSummarize: true` / assert clean, same for `CommunicationRequest` - **both
 `?!` modifier elements, neither type in `SAFETY_RESOURCE_TYPES`, so the instruction was NEVER LOOKED
@@ -3763,7 +3799,7 @@ in prose: this note said "8" and was off by one. Red-at-base **15 of 23**, 8 bot
 ## The `not-done` / `not-taken` type gates, dropped after a CENSUS (2026-08-09)
 
 **Narrative relocated** (cap):
-[`agent-notes/negation-status-codes.md`](agent-notes/negation-status-codes.md). Base `f8d7213`,
+[the negation status codes narrative](#narrative-the-not-done--not-taken-type-gates-were-dropped-after-a-census-2026-08-09). Base `f8d7213`,
 closing the first residual of the section above. Cursors: **plain conformant JSON**
 `{"resourceType":"Procedure","status":"not-done"}` read `negations: []` / `safeToSummarize: true`,
 same for `Communication`, `Media` and `MedicationAdministration` - **four conformant R4 types, and
@@ -3788,7 +3824,7 @@ so the element scope was written down and unpinned.
 ## Every negation reaches every resource root (2026-08-09)
 
 **Narrative relocated** (cap):
-[`agent-notes/negation-read-scope-depth.md`](agent-notes/negation-read-scope-depth.md). Base
+[the negation depth narrative](#narrative-every-negation-reaches-every-resource-root-2026-08-09). Base
 `3fa61aa`, closing the SECOND residual of the scope section above and the FIRST of the census
 section, which were **one gap read from two sides**. Cursor: **plain conformant JSON**, a collection
 `Bundle` whose single entry is `{"resourceType":"Observation","status":"entered-in-error"}` read
@@ -3817,7 +3853,7 @@ pins named in the test file, **9 of 9 mutations red**, negative control 32/32 fa
 ### The `null` / `_`-sibling laundering: the CLAUDE.md cursor, relocated VERBATIM 2026-08-09
 
 Moved out of `CLAUDE.md` under its byte budget to make genuine room for the negation-read-scope trap
-(ADR 0023's remedy is relocation, never deletion). Nothing is changed; the short cursor left behind
+(the remedy for a full card is relocation, never deletion). Nothing is changed; the cursor left behind
 points here. See also
 [`#the-null-laundering-closed-2026-08-07`](#the-null-laundering-closed-2026-08-07) and
 [`#the-_-sibling-channel-closed-2026-08-07`](#the-_-sibling-channel-closed-2026-08-07).
@@ -3846,7 +3882,7 @@ points here. See also
 
 ## The XML profile `min`, read (2026-08-09)
 
-[`agent-notes/xml-profile-min.md`](agent-notes/xml-profile-min.md). Cursor: an XML-sourced profile
+[the XML profile `min` narrative](#narrative-an-xml-sourced-profiles-required-elements-are-enforced-elementdefinitionmin). Cursor: an XML-sourced profile
 declared required elements and this library enforced **none**. Fixed at `parseMin`, not the reader.
 **🛑 SAFE ONLY BECAUSE `mergeElement` NOW TAKES THE TIGHTER `min`**: it overlaid verbatim, retiring
 a `CARDINALITY_MIN`.
@@ -3912,3 +3948,2882 @@ by re-reading the wire document. `SafetyReadout.absenceMarkers` is the read that
   table to consult, so it asks R4's own question (`ele-1`: a value, or children) with the four
   metadata names and `resourceType` subtracted. A vendor element that reused one of those five names
   for content would be read as carrying none.
+
+## Narrative: PHI scan scope (2026-08-05)
+
+Relocated VERBATIM out of `agent-notes.md` on 2026-08-11 when that file reached its budget
+(`PHI-SCAN`), nothing dropped. The cursor there points here.
+
+`PHI-SCAN-WALK-ROOT-SCOPE` and `PHI-SCAN-OBSERVED-NOTHING-IS-GLOBAL`.
+
+Two holes in `scripts/phi-scan.ts`, closed together because closing either alone ships a gate that
+reads green over what it did not read.
+
+### The scope, re-derived for this package rather than ported
+
+The walk roots were `test/__fixtures__` and `src`, and `--staged` was scoped to the same two
+prefixes, so **a tracked file directly under `test/` was reached by neither route**. Measured here:
+**101 tracked files** were scanned by neither route, **55 of them under `test/`**. Counted with the
+scanner's own key regex over those 55 files: **87** object-literal `family` / `given` sites and
+**21** `birthDate` sites, plus **33** more `family` / `given` and **3** `birthDate` spelled as XML
+`value` attributes. The roots are `test` and `src` now, on **both** routes; keeping them different is what let the
+hole sit unnoticed.
+
+**The exclusion had a stated reason and the reason covered two files, not a directory.** The old
+comment said `test/*.ts` is not walked because the PHI-leak suite ships deliberately PHI-shaped
+sentinels. True of `test/phi-leak.test.ts` and `test/scripts/phi-scan.test.ts`; not true of the
+other 53. Those two are declared by exact path in `SENTINEL_FILES`, subtracted from the **sweeping**
+routes only, **announced** when skipped, and still scanned when named on the command line. They are
+not `--allow-fixture`: that needs a flag, CI passes none, so a command-line-only bypass would leave
+them unscanned in the one route that matters.
+
+**Nothing was ported.** Sibling residuals were checked and refuted against this tree: `ncpdp`'s 115
+test-directory files is **55** here, and `terminology`'s exit **1** on a regular-file walk root is
+exit **2** here. Both of the "pre-existing minors" carried over from siblings were measured
+**already closed** here before this change: `loadAllowList()` throwing exits **2** (it sits inside
+`main`'s handler), and an unmerged `U` entry is in the `--diff-filter=AMTU` list and refused with
+**2**.
+
+### Enumerating the files buys the SSN / email floor and nothing else
+
+This is the half that a scope widening on its own silently omits. The structured scanner assumes
+**the file is the document** and is reached only for a fixture with a FHIR wire-format extension. A
+test builds its resources as TypeScript object literals, so a real surname typed as `family: "…"`
+inside a `.ts` file was read by nothing: a dashed SSN and an email are neither a name, a date of
+birth nor a street address. Measured on `.ts` carrying
+`{ resourceType: "Patient", name: [{ family: "…", given: ["…"] }] }`: exit 0, `OK, no hits`, **both**
+before the widening (never enumerated) **and** after it with the recogniser absent (enumerated,
+unread).
+
+So `family`, `given`, `birthDate`, `deceasedDateTime` and `line` are keyed in source and dispatched
+to the same detectors the structured scanner uses, **in addition to** the shape pass, never instead
+of it. **Do not key `text`, `identifier.value` or `telecom.value` there.** `HumanName.text` and
+`Address.text` are PHI but a flat pass cannot tell them from `CodeableConcept.text` or an assertion
+message; bare `value` is FHIR's most overloaded name (`Quantity.value`, `Extension.value[x]`, every
+primitive) and the XML scanner only dares read it inside a `<telecom>` / `<identifier>` block, a
+boundary TypeScript source does not have. A gate that false-errors on conformant test code is a gate
+someone switches off.
+
+**IN BOTH WIRE FORMATS, AND "FORMATS" IS NOT "SPELLINGS".** This package reads JSON and XML and its
+tests write both, so the same `xmlValues` extractor the fixture scanner uses runs over source too;
+keying only the object literal left 33 `family` / `given` and 3 `birthDate` XML `value` attributes
+unread in the 55 files the widening admitted, and the standing trap ("compare the same document
+spelled the other way") is the one that catches that. But the XML arm covers **one of the three ways
+this suite spells an XML value**: the double-quoted attribute. A single-quoted attribute
+(`value='…'`) and XML **element text** (`<given>…</given>`) are unread, measured at exit 0. The
+element-text case has a live site, and it is in `dropped-element-text.test.ts`, the suite whose whole
+purpose is element text: on the pre-rename line the `value=`-attribute half reported and the
+element-text half did not, so **the scanner forced only half of that rename** and the other half was
+done by hand. Declared in `phi-scan-overrides.md` rather than guarded.
+
+Escapes are decoded to a **bounded fixed point (three rounds)**, because this suite routinely writes
+a JSON document inside a TypeScript string, so such a value carries two layers of escaping and one
+decode leaves a backslash-u sequence whose only surviving name token is `Ro`, which nobody wrote. A
+fourth layer is not decoded, and that fails toward reporting: the residue still tokenizes and still
+has to clear the allow-list.
+
+Entity references are blanked to a space before tokenizing, which is what stops entity NAMES (`amp`,
+`xxe`, `secret`) being reported as person names. Blanking can only split a token apart, never join
+two, but **splitting is not the failure there, deletion is**: any letter run between an `&` and a
+`;` goes with it, so `Smith&Rodriguez;Jones` reports `Smith` and `Jones` and loses `Rodriguez`.
+State that residual as the run, not as "a name spelled entirely as character references".
+
+The widened scan surfaced one false positive and it is this package's own diagnostic form: the email
+recogniser cannot tell `UNKNOWN_PROPERTY@Patient.name` from an address, because both are one `@`
+between two dotted tokens and `.name` is a real top-level domain.
+
+**THE FIRST REMEDY FOR IT WAS A WIDENING THAT WAS "INSTEAD OF" RATHER THAN "IN ADDITION TO", AND IT
+MADE THE GATE DETECT LESS THAN THE ONE IT REPLACED.** This is the single most important thing in the
+slice, and it happened in the same change that quotes the rule. A shape exclusion keyed on an
+all-caps underscore-joined local part plus a capitalised first domain label, scoped **in intent** to
+source files, in fact reached any fixture whose extension is not `.json` / `.xml` / `.ndjson`,
+because `scanTarget` routes those down the SAME branch as source. Measured: a fixture carrying
+`JOHN_SMITH@Mercy.org` was exit 1 on base and exit 0 with the exclusion. **A PHI gate that detects
+less than its predecessor is worse than the defect it was closing.** The refuter found it; the local
+suite was green.
+
+It is **reverted**, and the residual it carried is gone with it: that address now reports. One
+`EMAILDOMAIN` line covers the live occurrence with a blast radius of one domain. **The enumeration
+that stood here (four domains, three sentinel-only, exactly one live) was true of the corpus THIS
+slice scanned and is no longer true of the corpus; it is superseded by the re-measurement in
+[the PHI scan union narrative](#narrative-the-bytes-git-carries-as-a-union-with-the-walk-2026-08-11) and in `phi-scan-overrides.md`, not softened.** **Declare a domain, never a shape rule.**
+
+### Existence is not observation
+
+`walk` returned silently when its root did not exist and yielded nothing when the root was an empty
+directory, so an **emptied or deleted** `test/__fixtures__` printed `OK, no hits` and exited **0**
+over a corpus still wholly present in the index (measured, both cases).
+
+**A denominator does not detect this and shipping one as the remedy was refuted elsewhere**: a count
+counts the roots that DID exist, so the surviving root supplies a healthy-looking number.
+
+Two arms, and they cover different failures. The sharp one **reconciles against the index**: every
+path `git ls-files -- test src` names, minus the markdown the walk exempts, must have been opened by
+the sweep or the scan refuses with **2** and names every offender. The blunt one is the floor
+underneath it: **a sweep that opened zero files refuses whatever the index said**, which covers a
+copy of this tree with no repository of its own. **State what that arm covers, which is the
+zero-files case and not the general one**: with no usable index and only SOME roots emptied, the
+surviving root still yields targets, the arm does not fire, and that state is reported clean. It is
+a declared residual, not a covered case. **`git rev-parse --is-inside-work-tree` cannot be
+the test, because it answers for the ENCLOSING repository** and returns `true` for a nested copy
+whose files git has never heard of; the pathspec is scoped to the scan roots for the same reason, so
+a nested copy yields `null` and the walk rather than a list belonging to the wrong tree.
+
+The reconciliation also refuses over a tracked file deleted from the working tree. It cannot tell
+that from a vanished root, and refusing is the safe direction of the two.
+
+### What this closed, and what it left open
+
+Three characterization tests went **red on the spot** and were rewritten to the new behaviour, which
+is that mechanism working: the observed-nothing gap, the scan-root's-**parent**-as-a-link gap (now
+refused on both routes, by different mechanisms), and three quarters of the regular-blob-at-the-
+fixture-root gap. **Still open, pinned:** at exactly `test/__fixtures__`, `identifier.value` and
+`telecom.value` are read by nothing, because `isFixture` tests a trailing slash and the remaining fix
+belongs to `scanTarget`'s dispatch. Full residual list, and the reviewed allow-list additions the
+widening forced, are in `phi-scan-overrides.md`.
+
+## Narrative: The bytes git carries, as a union with the walk (2026-08-11)
+
+`PHI-SCAN`. **A walk reads the WORKING TREE, and that is not what a commit contains.**
+
+Relocated out of `agent-notes.md`, which is at its own budget. The cursor there points here.
+
+### The premise this slice was dispatched on was wrong, and the measurement is the finding
+
+The coordinator's survey scored this copy at **2 `ls-files` + 1 `reconcile`**, "the thinnest
+reconciliation of the eight remaining copies". Re-measured in-repo: the two `ls-files` occurrences
+are one comment and one call, and the word `reconcile` appears only in prose: the mechanism is
+named `trackedInScope` / `refuseUnobserved`. **A text census scores the vocabulary, not the
+mechanism.** Measured against the four escape shapes a sibling reproduced at `exit 0`, this copy was
+one of the STRONGEST, not the thinnest:
+
+| shape                                                        | base result                                                                |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| a tracked path occupied by a **directory** of decoys         | **exit 2**, already closed                                                 |
+| a whole walk root swapped for a decoy directory              | **exit 2**, already closed                                                 |
+| **most** tracked files absent from the working tree          | **exit 2**, already closed (no floor-of-one to fool)                       |
+| a **gitlink** under a walk root whose working tree is absent | **exit 2**, already closed                                                 |
+| a path under the walk's skip rule (`.md`) at any depth       | **exit 0**, the exemption, applied symmetrically to both routes, by design |
+| `--staged` over an **unmerged** path                         | **exit 2**, already closed, keyed on status `U`                            |
+
+**The unmerged axis, which broke a sibling's draft, was already closed here** and needed no port.
+**Reproducing a state space and reporting "already closed" is the result**; the temptation is to
+credit a route with a state it did not close.
+
+### The two states that WERE open, both measured
+
+1. **A fixture `git add`ed and then scrubbed in the working tree scanned clean at `exit 0`**, while
+   `git commit` would have committed the staged blob. The sweep only ever read the working tree.
+2. **33 tracked non-markdown files sit outside `test/` and `src/` altogether**: `scripts/`,
+   `.github/`, `docs-content/`, `.changeset/`, the root manifests. Neither the walk nor
+   `refuseUnobserved` mentioned them, because that reconciliation's pathspec is limited to the walk
+   roots. **Two of the 33 carried bytes this scanner's own recognisers report.** Real unscanned
+   corpus, and this is the `astm` shape rather than the `ccda` one.
+
+### The remedy, and the two things it is not
+
+`all` mode enumerates **both** routes. **Union, never replacement:** the walk alone sees
+**untracked** working-tree content; the index alone sees what is **staged** and what lives **outside
+the roots**. **WALK_ROOTS did not move**, and no refusal was retired: the floor-of-one stays keyed
+on the walk, because the state it names is "no repository to ask and nothing on disk either", and an
+index route that happened to find blobs would make it unreachable in exactly the case it exists for.
+
+**Dedup is by CONTENT under git's `blob <len>\0` framing, never by path.** Measured on a clean
+checkout at the commit that closed this: **202** in-scope index entries, **167** already scanned by
+the walk, **35 fetched**, so a clean checkout SCANS nothing twice. Convert one tracked file's working
+copy to CRLF and the fetch count goes **35 to 36**, both copies scanned. **That is the EOL axis**,
+and a path-keyed dedup would have picked one of the two byte streams and called it the corpus.
+**THESE NUMBERS MOVED ONCE ALREADY, INSIDE THIS SLICE, AND THAT IS WHY THEY ARE SPELLED OUT.** The
+first draft measured 169 scanned and 33 fetched; excluding declared paths from the observed set
+(below) drops two files out of "scanned" and adds their blobs to "fetched", and the corrected slice
+left the old pair standing in four carriers until a gate caught it. **Re-derive, never copy.** Note
+also that `cat-file` IS invoked on a clean checkout, for the out-of-root blobs; the property is that
+nothing is scanned twice, not that git is never asked. The object-id algorithm is **asked
+for** (`git rev-parse --show-object-format`), never assumed: a SHA-256 repository would match nothing
+and quietly scan everything twice.
+
+**THE KEY IS THE OBJECT ID _AND_ THE DETECTOR, AND THE FIRST DRAFT SHIPPED WITHOUT THE SECOND HALF.**
+A gate found two states against an oid-only key, **both at exit 0**, and both are worth carrying:
+
+- **The detector is a property of the PATH, not of the bytes.** `scanTarget` sends a fixture to the
+  structured FHIR scan and a `.ts` file to the source pass, and the source pass deliberately does not
+  key `identifier.value` or `telecom.value`. One payload committed at `test/__fixtures__/leak.json`
+  and at `src/decoy.ts` was "observed" at the weaker path, so the fixture blob carrying an
+  SSN-shaped `identifier.value` was never fetched. **An oid-only key silently applies the WEAKEST
+  detector any path holding those bytes gets.**
+- **An exempt path's bytes were never scanned at all.** A `SENTINEL_FILES` entry is walked but
+  dropped before any detector runs, and it is exempt precisely BECAUSE it carries
+  realistic-PHI-shaped strings. Hashing it into the observed set let it vouch for an identical copy
+  at a path with no exemption, and **that one is not even convergent** -- a sentinel is never fixed.
+
+So the observed set holds `<oid>\0<detector>` for the files that were actually SCANNED, `scanKindOf`
+is the ONE dispatch table (`scanTarget` reads it too, so the key cannot drift from what runs), and a
+declared path contributes nothing. It is still ENUMERATED by both routes and dropped by `main`, so
+the exemption is still announced -- **deduped**, since a declared path can now arrive twice.
+
+**The lesson generalises past this scanner: a dedup is only as sound as its notion of "already
+done", and "already read" is not "already scanned".**
+
+**The unmerged case keys on the ABSENCE OF STAGE 0, and that is not how `--staged` spots one.**
+`git diff --cached --raw` gives status `U` and destination mode `000000`; **`git ls-files -s` gives
+stages 1/2/3 with ORDINARY blob modes and no `U` anywhere**, so a reader that takes the first record
+gets **the merge base** and reports on it as what git carries. Every stage is read and labelled with
+its own number. Pinned by a case whose payload lives **only in stage 3**, and by a second whose
+payload lives only in stage 1 and must be labelled as such.
+
+**A mode the index carries that is not a regular blob refuses the scan (exit 2), across the
+NON-MARKDOWN index.** That is the half covering a link or a gitlink **outside** the walk roots,
+which no route reached before (measured, exit 0 on base for both).
+
+**IT SAID "REPO-WIDE", AND A GATE FALSIFIED THAT IN THE EXACT WAY THE SCANNER'S OWN BANNER FORBIDS**
+("an entry a route never lists is not reached by the refusal either -- do not restate this as *every*
+non-regular entry"). The `.md` filter runs **before** the mode check, so a gitlink at
+`vendor/sub.md` or a link at `docs-content/NOTES.md` pointing outside the repository is **exit 0**,
+while the same entry without the suffix is **exit 2**. **The walk refuses by MODE regardless of
+name** -- "a link's name is no evidence at all about what is on the other side" -- so the two routes
+really do differ. Left as it is and **declared**: matching them changes what the gate REFUSES over,
+not what it scans, and it is a sub-case of the `.md` exemption below reached by mode instead of by
+content. **That is one more claim-defect-in-a-prose-carrier in this lineage, and the code was right
+again.** No ordinal is written down: an ordinal is a count, this class's own rule forbids one, and
+the pass that found this finding also found four more.
+
+### The two hits the wider corpus produced, and why neither was answered with a rule
+
+- `hello@cosyte.com` in `package.json` → **`EMAILDOMAIN cosyte.com`**. Not a reserved domain: it is
+  ours, which is the reason it is declarable, and the blast radius is one domain.
+- `JOHN_SMITH@Mercy.org` in this scanner's own docblock → **`scripts/phi-scan.ts` declared in
+  `SENTINEL_FILES`**, by literal path, logged in `phi-scan-overrides.md`. **The token-level remedy
+  was measured worse:** an allow-list entry is global and route-blind, so `EMAILDOMAIN mercy.org`
+  would admit a plausible real hospital domain in a fixture. **Exclude a literal path; never infer a
+  class.** The file sits outside every walk root, so no route opened it before: a newly _declared_
+  blind spot, not a newly _created_ one. Its cost: a change to that file is reviewed by a human and
+  not by the gate it implements.
+
+### The positive control, which is the part worth copying
+
+A gate never seen red is indistinguishable from one that cannot go red. So the control is built from
+**this repository's own tracked path list**: same paths, same directory shapes, same extensions,
+same in-root / outside-root split, with placeholder bytes so no fixture is copied anywhere. It
+asserts the mirror **clears** (so a hit is the payload and not the shape), then plants a payload
+across **every** non-exempt path and asserts **every one of them is named**, with the markdown and
+sentinel paths payload-bearing and silent. **The payload is made unique per path on purpose**: one
+payload written to every path is ONE blob under content-keying, scanned once, and the case would then
+assert nothing about the rest. A third arm plants the payload only in an **index blob** at a path
+outside every walk root and scrubs the working copy, so only the new route can find it.
+
+The mirror sets `core.hooksPath` to a path that does not exist. It reproduces every tracked path,
+`.npmrc` among them, and a developer machine or CI image may carry a global pre-commit hook with an
+opinion about such a filename, which is an opinion about the environment, not about this scanner.
+
+### The control reads its answer through a PIPE, so it sweeps in BOUNDED BATCHES
+
+**THE REPORT IS A SECOND VARIABLE, AND IT ONCE ANSWERED FOR THE SWEEP.** `process.exit()` discards
+writes still pending on a pipe, and stderr is a pipe, so a report large enough to outrun its reader
+loses its **tail** -- and a missing tail is the same string, to a case asking "is this path named",
+as a sweep that stopped early. Measured: with the payload at every non-exempt path at once the report
+runs to tens of kilobytes, and this control came back **129 of 199 paths named on the Node 24 CI
+runner while the Node 22 runner at the same commit, and every local run, were green**. The shape read
+as "the walk stopped partway through `src/`". The walk had not stopped. The write had.
+
+So the control sweeps the corpus in **bounded batches**. One run plants the payload at a bounded
+number of non-exempt paths, plus **every** exempt path -- those cost the report nothing, and carrying
+them in every run is what keeps "silent" meaning "silent _while_ the scanner is reporting" -- and the
+batches cover the whole non-exempt set. **Nothing is sampled and nothing left the expected set.** A
+**per-run ceiling on the report's byte length is asserted**, so the bound is enforced and not merely
+intended: widen the payload or the per-hit output far enough and the case reds instead of going
+flaky again. The ceiling is one page, the smallest buffer Linux hands a pipe under memory pressure.
+
+**THE MARGIN IS THINNER THAN THAT CEILING MAKES IT LOOK, AND A GATE CORRECTED A DRAFT WHICH SAID THE
+WIDEST BATCH WAS "WELL UNDER HALF" OF IT.** It is 2,065 bytes against 4,096, which is just **over**
+half, and what makes a batch the widest is **composition, not width**: an `.ndjson` fixture reports
+several times what a `.json` one does, so eight of them in one batch would compute near the ceiling.
+The direction is a red rather than a false green, and the fix when it fires is to **lower the batch
+width, never to raise the ceiling**. Two things one run no longer exercises, stated here so they are
+not discovered as a surprise: the whole corpus through a single `report()`, and through a single
+`git cat-file --batch`. There is no cap on hits reported today; if one is ever added, this case is
+not what catches it.
+
+⚖️ **DO NOT READ ANY OF THIS AS "`spawnSync` CANNOT SEE THE TRUNCATION" OR AS "A CONTROL BUILT ON IT
+WOULD BE VACUOUS". BOTH ARE FALSE, AND A DRAFT OF THIS FILE ASSERTED THEM.** This control runs on
+`spawnSync` (`runIn`) and it is precisely what caught the defect. What such a reader sees under the
+race is **non-deterministic**, which is a reason to bound the report here and no reason at all to
+weaken the control or to reach for a different spawn.
+
+🛑 **THE TRUNCATION ITSELF IS NOT FIXED HERE, AND `process.exit(exitCode)` STAYS.** So `pnpm
+phi-scan` read by a consumer that does not drain can still print a **prefix** of its own findings:
+that is an open gap of the shipped gate, not only of this control. **The exit code is unaffected**
+(hits 1, refusal 2), so it blocks either way and no false green follows from it. Assigning
+`process.exitCode` instead does fix the report, measured (445 of 2,000 hit lines to 2,000 of 2,000 --
+a **single sample of a racy quantity**; another run of the same corpus survived 379 of 2,000, and
+neither number is a constant), but it also drops the `EPIPE` swallowing `process.exit()` was doing
+for free: with a consumer that
+closes stdout early (`pnpm phi-scan | head -1`) a **clean** run then exits **1**, which is this
+gate's code for HITS FOUND, and prints a stack trace where the report belongs -- measured 5 of 5,
+plain `node` and through `tsx`. The assignment **and** a `process.stdout.on("error", ...)` guard are
+one pair, filed as their own item with their own gate passes. **Do not reintroduce half of it here.**
+
+**Two measured corrections for whoever takes that item.** The pin written for it -- reverted out of
+this tree with the rest of that change, so do not go looking for it here -- spawned the scanner with
+a reader that stays PAUSED until the pipe has filled, and red at 9,776 bytes of a 130,000-byte report
+with `process.exit` in place. Its draft justified calling `pause()` a second time, after the `data`
+listener is attached, by claiming that without it the case drains from the start and passes over the
+defect it exists to catch: **that is false, falsified 3 of 3** -- with the second call deleted the
+mutation still reds at the identical 9,776 bytes. The second `pause()` is determinism hardening, not
+what makes the case able to fail. And the fix arrived at the FOURTH pass of a four-pass cap, so its
+own regression had no pass left to grade a repair. **That shape, not the defect, is why this branch
+was cut back.**
+
+### Declared, not closed
+
+The `.md` exemption still hides a payload at any depth, on **both** routes, and that is the design
+("docs may legitimately describe violator values"). Dropping the exemption would red the gate on the
+files that explain it.
+
+**NO PREDICATE IS STATED ABOUT WHAT THE EXEMPT FILES CONTAIN, AND THAT IS THE THIRD SHAPE OF THE SAME
+MISTAKE, ALL THREE MADE IN THIS ONE SLICE.** A draft quoted a **count**; its replacement named the
+**files**; the third tried a class-membership **predicate** -- "every tracked markdown file that
+carries a violator string is documentation ABOUT this scanner" -- and a gate falsified that in the
+one command it offered as proof. `pnpm exec tsx scripts/phi-scan.ts $(git ls-files '*.md')` names
+`documentation/agent-notes.md`, whose hit is `MIXED_XML_SPELLING@Patient.text.div`: an **XML-reader
+diagnostic form** that merely parses as an email, in a note about something else entirely. **A
+count, a list and a predicate all move with the commit that states them.** Run the command; it is
+the ground truth precisely because it is a command and not a sentence, and some of what it names is
+not a violator at all.
+
+The two earlier shapes, kept because the sequence is the lesson: a draft quoted "46 tracked markdown
+files, 3 carrying violator strings" -- the BASE measurement,
+already false at the commit that shipped it, because the slice adds markdown files of its own. Its
+replacement named the files instead and was short by one within the same slice, for the same reason.
+A count or a list that moves with the commit stating it is a claim nobody can keep true; the
+predicate is stable, checkable in one command, and does not go stale.
+
+Identical bytes at two in-scope paths **that dispatch to the same detector**, **exactly one of them
+read by the WALK**, are one object, so a payload in both is reported at whichever the sweep read
+first. The exit code is unaffected, and fixing the reported copy leaves the other object unobserved,
+so the next run names it, which is pinned. **The FOUR qualifiers are the whole sentence**: drop any
+one of them and this is the claim a gate falsified, above.
+
+**THIS SENTENCE SAID "THREE QUALIFIERS", A GATE ADDED A FOURTH, AND THE NEXT PASS FALSIFIED THE
+FOURTH.** The first repair said "at least one read by the walk" and that is still false: `scanned` is
+consulted **only** by `indexTargets`, so the dedup happens once, at the SEAM between the two routes,
+and nowhere within either. All three cases measured with one dashed SSN at two paths:
+
+| the two copies | reported |
+| --- | --- |
+| walk x walk (`test/aa.ts`, `src/bb.ts`) | **both** |
+| index x index (`docs-content/b.ts`, `docs-content/c.ts`) | **both** |
+| walk x index | **one** |
+
+So it is **exactly** one, not at least one. **The lesson is the one this slice keeps re-learning: a
+narrowing sentence is a claim, a claim falsified once is not thereby correct, and the repair needs
+the same measurement the original needed.** Note the supporting paragraph of the first repair was
+itself true and carried the fact that falsified its own qualifier.
+
+**Untracked content outside the walk roots remains invisible to both routes.** The index cannot see
+it because it is untracked, and the walk cannot because it is outside the roots. Unchanged by this
+slice, and stated because the union closes the tracked half of that sentence and not the other.
+
+**`all` MODE IS NOW REPO-WIDE (LESS THE MARKDOWN EXEMPTION) AND `--staged` IS NOT, SO THE TWO
+ROUTES DISAGREE BY 33 TRACKED
+FILES.** Measured: a staged `docs-content/leak.json` carrying a dashed SSN is exit 0 on the hook and
+exit 1 in CI (on base both were 0). The direction is the safe one, CI stricter than the hook, and it
+is the inverse of the shape that comment was written about, which was CI blind where the hook
+reported. **But do not read that as agreeing with the comment**, which carries a second argument
+that is direction-blind: "keeping the two routes on different scopes would mean the hook and CI
+disagree about what the corpus is, which is the state that let the hole sit unnoticed". By that
+argument this divergence is a real cost, and it is being ACCEPTED rather than argued away.
+**It is left open deliberately**: widening `--staged` is a HOOK decision
+that changes what a commit is BLOCKED on, declined three times across this suite with the cost
+measured, and taking it as a side effect of a scan widening is exactly how it would arrive ungraded.
+
+## Narrative: The `Coding` wrapper report moves to the negation read's own window
+
+`FHIR-NEGATION-READ-SCOPE-RESIDUALS`, 2026-08-10. Base commit `5c575e5`. `conformance-refuter`
+**REFUTED -> NOT REFUTED**, 2 passes.
+
+**Provenance.** FHIR R4 `datatypes.html` (`Coding.system` and `Coding.code`, both `0..1` on the
+`Coding` datatype) and `json.html` §2.6.2.2 (an array spells a repeating element and nothing else).
+A profile may only constrain, never relax, so no profiled instance widens either cardinality. Both
+were read, not recalled; nothing here rests on a claim about which resource types carry the element.
+
+Closes the `Coding`-level half of the array-wrapper residual, filed by the depth slice's gate as
+"the `Coding`-level twin of the same residual" and re-filed by the two slices after it. The
+**element-level** half stays open on purpose; its reason is at the bottom.
+
+### What was wrong, on plain conformant-shaped JSON
+
+At `5c575e5`:
+
+| document | at base |
+|---|---|
+| `{"resourceType":"ServiceRequest","verificationStatus":{"coding":[{"code":["refuted"]}]}}` | `negations: ["refuted"]`, `arrayWrappedScalars: []`, `safeToSummarize: true`, `valid: true` |
+| `{"…","verificationStatus":{"coding":[{"code":["entered-in-error","x"]}]}}` | `negations: []`, `arrayWrappedScalars: []`, `safeToSummarize: true`, `valid: true` |
+
+The first resolved a clinical code **through** a shape FHIR JSON does not define and handed it back
+with no diagnostic anywhere. The second is the sharper one and runs the other way: a multi-position
+wrapper is deliberately **left unread**, because `system` and `code` feed a cross-product and taking
+more than one value on either side pairs values the sender wrote in different positions and asserts
+a coding it never wrote -- one of which is a recorded "no known allergy", a *positive* clinical
+assertion. So the retraction was **neither surfaced nor reported**, and the readout affirmed over a
+value the library knowingly declined to read. Both held at every resource root, inside `contained`
+and a `Bundle.entry`, and at an entry root carrying no readable type.
+
+### 🛑 The read had escaped the report, and the module said the opposite about itself
+
+The negation reads were dropped out of `SAFETY_RESOURCE_TYPES` (a gate that never looks reports
+nothing, indistinguishably from a clean read). `checkCodingWrapping` was not: it ran only under
+`clinical && isSafetyType`. So the un-gated read used `safetyCodingsOf`'s unwrap at roots the report
+did not cover -- **exactly what `safetyCodingsOf`'s own JSDoc said must never happen** ("A read that
+unwrapped outside that window would resolve a clinical code out of an encoding FHIR JSON does not
+define and hand it to a caller with no diagnostic anywhere"), and what `CLAUDE.md`'s standing trap
+says ("if you ever widen the coding unwrap, widen `checkCodingWrapping` first, **in the same
+change**"). The widening happened in a later slice and the report did not follow.
+
+### 🛑 The licence is DATATYPE cardinality, and it is the fourth distinct one in this arc
+
+The three predecessors used **direction** (a read that can only add), an **R4 census** (which types
+carry a status code), and the **`?!` modifier rule** (the obligation attaches to the resource, not
+the position). **None of them licenses this one.** What does:
+
+> `Coding` is a **datatype**. Its `system` and `code` are `0..1` *wherever a `Coding` appears*
+> (datatypes.html). So an array at either is non-conformant whatever resource carries it and
+> whatever the enclosing element's own cardinality is. No question about the enclosing resource
+> arises, so no per-resource model is needed.
+
+That is precisely what is **not** true one level up, where R4 defines repeating elements under the
+same names (`Questionnaire.code`, `ElementDefinition.code`, both `0..*`). The element-level table
+therefore keeps its type scoping, and the two halves are now stated as the **pair** they are rather
+than blurred into one window -- the blurring is what let the gap survive three slices.
+
+### The shape of the fix
+
+- The read table (`NEGATION_CODE_READS`) gains a `codings` flag, beside `values` and `unread`. The
+  report is decided **in the same loop over the same table**, so read scope and report scope cannot
+  drift into covering different elements. `verificationStatus` carries it; `status` does not, its
+  read being a primitive one.
+- The de-duplicating `report` callback moved from inside `checkArrayWrapping` up to
+  `checkResourceRoot`, and both halves share it. A safety type's `verificationStatus` is covered by
+  **both** windows, and a location a caller can act on once must arrive once.
+- **Nothing in the read moved.** Not one value reads differently; the diff is a report and prose.
+
+### Measurement
+
+- **11 of 25 new cases red at base**, in a real detached base worktree at `5c575e5`; 25/25 at head.
+- **One further case is red at base only because the base table has no `codings` field** (the
+  vacuity assertion over the derived element lists). Reported separately, **not counted** as
+  behaviour. Every other assertion is written through fields the base commit has
+  (`arrayWrappedScalars`, `safeToSummarize`, `valid`, the issue list, the XML write refusal), so it
+  measures a behaviour rather than the presence of a symbol. **This slice exports no new symbol.**
+- **12 both-states pins, named in the test file**, not counted in a total: the exactly-once
+  de-duplication on `Condition`; a conformant document; `Questionnaire.code`; the `clinicalStatus`
+  surviving gap in **both** directions (read through, and declined); a SNOMED "no known allergy"
+  `code` on an off-table type; a `Coding` wrapper at a `code`-typed `status`; a `verificationStatus`
+  below a resource root; the derived `status` row; and the three element-level residuals
+  (`ServiceRequest.doNotPerform`, `Procedure.status`, an array-wrapped `verificationStatus` element).
+- **Nine mutations, none surviving, named rather than totalled:** drop the `codings` flag; invert the
+  flag test; re-gate the new report on resource type; give the negation half its own de-duplication
+  sets; report only single-position wrappers; report only multi-position ones; drop the
+  XML-unwritable half; read only the first written member; run the report for every table row
+  regardless of the flag.
+- Suite **72 files / 1,553 tests → 73 / 1,578**, exactly the new file, and the count is offered as
+  *consistent with* no existing test moving rather than as proof: no existing test file was edited.
+- **The pass-1 remedy is prose plus one test.** `src/` changed only inside comment blocks, and the
+  transpiled `dist/index.mjs` / `.cjs` are **byte-identical (sha256) to the graded sha `e04a997`**,
+  so nothing ungraded ships as behaviour and the mutation result above still stands.
+- `differential:read`: **0 readings moved**, 0 `valid` false→true, 0 `safeToSummarize` false→true, 0
+  negations / retractions / read diagnostics lost. **That 0 is vacuous by construction** and is
+  reported as such: no corpus document carries an array-wrapped `Coding` member, so none reaches the
+  changed code. The harness prints that caveat itself.
+- **Corpus caveat:** hand-authored fixtures, mutations and probes -- **not** the R4 published-examples
+  corpus.
+- **The `@cosyte/hl7` negative control is DEGENERATE and is reported as such, not counted as a
+  pass**: this slice adds no symbol, and every symbol the test file imports (`readSafety`,
+  `arrayWrappedScalars`, `parseResource`, `validateResource`, `serializeResourceXml`,
+  `assertSafeToSummarize`, `SERIALIZE_ERROR_CODES`, `FhirSafetyError`, `FhirSerializeError`,
+  `NEGATION_CODE_READS`) is absent from that package, so the file cannot even load there. A control
+  that cannot fail is not a control.
+
+### 🛑 Pass 1's major, and it is this lineage's shape landing on the slice that was fixing it
+
+**The slice's own licence sentence was false, published into five carriers, and it deleted the
+accurate version of itself on the way past.** It claimed `clinicalStatus`'s read is type-scoped, so
+its wrapper is reported wherever it is read. It is not. `readSafety` fills the `clinicalStatus`
+convenience field with `safetyCodeOf(getProperty(resource, "clinicalStatus"), clinicalSystemFor(rt))`
+and `clinicalSystemFor` chooses a **preferred system**; it gates nothing. Measured, identical at base
+and head: `{"resourceType":"Bundle","clinicalStatus":{"coding":[{"code":["active"]}]}}` reads
+`clinicalStatus: "active"` with `arrayWrappedScalars: []`, `safeToSummarize: true`, `valid: true`;
+and the multi-position twin declines the value with no location either. **That is verbatim the harm
+this slice's own headline uses to motivate itself, on the sibling element.**
+
+Worse than the overclaim: the base text the slice edited to mark the residual closed
+(`agent-notes.md`) **named `readSafety`'s `clinicalStatus` convenience read as one of the un-gated
+callers.** The slice fixed the `verificationStatus` term of that enumeration and **dropped the
+`clinicalStatus` term rather than carrying it forward**. The repo's own record named it; the edit
+deleted the name and shipped the opposite.
+
+**The behaviour is `PRE-EXISTING`** (byte-identical read path at `5c575e5`); what was `INTRODUCED`
+was the claim. **Remedied by correcting the claim, not by growing the guard** -- marking
+`clinicalStatus` `codings` would widen a report to rescue an overclaim, and it is not a negation read
+at all. Carriers corrected: `README.md`, `CHANGELOG.md` and the pending changeset (all three ship, or
+will), `safetyCodingsOf`'s note in `src/`, the `agent-notes.md` disclosure restored to its
+half-closed form, and the both-states test pin **re-titled and given an assertion on
+`SafetyReadout.clinicalStatus` itself** -- it previously asserted only `arrayWrappedScalars` and
+`safeToSummarize`, so it never looked at the field that disproved its own title. A pin that cannot
+see the thing it claims is not a pin.
+
+Two `INTRODUCED` minors from the same pass, both prose: the `nearMissNegationCodes` readout field
+said `arrayWrappedScalars` reaches every root for the `Coding` members of "those same elements" when
+`status` is not one of them (it ships in `dist`), and `arrayWrappedScalars`' `@returns` still
+promised **document order**, which the two halves running one after the other can violate at a root
+that emits from both. Corrected rather than re-engineered; the ordering of a diagnostic list is not
+load-bearing and sorting it would hide which half emitted what.
+
+### ⚠ Pass 2's two minors were FIXED rather than filed, and are recorded UNGRADED
+
+Pass 2 returned **NOT REFUTED** with two `INTRODUCED` minors, and said in terms that neither should
+open a pass 3. Both are prose, both are fixed, and **the transpile is byte-identical (sha256) to the
+graded sha `1ee0c6e`**, so nothing ungraded ships as behaviour:
+
+1. **The replacement `@returns` on `arrayWrappedScalars` asserted a new universal that is false.**
+   *"That is document order for every document where one root emits from only one of the two"* --
+   not so: `checkArrayWrapping` walks surviving properties then shadowed members, so a document
+   whose later property is unwrapped and whose earlier one is shadowed emits out of document order
+   from the cardinality half alone. **This was the third attempt at that sentence.** It now claims
+   walk order and explicitly disclaims document order, rather than trying to be precise about when
+   the two coincide. `unspellableXmlWrappers`' sibling `@returns` (a `PRE-EXISTING` copy of the same
+   overclaim) is pointed at it rather than left inconsistent.
+2. **The residual's blast-radius enumeration understated it in the reassuring direction.** *"never
+   `negations`, never `valid`, never `noKnownAllergy`"* omitted the thing a consumer actually
+   branches on: **`safeToSummarize` stays `true`** over the value the library declined. The brief and
+   both pins said so; the three consumer-facing carriers did not. Added to all of them.
+
+Two `PRE-EXISTING` minors pass 2 raised are **filed, not absorbed**: `safetyCodeOf` /
+`safetyHasCodeAnySystem` / `safetyHasCoding` still say *"windowed elements only"*, which the
+corrected `safetyCodingsOf` note now contradicts; and `unspellableXmlWrappers`' order claim was
+already false at base. Both identical at `5c575e5`.
+
+### The claim sweep, and what it caught
+
+Three statements the package shipped **about itself** were false at base, all in the reassuring
+direction (they described a discipline the code was not keeping):
+
+1. `unreadableBooleans`' JSDoc -- "**The window is every resource root**, which is
+   `arrayWrappedScalars`' window and is **the same window the negation read uses**". It was not:
+   that report's element-level half is type-scoped and the negation read is not.
+2. `nearMissNegationCodes`, in **both** its readout-field doc and its collector doc -- the same
+   equality, stated twice.
+3. `safetyCodingsOf`'s note -- "the reporting rule covers exactly one window … **Read scope must
+   equal report scope** … every caller of this must be reading one of the windowed elements off a
+   resource root". The negation read had been a caller outside that window for three slices.
+
+Carriers checked, and the two that carried them: **`README.md`** (both #1 and, as a whole paragraph
+headed *"One asymmetry is deliberate and worth stating rather than glossing"*, a defence of the
+defect itself) and the generated **`dist/index.d.ts` / `.d.cts`** (#1 and #2 -- verified **0** at head
+by grepping the built artifacts, not the source). Also checked and clean of these: the pending
+changesets, `docs-content/`, the test comments (theirs are about the *element-level* residual and
+stay true), and `CLAUDE.md` (its trap is the one this slice honours, and needs no edit -- it stands
+at 27,997 / 28,000 untouched). **`CHANGELOG.md` carried the asymmetry paragraph in the present tense
+under `[Unreleased]`, so it was cut by deletion rather than annotated** -- this package has never
+published, so nothing there is a released record.
+
+`safetyCodingsOf` is **not** exported from the package, so #3 never reached `dist`. Recorded because
+"it is in `src`" and "it ships" are different questions and only the second was ever checked here.
+
+### 🔴 Left open, with the reason
+
+- **The element-level wrappers.** `{"resourceType":"ServiceRequest","doNotPerform":[true]}` and
+  `{"resourceType":"Procedure","status":["not-done"]}` are still read through and surfaced with no
+  `ARRAY_WRAPPED_SCALAR`, as is an array-wrapped `verificationStatus` element. Closing them needs the
+  cardinality of the element **names** `status` / `doNotPerform` / `verificationStatus` at a resource
+  root on every R4 type that defines them -- an R4 census, which is a different licence and its own
+  change. Pinned in both states so it cannot move in silence.
+- **A `Coding` wrapper at a `code`-typed `status`** draws nothing, and that is deliberate: nothing
+  reads through it (a `CodeableConcept` at `status` is exempt from the unreadable-shape channel, its
+  members all being ones FHIR spells somewhere), so reporting the wrapper would be a report *wider*
+  than the read -- this slice's own defect inverted. Pinned. The silent read at that position is a
+  separate, already-filed residual.
+- **`no-known-allergy` stays root- and type-scoped**, read and report alike. It is the one negation
+  whose surfacing makes a caller *less* careful, absence reading as *unknown* rather than *none*.
+  Pinned, in both directions. Do not "finish the job".
+- **The `clinicalStatus` convenience read is the surviving half of this very rule**, and it is the
+  sharpest thing left open here: filled off **any** resource root, so on a type the cardinality table
+  does not know it unwraps a single-position wrapper, or declines a multi-position one, with no
+  location either way. It reaches that one field and nothing else: never `negations`, never `valid`,
+  never `noKnownAllergy`, whose read *is* type-gated. Identical at base. **Closing it is a change to
+  a convenience READ, not a widening of this report** -- `clinicalStatus` is not a negation and does
+  not belong in the read table -- so it is its own slice. Both directions pinned in both states.
+- **The validator's `RETRACTED_RESOURCE` is still root-scoped and type-gated.** A different layer
+  with a different contract; untouched here rather than absorbed.
+
+## Narrative: The untaggable `resourceType` (2026-08-09, `#77`)
+
+Split out of `documentation/agent-notes.md` when that file was at the 250,000-byte cap it was then
+held to, and a later slice needed the room. **Relocated
+verbatim, nothing dropped**: the heading below is this section's original one. The cursor stays in
+`agent-notes.md`.
+
+### The untaggable `resourceType` (2026-08-09)
+
+`FHIR-XML-WRITE-RESIDUALS`, the non-string-`resourceType` residual `#74`, `#75` and `#76` each
+declared open. `SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE`, raised **last** in the XML
+writer, as a whole-model pre-pass. XML only.
+
+#### The defect, measured against `63b05fc`
+
+FHIR XML has no `resourceType` element: the type IS the tag (xml.html). `writeElement`'s skip is
+`if (name === "resourceType") continue;`, unconditional on the name, and `resourceTypeOf` returns a
+string or nothing, so `serializeResourceXml` fell back to `tagName = rt ?? "Resource"`. Where the
+value was not a string, the property was deleted and the element was named a type nobody wrote.
+
+| in                                                                                         | reads                                         | XML out                                                     | re-read                                                                         |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `{"resourceType":42,"status":"entered-in-error"}`                                          | `RESOURCE_TYPE_UNKNOWN`/error, `valid: false` | `<Resource …><status value="entered-in-error"/></Resource>` | `[]`, `valid: true`                                                             |
+| `{"resourceType":{"modifierExtension":[{"url":"http://example.org/x"}]},"status":"final"}` | `valid: false`, `safeToSummarize: false`      | `<Resource …><status value="final"/></Resource>`            | `[]`, `valid: true`, `safeToSummarize: true`, `unhandledModifierExtensions: []` |
+| `{"resourceType":"Patient","contained":[{"resourceType":42,"status":"entered-in-error"}]}` | `valid: true`                                 | `<contained><status value="entered-in-error"/></contained>` | a `contained` backbone element, not a contained resource                        |
+| `{"_resourceType":{"id":"q"},"status":"final"}`                                            | `RESOURCE_TYPE_UNKNOWN`/error                 | `<Resource …><status value="final"/></Resource>`            | the `id` gone                                                                   |
+
+**The second row is the whole point of taking this leg.** `safeToSummarize` moves because the deleted
+property takes its **entire subtree** with it, and a `modifierExtension` -- FHIR's `?!` rule, the one
+thing a reader may never ignore -- is among the things that subtree can hold. That is the same shape
+`#74`, `#75` and `#76` each closed through a different door: a format change that **upgrades** a
+document's own trustworthiness claim.
+
+#### The predicate, and why it is element-level rather than property-level
+
+`lacksTaggableResourceType`: the element wrote a `resourceType`, and **the first one it wrote** is not
+a string primitive. Both halves are load-bearing and the second took three attempts.
+
+- **THE QUANTIFIER MUST BE THE WRITER'S OWN, AND `ANY` IS NOT IT. Gate pass 1 refuted the draft that
+  asked whether ANY value written there is a string.** `resourceTypeOf` in `src/xml/write.ts` is a
+  `find`, and `typeOf` goes through `getProperty`, which is first-wins as well. So with a non-string
+  first and a string second the writer read no type, named the element `Resource`, deleted **both**
+  properties and took the modifier extension with the subtree -- and an `any`-quantified predicate
+  answered `false` and refused nothing. **The defect, unrefused, inside the slice that claimed to
+  close it**, and the claim that the shape was safe had reached five carriers. Neither reader emits
+  that order, so it is hand-built and pinned that way; the general rule is that **a guard that answers
+  for a property the writer never consults is not guarding the writer.**
+- **A property-level predicate ("this `resourceType` is not a string") is WRONG, and the counterexample
+  comes from XML rather than from JSON.** The XML reader has no `duplicates` mechanism and pushes the
+  type synthesized from the tag first, so a `resourceType` CHILD element lands as a second property of
+  that name beside it: `<Patient xmlns="http://hl7.org/fhir"><resourceType><a value="1"/></resourceType></Patient>`
+  reads as two `resourceType` properties in one `FhirComplex`, `issues: []`, `valid: true`,
+  `safeToSummarize: true`. The tag there is named correctly, so this defect's substitution never
+  happens; what drops is the repeated-property-name case, which both writers do and which is declared
+  separately. A property-level predicate refused it, and **the cost of that is withdrawing
+  serialization from a model this library reports as clean.** Do not write it up as "the one cost
+  none of the refusals beside this one pays", which this note did and which is FALSE: `breaksTag`
+  pays it too, on `<a:!x xmlns:a="http://hl7.org/fhir" value="1"/>`. **Rarity was never the argument;
+  the cost is.** Gate pass 2 caught the idiom, tagged it `PRE-EXISTING` because it is verbatim at
+  `63b05fc`, and it is cut here at the three carriers this slice authored. **Two base-owned carriers
+  are LEFT, on purpose and named so the next reader does not have to find them:**
+  `src/codec/serialize-guard.ts` (the `assertNoShadowedProperty` docblock) and
+  `test/shadowed-property-write.test.ts`. They belong to `#76`'s slice, not this one.
+- **An ABSENT `resourceType` is left alone.** `serializeResourceXml` accepts any `FhirComplex` and
+  names a typeless one `Resource` by documented fallback, so refusing there would withdraw a route
+  from every model that never had a type -- and nothing is deleted in that case. **The line this
+  refusal draws is "the writer drops a property the sender did write", not "the verdict moved".**
+
+#### The bound, which is structural and holds only at the root as a verdict
+
+At the **root**, this costs a round trip only for a model already reported `valid: false`: `typeOf` is
+the strict single-value read, so exactly the values refused here draw an error-severity
+`RESOURCE_TYPE_UNKNOWN`. **Deeper it does not hold, it is not claimed, and a document read from XML
+reaches it.** `{"resourceType":"Patient","contained":[{"resourceType":42,…}]}` and
+`<Patient xmlns="http://hl7.org/fhir"><name><resourceType><a value="1"/></resourceType></name></Patient>`
+both read `valid: true` with an empty issue list, because no layer here checks a nested element's type.
+
+**So the bound that IS claimed is structural, and it is by construction rather than by sampling**:
+the writer's skip is unconditional on the name, so at every location this refuses base dropped a
+property the sender wrote and emitted no element for it, with no diagnostic at either end. What is
+withdrawn is a deletion, never a round trip that reproduced the input.
+
+#### Raised last, and nothing moved onto it
+
+Last in the chain, after `UNSERIALIZABLE_ELEMENT_NAME`, `UNSERIALIZABLE_DIV_MARKUP`,
+`UNSERIALIZABLE_JSON_ONLY_SHAPE`, `UNSERIALIZABLE_ARRAY_WRAPPER` and `UNSERIALIZABLE_SHADOWED_PROPERTY`.
+Measured, one document per code, each an untaggable type gate spelled a different way:
+`{"resourceType":null,…}` keeps `UNSERIALIZABLE_JSON_ONLY_SHAPE`, `{"resourceType":["Observation"],…}`
+and `{"resourceType":[],…}` keep `UNSERIALIZABLE_ARRAY_WRAPPER`,
+`{"resourceType":42,"resourceType":"Observation",…}` keeps `UNSERIALIZABLE_SHADOWED_PROPERTY`, and an
+XML document with dropped element text keeps `DROPPED_ELEMENT_TEXT`. **No case moved onto the new
+code.** Pinned by `test/xml-resource-type.test.ts`, "raised last, so no case moves onto the new code".
+
+The walk is `collectMarked`'s, shared with `droppedText` / `nestedArrays` / `assertXmlSerializable`
+rather than copied, and it selects **elements**; the location appends the `resourceType` segment with
+`childPath`, which is how the array wrapper on the same property already reports it
+(`Resource.resourceType`, `Patient.contained[0].resourceType`).
+**`collectMarked`'s signature was left alone.** A first draft widened its predicate to receive the
+property name so the walk could answer property-level questions; that draft was reverted with the
+property-level predicate it existed for, and the shared walk is unchanged in this slice.
+
+#### Both polarities, on the test rather than on a harness
+
+`test/xml-resource-type.test.ts` **fails 13 of 25 against the base source tree** (the two `src/` files
+stashed) and passes 25 of 25 at head. A control asserted in one state only clears nothing here; this
+one is asserted in both.
+
+**IT USED TO READ 7 OF 23, AND THE MISSING SIX WERE VACUOUS GREENS. A GREEN IN BOTH STATES CLEARS
+NOTHING EITHER.** Those cases asserted `viaXml?.code` against
+`SERIALIZE_ERROR_CODES.UNSERIALIZABLE_RESOURCE_TYPE`, and against a base tree **both sides are
+`undefined`**, so `expect(undefined).toBe(undefined)` passed and the four scalar spellings the
+CHANGELOG leans on discriminated nothing in the polarity that matters. They now assert a **string
+literal**, with the enum member pinned once on its own. Raised by gate pass 1 as an observation rather
+than a finding, which is why it is written down here.
+
+The out-of-tree harness carried its own negative control: pointed at `@cosyte/hl7` instead of this
+package it exits non-zero on the missing `serializeResourceXml` rather than reporting green.
+
+#### Not closed by it, named rather than implied
+
+- **A JSON decimal comes back from XML as a string**, because XML carries no JSON type.
+- **`Observation.value[x]`** is outside the array-wrapper window and its wrapper still launders.
+- **A `resourceType` CHILD element read from XML is still dropped by both writers**, silently, and
+  that document reads `valid: true`. It is the repeated-property-name case reached through a door the
+  reader's missing `duplicates` mechanism opens, not this one, and refusing it would pay the cost
+  named above. `<Patient xmlns="http://hl7.org/fhir"><resourceType value="Observation"/></Patient>`
+  comes back as `<Patient xmlns="http://hl7.org/fhir"/>`. Pinned as a characterization test.
+- **The XML reader putting two properties of one name in one `FhirComplex`** is the underlying gap
+  behind that row, and it is a READ-path decision, not this branch.
+
+#### The axis of every "0" here
+
+**None of the numbers above is the FHIR R4 published-examples corpus.** They are 7 hand-authored XML
+fixtures plus mutations plus this repo's hand-authored JSON fixtures, plus the hand-built documents in
+`test/xml-resource-type.test.ts`. The read differential cannot grade this class: the substitution is a
+WRITE-path branch, no XML document produces the marker, and its own control is stale on a clean tree.
+No zero of its is quoted as evidence here.
+
+#### What the gate found (pass 1, `52472c2`)
+
+`REFUTED`, and **the first `fhir` slice in eleven where the gate found a defect in the code rather
+than only in a sentence.** The escalated process finding above -- ten consecutive slices refuted on
+prose, and the pressure that creates to write a longer sentence -- ends here on the opposite outcome:
+the remedy was a **quantifier**, and the prose shrank around it.
+
+1. **`INTRODUCED` major, and it is the item's own leg.** `some` in the guard against `find` in the
+   writer, above. Remedied in the predicate, not in the claim: aligning it refuses nothing either
+   reader can build, and it makes the root-level bound (`typeOf` is first-wins, so exactly the values
+   refused draw an error-severity `RESOURCE_TYPE_UNKNOWN`) true as written instead of nearly true.
+2. **`INTRODUCED` minor: the thrown message stated a counterfactual false at every depth it reports.**
+   _"...which this writer would delete while naming the element `Resource`"_ -- but at depth the tag
+   comes from the property name, and the message is emitted for `Patient.contained[0].resourceType`.
+   **Cut to what is true everywhere: "which this writer would delete."** The `Resource` substitution
+   is a root fact and is stated where it is true.
+3. **`PRE-EXISTING` minor, taken anyway because this slice edits the paragraph and widens it.** The
+   module comment's _"No refusal here recognises anything new, invents a value, or changes a document
+   that reads clean"_ was already false at base -- `breaksTag` names a zero-issue document it refuses,
+   and so does the `div` forgery. **Only the false clause is cut**; the two true ones are kept, which
+   is the `#76` rule. One carrier, so cutting it there is the whole sweep: `dist/` is generated, and
+   no pending changeset carries the sentence.
+
+What the gate could **not** grade, in its own words: every "measured at `63b05fc`" number, because its
+Bash is `git diff`/`log`/`show` only. Those were re-measured by hand against a `63b05fc` worktree
+before the pass and again after the remedy.
+
+## Narrative: The XML magnitude, read (2026-08-09, `FHIR-XML-WRITE-RESIDUALS`)
+
+Split out of `documentation/agent-notes.md` when that file was at the 250,000-byte cap it was then
+held to. The cursor stays there; this is the narrative.
+
+### The filed line was half right, and the halves disagree
+
+*"A JSON decimal returns from XML as a string"* is a **declared limit** at the model, not a defect.
+FHIR XML carries every primitive as the text of its `value` attribute and the reader is schema-free
+by design: with no `StructureDefinition` in hand it never guesses a datatype. Precision survives on
+both paths (no `number` is involved either way), and `nodesEquivalent` already accounts for it.
+
+**But `readQuantity` accepted only the JSON reader's shape.** Measured at `b60e720`, an XML
+`MedicationRequest` whose dose is written `<value value="5"/><code value="mg"/>` read back as
+`{ value: undefined, code: "mg" }` under `issues: []`, and the same held for
+`readObservationValue().quantity` and both `readReferenceRanges` bounds. `undefined` is this API's
+documented word for *no magnitude*, so a document that carried one came back as the **bare-unit
+shape**. Now read from either reader's model, recognised against the R4 `decimal` lexical space, text
+carried through unchanged.
+
+**NO DIAGNOSTIC MOVED, MEASURED RATHER THAN ARGUED:** nothing in `src/validate/` branches on
+`Quantity.value` (both UCUM checks read `system` and `code`), and `scripts/read-differential.ts`
+reads no quantities. Confirmed independently by the gate: `validateResource` output is byte-identical
+base vs head across every probe.
+
+**COLLATERAL, DECLARED: the model records no provenance**, so a JSON document that spelled its
+magnitude as a string is read the same way. Upheld by the gate as *not* the ADR 0018 tolerance this
+repo refused for element-text recovery: that one invents a value slot FHIR XML does not define; this
+one reads a magnitude written **at** `Quantity.value` in a form R4's own regex defines.
+
+### Four residuals, pinned by `test/xml-quantity-magnitude.test.ts`
+
+Each is a characterization test over a gap. Closing one MUST red it, in the same change.
+
+1. Re-serializing an XML-sourced decimal to JSON **quotes** it (`"1.50"`, not `1.50`). Text
+   byte-exact, JSON type not.
+2. `validatePrimitiveValue` reads the JSON reader's model shape as **the** model shape, so a
+   conformant `<active value="true"/>` draws `TYPE_MISMATCH` and flips `valid` where the JSON twin
+   validates clean. **The in-place lexical fix RETIRES A REAL mismatch on `{"active":"true"}` and
+   nothing separates the two: a decision, not a patch.** The gate found no safe in-place remedy
+   either, and recorded one safe out-of-place one for a future slice: provenance need not live in the
+   model, because `parseResourceXml` already returns a `ReadResult`, so a caller-supplied validate
+   option separates them without touching the JSON rule.
+3. `matchesFixed` compares model shapes, so a profile's `fixed[x]` decimal never matches XML.
+4. **The bare-unit shape is NARROWED, NOT RETIRED, and it is still silent.** `+5`, `05`, `.5`, `5.`
+   and `" 5"` are outside R4's `decimal` space, so they read `undefined` beside a unit that reads
+   fine, with nothing on any diagnostic channel. Refusing to read them is right (coercing would
+   author a magnitude the sender did not spell); the residual is that the refusal is silent.
+
+### What the gate caught, pass 1 (`9a6f0dc`, `REFUTED`, two `INTRODUCED` majors, both deletion-shaped)
+
+- **A universal written INTO the remedy.** *"It never means 'present but unread'"* was false at
+  residual 4, in **five carriers** (two in `src/quantity/ucum.ts`, `CHANGELOG.md`, the changeset, the
+  commit). The pressure this lineage keeps naming, arriving on the pass that finally had code to
+  report: a guarantee is a longer sentence than a measurement.
+- **A phrase sweep is not a carrier sweep, third slice running.** *"Four false 'same model' sites
+  cut"* was itself false: `agent-notes.md`'s `#p2-p3-and-what-the-package-does-today` carried the same
+  universal, and `documentation/` is on the written carrier list. **Five.** **Sweep the carrier list
+  `agent-notes.md` already writes down, never a phrase.**
+- **`instanceof` bought nothing and lost a magnitude base read.** The base predicate was duck-typed
+  (`typeof node.value === "object"`); `instanceof FhirDecimal` fails the brand check for a decimal
+  built by a second copy of the module graph, which is the bare-unit shape again. Reverted to the
+  duck type, which narrows identically in TypeScript.
+- `JSON_NUMBER` was documented as a **strict superset** of the R4 `decimal` space. They are equal,
+  character for character, and the new docblock in the same file said so: cut.
+
+Upheld on every measurement: the R4 space and nothing wider (`5`, `-0`, `0.010`, `1.0E2`, `1e+2`,
+`9223372036854775807`, `&#53;` read; `+5`, `05`, `5.`, `.5`, `1_000`, `0x10`, `Infinity`, `NaN`,
+Arabic-Indic digits refused, nothing coerced or normalised); polarity re-derived independently at
+**7 failed / 10 passed of 17**, no `expect(undefined).toBe(undefined)` shape anywhere.
+
+### What the gate caught, pass 2 (`cb28b8b`, `REFUTED`, two `INTRODUCED` majors, both deletion-shaped)
+
+**▶ 🛑 THE HEADLINE, AND IT IS A RULE ABOUT REMEDIES: BOTH FINDINGS WERE THE PASS-1 REMEDY ITSELF,
+RECOMMITTING THE DEFECT IT FIXED, ONE STEP NARROWER EACH TIME.** No pass has refuted the code.
+
+- **A false UNIVERSAL was replaced by a false MODULO.** *"`nodesEquivalent` defines cross-format
+  equivalence modulo exactly this"* and *"the difference is a primitive's lexical form"* name **one**
+  of the **two** irreducible differences `src/xml/equivalence.ts` itself enumerates: the other is the
+  **singleton list** (JSON `name` is a `list` node, XML `name` a `complex` one). Seven carriers.
+  **THE REMEDY IS DELETION, NOT ENUMERATION** -- adding "and singleton lists" would still be short,
+  because `equivalence.ts` names two further corner cases below its numbered pair. What ships asserts
+  **non-identity** and points at the oracle, which is what that file already told a reader to do.
+- **The census of what was LEFT was itself short**, and cited a line number already stale. Hence: no
+  count anywhere, and the rule instead of the number. Pass 3 then found the deleted census had
+  carried a **second** falsehood: the site it called self-disclosing continues with a **stronger**
+  universal, not a qualifier.
+- **`PRE-EXISTING`, and the reason the two `src/xml/read.ts` edits exist:** that docblock called the
+  singleton case *"**the one** irreducible schema-free ambiguity"* while the bullet above it defined
+  equivalence *"modulo lexical form"*. Two one-sided quantifiers, both since before this slice, both
+  cut with the finding above.
+- **A commit message is a carrier that cannot be cut.** `9a6f0dc`'s body still carries the refuted
+  guarantee in weaker words, and `scripts/ship.sh` squash-merges. **So the squash body is written by
+  hand rather than filled from the branch**, and this is the standing reason.
+
+### The pass ledger
+
+`9a6f0dc` `REFUTED` -> `cb28b8b` `REFUTED` -> `c09dd23` **`NOT REFUTED`**. **Cumulative: 3 graded
+passes, none of which refuted the CODE** -- every finding in all three was claim width.
+
+**▶ ⚠ THE COMMIT AFTER `c09dd23` IS UNGRADED BY THE GATE AND SAYS SO IN ITS OWN MESSAGE AND IN THE
+PR.** It applies pass 3's four `INTRODUCED` **minors**, which are all record-accuracy in this file and
+in `CHANGELOG.md` plus one comment in the test file, and it is deletion-dominant. **It does NOT ride
+on ADR 0027**, whose conditions pass 3 measured as unmet (that route needs a deletion-only remedy, and
+this one adds sentences). It rides on the verdict: no blocker, no major, and no behaviour touched.
+**Do not copy a pass ceiling out of this file.** ADR 0016's last amendment (2026-08-02) says four and
+ADR 0027 says three; they conflict, unresolved, and two agents have already halted a slice early by
+reading only the first number they met. Read the ADR, both of them, top to bottom.
+
+### The axis of every number here
+
+7 hand-authored XML fixtures plus mutations, this repo's hand-authored JSON fixtures, and hand-built
+probes. **None of it is the FHIR R4 published-examples corpus.** Nothing here is corpus-wide.
+
+## Narrative: The XML boolean, read (2026-08-09, `FHIR-XML-BOOLEAN-NEGATION-LOST`)
+
+Split out of `documentation/agent-notes.md` when that file was at the 250,000-byte cap it was then
+held to, and `CLAUDE.md` at its own. The cursor stays
+there; this is the narrative. Sibling: [the XML magnitude narrative](#narrative-the-xml-magnitude-read-2026-08-09-fhir-xml-write-residuals), the same root class
+one datatype over.
+
+### What it was
+
+Filed as a **STOP-THE-LINE**, and reproduced three times before any code moved (by `#78`'s author
+outside its slice, by the coordinator at `4eb444f`, and by this slice's own probe at the same
+commit). All three agree:
+
+```
+{"resourceType":"MedicationRequest","status":"active","intent":"order","doNotPerform":true, …}
+
+  JSON            -> negations: ["do-not-perform"]  doNotPerform: true
+  XML round trip  -> negations: []                  doNotPerform: undefined
+                     issues: []   safeToSummarize: true   assertSafeToSummarize PASSES CLEAN
+```
+
+The round trip is **this package's own** `serializeResourceXml` then `parseResourceXml`. **The
+writer is correct**: it emits `<doNotPerform value="true"/>`. The reader yields
+`{kind:"primitive", value:"true"}`, the **string**, because FHIR XML carries every primitive as
+attribute text and this reader is schema-free by design. `readDoNotPerform` read via
+`primitiveBooleans`, which accepted only a JS `boolean`, **and a failed match reads as absence.**
+
+**Why it outranked the other residuals of its class:** `#78`'s Quantity defect degraded a _value_;
+this one **inverts an instruction**.
+
+### THE CENSUS IS THE LESSON, AND SO IS WHAT IT DID NOT LICENSE
+
+The item said _census every boolean_. The census found three sites. **Only one was changed, and the
+gate is why.**
+
+| Site                                                                 | Via                 | Read from XML | Disposition               |
+| -------------------------------------------------------------------- | ------------------- | ------------- | ------------------------- |
+| `MedicationRequest.doNotPerform` (`safety/status.ts`)                | `primitiveBooleans` | LOST          | **FIXED**                 |
+| `ElementDefinition.mustSupport` (`profiles/structure-definition.ts`) | `primitiveBoolean`  | LOST          | **left standing, pinned** |
+| `ElementDefinition.slicing.ordered` (same file)                      | `primitiveBoolean`  | LOST          | **left standing, pinned** |
+
+**The first draft widened both helpers, and `conformance-refuter` pass 1 REFUTED it with a measured
+BEHAVIOURAL counterexample.** `src/profiles/snapshot.ts` merges a differential flag only when it is
+not `undefined`, so an XML `<mustSupport value="false"/>` that base read as `undefined` began
+**overwriting an inherited `true` and RETIRING a `MUST_SUPPORT_ABSENT` the base emitted.** The same
+held for a non-conformant JSON `{"mustSupport":"false"}`. That is the exact retirement class `#78`
+measured at `validatePrimitiveValue` and declined, reopened one layer over and unmeasured.
+
+**THE RULE THIS BOUGHT, AND IT IS NOT "CENSUS EVERY BOOLEAN":
+A SAFETY READ AND A CONVENIENCE READ CANNOT SHARE A WIDENING.** `primitiveBooleans` feeds
+`negations`, where a newly-read value can only **add**. `primitiveBoolean` feeds callers that treat
+`undefined` as **inherit**, where the same newly-read value **removes** a finding. The helpers look
+interchangeable and the direction of harm is opposite. **Additivity was argued from the helper's
+export status; it is a property of its CONSUMERS.** Check every consumer for an
+`undefined`-means-inherit merge before widening anything. `snapshot.ts` `mergeElement` has eight such
+lines. **The split is left in the tree deliberately**, both helpers being package-private, each
+read by exactly one module (`primitiveBoolean` from two call sites in `structure-definition.ts`,
+`primitiveBooleans` from one in `status.ts`) and documented at each site; the standing hazard is that **two near-identically-named
+readers of one datatype now accept different text, so if either is ever exported the split must be
+resolved rather than shipped.**
+
+**`negations` is monotone across the change** (a JS `boolean` `true` still yields `true`, so the
+negation can never be retired), **but `SafetyReadout.doNotPerform` moves further than `undefined` to
+a value**: it also moves `false` to `true` where **any** value spells the negation a JS `boolean`
+**elsewhere in the element** contradicts (the ordering is not the point, and a draft that said
+_later_ / _earlier_ was falsified by `{"doNotPerform":["true",false]}`), which is the documented
+"a `true` anywhere wins" rule and is pinned at
+`test/xml-lexical-boolean.test.ts`. **Gate pass 2 refuted a sentence saying the read "can only fill
+in a value that was `undefined`" using this slice's own fixture: the third generation of one
+universal.** Say _adds a negation, never retires one_, which is the only form that measures true.
+
+**Censused and deliberately unchanged**, each a decision:
+
+- **`validatePrimitiveValue`'s `boolean` branch** (`validate/primitives.ts`): still reads a
+  conformant `<active value="true"/>` as `TYPE_MISMATCH` and flips `valid`. `#78` measured that an
+  in-place fix **retires a real mismatch** on JSON `{"active":"true"}`. **Not reopened here.**
+- **FHIRPath `convertToBoolean`** (`fhirpath/evaluate.ts`, and it **is** a public export feeding
+  `InvariantResult.satisfied`, an error-severity verdict): a single non-Boolean item is `true` by the
+  reference singleton-evaluation rule, so an XML-sourced `<doNotPerform value="false"/>` judges an
+  invariant `true`. Fixing it changes FHIRPath typing for genuinely string-valued elements, so it can
+  **retire** a finding. Pinned.
+- **`toTrit`** (same file): throws `UnsupportedFhirPathError` on a string operand. **Fail-loud**,
+  surfacing as `INVARIANT_UNCHECKED`. Left as is.
+- **`systemTypeOf`** (same file): an XML-sourced boolean answers `"String"`, so `is Boolean` is
+  false. Same trade.
+- **The writers** (`xml/write.ts`, `codec/write.ts`, `xml/equivalence.ts`): they _emit_ and already
+  render a string unchanged, so the round trip is byte-exact either way.
+
+**The wider sweep the item asked for, over consumers matching on the JSON reader's TYPE rather than
+just booleans.** `decimalValue` closed by `#78`. **`parseMin`** (`structure-definition.ts`),
+`min` being an `unsignedInt` read through an `instanceof FhirDecimal` match, so **a profile handed
+over in XML declares required elements this library enforces none of**, silently (`max` is fine, FHIR
+spells it a string in both formats). **CLOSED 2026-08-09, and the widening is safe ONLY because
+`mergeElement` now takes the TIGHTER of the inherited and stated bound**: it overlaid the
+differential's verbatim, so any newly-read bound below the inherited one retired a `CARDINALITY_MIN`
+under `valid: false -> true`. A gate pass paid for that. `max` is the unguarded mirror:
+[the XML profile `min` narrative](#narrative-an-xml-sourced-profiles-required-elements-are-enforced-elementdefinitionmin). **OPEN: `numberOf`** (`fhirpath/evaluate.ts`), where an
+XML-sourced number falls through to **string** ordering, so `"9" < "10"` is false. `lexicalOf`
+(`bundle/types.ts`), `resourceTypeOf` (`model/node.ts`) and `lacksTaggableResourceType`
+(`codec/serialize-guard.ts`) read strings and are correct on both paths.
+
+### Where the fix went, and why not one layer down
+
+**At the safety read helper, `src/safety/codes.ts`, not in the XML reader.** A new `booleanOf`
+recognises **exactly `true` and `false`**, the whole of R4's `boolean` lexical space, and
+`primitiveBooleans` routes through it. This is the level `#78` used for the identical remedy
+(`decimalValue` inside `readQuantity`).
+
+**Reader-level coercion was rejected, and the reason is not timidity.** The reader is schema-free by
+design: with no `StructureDefinition` it cannot know `value` spells a `boolean` rather than a `code`,
+so coercing there turns `<name value="true"/>` on a string element into a JS boolean and
+`serializeResource` then emits `true`, **authoring a value the sender did not spell and laundering it
+across a format change**, the exact move `#74` refused. The gate confirmed the reader has no
+conformant-input hole under this choice: namespace prefixes resolve and `&#116;rue` decodes, so no
+legal XML spelling of `true` escapes the helper.
+
+### What moves, measured base-vs-head
+
+**No diagnostic moves at all.** `collectProfileIssues` over an XML-sourced profile and
+`validateResource` over the round-tripped `MedicationRequest` are identical on `4eb444f` and at head.
+The only thing that moves is `readSafety`'s `doNotPerform` and `negations`.
+
+### Residuals, each pinned in `test/xml-lexical-boolean.test.ts`
+
+Closing any of them MUST red its test, in the same change.
+
+1. **The two profile booleans**, above: unread from XML, and the retirement is why.
+2. **`ElementDefinition.min` unread from XML**, silently. Same root class, different datatype.
+   **CLOSED 2026-08-09** ([the XML profile `min` narrative](#narrative-an-xml-sourced-profiles-required-elements-are-enforced-elementdefinitionmin)); the pin here was rewritten in
+   place rather than deleted. What stays open is the unguarded `max` mirror in `mergeElement`.
+3. **FHIRPath `convertToBoolean` reads an XML `false` as `true`.**
+4. **`safeToSummarize` IS UNMOVED IN BOTH DIRECTIONS, AND THE SECOND DIRECTION IS A REAL GAP.**
+   For a value that reads, unmoved is right: `negations` carries the instruction and refusing to
+   summarize was never the remedy. For a value that does **not** read (`"1"`, `"0"`, `"Y"`, ordinary
+   v2- and C-CDA-to-FHIR converter output) **the element is present, its value is unread, nothing
+   records that, and the readout affirms**: the exact shape this item was filed over, surviving one
+   spelling over. `codes.ts` states the contract it sits against, that a consumer which does not
+   understand a modifier must **refuse** it rather than process it as absent. `SafetyReadout` has
+   location channels for content the codec could not read (`nestedArrays`, `droppedText`) and **none
+   for "value written, not readable"**. Base did this for `true` too, so it is strictly improved and
+   did not block. **Do not let "declared residual" absorb it: it wants its own item.**
+   **▶ 🟢 IT GOT ONE AND IT IS CLOSED**, `FHIR-XML-UNREADABLE-BOOLEAN-IS-SILENT`:
+   [the unreadable boolean narrative](#narrative-the-unreadable-boolean-reported-2026-08-09-fhir-xml-unreadable-boolean-is-silent). The remedy was the missing channel
+   (`unreadableBooleans`), **not** a wider read: the read is byte-identical to what this slice left.
+   Its half of the pin above moved out of `test/xml-lexical-boolean.test.ts` accordingly; residuals
+   1-3 stay there, unchanged.
+
+The lexical space itself is the fifth: `"TRUE"`, `"True"`, `"1"`, `"yes"`, `"Y"`, `" true"` and `""`
+read as no boolean. Refusing them is right, because coercing would author a value the sender did not
+spell. **The refusal being SILENT was the gap, and it is closed for the safety read only** (above):
+`primitiveBoolean`'s callers still refuse the same text with nothing on any channel.
+
+### Measurements
+
+**Red-at-base 6-of-22** against a real `4eb444f` worktree (22-of-22 at head). The other **16 are
+green in both states on purpose and are named**: seven lexical-space negative controls, the
+`doNotPerform`-on-`Patient` type gate, the decimal-form control, the JSON-reader control, the three
+profile-census pins, and the three residual pins. Non-vacuity was established by mutation, not
+asserted: a case/whitespace-insensitive `booleanOf` reds 3, dropping the `false` arm reds 1,
+accepting `"1"` reds 1.
+
+**The gate: `conformance-refuter` REFUTED -> REFUTED -> NOT REFUTED, cumulative 3** (`4b67787`,
+`1d9953d`, `27cb42c`; the first two were amended away). **Pass 1's finding was BEHAVIOURAL** (the
+`mustSupport` retirement above), which is why **ADR 0027 is NOT available to this slice** and was not
+invoked: its route requires that no pass refuted the code. The gate converged instead. **One commit
+after `27cb42c` applies pass 3's two advisories and is UNGRADED**, disclosed here, in its own message
+and in the PR: it deletes an over-specified _later_ / _earlier_ ordering from the `doNotPerform`
+transition sentence at three sites, and corrects "single-consumer" to name the call sites. Both are
+documentation, neither adds a guarantee.
+
+**Suite 64 files / 1,316 tests**, which is `#78`'s 1,294 plus this file's 22 exactly, so **no
+existing test moved**. **Corpus caveat, standing:** hand-authored XML fixtures plus mutations and
+hand-built probes, **not** the FHIR R4 published-examples corpus. Nothing here is corpus-wide.
+
+**Claims deliberately left standing, because this slice cannot grade them:** the _"same schema-free
+model"_ universals at `README.md` (x2), `src/index.ts` and `src/xml/read.ts`; _"never drops a status,
+modifier, or negation"_ at `README.md` and `docs-content/intro.md`, still qualified by a status
+written as XML **element text**, a different channel; and the `@example` blocks on `primitiveString`
+/ `primitiveBoolean` (`codes.ts`) that `import` them from `@cosyte/fhir` although neither is
+exported, byte-identical at `4eb444f` and reaching no declaration file.
+
+## Narrative: The unreadable boolean, reported (2026-08-09, `FHIR-XML-UNREADABLE-BOOLEAN-IS-SILENT`)
+
+Split out of `documentation/agent-notes.md` when that file was at the 250,000-byte cap it was then
+held to, and `CLAUDE.md` at its own. The cursor stays
+there; this is the narrative. Siblings: [the XML boolean narrative](#narrative-the-xml-boolean-read-2026-08-09-fhir-xml-boolean-negation-lost), the
+slice immediately before this one, and [the XML magnitude narrative](#narrative-the-xml-magnitude-read-2026-08-09-fhir-xml-write-residuals), the same root class
+one datatype over.
+
+### What it was
+
+Filed as a **STOP-THE-LINE** by `#79`'s own gate, outside its slice, and reproduced independently by
+the coordinator at `05ecc5a` and again by this slice's probe at the same commit. All agree:
+
+```
+<doNotPerform value="true"/>   negations: ["do-not-perform"]   issues: []  safeToSummarize: true  assert clean
+<doNotPerform value="1"/>      negations: []                   issues: []  safeToSummarize: true  assert clean
+<doNotPerform value="Y"/>      negations: []                   issues: []  safeToSummarize: true  assert clean
+<doNotPerform value="0"/>      negations: []                   issues: []  safeToSummarize: true  assert clean
+<doNotPerform value="N"/>      negations: []                   issues: []  safeToSummarize: true  assert clean
+```
+
+`#79` closed the `"true"` row. **`"1"` and `"Y"` are ordinary v2 and C-CDA converter output for a
+boolean**, and R4's `boolean` lexical space is `true|false` (`datatypes.html`), so they are **not
+readable** rather than false. **The reading is indistinguishable from `"0"` / `"N"`**: an author who
+wrote _"yes, do not administer"_ got the same answer as one who wrote _"no"_, with nothing recorded
+anywhere.
+
+**The structural gap was the item, not the site.** `SafetyReadout` had location channels for content
+the codec **could not read** (`nestedArrays`, `droppedText`) and **none for "value written, not
+readable"**: against `codes.ts`'s own stated `?!` contract.
+
+### 🛑 THE TRAP, WHICH ALREADY REFUTED A PREDECESSOR: DO NOT WIDEN `booleanOf`
+
+**Accepting `"1"` / `"Y"` is the OPPOSITE of what this item asked, and it is a worse defect than the
+one it fixes.** It invents a reading R4 does not license, and it turns `<doNotPerform value="0"/>`
+and `value="N"` into a JS `false` that `serializeResource` then emits, **authoring a value and
+laundering it across a format change**, exactly what `#74` refused. `"1"` and `"Y"` also arrive on
+real wires meaning a boolean's `true` _and_, elsewhere, its opposite: there is no safe direction to
+guess in.
+
+**What was missing was a REPORT, not a wider read.** `booleanOf` is byte-identical to `#79`'s. The
+value stays unread; what changed is that its presence is recorded.
+
+### The remedy
+
+`SafetyReadout.unreadableBooleans`, a third **not-readable** location channel beside `nestedArrays`
+and `droppedText`, plus `unreadableBooleans(resource, path)` exported beside them. It feeds
+`safeToSummarize` and `assertSafeToSummarize`.
+
+Detection is `hasUnreadableBoolean`, the **exact complement** of the read: it walks the same values
+through the same array wrapper (`scalarValues`) and asks `booleanOf` the same question, so a location
+is emitted for precisely the values `primitiveBooleans` declined. That coupling is deliberate and is
+the reason it cannot false-fire, **it cannot report a value the read did not look at, and it cannot
+miss one the read dropped.** A second rule with its own shape could do both.
+
+**It is decided in the safety layer, not the reader, and not the validator.** The reader is
+schema-free: `<doNotPerform value="1"/>` and `<status value="1"/>` are the same node to the codec, so
+nothing at parse time knows the text should spell a `boolean`. The safety layer is the first place
+that knows the datatype.
+
+### 🛑 THE ADDITIVITY ARGUMENT, FROM THE CONSUMERS, AND IT IS THE WHOLE GATE
+
+`#79` paid a refuted pass for the rule that **additivity is a property of the CONSUMERS, not the
+helper**: its pass 1 measured an XML `<mustSupport value="false"/>` overwriting an inherited `true`
+and **retiring** a `MUST_SUPPORT_ABSENT`.
+
+**That class is unreachable here by construction, and the reason is the strongest form available:
+THIS SLICE WIDENS NO READ AT ALL.** No value that was `undefined` becomes defined anywhere, so
+nothing that treats `undefined` as _inherit_ or _absent_ ever sees a new value. The consumers, in
+full:
+
+| what is added                                                  | who reads it                                                          | can it remove anything                                                                        |
+| -------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `SafetyReadout.unreadableBooleans`                             | nothing in tree before this slice                                     | new field; no prior consumer                                                                  |
+| `safeToSummarize`                                              | `assertSafeToSummarize` only (every other mention in `src/` is prose) | a conjunction of empty-list tests, one term added: monotone `true → false`, never the reverse |
+| `assertSafeToSummarize` locations                              | `FhirSafetyError.locations`                                           | appended last; no existing location is dropped or reordered                                   |
+| the read (`booleanOf`, `readDoNotPerform`, `primitiveBoolean`) | unchanged                                                             | **nothing added at all**                                                                      |
+
+**Measured, not argued.** Over a 33-document corpus in a real `05ecc5a` worktree, comparing every
+`SafetyReadout` field that exists on both trees, both writers' output, the parse issues, the
+`ValidationIssue` list and `valid`: **13 documents move, and in every one the ONLY field that moves
+is `safeToSummarize`, `true → false`.** The other 20 are identical on every channel. **No diagnostic
+moves anywhere.**
+
+### `safeToSummarize` DOES move, and that is the answer rather than a side effect
+
+Its stated contract is that the library declines when a summary would have to assert something it
+cannot establish. An unreadable negation is precisely that. `value="1"` and `value="0"` are
+indistinguishable to a reader with no licence to guess, so **affirming over either is affirming over
+a coin flip**: and the coin decides whether a medication is given. Both now refuse. Note the
+direction that makes this honest: the fix does **not** make `"Y"` and `"N"` read differently; they
+still read alike, because they _are_ alike to this library. What changed is that the shared answer is
+a refusal instead of an affirmation.
+
+### The census: the class is WIDER than the channel, and the channel says so
+
+**Booleans the safety spine reads out of a document: exactly one.** `MedicationRequest.doNotPerform`.
+`retracted` and `noKnownAllergy` are derived from codes and codings, not from a `boolean` element. So
+the channel is **complete for its own layer** and for nothing beyond it, and that limit is written
+into its docblock rather than left to be discovered.
+
+| site                                          | read via                         | unreadable value at head | disposition              |
+| --------------------------------------------- | -------------------------------- | ------------------------ | ------------------------ |
+| `MedicationRequest.doNotPerform`              | `primitiveBooleans` (safety)     | **REPORTED**             | **FIXED**                |
+| `ElementDefinition.mustSupport`               | `primitiveBoolean` (convenience) | silent                   | standing, pinned         |
+| `ElementDefinition.slicing.ordered`           | `primitiveBoolean` (convenience) | silent                   | standing, pinned         |
+| `ElementDefinition.min` (`unsignedInt`)       | `parseMin`                       | silent                   | narrowed 2026-08-09      |
+| `Quantity` magnitude (`+5`, `05`, `.5`, `5.`) | `readQuantity`                   | silent                   | standing, `#78`'s pin    |
+| FHIRPath `numberOf`                           | FHIRPath                         | silent                   | standing, `#79`'s census |
+
+**The `min` row narrowed on 2026-08-09 and the row is scoped, not retired.** `parseMin` now reads
+R4's **`unsignedInt`** lexical space off XML (`[0]|([1-9][0-9]*)`, `min`'s own datatype), so a stated
+bound is enforced and `<min value="0"/>` reads faithfully as `0`; a `min` written **outside** that
+space (`+1`, `01`, `1.0`, `" 1"`, `1e2`) is still unread and still silent, which is what this table's
+column measures. [the XML profile `min` narrative](#narrative-an-xml-sourced-profiles-required-elements-are-enforced-elementdefinitionmin).
+
+**The two profile booleans are not merely unfixed here, they have nowhere to go.** A
+`StructureDefinition` is not a safety resource and has no `SafetyReadout`, so reporting them needs a
+home this slice does not build, a second reason on top of `#79`'s measured retirement.
+
+### The one deliberate asymmetry: NO `ValidationIssue` OF ITS OWN
+
+**On the default path this is the first place on the readout where `safeToSummarize: false` sits
+beside `valid: true`.** Stated rather than glossed, because it is new.
+
+**🛑 THE REASON IS AVAILABILITY, AND TWO STRONGER-SOUNDING VERSIONS OF IT ARE FALSE. THE GATE
+REFUTED BOTH, ONE PER PASS, IN THIS PARAGRAPH.**
+
+**Pass 1 killed** _"the validator is schema-free and every rule it carries is about a shape FHIR gives
+no meaning to at any position"_. It is not schema-free: `validateResource` takes `{ schemas }`,
+`validate.ts` resolves a datatype from the registry, and `validate/primitives.ts` decides `boolean`
+on it.
+
+**Pass 2 killed the replacement**, _"supply a schema and it draws `TYPE_MISMATCH` on the conformant
+`value="true"` too, so it does not separate readable from unreadable"_. The three rows behind that
+were all **XML**, and the conclusion was drawn unscoped over a channel whose own docblock says "in
+either wire format". On the **JSON** wire it is plainly false: `validatePrimitiveValue` shape-checks
+`typeof value === "boolean"`, so a conformant `{"doNotPerform":true}` validates **clean** with a
+schema supplied while `{"doNotPerform":"Y"}` draws `TYPE_MISMATCH`. The package's own pending
+`olive-comets-listen` changeset already said so.
+
+**What survives unscoped is availability, not discrimination.** `MedicationRequest` has **no built-in
+schema** (`BUILTIN_SCHEMAS` was `[Patient]` when this was written and is `[Patient, Observation]`
+from 2026-08-25; `MedicationRequest` is in neither list, so the claim is unchanged, and read the set
+off the module rather than off this parenthesis), so the validator is silent about this element's
+**datatype** unless a caller supplies one (the shape channels, `ARRAY_WRAPPED_SCALAR` and
+`DUPLICATE_PROPERTY`, still fire at this element with no schema at all: pass 3's one-word finding), and a readout that has to hold on every document cannot be built on a diagnostic
+that only exists when a caller opts in. The safety layer knows the datatype **unconditionally**, which
+is why the report lives there. Pinned on the default path and with a schema supplied.
+
+**🛑 A CORRECTED CLAIM IS A NEW CLAIM, AND THIS PARAGRAPH PRODUCED THREE, EACH STILL A LITTLE WIDE.**
+Pass 3 graded the third **NOT REFUTED** but found it wide by one word (_"silent about this element"_
+where only its **datatype** is silent), which is the narrowing above. Every one of the three was the
+_reason_ reaching further than the _measurement_, and every remedy was a deletion or a narrowing.
+**Measure both wires, and both the datatype channel and the shape channels, before writing a general
+sentence here.**
+
+**Also raised by pass 3, `PRE-EXISTING` and advisory:** `readDoNotPerform` is **root-only**, so a
+`Bundle` whose `entry[0].resource` is a **conformant** `MedicationRequest` with `doNotPerform: true`
+reads `negations: []` and `safeToSummarize: true`, while the _unreadable_ spelling at the same
+location **is** reported by this channel. Identical at `05ecc5a`. Pass 3's disposition, adopted: fold
+it into the `ServiceRequest` item below rather than opening a second one, since both are the spine's
+read scope rather than a report.
+
+**And `FhirSafetyError.message` moves, outside the corpus measurement above**: it now names this
+sixth shape, so the string changes for **every** refusal it raises, including the five that already
+refused. `locations`, the class and the thrown type are unchanged. Named because the measurement
+enumerates readout fields, parse issues, `ValidationIssue`, `valid`, `negations` and both writers,
+and a public-observable string that moves outside that set has to be said out loud.
+
+### Measurements
+
+- **Red-at-base 18-of-30**, 30-of-30 at head, derived in a **real `05ecc5a` worktree** with a
+  base shim that supplies the new surface with **base's own semantics** (an always-empty channel,
+  because base reports nothing), so each test measures behaviour rather than a missing export. The 12
+  both-states pins, named: the two conformant spellings `true` / `false`, the absent element, the
+  value-less primitive carrying only metadata, the non-MedicationRequest type gate, the conformant
+  JSON `MedicationRequest`, this package's own XML round trip, the no-`ValidationIssue` pin, the
+  object/empty-array shape, the JSON `null`, the two profile booleans, and the non-boolean datatype.
+- **Non-vacuity by mutation, seven of them, each reds at least one pin:** dropping the
+  `MedicationRequest` type gate reds 1; stopping `hasUnreadableBoolean` reading through the array
+  wrapper reds 2; firing it on a value-less primitive reds 2; dropping the new term from
+  `safeToSummarize` reds 13; accepting `"1"` in `booleanOf` reds 1; reading only `node.properties`
+  and not the shadowed `duplicates` reds 1; dropping the channel from `assertSafeToSummarize`'s
+  location list reds 1.
+- **Suite 65 files / 1,346 tests** = `#79`'s 1,316 + this file's 30, so **no existing test moved**.
+  One existing test was **rewritten rather than added to**: `#79`'s pin _"still affirms
+  safeToSummarize over a doNotPerform this reader cannot read"_ looped over `["true", "1"]` and the
+  `"1"` arm is what this slice closes, so the pin now covers the `"true"` arm only and names where
+  the other half went. That is the pin discipline working, not a test being weakened.
+- Verify green: 11 `==>` step headers, 11 `ran:` entries, zero `(FAIL)`, no unladdered-script warning.
+
+### 🛑 RAISED BY PASS 1, OUTSIDE THIS SLICE: `ServiceRequest.doNotPerform` IS NOT READ AT ALL
+
+`PRE-EXISTING`, identical at `05ecc5a`, so it did not block. **It is a sharper shape than the item
+this slice closed**, and it needs its own item.
+
+R4 marks `ServiceRequest.doNotPerform` (and `CommunicationRequest.doNotPerform`) a `?!` **boolean
+modifier element**, exactly as `MedicationRequest.doNotPerform` is. `readSafety` gates the read on
+`isType("MedicationRequest")` and `ServiceRequest` is not in `SAFETY_RESOURCE_TYPES`, so a
+**conformant JSON** `{"resourceType":"ServiceRequest","doNotPerform":true}` reads `negations: []`,
+`unreadableBooleans: []`, `safeToSummarize: true`, `assertSafeToSummarize` clean. **This one is not
+an unreadable value: the document is conformant and the instruction is simply not looked for.**
+
+**Do not fold it into a channel slice.** The remedy is a question about the spine's type scope
+(`SAFETY_RESOURCE_TYPES` and `NegationKind`), not about a report, and widening the spine touches
+every type-gated read at once.
+
+### Corpus caveat
+
+Hand-authored XML and JSON fixtures, mutations and hand-built probes, **not** the FHIR R4
+published-examples corpus. Nothing here is corpus-wide.
+
+## Narrative: The negation read was blind by scope (2026-08-09): STOP-THE-LINE
+
+Relocated narrative for the `agent-notes.md` section of the same name. Base commit `f0289a2`.
+
+### What was measured, before anything was changed
+
+Plain conformant JSON. No XML, no round trip, no value outside a datatype's lexical space.
+
+```
+{"resourceType":"MedicationRequest",   "doNotPerform":true}  ->  negations: ["do-not-perform"]
+{"resourceType":"ServiceRequest",      "doNotPerform":true}  ->  negations: []  safeToSummarize: true
+{"resourceType":"CommunicationRequest","doNotPerform":true}  ->  negations: []  safeToSummarize: true
+```
+
+`assertSafeToSummarize` clean on all three. **That is what makes this one sharper than the two
+before it**: the first needed the XML round trip, the second needed `value="1"`. This needed neither.
+
+The unreadable twin measured the same way, and the asymmetry is the finding:
+
+```
+{"resourceType":"ServiceRequest","doNotPerform":"1"}  ->  unreadableBooleans: []   safeToSummarize: true
+{"resourceType":"MedicationRequest","doNotPerform":"1"} -> unreadableBooleans: [.] safeToSummarize: false
+Bundle.entry[0].resource = MedicationRequest doNotPerform:true  ->  negations: []
+Bundle.entry[0].resource = MedicationRequest doNotPerform:"1"   ->  reported at that exact location
+```
+
+**The library was strictly more honest about a value it could not read than about one it could.**
+
+### Why the gate was DROPPED and not WIDENED
+
+The tempting fix is `DO_NOT_PERFORM_TYPES = {MedicationRequest, ServiceRequest,
+CommunicationRequest, ...}`. **It is the same mechanism that produced the defect.** A type gate does
+not merely fail to *read* the types it omits: nothing looks at them, so nothing is *reported* for
+them either, and a gate is a list of the types somebody remembered. A fifth type reproduces the whole
+finding, silently, and the census would have to be re-grounded every R4 reading.
+
+**What licenses dropping it is the DIRECTION, not a census of R4.** This read can only ADD the
+`do-not-perform` negation. It can never retire a finding, never flip `valid`, never turn a refusal
+into an affirmation. So a type nobody enumerated costs a caller a negation it can ignore, where a
+type nobody enumerated *under a gate* costs a patient an instruction not to give a medication. This
+is the same asymmetry `CLAUDE.md` already records for `isRetracted` and the `refuted` read, and it is
+**the exact opposite** of `noKnownAllergy`, which asserts something *positive* about a patient and
+therefore stays type-gated. Un-gating that one would claim "no known allergy" over a `Condition` that
+merely carries SNOMED `716186003`. Both directions are pinned in the new test.
+
+**Do not reason from "no conformant document reaches it".** That is a universal over R4 and this repo
+has been refuted three times for exactly that shape of sentence. The argument above needs no such
+claim, and the one place a universal would be load-bearing (the refusal half, which *can* flip
+`safeToSummarize` to `false`) is answered narrowly instead: a type that defines no `doNotPerform`
+makes the document non-conformant *by writing the element at all*, so declining to affirm over it is
+the fail-safe direction rather than a false error.
+
+### The two halves are ONE function, and that is the design
+
+`checkDoNotPerform` does the read and its complement in one pass at one window. The predecessor
+(`checkUnreadableBooleans`) carried the docblock "the element name is type-gated the way the read
+is" - a sentence that was true only as long as somebody kept it true by hand. **Widen the read
+without the report and `<doNotPerform value="1"/>` on a `ServiceRequest` is exactly as invisible as
+`value="true"` was before this slice**: the previous STOP-THE-LINE, reproduced on a new type by the
+fix to this one. Structure beats the sentence: they cannot drift now.
+
+### Axis 2 in one line
+
+The negation comes from the walk (`SafetyWalk.doNotPerform`), which visits the entry node **plus
+every node carrying its own `resourceType`** - the same window `checkArrayWrapping` and the
+unreadable report already use. `readDoNotPerform` stays the root read behind the **convenience**
+field, exactly as `status` beside it is root-only. **`readSafety(bundle).doNotPerform` is therefore
+`undefined` while `negations` holds `do-not-perform`, on purpose**; the readout's own contract says
+branch on `negations`.
+
+**`safeToSummarize` does NOT move for a value that IS read**, and that is not an oversight: the
+refusal channel is for values this library cannot read. Reading it and surfacing it loses nothing.
+
+### Declared, NOT folded in - each its own slice
+
+- **`not-done` is also a `Procedure` / `MedicationAdministration` status in R4**, and both read
+  `negations: []` today. Same class, different element; each status gate needs its own grounding of
+  which types carry that code. Pinned in both states.
+  **CLOSED 2026-08-09** by the next slice, which did that grounding: an R4 census, not this slice's
+  direction argument, which does not transfer to a status *code*:
+  [the negation status codes narrative](#narrative-the-not-done--not-taken-type-gates-were-dropped-after-a-census-2026-08-09).
+- **Every negation except `doNotPerform` is still root-only.** A retracted `Observation` inside a
+  `Bundle.entry` leaves the Bundle's `negations` empty. Pinned.
+  **CLOSED 2026-08-09** by the slice after next, on FHIR's `?!` modifier rule rather than on this
+  slice's direction argument alone: [the negation depth narrative](#narrative-every-negation-reaches-every-resource-root-2026-08-09).
+  `no-known-allergy` stays root-scoped there, and that is now the declared residual.
+- **The array-wrapper report keeps its cardinality table.** `{"resourceType":"ServiceRequest",
+  "doNotPerform":[true]}` is now read through the wrapper and the negation surfaced, but the wrapper
+  itself draws no `ARRAY_WRAPPED_SCALAR`, because reporting one is an `error` and that stays where a
+  cardinality is known. Strictly better than base (which surfaced nothing), and pinned as a residual.
+- **Scope stops at resource roots**, not backbone elements: `MedicationRequest.dosageInstruction[0]
+  .doNotPerform` reads nothing. Pinned.
+
+### The count, and the sweep
+
+`status.ts` (x3, not the x2 the item named), `codes.ts`, `validate/safety.ts` (x2),
+`validate/validate.ts`, `test/validate-safety.test.ts` and `README.md` all said **"the six safety
+resource types"** over a set holding **seven**, and copies of it rendered into `dist/index.d.ts` and
+`dist/index.d.cts` (**0 at head**). **Cut, not corrected to "seven"** - a number written down here was wrong for days
+and the next reader does not re-check. **And do not write the CARRIER count down either. FOUR attempts, four different
+answers, every one of them defended at the time**: "8" tracked sites, then "3" dist occurrences,
+then the gate's "6" reasoned from the export list, then a measured "5" - and pass 3 showed that last
+one low too, because the grep that produced it could not match a phrase the JSDoc had wrapped.
+**THE COUNT IS NOT WRITTEN HERE, AND THAT IS THE WHOLE FINDING.** The only number that survives is
+**0 at head**, checked wrap-tolerantly in both declaration files. **Grep wrap-tolerantly or do not
+grep**: normalise newlines AND the JSDoc ` * ` continuation before matching, or the phrase that
+wraps mid-sentence reads as absent, which is fail-open and is exactly the defect the count exists to
+catch. That is how `README.md`'s copy hid from the first sweep.
+
+**Four carriers beyond the sites the item named. The sweep found two; THE GATE FOUND THE OTHER TWO,
+AND THEY WERE THE WORSE PAIR.** The sweep found the live `CHANGELOG.md` `[Unreleased]` entry and the
+**pending changeset** `.changeset/olive-herons-report.md`, both saying the read's element is
+`MedicationRequest.doNotPerform`; both are unreleased prose describing today's behaviour, so both
+were corrected rather than preserved. **What the sweep missed is the pair the fix itself falsified**:
+the JSDoc on the **exported** `unreadableBooleans` (which renders into `dist/index.d.ts`) and the
+same paragraph on `README.md`, the npm front page, each stating that the report window is
+*deliberately wider than the read* - true at base, false the moment the read widened, and a direct
+contradiction of `CLAUDE.md`'s own "the read window and the report window must be the same window".
+**The lesson is sharper than "sweep wider": grep for the sentences your change makes FALSE, not only
+for the sentence the item quoted.** A file being edited by the slice is no protection - `README.md`
+was edited, 200 lines above the stale paragraph. Both were CUT, not qualified. The historical `CHANGELOG.md` release entry for the Phase-3 layer is
+left alone: it *enumerates* its six groups and is true at its own site.
+
+### Measurement
+
+- **Red at base: 15 of 23** new assertions, in a real detached base worktree at `f0289a2`; **23 of 23
+  at head.** The 8 that pass in both states are deliberate pins, named **in the test file itself**,
+  five under their own `describe` and three commented in place: the
+  `MedicationRequest` pair that already worked (the control that says nothing broke), the negation
+  ordering, the absent element, `noKnownAllergy`'s gate, the status-code gates, the root-scoped
+  convenience fields, and the backbone-element boundary. (That sixth pin read "the other negations
+  are root-only" until the slice that closed it re-keyed it; the re-key is recorded in the test.)
+- **Non-vacuity by mutation, 7 of 7 red at least one test:** re-gate the root read (5); re-gate the
+  walk (10); gate **only** the report half, i.e. the drift this design forbids (2); undo axis 2 (5);
+  negate on a written `false` (1); run the check past resource roots (1); make the convenience field
+  deep (3).
+- **Suite: 65 files / 1,346 tests at base -> 66 / 1,369 at head**, and 1,369 - 1,346 = 23 is exactly
+  the new file, so **no existing test moved** except the two characterization pins over the type gate
+  (`xml-lexical-boolean.test.ts`, `xml-unreadable-boolean.test.ts`), which this closes and therefore
+  rewrites. Closing a pinned gap MUST red its pin, and both did.
+- **`verify.sh fhir` green**, `ran:` audited at 11 steps (`licenses typecheck lint format:check
+  phi-scan check:no-emdash check:no-internal-refs test:coverage build attw`) with zero `(FAIL)`.
+  `pnpm differential:read`: **0 readings moved, 0 regressions.**
+- Corpus caveat, as on every slice here: hand-authored JSON/XML fixtures, mutations and hand-built
+  probes, **not** the R4 published-examples corpus.
+
+---
+
+## The case/whitespace gap: DISCLOSE, DO NOT NORMALISE (2026-08-09)
+
+Base commit `fa5bfd8`. The last residual `#82` filed against this arc, and the one that needed a
+direction call before it could be built at all, because **the behaviour it complains about is
+spec-correct.**
+
+### 🛑 THE TRAP, AND IT IS THE ONE A FUTURE READER WILL WANT TO BREAK
+
+**Never coerce, trim or case-fold a value into a negation code.** `isNearMissCode` decides a
+**diagnostic**, never a reading; it is asked only *after* the exact match has already failed, and
+nothing anywhere turns the value it describes into the code it resembles. Making the read tolerant
+would be the **laundering class this package refuses everywhere else**: a non-conformant document
+accepted as though it were conformant, and a negation handed to a caller that its sender never
+spelled. Fix at the READ, never the reader. The sibling precedents are `x12`, which leaves
+whitespace-only control numbers padded **by design** because "trimming is a normalisation rule and no
+source states one", and `dicom`, which ships **a disclosure, not a bound**.
+
+**The silence was the defect. The strictness is not, and must not be "finished".**
+
+### The census WAS the slice, and the filed line understated the class again
+
+The item named `"NOT-DONE"`, `" not-done"` and `entered-in-error`. Measured over the codes derived
+from `src/`, at every element and every resource root each is read at, every case variant and every
+surrounding-whitespace form was **SILENT** - no negation, `safeToSummarize: true`, nothing on any
+channel. So the class was every `?!`-modifier-element negation code this layer classifies, on
+`status` **and** on a `verificationStatus` coding, at the entry root, in `Bundle.entry` and in
+`contained`, over space / tab / LF / CR / leading / trailing / both / any case.
+
+**One axis does not exist and inventing it would be wrong:** SNOMED `716186003` is digits, so case
+cannot vary it at all. Derive the codes from `src/`; never write the set down.
+
+### 🛑 THE CLAIM THAT WOULD HAVE BEEN FALSE, in `#83`'s "understating" direction
+
+**`do-not-perform`, the one BOOLEAN negation, ALREADY had this disclosure.** `<doNotPerform
+value="TRUE"/>` and `value=" true"` have landed on `unreadableBooleans` under
+`safeToSummarize: false` since that channel shipped. So *"this is the first time the package records
+a negation value it declined"* is **false**, and it is false in the flattering-to-caution direction
+that `#83` pass 1 was refuted for. The true, narrower claim is the one shipped: **the `code`-valued
+reads had no complement; the boolean one did.** Pinned in both states in the test file so the claim
+cannot drift back.
+
+### Why the two halves are not the same shape, stated rather than blurred
+
+The `unreadableBooleans` channel is about a value that could not be read **at all** - `doNotPerform`
+reads `undefined`, which is what an absent element reads too. This one is about a value that **is**
+read and **is** surfaced on `status` / `verificationStatus` unchanged; what fails is the
+**classification**. Nothing is lost. Do not describe it as a data loss, and do not fold it into the
+module docblock's "shapes FHIR does not define" - it is not one of them. (That docblock's count was
+removed 2026-08-10 when a further encoding joined the list; derive the set, never cite a number.)
+
+### ⚖️ `no-known-allergy` is OUTSIDE the disclosure, and the reason is architectural, not timidity
+
+`AllergyIntolerance.code` is deliberately absent from `NEGATION_CODE_READS`. Adding it would put a
+near-miss disclosure at **every resource root** while an *exact* SNOMED `716186003` at a nested root
+is read by **nothing at all** - so the library would **report the miss more loudly than the hit**.
+That is the same boundary that keeps `no-known-allergy` off the walk: it is a *positive* assertion,
+the one negation whose surfacing can make a caller **less** careful, where an absent one reads as
+*unknown*. Pinned in both directions. **Do not "finish the job" by adding it.**
+
+### Read scope and report scope are the same scope BECAUSE THEY ARE THE SAME TABLE
+
+`NEGATION_CODE_READS` holds the element, the codes matched exactly on it, **and the reader** - the
+same `primitiveStrings` / `safetyCodingsOf` the matches themselves go through. The disclosure is
+derived from it, inside `checkNegations`, so it inherits that function's window by construction
+rather than by a second copy of the condition. A test iterates the table and asserts of every entry
+that the exact code **is** classified there, so the table cannot drift into describing a read that is
+not there.
+
+**Whitespace is R4's own four-character class (`[^\s]+(\s[^\s]+)*`, XML Schema's `\s`), NOT
+JavaScript's.** A no-break space and a byte-order mark are ordinary characters inside a conformant
+`code`, so trimming one would call a value non-conformant that R4 accepts. Pinned in both states, and
+widening it to `/\s/` reds a test.
+
+### 🛑 PASS 1 REFUTED IT, and the finding was a FALSE POSITIVE ON A CONFORMANT DOCUMENT
+
+The gate's sharpest finding was **not** a claim defect but a behavioural one, and it is the shape to
+remember: **R4 permits TRANSLATION CODINGS beside the one a required binding's value set supplies**
+(`terminologies.html`: at least one Coding SHALL be from the value set, "text can be provided as
+well", additional codings permitted). So
+
+```json
+{"resourceType":"Condition","verificationStatus":{"coding":[
+  {"system":"http://terminology.hl7.org/CodeSystem/condition-ver-status","code":"refuted"},
+  {"system":"http://acme.example.org/legacy","code":"REFUTED"}]}}
+```
+
+is **conformant**, its negation **is** classified, and the first draft disclosed anyway and set
+`safeToSummarize: false`. **A disclosure channel that fires on a document the library read correctly
+and completely is a false positive, and it falsified the shipped sentence "Empty for every conformant
+document".**
+
+Closed by suppressing a near miss of code C at element E **where E also spells C exactly**. **Per
+CODE, never per element** - `refuted` exact beside `ENTERED-IN-ERROR` must still report, because
+nothing classified the retraction. Both directions are pinned, and both a per-element suppression and
+no suppression at all red a test.
+
+**The control that missed it exercised SINGLE-CODING conformant documents only**, so it discriminated
+a narrower claim than the one shipped - the same shape `#82` pass 1 was refuted for. The both-states
+control now carries the multi-coding document.
+
+### 🛑 THE OTHER TWO PASS-1 MAJORS WERE BOTH CLAIMS IN THE REASSURING DIRECTION
+
+**1. "the value is not lost, it is surfaced on `status` / `verificationStatus` exactly as written"
+was FALSE three ways**, and it was the load-bearing sentence justifying treating this channel
+differently from the loss channels. `status` and `verificationStatus` are **root-scoped and
+preferred-system-first**; this channel is **document-wide**. So a near miss in `contained` leaves
+`status` showing the ROOT's value (measured: `"active"` while the near miss was `"NOT-DONE"` one
+level down), a nested one in a `Bundle.entry` leaves it `undefined`, and a second-coding near miss is
+not the code `verificationStatus` shows. **The true claim is narrower: the codec KEPT the value, at
+the element the location names. Walk the model there. It is not a promise the value reaches a
+convenience field.** Corrected in `status.ts` (x3), `README.md`, `CHANGELOG.md`, the changeset and
+this note.
+
+**2. The `code` lexical-space argument is JSON-ONLY and was stated for "either wire format".** R4
+derives `code` **in XML** from `xs:token` (`fhir-base.xsd`, `code-primitive`), and `xs:token` carries
+`whiteSpace=collapse`, which strips surrounding whitespace **before** validation - so
+`<status value=" not-done"/>` is schema-valid R4 and **is** the code for a schema-validating
+consumer. Independently, XML 1.0 §3.3.3 attribute-value normalization turns a literal tab/LF/CR in
+any attribute value into a space for every conformant processor. **This reader is schema-free and
+does not collapse**, so it discloses rather than reads: fail-safe, and now a **declared limit** in
+every carrier rather than a conformance claim. **Do not "fix" this by collapsing in the XML reader** -
+that is the normalisation the whole slice refuses.
+
+Minor, also corrected: the regex was quoted as `[^\s]+([\s][^\s]+)*` where R4 spells it
+`[^\s]+(\s[^\s]+)*` (equivalent, but it was cited as verbatim, in ~7 carriers including
+`dist/index.d.ts`); and the first remedy for `#83`'s stale channel enumeration **reversed `#83` pass
+1's own fix** (naming the set WAS that fix), so the falsifiable clause was **deleted outright** from
+both `CHANGELOG.md` and the pending changeset instead.
+
+### Pass 2: NOT REFUTED, and the two minors it still found were both mine
+
+Graded the remedy diff only. All six pass-1 findings confirmed closed, the suppression invariant
+`suppressed(C at E) => C in negations` verified by brute force over 1,200 generated documents with
+**0 violations**, and the note's red-at-base figures reproduced to the test.
+
+Its two `INTRODUCED` minors, both corrected here and both the same shape as everything else in this
+arc: **an absolute claim.** *"Empty for every conformant document read from JSON"* shipped in five
+carriers while **the slice's own new test pinned a counterexample** - a `verificationStatus` carrying
+`confirmed` from the standard system beside a local `REFUTED`. That satisfies `terminologies.html`
+§4.1.5.1 (one coding SHALL come from the value set) and is non-conformant only under
+`datatypes.html`'s descriptive "each coding is a representation of the concept", which carries **no
+SHALL**. **The remedy used the permissive reading to justify the suppression and then asserted a
+claim that survives only under the restrictive one.** The sentence is now qualified in all five
+carriers; the guard was **not** grown, because over-disclosure is the fail-safe direction. The other
+minor was a stale count in this file, in a paragraph the remedy itself re-counted.
+
+**"FHIR `code` is case-sensitive" is imprecise and is deliberately left**: R4 says codes are case
+sensitive *unless the code system specifies otherwise*. It bites only for a `Coding` from a caller's
+own case-insensitive `CodeSystem`, and correcting it would push toward the coercion the direction
+forbids.
+
+### Passes 3 and 4: NOT REFUTED, and both found only my own prose
+
+**Pass 3** caught the qualification added for pass 2 being **one notch WIDER than the truth, in the
+cautious direction**: it admitted "a translation whose code *near-misses* a negation" as conformant,
+but a near miss is case **or** surrounding whitespace, and the whitespace half is never conformant
+JSON. **Only the case half can be.** Narrowed at all five carriers. **That is the understating shape
+again** - the third time in this arc a claim erred toward caution and was still false.
+
+It also caught the same edit leaving **unmatched `**` closers**: the rendered `CHANGELOG.md` entry
+carried three stray literal asterisks and **lost the bold on the `do-not-perform` sentence**, and
+`status.ts` carried one that ships verbatim into `dist/index.d.ts` / `.d.cts` and so into a
+consumer's hover. **Prettier had ESCAPED one closer to `disclosure\*\*`, which is exactly why
+`format:check` passed.** 🩺 **Nothing in CI reads rendered markdown, so the next such residue will
+also ship.** Repaired with real openers, never another escape.
+
+**Pass 4** (the cap) confirmed both closed at source **and in the built `dist/index.d.*`**, verified
+the transpile byte-identical across the remedy, and exercised the narrowed claim against the built
+library: every conformant-JSON firing observed is the case-only translation coding, and
+`"refu ted"`, `"not- done"` and an NBSP-padded code are all conformant and all silent. The anchored
+`CODE_WHITESPACE` is what stops internal whitespace manufacturing a second firing shape.
+
+### 🔴 `PRE-EXISTING`, raised by the gate, filed not absorbed
+
+**The XML reader performs no XML 1.0 §3.3.3 attribute-value normalization.**
+`<status value="&#x9;not-done"/>` and a literal tab both reach the model as `"\tnot-done"`.
+Unchanged at base, unchanged here, and its own item.
+
+**`fhir/CLAUDE.md` still says "Two refuter passes max ... **No fourth** (ADR 0016)"**, which
+contradicts the founder-settled cap of **FOUR** (2026-08-09). Not corrected here: that file is at
+**exactly 28,000 / 28,000** and any edit moves the ratchet. Its own item.
+
+**The BOOLEAN channel carries the identical un-scoped claim this slice just retired for `code`.**
+`unreadableBooleans` says *"Empty for every conformant document, in either wire format"*
+(`src/safety/status.ts`, shipped in `dist/index.d.*`) and `README.md` says it *"cannot fire on a
+conformant document in either wire format"*. But `fhir-base.xsd` restricts `boolean-primitive` to
+`xs:boolean`, whose `whiteSpace=collapse` facet is applied **before** the pattern, so
+`<doNotPerform value=" true"/>` is schema-valid R4 XML and lands on `unreadableBooleans` under
+`safeToSummarize: false`. **Verbatim at `fa5bfd8`, so it cannot gate this slice**, and the direction
+is over-disclosure rather than a mis-read. Its own item; **do not fold it in.**
+
+### 🛑 Measurement, and the shape of the count that was ALMOST published
+
+**32 of 40 red at base**, in a real detached base worktree at `fa5bfd8`; 41/41 at head (the 41st is a
+direct unit pin on the predicate, base-independent). **Of those 32, six are red only because the
+symbol or channel they name does not exist at base** (the two table-integrity tests, the three
+head-only channel-name pins, and the suppression case, whose base behaviour already matched), so
+**26 of 40 are red for a behavioural difference.** Reported that way on purpose.
+
+**The first draft of this test file measured 31 of 35, and that figure was wrong in the flattering
+direction** - the both-states pins were written as `expect(...nearMissNegationCodes).toEqual([])`,
+which goes red at base for the trivial reason that the field reads `undefined`, pinning **nothing**.
+They were rewritten onto `safeToSummarize` and `negations`, which both states have and which are
+`true` / empty only if the channel is empty. **A both-states pin asserted through a field the base
+commit does not have is not a both-states pin.** This is the second time in this arc a count
+overstated what was held down; the remedy both times was to restructure the tests, not the prose.
+
+**8 both-states pins, named in the test file** under their own `describe` with the reason written
+there: the non-negation padded code, the not-quite-a-negation value, the R4-vs-JS whitespace set,
+every conformant document, the backbone-element boundary, `no-known-allergy`'s two directions, the
+boolean negation's existing channel, and `valid` not moving.
+
+**Non-vacuity by mutation - what is held down, named, never a total:** widen the whitespace set to
+JavaScript's `\s`; drop the case fold; drop the whitespace strip; drop the exact-value guard so an
+exact code also reports; remove the channel from `safeToSummarize`; remove it from
+`assertSafeToSummarize`'s refusal; narrow the disclosure to the entry root; drop `verificationStatus`
+from the table; narrow the `status` reader to one value so a wrapper and a shadowed member are
+missed; add `AllergyIntolerance.code` to the table; remove the per-code suppression so a conformant
+translated coding fires; widen that suppression to per element so a different code's near miss is
+hidden. **Every one reddened at least one test; none survived.**
+
+**One SURVIVED after the pass-1 remedy and was closed rather than explained away.** The per-code
+suppression made the predicate's own `folded !== value` guard redundant *at its call site*: a value
+equal to the code is a value the element spells exactly, so it is suppressed regardless. The guard
+stays, because it is what the word "near" means, and it is now pinned by a direct unit test on
+`isNearMissCode` instead of by a document. **A guard nothing checks is a guard that rots.**
+
+**Negative control is DEGENERATE here and is reported as such**: `@cosyte/hl7` provides **0 of the 13
+symbols** this file imports, so every assertion in it fails at import for a reason that discriminates
+nothing about behaviour. The red-at-base fraction and the mutations are the real evidence. Do not
+quote an hl7 control on this repo as though it graded anything.
+
+**Corpus caveat:** hand-authored fixtures, mutations and probes - **not** the R4 published-examples
+corpus.
+
+### Residual raised by the work, filed not absorbed
+
+`{"resourceType":"Procedure","status":["NOT-DONE"]}` gets the near-miss location but **no
+`ARRAY_WRAPPED_SCALAR`**, because `arrayWrappedScalars` is scoped to a cardinality table on the
+safety resource types and `Procedure` is not one. Unchanged at both states, already filed against the
+array-wrapper rule by `#82`. Head is **strictly better** than base there, not complete. Pinned.
+
+## Narrative: The `not-done` / `not-taken` type gates were dropped, after a census (2026-08-09)
+
+Relocated narrative for the `agent-notes.md` section of the same name. Base commit `f8d7213`, the
+head of the slice that dropped the `doNotPerform` type gate
+([the negation read scope narrative](#narrative-the-negation-read-was-blind-by-scope-2026-08-09-stop-the-line)). Closes the first of that slice's declared
+residuals.
+
+### What was measured, before anything was changed
+
+Plain conformant JSON, on the base commit:
+
+```
+{"resourceType":"Immunization",            "status":"not-done"}  ->  negations: ["not-done"]
+{"resourceType":"Procedure",               "status":"not-done"}  ->  negations: []  safeToSummarize: true
+{"resourceType":"Communication",           "status":"not-done"}  ->  negations: []  safeToSummarize: true
+{"resourceType":"Media",                   "status":"not-done"}  ->  negations: []  safeToSummarize: true
+{"resourceType":"MedicationAdministration","status":"not-done"}  ->  negations: []  safeToSummarize: true
+{"resourceType":"MedicationAdministration","status":"not-taken"} ->  negations: []  safeToSummarize: true
+```
+
+Every one of the four blind rows is a **conformant R4 document**: `not-done` is in the required
+value set bound to that resource's `status`. A procedure recorded as **not performed** read as a
+procedure with nothing to say about it, under an affirmative `safeToSummarize`.
+
+### 🛑 The argument that licensed the previous drop DOES NOT TRANSFER, and that was the whole slice
+
+`doNotPerform` is an **element**. No R4 type defines it as anything but an instruction not to act, so
+reading it on a type nobody enumerated cannot mis-read it, and the direction alone (a read that can
+only **add** a negation) licenses dropping the gate.
+
+`not-done` is a **value of `status`**: one element name whose value set R4 defines **per resource
+type**. "Which types carry this code" is therefore a real question with a real answer, and the
+direction argument answers a different one. So the gate was not dropped by analogy. It was dropped
+after a census, and the census is what the drop rests on.
+
+### The census, and how to re-run it
+
+Source: the published R4 definitions, `hl7.org/fhir/R4/valuesets.json` (sha256
+`8d8fd0894624163296aa84e93c47cbead9b805fd83ec22ac71d45b7e25a86758`) and
+`profiles-resources.json` (sha256
+`d062516a420265da6d248e1d2b5d2a4aa9709c3c637807fe48e278054dffa114`), `fhirVersion` **4.0.1**. Method:
+every `CodeSystem` in the bundle whose concept tree defines the code, then every element in every
+resource `StructureDefinition` whose binding names a value set that includes it (following
+`compose.include`, whole-system includes and nested `valueSet` references).
+
+| | `not-done` | `not-taken` |
+|---|---|---|
+| R4 code systems defining it | `event-status`, `medication-admin-status` | `medication-statement-status` |
+| R4 elements bound to a value set containing it | `Procedure.status`, `Communication.status`, `Media.status`, `MedicationAdministration.status`, `Immunization.status` | `MedicationStatement.status` |
+| binding strength / cardinality | `required`, `1..1`, every one | `required`, `1..1` |
+| what this library read | `Immunization` only | `MedicationStatement` only |
+
+Three facts came out of it, and together they are the licence:
+
+1. **Each code is spelled only as a `status` value.** No R4 element outside `status` binds a value
+   set containing either code, so a wider read cannot meet the code doing a different job elsewhere.
+2. **Every code system that defines the code defines it as the negation**: "terminated prior to any
+   activity beyond preparation" (`event-status`), "terminated prior to any impact on the subject"
+   (`medication-admin-status`), "the medication was not consumed by the patient"
+   (`medication-statement-status`). So reading the code on a type nobody enumerated cannot *mis*-read
+   it; it can only surface it somewhere a census did not predict.
+3. **A gate is short, and version-scoped.** R4 carries `not-done` on five types where this library
+   read one. The same census against R5 (`5.0.0`) returns a different set again: it adds
+   `ClinicalImpression`, `NutritionIntake` and `DeviceUsage`, has no `Media` resource at all, and
+   **drops `not-taken` from `MedicationStatement.status` entirely**: on documents a reader with R5
+   read-tolerance is still handed. A list keyed to one published version is blind by construction.
+
+Only then does the direction argument apply, exactly as it did to the element: the read can only add
+a negation, never retire a finding, and never flip `valid` (nothing in the validator reads
+`negations`). A document spelling the code on a type whose value set excludes it is **already
+non-conformant**, and the fail-safe move over one is to surface the negation the sender plainly
+wrote, not to read the record as live.
+
+**⚠ Two nuances the census turned up, disclosed rather than smoothed over. Both are R5, and both are
+why the claim in the code is scoped to R4:**
+
+- R5 defines `not-done` in `consent-state-codes` with the display **"Abandoned"** ("the consent
+  development has been terminated prior to completion"). Still not-happened, so still the safe
+  direction, but it is the one place where the code's *display* is not a negation on its face.
+- **The "only as a `status` value" half is version-scoped too, exactly as the type list is.** In R5,
+  `DeviceUsage.usageStatus` binds a value set containing `not-done` and is not named `status`, so it
+  is the one element outside `status` that carries the code anywhere in either version. This read
+  does not look there, which is an **under**-read (the safe direction, a negation not surfaced rather
+  than one invented), and it is stated here rather than left as an implication of an R4-only census.
+
+### `not-taken` is the narrower half, and is reported as such rather than dressed up
+
+The census returns exactly one R4 element for `not-taken`, which is the type the gate already named.
+**So the old gate was complete for every conformant document, and dropping it changes nothing on
+one.** What it changes is the non-conformant document the item quoted -
+`{"resourceType":"MedicationAdministration","status":"not-taken"}`, where R4's conformant spelling is
+`not-done`. That is the case this library exists to be honest about: a sender who wrote "not taken"
+on a medication administration, and a readout that called the record live.
+
+Dropping it also removes the last reason to keep two mechanisms. The read is now
+`codes.ts` `statusSpells`, **the read `isRetracted` already performed for `entered-in-error`** (the
+same shape of code, on the same element, at the same root scope), so the three cannot drift apart
+over which values of `status` they see.
+
+### Measurement
+
+- **Red-at-base 11 of 22** in a real detached base worktree at `f8d7213`; 22 of 22 at head. **11
+  both-states pins**, named in the test file itself rather than in a commit message.
+- **Non-vacuity by mutation, stated as WHAT IS PINNED rather than as a total.** Method: mutate one
+  real behaviour of the read away, run the whole suite, and require at least one assertion to red.
+  Held down this way, each named: the type gate on `not-done` (reds 11); the type gate on `not-taken`
+  (2); reading every written member rather than only the first (9); reading through an array wrapper
+  (9); the order the two negations are pushed in (1); code equality rather than a prefix match (1);
+  the retraction's `status` arm, which is the refactor's cover (25); and **the element scope, which
+  needed two rounds and is the reason a total is not the claim here.**
+  **🛑 A MUTATION TOTAL OVERSTATES WHAT IT MEASURES, AND DID.** "8 of 8" was published while the
+  element-scope assertions used `CodeableConcept` values only: they discriminated a widening through
+  the *coding* reader, so the whole primitive widening
+  (`["status","code","statusReason","category"]` inside `statusSpells`) passed the entire suite. The
+  gate found it. The primitive-shaped twins were added, and the minimal one-token widening
+  (`["status","code"]`) now reds. **Name the list, not the count** - the count was wider than the
+  thing it measured, which is this repo's recurring error in a new place.
+- Suite 66 files / 1,369 tests -> 67 / 1,391: the new file, and **no existing test moved except the
+  three characterization pins over the old gate**, which this closes and therefore rewrites.
+- Negative control: all 22 assertions **fail** against `@cosyte/hl7`.
+
+### 🛑 Two tests were re-keyed, and the two reasons are DIFFERENT
+
+Both proved the fail-safe type read with a `not-taken` behind a wrapped or duplicated `resourceType`,
+and that negation is no longer type-scoped, so neither document grades that mechanism any more. What
+each did about it was not the same, and the distinction was got wrong once here before the gate
+corrected it:
+
+- `test/xml-array-wrapper.test.ts` was **falsified outright**: it asserted `negations: []` for a
+  laundered `<Resource><status value="not-taken"/></Resource>`, which now reads `["not-taken"]`. It
+  was red at head, not vacuous.
+- `test/array-wrapped-scalar.test.ts` stayed **green**, but its *negation* assertion no longer
+  depended on the type read; the `resourceType` and `arrayWrappedScalars` assertions beside it still
+  did, so the test was partly hollowed rather than wholly vacated.
+
+Both are re-keyed to `no-known-allergy`, the negation that **is** still type-gated, and both red
+again under a `typesOf` reduced to a strict single-value read. Leaving them keyed to a status code
+would have left green tests claiming to grade a mechanism they no longer touch, which is the failure
+mode this repo has hit from the other direction twice.
+
+### Declared, NOT folded in - each its own slice
+
+- **Still root-only.** `{"resourceType":"Bundle",…,"entry":[{"resource":{"resourceType":"Procedure",
+  "status":"not-done"}}]}` leaves the Bundle's `negations` empty, exactly as a nested retraction
+  does. Only `doNotPerform` reads at every resource root. Pinned.
+  **CLOSED 2026-08-09**, together with the retraction and the refutation:
+  [the negation depth narrative](#narrative-every-negation-reaches-every-resource-root-2026-08-09). Its pin here was re-keyed to the
+  element-and-root scope, which is what survives.
+- **The array-wrapper report keeps its cardinality table.** `{"resourceType":"Procedure","status":
+  ["not-done"]}` is read through the wrapper and the negation surfaced, but the wrapper draws no
+  `ARRAY_WRAPPED_SCALAR` on a type outside `SAFETY_RESOURCE_TYPES`. Strictly better than base, which
+  read nothing and reported nothing. Pinned, with the `Immunization` half as the both-states control.
+- **The read is at the resource root, not a backbone element.** `Procedure.performer[0].status`
+  reads nothing. Pinned.
+- **No value-set validation.** This library surfaces the code; it does not check the code against the
+  binding, so it does not *report* `{"resourceType":"Patient","status":"not-done"}` as
+  non-conformant, it merely surfaces the negation. Making that a diagnostic needs the per-resource
+  model this layer must not grow.
+- `PRE-EXISTING`, untouched: `src/safety/codes.ts` still publishes a **set size** into
+  `dist/index.d.ts`.
+
+**CORPUS CAVEAT on every zero above:** the fixtures are hand-authored plus mutations and probes, not
+the R4 published-examples corpus. The census is over the published R4 *definitions*, which is a
+different artifact from a corpus of instances.
+
+## Narrative: Every negation reaches every resource root (2026-08-09)
+
+Base `3fa61aa`, closing the second residual of
+[the negation read scope narrative](#narrative-the-negation-read-was-blind-by-scope-2026-08-09-stop-the-line) and the first of
+[the negation status codes narrative](#narrative-the-not-done--not-taken-type-gates-were-dropped-after-a-census-2026-08-09): they were the same gap read from two sides.
+Item `FHIR-NEGATION-READ-SCOPE-RESIDUALS`.
+
+### The cursor
+
+**Plain conformant JSON, in the container the standard defines for carrying resources:**
+
+```
+Bundle{ entry[0].resource = Observation{status:"entered-in-error"} }        -> negations: []
+Bundle{ entry[0].resource = Procedure{status:"not-done"} }                  -> negations: []
+Bundle{ entry[0].resource = MedicationStatement{status:"not-taken"} }       -> negations: []
+Bundle{ entry[0].resource = AllergyIntolerance{verificationStatus refuted}} -> negations: []
+Patient{ contained[0] = any of the above }                                  -> negations: []
+```
+
+each under `safeToSummarize: true` with `assertSafeToSummarize` clean, while the identical `Bundle`
+carrying `doNotPerform: true` returned `negations: ["do-not-perform"]`: `#81` having moved that one
+negation onto the walk and left the rest behind on purpose. **A retracted record read as data.**
+
+### 🛑 What licenses reading a NESTED resource is the `?!` RULE, not the depth
+
+The three element NAMES moved here are ones R4 flags `?!` on the types that define them (`status`,
+`verificationStatus`, `doNotPerform`; citations on `checkNegations`), and
+a consumer may never process a modifier element as if it were absent. **That is a claim about the
+NAMES, not about every node the walk hands them.** The window is a property-name test (`resourceType`
+is written here), inherited from `checkArrayWrapping`, not a proof that the node is a resource: R4
+gives `ExampleScenario.instance` a `resourceType` element of its own. Additive either way, and
+declared on the function rather than claimed away. **That obligation attaches to
+the resource carrying it, not to the position the resource occupies in a document**: a `Bundle.entry`
+order and a `contained` order are resources. Only _then_ does the direction argument apply, exactly
+as at the entry root: the read can only ADD a negation, never retire a finding, never flip `valid`.
+
+**Do not restate this as "read deeper is always safe."** It is a rule about which ELEMENTS carry an
+obligation, which is why `no-known-allergy` does not move (below).
+
+### 🛑 The read was NOT widened past its refusal, and here the check runs the OTHER WAY
+
+`#81` paid for the rule that a read and its refusal move together. **Check the direction before
+assuming you must move both.** Here the location channels that record a value this library could not
+read (`droppedText` and `nestedArrays` at every node, `shadowedProperties` at every complex,
+`unhandledModifierExtensions` at every property, `arrayWrappedScalars` and `unreadableBooleans` at
+every resource root) **already covered at least every location this read moved into**, so the refusal window was and remains no narrower than the read. Nothing needed
+widening; what was needed was the evidence, and it is a **pin at one nested location from both
+sides**: `<status>not-done</status>` (character data the reader drops, xml.html §2.6.1) is reported
+there and adds no negation, and `<status value="not-done"/>` at that same location is read.
+
+**The reads themselves are byte-identical to the ones already performed at the entry root**
+(`isRetracted`, `statusSpells`, `safetyHasCodeAnySystem`), called on more nodes rather than
+rewritten. So **no document's reading moves; only the set of nodes the reading is applied to.**
+`checkArrayWrapping` and `checkNegations` are now reached through one `checkResourceRoot`, so "which
+nodes are a resource root" is decided in one place for the report and the reads together.
+
+### 🔴 `no-known-allergy` DELIBERATELY does not move: it is the one whose ABSENCE is cautious
+
+Two independent reasons, and the second is the one that generalises:
+
+1. It is read off `AllergyIntolerance.code`, an element R4 does **not** flag `?!` at all. It is this
+   library's own first-class concept, so the modifier rule above does not reach it.
+2. **It runs the other way from every negation on the walk.** Surfacing a recorded "no known allergy"
+   from somewhere inside a document can make a caller **less** careful about a patient; leaving it
+   unsurfaced reads as _unknown_, which is the cautious answer. So the direction argument that
+   licenses the others argues **against** this one.
+
+Pinned in both states, so closing it later must red those. It is the same asymmetry the type gate
+already encodes, seen from the scope side.
+
+### Root vs document, and it is now a stated contract
+
+**🛑 NAME THE SET. `negations` is not "the only field that covers the document" and a draft of this
+slice shipped that universal into `dist/index.d.ts` before the gate cut it.** The readout has **two**
+groups, and the line between them is not depth but **whether a value can say where it came from**:
+
+- **Document-wide, and ALREADY WERE:** the location channels `unhandledModifierExtensions`,
+  `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
+  and the `safeToSummarize` derived from them. They carry FHIRPath locations, so a nested finding has
+  an address, and **`assertSafeToSummarize` has always refused over a `Bundle`'s entries.** Untouched
+  here: this is exactly why the refusal needed no widening.
+- **Single-valued, and therefore root:** `resourceType`, `status`, `clinicalStatus`,
+  `verificationStatus`, `doNotPerform`, `retracted`, `noKnownAllergy`. One value cannot say which
+  resource it came from. A `Bundle` is not retracted when one of its entries is, so **`retracted`
+  implies `entered-in-error` is on `negations`, never the other way round.**
+
+`negations` is the read that crosses the line, and it can because it is a **set with no locations**
+in a **fixed order** (`NEGATION_ORDER`): a kind says the same thing once however many resources
+assert it, and entry order must not decide the order a caller sees.
+
+### Measurement
+
+- **Red at base: 21 of 32** new test cases, in a real detached base worktree at `3fa61aa`; **32 of 32
+  at head.** The 11 both-states pins are named **in the test file**, five under their own `describe`,
+  three commented in place, three in the declared-gap section.
+- **Non-vacuity by mutation, 9 of 9 red at least one test.** Recorded as WHAT IS HELD DOWN, never as
+  a total: the four status/coding reads at the walk's window; the walk window itself (`isRoot` only);
+  `retracted` staying the root read; `no-known-allergy` staying off the walk; the fixed kind order;
+  the de-duplication; the resource-root boundary (run past it onto every complex); the absence of a
+  type gate on the nested read; reading every written member rather than the first.
+- **Suite: 67 files / 1,391 tests -> 68 / 1,423**, and 1,423 - 1,391 = 32 is exactly the new file, so
+  **no existing test moved**: the two characterization pins over the gap were re-keyed in place, one
+  test each.
+- **Negative control: all 32 cases fail** against `@cosyte/hl7` 0.0.10 in a separate scratch package.
+- **CORPUS CAVEAT on every zero here:** the fixtures are hand-authored plus mutations and probes, not
+  the R4 published-examples corpus.
+
+### The sweep, and what it corrected BY DELETION
+
+Sentences the fix **falsified**, not just the sites the item quoted:
+
+- `README.md`: _"`doNotPerform` goes further and is read at any resource root"_: true of one negation
+  when written, false as a distinction the moment the others joined it.
+- `SafetyReadout`'s docblock: _"`negations` (and `retracted`) are the authoritative safety reads"_:
+  the two now answer different questions, so the pairing was cut.
+- **The live `CHANGELOG.md` `[Unreleased]` entry AND the pending changeset `tame-pears-shake.md`**,
+  both stating a `Procedure` in a `Bundle` entry still leaves `negations` empty. **Corrected by
+  DELETING the clause, never by rewording it**: a changeset freezes into `CHANGELOG.md`.
+- Verified **0** in `dist/index.d.ts` and `dist/index.d.cts`, grepped wrap-tolerantly (normalise
+  newlines and the JSDoc `*` continuation, or a wrapped phrase reads as absent, which is fail-open).
+
+### Declared, NOT folded in: each its own slice
+
+- **`no-known-allergy` stays root-scoped** (above). The residual this slice creates on purpose.
+- **The array-wrapper report keeps its cardinality table**, now reachable at one more location: a
+  nested `{"resourceType":"Procedure","status":["not-done"]}` surfaces the negation and draws no
+  `ARRAY_WRAPPED_SCALAR`. Strictly better than base, which surfaced neither. Pinned, with the
+  `Observation` half as the both-states control.
+  **Gate pass 1 found the `Coding`-level twin of the same residual** -- **CLOSED 2026-08-10, see
+  [the `Coding` wrapper narrative](#narrative-the-coding-wrapper-report-moves-to-the-negation-reads-own-window); the element-level half
+  above is still open.** As found: a nested `FamilyMemberHistory` with
+  `verificationStatus.coding[0].code: ["refuted"]` reads `negations: ["refuted"]` at head (`[]` at
+  base) with `arrayWrappedScalars: []`, because `safetyCodingsOf`'s single-position unwrap now fires
+  at a resource root whose type is outside `SAFETY_RESOURCE_TYPES`, where `checkCodingWrapping` does
+  not report. Additive only (a negation appears; nothing is retired), same mechanism, one level down.
+- **Exact-string matching still drops `"NOT-DONE"` / `" not-done"` silently**, at every window.
+  Spec-correct (FHIR `code` is case-sensitive) but a Postel's-Law gap in a SAFETY read. Its own item.
+- **The validator's `RETRACTED_RESOURCE` is still root-scoped AND type-gated**
+  (`src/validate/safety.ts`), so a retracted entry inside a `Bundle` raises no issue even though the
+  readout now classifies it. A different layer and a different contract (an issue is a report, not a
+  read); untouched here rather than absorbed.
+- `PRE-EXISTING`, raised by gate pass 1 and filed rather than absorbed: **a `status` written as a
+  JSON OBJECT was invisible on every channel.** `{"resourceType":"Observation","status":
+  {"value":"entered-in-error"},"code":{"text":"x"}}` read `retracted: false`, `negations: []`,
+  `safeToSummarize: true`, `valid: true`, zero diagnostics, **identical at `3fa61aa`**. It is another
+  of the encodings `src/safety/status.ts` enumerates, and it is what a generic FHIR-XML to JSON
+  converter makes of `<status value="entered-in-error"/>`, the same traffic that docblock cites.
+  Not `STOP-THE-LINE` (non-conformant input, and the value survives in the model).
+  **🟢 CLOSED 2026-08-10**, `documentation/agent-notes.md#narrative-content-written-where-a-code-belongs-is-disclosed-not-read-through`: it draws
+  `unreadableNegationCodes` and `safeToSummarize: false`. **`valid: true` is UNCHANGED and stays
+  open** - the safety layer was that slice's window and it raised no `ValidationIssue`.
+- `PRE-EXISTING`, untouched: `src/safety/codes.ts` still publishes a **set size** into
+  `dist/index.d.ts`; and _"the negation read"_ stays **ambiguous** between the walk-scoped `negations`
+  and the root-scoped convenience fields wherever it appears unqualified.
+
+### ⚠ Budget
+
+`CLAUDE.md` is at **28,000 / 28,000** and **was not touched**. No trap was needed: its existing
+type-gate trap already says _"the read runs at **every resource root**; the convenience field stays
+root-scoped like `status`"_ and _"`noKnownAllergy` is the opposite and stays gated"_, both of which
+this slice makes true of every negation rather than one. **Do not add a line here to celebrate that.**
+
+## Narrative: Content written where a `code` belongs is disclosed, not read through
+
+`FHIR-NEGATION-READ-SCOPE-RESIDUALS`, base `632f914`. Closes the `PRE-EXISTING` residual `#83` filed
+and `#84` carried forward: **a `status` written as a JSON object read `negations: []` /
+`safeToSummarize: true` / `valid: true` at both states.**
+
+**This file exists because `documentation/agent-notes.md` had six bytes left of its archive budget
+when this slice started, so it could not be appended to.** This is the per-slice tier, which carries
+its own budget. `CLAUDE.md` was **not touched**, and the one correction this slice made to
+`agent-notes.md` (retracting a now-closed entry) came out **net negative**. No ratchet was raised and
+no trap was deleted or reworded to buy room. **The figures themselves are deliberately not written
+down here**: derive them from the files, because a number copied into prose here is the one thing
+guaranteed to be stale when it is next read.
+
+### What was wrong
+
+At `632f914`, every one of these returned an empty negation list with **no location anywhere**:
+
+```
+{"resourceType":"Procedure","status":{"value":"not-done"}}           -> negations: []  safe: true
+{"resourceType":"Observation","status":{"value":"entered-in-error"}} -> negations: []  safe: true
+{"resourceType":"Procedure","status":[{"value":"not-done"}]}         -> negations: []  safe: true
+{"resourceType":"Procedure","status":3}                              -> negations: []  safe: true
+```
+
+A `Bundle.entry` and a `contained` resource behaved the same way. `{"value":"not-done"}` is not an
+exotic input: it is what a generic converter emits when it carries FHIR **XML**'s `value` attribute
+across into JSON as a member, and it is the same class of converter output that motivated the array
+wrapper reads already in this layer.
+
+### The licence, and it did not transfer from any predecessor
+
+Four slices, four different licences. `#81` dropped a type gate on **direction**; `#82` needed an
+**R4 census** because a status code is not an element; `#83` used the **`?!` modifier rule**; `#84`
+was a **decided direction** (disclose, do not normalise) over a value.
+
+**This one is licensed by the ENCODING, and by nothing else.** FHIR JSON spells a `code` as a JSON
+string (json.html §2.6.0) and a `CodeableConcept` as an object with `coding` / `text`; those are the
+two datatypes a root `status` carries. A shape spellable as **neither** is one no version of FHIR
+defines at that position, so descending into `{"value":"not-done"}` to recover the string would
+resolve a negation out of an encoding **no specification defines**, and hand a caller an assertion
+its sender never spelled in a form the sender could have spelled it. That is the laundering this
+package refuses everywhere else, and it is why the remedy is a **disclosure** rather than a read.
+**The gap closed is the silence, not the strictness** - the same disposition `#84` took on a value,
+applied to a position.
+
+**🩺 The licence was ARRIVED AT TWICE.** The first cut stated it as *"a `code` is a JSON string, so
+anything the string read cannot take is unreadable"*, which is a statement about a **reader** rather
+than about the **encoding**, and it was wrong for exactly the documents where the encoding is a
+`CodeableConcept`. Gate pass 1 refuted it (below). The correct form is about what FHIR can spell at
+the position, and only that form survives contact with the published R4 examples.
+
+### The shape / value distinction, which is the whole finding
+
+**Every other question this layer asks is about a WRITTEN VALUE, and a shape is invisible to all of
+them.** `hasUnreadableBoolean` asks whether a value the read saw fell outside the boolean lexical
+space; `isNearMissCode` asks whether a value spells a code bar its case or its whitespace. **An
+object holds no value at all**, so both answer `false` about it, **truthfully**, and the element then
+reads exactly like one the sender left out.
+
+That is worth naming as its own shape, because it means the two existing channels were not "missing"
+this case through an oversight in their predicates. They were answering a different question
+correctly. `hasUnreadableBoolean`'s own docblock **already said so** at base ("It answers about a
+value, not about a shape... those shapes are a separate gap"), and this slice does not widen it: an
+object at `doNotPerform` still draws nothing, pinned in both states.
+
+### Read and refusal move together, at one window
+
+The trap this lineage paid for is that **a read and its refusal must be one function at one window**,
+or widening the read alone reproduces `#80`'s STOP-THE-LINE on the newly-reachable locations.
+
+Here nothing about the **read** widened at all. What was added is the read's **shape complement**,
+carried as a third field (`unread`) in the **same `NEGATION_CODE_READS` row** as the reader it
+complements, and applied in the **same loop over the same table** that makes the exact matches and
+the near-miss disclosure. So the disclosure cannot come to cover an element the classification does
+not, nor miss one it does, **by construction rather than by a second copy of a condition**. That is
+pinned mechanically (the covered element list is derived from the table in the test, never written
+down) rather than described.
+
+**🛑 But "one window" is a claim about the ELEMENT dimension only, and gate pass 1 named the
+dimension it does not cover.** Report scope is genuinely *wider* than read scope in the
+**resource-type** dimension: the read runs at every root of every type on purpose, and the refusal
+initially did too, which is how it reached a `CodeableConcept`-typed `status`. **A derivation over
+element names is structurally blind to that**, so the element-name pin is not the guarantee it looks
+like. What bounds the refusal now is the datatype-shape question, pinned by conformant fixtures of
+the types that exposed it rather than by a derivation.
+
+The window is **every resource root**, inherited from `checkResourceRoot` exactly as `negations`,
+`arrayWrappedScalars` and `nearMissNegationCodes` are. No new walk was added.
+
+### 🛑 Gate pass 1's BLOCKER, and it is the shape this lineage keeps producing
+
+The first cut asked **"did the string read take anything?"** and refused where it did not. That
+**refuses a conformant document**, because **R4 spells a root `status` a `CodeableConcept` on
+`MedicinalProductAuthorization` and `SubstanceSpecification`**, R5 adds more (including a
+**mandatory** `DeviceAssociation.status`), and a conformant `CodeableConcept` yields no string to a
+`code` read. Reproduced by the gate on the **unmodified HL7-published R4
+`medicinalproductauthorization-example.json`**: clean at base, `safeToSummarize: false` at head, with
+`assertSafeToSummarize` throwing. That is `#84` pass 1's shape exactly, one slice later.
+
+**Worse than the behaviour was the claim.** The slice had published *"`status` carries no such
+hazard: it is a `code` in every version this reader accepts"* into `dist/index.d.ts`, `.d.cts`,
+`README.md`, `CHANGELOG.md`, a pending changeset and this note, and had described the reasoning as
+*"checked rather than assumed"* when nothing in the diff checked it. **The slice reasoned correctly
+about the element it DECLINED (`verificationStatus`) and asserted without checking about the element
+it SHIPPED.** That asymmetry is the finding worth keeping.
+
+**Remedy: ask about the SHAPE, not about which reader succeeded.** `{"value":"not-done"}` is
+spellable as neither datatype, so nothing was declined there: there was nothing either datatype could
+hold. **⚠ The pass-1 remedy phrased that exemption as "a complex carrying `coding`, `text`, `id` or
+`extension` is left alone", and THAT PHRASING IS THE PASS-2 DEFECT below** - recorded here only so
+the two sections are not read as agreeing. The shipped rule is the one in §"Gate pass 2's finding":
+**all** of a complex's members must be ones FHIR spells here for it to be left alone.
+
+**The direction of the scoping is the whole argument, and it does NOT contradict "the type gate was
+DROPPED, not widened".** That rule governs a **read**, which can only *add* a negation, so widening
+is free. This is a **refusal**, and an ungated refusal flips a conformant document from summarizable
+to refused, which is the one direction a fail-safe layer must not move without evidence. The sibling
+`checkArrayWrapping` is type-scoped for exactly this reason and says so in its own docblock.
+
+**Converse declared limit, taken knowingly:** a shape **all of whose members** are ones FHIR spells
+here is never reported, so a code buried under `{"status":{"coding":{...}}}` at a `Procedure` stays
+silent. **One member outside the set is enough to report**, so the limit is narrower than "carries a
+`CodeableConcept` member". Pinned as the exact document above, not as the universal.
+
+### ⚖️ `verificationStatus` is deliberately outside it, and the reason is a VERSION
+
+The shape complement of a `CodeableConcept` read is a **primitive** at the element. Applying it would
+report `{"resourceType":"Condition","verificationStatus":"refuted"}`.
+
+**`Condition.verificationStatus` IS a `code` in DSTU2**, and this library declares DSTU2
+read-tolerance (`documentation/decisions/0004-r4-first-version-strategy.md`). So the same predicate
+that reports a non-conformant R4 document reports a **conformant DSTU2** one, and this reader carries
+no version discriminator at the point the predicate runs. **That is the `#84` pass-1 shape** (a
+disclosure firing on a conformant document, the first behavioural refusal in this lineage), and
+taking it on the strength of the R4 half alone would have walked straight into it.
+
+**And unlike the first cut, this is now checked rather than asserted**: DSTU2 `Condition.
+verificationStatus` is `code [1..1]` where R4 and R5 spell it `CodeableConcept [0..1]`, confirmed
+against the published definitions by the gate.
+
+Filed, not absorbed, and **pinned in both directions**.
+
+### ⚖️ `no-known-allergy` and `AllergyIntolerance.code` stay where they are
+
+Untouched, on purpose, for the reason `#83` recorded: absence there reads as **UNKNOWN, not NONE**,
+so surfacing it more widely makes a caller **less** careful. This slice does not "finish the job".
+
+### 🛑 Gate pass 2's finding: the remedy's exemption had the WRONG POLARITY
+
+The pass-1 remedy exempted a complex that carried **any** member of a `CodeableConcept`. So
+`{"status":{"id":"s1","value":"not-done"}}` and `{"status":{"value":"not-done","extension":[...]}}`
+read as **clean** - and those are the *same* generic-converter output the whole slice is built on,
+the converter having carried the primitive's own `id` / `extension` metadata across beside the value.
+The item's residual was still open for them, unnamed and unpinned, while `dist/index.d.ts` asserted
+that a complex carrying one of those members "is something FHIR spells here".
+
+**Corrected polarity: report when ANY member is outside the set.** A conformant `CodeableConcept` has
+**no** member outside it, so the channel stays empty on one whatever else it carries; a converter
+output carrying `value` is reported however much legal metadata sits beside it. The empty complex is
+reported by its own arm, `ele-1` forbidding an element with no value, children or extension.
+
+**Both polarities are now pinned**, and the wrong one is a named mutation.
+
+### Measurement
+
+Every figure below is derived; the named lists are the claim, and no total stands in for one. **All
+of it was re-measured after the pass-2 remedy**, not carried over from either earlier cut.
+
+- **Red at base: 13 of 38** for a **behavioural** difference, in a real **detached base worktree** at
+  `632f914`; **43 of 43 at head**.
+  - **Five further cases name a symbol the base commit does not have** (`unreadableNegationCodes`,
+    `hasUnreadableCode`, the table's `unread` field). They are **skipped, not counted as red**: a pin
+    asserted through a symbol the base lacks measures the symbol, not the behaviour. That is `#84`'s
+    published self-correction.
+  - **The base copy differs from the shipped file in exactly three documented ways** and in nothing
+    else: the `disclosed` accessor returns the reading a caller had before the channel existed, two
+    base-absent imports are dropped, and the five cases above are `.skip`ped. **Nothing is deleted**,
+    and the copy asserts its own case count against the shipped file so the two cannot drift.
+    🩺 **Gate pass 2 caught an earlier copy that had silently lost a case**, which is why the count
+    is now asserted rather than eyeballed.
+- **25 both-states pins, NAMED in the test file itself**, not counted in a total. The conformant
+  documents: a plain `status`; a `status` that IS a negation; the value-absent `data-absent-reason`
+  sibling; a resource with no `status`; a `CodeableConcept` `verificationStatus`; a
+  `verificationStatus` carrying only `text`; a Bundle of conformant entries; **the R4
+  `MedicinalProductAuthorization` and `SubstanceSpecification` shapes, whose `status` IS a
+  `CodeableConcept`**; a `CodeableConcept` `status` carrying only `text`; one carrying only an
+  `extension`; one carrying `coding` beside `id`, `text` and `extension`; **the R5
+  `DeviceAssociation` shape**; a `CodeableConcept` `status` inside a Bundle entry; and two conformant
+  **XML** shapes, one with `id` + `extension` children beside the value and one with no value at all.
+  Plus "reads no deeper than a resource root", "a duplicate key cannot hide a `CodeableConcept`
+  member", and the seven declared limits (bare-string `verificationStatus`; bare-string
+  `AllergyIntolerance.code`; an object at `doNotPerform`; an object at `clinicalStatus`;
+  `validateResource` still `valid: true`; an empty array at `status`; and a code buried under a
+  `CodeableConcept` member at a `code`-typed `status`).
+- **Non-vacuity by mutation: NONE SURVIVED, and they are named rather than totalled.** Each reddened
+  at least one case: ignoring a non-string written value; dropping the value-absent guard so the
+  conformant `data-absent-reason` shape reports; not walking the array wrapper; **dropping the
+  datatype scoping, which is pass 1's blocker**; **exempting a shape that carries any one legal
+  member, which is pass 2's polarity defect**; reading every complex as clean; dropping the
+  empty-complex arm; forgetting `text`; forgetting `id` / `extension`; removing the `status` row's
+  `unread`; **giving `verificationStatus` the complement the DSTU2 limit declines**; reporting the
+  resource root instead of the element; `some` becoming `every`; `safeToSummarize` no longer
+  consulting the channel; and `assertSafeToSummarize` no longer consulting it.
+- **🩺 One mutation survived an earlier cut and was closed by DELETING THE BRANCH, not by adding a
+  test.** Scanning `duplicates` alongside `properties` could not change any answer: a repeated name
+  keeps its **first** member in `properties` and puts only later ones in `duplicates`, so every name
+  in `duplicates` is present in `properties` too, measured on a document rather than assumed. **Dead
+  code**, and an unreachable branch is one no mutation can red and no reader can check. The invariant
+  it relied on is now pinned by a test.
+- **Suite 70 files / 1,495 tests -> 71 / 1,538.** **The count alone does not establish that no
+  existing test moved, and it is not offered as if it did** (gate pass 1's point, and the same shape
+  as this repo's own "a scanned-file COUNT cannot detect a sweep that opened nothing"). **Three
+  existing test files were edited, named here:** `test/xml-unreadable-boolean.test.ts` (the
+  refusal-message string pin, which this slice legitimately extends and therefore rewrites), and
+  `test/derived-names.test.ts` and `test/phi-diagnostic-surface.test.ts`, whose collected-location
+  lists were extended to include the new channel so it is swept for name echo. No other test file is
+  touched, and `git diff 632f914..HEAD -- test/` is the derivation.
+- **`differential:read`: 0 readings moved, 0 regressions - and that 0 is VACUOUS BY CONSTRUCTION.**
+  The harness prints its own caveat that it cannot distinguish "nothing moved" from "no document in
+  the corpus reaches the changed code", and no corpus fixture carries an unspellable shape at
+  `status`. Reported as a non-measurement, not as a clean sheet.
+- **🩺 The negative control against `@cosyte/hl7` is DEGENERATE and is reported as such.** **0 of the
+  9 symbols** this test file names exist on that package, so every assertion would fail for a
+  missing-symbol reason and none for a behavioural one. **A control that cannot fail is not a
+  control**, and counting it as a pass would repeat a shape this run has already published twice.
+- **Corpus caveat:** hand-authored fixtures, mutations and probes. **Not** the R4 published-examples
+  corpus - **and pass 1 showed that caveat cutting the other way**: its blocker was visible in the R4
+  published-examples corpus this slice does not run, and pass 2 cleared the remedy against the
+  published R4 and R5 example corpora. The fixtures added afterwards are hand-authored copies of
+  those shapes, not the published files.
+
+### 🛑 Gate pass 4 (the CAP) and the UNGRADED pre-merge edits
+
+**`NOT REFUTED` at pass 4 of 4.** It cleared the behaviour independently: the empty-complex arm is
+real and reachable, the corrected polarity holds, `ele-1` is quoted correctly against the published
+R4 and R5 `StructureDefinition`s, the old phrasings return **zero** hits across `src/`, `test/`,
+`README.md`, `CHANGELOG.md`, all pending changesets and both `dist/index.d.*`, and the pass-3 diff
+was **provably behaviour-neutral** (comment-stripped transpile byte-identical).
+
+It left **three minors and two nits, all prose**, and judged the right disposition to be landing
+them as a residual rather than spending a fifth pass. **They were fixed instead of filed**, because
+each is a sentence the gate itself quoted and gave the true form of, and two of them ship in
+`dist/index.d.ts`:
+
+- the exported `unreadableNegationCodes()` docblock omitted the empty-complex arm, and its universal
+  was **vacuously wrong** for `{"status":{}}` (zero members, so "all of them legal" holds, yet it
+  reports);
+- the readout field's defining sentence said the element is "present **and filled in**", which the
+  no-member arm contradicts;
+- `ele-1` was cited as *the* ground in a way that invites "ele-1 violations at `status` are
+  reported", which is **untrue**: `{"id":"s1"}` and `{"coding":[]}` violate it and are deliberately
+  left alone;
+- this file's own pass-1 narrative still stated the pass-2 wrong polarity as "the Remedy";
+- a test comment carried a hard line reference that goes stale on any insertion above it.
+
+**🛑 THESE EDITS ARE UNGRADED, and that is stated rather than glossed.** ADR 0016's cap is four and
+it is spent. They are prose only and the **comment-stripped transpile of both changed source files
+is byte-identical**, measured, so nothing ungraded is shipping as behaviour. A future reader should
+treat these five sentences, and only these, as never having faced a refuter.
+
+### 🔴 Deferred, filed rather than absorbed
+
+1. **`verificationStatus`'s shape complement**, above. Needs a version discriminator or a decision to
+   accept reporting conformant DSTU2. Pinned in both directions.
+2. **`validateResource` still reports `valid: true`** on every document this channel discloses.
+   Raising an issue code needs a window decision of its own (which types, and what the validator
+   knows about a datatype with no caller-supplied profile), and the safety layer is this slice's
+   window. Pinned as a both-states limit.
+3. **An empty array at `status` draws nothing** - no position, so no content the read stepped over.
+   Pinned.
+4. **The array-wrapped `Procedure.status` still draws no `ARRAY_WRAPPED_SCALAR`**, unchanged from
+   `#84`: that report is scoped to the safety resource types at a resource root. A wrapped object now
+   draws *this* channel, so the wrapper case is strictly better than base, but the wrapper itself is
+   still unreported.
+5. `PRE-EXISTING`, untouched: `src/safety/codes.ts` still publishes a **set size** into
+   `dist/index.d.ts`; *"the negation read"* remains **ambiguous** between the walk-scoped `negations`
+   and the root-scoped convenience field wherever it appears unqualified; the case-sensitivity gap;
+   and the historical *"no negation readable at all"* sentence in `CHANGELOG.md`, which stays under
+   its explicit *"Measured at the base commit"* framing and is **deliberately left**.
+
+### Process
+
+- **The repo's own `format` script was used**, never a wider glob. `git status` after it showed only
+  this slice's own files: no cross-cutting write, which is the failure `#83` recorded.
+- **`git add` before believing a gate.** `check:no-emdash` scans `git ls-files`, so it reported OK
+  over a new test file it had never opened. Staging first turned it red on seven real em dashes.
+  The same run, `check:no-internal-refs` caught an ADR number in a **doc comment**, which compiles
+  into `dist/` and renders in a consumer's editor; it was translated at the boundary, not deleted.
+
+## Narrative: An XML-sourced profile's required elements are enforced (`ElementDefinition.min`)
+
+Relocated out of `agent-notes.md` at write time (that file is at its archive budget). The cursor
+stays there; this is the whole record.
+
+### The defect, reproduced at `72cdee2` before it was touched
+
+FHIR XML carries every primitive as the text of its `value` attribute (`xml.html` §2.6.1) and this
+reader is **schema-free by design**, so `<min value="1"/>` reaches the model as the string `"1"`
+where FHIR JSON's `"min": 1` reaches it as a number. `parseMin` matched **only** the number
+(`instanceof FhirDecimal`), and a failed match reads as absence.
+
+So an XML-sourced `StructureDefinition` declared its required elements and this library enforced
+**none** of them, with nothing on any diagnostic channel to say so. The same profile, spelled the two
+ways:
+
+```
+snapshot: Observation.subject 1..1, Observation.performer 2..*     instance: neither present
+
+  JSON-sourced profile  -> valid: false   CARDINALITY_MIN @Observation.subject, @Observation.performer
+  XML-sourced  profile  -> valid: true    no profile finding of any kind
+
+both readings also carry `information: RESOURCE_NOT_MODELED @Observation`, which is the built-in
+schema speaking and is unrelated; an earlier draft said "no finding at all" and was one finding out.
+```
+
+**As of 2026-08-25 that third finding is gone**, and its disappearance is as unrelated to this
+lineage as its presence was: `MODEL-OBSERVATION-1` put `Observation` in `BUILTIN_SCHEMAS`, so the
+type is modeled and the informational note it used to draw is not emitted. The instance in the run
+above carries both mandatory elements, so the built-in table adds nothing in its place and the two
+profile findings are now the whole list. The asymmetry this note is about is untouched. Reading left
+as it was taken, with the correction beside it rather than in it.
+
+**The XML in that run is this package's own `serializeResourceXml` output, read back by its own
+`parseResourceXml`.** A caller who changed format inside this library got a profile that had stopped
+enforcing anything, and a verdict that moved `valid: false -> true`: a format change **upgrading** a
+document's trustworthiness claim, which is the harm shape this lineage was opened for.
+
+**The asymmetry that made it invisible: `max` was fine.** FHIR spells `max` as a *string* in both
+formats, so `parseMax` goes through `primitiveString` and reads. Upper bounds enforced, lower bounds
+silently not.
+
+### Where the fix went, and why not one layer down
+
+**At `parseMin`, in `src/profiles/structure-definition.ts` - never in the XML reader.** A
+schema-free reader cannot know that `value` spells an `unsignedInt` rather than a `code`, and
+coercing there turns the text into a number that `serializeResource` then emits as one: **authoring
+a value the sender did not spell and laundering it across a format change**, the move `#74` refused
+and `#78`/`#79`/`#80` each declined again. Same level as `#79`'s `booleanOf` and `#78`'s
+`decimalValue`.
+
+The text recognised is exactly R4's `unsignedInt` lexical space, `[0]|([1-9][0-9]*)`
+(datatypes.html), which is the datatype `ElementDefinition.min` declares (elementdefinition.html). No
+sign, no leading zero, no whitespace, no decimal point, no exponent: `"+1"`, `"01"`, `"1.0"`, `"1."`,
+`" 1"`, `"1 "`, `"1e2"`, `"-1"`, `"one"` and `""` state no bound.
+
+**🩺 `positiveInt` IS A DIFFERENT SPACE AND AN EARLIER DRAFT CITED IT WRONGLY.** R4 publishes
+`positiveInt` as `+?[1-9][0-9]*`, a **leading `+` admitted**; gate pass 1 checked it against
+`datatypes.html` and caught the citation. `min` is an `unsignedInt`, `+1` states no bound, and the
+sentence now names the datatype the element actually declares. (`src/validate/primitives.ts` carries
+the same `positiveInt` drift in `PATTERNS`, `PRE-EXISTING` and identical at `72cdee2`; left alone,
+because no read in this slice reaches it.)
+
+### 🛑 THE ADDITIVITY GUARANTEE IS AT THE MERGE, NOT AT THE READ. A GATE PASS PAID FOR THAT.
+
+**The first attempt (`0dda6d0`) put it at the read** and excluded `0` from the lexical space,
+arguing that a bound of `0` is the only value `mergeElement` could tell from absent. **Gate pass 1
+REFUTED that on a measured behavioural counterexample, and it was right.** `mergeElement` is an
+unconditional override, not a tighten:
+
+```ts
+if (diff.min !== undefined) merged.min = diff.min;   // no comparison against base.min
+```
+
+so the retirement is reachable for **any** stated bound below the inherited one, not only for `0`.
+Measured in real worktrees, base snapshot `Observation.performer 2..*`, differential stating `min 1`,
+instance carrying **one** performer:
+
+| differential | `72cdee2` | `0dda6d0` (refuted) | remedy |
+|---|---|---|---|
+| XML `<min value="1"/>` | min 2, `CARDINALITY_MIN` | **min 1, no finding** | min 2, `CARDINALITY_MIN` |
+| JSON `{"min":"1"}` | min 2, `CARDINALITY_MIN` | **min 1, no finding** | min 2, `CARDINALITY_MIN` |
+| JSON `{"min":1}` | min 1, no finding | min 1, no finding | min 2, `CARDINALITY_MIN` |
+| XML, no `min` (control) | min 2, `CARDINALITY_MIN` | same | same |
+| XML `<min value="0"/>` (control) | min 2, `CARDINALITY_MIN` | same | same |
+
+**Row 2 is what made it a blocker rather than a claim defect.** `{"min":"1"}` is a JSON document, so
+that row is an in-format regression on the reference path: base called it non-conformant, the refuted
+head called it conformant. The `0` exclusion was not wrong, it was **insufficient**, and six
+artifacts (one of them the tarball's `CHANGELOG.md`) asserted the class was impossible by
+construction.
+
+**The remedy is the predicate, not the claim.** `mergeElement` now takes the **tighter** of the
+inherited and the stated bound:
+
+```ts
+if (diff.min !== undefined) merged.min = Math.max(base.min ?? 0, diff.min);
+```
+
+**Grounded, not preferred:** a profile derives by *constraining* (profiling.html), so its `min` may
+raise the inherited one and may not lower it. A differential stating a smaller bound is an **invalid
+profile**, not a relaxation to honour. Taking the maximum is lenient on the malformed profile (it is
+not refused, and `generateSnapshot` has no diagnostics channel to report it on) and fail-safe on the
+instance.
+
+With the guarantee at the merge, **excluding `0` from the read bought nothing and was dropped**: the
+read is now exactly R4's `unsignedInt` space, `[0]|([1-9][0-9]*)`, which is `min`'s own datatype, and
+`<min value="0"/>` loads faithfully as `0`. One mechanism, one place.
+
+**▶ Row 3 is a `PRE-EXISTING` defect this remedy closes as a consequence, and that is disclosed
+rather than absorbed quietly.** A JSON `{"min": 1}` under an inherited `2` already retired that
+`CARDINALITY_MIN` at `72cdee2`. It could not be left standing: the read cannot know the inherited
+bound, so the only place to fix the `INTRODUCED` blocker is the merge, and fixing it there fixes both.
+The direction is `valid: true -> false`, the fail-safe one.
+
+**▶ 🛑 A CLAMP AGAINST `max` WAS TRIED AND REVERTED. TWO GATE PASSES PAID FOR THIS PARAGRAPH.**
+
+**Pass 2** found the bare `Math.max` composes an unsatisfiable pair. Beneath a base element that is
+required, a differential forbidding it with `0..0` gives `min 1` beside `max 0`. `resolveSlices`
+reads a descendant's cardinality as an existence expectation and resolves that contradiction toward
+*present*, so beneath an `exists` discriminator a `PROFILE_SLICE_UNMATCHED` and a slice
+`CARDINALITY_MIN` are lost: 3 errors at `72cdee2`, 1 at `5afc602`. Rated **major, not blocker**,
+because every trigger needs an invalid profile and no document is mis-read.
+
+**Pass 3 then refuted the clamp that answered it**, and the counterexample is worse than the defect
+it fixed. `Math.min(tightened, effectiveMax)` discards the inherited bound whenever the
+differential's own `max` sits below it, so the enforced bound goes DOWN. Measured across all three
+trees, base `Observation.performer 2..*`, one performer on the instance:
+
+| differential | `72cdee2` | `5afc602` (bare max) | `e03f179` (clamp) |
+|---|---|---|---|
+| XML `min 3`, `max 1` | `{2,1}` error | `{3,1}` error | **`{1,1}` no finding** |
+| JSON `{min:2,max:"1"}` | `{2,1}` error | `{2,1}` error | **`{1,1}` no finding** |
+| XML `min 1`, `max 1` | `{2,1}` error | `{2,1}` error | **`{1,1}` no finding** |
+| XML `min 1`, `max *` | `{2,*}` error | `{2,*}` error | `{2,*}` error |
+| JSON `{min:1,max:"*"}` | `{1,*}` **no finding** | `{2,*}` error | `{2,*}` error |
+
+The clamp reaches an **ordinary** profile mistake (`1..1` under `2..*`), not only a contradictory
+one, and on the pure JSON path. The bare guard loses nothing relative to base on any row.
+
+**▶ ⚖️ SO THE CLAMP WAS REVERTED AND PASS 2's FINDING IS DECLARED OPEN INSTEAD, WHICH IS THIS
+REPO'S OWN WRITTEN RULE**: a sub-problem that fails to converge twice gets reverted and declared a
+gap, because a pure revert ships no ungraded behaviour and a declared gap is not a claim. Pass 2 and
+pass 3 both rated their finding `major` rather than `blocker`, and only an `INTRODUCED` blocker gates
+a ship. **The remedy belongs at `resolveSlices`**, which resolves a contradictory cardinality toward
+*present* where its own contract says report the slicing `unchecked`, and it is its own slice. Pinned
+by `still loses two slice findings when a contradictory profile meets an exists discriminator` (RENAMED AND MOVED: it is now `closes it through a differential and a base, the route the defect was filed at` in `test/profile-slice-contradiction.test.ts`), which
+is RED at base and pins the DEFECT rather than the fix: closing it must red that test.
+
+**▶ 🟢 THAT SLICE WAS TAKEN NEXT AND THE PREDICTION HELD**: the remedy went to `resolveSlices`, the
+merge was left composing the unsatisfiable pair, and the pin red on the first run. The test named
+above no longer exists under that name; it was rewritten as the closure and moved to
+`test/profile-slice-contradiction.test.ts`. Everything above this line is the `#86` record and is
+left as it was written, except that each quote of the retired test name below carries the same
+parenthetical: a reader following the old name would otherwise find nothing.
+
+**▶ 🛑 `max` IS THE MIRROR AND IS DELIBERATELY NOT TAKEN.** `mergeElement` still overlays `max`
+verbatim, so a differential stating a **larger** `max` widens an upper bound and retires a
+`CARDINALITY_MAX`. It is left standing because **no read feeding it moved**: FHIR spells `max` as a
+string in both formats, so `parseMax` read it from XML at base too, and tightening it would be a
+change to the JSON path with no defect in this slice forcing it. Pinned by a characterization test.
+
+### The consumer census, done before the widening rather than after
+
+Six sites read `ElementDefinition.min`; `define-profile.ts` is the authoring path (its `min` is a
+caller's JS number, never a node) and `validate/validate.ts:277` reads the built-in Phase-2 schema,
+a different type, so neither is a consumer of this read.
+
+**🛑 THE QUESTION THE FIRST CENSUS ASKED WAS THE WRONG ONE**, and it is the standing "additivity is a
+property of the CONSUMERS" trap hit at the one consumer that matters. It asked *can `0` differ from
+absent?*; what governs additivity is *can any newly-read value differ from absent in a
+finding-retiring direction?*
+
+| site | what it does with `min` | can a newly-read value retire a finding? |
+|---|---|---|
+| `validate-profile.ts:150` | element `CARDINALITY_MIN` | no (`min >= 1`, and a larger bound only adds) |
+| `validate-profile.ts:222` | slice `CARDINALITY_MIN` | no (same) |
+| `slicing.ts:108` | builds an `exists` expectation | no (`min >= 1`; see below) |
+| `slicing.ts:117` | copies it onto `SliceDefinition` | no (only 222 reads it) |
+| `snapshot.ts:63` | `mergeElement` overlay | **YES at `0dda6d0`, for ANY bound below the inherited one. Guarded in the remedy.** |
+| `structure-definition.ts:325` | writes it onto the model | it is the write |
+
+**`slicing.ts:108` is the second consumer and it is worth knowing about.** `discriminatorHolds`
+returns `unevaluable` for an `exists` discriminator with no expectation, and `matchSlices` turns a
+single `unevaluable` into `unchecked` for the **whole** slicing - so at base an XML-sourced sliced
+profile came back `PROFILE_SLICE_UNCHECKED` (information) and **no slice constraint was checked at
+all**. At head the expectations are built and the slicing is really evaluated. That information-level
+placeholder giving way to real evaluation is the one finding this change can remove, and it is the
+fail-safe marker whose whole meaning is *"I could not evaluate this"*.
+
+### Measurements
+
+All of these are **post-remedy**, at the head this slice ships.
+
+- **Red-at-base 20 of 32**, in a real `72cdee2` worktree (`git worktree add`, this package's own
+  `node_modules` symlinked). The denominator is the tests this slice adds or rewrites: 31 in
+  `test/xml-profile-min.test.ts` plus the one rewritten in `test/xml-lexical-boolean.test.ts`.
+  **The 20 are not 20 closures, and the two that are not are separated out rather than banked:**
+  - **0 are symbol-only reds.** The change adds no export (`src/index.ts` is byte-identical across
+    `72cdee2..HEAD`), so every symbol the new file imports already resolves at base and every red is
+    behavioural.
+  - `still reads no mustSupport and no slicing.ordered off an XML definition` is red **only** through
+    its co-located head assertion that `min` reads 1; its two residual assertions are green in both
+    states.
+  - `still loses two slice findings when a contradictory profile meets an exists discriminator` (RENAMED AND MOVED: it is now `closes it through a differential and a base, the route the defect was filed at` in `test/profile-slice-contradiction.test.ts`) is
+    red because **head is WORSE there than base**. It pins the declared gap, so it is a cost, not a
+    capability, and it must not be counted as evidence for the slice.
+  - **So the behavioural figure for the closure is 18.**
+- **The 12 green-at-base tests are pins, named** so a reader need not re-derive which cleared
+  nothing: the ten `reads %j as no bound at all` refusal cases (`+1`, `01`, `1.0`, `1.`, ` 1`, `1 `,
+  `one`, ``, `-1`, `1e2`), `leaves an element the differential states no min for exactly as the base
+  had it` (the merge control), and `still overlays a differential max verbatim, so an upper bound CAN
+  be relaxed` (the `max` residual).
+- **Non-vacuity by mutation, ten mutations, each reddening a NAMED list** (never a count):
+  1. drop the merge guard (overlay verbatim) -> `keeps the inherited bound when an XML differential
+     states a smaller one`, `…when a JSON differential states a smaller one`, `keeps the inherited
+     bound for a min of 0, whichever format spelled it`, `still loses two slice findings…` (renamed and moved, see above)
+  2. over-guard the merge (always inherit when the base states one) -> `still takes a differential
+     bound that tightens, which is the whole point of a profile`, `never lowers the enforced bound,
+     even when the differential's own max sits under it`
+  3. re-add the REVERTED clamp against `max` -> `never lowers the enforced bound…`, `still loses two
+     slice findings…` (renamed and moved, see above)
+  4. close the declared gap at `resolveSlices` (refuse to resolve a contradictory cardinality) ->
+     `still loses two slice findings when a contradictory profile meets an exists discriminator` (RENAMED AND MOVED: it is now `closes it through a differential and a base, the route the defect was filed at` in `test/profile-slice-contradiction.test.ts`).
+     This is the repo's own rule made executable: closing a declared gap MUST red its pin. (That
+     mutation stopped being hypothetical in the next slice, and the pin red exactly here.)
+  5. drop the lexical guard entirely -> the nine refusal cases `+1` `01` `1.0` `1.` ` 1` `1 ` ``
+     `-1` `1e2`
+  6. tolerate surrounding whitespace -> ` 1`, `1 `
+  7. tolerate leading zeros -> `01`
+  8. use `positiveInt`'s real space, a leading `+` admitted -> `+1`
+  9. `Number.parseInt` instead of an exact match -> `+1` `01` `1.0` `1.` ` 1` `1 ` `-1` `1e2`
+  10. remove the lexical route (revert the read fix) -> 18 tests, and the membership is NOT the 18
+      behavioural reds even though the count coincides. Named, because the count is what a reader
+      would otherwise infer: the seven headline closures, the five `reads N as the bound N` cases
+      (`0` `1` `2` `10` `999`), `keeps the inherited bound when an XML differential states a smaller
+      one`, `keeps the inherited bound for a min of 0, whichever format spelled it`, `still takes a
+      differential bound that tightens…`, `never lowers the enforced bound…`, `still reads no
+      mustSupport and no slicing.ordered off an XML definition`, and `reads a min a non-conformant
+      JSON document spelled as a string…`. It **includes** the `mustSupport` test that this note
+      separates out as not-evidence, and **excludes** `keeps the inherited bound when a JSON
+      differential states a smaller one`, which the merge guard closes rather than the read, so a
+      string-route removal cannot reach it.
+  **Mutations 1, 2 and 3 are three polarities of the merge guard**, so it cannot pass by refusing
+  every differential `min` and cannot pass with the reverted clamp back in. **`"one"` is reddened by
+  none of the ten** and is retained as documentation of the boundary, not as evidence. Said here
+  rather than folded into a total.
+- **Exactly one existing test moved** across the whole suite: the characterization test that pinned
+  this gap, which the repo's own rule requires a closure to red. It is rewritten in place rather than
+  deleted, so the closure is visible from where the gap was declared. Suite **70 files / 1495 tests**
+  from base's **69 / 1464**, and 1464 + 31 = 1495, so nothing else moved.
+- **The `@cosyte/hl7` negative control is DEGENERATE and is reported as such rather than as a zero.**
+  `hl7` is not a dependency of this package and has no `StructureDefinition` loader, so 0 of the
+  symbols under measurement exist there and the control cannot fail. The controls that CAN fail are
+  the three merge-guard polarities above and the two both-states pins named in the list.
+- **The committed read differential (`pnpm differential:read`) moves 0 of 1,195 readings and 0 of 27
+  JSON fixtures, and that zero is VACUOUS BY CONSTRUCTION for this class** rather than evidence:
+  checked by hand, **no corpus fixture carries a `min` at all**, and the reading runs no profile
+  validation (profiles are caller-supplied and none is supplied). What the zero does say is that the
+  reader, the writers and the safety spine are untouched, which is worth having and is all it says.
+- **Corpus caveat on every number here:** hand-authored XML and JSON fixtures, plus mutations and
+  probes. **Not the R4 published-examples corpus.** Nothing here is corpus-wide.
+
+### The gate
+
+`conformance-refuter` **`REFUTED` -> `REFUTED` -> `REFUTED` -> `NOT REFUTED`**, four passes, the
+ADR 0016 cap spent and no fifth. Pass 1 found the `INTRODUCED` blocker at `mergeElement`; pass 2
+found the bare guard composes an unsatisfiable pair; pass 3 refuted the clamp that answered pass 2
+with a counterexample worse than the defect; pass 4 graded the cut-back `NOT REFUTED`, finding no
+`INTRODUCED` blocker.
+
+**The last commit on the branch is UNGRADED and says so**: pass 4's one documentation minor, entry
+10 of the mutation ledger above, whose count was right and whose membership was wrong. It changes no
+executable line (`git diff` over `src/` and `test/` is empty). Applied rather than deferred because
+the carrier is this note, which is the record a later slice reads. No sha is named here on purpose:
+the branch squash-merges, so a branch sha would be dead the moment it landed.
+
+**Pass 4 also asked that the declared gap be filed as its own backlog item immediately.** It is a
+`resolveSlices` defect, not a `parseMin` one, and it is outside this item's bar.
+
+### Declared open, each pinned in `test/xml-profile-min.test.ts`
+
+Closing any of them MUST red its test, in the same change.
+
+1. ~~**A contradictory profile loses two slice findings.**~~ **CLOSED by the next slice**, at
+   `resolveSlices` exactly as this entry predicted, and NOT at the merge: the contradiction is
+   recorded as unsatisfiable instead of resolved toward either side, so an `exists` discriminator on
+   such a path assigns no occurrence and both findings are drawn. Its pin red as required and its
+   tests moved to `test/profile-slice-contradiction.test.ts`. The whole record, including the one
+   finding the closure RETIRES and the bound on it:
+   `documentation/agent-notes.md#narrative-a-contradictory-slice-descendant-assigns-no-occurrence-resolveslices`. The merge is unchanged, so entry 2
+   below still composes the pair.
+2. **`mergeElement` still overlays a differential `max` verbatim**, so an upper bound can be widened
+   and a `CARDINALITY_MAX` retired. The mirror of what this slice fixed, left standing because no
+   read feeding `max` moved. Both-states pin.
+3. **`ElementDefinition.mustSupport` and `slicing.ordered` are still unread from XML.** What makes a
+   widened `min` safe is that its one finding-retiring consumer now takes the tighter of two bounds;
+   a boolean flag has **no tighter-of-the-two**, since `false` is not "no flag stated". `#79`'s
+   measured retirement stands.
+4. **A non-conformant JSON `{"min": "1"}` is now read**, because the model records no provenance and
+   the lexical read cannot be scoped to XML. Lenient on the read, unchanged on the write - the string
+   is still what the writer hands back. The same collateral `#79` declared for `booleanOf`.
+5. **FHIRPath `numberOf`** is the sibling from the same census and is **not** absorbed here: an
+   XML-sourced number still falls through to string ordering, so `"9" < "10"` is false. Its own item.
+
+## Narrative: A contradictory slice descendant assigns no occurrence (`resolveSlices`)
+
+Written to the per-slice tier rather than appended to `agent-notes.md`, which is 7 bytes from its
+archive budget. The cursor stays there; this is the whole record. Predecessor:
+`documentation/agent-notes.md#narrative-an-xml-sourced-profiles-required-elements-are-enforced-elementdefinitionmin`.
+
+**Provenance.** FHIR R4 `elementdefinition.html` (§slicing, and cardinality "constraining" under a
+derived profile) for what a discriminator decides and what makes a derived profile invalid; this
+package's own `src/profiles/slicing.ts` contract and `collectSlicingIssues` control flow for what a
+report of `unchecked` costs. **No new spec clause is relied on**: R4 makes a `min 1 / max 0` profile
+invalid and defines no instance behaviour for it, so the choice between "no" and "unevaluable" is
+this library's fail-safe policy, not a conformance requirement. Everything numeric below is measured
+in this repo, not cited.
+
+### The defect
+
+`resolveSlices` turns a slice descendant's cardinality into an `exists` expectation, and it read the
+two bounds as an **ordered pair**:
+
+```ts
+if (desc.min !== undefined && desc.min >= 1) existsExpectations.set(rel, true);
+else if (desc.max === 0) existsExpectations.set(rel, false);
+```
+
+`min` was consulted first, so a descendant stating **both** at once discarded the prohibition. An
+unsatisfiable `min 1 / max 0` is not a hypothetical shape: it is exactly what the previous slice's
+merge composes when a differential forbids with `0..0` an element the base makes required, and that
+merge was deliberately left composing it after a clamp against `max` was tried there and reverted
+for lowering the enforced bound below the inherited one.
+
+The consequence is that every occurrence carrying the **forbidden** element was admitted into the
+slice. Beneath a `closed` slicing that retired a `PROFILE_SLICE_UNMATCHED` and the slice's own
+`CARDINALITY_MIN`: three errors before the previous slice, one after it.
+
+### What shipped
+
+A third state, kept **apart from** the boolean map rather than folded into it, because neither
+boolean is true of a contradiction and picking one admits occurrences the profile forbids:
+
+- `SliceDefinition.unsatisfiableExists: ReadonlySet<string>`, populated when a descendant states
+  `min >= 1` beside `max === 0`.
+- `discriminatorHolds` answers `"no"` for an `exists` discriminator on such a path.
+
+**The answer is `"no"`, never `"unevaluable"`, and that is the whole design decision.**
+`"unevaluable"` reports the entire slicing `unchecked`, and `collectSlicingIssues` **returns** on
+`unchecked` before the unmatched-occurrence arm, the slice cardinality arms and the slice
+must-support arm. Reporting `unchecked` would therefore have *retired* the very findings this case
+exists to draw, while dressing the retirement as a fail-safe. It is not a guess either: no instance
+has a path both present and absent. **`"no"` is not purely additive against the previous behaviour,
+though, and the gate was right to press on that** - see the retirement classes below.
+
+**Scoped to the discriminator path on purpose.** An unsatisfiable descendant does not make the slice
+unmatchable in general. FHIR decides membership by the discriminators and then validates the
+assigned occurrence, so an occurrence may legitimately be assigned to a slice it violates. Only a
+contradiction **at** a discriminator path makes membership itself undecidable, and marking the whole
+slice unmatchable would move genuine violations to "unmatched" and hide them.
+
+**Scoped to the slice's OWN descendants (`sliceName === undefined`) too, and gate pass 1 is what
+forced that.** The reason the narrowing cannot introduce a third defect is **not** the loose one
+first written down ("it only moves toward base"); state the gate's version: for any descendant
+failing the new first conjunct the remaining chain is **token-identical to base's**, and
+`unsatisfiableExists` is read at **exactly one site**. Pass 2 confirmed it mechanically with a
+1,349-case grid: this tree differs from base in **exactly 120 rows, every one of them carrying the
+filed `own = {min >= 1, max "0"}` shape**, with **zero `valid: false -> true` rows**; the 104 extra
+rows the first draft moved are all gone. This walk sweeps every element under the slice's id prefix, and a **re-slice** of a
+descendant sits under that prefix and flattens onto the same relative path. Recording a re-slice's
+contradiction made the satisfiable **outer** slice unmatchable and drew a `PROFILE_SLICE_UNMATCHED`
+plus a slice `CARDINALITY_MIN` **on a conformant document**: it blamed the instance for a statement
+belonging to a different slice. Re-slicing is a declared deferral of this module, so a contradiction
+carried only by a re-slice is left reading as it did before rather than guessed at from the outer
+slice's position. Pinned by `ignores a contradiction carried only by a RE-SLICE of the discriminator
+path`.
+
+**Scoped to `max === 0`, not to `max < min`.** `min 2 / max 1` is unsatisfiable by *count* and still
+says something unambiguous about *existence*: `min 2` means present. Only `max 0` contradicts the
+presence half. That row is pinned, and mutation M4 (widening the guard to `max < min`) reds it.
+
+The merge is untouched. This is the remedy the predecessor predicted, at the site it named.
+
+### Measurements
+
+Re-measured after the accuracy gate's first pass, which refuted the slice and forced a scoping
+change; every figure below is from the post-remedy tree. Suite `1538 -> 1553` (one test moved out of
+`test/xml-profile-min.test.ts`, sixteen added in `test/profile-slice-contradiction.test.ts`). Every
+repo gate green: `typecheck`, `lint`, `test`, `format:check`, `check:no-emdash`,
+`check:no-internal-refs`, `phi-scan`, plus the umbrella's `scripts/verify.sh fhir`.
+
+#### Red-at-base, as a fraction, and split by kind
+
+Measured against `4bc8780` in a tree extracted with `git archive` (file copy, never a checkout over
+the working tree), the new file's own tests copied in:
+
+**12 of 16 red at base. Only 5 of those are behavioural, and 2 of the 5 are costs.**
+
+- **5 behavioural reds**, each an `AssertionError`:
+  - `draws both findings the ordered read used to retire, under closed slicing` (1 issue -> 3)
+  - `closes it through a differential and a base, the route the defect was filed at` (1 issue -> 3)
+  - `does not report the slicing unchecked, which would return before those arms`
+    (`['Missing']` -> `[undefined]`)
+  - `retires a slice CARDINALITY_MAX that only fired on a wrongful admission` (3 -> 2) - **COST**
+  - `retires a later slice's findings that existed only because a contradictory slice shadowed it`
+    (3 -> 1) - **COST**
+- **7 symbol-only reds**, every one `TypeError: slice.unsatisfiableExists is not iterable`. The
+  member does not exist at base, so these rows cannot be behavioural evidence. **Reported as
+  symbol-only rather than banked**, which is the opposite of the predecessor's figure: that slice
+  added no export and had 0 symbol-only reds, this one adds an interface member and has 7.
+
+**Both cost rows are red because HEAD IS WORSE THERE.** So the **behavioural closure figure is 3.**
+
+#### Green at base, named, so a reader need not re-derive which cleared nothing
+
+Four rows. Each touches no new member, so each genuinely runs at base:
+
+- `still reports unchecked when no descendant pins the discriminator path` - the pre-existing
+  fail-safe, unchanged, and deliberately not reused for this case.
+- `does not move a verdict to valid through a re-slice the element check never sees` - green at base
+  **and** at head, which is the point: the remedy restores the base reading. It is **not** vacuous;
+  M9 (the pre-remedy tree) reds it, which is the gate's own finding made executable.
+- `leaves an error standing when the forbidden element is present`
+- `leaves an error standing when the forbidden element is absent`
+
+#### Non-vacuity by mutation: 9 mutations, each reddening a NAMED list
+
+| # | mutation | reds (new rows unless marked pre-existing) |
+|---|---|---|
+| M1 | guard removed (the base ordered read) | `records the contradiction…`, `draws both findings…`, `does not report the slicing unchecked…`, `reads the same contradiction out of the XML spelling…`, `closes it through a differential and a base…`, `retires a slice CARDINALITY_MAX…`, `retires a later slice's findings…` |
+| M2 | answer `"unevaluable"` instead of `"no"` | the six above bar `records the contradiction…`, plus `leaves an error standing when the forbidden element is present` / `…is absent` |
+| M3 | guard widened to `max === 0` alone | `still expects absence from a plainly prohibited descendant`, `ignores a contradiction carried only by a RE-SLICE…`, `does not move a verdict to valid…`, plus pre-existing `matchSlices handles an 'expect absent' (max 0) exists discriminator` |
+| M4 | guard widened to `max < min` | `still expects presence from min 2 / max 1…` |
+| M5 | populate the set but drop the check in `discriminatorHolds` | the same eight as M2 |
+| M6 | record the contradiction AFTER setting the expectation | `records the contradiction apart from the expectations…` |
+| M7 | guard widened to `min >= 1` alone | `still expects presence from a plainly required descendant`, `still expects presence from min 2 / max 1…`, `ignores a contradiction carried only by a RE-SLICE…`, `retires a later slice's findings…`, plus 3 pre-existing rows in `slicing.test.ts` and `xml-profile-min.test.ts` |
+| M8 | every descendant recorded unsatisfiable | all five neighbour rows, `still reports unchecked when no descendant pins…`, `retires a later slice's findings…`, plus 4 pre-existing rows |
+| M9 | **the pre-remedy tree**: drop the `sliceName === undefined` scoping | `ignores a contradiction carried only by a RE-SLICE…`, `does not move a verdict to valid through a re-slice…` |
+
+**16 of 16 new rows are reddened by at least one mutation. There is no documentation-only row** -
+the predecessor had one (`"one"`, reddened by none of its ten) and said so; this slice has none.
+M3, M4, M7 and M8 are what make the symbol-only neighbour rows admissible, since their base
+comparison cannot run. **M9 is the gate's own counterexample turned into a regression pin**, and it
+is the reason `does not move a verdict to valid…` is not just a both-states decoration.
+
+#### 🩺 Two degenerate rows of my own, both caught by a mutation before being trusted
+
+1. `does not report the slicing unchecked` first passed the whole `Observation` to `matchSlices`,
+   which takes the sliced element's **occurrences**. `dataAbsentReason` does not resolve at an
+   `Observation` root, so the occurrence went unmatched **however the contradiction was resolved**.
+   M1 failing to red it is what exposed it. It now passes the `component` node and asserts the
+   occurrence count. The sibling row `still reports unchecked when no descendant pins…` had the same
+   shape and was repaired with it, on the gate's prompting.
+2. `does not move a verdict to valid through a re-slice…` was **first written with a fixture that
+   could not reproduce the gate's finding at all** - a second element made the issue list identical
+   in both trees, so no mutation reddened it. It was rebuilt until M9 reds it. **A row written to
+   pin a gate finding that the gate's own counterexample does not red is decoration**, and it was
+   one mutation away from shipping as such.
+
+Also corrected on the gate's prompting: `reads the same contradiction out of the XML spelling`
+compared the XML reading to the JSON reading, which agreed at base too. Both its assertions now
+state a literal.
+
+#### The zero that is vacuous, and why
+
+`pnpm differential:read`: **0 readings moved of 1,195 documents**, every no-suppression bar 0
+(`valid F->T` 0, `safeToSummarize F->T` 0, retractions lost 0, negations lost 0, read diagnostics
+lost 0, 18 emitted-XML re-read differences of which **0 stable on base**, so 0 regressions).
+
+**That zero is VACUOUS BY CONSTRUCTION and is not evidence.** It is vacuous more strongly than the
+predecessor's was: that slice at least sat on a read the harness exercises and merely lacked a
+fixture carrying a `min`. This change is in the **profile-validation layer**, which the read
+differential never invokes at all - the harness compares reader and writer readings and does not
+call `collectProfileIssues` or `resolveSlices` on any document. The harness prints its own caveat
+that a 0 on that line is not evidence the change is safe, and it is right here.
+
+**Corpus caveat on every figure above: hand-authored JSON and XML fixtures plus mutations and
+probes, NOT the R4 published-examples corpus.**
+
+### ⚖️ What is retired, enumerated rather than counted
+
+The first draft of this slice said "one finding is retired" and bounded it with a general claim. The
+accuracy gate refuted both halves. The corrected account:
+
+**Retirement 1 - a slice `CARDINALITY_MAX` fired by the wrongful count.** An occurrence no longer
+admitted stops counting toward the slice, so a `CARDINALITY_MAX` that only fired because of the
+admission goes.
+
+**Retirement 2 - a LATER slice's `CARDINALITY_MIN` and `MUST_SUPPORT_ABSENT`, through de-shadowing.**
+`matchSlices` breaks at the first matching slice, so an occurrence wrongly admitted to a
+contradictory slice never reached the slices after it. Refusing the admission de-shadows them, and
+whatever they then do - match, or turn out **unevaluable** and take the whole slicing to `unchecked`
+- the findings their emptiness had earned go with them. **This class was missed entirely in the
+first draft** and was found by gate pass 1.
+
+**Retirement 3 - the unevaluable half of retirement 2, which is NOT confined to one slice's codes.**
+`matchSlices` returns `unchecked()` on the **first** `unevaluable` verdict, so if a de-shadowed
+slice pins nothing at the discriminator path, **every** slice arm for that slicing is skipped: a
+third slice's `CARDINALITY_MAX` goes too, and an evaluated slicing becomes an unevaluated one, which
+is the very outcome the design section above says `"no"` was chosen to avoid. It surfaces as the
+library's honest `information` marker `PROFILE_SLICE_UNCHECKED`, `valid` does not move (0 flips
+across the gate's 1,349-case grid), and a `PROFILE_SLICE_UNMATCHED` can never be retired this way.
+**Found by gate pass 2, after the first draft of retirement 2 was written too narrowly** ("a later
+slice that now matches"). Disclosure width, not a safety defect.
+
+**🛑 Carried forward for whoever opens this module next.** Every retirement above rests on the same
+two properties of `matchSlices`: **break-at-first-match**, and an **all-or-nothing `unchecked`**.
+This slice was bitten by that control flow **twice, from two directions** - once as de-shadowing and
+once as the unevaluable collapse. The gate's closing words were that the next slice into this module
+should expect it a third time.
+
+In every case measured the head reading is the more correct one, because each retired finding was an
+artefact of the wrongful admission. That is a reason to disclose them, not a reason to omit them.
+
+**The bound, stated at the width it actually holds.** Where the contradiction sits on the slice's
+**own** descendant, that descendant is also checked at element level, and `min 1 / max 0` is
+unsatisfiable for every count (0 draws `CARDINALITY_MIN`, 1 or more draws `CARDINALITY_MAX`), so an
+error stands on each present parent occurrence whichever way the instance goes. Both polarities are
+asserted.
+
+**🛑 That is NOT a general bound, and the first draft wrongly wrote it as one.**
+`collectProfileIssues` **skips slice elements**, so a contradiction carried by a **re-slice** is
+never element-checked at all, and nothing stands behind a retirement on that route. The gate
+reproduced a `valid: false -> true` move through the public `validateResource` there. The answer was
+not to re-word the bound but to **narrow the record away from re-slices**, which closes the route:
+`does not move a verdict to valid through a re-slice the element check never sees` pins it, and M9
+reds it.
+
+### Carriers swept, not just the site
+
+The predecessor's changeset and `CHANGELOG.md` entry both asserted this gap was open and "pinned by
+a test". Fixing only the code would have shipped a release body contradicting itself.
+
+- `.changeset/olive-badgers-enforce.md` - the falsified paragraph **DELETED, not reworded**: a
+  changeset freezes permanently.
+- `CHANGELOG.md` - the same paragraph deleted from the `[Unreleased]` entry.
+- `documentation/agent-notes.md#narrative-an-xml-sourced-profiles-required-elements-are-enforced-elementdefinitionmin` - the "Declared open" entry marked closed, the
+  forward-looking sentence answered, and the **test name it quotes corrected**: that test was
+  rewritten as the closure and moved, so a reader following the old name would have found nothing.
+- `src/profiles/snapshot.ts` - the `mergeElement` docblock, which named this as its own slice.
+- `test/xml-profile-min.test.ts` - the residuals block's own count corrected from four to three.
+- `documentation/agent-notes.md` is **not** a carrier (it names `resolveSlices` only in a layer
+  description), so the 7-byte-from-budget file was not touched. Neither was `fhir/CLAUDE.md`, which
+  is 3 bytes from its own.
+
+**Owed, and deliberately not done here:** the meta-repo's `documentation/repos/fhir/xml-profile-min.md`
+carries the same "🔴 Open" entry, and `operations/BACKLOG.md` still lists this gap as the item's
+first open leg. This session was scoped to the submodule and told not to touch either.
+
+### The gate
+
+`conformance-refuter`, **`REFUTED` -> `NOT REFUTED`, 2 passes of the ADR 0016 cap of 4.**
+
+| pass | verdict | finding |
+|---|---|---|
+| 1 | `REFUTED` | **two `INTRODUCED` majors.** The bound was false (`collectProfileIssues` skips slice elements, so a **re-slice**'s contradiction is never element-checked and a `valid: false -> true` moved through the public `validateResource`); and the guard was mis-scoped WIDE, a contradictory re-slice making the satisfiable **outer** slice unmatchable and **false-erroring a conformant document**. Plus five minors. |
+| 2 | **`NOT REFUTED`** | Both majors **closed in code and verified mechanically, not argued** - a 1,349-case differential grid over three trees. One `INTRODUCED` **minor** survivor (the retirement enumeration still too narrow), remedied by a **cut**. |
+
+**Both majors were answered in CODE, by one narrowing, not by re-wording the claim** - which is the
+right answer to the predecessor's history of two consecutive remedies each introducing a defect. The
+pass-2 prose cut is applied here and is **UNGRADED**: the cap was not spent (2 of 4), and the cut is
+the refuter's own prescribed wording, strictly narrowing a claim.
+
+**🩺 Two findings this slice reported against itself**, both recorded because a probe that cannot
+fail is not a probe: the probe-D fixture that could not reproduce the gate's own counterexample and
+was reddened by no mutation until rebuilt, and an annotation in the predecessor note that named a
+successor test **which did not exist**.
+
+### Owed elsewhere, filed rather than absorbed
+
+- **`README.md` and `docs-content/intro.md` promise re-slicing is announced as
+  `PROFILE_SLICE_UNCHECKED`, and it is not** (`README.md` ~601-603 and ~619-620,
+  `docs-content/intro.md` ~58). Measured false at `4bc8780` as well as here, so `PRE-EXISTING`. The
+  cause is untouched by this slice: `resolveSlices` still pushes a **re-slice's `fixed`/`pattern`
+  into the outer slice's `constraints` with no `sliceName` filter**, so a `value`/`pattern`
+  discriminator can still be decided by a re-slice. The `exists` record is the only half scoped here,
+  deliberately. **The backlog line is "re-slice content participates in outer-slice membership at
+  all", and the README claim goes with it.** Not deleted here: this slice cannot grade that site.
+- The meta-repo's `documentation/repos/fhir/xml-profile-min.md` "🔴 Open" entry and
+  `operations/BACKLOG.md`'s first open leg for this item both still describe the gap as open. This
+  session was scoped to the submodule and told to touch neither.
+
+### Still open, unchanged by this slice
+
+- **`mergeElement` still overlays `max` verbatim** - the mirror, and the composer of the very pair
+  this slice handles. Both-states pin.
+- `ElementDefinition.mustSupport` and `slicing.ordered` still unread from XML.
+- FHIRPath `numberOf` - an XML-sourced number still falls through to string ordering.
+- A non-conformant JSON `{"min": "1"}` is read, no provenance available to scope it.
+- The `type` / `profile` / R5 `position` discriminators still report `unchecked`; nothing here
+  widened what this module can evaluate.
