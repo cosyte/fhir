@@ -17,14 +17,19 @@
  *   occurrence is `CARDINALITY_MIN`, and a slicing whose discriminator cannot be evaluated is
  *   `PROFILE_SLICE_UNCHECKED` (never silently passed).
  *
+ * **A slice's constraints apply to its members alone.** An element under a slice
+ * (`Observation.component:SystolicBP.code`) constrains only the occurrences the slicing assigned to
+ * the slice it names; an element under no slice (`Observation.component.code`) constrains every
+ * occurrence ({@link ./scope.js}). A re-slice nests the same way: its cardinality and its elements are checked
+ * within its parent slice's members, and its `fixed[x]` / `pattern[x]` values still decide the
+ * parent slice's membership (the R4 blood-pressure shape, where
+ * `component:SystolicBP.code.coding:SBPCode.code` fixes the code the component slicing
+ * discriminates on). A slicing reported `PROFILE_SLICE_UNCHECKED` assigns no occurrence, so its
+ * slices' own constraints are not checked either: membership is never assumed.
+ *
  * Every finding is **value-free**, a code, a severity, and a FHIRPath location, never a value.
  * **Deferred:** binding enforcement from profile bindings (the terminology layer already covers
  * bindings), the `profile`/`type` discriminators (need FHIRPath), and invariant `constraint`s.
- * Reslicing is not modeled either, and it is **not** reported `PROFILE_SLICE_UNCHECKED`: a
- * re-slice's `fixed[x]` / `pattern[x]` values decide its parent slice's membership (the R4
- * blood-pressure shape, where `component:SystolicBP.code.coding:SBPCode.code` fixes the code the
- * component slicing discriminates on), and the re-slice is not checked within its parent slice's
- * members alone.
  *
  * @packageDocumentation
  */
@@ -42,8 +47,8 @@ import { primitiveString } from "../safety/codes.js";
 import { UNBOUNDED } from "../validate/schema.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "../validate/issues.js";
 import { matchesFixed, matchesPattern } from "./fixed-pattern.js";
-import { resolvePath } from "./navigate.js";
-import { matchSlices, resolveSlices } from "./slicing.js";
+import { SliceScope } from "./scope.js";
+import { isSliceOf, matchSlices, resolveSlices } from "./slicing.js";
 import { snapshotElements, type BaseResolver } from "./snapshot.js";
 import type { ElementDefinition, StructureDefinition } from "./structure-definition.js";
 
@@ -51,56 +56,6 @@ import type { ElementDefinition, StructureDefinition } from "./structure-definit
 export interface ProfileOptions {
   /** Base resolver for snapshot generation, needed only when the profile carries no snapshot. */
   readonly resolve?: BaseResolver;
-}
-
-/** Flatten a resolved path result into individual occurrences (a list becomes its items). */
-function occurrencesOf(nodes: readonly FhirNode[]): FhirNode[] {
-  return nodes.flatMap((n) => (isList(n) ? n.items : [n]));
-}
-
-/**
- * One evaluation context for an element: a present occurrence of the element's **parent** and this
- * element's occurrences *within it*. Cardinality is defined relative to the parent
- * (elementdefinition.html), so a `1..1` child is "one per parent", not "one in the whole resource",
- * evaluating it against a root-flattened count would false-error a conformant repeating backbone.
- */
-interface ParentGroup {
-  /** The FHIRPath location of the parent occurrence (the element's own path is `${path}.${leaf}`). */
-  readonly path: string;
-  /** This element's occurrences within that parent. */
-  readonly children: FhirNode[];
-}
-
-/** The element's leaf segment (the last path step, e.g. `code` or `value[x]`). */
-function leafOf(elementPath: string): string {
-  const dot = elementPath.lastIndexOf(".");
-  return dot === -1 ? elementPath : elementPath.slice(dot + 1);
-}
-
-/**
- * Group an element's instance occurrences by the parent occurrence they belong to. A top-level
- * element (parent = the resource) yields a single group; a nested element yields one group per
- * present parent occurrence, and **no groups at all when the parent is absent**, an absent optional
- * parent means its required children simply do not apply (no false cardinality error).
- */
-function parentGroups(
-  resource: FhirComplex,
-  rt: string,
-  root: string,
-  elementPath: string,
-): ParentGroup[] {
-  const relPath = elementPath.slice(rt.length + 1);
-  const dot = relPath.lastIndexOf(".");
-  if (dot === -1) {
-    return [{ path: root, children: occurrencesOf(resolvePath(resource, relPath)) }];
-  }
-  const parentRel = relPath.slice(0, dot);
-  const leaf = relPath.slice(dot + 1);
-  const parents = occurrencesOf(resolvePath(resource, parentRel));
-  return parents.map((parent, j) => ({
-    path: parents.length > 1 ? `${root}.${parentRel}[${String(j)}]` : `${root}.${parentRel}`,
-    children: occurrencesOf(resolvePath(parent, leaf)),
-  }));
 }
 
 /**
@@ -131,15 +86,18 @@ export function collectProfileIssues(
   const root = rootPath(rt);
 
   const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
+  const scope = new SliceScope(resource, root, snapshot);
   const issues: ValidationIssue[] = [];
 
   for (const el of snapshot) {
     if (el.path === profile.type) continue; // the root element, nothing to check on the resource itself.
     if (el.sliceName !== undefined) continue; // slice elements are handled via their sliced parent below.
 
-    const groups = parentGroups(resource, rt, root, el.path);
+    // An element under a slice constrains the members of the slice its id names, and no others, so
+    // its groups are the in-scope parents only; an element under no slice constrains every occurrence.
+    const groups = scope.parentGroups(el);
     if (groups.length === 0) continue; // parent absent → the element's constraints do not apply.
-    const leaf = leafOf(el.path);
+    const leaf = el.path.slice(el.path.lastIndexOf(".") + 1);
     const totalChildren = groups.reduce((n, g) => n + g.children.length, 0);
 
     // must-support: informational, never an error (roadmap §8, the load-bearing rule). Evaluated at
@@ -219,7 +177,7 @@ function collectSlicingIssues(
   for (const slice of slices) {
     const count = result.assignments.filter((name) => name === slice.sliceName).length;
     const sliceElement = snapshot.find(
-      (e) => e.sliceName === slice.sliceName && e.path === slicedElement.path,
+      (e) => e.sliceName === slice.sliceName && isSliceOf(e, slicedElement),
     );
     const slicePath = `${slicedPath}:${slice.sliceName}`;
     if (sliceElement?.mustSupport === true && count === 0) {

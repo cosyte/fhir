@@ -62,7 +62,9 @@ you treat any non-error finding as a pass, you will misread them.
   unchecked like any other the subset cannot evaluate.
 - `PROFILE_SLICE_UNCHECKED`: a slice whose discriminator this library cannot apply: a `type` or
   `profile` discriminator, or the `position` discriminator, which is not part of the R4 discriminator
-  set. Again, it means the slice membership was not decided, not that it matched.
+  set. Again, it means the slice membership was not decided, not that it matched. A slice's own
+  constraints apply only to the occurrences assigned to it, so under an undecided slicing they are
+  not checked either.
 
 Both exist because the alternative, staying quiet, is indistinguishable from a pass to every
 consumer downstream.

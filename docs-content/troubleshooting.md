@@ -170,8 +170,10 @@ discriminator, which needs a FHIRPath engine, or a `position` discriminator, whi
 the R4 discriminator set at all.
 
 **What to do**: the same as the previous entry. It means the slice membership was not decided, not
-that it matched. If the profile is yours, an equivalent slice expressed with a value, pattern, or
-exists discriminator will be evaluated.
+that it matched. A slice's own constraints (its fixed and pattern values, cardinalities and
+invariants) apply only to the occurrences assigned to it, so none of them were checked either. If
+the profile is yours, an equivalent slice expressed with a value, pattern, or exists discriminator
+will be evaluated.
 
 ## An element is not in the base definition
 

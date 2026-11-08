@@ -35,18 +35,11 @@
  */
 
 import { evaluateInvariant } from "../fhirpath/index.js";
-import {
-  isComplex,
-  isList,
-  resourceType,
-  rootPath,
-  type FhirComplex,
-  type FhirNode,
-} from "../model/index.js";
+import { isComplex, resourceType, rootPath, type FhirComplex } from "../model/index.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "../validate/issues.js";
-import { resolvePath } from "./navigate.js";
+import { SliceScope } from "./scope.js";
 import { snapshotElements, type BaseResolver } from "./snapshot.js";
-import type { StructureDefinition } from "./structure-definition.js";
+import type { ElementDefinition, StructureDefinition } from "./structure-definition.js";
 
 /** Options for {@link collectInvariantIssues}. */
 export interface InvariantOptions {
@@ -74,25 +67,16 @@ interface Focus {
   readonly path: string;
 }
 
-/** Flatten a resolved path result into individual complex occurrences (constraints anchor on elements). */
-function complexOccurrences(nodes: readonly FhirNode[]): FhirComplex[] {
-  return nodes.flatMap((n) => (isList(n) ? n.items : [n])).filter(isComplex);
-}
-
 /**
- * The instance occurrences a constraint on `elementPath` is evaluated against. A root-level constraint
- * (path === the resource type) evaluates once against the whole resource; a nested one evaluates once
- * per present occurrence of that element (a primitive occurrence carries no invariants to anchor, so
- * only complex occurrences are used).
+ * The instance occurrences a constraint on `el` is evaluated against. A root-level constraint (path ===
+ * the resource type) evaluates once against the whole resource; a nested one evaluates once per
+ * present occurrence of that element within its slice's members when its id names a slice (a
+ * primitive occurrence carries no invariants to anchor, so only complex occurrences are used).
  */
-function fociFor(resource: FhirComplex, rt: string, root: string, elementPath: string): Focus[] {
-  if (elementPath === rt) return [{ node: resource, path: root }];
-  const rel = elementPath.slice(rt.length + 1);
-  const occ = complexOccurrences(resolvePath(resource, rel));
-  return occ.map((node, i) => ({
-    node,
-    path: occ.length > 1 ? `${root}.${rel}[${String(i)}]` : `${root}.${rel}`,
-  }));
+function fociFor(scope: SliceScope, el: ElementDefinition): Focus[] {
+  return scope
+    .occurrences(el)
+    .flatMap(({ node, path }) => (isComplex(node) ? [{ node, path }] : []));
 }
 
 /**
@@ -155,13 +139,15 @@ export function invariantFindings(
   const root = rootPath(rt);
 
   const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
+  const scope = new SliceScope(resource, root, snapshot);
   const findings: InvariantFinding[] = [];
 
   for (const el of snapshot) {
     if (el.constraint === undefined || el.constraint.length === 0) continue;
-    if (el.sliceName !== undefined) continue; // slice-scoped constraints are handled with their slice (deferred).
+    // A slice element's own constraints are deferred; its descendants are scoped to its members.
+    if (el.sliceName !== undefined) continue;
 
-    const foci = fociFor(resource, rt, root, el.path);
+    const foci = fociFor(scope, el);
     if (foci.length === 0) continue; // element absent → its invariants do not apply.
 
     for (const constraint of el.constraint) {
