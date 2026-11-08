@@ -7,7 +7,15 @@ layers, with zero runtime dependencies.
 
 ## Build and test
 
-Use Node.js 22 or later and pnpm 10.34.5, the version `packageManager` in `package.json` pins.
+Use Node.js 22.22.2 or later and pnpm 10.34.5, the version `packageManager` in `package.json` pins.
+The package itself runs on Node.js 22.0.0 and later; the development tools need 22.22.2.
+
+`build`, `test`, `lint`, `typecheck` and `format` run through `cosyte-process` from
+`@cosyte/process`, which owns the tool versions. `cosyte-process.config.json` keeps one
+repo-specific override: the `format` globs, which take `examples/` in and leave `scripts/` out, as
+this repository's format check always has. `eslint` stays a direct devDependency for
+`pnpm lint:examples`, which lints the examples after a build; `typescript` and `vitest` stay for the
+scripts and tests that import them.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -37,6 +45,7 @@ pnpm phi-scan:examples
 pnpm check:readme
 pnpm check:claude-card
 pnpm check:catalog
+pnpm check:process
 pnpm check:no-emdash
 pnpm check:no-internal-refs
 ```

@@ -661,7 +661,7 @@ describe("the walk reaches every page the bundle publishes", () => {
       },
       ["mdx-braces", "synthetic-identifiers"],
     );
-    // `scripts/build-docs-artifacts.sh` packs `docs-content/` recursively, so this page ships. A
+    // `cosyte-process pack-docs` packs `docs-content/` recursively, so this page ships. A
     // walk that read one directory level reported nothing at all here.
     expect(messages(findings)).toContain("guides/profiles.md:6 [mdx-braces]");
     expect(messages(findings)).toContain('name value "Chalmers"');

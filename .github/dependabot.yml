@@ -18,6 +18,11 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      # @types/node tracks the lowest Node line we support, 22, so a newer major would type APIs the
+      # package cannot rely on. Minor and patch updates within 22 still come through.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   # keep GitHub Actions references current
   - package-ecosystem: github-actions
     directory: "/"
