@@ -97,7 +97,7 @@ export interface ProfileElementSpec {
   readonly max?: number | "*";
   /** Whether the element is flagged must-support (a *system obligation*, not instance-presence). */
   readonly mustSupport?: boolean;
-  /** The slicing declaration, when this element introduces slices. */
+  /** The slicing declaration, when the element introduces slices. */
   readonly slicing?: Slicing;
   /** The allowed types, when the profile constrains them. */
   readonly type?: readonly ElementType[];

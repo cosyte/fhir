@@ -636,8 +636,8 @@ function elementTextValue(children: readonly XmlNode[]): string | undefined {
  * that cannot be modeled), and more than one of them can be true at one location. **This does NOT
  * make the code once-per-location across the reader:** it has one caller, the resource-valued
  * unwrap, which is the only site that asks. The other two text sites and the foreign flag can and
- * do land twice at one expression, on this release and every release before it. Widening that is a
- * change to what the reader reports at positions this slice never touched, so it is not made here.
+ * do land twice at one expression, on this release and every release before it. Widening that would
+ * change what the reader reports at other positions, so it is not done here.
  */
 function unexpectedXmlContentAt(issues: readonly FhirIssue[], path: string): boolean {
   return issues.some((i) => i.code === ISSUE_CODES.UNEXPECTED_XML_CONTENT && i.expression === path);

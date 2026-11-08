@@ -5,22 +5,23 @@ name: Public-surface gate
 # process commentary belong in the changeset, CHANGELOG.md, the commit, the PR and the
 # umbrella's plans, never in README.md, docs-content/, the npm description, a JSDoc block a
 # consumer's editor renders, or a message string a consumer reads in their logs.
-# `scripts/check-no-internal-refs.sh` is what enforces it here; the umbrella's
-# plans/standards.md (ST34) moves this gate into `@cosyte/script-utils`, run through the
-# shared gate workflows.
+# `cosyte-internal-refs`, the shared gate from `@cosyte/script-utils` (ST34), enforces it
+# here, configured by `scripts/internal-refs.json`.
 #
 # WHY A GATE AND NOT A NOTE. The founder, on the sweep that removed 149 of these across the
 # ecosystem: "it needs to not just be a memory note, but something that is addressed in the
 # workflow accordingly. This needs to not happen again." A sweep regresses the first time
 # someone writes `(Phase 12)` into a README; a job that reds does not.
 #
-# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-internal-refs`, which is
-# this repository's own checker. The job below delegates the plumbing (checkout, pnpm,
-# Node) to the shared gate workflow, which carries no pattern, no allow-list and no file
-# selection of its own: it prepares the tree, runs the command, and lets the command's
-# exit status decide the job. The detection rules, the self-tests and the known project
-# prefixes all stay here, because what counts as a project prefix and what counts as a
-# domain designator is a property of this package.
+# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-internal-refs`, which runs
+# `cosyte-internal-refs` from the `@cosyte/script-utils` devDependency. The job below
+# delegates the plumbing (checkout, pnpm, Node, and the install the gate needs) to the shared
+# gate workflow, which carries no pattern, no allow-list and no file selection of its own: it
+# prepares the tree, runs the command, and lets the command's exit status decide the job. The
+# rules are the shared ones; `scripts/internal-refs.json` holds this package's own prefixes,
+# designations, surface, the passes over `src/` doc comments and string literals, and one
+# extra rule that keeps the shared gate reading at least what this repository's former
+# checker read.
 #
 # THE JOB ID IS LOAD-BEARING. A called job's check run is named
 # `<caller job id> / <inner job id>`, so the job id `no-internal-refs` below publishes
@@ -38,8 +39,8 @@ name: Public-surface gate
 #   is its own deliberate piece of work. A shared pipeline is the wrong place to land a rule
 #   most of its callers cannot yet satisfy.
 #
-#   Within this repo, keeping it out of ci.yml also keeps it cheap: this job is a checkout
-#   and a handful of greps over the public surface and the source files, while ci.yml
+#   Within this repo, keeping it out of ci.yml also keeps it cheap: this job is a checkout,
+#   an install and one scan over the public surface and the source files, while ci.yml
 #   drives the full Node 22, 24, and 26 matrix, a fuzz job at FUZZ_RUNS=20000, and a
 #   differential job that downloads validator_cli.jar and runs a JVM oracle over four corpora.
 #
@@ -77,7 +78,7 @@ jobs:
     # Named by the published reference, as its release notes show. That release is
     # immutable, so its tag cannot be moved or deleted, and every workflow caller in
     # this repository names the same reference and moves to the next one together.
-    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs-install.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:

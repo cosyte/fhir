@@ -56,7 +56,7 @@ export interface SliceDefinition {
   /**
    * Relative paths the slice fixes as present **and** absent at once (`min ≥ 1` beside `max 0`).
    * No instance can meet such an expectation, so an `exists` discriminator on one of these paths
-   * assigns no occurrence to this slice. Kept apart from {@link existsExpectations} rather than
+   * assigns no occurrence to the slice. Kept apart from {@link existsExpectations} rather than
    * resolved into a boolean there: neither boolean is true of a contradiction, and picking one
    * admits occurrences the profile forbids.
    */

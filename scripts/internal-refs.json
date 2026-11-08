@@ -1,0 +1,143 @@
+{
+  "$comment": "The public-surface gate's axes for @cosyte/fhir, read by `cosyte-internal-refs` (pnpm check:no-internal-refs), the shared gate in @cosyte/script-utils. This file adds detection and never subtracts. The extra rule carries this repository's former phase rule as it was, so the shared gate reads at least what the former scripts/check-no-internal-refs.sh read.",
+  "$prefixes": "Keyed on our own programme prefixes, never on a WORD-N shape: FHIR invariant ids (ait-1, con-3, obs-6), LOINC codes (8480-6) and ICD-10-CM codes are reference material here.",
+  "projectPrefixes": [
+    "PARSERS-PUBLIC",
+    "DOCS-CONTENT",
+    "KNOWLEDGEBASE",
+    "TERMINOLOGY",
+    "PATHWAYS",
+    "TRANSFORM",
+    "WEBSITE",
+    "STAGING",
+    "SUPPLY",
+    "NCPDP",
+    "ASSETS",
+    "EMDASH",
+    "README",
+    "CONFIG",
+    "DICOM",
+    "SYNTH",
+    "DEID",
+    "CCDA",
+    "ASTM",
+    "MLLP",
+    "FHIR",
+    "CREW",
+    "DOCS",
+    "PERF",
+    "SYNC",
+    "VERSION",
+    "PUBLIC",
+    "HL7",
+    "X12",
+    "IAC",
+    "CLI",
+    "KB",
+    "PW",
+    "PUB",
+    "CI",
+    "REAL",
+    "TERM",
+    "WF",
+    "VERIFY"
+  ],
+  "standardsDesignations": [
+    "FHIR-R\\d[A-Z]?",
+    "HL7-(?:V2|V3|CDA|FHIR|OMG)",
+    "NCPDP-(?:SCRIPT|TELECOM|D\\.\\d)",
+    "DICOM-(?:SR|RT|SEG|DIR|PS\\d)",
+    "X12-\\d{3}[A-Z]?",
+    "X12-\\d{6}",
+    "CCDA-R\\d(?:\\.\\d)?",
+    "ASTM-E\\d+"
+  ],
+  "$surface": "What a consumer reads: README.md, LICENSE, and docs-content/ (docs.cosyte.com). CHANGELOG.md is where identifiers belong, and the four dist/ files are built from src/, whose doc comments and string literals are scanned below.",
+  "surfacePaths": [
+    "README.md",
+    "LICENSE",
+    "docs-content"
+  ],
+  "accountedTarballFiles": [
+    "CHANGELOG.md",
+    "dist",
+    "dist/index.mjs",
+    "dist/index.cjs",
+    "dist/index.d.ts",
+    "dist/index.d.cts"
+  ],
+  "sourceDocComments": {
+    "enabled": true,
+    "paths": [
+      "src/*.ts",
+      "src/**/*.ts"
+    ]
+  },
+  "sourceStringLiterals": {
+    "enabled": true,
+    "paths": [
+      "src/*.ts",
+      "src/**/*.ts"
+    ]
+  },
+  "extraRules": [
+    {
+      "id": "fhir-phase",
+      "name": "phase or wave language",
+      "pattern": {
+        "source": "\\b(?:roadmap phases?\\b[ ]?[A-Za-z0-9]*|(?<!study )(?<!clinical )(?<!trial )(?<!acute )(?<!chronic )(?<!luteal )(?<!follicular )(?<!liquid )(?<!gas )phases?[ -](?!of\\b|with\\b|in\\b|out\\b|the\\b|and\\b|is\\b|for\\b|to\\b|(?:I{1,3}|IV)\\s+(?:trial|stud|clinical|oncolog))[A-Za-z0-9]+[a-z]?\\b|wave \\d+\\b|the \\w+ and final phase\\b|documentation residual\\b|(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|twenty-first|twenty-second|twenty-third|twenty-fourth|\\d+(?:st|nd|rd|th)) (?:slice|wave)\\b)",
+        "flags": "i"
+      },
+      "positives": [
+        "Phase 5b closes it (Phase W, Phase-L and the thirteenth slice landed earlier, in wave 2), and Phases 6 and 7 preceded it",
+        "Added in Phase 9 and reworked in phase 10b",
+        "The connect-phase socket, and the phase was named"
+      ],
+      "negatives": [
+        "A Phase III oncology trial and a Phase II study; the clinical phases of a drug programme; the acute phase reactant; luteal phase dosing and follicular phase dosing; the liquid phase of a specimen; the reader stays in phase with the source system and is out of phase",
+        "Resource type is not modeled by this library; validated structurally only. A Phase III trial and the acute phase reactant are out of scope, and the reader stays in phase with the source system."
+      ]
+    }
+  ],
+  "extraSamples": {
+    "internal-identifier": {
+      "positives": [
+        "Item FHIR-P10 is done, FHIR-NPM-NAME is open, and CCDA-P7 with it",
+        "FHIR-P10 shipped this reader"
+      ],
+      "negatives": [
+        "FHIR-R4, FHIR-R4B and FHIR-R5, HL7-V2 and HL7-CDA and HL7-FHIR, HL7-defined tables, FHIR-bridge stability, FHIR-native shapes, docs-content/ layout, US-Core profiles, SMART-on-FHIR launch, ICD-10-CM T78.40XA and the range P00-P96, LOINC 8480-6, the invariants ait-1 and con-3 and obs-6, the negation codes no-known-allergy and entered-in-error and do-not-perform, the category vital-signs, mm[Hg] and mg, NCPDP-SCRIPT, DICOM-SR, X12-837P and X12-005010, CCDA-R2.1",
+        "UNHANDLED_MODIFIER_EXTENSION and PROFILE_SLICE_UNCHECKED and VITAL_SIGN_UNIT_NONCONFORMANT and MAX_DEPTH_EXCEEDED, ./lexer.js and ../model/decimal.js, http://hl7.org/fhir and http://hl7.org/fhir/sid/icd-10-cm, FHIR-R4, HL7-V2, the invariants ait-1 and con-3 and obs-6, the codes no-known-allergy and entered-in-error and vital-signs, mm[Hg]"
+      ]
+    },
+    "adr-reference": {
+      "positives": [
+        "Decided in ADR 0015, restated in ADR-0021, and recorded in docs/adr/0001-x.md",
+        "Ratified in docs/adr/0001-decimal.md",
+        "Behaviour fixed by ADR 0001, recorded in docs/adr/0001-x.md"
+      ],
+      "negatives": [
+        "ADR is not a segment identifier, and 0015 alone is a value"
+      ]
+    },
+    "internal-repo-path": {
+      "positives": [
+        "Roadmap operations/roadmaps/fhir.md and documentation/decisions/0015-x.md",
+        "See documentation/decisions/0002-fhirpath-dependency-posture.md",
+        "See operations/roadmaps/fhir.md"
+      ],
+      "negatives": [
+        "FHIR operations are documented in the README, and documentation for the API is generated"
+      ]
+    },
+    "traceability-marker": {
+      "positives": [
+        "Repeating [S-SIG], and Open-question #12 resolves the direction",
+        "Traced as [S-SIG]"
+      ],
+      "negatives": [
+        "A character range like [S-Z], a value set written [SNOMED], and open questions about the feed"
+      ]
+    }
+  }
+}

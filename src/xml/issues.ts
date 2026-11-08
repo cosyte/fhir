@@ -25,7 +25,7 @@
  * overflow.
  *
  * Every message is **value-free**: it carries a coded reason and an `offset`, never
- * a slice of the offending document, because that slice could be PHI.
+ * a slice of the offending document, because any part of it could be PHI.
  *
  * @packageDocumentation
  */
@@ -58,8 +58,8 @@ export type XmlFatalCode = (typeof XML_FATAL_CODES)[keyof typeof XML_FATAL_CODES
 /**
  * Thrown by the XML reader on an unrecoverable failure, a well-formedness error, a **refused** DTD
  * or entity (the safety refusals), or nesting past the depth bound. Carries the coded reason and a
- * `offset` into the input, and, by design, **no** slice of the offending input, because that slice could be
- * PHI.
+ * `offset` into the input, and, by design, **no** slice of the offending input, because any part of it
+ * could be PHI.
  *
  * @example
  * ```ts
