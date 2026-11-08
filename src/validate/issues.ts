@@ -415,8 +415,7 @@ export type CodeSystemVersionRecordCode =
  * own `Coding.version` is document content and never reaches a finding.
  */
 export type CodeSystemVersionRecord =
-  | { readonly declared: true; readonly version: string }
-  | { readonly declared: false };
+  { readonly declared: true; readonly version: string } | { readonly declared: false };
 
 /**
  * A single value-free validation finding.
