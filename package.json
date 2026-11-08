@@ -102,7 +102,7 @@
     "version": "changeset version && node scripts/sync-version.mjs && prettier --write package.json src/index.ts",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",
-    "prepare": "command -v simple-git-hooks >/dev/null 2>&1 && simple-git-hooks || true"
+    "prepare": "command -v simple-git-hooks >/dev/null 2>&1 && simple-git-hooks 1>&2 || true"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm phi-scan --staged"

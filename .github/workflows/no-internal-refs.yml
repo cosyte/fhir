@@ -32,16 +32,16 @@ name: Public-surface gate
 # door, and the first half is the deciding one:
 #
 #   The shared ci pipeline is not an option. This repo's `ci` job calls
-#   cosyte/.github/.github/workflows/ci.yml@main, which runs a fixed ladder and no arbitrary
-#   repo script. Adding this there would also flip every other caller red on its next run:
+#   cosyte/.github/.github/workflows/ci.yml at a published reference, which runs a fixed
+#   ladder and no arbitrary repo script. Adding this there would also flip every other caller red on its next run:
 #   the measured backlog was 149 internal references across 11 repos, and remediating each
 #   is its own deliberate piece of work. A shared pipeline is the wrong place to land a rule
 #   most of its callers cannot yet satisfy.
 #
 #   Within this repo, keeping it out of ci.yml also keeps it cheap: this job is a checkout
-#   and a handful of greps over 4 public-surface files and 58 source files, while ci.yml
-#   drives the full Node 22 + 24 matrix, a fuzz job at FUZZ_RUNS=20000, and a differential
-#   job that downloads validator_cli.jar and runs a JVM oracle over two corpora.
+#   and a handful of greps over the public surface and the source files, while ci.yml
+#   drives the full Node 22, 24, and 26 matrix, a fuzz job at FUZZ_RUNS=20000, and a
+#   differential job that downloads validator_cli.jar and runs a JVM oracle over four corpora.
 #
 # WHAT THIS DOES NOT CHECK, deliberately: the PR title, the PR body, and commit messages.
 # The em-dash gate scans all three because the brand rule names commit messages explicitly.
@@ -71,12 +71,10 @@ concurrency:
 jobs:
   # The check-run context prefix. See the note above before touching this id.
   no-internal-refs:
-    # Pinned to the 40 character commit, not to the tag beside it: a tag can be moved
-    # or deleted by anyone who gains write access to the workflow's repository, so a
-    # tag is not an immutable reference and is not a pin. The trailing comment is the
-    # published reference that commit was released as, so the release note stays
-    # findable from here.
-    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@84ecccd771cbc9c1ece003a3f8ff61415360395b # workflows-2026-09-18-84ecccd771cb
+    # Named by the published reference, as its release notes show. That release is
+    # immutable, so its tag cannot be moved or deleted, and every workflow caller in
+    # this repository names the same reference and moves to the next one together.
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@workflows-2026-11-07-498c7c13c886
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:

@@ -35,8 +35,8 @@ name: Em-dash gate
 # message that lands.
 #
 # ci.yml cannot afford that trigger. It runs the shared pipeline over a
-# {node 22, 24} matrix, plus a fuzz job at FUZZ_RUNS=20000, plus a differential
-# job that downloads validator_cli.jar and runs a JVM oracle over two corpora.
+# {node 22, 24, 26} matrix, plus a fuzz job at FUZZ_RUNS=20000, plus a differential
+# job that downloads validator_cli.jar and runs a JVM oracle over four corpora.
 # Re-running all of it every time someone fixes a typo in a PR description buys
 # no extra safety and costs a great deal. This workflow is a checkout and one
 # bash script, so it can afford the noisier trigger. Same call website made
@@ -68,12 +68,10 @@ concurrency:
 jobs:
   # The check-run context prefix. See the note above before touching this id.
   no-emdash:
-    # Pinned to the 40 character commit, not to the tag beside it: a tag can be moved
-    # or deleted by anyone who gains write access to the workflow's repository, so a
-    # tag is not an immutable reference and is not a pin. The trailing comment is the
-    # published reference that commit was released as, so the release note stays
-    # findable from here.
-    uses: cosyte/.github/.github/workflows/gate-no-emdash.yml@84ecccd771cbc9c1ece003a3f8ff61415360395b # workflows-2026-09-18-84ecccd771cb
+    # Named by the published reference, as its release notes show. That release is
+    # immutable, so its tag cannot be moved or deleted, and every workflow caller in
+    # this repository names the same reference and moves to the next one together.
+    uses: cosyte/.github/.github/workflows/gate-no-emdash.yml@workflows-2026-11-07-498c7c13c886
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:

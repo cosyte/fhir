@@ -20,8 +20,8 @@ not interchangeable:
 - **(a) Depend on a full third-party engine** (e.g. `fhirpath.js`). It is a complete implementation,
   but it is large, pulls its own transitive dependencies, and evaluates a far broader surface than
   our shipped profiles use. Adopting it **violates the Cosyte zero-runtime-dependency rule** that
-  every parser in the suite holds (see the meta-repo `documentation/conventions.md` and the dep-cap
-  gate in `scripts/verify.sh`). A runtime dep here would make `@cosyte/fhir` the one parser that
+  every parser in the suite holds (this package's `dependencies` is empty, and the README says it
+  has zero runtime dependencies). A runtime dep here would make `@cosyte/fhir` the one parser that
   breaks the suite's core promise.
 - **(b) Optional peer dependency**: declare FHIRPath support only if the consumer installs an
   engine. This fragments behavior (validation results depend on whether a peer is present and which
