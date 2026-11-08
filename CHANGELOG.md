@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+### Patch Changes
+
+- 9f507a5: Reworded ten doc comments that used "slice" loosely, so the editor hover text says "slice" only for a FHIR profile slice or a part of the input. No code or behaviour changes.
+
 ## 0.1.3
 
 ### Patch Changes
