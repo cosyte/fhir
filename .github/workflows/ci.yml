@@ -71,7 +71,7 @@ jobs:
       - run: pnpm examples
       - run: pnpm phi-scan:examples
 
-  # The house checks from @cosyte/script-utils (README, CLAUDE.md card, agent notes, catalog).
+  # The house checks from @cosyte/script-utils (README, CLAUDE.md card, catalog).
   standards:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -85,7 +85,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:readme
       - run: pnpm check:claude-card
-      - run: pnpm check:agent-notes
       - run: pnpm check:catalog
 
   # Differential vs the official validator (`org.hl7.fhir.core` / validator_cli.jar).

@@ -17,9 +17,6 @@
  * and asserts the polarity on both sides: red on a clean tree, green on a changed one. **A control
  * that has never been observed red on a tree it should be red on has not cleared any tree.**
  *
- * The incident, the three measurements behind the replacement, and what stayed open:
- * `documentation/agent-notes.md`, "A control that cleared nothing".
- *
  * ────────────────────────────────────────────────────────────────────────────────────────────────
  * THE THREE ARMS, AND WHY IT TAKES THREE
  * ────────────────────────────────────────────────────────────────────────────────────────────────

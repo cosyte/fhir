@@ -103,7 +103,6 @@
     "check:docs-set": "tsx scripts/docs-set-check.ts",
     "check:readme": "cosyte-readme",
     "check:claude-card": "cosyte-claude-card",
-    "check:agent-notes": "cosyte-agent-notes",
     "check:catalog": "cosyte-catalog",
     "version": "changeset version && node scripts/sync-version.mjs && prettier --write package.json src/index.ts",
     "release": "changeset publish",
