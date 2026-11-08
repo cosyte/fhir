@@ -384,7 +384,7 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
 /**
  * Thrown by the JSON reader on an unrecoverable structural failure. Carries the coded reason, a
  * FHIRPath `expression` location (for a misalignment) or an `offset` byte position (for malformed
- * JSON), and, by design, **no** slice of the offending input, because that slice could be PHI.
+ * JSON), and, by design, **no** slice of the offending input, because any part of it could be PHI.
  *
  * @example
  * ```ts

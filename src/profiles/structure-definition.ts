@@ -63,9 +63,9 @@ export interface Discriminator {
   readonly path: string;
 }
 
-/** The slicing declaration on an element that introduces slices. */
+/** The slicing declaration on an element with slices. */
 export interface Slicing {
-  /** The discriminators that distinguish the slices (empty is legal but leaves slices unresolvable). */
+  /** The discriminators distinguishing the slices (empty is legal but leaves slices unresolvable). */
   readonly discriminator: readonly Discriminator[];
   /** Whether content outside the defined slices is allowed. Absent defaults to `open` (the R4 default). */
   readonly rules: SlicingRules;
@@ -125,7 +125,7 @@ export interface ElementDefinition {
   readonly max?: number;
   /** Whether the element is flagged must-support. */
   readonly mustSupport?: boolean;
-  /** The slicing declaration, when this element introduces slices. */
+  /** The slicing declaration, when the element introduces slices. */
   readonly slicing?: Slicing;
   /** The allowed types, when the definition constrains them. */
   readonly type?: readonly ElementType[];
