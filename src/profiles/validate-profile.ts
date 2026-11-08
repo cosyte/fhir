@@ -19,8 +19,12 @@
  *
  * Every finding is **value-free**, a code, a severity, and a FHIRPath location, never a value.
  * **Deferred:** binding enforcement from profile bindings (the terminology layer already covers
- * bindings), the `profile`/`type` discriminators and reslicing (need FHIRPath),
- * and invariant `constraint`s.
+ * bindings), the `profile`/`type` discriminators (need FHIRPath), and invariant `constraint`s.
+ * Reslicing is not modeled either, and it is **not** reported `PROFILE_SLICE_UNCHECKED`: a
+ * re-slice's `fixed[x]` / `pattern[x]` values decide its parent slice's membership (the R4
+ * blood-pressure shape, where `component:SystolicBP.code.coding:SBPCode.code` fixes the code the
+ * component slicing discriminates on), and the re-slice is not checked within its parent slice's
+ * members alone.
  *
  * @packageDocumentation
  */

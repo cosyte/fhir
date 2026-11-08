@@ -476,7 +476,10 @@ export interface SafetyReadout {
    * not written down**: that census has gone stale here before.
    * The element read is `doNotPerform`, at any resource root, on any type; it is the only `boolean`
    * this readout takes off a document at all, since `retracted` and `noKnownAllergy` come from codes
-   * and codings. Empty on every conformant document.
+   * and codings. Empty whenever each `doNotPerform` is written as exactly `true` or `false`. That is
+   * not every schema-valid document: R4's XML schema takes `<doNotPerform value=" true"/>`, since its
+   * `xs:boolean` collapses surrounding whitespace, and R4 says an XML reader SHOULD trim it. This
+   * reader does not trim, so that value lands here and the resource is not `safeToSummarize`.
    */
   readonly unreadableBooleans: readonly string[];
   /**
@@ -1021,7 +1024,13 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  * `ElementDefinition.min` whose text falls outside the lexical space the profile loader reads, and a
  * `Quantity` magnitude's lexical forms are read elsewhere and are still lost silently.
  *
- * Empty for every conformant document, in either wire format.
+ * **Empty whenever each `doNotPerform` is written as exactly `true` or `false`, which is not every
+ * schema-valid document.** R4's XML schema derives `boolean` from `xs:boolean`, whose
+ * `whiteSpace=collapse` facet strips surrounding whitespace before the value is checked, so
+ * `<doNotPerform value=" true"/>` is schema-valid, and R4 says an XML reader SHOULD trim that
+ * whitespace (xml.html, datatypes.html). This reader does not trim, so the value is reported here
+ * rather than read: over-disclosure, never a guessed boolean. XML attribute-value normalization does
+ * not change the answer, since it turns a literal tab or line break into a space and keeps a space.
  *
  * @param resource - The resource model.
  * @param path - The FHIRPath prefix for the resource root (usually its `resourceType`).

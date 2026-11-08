@@ -16,15 +16,26 @@
  * typed {@link ./issues.js FhirXmlError}, never a hang, an OOM, a fetch, or a crash. It maps the FHIR
  * datatype layer no more than {@link ../codec/raw-json.js} maps FHIR JSON, that is the job of
  * {@link ./read.js}. Its only concern beyond well-formedness is to hand text and attribute values back
- * with the five predefined entities and numeric character references decoded, and everything else
- * verbatim.
+ * with the five predefined entities and numeric character references decoded, attribute values
+ * normalized as XML 1.0 §3.3.3 requires of every processor, and everything else verbatim.
+ *
+ * **Attribute-value normalization** (XML 1.0 §3.3.3, with the line-end handling of §2.11 it builds
+ * on): with no DTD every attribute is CDATA, so each literal tab, line feed or carriage return in a
+ * value becomes one space, and a literal CR LF pair becomes one space too. A character reference is
+ * appended as the character it names and is not normalized, so `&#9;` stays a tab. Nothing is
+ * trimmed or collapsed: that is the further step §3.3.3 takes only for a non-CDATA attribute type,
+ * which needs a DTD this reader refuses.
  *
  * @packageDocumentation
  */
 
 import { FhirXmlError, XML_FATAL_CODES } from "./issues.js";
 
-/** A name/value attribute on an {@link XmlElement}. Values are already entity-decoded. */
+/**
+ * A name/value attribute on an {@link XmlElement}. Values are already entity-decoded and
+ * normalized (XML 1.0 §3.3.3): a literal tab, line feed, carriage return or CR LF pair is one space,
+ * while a character reference such as `&#10;` keeps the character it names.
+ */
 export interface XmlAttribute {
   readonly name: string;
   readonly value: string;
@@ -264,7 +275,11 @@ class RawXmlReader {
     return attributes;
   }
 
-  /** Parse a quoted attribute value, decoding entities. */
+  /**
+   * Parse a quoted attribute value, decoding entities and normalizing it (XML 1.0 §3.3.3): a literal
+   * whitespace character becomes a space, a literal CR LF pair one space (§2.11 turns it into a
+   * single line feed first), and a character reference is kept as the character it names.
+   */
   private parseAttributeValue(): string {
     const quote = this.#peek();
     if (quote !== '"' && quote !== "'") throw this.fail("Expected a quoted attribute value");
@@ -282,7 +297,12 @@ class RawXmlReader {
         out += this.parseEntity();
         continue;
       }
-      out += c;
+      if (c === "\r") {
+        out += " ";
+        this.#pos += this.#peek(1) === "\n" ? 2 : 1;
+        continue;
+      }
+      out += c === "\t" || c === "\n" ? " " : c;
       this.#pos++;
     }
   }
@@ -370,8 +390,10 @@ class RawXmlReader {
 }
 
 /**
- * Parse an XML document into a raw {@link XmlElement} tree, preserving element/attribute order and
- * decoding the five predefined entities and numeric character references. **Refuses** any DTD
+ * Parse an XML document into a raw {@link XmlElement} tree, preserving element/attribute order,
+ * decoding the five predefined entities and numeric character references, and normalizing attribute
+ * values as XML 1.0 §3.3.3 requires (a literal tab, line feed or carriage return becomes a space; a
+ * character reference keeps the character it names). **Refuses** any DTD
  * (`DTD_FORBIDDEN`) or non-predefined entity (`UNDEFINED_ENTITY`), and bounds nesting depth, so it
  * is XXE- and billion-laughs-safe and never crashes on adversarial input. Throws
  * {@link FhirXmlError} on any refusal or well-formedness error, with an `offset` and no snippet.

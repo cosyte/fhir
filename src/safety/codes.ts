@@ -339,7 +339,9 @@ export function primitiveBooleans(node: FhirNode | undefined): readonly boolean[
  * **A value must be written for this to be `true`.** A primitive carrying only `id` / `extension`
  * metadata has no value (`value` is `undefined`, json.html §2.6.2.3), and a `0..1` element the
  * sender left out has no node, so neither answers `true`. R4 spells a `boolean` as `true` or `false`
- * (datatypes.html), so this is `false` for every conformant document.
+ * (datatypes.html), so this is `false` wherever a boolean is spelled exactly that way. It is `true`
+ * for `" true"`, which R4's XML schema accepts (`xs:boolean` collapses surrounding whitespace): this
+ * read does not trim, so it declines the value and the caller reports it.
  *
  * **It answers about a value, not about a shape.** A `boolean` element written as an object or as an
  * empty array holds no value at all, so it is not reported here; those shapes are a separate gap,

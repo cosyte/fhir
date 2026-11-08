@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  collectProfileIssues,
   complex,
   list,
   loadStructureDefinition,
@@ -147,5 +148,136 @@ describe("matchSlices", () => {
       { type: "exists", path: "coding" },
     ]);
     expect(result.assignments).toEqual(["Has", undefined]);
+  });
+});
+
+/**
+ * A re-slice is read, not reported unchecked.
+ *
+ * The documentation used to say reslicing is reported `PROFILE_SLICE_UNCHECKED`. It is not: a
+ * slice's `fixed[x]` / `pattern[x]` constraints are collected from every element under its id, a
+ * re-slice's included, so a `value` discriminator can be decided by a re-slice. That is the shape of
+ * the R4 blood-pressure profile (`bp.profile.json`), where the component slicing discriminates on
+ * `code.coding.code` and `code.coding.system`, and only the required `SBPCode` / `DBPCode` re-slices
+ * fix those values. Reporting it unchecked would stop the library telling the two components apart,
+ * so the documentation was corrected rather than the code, and these rows pin what the code does.
+ */
+describe("a re-slice decides its parent slice's membership", () => {
+  /** One blood-pressure component slice, with the `code.coding` re-slice that fixes its code. */
+  function component(slice: string, reslice: string, code: string): unknown[] {
+    const id = `Observation.component:${slice}`;
+    return [
+      { id, path: "Observation.component", sliceName: slice, min: 1, max: "1" },
+      { id: `${id}.code`, path: "Observation.component.code", min: 1, max: "1" },
+      {
+        id: `${id}.code.coding`,
+        path: "Observation.component.code.coding",
+        slicing: {
+          discriminator: [
+            { type: "value", path: "code" },
+            { type: "value", path: "system" },
+          ],
+          rules: "open",
+        },
+      },
+      {
+        id: `${id}.code.coding:${reslice}`,
+        path: "Observation.component.code.coding",
+        sliceName: reslice,
+        min: 1,
+        max: "1",
+      },
+      {
+        id: `${id}.code.coding:${reslice}.system`,
+        path: "Observation.component.code.coding.system",
+        min: 1,
+        max: "1",
+        fixedUri: "http://loinc.org",
+      },
+      {
+        id: `${id}.code.coding:${reslice}.code`,
+        path: "Observation.component.code.coding.code",
+        min: 1,
+        max: "1",
+        fixedCode: code,
+      },
+    ];
+  }
+
+  const componentElement = {
+    id: "Observation.component",
+    path: "Observation.component",
+    min: 2,
+    max: "*",
+    slicing: {
+      discriminator: [
+        { type: "value", path: "code.coding.code" },
+        { type: "value", path: "code.coding.system" },
+      ],
+      rules: "open",
+    },
+  };
+  const bp = loadSd({
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/bp-shape",
+    type: "Observation",
+    kind: "resource",
+    derivation: "constraint",
+    snapshot: {
+      element: [
+        { id: "Observation", path: "Observation" },
+        componentElement,
+        ...component("SystolicBP", "SBPCode", "8480-6"),
+        ...component("DiastolicBP", "DBPCode", "8462-4"),
+      ],
+    },
+  });
+  const snapshot = req(bp.snapshot);
+  const sliced = req(snapshot.find((e) => e.id === "Observation.component"));
+  const discriminators = req(sliced.slicing).discriminator;
+
+  /** A component whose code carries one LOINC coding. */
+  function loinc(code: string) {
+    return complex([{ name: "code", value: cc(code, "http://loinc.org") }]);
+  }
+
+  it("collects the re-slice's fixed values at the discriminator paths", () => {
+    const systolic = req(resolveSlices(snapshot, sliced).find((s) => s.sliceName === "SystolicBP"));
+
+    expect(systolic.constraints.map((c) => [c.path, c.kind])).toEqual([
+      ["code.coding.system", "fixed"],
+      ["code.coding.code", "fixed"],
+    ]);
+  });
+
+  it("assigns each component by the value its re-slice fixes, and is not unchecked", () => {
+    const result = matchSlices(
+      [loinc("8480-6"), loinc("8462-4"), loinc("1111-1")],
+      resolveSlices(snapshot, sliced),
+      discriminators,
+    );
+
+    expect(result.unchecked).toBe(false);
+    expect(result.assignments).toEqual(["SystolicBP", "DiastolicBP", undefined]);
+  });
+
+  it("draws no PROFILE_SLICE_UNCHECKED for the component slicing", () => {
+    const observation = req(
+      parseResource(
+        JSON.stringify({
+          resourceType: "Observation",
+          status: "final",
+          code: { text: "blood pressure" },
+          component: [
+            { code: { coding: [{ system: "http://loinc.org", code: "8480-6" }] } },
+            { code: { coding: [{ system: "http://loinc.org", code: "8462-4" }] } },
+          ],
+        }),
+      ).resource,
+    );
+    const findings = collectProfileIssues(observation, bp);
+
+    expect(findings.filter((f) => f.code === "PROFILE_SLICE_UNCHECKED")).toEqual([]);
+    expect(findings.some((f) => f.expression.startsWith("Observation.component:"))).toBe(false);
   });
 });

@@ -46,8 +46,10 @@ and DSTU2 documents can be read, since the model is schema-free, but they are no
 their own definitions.
 
 Not covered yet: typed per-resource models (the built-in structural schemas cover the base elements
-plus the eight modeled resource types), `type` and `profile` slicing discriminators and reslicing
-(reported `PROFILE_SLICE_UNCHECKED`), FHIRPath outside the supported subset (reported
+plus the eight modeled resource types), `type` and `profile` slicing discriminators (reported
+`PROFILE_SLICE_UNCHECKED`), reslicing (a re-slice's fixed and pattern values decide its parent
+slice's membership, but the re-slice is not checked within its parent slice's members alone, and
+it is not reported `PROFILE_SLICE_UNCHECKED`), FHIRPath outside the supported subset (reported
 `INVARIANT_UNCHECKED`, never passed), bundled terminology or US Core content, spec-clean JSON written
 from a model read out of XML, unit conversion, and executing a transaction Bundle.
 

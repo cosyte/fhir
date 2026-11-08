@@ -375,3 +375,43 @@ describe("declared residuals of the unreadable-boolean report, pinned", () => {
     expect(safety.safeToSummarize).toBe(true);
   });
 });
+
+/**
+ * Surrounding whitespace on a boolean is reported, not read, and that includes a schema-valid
+ * document.
+ *
+ * R4's XML schema derives `boolean` from `xs:boolean`, whose `whiteSpace=collapse` facet strips
+ * surrounding whitespace before the value is checked, so `<doNotPerform value=" true"/>` validates,
+ * and R4 says an XML reader SHOULD trim it. This reader does not trim, so the documentation may not
+ * say the channel is empty for every conformant document. These rows pin what it does instead: the
+ * read stays `undefined` and the location is reported. XML attribute-value normalization turns a
+ * literal tab or line feed into a space and leaves a character reference as written, so none of
+ * these spellings becomes `true`.
+ */
+describe("a doNotPerform with surrounding whitespace is reported even where the schema accepts it", () => {
+  const spellings: readonly (readonly [string, string])[] = [
+    ["a leading space", " true"],
+    ["a trailing space", "false "],
+    ["a literal leading tab", "\ttrue"],
+    ["a literal trailing line feed", "true\n"],
+    ["a tab character reference", "&#9;true"],
+    ["a line feed character reference", "true&#10;"],
+  ];
+  for (const [label, text] of spellings) {
+    it(`reports ${label} and reads no boolean`, () => {
+      const safety = safetyOfXml(`<doNotPerform value="${text}"/>`);
+
+      expect(safety.doNotPerform).toBeUndefined();
+      expect(safety.negations).toEqual([]);
+      expect(safety.unreadableBooleans).toEqual(["MedicationRequest.doNotPerform"]);
+      expect(safety.safeToSummarize).toBe(false);
+    });
+  }
+
+  it("reads the exact spelling and reports nothing beside it", () => {
+    const safety = safetyOfXml('<doNotPerform value="true"/>');
+
+    expect(safety.doNotPerform).toBe(true);
+    expect(safety.unreadableBooleans).toEqual([]);
+  });
+});
