@@ -37,7 +37,8 @@
   "pnpm": {
     "overrides": {
       "esbuild@>=0.27.3 <0.28.1": "0.28.1",
-      "js-yaml@>=4.0.0 <4.3.0": "4.3.0"
+      "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
+      "js-yaml@>=3.0.0 <3.15.2": "3.15.2"
     }
   },
   "main": "./dist/index.cjs",
@@ -116,7 +117,7 @@
     "@changesets/cli": "2.31.0",
     "@cosyte/eslint-config": "^0.1.2",
     "@cosyte/prettier-config": "^0.1.2",
-    "@cosyte/script-utils": "^0.1.4",
+    "@cosyte/script-utils": "^0.1.5",
     "@cosyte/test-utils": "^0.1.2",
     "@cosyte/tsconfig": "^0.1.2",
     "@cosyte/tsup-config": "^0.1.2",
