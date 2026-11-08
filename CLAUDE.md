@@ -17,7 +17,7 @@ pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm format:che
 pnpm phi-scan && pnpm test && pnpm test:coverage && pnpm build && pnpm attw
 FUZZ_RUNS=20000 pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts
 pnpm typecheck:examples && pnpm lint:examples && pnpm examples && pnpm phi-scan:examples
-pnpm check:readme && pnpm check:claude-card && pnpm check:catalog
+pnpm check:readme && pnpm check:claude-card && pnpm check:catalog && pnpm check:process
 pnpm check:no-emdash && pnpm check:no-internal-refs
 ```
 

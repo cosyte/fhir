@@ -2,8 +2,8 @@
  * The documentation-set gate: grades every `.md` and `.mdx` page in the `docs-content/` TREE,
  * subdirectories included, against the package as it actually exists in this repository.
  *
- * WHAT IT WALKS, STATED EXACTLY, BECAUSE THE PUBLISHER IS RECURSIVE. `scripts/build-docs-artifacts.sh`
- * packs the bundle with `tar -czf ... -C docs-content .`, so every entry at every depth ships. So
+ * WHAT IT WALKS, STATED EXACTLY, BECAUSE THE PUBLISHER IS RECURSIVE. `pnpm pack:docs` runs
+ * `cosyte-process pack-docs`, which packs every file under `docs-content/` at every depth. So
  * `loadPages` recurses, and a page one directory down is read by every arm below exactly as a
  * top-level one is; a finding names it by its path relative to the content directory, and a relative
  * link is resolved against the directory of the page that wrote it. Two classes of entry are
@@ -12,9 +12,9 @@
  *     below; any OTHER such file is a declared residual, because which detector a data file or an
  *     asset should get is a question this gate does not answer, and the set carries none today.
  *   - a SYMBOLIC LINK TO A DIRECTORY, which is not descended. Descending one is how a walk loops or
- *     leaves the directory the bundle is built from, and `tar` packs the link rather than the tree
- *     behind it, so nothing under it reaches a reader this way. A link to a regular `.md` file IS
- *     read, exactly as it was before this walk recursed.
+ *     leaves the directory the bundle is built from, and the packer refuses any entry that is neither
+ *     a regular file nor a directory, so nothing under it reaches a reader this way. A link to a
+ *     regular `.md` file IS read, exactly as it was before this walk recursed.
  *
  * `docs-content/` is the narrative content the docs site pulls from a release asset and publishes
  * verbatim. Three properties make an unguarded edit there expensive:

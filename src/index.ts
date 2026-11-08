@@ -4,7 +4,7 @@
 
 /**
  * Library version string, synced with `package.json#version` at build time by
- * `scripts/sync-version.mjs` (wired into the Changesets `version` script). Exported now so
+ * `cosyte-process sync-version` (wired into the Changesets `version` script). Exported now so
  * consumers, and the type-check pipeline, have at least one symbol to resolve through the
  * `exports` map.
  *
