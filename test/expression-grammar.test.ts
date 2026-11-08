@@ -21,10 +21,12 @@ import { ISSUE_CODES, parseResource, parseResourceXml, WITHHELD } from "../src/i
  * rather than papered over, so widening or narrowing either is a deliberate act that edits this file.
  */
 
+/** The withheld marker as RegExp source: every syntax character escaped, the backslash included. */
+const WITHHELD_SOURCE = WITHHELD.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 /** A path segment: an identifier or a withheld marker, with any number of `[n]` indices. */
-const SEGMENT = String.raw`(?:[A-Za-z][A-Za-z0-9]*|${WITHHELD.replace(/[<>]/g, "\\$&")})(?:\[\d+\])*`;
+const SEGMENT = String.raw`(?:[A-Za-z][A-Za-z0-9]*|${WITHHELD_SOURCE})(?:\[\d+\])*`;
 /** The XML reader's unmodeled-attribute form, a declared residual (see the suite doc). */
-const ATTRIBUTE = String.raw`@(?:[A-Za-z][A-Za-z0-9]*|${WITHHELD.replace(/[<>]/g, "\\$&")})`;
+const ATTRIBUTE = String.raw`@(?:[A-Za-z][A-Za-z0-9]*|${WITHHELD_SOURCE})`;
 const EXPRESSION = new RegExp(String.raw`^${SEGMENT}(?:\.(?:${SEGMENT}|${ATTRIBUTE}))*$`);
 
 /** Documents chosen to make the reader talk: every warning it has, at several depths. */
