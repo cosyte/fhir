@@ -179,13 +179,7 @@ import { SAFETY_RESOURCE_TYPES, typesOf } from "./codes.js";
  * ```
  */
 export type ModifierElementName =
-  | "comparator"
-  | "implicitRules"
-  | "active"
-  | "use"
-  | "deceased"
-  | "link"
-  | "isSubpotent";
+  "comparator" | "implicitRules" | "active" | "use" | "deceased" | "link" | "isSubpotent";
 
 /**
  * One reported modifier element: which element, and where.

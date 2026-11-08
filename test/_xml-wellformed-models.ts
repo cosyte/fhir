@@ -168,13 +168,11 @@ const NOT_A_NAME: readonly (readonly [string, string])[] = [
 
 /** AC-1: every model whose only refusal head adds is the name code, with its locations. */
 export const NAME_MODELS: readonly NamedModel[] = [
-  ...NOT_A_NAME.map(
-    ([label, name]): NamedModel => ({
-      label: `a property name carrying ${label}`,
-      recipe: named(name),
-      locations: [`Patient.${W}`],
-    }),
-  ),
+  ...NOT_A_NAME.map(([label, name]): NamedModel => ({
+    label: `a property name carrying ${label}`,
+    recipe: named(name),
+    locations: [`Patient.${W}`],
+  })),
   {
     label: "a name read from XML, which the reader reads back as written",
     recipe: {
@@ -318,13 +316,11 @@ const NOT_A_CHAR: readonly (readonly [string, string])[] = [
 
 /** AC-2: every model whose only refusal head adds is the character code, with its locations. */
 export const CHARACTER_MODELS: readonly NamedModel[] = [
-  ...NOT_A_CHAR.map(
-    ([label, char]): NamedModel => ({
-      label: `${label} in a primitive's value`,
-      recipe: json({ resourceType: "Observation", status: "final", valueString: `a${char}b` }),
-      locations: ["Observation.valueString"],
-    }),
-  ),
+  ...NOT_A_CHAR.map(([label, char]): NamedModel => ({
+    label: `${label} in a primitive's value`,
+    recipe: json({ resourceType: "Observation", status: "final", valueString: `a${char}b` }),
+    locations: ["Observation.valueString"],
+  })),
   {
     label: "a non-Char at the start of a value",
     recipe: json({ resourceType: "Observation", status: "final", valueString: "\u0000ab" }),
@@ -478,13 +474,11 @@ export const DIV_MODELS: readonly NamedModel[] = [
       ["&#xFFFF; in the text", `<div xmlns="${XHTML}">a&#xFFFF;b</div>`],
       ["&#x0B; under a prefix the string binds", `<h:div xmlns:h="${XHTML}">a&#x0B;b</h:div>`],
     ] as const
-  ).map(
-    ([label, div]): NamedModel => ({
-      label: `a div carrying ${label}`,
-      recipe: json(narrative(div)),
-      locations: ["Patient.text.div"],
-    }),
-  ),
+  ).map(([label, div]): NamedModel => ({
+    label: `a div carrying ${label}`,
+    recipe: json(narrative(div)),
+    locations: ["Patient.text.div"],
+  })),
   {
     label: "a div inside a contained resource",
     recipe: json({
@@ -535,12 +529,10 @@ export const DIV_WRITTEN_MODELS: readonly NamedModel[] = (
     ],
     ["&#x1; inside a comment before the root", `<!--&#x1;--><div xmlns="${XHTML}">a</div>`],
   ] as const
-).map(
-  ([label, div]): NamedModel => ({
-    label: `a div carrying ${label}`,
-    recipe: json(narrative(div)),
-  }),
-);
+).map(([label, div]): NamedModel => ({
+  label: `a div carrying ${label}`,
+  recipe: json(narrative(div)),
+}));
 
 /**
  * AC-5: every tag name a Name and every emitted value and `div` string Chars only, reaching into the

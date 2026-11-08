@@ -182,10 +182,11 @@ describe("fuzz: JSON, arbitrary bytes never throw except a registered FhirCodecE
   });
 
   it("strings drawn loosely from the JSON alphabet", () => {
-    const jsonish = fc.stringOf(
-      fc.constantFrom(...'{}[]:,"\\0123456789.-eEtruefalsnull ABCabc'.split("")),
-      { minLength: 0, maxLength: 200 },
-    );
+    const jsonish = fc.string({
+      unit: fc.constantFrom(...'{}[]:,"\\0123456789.-eEtruefalsnull ABCabc'.split("")),
+      minLength: 0,
+      maxLength: 200,
+    });
     fc.assert(
       fc.property(jsonish, (raw) => {
         assertJsonSafe(raw);
@@ -253,7 +254,8 @@ describe("fuzz: JSON, deep nesting is a typed MAX_DEPTH_EXCEEDED, never a stack 
 
 describe("fuzz: JSON, huge / scientific-notation numbers are preserved, never crash or corrupt", () => {
   it("adversarial number literals round-trip as text with a precision flag, no throw", () => {
-    const digits = fc.stringOf(fc.constantFrom(..."0123456789".split("")), {
+    const digits = fc.string({
+      unit: fc.constantFrom(..."0123456789".split("")),
       minLength: 1,
       maxLength: 40,
     });
@@ -467,10 +469,11 @@ describe("fuzz: XML, arbitrary bytes never throw except a registered FhirXmlErro
   });
 
   it("strings drawn loosely from the XML alphabet", () => {
-    const xmlish = fc.stringOf(
-      fc.constantFrom(...'<>/="&;?!- abcABC0123DOCTYPEentitySYSTEM'.split("")),
-      { minLength: 0, maxLength: 200 },
-    );
+    const xmlish = fc.string({
+      unit: fc.constantFrom(...'<>/="&;?!- abcABC0123DOCTYPEentitySYSTEM'.split("")),
+      minLength: 0,
+      maxLength: 200,
+    });
     fc.assert(
       fc.property(xmlish, (raw) => {
         assertXmlSafe(raw);
@@ -529,7 +532,7 @@ describe("fuzz: XML, XXE / billion-laughs / entity attacks are refused by constr
   it("a leading DOCTYPE is refused wherever whitespace/prolog precedes it (fuzzed prolog)", () => {
     fc.assert(
       fc.property(
-        fc.stringOf(fc.constantFrom(" ", "\t", "\n", "\r"), { minLength: 0, maxLength: 8 }),
+        fc.string({ unit: fc.constantFrom(" ", "\t", "\n", "\r"), minLength: 0, maxLength: 8 }),
         (ws) => {
           const raw = `${ws}<!DOCTYPE x [<!ENTITY e "boom">]><Patient/>`;
           // With an XML declaration or not; the reader must still refuse the DTD.
@@ -567,7 +570,8 @@ describe("fuzz: XML, XXE / billion-laughs / entity attacks are refused by constr
     fc.assert(
       fc.property(
         fc
-          .stringOf(fc.constantFrom(..."abcdefghijklmnopqrstuvwxyzABCXYZ0123".split("")), {
+          .string({
+            unit: fc.constantFrom(..."abcdefghijklmnopqrstuvwxyzABCXYZ0123".split("")),
             minLength: 1,
             maxLength: 12,
           })
