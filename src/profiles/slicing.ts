@@ -19,6 +19,13 @@
  * (`PROFILE_SLICE_UNCHECKED`) so membership is never silently assumed to pass or fail
  * (fail-safe). Full evaluation of the deferred kinds needs the FHIRPath engine.
  *
+ * **A re-slice is read, not reported unchecked.** A slice's `fixed[x]` / `pattern[x]` constraints
+ * are collected from every element under its id, a re-slice of a descendant and that re-slice's own
+ * children included, so a `value` or `pattern` discriminator can be decided by a re-slice's value.
+ * That is how the R4 blood-pressure profile tells its components apart: the component slicing
+ * discriminates on `code.coding.code`, and only the required `SBPCode` re-slice fixes it. Only the
+ * unsatisfiable-`exists` record below is scoped to the slice's own descendants.
+ *
  * @packageDocumentation
  */
 

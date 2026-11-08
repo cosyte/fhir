@@ -18,8 +18,9 @@
  *
  * **Known limitation (deferred):** re-slicing and deep re-parenting of a slice's descendant elements
  * are not modeled, slice *membership* is resolved from the slice element and any descendant
- * `fixed`/`pattern` constraints (see {@link ./slicing.js}), which covers the US Core slice shapes,
- * but a profile that re-slices an inherited slice is out of scope here.
+ * `fixed`/`pattern` constraints, a re-slice's included (see {@link ./slicing.js}), which covers the
+ * US Core slice shapes, but a profile that re-slices an inherited slice is out of scope here, and
+ * it is not reported `PROFILE_SLICE_UNCHECKED`.
  *
  * @packageDocumentation
  */

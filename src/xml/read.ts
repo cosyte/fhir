@@ -372,9 +372,20 @@ function valueAttribute(element: XmlElement): string | undefined {
  * second, laxer escaper for the fixup would put that straight back into the string unescaped, and
  * since the writer emits `Narrative.div` verbatim, the emitted document would not be well-formed XML
  * and would not re-read.
+ *
+ * A tab, line feed or carriage return is written as a character reference. The raw reader hands
+ * these back only where the source wrote a reference (a literal one is normalized to a space, XML 1.0
+ * §3.3.3), and written literally they would be normalized to a space by whatever reads the
+ * narrative next, so the string would no longer say what the source said.
  */
 function escapeNarrativeAttr(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/"/g, "&quot;")
+    .replace(/\t/g, "&#9;")
+    .replace(/\n/g, "&#10;")
+    .replace(/\r/g, "&#13;");
 }
 
 /**
