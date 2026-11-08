@@ -17,12 +17,11 @@ pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm format:che
 pnpm phi-scan && pnpm test && pnpm test:coverage && pnpm build && pnpm attw
 FUZZ_RUNS=20000 pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts
 pnpm typecheck:examples && pnpm lint:examples && pnpm examples && pnpm phi-scan:examples
-pnpm check:readme && pnpm check:claude-card && pnpm check:agent-notes && pnpm check:catalog
+pnpm check:readme && pnpm check:claude-card && pnpm check:catalog
 pnpm check:no-emdash && pnpm check:no-internal-refs
 ```
 
 Put pnpm 10.34.5 first on PATH: pnpm 12 refuses the frozen install, and a test runs bare `pnpm`.
-Gate notes and each rule's full story: documentation/agent-notes.md#the-card-in-full-2026-11-07.
 
 ## Hazard
 
@@ -56,5 +55,6 @@ refuse; never guess, repair, or affirm. Keep content out of errors and logs.
   is the release body: short, no internal ids. Never hand-edit `CHANGELOG.md` (#39, #100, #111).
 - Public surfaces (`README.md`, `docs-content/`, `/** */` comments, `src/` strings) carry no item
   ids or private paths: translate the line, never delete a doc comment (#31).
-- npm has refused fhir versions with a bare `E403`: keep `files` slim and the name (#55, #134), and
-  settle a publish on repeated evidence: documentation/agent-notes.md#publish-state-fhir-npm-name.
+- npm refused full fhir tarballs with a bare `E403` (0.0.11, the first 0.1.0) and took every one cut
+  to the runtime files: keep `files` that narrow and the name (#55, #134). Never call a publish done
+  or failed from one registry read; a 404 seconds after a publish means nothing (#107, #109).
