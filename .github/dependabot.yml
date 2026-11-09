@@ -23,6 +23,12 @@ updates:
       # package cannot rely on. Minor and patch updates within 22 still come through.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # @cosyte/process owns the vitest and typescript versions; this repository declares them
+      # directly only because test files import vitest and the compiler API, pinned to exactly the
+      # versions process runs. `cosyte-process check` fails a vitest mismatch. They move when
+      # process does, never on their own.
+      - dependency-name: "vitest"
+      - dependency-name: "typescript"
   # keep GitHub Actions references current
   - package-ecosystem: github-actions
     directory: "/"

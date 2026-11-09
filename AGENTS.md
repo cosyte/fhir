@@ -13,9 +13,9 @@ The package itself runs on Node.js 22.0.0 and later; the development tools need 
 `build`, `test`, `lint`, `typecheck` and `format` run through `cosyte-process` from
 `@cosyte/process`, which owns the tool versions. `cosyte-process.config.json` keeps one
 repo-specific override: the `format` globs, which take `examples/` in and leave `scripts/` out, as
-this repository's format check always has. `eslint` stays a direct devDependency for
-`pnpm lint:examples`, which lints the examples after a build; `typescript` and `vitest` stay for the
-scripts and tests that import them.
+this repository's format check always has. `pnpm lint:examples` lints the examples after a build
+with process's own eslint, through `scripts/process-tool.mjs`; `typescript` and `vitest` stay as
+direct devDependencies, pinned to process's versions, for the scripts and tests that import them.
 
 ```sh
 pnpm install --frozen-lockfile
