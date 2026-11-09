@@ -168,6 +168,9 @@ synthetic data only. Ideas and open questions can also go to
 [Discussions](https://github.com/cosyte/.github/discussions). Our
 [support page](https://github.com/cosyte/.github/blob/main/SUPPORT.md) lists every route.
 
+Need a FHIR R4 integration built, or hosted and run for you? See our
+[integration services](https://cosyte.com/integration-services).
+
 ## Security
 
 Report a vulnerability privately, never in a public issue: through GitHub's
