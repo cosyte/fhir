@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8
+
+### Patch Changes
+
+- 01f0c51: FHIRPath `=` now ignores trailing zeroes when it compares two decimals from the document, as the FHIRPath specification's equality rules say: `1.5 = 1.50` is true, where it was false. The same equality decides `!=`, `in`, `contains`, `distinct()`, `intersect()` and union, so an invariant that compared two such values could have been reported violated or satisfied wrongly before. The model still keeps every decimal exactly as written, and a profile's `fixed[x]` and `pattern[x]` still compare decimals with their precision. `~` stays outside the supported subset and is still reported unchecked.
+- 01f0c51: Profile validation now reports a slice whose sliced element declares no `slicing`, or is missing from the snapshot, as `PROFILE_SLICE_NO_SLICING` at information severity, at the slice's location (such as `Observation.component:coded`), once per present parent. Nothing in such a profile says which occurrences belong to the slice, so none is assigned to it and its own constraints are not checked. Before this, the slice and everything under it were skipped with no finding at all, so a required element under the slice could be missing and `collectProfileIssues` returned nothing. `PROFILE_SLICE_NO_SLICING` is a new member of `VALIDATION_CODES`.
+- bc60a40: The doc comment on `serializeResourceXml` no longer carries two Markdown headings. They showed up as top-level headings in the API reference and split its list of functions; they are now bold lead-ins with the same text. No behavior changes.
+
 ## 0.1.7
 
 ### Patch Changes
