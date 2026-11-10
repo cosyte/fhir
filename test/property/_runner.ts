@@ -132,12 +132,20 @@ export function assertProperty<Ts>(
 }
 
 /**
- * A test's time budget for a property at the resolved depth: the suite's 10 s floor, or 10 ms a
- * case, whichever is longer, so a deep run (`COSYTE_PROPERTY_RUNS=10000`) is not cut off by the
- * budget a 100-case run needs.
+ * A test's time budget for a property at the resolved depth: the suite's 10 s floor, or
+ * {@link MS_PER_CASE} a case, whichever is longer, so a deep run (`COSYTE_PROPERTY_RUNS=10000`) is
+ * not cut off by the budget a 100-case run needs.
  */
 export function propertyTimeout(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): number {
-  return Math.max(10_000, resolvePropertyRun({}, env).numRuns * 10);
+  return Math.max(10_000, resolvePropertyRun({}, env).numRuns * MS_PER_CASE);
 }
+
+/**
+ * The budget a case gets in a deep run. A FHIR case is heavier than an HL7 one: a Bundle case
+ * generates, writes and reads several resources, and the lenient case reads, validates and writes
+ * a JSON and an XML document. At 10,000 cases those took 15 to 16 ms a case on a loaded machine,
+ * so 10 ms (hl7's figure) cut them off; 40 leaves room.
+ */
+export const MS_PER_CASE = 40;

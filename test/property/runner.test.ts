@@ -50,7 +50,8 @@ describe("resolvePropertyRun", () => {
 
   it("scales a test's budget with the depth", () => {
     expect(propertyTimeout({})).toBe(10_000);
-    expect(propertyTimeout({ COSYTE_PROPERTY_RUNS: "10000" })).toBe(100_000);
+    expect(propertyTimeout({ COSYTE_PROPERTY_RUNS: "10000" })).toBe(400_000);
+    expect(propertyTimeout({ COSYTE_PROPERTY_RUNS: "250" })).toBe(10_000);
   });
 });
 
