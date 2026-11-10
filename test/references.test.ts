@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildBundleIndex,
+  complex,
   containedIndex,
   hasContainedCycle,
+  list,
   MAX_REFERENCE_DEPTH,
   parseResource,
+  primitive,
   resolveReference,
 } from "../src/index.js";
 
@@ -154,5 +157,84 @@ describe("hasContainedCycle: the DoS-safe cycle guard", () => {
     );
     expect(hasContainedCycle(resource)).toBe(false);
     expect(MAX_REFERENCE_DEPTH).toBeGreaterThan(0);
+  });
+});
+
+describe("reference indexing and the cycle guard at their edges", () => {
+  it("reads a single contained object as well as a contained array, first id winning", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"Observation","id":"root",' +
+        '"contained":{"resourceType":"Patient","id":"p1"},"subject":{"reference":"#p1"}}',
+    );
+    const single = containedIndex(resource);
+    expect(resolveReference("#p1", { contained: single }).status).toBe("resolved");
+
+    const { resource: twice } = parseResource(
+      '{"resourceType":"Observation","id":"root","contained":[' +
+        '{"resourceType":"Patient","id":"dup","gender":"female"},' +
+        '{"resourceType":"Group","id":"dup","type":"person","actual":true}]}',
+    );
+    const res = resolveReference("#dup", { contained: containedIndex(twice) });
+    expect(res.status).toBe("resolved");
+    expect(res.status === "resolved" ? res.target.properties[0]?.value : undefined).toEqual(
+      expect.objectContaining({ value: "Patient" }),
+    );
+  });
+
+  it("skips an entry that is not an object, and keeps the first entry for a repeated Type/id", () => {
+    const entry = (fullUrl: string, gender: string) =>
+      parseResource(
+        `{"resourceType":"Bundle","type":"collection","entry":[{"fullUrl":"${fullUrl}",` +
+          `"resource":{"resourceType":"Patient","id":"7","gender":"${gender}"}}]}`,
+      ).resource.properties.find((p) => p.name === "entry")?.value;
+    const first = entry("https://a.example/fhir/Patient/7", "male");
+    const second = entry("https://b.example/fhir/Patient/7", "female");
+    if (first?.kind !== "list" || second?.kind !== "list") throw new Error("expected entry lists");
+    const bundle = complex([
+      { name: "resourceType", value: primitive("Bundle") },
+      { name: "entry", value: list([primitive("not-an-entry"), ...first.items, ...second.items]) },
+    ]);
+    const index = buildBundleIndex(bundle);
+    expect(index.byFullUrl.size).toBe(2);
+    expect(index.byTypeId.size).toBe(1);
+    const res = resolveReference("Patient/7", { bundle: index });
+    expect(res.status).toBe("resolved");
+    expect(res.status === "resolved" ? res.target : undefined).toBe(
+      index.byFullUrl.get("https://a.example/fhir/Patient/7"),
+    );
+  });
+
+  it("walks a diamond without calling the shared target a cycle", () => {
+    // root → a, root → b, a → c, b → c: c is reached twice, finished the first time.
+    const { resource } = parseResource(
+      '{"resourceType":"Observation","id":"root",' +
+        '"hasMember":[{"reference":"#a"},{"reference":"#b"}],"contained":[' +
+        '{"resourceType":"Observation","id":"a","hasMember":[{"reference":"#c"}]},' +
+        '{"resourceType":"Observation","id":"b","hasMember":[{"reference":"#c"}]},' +
+        '{"resourceType":"Observation","id":"c"}]}',
+    );
+    expect(hasContainedCycle(resource)).toBe(false);
+  });
+
+  it("reads a repeated contained id once in the cycle graph, the first one, as #a resolves", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"Observation","id":"root","contained":[' +
+        '{"resourceType":"Observation","id":"a"},' +
+        '{"resourceType":"Observation","id":"a","hasMember":[{"reference":"#a"}]}]}',
+    );
+    expect(hasContainedCycle(resource)).toBe(false);
+  });
+
+  it("treats a chain deeper than MAX_REFERENCE_DEPTH as a cycle rather than walking on", () => {
+    const n = MAX_REFERENCE_DEPTH + 2;
+    const contained: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const next = i < n - 1 ? `,"hasMember":[{"reference":"#c${String(i + 1)}"}]` : "";
+      contained.push(`{"resourceType":"Observation","id":"c${String(i)}"${next}}`);
+    }
+    const { resource } = parseResource(
+      `{"resourceType":"Observation","id":"root","contained":[${contained.join(",")}]}`,
+    );
+    expect(hasContainedCycle(resource)).toBe(true);
   });
 });

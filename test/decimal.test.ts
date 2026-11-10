@@ -94,6 +94,9 @@ describe("wouldLosePrecisionAsDouble", () => {
   it("flags values with more significant digits than a double keeps", () => {
     expect(wouldLosePrecisionAsDouble("9223372036854775807")).toBe(true);
     expect(wouldLosePrecisionAsDouble("0.12345678901234567890")).toBe(true);
+    // Past the double range entirely: the value would become Infinity.
+    expect(wouldLosePrecisionAsDouble("1e400")).toBe(true);
+    expect(wouldLosePrecisionAsDouble("-1e400")).toBe(true);
   });
 
   it("does not flag values a double round-trips exactly", () => {

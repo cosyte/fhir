@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  collectInvariantIssues,
   collectProfileIssues,
   collectProfileVersionIssues,
   complex,
+  defineProfile,
+  FhirProfileError,
   generateSnapshot,
   list,
   loadStructureDefinition,
@@ -434,5 +437,281 @@ describe("validate-profile: remaining branches", () => {
     };
     const issues = collectProfileVersionIssues(obs, [supplied]);
     expect(issues.map((i) => i.code)).toEqual(["PROFILE_VERSION_MISMATCH"]);
+  });
+});
+
+describe("profile validation without a resolver for a profile that needs its base", () => {
+  const base = loadSd({
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/obs-base",
+    type: "Observation",
+    snapshot: {
+      element: [
+        { id: "Observation", path: "Observation" },
+        { id: "Observation.status", path: "Observation.status" },
+      ],
+    },
+  });
+  const profile = loadSd({
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/obs-needs-base",
+    type: "Observation",
+    baseDefinition: base.url,
+    differential: {
+      element: [
+        {
+          id: "Observation",
+          path: "Observation",
+          constraint: [{ key: "obs-x", severity: "error", expression: "status = 'final'" }],
+        },
+        { id: "Observation.status", path: "Observation.status", min: 1 },
+      ],
+    },
+  });
+  const resolve: BaseResolver = (url) => (url === base.url ? base : undefined);
+  const observation = parse({ resourceType: "Observation", status: "preliminary" });
+
+  it("throws FhirProfileError rather than validating against a partial snapshot", () => {
+    expect(() => collectProfileIssues(observation, profile)).toThrow(FhirProfileError);
+    expect(() => collectInvariantIssues(observation, profile)).toThrow(FhirProfileError);
+  });
+
+  it("validates once the base resolves", () => {
+    expect(collectProfileIssues(observation, profile, { resolve })).toEqual([]);
+    expect(collectInvariantIssues(observation, profile, { resolve }).map((i) => i.code)).toEqual([
+      "INVARIANT_VIOLATED",
+    ]);
+  });
+});
+
+describe("collectProfileVersionIssues: declarations it skips", () => {
+  const pinned = loadSd({
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/p",
+    version: "2.0.0",
+    type: "Patient",
+  });
+  const unversioned = loadSd({
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/q",
+    type: "Patient",
+  });
+
+  it("returns nothing when meta carries no profile", () => {
+    expect(
+      collectProfileVersionIssues(parse({ resourceType: "Patient", meta: {} }), [pinned]),
+    ).toEqual([]);
+  });
+
+  it("never flags a canonical supplied without a version", () => {
+    const patient = parse({
+      resourceType: "Patient",
+      meta: { profile: ["http://example.org/StructureDefinition/q|1.0.0"] },
+    });
+    expect(collectProfileVersionIssues(patient, [unversioned])).toEqual([]);
+  });
+
+  it("skips a value-absent declaration and still indexes the next one by its position", () => {
+    const patient = parse({
+      resourceType: "Patient",
+      meta: {
+        profile: [null, "http://example.org/StructureDefinition/p|1.0.0"],
+        _profile: [
+          { extension: [{ url: "http://example.org/x", valueString: "synthetic" }] },
+          null,
+        ],
+      },
+    });
+    expect(
+      collectProfileVersionIssues(patient, [pinned]).map((i) => [i.code, i.expression]),
+    ).toEqual([["PROFILE_VERSION_MISMATCH", "Patient.meta.profile[1]"]]);
+  });
+
+  it("still reports a mismatch on a model built without a resourceType", () => {
+    const untyped = complex([
+      {
+        name: "meta",
+        value: complex([
+          {
+            name: "profile",
+            value: list([primitive("http://example.org/StructureDefinition/p|1.0.0")]),
+          },
+        ]),
+      },
+    ]);
+    const found = collectProfileVersionIssues(untyped, [pinned]);
+    expect(found.map((i) => i.code)).toEqual(["PROFILE_VERSION_MISMATCH"]);
+  });
+});
+
+describe("slice scope: element ids that do not line up with their paths", () => {
+  const observation = parse({
+    resourceType: "Observation",
+    status: "final",
+    code: { text: "synthetic" },
+    component: [
+      { code: { coding: [{ system: "http://example.org/cs", code: "a" }] } },
+      { valueString: "no code here" },
+    ],
+  });
+
+  function profileWith(element: Record<string, unknown>): StructureDefinition {
+    return loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/scoped",
+      type: "Observation",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          {
+            id: "Observation.component",
+            path: "Observation.component",
+            slicing: { discriminator: [{ type: "exists", path: "code" }], rules: "open" },
+          },
+          { id: "Observation.component:coded", path: "Observation.component", sliceName: "coded" },
+          {
+            id: "Observation.component:coded.code",
+            path: "Observation.component.code",
+            min: 1,
+          },
+          element,
+        ],
+      },
+    });
+  }
+
+  it("scopes an element under a slice to that slice's members only", () => {
+    const issues = collectProfileIssues(
+      observation,
+      profileWith({
+        id: "Observation.component:coded.value[x]",
+        path: "Observation.component.value[x]",
+        min: 1,
+      }),
+    );
+    expect(issues.map((i) => [i.code, i.expression])).toEqual([
+      ["CARDINALITY_MIN", "Observation.component[0].value[x]"],
+    ]);
+  });
+
+  it("applies an element whose id has a different depth from its path to every occurrence", () => {
+    const issues = collectProfileIssues(
+      observation,
+      profileWith({ id: "componentValue", path: "Observation.component.value[x]", min: 1 }),
+    );
+    expect(issues.map((i) => [i.code, i.expression])).toEqual([
+      ["CARDINALITY_MIN", "Observation.component[0].value[x]"],
+    ]);
+  });
+
+  it("applies an element whose id names a different element at some step to every occurrence", () => {
+    const issues = collectProfileIssues(
+      observation,
+      profileWith({
+        id: "Observation.part:coded.interpretation",
+        path: "Observation.component.interpretation",
+        min: 1,
+      }),
+    );
+    expect(issues.map((i) => [i.code, i.expression])).toEqual([
+      ["CARDINALITY_MIN", "Observation.component[0].interpretation"],
+      ["CARDINALITY_MIN", "Observation.component[1].interpretation"],
+    ]);
+  });
+
+  it("reads the first of two snapshot elements sharing an id", () => {
+    const sd = profileWith({ id: "Observation.component", path: "Observation.component" });
+    const issues = collectProfileIssues(
+      observation,
+      loadSd({
+        resourceType: "StructureDefinition",
+        url: sd.url,
+        type: "Observation",
+        snapshot: {
+          element: [
+            { id: "Observation", path: "Observation" },
+            {
+              id: "Observation.component",
+              path: "Observation.component",
+              slicing: { discriminator: [{ type: "exists", path: "code" }], rules: "open" },
+            },
+            {
+              id: "Observation.component:coded",
+              path: "Observation.component",
+              sliceName: "coded",
+            },
+            { id: "Observation.component:coded.code", path: "Observation.component.code", min: 1 },
+            { id: "Observation.component", path: "Observation.component" },
+            {
+              id: "Observation.component:coded.interpretation",
+              path: "Observation.component.interpretation",
+              min: 1,
+            },
+          ],
+        },
+      }),
+    );
+    expect(issues.map((i) => [i.code, i.expression])).toEqual([
+      ["CARDINALITY_MIN", "Observation.component[0].interpretation"],
+    ]);
+  });
+});
+
+describe("resolveSlices: slice elements written in other shapes", () => {
+  it("takes a slice whose id is its bare path, and the slice's own fixed value", () => {
+    const sd = defineProfile({
+      url: "http://example.org/StructureDefinition/fixed-slice",
+      type: "Observation",
+      snapshot: [
+        { path: "Observation" },
+        {
+          path: "Observation.category",
+          slicing: { discriminator: [{ type: "value", path: "$this" }], rules: "closed" },
+        },
+        {
+          path: "Observation.category",
+          id: "Observation.category",
+          sliceName: "vs",
+          fixed: {
+            type: "CodeableConcept",
+            value: complex([{ name: "text", value: primitive("vs") }]),
+          },
+        },
+      ],
+    });
+    const snapshot = req(sd.snapshot);
+    const slices = resolveSlices(snapshot, req(snapshot[1]));
+    expect(slices.map((sl) => [sl.sliceName, sl.constraints.map((c) => [c.path, c.kind])])).toEqual(
+      [["vs", [["$this", "fixed"]]]],
+    );
+  });
+
+  it("keeps the full path of a slice descendant whose path lies outside the sliced element", () => {
+    const sd = loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/stray",
+      type: "Observation",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          {
+            id: "Observation.category",
+            path: "Observation.category",
+            slicing: { discriminator: [{ type: "pattern", path: "$this" }], rules: "open" },
+          },
+          { id: "Observation.category:vs", path: "Observation.category", sliceName: "vs" },
+          {
+            id: "Observation.category:vs.text",
+            path: "Observation.code.text",
+            patternString: "vs",
+          },
+        ],
+      },
+    });
+    const snapshot = req(sd.snapshot);
+    const slices = resolveSlices(snapshot, req(snapshot[1]));
+    expect(slices.map((sl) => sl.constraints.map((c) => c.path))).toEqual([
+      ["Observation.code.text"],
+    ]);
   });
 });
