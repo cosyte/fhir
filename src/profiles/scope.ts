@@ -14,8 +14,9 @@
  * ({@link ./slicing.js}). A slicing whose membership cannot be decided (`unchecked`), or a slice whose
  * sliced element is missing from the snapshot or declares no slicing, assigns no occurrence, so
  * its elements constrain nothing: membership is never assumed. The profile layer reports an
- * undecided slicing as `PROFILE_SLICE_UNCHECKED`; a slice with no slicing declared over it states no
- * membership to decide. An element whose id does not follow its path step for step is read as
+ * undecided slicing as `PROFILE_SLICE_UNCHECKED`, and a slice with no slicing declared over it, which
+ * states no membership to decide, as `PROFILE_SLICE_NO_SLICING`: neither is passed in silence. An
+ * element whose id does not follow its path step for step is read as
  * naming no slice, and constrains every occurrence.
  *
  * @packageDocumentation

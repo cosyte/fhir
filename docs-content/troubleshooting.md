@@ -175,6 +175,19 @@ invariants) apply only to the occurrences assigned to it, so none of them were c
 the profile is yours, an equivalent slice expressed with a value, pattern, or exists discriminator
 will be evaluated.
 
+## A profile slice has no slicing over it
+
+You get a `PROFILE_SLICE_NO_SLICING` finding at informational severity.
+
+The profile names a slice, such as `Observation.component:coded`, but the element it slices
+(`Observation.component`) declares no `slicing`, or is missing from the snapshot. Without a slicing
+there is no discriminator to decide which occurrences belong to the slice, so none is assigned to
+it, and the slice's own constraints (its cardinality and everything under it) were not checked.
+
+**What to do**: read it as "unknown", never as "passed". If the profile is yours, declare the
+slicing on the sliced element, with a value, pattern, or exists discriminator, and the slice will
+be evaluated. If it came from someone else, check that its snapshot was generated in full.
+
 ## An element is not in the base definition
 
 You get an `UNKNOWN_ELEMENT` finding: a warning on a lenient read, an error in strict mode.
