@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import { cosyteVitest } from "@cosyte/vitest-config";
 
 /** Every metric at 100. */
@@ -12,7 +14,7 @@ const FULL = { lines: 100, branches: 100, functions: 100, statements: 100 };
  * inline `v8 ignore` comment naming its reason rather than lowering a number. Barrels (`index.ts`)
  * are excluded by the shared config, so re-export files do not dilute the number.
  */
-export default cosyteVitest({
+const config = cosyteVitest({
   coverageThresholds: {
     ...FULL,
     "src/model/**": FULL,
@@ -25,6 +27,7 @@ export default cosyteVitest({
     "src/fhirpath/**": FULL,
     "src/xml/**": FULL,
     "src/bundle/**": FULL,
+    "src/arbitraries/**": FULL,
   },
   coverageDirs: [
     "model",
@@ -37,6 +40,7 @@ export default cosyteVitest({
     "fhirpath",
     "xml",
     "bundle",
+    "arbitraries",
   ],
   test: {
     globals: false,
@@ -46,3 +50,24 @@ export default cosyteVitest({
     hookTimeout: 10_000,
   },
 });
+
+const srcEntry = fileURLToPath(new URL("src/index.ts", import.meta.url));
+const distDir = fileURLToPath(new URL("dist/", import.meta.url));
+
+/**
+ * `src/arbitraries/` imports the library by its package name, as the published subpath must (see
+ * `tsup.config.ts`). Under test that name resolves to the source entry point, the mapping `paths`
+ * gives the type checker, so the tests and coverage run against `src/`. Imported from the built
+ * subpath (`dist/arbitraries.mjs`, which the docs samples load), it resolves to the built entry
+ * point beside it, as it does for a consumer, so a sample never mixes built and source classes.
+ */
+const ownPackageName = {
+  name: "cosyte-fhir-own-package-name",
+  enforce: "pre" as const,
+  resolveId(source: string, importer: string | undefined): string | null {
+    if (source !== "@cosyte/fhir") return null;
+    return importer?.startsWith(distDir) === true ? `${distDir}index.mjs` : srcEntry;
+  },
+};
+
+export default { ...config, plugins: [ownPackageName] };

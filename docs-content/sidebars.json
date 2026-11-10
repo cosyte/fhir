@@ -14,7 +14,8 @@
         "check-codes",
         "read-bundles-and-references",
         "stream-ndjson-exports",
-        "preserve-unknown-content"
+        "preserve-unknown-content",
+        "property-test-your-code"
       ]
     },
     { "type": "category", "label": "Explanation", "items": ["core-concepts", "limits"] },

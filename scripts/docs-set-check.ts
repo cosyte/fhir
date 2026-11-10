@@ -60,6 +60,7 @@ import {
   constants,
   existsSync,
   fstatSync,
+  mkdirSync,
   mkdtempSync,
   openSync,
   readFileSync,
@@ -68,16 +69,23 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
+import * as arbitraries from "../src/arbitraries/index.js";
 import * as fhir from "../src/index.js";
+import { PROPERTY_ENV } from "../test/property/_runner.js";
 
 /** The package root, derived from this file's own location so any working directory works. */
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Where a sample importing `@cosyte/fhir/arbitraries` is pointed: the subpath's source. */
+const ARBITRARIES_INDEX = join(REPO_ROOT, "src", "arbitraries", "index.js");
+
+/** The directory the samples are written under while they are graded. */
+const SAMPLE_PARENT = join(REPO_ROOT, "node_modules", ".cache");
 
 /** One graded property of the documentation set. Every arm is independently seedable. */
 export const ARMS = [
@@ -1332,10 +1340,14 @@ function sectionNaming(page: DocPage, token: string): { line: number; body: stri
 // Arm: code tokens
 // ---------------------------------------------------------------------------
 
-/** Every screaming-snake token the package really defines: export names plus code-table values. */
+/**
+ * Every screaming-snake token the package really defines: export names plus code-table values, from
+ * the main entry point and the `arbitraries` subpath, and the environment variables the property
+ * runner reads, which the pages name as the way to run deeper.
+ */
 function knownCodeTokens(): Set<string> {
-  const known = new Set<string>();
-  for (const [name, value] of Object.entries(fhir)) {
+  const known = new Set<string>(Object.values(PROPERTY_ENV));
+  for (const [name, value] of Object.entries({ ...fhir, ...arbitraries })) {
     known.add(name);
     if (typeof value !== "object" || value === null) continue;
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
@@ -1456,7 +1468,9 @@ function rewriteSample(sample: Sample, sourceIndexPath: string): string {
       const expected = expectation[3] ?? "";
       return `${indent}__expect(${expression}, (${expected}), ${String(docLine)});`;
     }
-    return line.replace(/(["'])@cosyte\/fhir\1/g, `"${sourceIndexPath}"`);
+    return line
+      .replace(/(["'])@cosyte\/fhir\/arbitraries\1/g, `"${ARBITRARIES_INDEX}"`)
+      .replace(/(["'])@cosyte\/fhir\1/g, `"${sourceIndexPath}"`);
   });
   return [...SAMPLE_PREAMBLE, ...lines].join("\n");
 }
@@ -1486,15 +1500,30 @@ function sampleCompilerOptions(): ts.CompilerOptions {
     skipLibCheck: true,
     noEmit: true,
     typeRoots: [join(REPO_ROOT, "node_modules", "@types")],
+    // The `arbitraries` subpath imports the package by its own name, as the published one must.
+    paths: { "@cosyte/fhir": [join(REPO_ROOT, "src", "index.ts")] },
   };
 }
 
 /**
+ * What a sample may import: the package's two public entry points, `fast-check` (the optional peer
+ * dependency the `arbitraries` subpath is built on), and Node built-ins.
+ */
+const SAMPLE_IMPORTS: ReadonlySet<string> = new Set([
+  "@cosyte/fhir",
+  "@cosyte/fhir/arbitraries",
+  "fast-check",
+]);
+
+/**
  * Compile every sample, then run every sample.
  *
- * A sample that imports anything but the package's public entry point is refused before compilation:
- * a documented example that reaches into a deep path is teaching a consumer to import something the
- * `exports` map does not offer.
+ * A sample that imports anything but the package's public entry points (and the peer dependency one
+ * of them is built on) is refused before compilation: a documented example that reaches into a deep
+ * path is teaching a consumer to import something the `exports` map does not offer.
+ *
+ * The samples are written under `node_modules/.cache/` in this repository, not the system's temporary
+ * directory, so `fast-check` resolves from here as it does from a consumer's project.
  */
 function checkSamples(
   pages: readonly DocPage[],
@@ -1522,18 +1551,19 @@ function checkSamples(
       const importMatch = /\bfrom\s+["']([^"']+)["']/.exec(line);
       if (importMatch === null) continue;
       const specifier = importMatch[1] ?? "";
-      if (specifier === "@cosyte/fhir" || specifier.startsWith("node:")) continue;
+      if (SAMPLE_IMPORTS.has(specifier) || specifier.startsWith("node:")) continue;
       findings.push({
         arm: "samples",
         file: sample.page.file,
         line: sample.fenceLine + index + 1,
-        message: `sample imports "${specifier}"; documented samples may only import "@cosyte/fhir"`,
+        message: `sample imports "${specifier}"; documented samples may only import "@cosyte/fhir", "@cosyte/fhir/arbitraries" or "fast-check"`,
       });
     }
   }
   if (samples.length === 0) return findings;
 
-  const dir = mkdtempSync(join(tmpdir(), "fhir-docs-samples-"));
+  mkdirSync(SAMPLE_PARENT, { recursive: true });
+  const dir = mkdtempSync(join(SAMPLE_PARENT, "fhir-docs-samples-"));
   try {
     // `.mts`, so both the compiler and `tsx` read every sample as an ES module wherever the
     // temporary directory lands. A bare `.ts` in a directory with no `package.json` above it is read

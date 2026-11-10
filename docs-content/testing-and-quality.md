@@ -26,7 +26,7 @@ checks values and verdicts, not only that nothing threw.
 | Fixture corpus | a regression on a known document shape: synthetic resources in JSON and XML under `test/__fixtures__`, including the quirks real servers send, such as a scientific-notation decimal, a `resourceType` written last and a misaligned primitive extension | a shape the corpus does not hold; behavior on real traffic, since every fixture is synthetic |
 | Differential testing | a verdict that disagrees with the HL7 reference validator: the corpus declares 300 documents from four corpora (our fixtures, HL7's shared `fhir-test-cases`, the R4 specification's examples and the US Core 6.1.0 and 9.0.0 examples), holds out 87 of them with the reason recorded for each (most because the validator resolves a URL or canonical reference that we do not; the [corpus README](https://github.com/cosyte/fhir/blob/main/corpus/README.md) has the breakdown), and validates the other 213 with both; the run fails if the validator finds an error in a document we call clean, or if we report an error in a document it finds clean (our refusal to read a broken structure is the one exemption) | a bug both validators share; the content of a terminology finding, since both run with no terminology server and those findings are counted, not compared |
 | FHIRPath conformance suite | a wrong answer from the bounded FHIRPath engine on HL7's shared R4 FHIRPath cases; a case the engine cannot evaluate is counted as declined, and a wrong answer fails the suite, apart from two cases the suite declares by name because they differ only in a strictness mode the engine does not implement | an expression the shared suite does not hold |
-| Property-based tests | a whole class of input breaking a stated rule: a model survives writing and reading back, a negation is never lost on a round trip, a model name at an XML tag position is written as a well-formed tag | a rule nobody stated; a case outside the cases run; a gap in what the generators produce |
+| Property-based tests | a whole class of input breaking a stated rule: a model survives writing and reading back in JSON and in XML, writing what was read a second time changes nothing the first pass did not, a reader never throws on hostile input except with a documented fatal error, a negation is never lost on a round trip, a model name at an XML tag position is written as a well-formed tag | a rule nobody stated; a case outside the cases run; a gap in what the generators produce |
 | Fuzzing | a crash, a hang or an untyped throw on hostile input: truncation, deep nesting, `_element` games, huge and scientific numbers, `resourceType` games, and for XML a DTD, entity expansion and undefined entities; each must end in a typed error or a bounded rejection | a wrong but plausible result, unless a property states what right is |
 | PHI-leak tests | a diagnostic that carries a value: every fixture and a battery of resources seeded with distinctive values in every identifying position run through reading, validation and the `OperationOutcome`, and no seeded value may appear in any finding or error | a value in a position the battery does not seed |
 | Coverage gate | code no test runs: lines, branches, functions and statements, held at a floor of 100 on the package and on each source directory, with each line that cannot be reached marked with its reason | a test that runs code without checking what it returns |
@@ -42,6 +42,18 @@ checks values and verdicts, not only that nothing threw.
   cases by default, which a separate CI job raises to 20,000, and three run 50 or 100. The six other
   property tests run 60 to 3,000 cases each with no fixed seed, so fast-check seeds each run afresh
   and prints the seed when one fails.
+- **The three properties every Cosyte parser proves** run on the generators we publish at
+  `@cosyte/fhir/arbitraries`, in ten checks. Round trip: in JSON, a resource read back from
+  what the writer wrote is the same model, every decimal by its exact text, and writing it again
+  gives the same bytes; in XML, where the reader keeps every value as text, the model read back is
+  equivalent under `nodesEquivalent`, and writing it again gives the same bytes. Idempotent
+  normalize: writing what was read, twice, gives what writing it once gave, for messy and hostile
+  JSON and XML. Never throws: hostile input becomes a model with registered issue codes, or a
+  documented fatal error, and nothing else. A further check holds the generator to account: every
+  generated resource reads with no repair and validates with no error in strict mode. Each runs
+  100 cases from a fresh seed, `COSYTE_PROPERTY_RUNS` sets a deeper run, and a failure prints the
+  seed and path that replay it. [Property-test your code](./property-test-your-code.md) shows those
+  generators on code of your own.
 - **The coverage gate** runs with the suite. A floor that is not met fails the pull request.
 - **Differential testing** runs as its own CI job on every pull request and on `main`. It pins the
   reference validator to one release and fetches the third-party corpora with a checksum for each

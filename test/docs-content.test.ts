@@ -40,10 +40,15 @@ import {
  */
 const root = join(import.meta.dirname, "..");
 const ENTRY = join(root, "dist", "index.mjs");
+const ARBITRARIES = join(root, "dist", "arbitraries.mjs");
 const README = join(root, "README.md");
 const DOCS_DIR = join(root, "docs-content");
 const resolveEntry = (specifier: string): string | undefined =>
-  specifier === "@cosyte/fhir" ? ENTRY : undefined;
+  specifier === "@cosyte/fhir"
+    ? ENTRY
+    : specifier === "@cosyte/fhir/arbitraries"
+      ? ARBITRARIES
+      : undefined;
 
 beforeAll(() => {
   execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit" });
