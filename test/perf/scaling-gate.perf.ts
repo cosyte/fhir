@@ -40,8 +40,14 @@ import {
 } from "../../src/index.js";
 import { observation, transactionBundle } from "../../bench/shapes.mjs";
 
-/** Observations on the count axis: enough that each phase is well above the 4 ms floor. */
-const COUNT = 250;
+/**
+ * Observations on the count axis for the read and the write: enough that each base phase is well
+ * above the 4 ms floor on a GitHub-hosted runner. At 250, the read's base phase there was 3.9 ms
+ * and the gate skipped.
+ */
+const COUNT = 1_000;
+/** The validator costs several times as much a resource, so fewer reach the same phase length. */
+const VALIDATE_COUNT = 250;
 /** Entries in the size axis's base Bundle; the scaled phase has 4 times as many. */
 const ENTRIES = 500;
 /** Bundles in each size-axis phase. */
@@ -112,7 +118,7 @@ const validateOptions: ScalingGateOptions<FhirComplex, ValidationResult> = {
   name: "@cosyte/fhir validateResource",
   parse: (model) => validateResource(model),
   weigh: (result) => result.issues.length + 1,
-  count: { n: COUNT, generate: observationModel },
+  count: { n: VALIDATE_COUNT, generate: observationModel },
   size: { inputs: BUNDLES, size: ENTRIES, generate: bundleModel },
 };
 
