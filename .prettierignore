@@ -1,6 +1,7 @@
 # Generated artifacts
 dist/
 coverage/
+bench-results/
 
 # Dependencies
 node_modules/

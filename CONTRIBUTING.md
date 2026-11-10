@@ -31,6 +31,28 @@ EHR that produced it, and say what you expected beside what happened.
   `pnpm check:no-emdash` runs the file half locally. Rewrite with a period, colon, comma, or
   parentheses.
 
+## Performance
+
+`pnpm test:perf` runs the scaling gates (`test/perf/scaling-gate.perf.ts`) apart from coverage, and
+CI runs them on every pull request. They fail when the cost of `parseResource`, `validateResource`
+or `serializeResource` grows faster than the input: 4 times the Observations, or transaction
+Bundles with 4 times the entries.
+
+`bench/fhir.bench.mjs` measures throughput, latency, memory and import cost against `dist/`, on
+five synthetic shapes built in code by `bench/shapes.mjs`: a vital-signs Observation, a transaction
+Bundle, a searchset Bundle, a deep and wide Patient, and a DiagnosticReport with a base64 PDF.
+
+```sh
+pnpm build
+pnpm bench:reading --out bench-results/reading.json --summary bench-results/reading.md
+node bench/budgets.mjs bench-results/reading.json
+node --enable-source-maps bench/profile.mjs dist/index.mjs --out bench-results/profiles
+```
+
+A full reading takes several minutes; `--only <benchmark>` narrows it. On a pull request CI times
+the base build against the head build (advisory), and the Bench reading workflow takes a reading,
+the budgets and a profile on a GitHub-hosted runner when the bench changes, or when run by hand.
+
 ## Architecture decisions
 
 The choices that bind the model and the codecs are recorded under
