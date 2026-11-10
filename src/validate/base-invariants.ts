@@ -57,6 +57,7 @@ import {
   getProperty,
   isComplex,
   isList,
+  isPrimitive,
   rootPath,
   type FhirComplex,
   type FhirNode,
@@ -162,8 +163,12 @@ const BASE_CONSTRAINTS: readonly BaseConstraint[] = [
   },
 ];
 
-/** The outcome of one constraint at one focus. */
-type Outcome = "satisfied" | "violated" | "unchecked";
+/**
+ * The outcome of one constraint at one focus.
+ *
+ * @internal
+ */
+export type Outcome = "satisfied" | "violated" | "unchecked";
 
 /** Parse an expression once, or `undefined` when it lies outside the subset's grammar. */
 function compile(expression: string): Expr | undefined {
@@ -192,6 +197,105 @@ const EXPRESSION_OF: ReadonlyMap<string, string> = new Map(
 
 /** The selection `dom-3` starts from, evaluated on its own by the same engine. */
 const CONTAINED_SELECTION = compile("contained");
+
+/**
+ * The leaves a node selects in FHIRPath: itself, or for a list every item, a list inside a list
+ * followed item by item, exactly as the engine's `wrap` flattens one.
+ */
+function leafCount(node: FhirNode): number {
+  if (!isList(node)) return 1;
+  let count = 0;
+  for (const item of node.items) count += leafCount(item);
+  return count;
+}
+
+/** Whether `propertyName` is a `[x]` variant of `base`, as the engine decides it. */
+function isChoiceVariant(propertyName: string, base: string): boolean {
+  if (!propertyName.startsWith(base) || propertyName.length === base.length) return false;
+  const suffix = propertyName.charAt(base.length);
+  return suffix >= "A" && suffix <= "Z";
+}
+
+/**
+ * How many items the member `name` selects on `node`, as the engine navigates it: on a complex
+ * node, the first property of that name, or failing one, every `[x]` variant of it; on a primitive,
+ * its `extension` metadata or its `id`; anything else selects nothing.
+ */
+function memberCount(node: FhirNode, name: string): number {
+  if (isComplex(node)) {
+    const exact = getProperty(node, name);
+    if (exact !== undefined) return leafCount(exact);
+    let count = 0;
+    for (const property of node.properties) {
+      if (isChoiceVariant(property.name, name)) count += leafCount(property.value);
+    }
+    return count;
+  }
+  if (isPrimitive(node)) {
+    if (name === "extension") return node.extension?.length ?? 0;
+    if (name === "id") return node.id === undefined ? 0 : 1;
+  }
+  return 0;
+}
+
+/**
+ * How many items `children()` selects on `node`, as the engine reads it: a complex node's
+ * properties but `resourceType`, each list flattened; a primitive's `id` and its extensions.
+ */
+function childCount(node: FhirNode): number {
+  if (isComplex(node)) {
+    let count = 0;
+    for (const property of node.properties) {
+      if (property.name !== "resourceType") count += leafCount(property.value);
+    }
+    return count;
+  }
+  if (isPrimitive(node)) return (node.id === undefined ? 0 : 1) + (node.extension?.length ?? 0);
+  return 0;
+}
+
+/**
+ * `ele-1`, `hasValue() or (children().count() > id.count())`, decided directly at one occurrence.
+ *
+ * The layer asks this of every element of the resource, so it is decided by code written for it
+ * rather than by running the expression through the engine at each one, which allocated more than
+ * every other layer of the validator put together. Both operands are booleans for every focus, so
+ * the engine never refuses it and its answer is `satisfied` or `violated`, never `unchecked`.
+ * `test/base-invariants.test.ts` holds this to the engine's own answer over every element of a
+ * generated corpus.
+ */
+function decideEle1(focus: FhirNode): Outcome {
+  const hasValue = isPrimitive(focus) && focus.value !== undefined;
+  return hasValue || childCount(focus) > memberCount(focus, "id") ? "satisfied" : "violated";
+}
+
+/** `ext-1`, `extension.exists() != value.exists()`, decided directly, as {@link decideEle1} is. */
+function decideExt1(focus: FhirNode): Outcome {
+  const extension = memberCount(focus, "extension") > 0;
+  const value = memberCount(focus, "value") > 0;
+  return extension !== value ? "satisfied" : "violated";
+}
+
+/** The constraints decided directly rather than by the engine, by key. */
+const DECIDED_DIRECTLY: ReadonlyMap<string, (focus: FhirNode) => Outcome> = new Map([
+  ["ele-1", decideEle1],
+  ["ext-1", decideExt1],
+]);
+
+/**
+ * One base constraint's outcome at one focus, by the engine and, where the layer decides it
+ * directly, by that code too, so a test can hold the two to agreement.
+ *
+ * @internal
+ */
+export function baseConstraintOutcomes(
+  key: string,
+  focus: FhirNode,
+  resource: FhirComplex,
+): { readonly engine: Outcome; readonly direct: Outcome | undefined } {
+  const ast = COMPILED.find(({ row }) => row.key === key)?.ast;
+  return { engine: outcomeOf(ast, focus, resource), direct: DECIDED_DIRECTLY.get(key)?.(focus) };
+}
 
 /**
  * Evaluate a parsed expression against one focus. Any failure, a missing parse included, is
@@ -293,19 +397,22 @@ function walkElements(
   typedElement: boolean,
   visit: Visit,
 ): void {
-  for (const occurrence of occurrencesOf(value, path)) {
-    const { node } = occurrence;
-    visit(node, occurrence.path, extension, typedElement);
-    if (isComplex(node)) {
-      walkChildren(node, occurrence.path, extension, visit);
-      continue;
-    }
-    /* v8 ignore next -- unreachable: occurrencesOf() flattens every list */
-    if (isList(node)) continue;
-    (node.extension ?? []).forEach((ext, i) => {
-      walkElements(ext, `${occurrence.path}.extension[${String(i)}]`, true, true, visit);
+  // Each occurrence, a list followed item by item at its own index as `occurrencesOf` does, is
+  // visited and then walked into before the next one.
+  if (isList(value)) {
+    value.items.forEach((item, i) => {
+      walkElements(item, `${path}[${String(i)}]`, extension, typedElement, visit);
     });
+    return;
   }
+  visit(value, path, extension, typedElement);
+  if (isComplex(value)) {
+    walkChildren(value, path, extension, visit);
+    return;
+  }
+  (value.extension ?? []).forEach((ext, i) => {
+    walkElements(ext, `${path}.extension[${String(i)}]`, true, true, visit);
+  });
 }
 
 /** Walk the members of one complex node. `resourceType` is a type marker, not an element. */
@@ -338,20 +445,26 @@ export function collectBaseInvariantFindings(
 ): BaseInvariantResult {
   const findings: BaseInvariantFinding[] = [];
   // The keys decided (held or not held) at each node; an unchecked outcome is never recorded here.
-  const decided = new Map<FhirNode, Set<string>>();
+  // Most nodes have one key decided at them, kept as the key itself until a second one arrives.
+  const decided = new Map<FhirNode, string | Set<string>>();
+  const isDecided = (focus: FhirNode, key: string): boolean => {
+    const keys = decided.get(focus);
+    return typeof keys === "string" ? keys === key : keys?.has(key) === true;
+  };
   const result: BaseInvariantResult = {
     findings,
     decides: (focus, key, expression) =>
-      EXPRESSION_OF.get(key) === expression && decided.get(focus)?.has(key) === true,
+      EXPRESSION_OF.get(key) === expression && isDecided(focus, key),
   };
   if (!BASE_CONSTRAINT_TYPES.has(rt)) return result;
   const root = rootPath(rt);
 
   const report = (outcome: Outcome, key: string, focus: FhirNode, path: string): void => {
     if (outcome !== "unchecked") {
-      const keys = decided.get(focus) ?? new Set<string>();
-      keys.add(key);
-      decided.set(focus, keys);
+      const keys = decided.get(focus);
+      if (keys === undefined) decided.set(focus, key);
+      else if (typeof keys !== "string") keys.add(key);
+      else if (keys !== key) decided.set(focus, new Set([keys, key]));
     }
     if (outcome === "satisfied") return;
     const issue =
@@ -378,12 +491,17 @@ export function collectBaseInvariantFindings(
 
   const elementRow = COMPILED.find(({ row }) => row.anchor.kind === "every-element");
   const extensionRow = COMPILED.find(({ row }) => row.anchor.kind === "every-extension");
+  const decide = (row: Compiled, node: FhirNode): Outcome => {
+    const direct = DECIDED_DIRECTLY.get(row.row.key);
+    /* v8 ignore next -- unreachable today: both rows asked at every element are decided directly */
+    return direct === undefined ? outcomeOf(row.ast, node, resource) : direct(node);
+  };
   const visit: Visit = (node, path, extension, typedElement) => {
     if (elementRow !== undefined && typedElement) {
-      report(outcomeOf(elementRow.ast, node, resource), elementRow.row.key, node, path);
+      report(decide(elementRow, node), elementRow.row.key, node, path);
     }
     if (extensionRow !== undefined && extension) {
-      report(outcomeOf(extensionRow.ast, node, resource), extensionRow.row.key, node, path);
+      report(decide(extensionRow, node), extensionRow.row.key, node, path);
     }
   };
   // The resource root is a resource, not an element, and `contained` holds resources whose own

@@ -608,9 +608,9 @@ export function primitive(
  */
 export function complex(
   properties: readonly FhirProperty[],
-  duplicates: readonly FhirProperty[] = [],
+  duplicates?: readonly FhirProperty[],
 ): FhirComplex {
-  if (duplicates.length === 0) return { kind: "complex", properties };
+  if (duplicates === undefined || duplicates.length === 0) return { kind: "complex", properties };
   return { kind: "complex", properties, duplicates };
 }
 
@@ -669,6 +669,21 @@ export function getAllProperties(node: FhirComplex, name: string): readonly Fhir
     if (property.name === name) out.push(property.value);
   }
   return out;
+}
+
+/**
+ * Whether `node` wrote a member named `name`, in `properties` or among the members a repeated name
+ * shadowed: `getAllProperties(node, name).length > 0`, without building the list. A walk asks this
+ * at every node, so it allocates nothing.
+ *
+ * @internal
+ */
+export function writesProperty(node: FhirComplex, name: string): boolean {
+  for (const property of node.properties) if (property.name === name) return true;
+  const duplicates = node.duplicates;
+  if (duplicates === undefined) return false;
+  for (const property of duplicates) if (property.name === name) return true;
+  return false;
 }
 
 /**

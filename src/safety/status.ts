@@ -141,7 +141,8 @@ import {
   type IntentReport,
   type ModifierElementReport,
 } from "./modifier-elements.js";
-import { collectAbsence, type AbsenceMarker } from "./absence.js";
+import { collectAbsence, type AbsenceMarker, type AbsenceReport } from "./absence.js";
+import { writesProperty } from "../model/node.js";
 
 /**
  * `doNotPerform` on **this** node, read across every value the document wrote for it and through an
@@ -744,7 +745,7 @@ export interface SafetyReadout {
  * ```
  */
 export function unhandledModifierExtensions(resource: FhirComplex, path: string): string[] {
-  return walkSafety(resource, path).modifiers;
+  return [...sharedWalk(resource, path).modifiers];
 }
 
 /**
@@ -772,7 +773,7 @@ export function unhandledModifierExtensions(resource: FhirComplex, path: string)
 export function modifierElements(resource: FhirComplex): ModifierElementReport[] {
   const types = typesOf(resource);
   const prefix = safetyPrefix(types);
-  return rebaseModifierElements(walkSafety(resource, prefix).modifierElements, prefix, types);
+  return rebaseModifierElements(sharedWalk(resource, prefix).modifierElements, prefix, types);
 }
 
 /**
@@ -817,7 +818,9 @@ function safetyPrefix(types: readonly string[]): string {
  * ```
  */
 export function shadowedProperties(resource: FhirComplex, path: string): string[] {
-  return walkSafety(resource, path).shadowed;
+  const out: string[] = [];
+  if (anyShadowed(resource)) collectShadowed(resource, path, out);
+  return out;
 }
 
 /**
@@ -880,7 +883,7 @@ export function shadowedProperties(resource: FhirComplex, path: string): string[
  * ```
  */
 export function arrayWrappedScalars(resource: FhirComplex, path: string): string[] {
-  return walkSafety(resource, path).arrayWrapped;
+  return [...sharedWalk(resource, path).arrayWrapped];
 }
 
 /**
@@ -901,7 +904,7 @@ export function arrayWrappedScalars(resource: FhirComplex, path: string): string
  * @internal
  */
 export function unspellableXmlWrappers(resource: FhirComplex, path: string): string[] {
-  return walkSafety(resource, path).unspellableInXml;
+  return [...sharedWalk(resource, path).unspellableInXml];
 }
 
 /**
@@ -1045,7 +1048,7 @@ export function droppedText(resource: FhirComplex, path: string): string[] {
  * ```
  */
 export function unreadableBooleans(resource: FhirComplex, path: string): string[] {
-  return walkSafety(resource, path).unreadableBoolean;
+  return [...sharedWalk(resource, path).unreadableBoolean];
 }
 
 /**
@@ -1102,7 +1105,7 @@ export function unreadableBooleans(resource: FhirComplex, path: string): string[
  * ```
  */
 export function nearMissNegationCodes(resource: FhirComplex, path: string): string[] {
-  return walkSafety(resource, path).nearMissCode;
+  return [...sharedWalk(resource, path).nearMissCode];
 }
 
 /**
@@ -1148,7 +1151,7 @@ export function nearMissNegationCodes(resource: FhirComplex, path: string): stri
  * ```
  */
 export function unreadableNegationCodes(resource: FhirComplex, path: string): string[] {
-  return walkSafety(resource, path).unreadableCode;
+  return [...sharedWalk(resource, path).unreadableCode];
 }
 
 /**
@@ -1179,7 +1182,7 @@ export function unreadableNegationCodes(resource: FhirComplex, path: string): st
  * ```
  */
 export function absenceMarkers(resource: FhirComplex, path: string): AbsenceMarker[] {
-  return [...collectAbsence(resource, path).markers];
+  return [...sharedAbsence(resource, path).markers];
 }
 
 /**
@@ -1205,7 +1208,7 @@ export function absenceMarkers(resource: FhirComplex, path: string): AbsenceMark
  * ```
  */
 export function unreadableAbsenceMarkers(resource: FhirComplex, path: string): string[] {
-  return [...collectAbsence(resource, path).unreadable];
+  return [...sharedAbsence(resource, path).unreadable];
 }
 
 /**
@@ -1230,7 +1233,7 @@ export function unreadableAbsenceMarkers(resource: FhirComplex, path: string): s
  * ```
  */
 export function conflictingAbsenceMarkers(resource: FhirComplex, path: string): string[] {
-  return [...collectAbsence(resource, path).conflicting];
+  return [...sharedAbsence(resource, path).conflicting];
 }
 
 /**
@@ -1250,10 +1253,36 @@ export function collectMarked(
   path: string,
   marked: (node: FhirNode) => boolean,
 ): string[] {
+  // Almost every document carries no marked node at all. Asking that first, without building a
+  // location at every node, answers those with the same empty list the walk below would.
+  if (!anyMarked(resource, marked)) return [];
   const out: string[] = [];
   collectNested(resource, path, out, marked);
   return [...new Set(out)];
 }
+
+/** Whether {@link collectNested} would record anything: the same traversal, building no location. */
+function anyMarked(node: FhirNode, marked: (node: FhirNode) => boolean): boolean {
+  if (marked(node)) return true;
+  if (isList(node)) {
+    for (const item of node.items) if (anyMarked(item, marked)) return true;
+    return false;
+  }
+  if (isPrimitive(node)) {
+    for (const ext of node.extension ?? NO_NODES) if (anyMarked(ext, marked)) return true;
+    return false;
+  }
+  for (const property of node.properties) if (anyMarked(property.value, marked)) return true;
+  for (const property of node.duplicates ?? NO_PROPERTIES) {
+    if (anyMarked(property.value, marked)) return true;
+  }
+  return false;
+}
+
+/** An empty list of nodes, shared, for a walk to loop over when a node has none. */
+const NO_NODES: readonly FhirNode[] = Object.freeze([]);
+/** An empty list of properties, shared, as {@link NO_NODES} is. */
+const NO_PROPERTIES: readonly FhirProperty[] = Object.freeze([]);
 
 /**
  * Walk every node in the tree, recording each one `marked` selects. Deliberately a **separate**
@@ -1294,6 +1323,77 @@ function collectNested(
   for (const property of node.duplicates ?? []) {
     collectNested(property.value, childPath(path, property.name), out, marked);
   }
+}
+
+/**
+ * Every member a node wrote, in `properties` and then among the members a repeated name shadowed:
+ * `[...node.properties, ...(node.duplicates ?? [])]`, without copying when nothing was shadowed.
+ */
+function membersOf(node: FhirComplex): readonly FhirProperty[] {
+  const duplicates = node.duplicates;
+  return duplicates === undefined || duplicates.length === 0
+    ? node.properties
+    : [...node.properties, ...duplicates];
+}
+
+/** The walks one {@link shareSafetyWalks} call has made, by resource and location prefix. */
+interface SharedWalks {
+  readonly safety: Map<FhirComplex, Map<string, SafetyWalk>>;
+  readonly absence: Map<FhirComplex, Map<string, AbsenceReport>>;
+}
+
+/** The walks being shared, while a {@link shareSafetyWalks} call runs. */
+let shared: SharedWalks | undefined;
+
+/**
+ * Run `run`, letting every safety accessor it calls share one walk of each resource and prefix
+ * instead of walking again: the validator's safety layer asks the same walk for several of its
+ * channels. A model is never changed once read, so a second walk of it would find exactly what the
+ * first did. The walks are dropped when `run` returns, so nothing outlives the call, and each
+ * accessor still hands its caller a list of its own.
+ *
+ * @internal
+ */
+export function shareSafetyWalks<T>(run: () => T): T {
+  if (shared !== undefined) return run();
+  shared = { safety: new Map(), absence: new Map() };
+  try {
+    return run();
+  } finally {
+    shared = undefined;
+  }
+}
+
+/** The entry for `resource` at `path` in one of the shared maps, made by `make` the first time. */
+function memo<T>(
+  table: Map<FhirComplex, Map<string, T>>,
+  resource: FhirComplex,
+  path: string,
+  make: () => T,
+): T {
+  let byPath = table.get(resource);
+  if (byPath === undefined) {
+    byPath = new Map();
+    table.set(resource, byPath);
+  }
+  let value = byPath.get(path);
+  if (value === undefined) {
+    value = make();
+    byPath.set(path, value);
+  }
+  return value;
+}
+
+/** {@link walkSafety}, shared while a {@link shareSafetyWalks} call runs. */
+function sharedWalk(resource: FhirComplex, path: string): SafetyWalk {
+  if (shared === undefined) return walkSafety(resource, path);
+  return memo(shared.safety, resource, path, () => walkSafety(resource, path));
+}
+
+/** `collectAbsence`, shared while a {@link shareSafetyWalks} call runs. */
+function sharedAbsence(resource: FhirComplex, path: string): AbsenceReport {
+  if (shared === undefined) return collectAbsence(resource, path);
+  return memo(shared.absence, resource, path, () => collectAbsence(resource, path));
 }
 
 /** The fail-closed findings a single walk of the resource collects. */
@@ -1425,7 +1525,7 @@ type WrapperReport = (location: string, unwritable: boolean) => void;
 function checkArrayWrapping(node: FhirComplex, path: string, report: WrapperReport): void {
   const types = typesOf(node);
   const isSafetyType = types.some((type) => SAFETY_RESOURCE_TYPES.has(type));
-  for (const property of [...node.properties, ...(node.duplicates ?? [])]) {
+  for (const property of membersOf(node)) {
     const clinical = SAFETY_SCALAR_ELEMENTS.has(property.name);
     // `resourceType` is a JSON string on every resource, not an element with a cardinality, so it is
     // checked whatever the type says, and it is checked first: an array-wrapped type gate is what
@@ -1711,7 +1811,7 @@ function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): vo
 function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = false): void {
   // A resource root is the entry node, or any nested node that carries its own `resourceType` (a
   // `contained` resource, a Bundle `entry.resource`). Only there does this library know a cardinality.
-  if (isRoot || getAllProperties(node, "resourceType").length > 0) {
+  if (isRoot || writesProperty(node, "resourceType")) {
     checkResourceRoot(node, path, out);
   }
   // Every node, not only a resource root: `comparator` modifies the value beside it wherever that
@@ -1727,8 +1827,10 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
   // any nested resource root, which this walk reaches and reads in its own turn.
   collectDatatypeUses(node, path, out.useReadings);
   for (const property of node.properties) visitProperty(property, path, out);
+  const duplicates = node.duplicates;
+  if (duplicates === undefined) return;
   const reported = new Set<string>();
-  for (const property of node.duplicates ?? []) {
+  for (const property of duplicates) {
     // One location per element, however many members shadowed it: FHIRPath cannot address the
     // individual members, so repeating the same path would be noise a caller cannot act on.
     if (!reported.has(property.name)) {
@@ -1736,6 +1838,54 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
       out.shadowed.push(childPath(path, property.name));
     }
     visitProperty(property, path, out);
+  }
+}
+
+/**
+ * Whether the safety walk would record a shadowed member anywhere: the traversal
+ * {@link walkComplex} and {@link descend} make (complex nodes and list items, not a primitive's
+ * metadata), building no location.
+ */
+function anyShadowed(node: FhirNode): boolean {
+  if (isList(node)) {
+    for (const item of node.items) if (anyShadowed(item)) return true;
+    return false;
+  }
+  if (!isComplex(node)) return false;
+  if (node.duplicates !== undefined && node.duplicates.length > 0) return true;
+  for (const property of node.properties) if (anyShadowed(property.value)) return true;
+  return false;
+}
+
+/**
+ * The shadowed-member locations of {@link walkSafety}, collected on their own: the same traversal in
+ * the same order, recording only what {@link walkComplex} records on `shadowed`. The writers ask
+ * only this of the safety walk, so they no longer pay for the rest of it.
+ */
+function collectShadowed(node: FhirComplex, path: string, out: string[]): void {
+  for (const property of node.properties) {
+    shadowedUnder(property.value, childPath(path, property.name), out);
+  }
+  const duplicates = node.duplicates;
+  if (duplicates === undefined) return;
+  const reported = new Set<string>();
+  for (const property of duplicates) {
+    const at = childPath(path, property.name);
+    if (!reported.has(property.name)) {
+      reported.add(property.name);
+      out.push(at);
+    }
+    shadowedUnder(property.value, at, out);
+  }
+}
+
+/** {@link descend}, for {@link collectShadowed}. */
+function shadowedUnder(node: FhirNode, path: string, out: string[]): void {
+  if (isComplex(node)) collectShadowed(node, path, out);
+  else if (isList(node)) {
+    node.items.forEach((item, index) => {
+      shadowedUnder(item, `${path}[${String(index)}]`, out);
+    });
   }
 }
 

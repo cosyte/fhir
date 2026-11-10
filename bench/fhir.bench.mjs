@@ -29,7 +29,8 @@ import {
 } from "./shapes.mjs";
 
 // Five shapes, each at the size real traffic has and at a size well past it. The pull request
-// comparison runs only the small Observation and the 100 entry transaction, for each operation: a
+// comparison runs only the small Observation, the 100 entry transaction and the report with a 64 KiB
+// PDF (a long string, which the reader once built a character at a time), for each operation: a
 // comparison runs every case 24 times in fresh processes, and its budget is 600 seconds. A reading
 // measures every size.
 const SHAPES = [
@@ -70,7 +71,12 @@ const SHAPES = [
   {
     name: "DiagnosticReport, base64 PDF",
     sizes: [
-      { label: "64 KiB PDF, 86 KiB", inputs: 4, build: (i) => reportWithAttachment(i, 64 * KIB) },
+      {
+        label: "64 KiB PDF, 86 KiB",
+        inputs: 4,
+        build: (i) => reportWithAttachment(i, 64 * KIB),
+        compare: true,
+      },
       { label: "4 MiB PDF, 5.3 MiB", inputs: 1, build: (i) => reportWithAttachment(i, 4096 * KIB) },
     ],
   },

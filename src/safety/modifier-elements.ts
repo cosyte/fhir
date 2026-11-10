@@ -159,7 +159,9 @@ import {
   WITHHELD,
   type FhirComplex,
   type FhirNode,
+  type FhirProperty,
 } from "../model/index.js";
+import { writesProperty } from "../model/node.js";
 import { SAFETY_RESOURCE_TYPES, typesOf } from "./codes.js";
 
 /**
@@ -464,8 +466,28 @@ export const MODIFIER_ELEMENT_ROOT_TYPES: ReadonlySet<string> = new Set([
  * @internal
  */
 function carries(node: FhirComplex, name: string): boolean {
-  return getAllProperties(node, name).length > 0 || getAllProperties(node, `_${name}`).length > 0;
+  // `getAllProperties(node, name)` or `getAllProperties(node, "_" + name)` is non-empty: decided
+  // without building either list or the `_` name, since this runs at every node the walk reaches.
+  return writesMember(node.properties, name) || writesMember(node.duplicates ?? [], name);
 }
+
+/** Whether one of `properties` is named `name` or `_` followed by `name`. */
+function writesMember(properties: readonly FhirProperty[], name: string): boolean {
+  for (const { name: written } of properties) {
+    if (written === name) return true;
+    if (
+      written.length === name.length + 1 &&
+      written.charCodeAt(0) === UNDERSCORE &&
+      written.endsWith(name)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** `_`, the prefix of a primitive's `_`-sibling. */
+const UNDERSCORE = 95;
 
 /**
  * Visit each entry of a repeating element, indexing the location at the array as the walk itself
@@ -655,18 +677,27 @@ function readUsesUnder(
   place: UsePlace,
   out: DatatypeUseReading[],
 ): void {
-  for (const property of [...node.properties, ...(node.duplicates ?? [])]) {
-    const at = childPath(path, property.name);
-    const codes = coveredCodes(property.name, place);
-    if (codes !== undefined) {
-      eachEntry(property.value, at, (entry, entryPath) => {
-        readUse(entry, entryPath, codes, out);
-      });
-    }
-    const next: UsePlace =
-      place === "patient-root" && property.name === CONTACT ? "patient-contact" : "other";
-    descendForUses(property.value, at, next, out);
+  for (const property of node.properties) readUsesAt(property, path, place, out);
+  for (const property of node.duplicates ?? []) readUsesAt(property, path, place, out);
+}
+
+/** {@link readUsesUnder}, for one member of the node. */
+function readUsesAt(
+  property: FhirProperty,
+  path: string,
+  place: UsePlace,
+  out: DatatypeUseReading[],
+): void {
+  const at = childPath(path, property.name);
+  const codes = coveredCodes(property.name, place);
+  if (codes !== undefined) {
+    eachEntry(property.value, at, (entry, entryPath) => {
+      readUse(entry, entryPath, codes, out);
+    });
   }
+  const next: UsePlace =
+    place === "patient-root" && property.name === CONTACT ? "patient-contact" : "other";
+  descendForUses(property.value, at, next, out);
 }
 
 /**
@@ -693,7 +724,7 @@ function descendForUses(
     });
     return;
   }
-  if (getAllProperties(value, "resourceType").length > 0) return;
+  if (writesProperty(value, "resourceType")) return;
   readUsesUnder(value, path, place, out);
 }
 

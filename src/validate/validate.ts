@@ -57,7 +57,7 @@ import { collectBundleIssues } from "./bundle.js";
 import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
 import { typesOf } from "../safety/codes.js";
-import { nestedArrays } from "../safety/status.js";
+import { nestedArrays, shareSafetyWalks } from "../safety/status.js";
 import { collectTerminologyIssues } from "./terminology.js";
 import { collectProfileIssues, collectProfileVersionIssues } from "../profiles/validate-profile.js";
 import { invariantFindings } from "../profiles/invariants.js";
@@ -73,6 +73,7 @@ import {
   resolveElement,
   type ElementSchema,
   type ResourceSchema,
+  type SchemaRegistry,
 } from "./schema.js";
 import {
   ISSUE_SEVERITIES,
@@ -120,6 +121,18 @@ export interface ValidationResult {
   readonly valid: boolean;
   /** Render the findings as an `OperationOutcome` resource model (value-free, serializable). */
   toOperationOutcome: () => FhirComplex;
+}
+
+/** The registry of the built-in schemas alone, built the first time a call needs it. */
+let builtIn: SchemaRegistry | undefined;
+
+/**
+ * The registry {@link buildRegistry} builds with no caller schemas. It holds only this package's own
+ * constant schemas, so it is the same on every call and is built once rather than per call.
+ */
+function builtInRegistry(): SchemaRegistry {
+  builtIn ??= buildRegistry();
+  return builtIn;
 }
 
 /** The severity a code carries in a given mode (only the unknown element varies by mode). */
@@ -215,6 +228,13 @@ export function validateResource(
   resource: FhirComplex,
   options: ValidateOptions = {},
 ): ValidationResult {
+  // Every layer below reads the same model, which no layer changes, so the safety walks several of
+  // them ask for are made once for the call and shared.
+  return shareSafetyWalks(() => validateOnce(resource, options));
+}
+
+/** {@link validateResource}, inside its shared-walk scope. */
+function validateOnce(resource: FhirComplex, options: ValidateOptions): ValidationResult {
   const mode: ValidationMode = options.mode ?? "lenient";
   const ctx: Ctx = { mode, issues: [] };
 
@@ -244,7 +264,10 @@ export function validateResource(
   // document wrote it. `root` is the same name bounded for use as a diagnostic location, and it is
   // the only one of the two that reaches an `expression`.
   const root = rootPath(rt);
-  const registry = buildRegistry(options.schemas ?? []);
+  const registry =
+    options.schemas === undefined || options.schemas.length === 0
+      ? builtInRegistry()
+      : buildRegistry(options.schemas);
   const modeled = registry(rt);
   const schema = modeled ?? baseSchema(rt);
   if (modeled === undefined) emit(ctx, "RESOURCE_NOT_MODELED", root);

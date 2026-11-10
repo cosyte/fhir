@@ -119,6 +119,7 @@
     "differential:determinism": "node scripts/differential-determinism.mjs",
     "differential:read": "tsx scripts/read-differential.ts",
     "capture:base-readouts": "tsx scripts/capture-base-readouts.ts",
+    "capture:output-digests": "tsx scripts/capture-output-digests.ts",
     "capture:xml-wellformed": "tsx scripts/capture-xml-wellformed.ts",
     "uscore:projection": "tsx scripts/uscore-projection.ts",
     "uscore:constraints": "tsx scripts/uscore-constraints.ts",

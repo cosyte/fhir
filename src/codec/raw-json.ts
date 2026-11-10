@@ -139,6 +139,14 @@ const Code = {
 class RawJsonReader {
   readonly #src: string;
   #pos = 0;
+  /**
+   * The members of every object being read, innermost last. An object's members are gathered here
+   * and copied out once, at their exact count, when it closes: an array grown a member at a time
+   * holds spare capacity, and a document is mostly small objects.
+   */
+  readonly #members: RawMember[] = [];
+  /** The items of every array being read, gathered as {@link RawJsonReader.#members} are. */
+  readonly #items: RawJson[] = [];
 
   public constructor(src: string) {
     this.#src = src;
@@ -213,12 +221,13 @@ class RawJsonReader {
 
   private parseObject(depth: number): RawObject {
     this.#pos++; // consume '{'
-    const members: RawMember[] = [];
     this.skipWhitespace();
     if (this.#peek() === Code.CloseBrace) {
       this.#pos++;
-      return { t: "obj", members };
+      return { t: "obj", members: [] };
     }
+    const gathered = this.#members;
+    const start = gathered.length;
     for (;;) {
       this.skipWhitespace();
       if (this.#peek() !== Code.Quote) throw this.fail("Expected a string key in object");
@@ -227,7 +236,8 @@ class RawJsonReader {
       if (this.#peek() !== Code.Colon) throw this.fail("Expected ':' after object key");
       this.#pos++;
       this.skipWhitespace();
-      members.push({ key, value: this.parseValue(depth + 1) });
+      const value = this.parseValue(depth + 1);
+      gathered.push({ key, value });
       this.skipWhitespace();
       const c = this.#peek();
       if (c === Code.Comma) {
@@ -236,6 +246,8 @@ class RawJsonReader {
       }
       if (c === Code.CloseBrace) {
         this.#pos++;
+        const members = gathered.slice(start);
+        gathered.length = start;
         return { t: "obj", members };
       }
       throw this.fail("Expected ',' or '}' in object");
@@ -244,15 +256,17 @@ class RawJsonReader {
 
   private parseArray(depth: number): RawArray {
     this.#pos++; // consume '['
-    const items: RawJson[] = [];
     this.skipWhitespace();
     if (this.#peek() === Code.CloseBracket) {
       this.#pos++;
-      return { t: "arr", items };
+      return { t: "arr", items: [] };
     }
+    const gathered = this.#items;
+    const start = gathered.length;
     for (;;) {
       this.skipWhitespace();
-      items.push(this.parseValue(depth + 1));
+      const item = this.parseValue(depth + 1);
+      gathered.push(item);
       this.skipWhitespace();
       const c = this.#peek();
       if (c === Code.Comma) {
@@ -261,29 +275,49 @@ class RawJsonReader {
       }
       if (c === Code.CloseBracket) {
         this.#pos++;
+        const items = gathered.slice(start);
+        gathered.length = start;
         return { t: "arr", items };
       }
       throw this.fail("Expected ',' or ']' in array");
     }
   }
 
+  /**
+   * Read a string token. The text between escapes is taken a run at a time with one `slice`, not
+   * a character at a time: appending each character built a new string per character, which made a
+   * long value (a base64 attachment) cost many times its length in garbage. The checks and the
+   * offsets a malformed string reports are the same as reading a character at a time.
+   */
   private parseString(): string {
-    this.#pos++; // consume opening '"'
+    const src = this.#src;
+    const end = src.length;
+    let pos = this.#pos + 1; // past the opening '"'
+    let runStart = pos;
     let out = "";
     for (;;) {
-      if (this.#pos >= this.#src.length) throw this.fail("Unterminated string");
-      const c = this.#src.charCodeAt(this.#pos);
+      if (pos >= end) {
+        this.#pos = pos;
+        throw this.fail("Unterminated string");
+      }
+      const c = src.charCodeAt(pos);
       if (c === Code.Quote) {
-        this.#pos++;
-        return out;
+        this.#pos = pos + 1;
+        return runStart === pos ? out : out + src.slice(runStart, pos);
       }
       if (c === Code.Backslash) {
+        if (runStart !== pos) out += src.slice(runStart, pos);
+        this.#pos = pos;
         out += this.parseEscape();
+        pos = this.#pos;
+        runStart = pos;
         continue;
       }
-      if (c < Code.Space) throw this.fail("Unescaped control character in string");
-      out += this.#src[this.#pos];
-      this.#pos++;
+      if (c < Code.Space) {
+        this.#pos = pos;
+        throw this.fail("Unescaped control character in string");
+      }
+      pos++;
     }
   }
 

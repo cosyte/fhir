@@ -207,7 +207,10 @@ function walkForObservationRoots(
       });
     }
   }
-  for (const property of [...node.properties, ...(node.duplicates ?? [])]) {
+  for (const property of node.properties) {
+    walkForObservationRoots(property.value, childPath(path, property.name), keep, out);
+  }
+  for (const property of node.duplicates ?? []) {
     walkForObservationRoots(property.value, childPath(path, property.name), keep, out);
   }
 }

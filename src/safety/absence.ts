@@ -62,6 +62,7 @@ import {
   type FhirComplex,
   type FhirNode,
 } from "../model/index.js";
+import { writesProperty } from "../model/node.js";
 import { primitiveString } from "./codes.js";
 
 /**
@@ -196,6 +197,9 @@ const STRUCTURAL_MEMBERS: ReadonlySet<string> = new Set([
   "resourceType",
 ]);
 
+/** What {@link extensionsOf} answers for a node with no extension: shared, since no caller writes to it. */
+const NO_EXTENSIONS: readonly FhirNode[] = Object.freeze([]);
+
 /**
  * Every extension written on a node, in either of the two places the model puts one: a primitive's
  * extension metadata, or a complex element's `extension` property.
@@ -206,8 +210,9 @@ const STRUCTURAL_MEMBERS: ReadonlySet<string> = new Set([
  * its carrier one legal way rather than the other.
  */
 function extensionsOf(node: FhirNode): readonly FhirNode[] {
-  if (isPrimitive(node)) return node.extension ?? [];
-  if (!isComplex(node)) return [];
+  if (isPrimitive(node)) return node.extension ?? NO_EXTENSIONS;
+  // Most nodes write no `extension` at all: answered without building the list below.
+  if (!isComplex(node) || !writesProperty(node, "extension")) return NO_EXTENSIONS;
   return getAllProperties(node, "extension").flatMap((written) =>
     isList(written) ? written.items : [written],
   );
@@ -277,7 +282,10 @@ function pushOnce(out: string[], location: string): void {
 
 /** Record what the markers on ONE node say, if it carries any. */
 function visit(node: FhirNode, path: string, out: MutableReport): void {
-  const markers = extensionsOf(node).filter(isAbsenceMarker);
+  const written = extensionsOf(node);
+  // A node with no extension carries no marker: answered without filtering an empty list.
+  if (written.length === 0) return;
+  const markers = written.filter(isAbsenceMarker);
   if (markers.length === 0) return;
   // The conflict is a property of the ELEMENT, not of an individual marker, so it is decided once
   // however many markers sit here: FHIRPath cannot address one extension apart from the element.

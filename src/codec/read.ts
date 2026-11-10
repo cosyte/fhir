@@ -105,6 +105,7 @@ import {
   type FhirComplex,
   type FhirNode,
   type FhirPrimitive,
+  type FhirProperty,
   type PrimitiveMeta,
   type PrimitiveValue,
 } from "../model/node.js";
@@ -124,6 +125,7 @@ import {
   readRawJson,
   type RawArray,
   type RawJson,
+  type RawMember,
   type RawObject,
 } from "./raw-json.js";
 
@@ -142,17 +144,34 @@ interface Shadowed {
   readonly node: RawJson;
 }
 
-/** Mutable grouping of a base property with its optional `_`-sibling, in first-seen order. */
+/**
+ * Mutable grouping of a base property with its optional `_`-sibling, in first-seen order: base name
+ * `order[i]` has its value at `value[i]` and its `_`-sibling at `meta[i]`, either `undefined` when
+ * the object did not write it. `shadowed` is `undefined` until a name repeats.
+ */
 interface Grouped {
   readonly order: string[];
-  readonly value: Map<string, RawJson>;
-  readonly meta: Map<string, RawJson>;
-  readonly shadowed: Shadowed[];
+  readonly value: (RawJson | undefined)[];
+  readonly meta: (RawJson | undefined)[];
+  shadowed: Shadowed[] | undefined;
 }
 
 /**
- * Group an object's members into `{ base → value }` and `{ base → meta }` maps, preserving the
- * first-seen order of base names across both.
+ * Objects with at most this many members find a base name's slot by scanning the names seen so
+ * far; a larger one indexes them in a `Map`. A FHIR element has a handful of members, and a scan of
+ * a handful of strings is cheaper than building a `Map`; the index keeps an object with thousands of
+ * members (hostile input) linear.
+ */
+const SCAN_MEMBERS = 16;
+
+/** `_`, the prefix of a primitive's `_`-sibling. */
+const UNDERSCORE = 95;
+
+/**
+ * Group an object's members by base name into a value and a `_`-sibling slot each (see {@link Grouped}),
+ * preserving the first-seen order of base names across both. Used for an object that has a
+ * `_`-sibling or a repeated name, or more members than {@link SCAN_MEMBERS}; every other object is
+ * read member for member (see {@link isPlain}).
  *
  * FHIR JSON requires unique property names (json.html §2.6.2: "Property names SHALL be unique") and
  * expresses a repeating element as an array, so a repeated name is a document defect. RFC 8259 §4
@@ -165,23 +184,27 @@ interface Grouped {
  * @internal
  */
 function group(obj: RawObject): Grouped {
-  const order: string[] = [];
-  const value = new Map<string, RawJson>();
-  const meta = new Map<string, RawJson>();
-  const shadowed: Shadowed[] = [];
-  const seen = new Set<string>();
-  for (const member of obj.members) {
-    const isMeta = member.key.startsWith("_") && member.key.length > 1;
-    const base = isMeta ? member.key.slice(1) : member.key;
-    if (!seen.has(base)) {
-      seen.add(base);
+  const members = obj.members;
+  const grouped: Grouped = { order: [], value: [], meta: [], shadowed: undefined };
+  const { order, value, meta } = grouped;
+  const index = members.length > SCAN_MEMBERS ? new Map<string, number>() : undefined;
+  for (const member of members) {
+    const key = member.key;
+    const isMeta = key.length > 1 && key.charCodeAt(0) === UNDERSCORE;
+    const base = isMeta ? key.slice(1) : key;
+    let slot = index === undefined ? order.indexOf(base) : (index.get(base) ?? -1);
+    if (slot === -1) {
+      slot = order.length;
       order.push(base);
+      value.push(undefined);
+      meta.push(undefined);
+      index?.set(base, slot);
     }
     const target = isMeta ? meta : value;
-    if (target.has(base)) shadowed.push({ base, isMeta, node: member.value });
-    else target.set(base, member.value);
+    if (target[slot] === undefined) target[slot] = member.value;
+    else (grouped.shadowed ??= []).push({ base, isMeta, node: member.value });
   }
-  return { order, value, meta, shadowed };
+  return grouped;
 }
 
 /** A scalar (non-object, non-array) raw node. */
@@ -349,6 +372,31 @@ function applyMetaSlotRule(
   return markNonObjectMeta(node, rawJsonText(rawMeta));
 }
 
+/** The metadata of a primitive with no `_`-sibling object: shared, since nothing writes to it. */
+const NO_META: PrimitiveMeta = Object.freeze({});
+
+/**
+ * A test of whether a member's key was already written earlier in the same object, member by
+ * member in order. A `_`-sibling object has a member or two, so a scan back is cheaper than a `Set`;
+ * a large one (hostile input) is indexed in a `Set` instead so the read stays linear.
+ */
+function repeatedKeys(members: readonly RawMember[]): (m: number) => boolean {
+  if (members.length > SCAN_MEMBERS) {
+    const seen = new Set<string>();
+    return (m) => {
+      const key = (members[m] as RawMember).key;
+      if (seen.has(key)) return true;
+      seen.add(key);
+      return false;
+    };
+  }
+  return (m) => {
+    const key = (members[m] as RawMember).key;
+    for (let i = 0; i < m; i++) if ((members[i] as RawMember).key === key) return true;
+    return false;
+  };
+}
+
 /**
  * Read a primitive's `_`-sibling object into `{ id, extension }`.
  *
@@ -367,16 +415,17 @@ function applyMetaSlotRule(
  * {@link ../safety/status.js} `shadowedProperties`, which walks object elements.
  */
 function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue[]): PrimitiveMeta {
-  if (metaNode === undefined || metaNode.t !== "obj") return {};
+  if (metaNode === undefined || metaNode.t !== "obj") return NO_META;
   const result: { id?: string; extension?: readonly FhirComplex[] } = {};
-  const seen = new Set<string>();
-  for (const member of metaNode.members) {
+  const members = metaNode.members;
+  const repeats = repeatedKeys(members);
+  for (let m = 0; m < members.length; m++) {
+    const member = members[m] as RawMember;
     const at = childPath(path, member.key);
-    if (seen.has(member.key)) {
+    if (repeats(m)) {
       issues.push(duplicateProperty(at));
       continue;
     }
-    seen.add(member.key);
     if (member.key === "id" && member.value.t === "str") {
       result.id = member.value.value;
     } else if (member.key === "extension" && member.value.t === "arr") {
@@ -566,29 +615,60 @@ function buildNode(
   );
 }
 
+/**
+ * Whether an object's members are its properties one for one: no `_`-sibling and no repeated name.
+ * Almost every object in a FHIR document is, and for those {@link buildComplex} reads the members
+ * directly instead of grouping them, which builds the same properties in the same order. Decided by
+ * a scan for a small object; a large one is grouped.
+ */
+function isPlain(members: readonly RawMember[]): boolean {
+  if (members.length > SCAN_MEMBERS) return false;
+  for (let m = 0; m < members.length; m++) {
+    const key = (members[m] as RawMember).key;
+    if (key.length > 1 && key.charCodeAt(0) === UNDERSCORE) return false;
+    for (let i = 0; i < m; i++) if ((members[i] as RawMember).key === key) return false;
+  }
+  return true;
+}
+
 /** Build a {@link FhirComplex} from a raw object, recursing through its properties. */
 function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirComplex {
+  const members = obj.members;
+  if (isPlain(members)) {
+    let rootedAt = path;
+    if (path === "") {
+      const rt = members.find((member) => member.key === "resourceType")?.value;
+      if (rt?.t === "str") rootedAt = rootPath(rt.value);
+    }
+    return complex(
+      members.map((member) => ({
+        name: member.key,
+        value: buildNode(member.value, undefined, childPath(rootedAt, member.key), issues),
+      })),
+    );
+  }
   const grouped = group(obj);
+  const { order, value, meta, shadowed } = grouped;
   // Root path becomes the resource type once known, so FHIRPath expressions read `Patient.birthDate`.
   let basePath = path;
   if (path === "") {
-    const rt = grouped.value.get("resourceType");
+    const rt = value[order.indexOf("resourceType")];
     if (rt?.t === "str") basePath = rootPath(rt.value);
   }
-  const properties = grouped.order.map((name) => ({
-    name,
-    value: buildNode(
-      grouped.value.get(name),
-      grouped.meta.get(name),
-      childPath(basePath, name),
-      issues,
-    ),
-  }));
+  const properties: FhirProperty[] = [];
+  for (let i = 0; i < order.length; i++) {
+    const name = order[i] as string;
+    properties.push({
+      name,
+      value: buildNode(value[i], meta[i], childPath(basePath, name), issues),
+    });
+  }
+  if (shadowed === undefined) return complex(properties);
   // Members a repeated property name shadowed: read them into the model too (a dropped value cannot
   // be reasoned about later) and flag each one, so a caller is never handed one arbitrary value out
   // of several with a clean result.
   const reported = new Set<string>();
-  const duplicates = grouped.shadowed.map((member) => {
+  const duplicates = shadowed.map((member) => {
     const at = childPath(basePath, member.base);
     // One issue per element on this object, however many members shadowed the name here (a name and
     // its `_`-sibling can each repeat): the FHIRPath location is the same, so a second issue would

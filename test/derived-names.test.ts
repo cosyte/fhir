@@ -16,9 +16,17 @@
  *     claiming more than the code did.
  */
 
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
-import { WITHHELD, childPath, rootPath, safeDerivedName } from "../src/model/path.js";
+import {
+  DERIVED_NAME_SHAPES,
+  WITHHELD,
+  childPath,
+  rootPath,
+  safeDerivedName,
+  type DerivedNameKind,
+} from "../src/model/path.js";
 import {
   FhirCodecError,
   FhirSerializeError,
@@ -36,6 +44,8 @@ const FORGED = "Chalmers, Peter 1974-12-25";
 const CONFORMING_FORGERY = "johnsmith";
 /** Longer than the 64 characters a published element name may occupy. */
 const OVERLONG = "a".repeat(65);
+/** Both shapes a document-supplied name is checked against. */
+const KINDS: readonly DerivedNameKind[] = ["elementName", "resourceTypeName"];
 
 /**
  * The `expression`s a document draws, from read, validation, and the safety readout.
@@ -151,6 +161,27 @@ describe("the shape test matches the published forms it claims to", () => {
     ]) {
       expect(safeDerivedName(type, "resourceTypeName")).toBe(WITHHELD);
     }
+  });
+
+  it("decides exactly what the published shape expressions decide, for any name", () => {
+    // The check is made a character at a time for speed; the expressions are its specification.
+    // Drawn from the characters either side of every boundary the expressions draw, at every length
+    // up to past the 64-character cap, plus anything at all.
+    const near = fc.constantFrom(..."aAzZ09`{@[/:_-. \néİK".split(""), "b", "Q", "5");
+    const name = fc.oneof(
+      fc.array(near, { maxLength: 70 }).map((chars) => chars.join("")),
+      fc
+        .tuple(fc.constantFrom("a", "A", "_"), fc.integer({ min: 60, max: 68 }), near)
+        .map(([head, n, c]) => head + "b".repeat(n - 2) + c),
+      fc.string({ unit: "binary", maxLength: 70 }),
+    );
+    fc.assert(
+      fc.property(name, fc.constantFrom(...KINDS), (value, kind) => {
+        const expected = DERIVED_NAME_SHAPES[kind].test(value) ? value : WITHHELD;
+        expect(safeDerivedName(value, kind)).toBe(expected);
+      }),
+      { seed: 20261110, numRuns: 5_000 },
+    );
   });
 
   it("joins a child onto its parent, and stands alone when there is no parent yet", () => {
