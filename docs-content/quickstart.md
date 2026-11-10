@@ -1,13 +1,13 @@
 ---
 id: quickstart
 title: Quickstart
-sidebar_position: 3
+sidebar_label: Quickstart
 description: Read a FHIR R4 document, read a clinical value off it, and get a validation verdict, in three steps.
 ---
 
 # Quickstart
 
-Five minutes, one file, and three steps: an unparsed FHIR document read into a resource, one
+One file and three steps: an unparsed FHIR document read into a resource, one
 clinically meaningful value read off it, and a validation verdict. Everything below uses the
 package's public entry point and nothing else.
 
@@ -59,7 +59,7 @@ A blood pressure is only useful as a magnitude with a unit. `readObservationValu
 `value[x]` variant is actually present, so a caller can never read a coded or free-text result as if
 it were a number:
 
-```ts
+```ts runnable
 import { parseResource, readObservationValue } from "@cosyte/fhir";
 
 const { resource } = parseResource(
@@ -84,7 +84,7 @@ string a sender is free to spell however it likes.
 `validateResource` walks the resource once and returns coded findings plus a single `valid` flag.
 Warnings and informational findings do not make a resource invalid; errors do.
 
-```ts
+```ts runnable
 import { parseResource, validateResource } from "@cosyte/fhir";
 
 const { resource } = parseResource(
@@ -101,7 +101,7 @@ Now break it. An unknown `modifierExtension` is the one shape the library refuse
 modifier changes the meaning of the element it sits on, so processing the resource as if it were
 absent is how a negation gets lost.
 
-```ts
+```ts runnable
 import { parseResource, validateResource } from "@cosyte/fhir";
 
 const { resource } = parseResource(
@@ -118,9 +118,22 @@ outcome.issues.map((issue) => issue.expression); // => ["Patient.modifierExtensi
 Notice what the finding carries: a coded reason and a location, and no slice of the document. That
 is a contract, not a coincidence, and [core concepts](./core-concepts.md) explains what rests on it.
 
+Every TypeScript sample on these pages runs in the package's test suite against the built package,
+and each `// =>` line is checked, so a sample cannot drift from the code.
+
 ## Where to go next
 
+- How-to guides, one task each: [accept JSON and XML](./accept-json-and-xml.md),
+  [read measured values](./read-measured-values.md),
+  [decide whether a resource is safe to summarize](./check-safety-before-summarizing.md),
+  [validate against your own profiles](./validate-against-profiles.md),
+  [check codes](./check-codes.md), [read Bundles and references](./read-bundles-and-references.md),
+  [stream a Bulk Data export](./stream-ndjson-exports.md), and
+  [keep what you cannot interpret](./preserve-unknown-content.md).
 - [Core concepts](./core-concepts.md) for the model, the two codecs, and the validation layers.
-- [Guides](./guides.md) for profiles, safety readouts and cross-format work.
 - [Current limits](./limits.md) for what the package deliberately does not do.
 - [Troubleshooting](./troubleshooting.md) when a document is refused or read in a degraded way.
+- The [API reference](./api/README.md) for every export, starting at
+  [`parseResource`](./api/README.md#parseresource),
+  [`readObservationValue`](./api/README.md#readobservationvalue) and
+  [`validateResource`](./api/README.md#validateresource).

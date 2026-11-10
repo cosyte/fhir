@@ -1,8 +1,8 @@
 ---
 id: limits
 title: Current limits
-sidebar_position: 6
-description: What @cosyte/fhir deliberately does not do, such as bundle terminology or profiles or offer typed per-resource models, and the findings that mean a check did not run.
+sidebar_label: Current limits
+description: "What @cosyte/fhir deliberately does not do (bundled terminology or profiles, typed models per resource) and the findings that mean a check did not run."
 ---
 
 # Current limits
@@ -92,3 +92,12 @@ finding. Either way the package reports the shape rather than guessing what the 
 The same posture governs the writers. When a model cannot be spelled back into the target format
 without inventing or losing content, the write is refused with a coded reason instead of emitting
 something plausible. [Troubleshooting](./troubleshooting.md) covers what each refusal means.
+
+## Put it to use
+
+- [Check codes without a terminology server](./check-codes.md) shows the content-free checks and
+  where a terminology service of your own plugs in.
+- [Validate against your own profiles](./validate-against-profiles.md) shows how to supply the
+  profiles this package does not bundle.
+- [Troubleshooting](./troubleshooting.md) has an entry for each finding above that means a check did
+  not run.

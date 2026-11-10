@@ -1,7 +1,7 @@
 ---
 id: troubleshooting
 title: Troubleshooting
-sidebar_position: 7
+sidebar_label: Troubleshooting
 description: Every refusal and degraded reading, the coded reason it carries, and what to do about it.
 ---
 
@@ -14,6 +14,15 @@ it.
 A fatal read is thrown as a typed error carrying a code. A non-fatal finding is returned, either on
 the read result or in the validation findings, and is never thrown.
 
+Each code below is listed, with what it means, in the API reference:
+[`FATAL_CODES`](./api/README.md#fatal_codes) for the JSON reader's refusals,
+[`XML_FATAL_CODES`](./api/README.md#xml_fatal_codes) for the XML reader's,
+[`ISSUE_CODES`](./api/README.md#issue_codes) for the findings a read returns,
+[`VALIDATION_CODES`](./api/README.md#validation_codes) for the findings validation returns,
+[`SERIALIZE_ERROR_CODES`](./api/README.md#serialize_error_codes) for a refused write, and
+[`NDJSON_ERROR_CODES`](./api/README.md#ndjson_error_codes) for a line of an NDJSON export that did not
+read.
+
 ## The XML reader refuses a document carrying a DOCTYPE
 
 You get a thrown error whose code is `DTD_FORBIDDEN`, and nothing is parsed.
@@ -23,7 +32,7 @@ attacks read files off the machine running the parser, and how a small document 
 gigabytes of memory. Refusing is not configurable, because a switch to turn it off is a switch an
 attacker only has to find once.
 
-```ts
+```ts runnable
 import { FhirXmlError, XML_FATAL_CODES, parseResourceXml } from "@cosyte/fhir";
 
 const readXml = (input: string): string => {
@@ -83,7 +92,7 @@ FHIR requires unique property names and expresses repetition with an array, so a
 no defined winner. The reader keeps the first value as the element's value, keeps the shadowed one
 rather than discarding it, and reports the position:
 
-```ts
+```ts runnable
 import { parseResource } from "@cosyte/fhir";
 
 const { issues } = parseResource('{"resourceType":"Patient","gender":"male","gender":"female"}');
@@ -106,7 +115,7 @@ A modifier extension changes the meaning of the element it sits on. An unknown o
 ignored, because ignoring it means processing the resource as though the modifier were not there,
 which is how a negation or a retraction gets lost.
 
-```ts
+```ts runnable
 import { parseResource, readSafety, validateResource } from "@cosyte/fhir";
 
 const { resource } = parseResource(
@@ -129,7 +138,7 @@ You get an `INVARIANT_UNCHECKED` finding at informational severity, carrying the
 The library evaluates FHIRPath through a bounded, in-repository subset rather than a full engine.
 An expression outside that subset is reported as unchecked instead of being assumed to pass:
 
-```ts
+```ts runnable
 import { defineProfile, parseResource, validateResource } from "@cosyte/fhir";
 
 const profile = defineProfile({

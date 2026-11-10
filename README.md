@@ -150,8 +150,9 @@ as PHI.
 
 ## Documentation
 
-- [docs.cosyte.com/fhir](https://docs.cosyte.com/fhir): installation, the quickstart, core
-  concepts, guides, current limits, and troubleshooting.
+- [docs.cosyte.com/fhir](https://docs.cosyte.com/fhir): installation, the quickstart, how-to
+  guides, core concepts, current limits, troubleshooting, the API reference, and how we test the
+  package and measure its performance.
 - [`documentation/capabilities.md`](https://github.com/cosyte/fhir/blob/main/documentation/capabilities.md):
   the full capability readout, layer by layer, with what each one checks and what it leaves open.
 - [`documentation/`](https://github.com/cosyte/fhir/tree/main/documentation) in the repository: the
