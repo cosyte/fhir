@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.9
+
+### Patch Changes
+
+- 317c46a: New `@cosyte/fhir/arbitraries` entry point: fast-check generators for FHIR R4, so you can property-test your own code on generated resources. `resource()` gives parsed, spec-clean resources of the eight types the library validates in full, which validate with no error, with decimals that outrun a double, strings JSON and XML must escape, and extensions on primitives; `bundle()` gives collections and search sets of them; `resourceJson()` and `resourceXml()` give messy JSON and XML text the readers accept; `hostileInput()` gives text a reader may refuse; and `resourceType()`, `decimalText()` and `stringValue()` give the parts. Every generated value is synthetic and random. `fast-check` (4.x) is an optional peer dependency: install it to use this entry point. The main entry point never loads it, so nothing changes for code that only imports `@cosyte/fhir`.
+- 317c46a: The XML reader now reads an extension that holds only nested extensions, such as a US Core race or ethnicity extension, as an Extension with its `url`. It read as a value-absent primitive before: its `url` was reported as an unknown property and left off the model, so `serializeResourceXml` and `serializeResource` wrote the extension without the URL that says what it means, and at a resource's root the validator also reported a type mismatch. An element with a `url` attribute and nothing else now reads as an Extension too, which `ext-1` reports. A document read from JSON is unaffected.
+
 ## 0.1.8
 
 ### Patch Changes
