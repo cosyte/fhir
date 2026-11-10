@@ -57,8 +57,14 @@
  */
 export const WITHHELD = "<withheld>";
 
-/** The published forms a document-supplied name is required to match to be echoed. */
-const DERIVED_NAME_SHAPES = {
+/**
+ * The published forms a document-supplied name is required to match to be echoed. The check itself
+ * is made a character at a time (see `matchesShape`); these expressions are its specification, and a
+ * test holds the two to agreement.
+ *
+ * @internal
+ */
+export const DERIVED_NAME_SHAPES = {
   /**
    * An element name: `eld-20`'s non-leading arm `[a-z][A-Za-z0-9]*`, capped at `eld-19`'s 64
    * characters per segment.
@@ -103,7 +109,45 @@ export type DerivedNameKind = keyof typeof DERIVED_NAME_SHAPES;
  * @internal
  */
 export function safeDerivedName(value: string, kind: DerivedNameKind): string {
-  return DERIVED_NAME_SHAPES[kind].test(value) ? value : WITHHELD;
+  return matchesShape(value, kind) ? value : WITHHELD;
+}
+
+/** The longest name either shape admits: `eld-19`'s 64 characters. */
+const MAX_NAME_LENGTH = 64;
+
+/**
+ * Whether `value` matches the shape `kind` names in {@link DERIVED_NAME_SHAPES}, decided a
+ * character at a time rather than by running the regular expression.
+ *
+ * A location is built at every node a walk visits, so this runs once per element per walk, and the
+ * regular expression was the single most expensive call in the validator. The test it makes is the
+ * expression's, exactly: a first character from the shape's leading class, then at most 63 more
+ * from its trailing class (letters and digits for an element name, letters only for a resource type),
+ * and nothing else. `test/derived-names.test.ts` holds the two to agreement.
+ */
+function matchesShape(value: string, kind: DerivedNameKind): boolean {
+  const length = value.length;
+  if (length === 0 || length > MAX_NAME_LENGTH) return false;
+  const element = kind === "elementName";
+  const first = value.charCodeAt(0);
+  if (element ? !isLower(first) : !isUpper(first)) return false;
+  for (let i = 1; i < length; i++) {
+    const c = value.charCodeAt(i);
+    if (!(isLower(c) || isUpper(c) || (element && isDigit(c)))) return false;
+  }
+  return true;
+}
+
+function isLower(c: number): boolean {
+  return c >= 97 && c <= 122;
+}
+
+function isUpper(c: number): boolean {
+  return c >= 65 && c <= 90;
+}
+
+function isDigit(c: number): boolean {
+  return c >= 48 && c <= 57;
 }
 
 /**

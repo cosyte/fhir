@@ -15,8 +15,11 @@
  * is rebuilt once for every entry instead of once for the Bundle. Every input is synthetic and built
  * in code by `bench/shapes.mjs`, the same code the benchmarks use.
  *
- * Not gated here: the read of one very long string (a base64 attachment) grows faster than its
- * length today, which a reading of the bench records. Its gate comes with its fix.
+ * The read of one very long string has a gate of its own: a DiagnosticReport whose base64 PDF is 4
+ * times as long on the size axis, 64 reports of a 64 KiB PDF on the count axis. The reader once
+ * built a string a character at a time, and 4 times the payload took about 9 times as long. Its
+ * self-check scans the text back to its start once for every 4 KiB of it, which is quadratic in the
+ * payload's length.
  */
 
 import {
@@ -38,7 +41,7 @@ import {
   type ReadResult,
   type ValidationResult,
 } from "../../src/index.js";
-import { observation, transactionBundle } from "../../bench/shapes.mjs";
+import { KIB, observation, reportWithAttachment, transactionBundle } from "../../bench/shapes.mjs";
 
 /**
  * Observations on the count axis for the read and the write: enough that each base phase is well
@@ -98,6 +101,42 @@ function resolveEachEntryQuadratically(bundle: FhirComplex): void {
   }
 }
 
+/** Reports on the long-string count axis, each with a 64 KiB PDF. */
+const REPORTS = 64;
+/** The PDF's length in the long-string size axis's base phase; the scaled phase's is 4 times it. */
+const PDF_BYTES = 256 * KIB;
+/** Reports in each phase of the long-string size axis. */
+const PDF_REPORTS = 8;
+/** How far apart the regressed read starts each scan of the text. */
+const SCAN_STEP = 4 * KIB;
+
+/**
+ * The read of a long string reached the wrong way: before reading the text, scan it back to its start
+ * once for every 4 KiB of it, so the cost grows with the square of its length. Throws if the scan
+ * finds what a JSON document cannot hold, so the work is used and cannot be skipped.
+ */
+function parseScanningQuadratically(raw: string): ReadResult {
+  for (let end = SCAN_STEP; end < raw.length; end += SCAN_STEP) {
+    if (raw.lastIndexOf("\u0000", end) !== -1) throw new Error("a NUL in the document");
+  }
+  return parseResource(raw);
+}
+
+/** The long-string read: every phase, and its self-check, use exactly these fixtures. */
+function longStringOptions(): ScalingGateOptions<string, ReadResult> {
+  return {
+    name: "@cosyte/fhir parseResource, a base64 attachment",
+    parse: (raw) => parseResource(raw),
+    weigh: (result) => result.issues.length + 1,
+    count: { n: REPORTS, generate: (i) => reportWithAttachment(i, 64 * KIB) },
+    size: {
+      inputs: PDF_REPORTS,
+      size: PDF_BYTES,
+      generate: (i, size) => reportWithAttachment(i, size),
+    },
+  };
+}
+
 /** Every phase, and each self-check, use exactly these fixtures. */
 function textOptions(): ScalingGateOptions<string, ReadResult> {
   return {
@@ -144,6 +183,22 @@ describe("the scaling gate: parseResource", () => {
   it("has fixtures large enough for that gate to fail", () => {
     const report = assertScalingGateFires(textOptions(), {
       regressedParse: parseQuadratic,
+      equals: (a, b) =>
+        a.issues.length === b.issues.length &&
+        serializeResource(a.resource) === serializeResource(b.resource),
+    });
+    expect(report.margin).toBeGreaterThan(1);
+  });
+});
+
+describe("the scaling gate: parseResource on a long string", () => {
+  it("has not acquired a complexity regression on either axis", () => {
+    expectMeasured(scalingGate(longStringOptions()));
+  });
+
+  it("has fixtures large enough for that gate to fail", () => {
+    const report = assertScalingGateFires(longStringOptions(), {
+      regressedParse: parseScanningQuadratically,
       equals: (a, b) =>
         a.issues.length === b.issues.length &&
         serializeResource(a.resource) === serializeResource(b.resource),

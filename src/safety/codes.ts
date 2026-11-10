@@ -30,6 +30,10 @@ import {
   type FhirNode,
   type PrimitiveValue,
 } from "../model/index.js";
+import { writesProperty } from "../model/node.js";
+
+/** What {@link typesOf} answers for a node that writes no `resourceType`. */
+const NO_TYPES: readonly string[] = Object.freeze([]);
 
 /**
  * The elements this layer reads to reach a safety verdict, every one of which is **`0..1` or `1..1`
@@ -1042,5 +1046,8 @@ export function typeOf(resource: FhirComplex): string | undefined {
  * ```
  */
 export function typesOf(resource: FhirComplex): readonly string[] {
+  // Most nodes a walk asks about are not resource roots and write no type: answer those without
+  // building a list. The answer is the same empty list either way, and every caller only reads it.
+  if (!writesProperty(resource, "resourceType")) return NO_TYPES;
   return getAllProperties(resource, "resourceType").flatMap((node) => [...primitiveStrings(node)]);
 }
