@@ -28,6 +28,8 @@
  *   reader cannot tell a value-absent *primitive* from a *complex* that happens to hold only an
  *   extension, and models it as a primitive; the JSON form disambiguates via the `_`-sibling. Such a
  *   pair may compare non-equivalent. It is the safe direction (no data is lost; XML→XML round-trips).
+ *   An `<extension>` itself is not this case: its `url` attribute marks it as an Extension, so one
+ *   holding only nested extensions reads as the complex it is.
  * - **Narrative `<div>`**, carried as an opaque XHTML string on both sides, so two narratives compare
  *   equivalent only when their XHTML text is byte-identical (XHTML has insignificant whitespace the
  *   codec does not normalize across formats).

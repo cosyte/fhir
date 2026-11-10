@@ -61,7 +61,10 @@ pnpm add @cosyte/fhir
 
 Node.js 22 or later, tested on 22, 24, and 26. The package ships dual ESM and CommonJS builds with
 type declarations for both, so `import` and `require` both work and neither needs a compatibility
-shim. There are zero runtime dependencies, and it imports no Node built-in.
+shim. There are zero runtime dependencies, and it imports no Node built-in. The optional
+`@cosyte/fhir/arbitraries` entry point, fast-check generators for
+[property-testing your own code](https://github.com/cosyte/fhir/blob/main/docs-content/property-test-your-code.md),
+needs `fast-check` installed beside it; the main entry point never loads it.
 
 ## Usage
 

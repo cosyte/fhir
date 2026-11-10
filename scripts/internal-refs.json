@@ -52,7 +52,7 @@
     "CCDA-R\\d(?:\\.\\d)?",
     "ASTM-E\\d+"
   ],
-  "$surface": "What a consumer reads: README.md, LICENSE, and docs-content/ (docs.cosyte.com). CHANGELOG.md is where identifiers belong, and the four dist/ files are built from src/, whose doc comments and string literals are scanned below.",
+  "$surface": "What a consumer reads: README.md, LICENSE, and docs-content/ (docs.cosyte.com). CHANGELOG.md is where identifiers belong, and the eight dist/ files (the main entry point and the arbitraries subpath) are built from src/, whose doc comments and string literals are scanned below.",
   "surfacePaths": [
     "README.md",
     "LICENSE",
@@ -64,7 +64,11 @@
     "dist/index.mjs",
     "dist/index.cjs",
     "dist/index.d.ts",
-    "dist/index.d.cts"
+    "dist/index.d.cts",
+    "dist/arbitraries.mjs",
+    "dist/arbitraries.cjs",
+    "dist/arbitraries.d.ts",
+    "dist/arbitraries.d.cts"
   ],
   "sourceDocComments": {
     "enabled": true,

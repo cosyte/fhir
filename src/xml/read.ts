@@ -782,8 +782,14 @@ function buildSingle(
   const extensionChildren = children.filter((c) => c.modelName === "extension");
   const otherChildren = children.filter((c) => c.modelName !== "extension");
 
+  // An element carrying a `url` attribute is an Extension, a complex type: FHIR XML gives a
+  // primitive only `value` and `id`. Without this test an extension holding only nested extensions
+  // read as a value-absent primitive, and its `url` was reported unknown and then lost on the way
+  // back out, in either format.
+  const isExtension = !hasValue && element.attributes.some((a) => a.name === "url");
+
   // Primitive: a `value` attribute, or no child elements beyond `extension` (incl. value-absent).
-  if (hasValue || otherChildren.length === 0) {
+  if (hasValue || (otherChildren.length === 0 && !isExtension)) {
     for (const stray of otherChildren) {
       issues.push(unknownProperty(childPath(path, stray.modelName)));
     }

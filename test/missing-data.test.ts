@@ -667,3 +667,26 @@ describe("the surface is reachable from the package entry point", () => {
     );
   });
 });
+
+describe("an extension that is not an element is never read as a marker", () => {
+  it("a string or a bare nested extension in an extension list draws no absence reading", () => {
+    // An `<extension>` with no `url` and only nested extensions still reads from XML as a value-
+    // absent primitive, and JSON can put a string in an extension array; neither is an element
+    // that can carry the DataAbsentReason `url`, so neither is a marker.
+    const json = readSafety(
+      parseResource(
+        '{"resourceType":"Observation","status":"final","code":{"extension":["synthetic"],"text":"synthetic"}}',
+      ).resource,
+    );
+    const xml = readSafety(
+      parseResourceXml(
+        '<Observation xmlns="http://hl7.org/fhir"><status value="final"/><code><extension><extension url="http://example.org/fhir/StructureDefinition/synthetic"><valueCode value="unknown"/></extension></extension><text value="synthetic"/></code></Observation>',
+      ).resource,
+    );
+    for (const safety of [json, xml]) {
+      expect(safety.absenceMarkers).toEqual([]);
+      expect(safety.unreadableAbsenceMarkers).toEqual([]);
+      expect(safety.conflictingAbsenceMarkers).toEqual([]);
+    }
+  });
+});
