@@ -14,17 +14,14 @@ const FULL = { lines: 100, branches: 100, functions: 100, statements: 100 };
  */
 export default cosyteVitest({
   coverageThresholds: {
-    lines: 100,
-    branches: 99,
-    functions: 99,
-    statements: 99,
+    ...FULL,
     "src/model/**": FULL,
     "src/codec/**": FULL,
     "src/validate/**": FULL,
     "src/safety/**": FULL,
     "src/quantity/**": FULL,
     "src/terminology/**": FULL,
-    "src/profiles/**": { lines: 100, branches: 99, functions: 99, statements: 99 },
+    "src/profiles/**": FULL,
     "src/fhirpath/**": FULL,
     "src/xml/**": FULL,
     "src/bundle/**": FULL,

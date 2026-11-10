@@ -301,6 +301,14 @@ export const VALIDATION_CODES = {
    */
   PROFILE_SLICE_UNCHECKED: "PROFILE_SLICE_UNCHECKED",
   /**
+   * Profile, the profile defines a slice under an element that declares no `slicing` (or that is
+   * missing from the snapshot), so nothing says which occurrences belong to the slice. Emitted as
+   * `information` at the slice's location: the slice and every element under it are reported
+   * **not checked**, never silently passed. A profile whose snapshot declares the slicing is
+   * checked as usual.
+   */
+  PROFILE_SLICE_NO_SLICING: "PROFILE_SLICE_NO_SLICING",
+  /**
    * Profile, an element the profile marks **must-support** is absent from the instance.
    * **Always `information`, never an error** (the fail-safe, and the single most important
    * must-support rule): must-support is a *system obligation* on the sender to be able to populate the
@@ -491,6 +499,7 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   CODE_NOT_IN_VALUESET: ISSUE_TYPES.CODE_INVALID,
   PROFILE_SLICE_UNMATCHED: ISSUE_TYPES.STRUCTURE,
   PROFILE_SLICE_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
+  PROFILE_SLICE_NO_SLICING: ISSUE_TYPES.INFORMATIONAL,
   MUST_SUPPORT_ABSENT: ISSUE_TYPES.INFORMATIONAL,
   PROFILE_VERSION_MISMATCH: ISSUE_TYPES.BUSINESS_RULE,
   PROFILE_FIXED_MISMATCH: ISSUE_TYPES.VALUE,
@@ -568,6 +577,9 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   PROFILE_SLICE_UNCHECKED:
     "Slice membership could not be evaluated (an unsupported discriminator); it is reported " +
     "unchecked rather than assumed to pass.",
+  PROFILE_SLICE_NO_SLICING:
+    "Profile defines a slice under an element that declares no slicing, so no occurrence can be " +
+    "assigned to it; the slice and the elements under it were not checked.",
   MUST_SUPPORT_ABSENT:
     "Profile marks this element must-support; it is absent. Must-support is a system obligation, " +
     "not an instance-presence requirement, this is informational, never an error.",

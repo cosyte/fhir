@@ -94,9 +94,16 @@ function scalarOf(item: FpItem): PrimitiveValue | number | undefined {
   return undefined;
 }
 
-/** Whether two primitive scalars are equal (`decimal` precision-exact, `number` vs `decimal` numeric). */
+/**
+ * Whether two primitive scalars are equal under FHIRPath `=` (FHIRPath N1 §6.1.1, "Decimal: values
+ * must be equal, trailing zeroes after the decimal are ignored"): two `decimal`s compare by value, so
+ * `1.5 = 1.50` is true, with no float involved ({@link FhirDecimal.equalsValue}); a computed `number`
+ * against a `decimal` compares numerically. The model still keeps each decimal exactly as written,
+ * and `fixed[x]` / `pattern[x]` keep their own precision-exact comparison. `~` has its own rule and
+ * stays outside the subset.
+ */
 function scalarEquals(a: PrimitiveValue | number, b: PrimitiveValue | number): boolean {
-  if (a instanceof FhirDecimal && b instanceof FhirDecimal) return a.equals(b);
+  if (a instanceof FhirDecimal && b instanceof FhirDecimal) return a.equalsValue(b);
   if (a instanceof FhirDecimal) return typeof b === "number" && Number(a.toString()) === b;
   if (b instanceof FhirDecimal) return typeof a === "number" && Number(b.toString()) === a;
   return a === b;

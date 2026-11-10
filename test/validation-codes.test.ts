@@ -72,6 +72,7 @@ describe("validation code / severity / issue-type registries (stable public cont
       CODE_NOT_IN_VALUESET: "CODE_NOT_IN_VALUESET",
       PROFILE_SLICE_UNMATCHED: "PROFILE_SLICE_UNMATCHED",
       PROFILE_SLICE_UNCHECKED: "PROFILE_SLICE_UNCHECKED",
+      PROFILE_SLICE_NO_SLICING: "PROFILE_SLICE_NO_SLICING",
       MUST_SUPPORT_ABSENT: "MUST_SUPPORT_ABSENT",
       PROFILE_VERSION_MISMATCH: "PROFILE_VERSION_MISMATCH",
       PROFILE_FIXED_MISMATCH: "PROFILE_FIXED_MISMATCH",
@@ -113,6 +114,9 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(validationIssue("CODE_NOT_IN_VALUESET", "error", "X").type).toBe("code-invalid");
     expect(validationIssue("PROFILE_SLICE_UNMATCHED", "error", "X").type).toBe("structure");
     expect(validationIssue("PROFILE_SLICE_UNCHECKED", "information", "X").type).toBe(
+      "informational",
+    );
+    expect(validationIssue("PROFILE_SLICE_NO_SLICING", "information", "X").type).toBe(
       "informational",
     );
     expect(validationIssue("MUST_SUPPORT_ABSENT", "information", "X").type).toBe("informational");

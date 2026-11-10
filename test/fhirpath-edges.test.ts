@@ -140,6 +140,40 @@ describe("equality over decimals and value-absent primitives", () => {
     expect(at("referenceRange[0].low.value = referenceRange[0].high.value")).toEqual(NOT_SATISFIED);
   });
 
+  it("ignores trailing zeroes when it compares two model decimals with = (FHIRPath N1 6.1.1)", () => {
+    // Written as JSON text, not through JSON.stringify, so `1.50` and `2.500` keep their zeroes.
+    const { resource } = parseResource(
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+        '"referenceRange":[{"low":{"value":1.5},"high":{"value":1.50}},' +
+        '{"low":{"value":2.500},"high":{"value":2.05}}]}',
+    );
+    const at = (expression: string) => evaluateInvariant(expression, resource, resource);
+    expect(at("referenceRange[0].low.value = referenceRange[0].high.value")).toEqual(SATISFIED);
+    expect(at("referenceRange[0].low.value != referenceRange[0].high.value")).toEqual(
+      NOT_SATISFIED,
+    );
+    expect(at("referenceRange[1].low.value = 2.5")).toEqual(SATISFIED);
+    expect(at("referenceRange[1].low.value = referenceRange[1].high.value")).toEqual(NOT_SATISFIED);
+    // distinct(), union and membership use the same equality.
+    expect(at("referenceRange[0].low.value in referenceRange[0].high.value")).toEqual(SATISFIED);
+    expect(at("(referenceRange[0].low.value | referenceRange[0].high.value).count() = 1")).toEqual(
+      SATISFIED,
+    );
+    expect(at("referenceRange.select(low.value | high.value).distinct().count() = 3")).toEqual(
+      SATISFIED,
+    );
+  });
+
+  it("still refuses ~, which the subset does not evaluate", () => {
+    const { resource } = parseResource(
+      '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
+        '"referenceRange":[{"low":{"value":1.5},"high":{"value":1.50}}]}',
+    );
+    expect(
+      evaluateInvariant("referenceRange.low.value ~ referenceRange.high.value", resource, resource),
+    ).toEqual(UNCHECKED);
+  });
+
   it("compares a computed number to a model decimal from either side", () => {
     expect(on("1.5 = referenceRange.low.value", observation)).toEqual(SATISFIED);
     expect(on("referenceRange.low.value = 1.5", observation)).toEqual(SATISFIED);
