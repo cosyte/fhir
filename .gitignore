@@ -10,6 +10,9 @@ dist/
 coverage/
 .vitest-cache/
 
+# Bench readings and profiles (`pnpm bench:reading --out bench-results/...`)
+bench-results/
+
 # Environment
 .env
 .env.*

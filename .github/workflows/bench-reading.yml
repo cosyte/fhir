@@ -1,0 +1,87 @@
+name: Bench reading
+
+# A reading of this build on a GitHub-hosted runner: every case of bench/fhir.bench.mjs (throughput,
+# latency p50/p95/p99, allocations, peak heap, a long run for leaks, the cold import with every file
+# it loads and its gzip size), the budgets read from it (bench/budgets.mjs), and a CPU and heap
+# profile of the hottest paths (bench/profile.mjs). The tables go to the run's summary; the results
+# document, its Markdown and the raw profiles are kept as the `bench-reading` artifact.
+#
+# Advisory: it fails only when it could not take a reading at all. A budget it finds exceeded is a
+# number to act on, not a red check. It runs on a pull request that changes the bench or this file,
+# and by hand on any branch (Actions, "Bench reading", "Run workflow").
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "bench/**"
+      - ".github/workflows/bench-reading.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  reading:
+    runs-on: ubuntu-latest
+    # A full reading took about 12 minutes on a developer machine; the bound is for a case that hangs.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      # The lowest Node line the package supports, the one the bench-compare job runs on.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Reading
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/bench-reading"
+          mkdir -p "${out}"
+          status=0
+          pnpm exec cosyte-bench run --suite bench/fhir.bench.mjs --target dist/index.mjs \
+            --commit "${GITHUB_SHA}" --out "${out}/reading.json" --summary "${out}/reading.md" || status=$?
+          case "${status}" in
+            0) ;;
+            2) echo "::notice::bench-reading: at least one case could not be measured; a skip is not a pass" ;;
+            *) echo "::warning::bench-reading: cosyte-bench exited ${status}" ;;
+          esac
+          if [ ! -f "${out}/reading.json" ]; then
+            echo "::error::bench-reading: no reading was written"
+            exit 1
+          fi
+          pnpm exec cosyte-bench check "${out}/reading.json"
+          cat "${out}/reading.md" >> "${GITHUB_STEP_SUMMARY}"
+      - name: Budgets
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/bench-reading"
+          node bench/budgets.mjs "${out}/reading.json" --summary "${out}/budgets.md"
+          { echo; cat "${out}/budgets.md"; } >> "${GITHUB_STEP_SUMMARY}"
+      - name: CPU and heap profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/bench-reading"
+          node --enable-source-maps bench/profile.mjs dist/index.mjs \
+            --out "${out}/profiles" --summary "${out}/profile.md"
+          { echo; cat "${out}/profile.md"; } >> "${GITHUB_STEP_SUMMARY}"
+      - name: Keep the reading
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-reading
+          path: ${{ runner.temp }}/bench-reading/
+          if-no-files-found: warn
+          retention-days: 30
