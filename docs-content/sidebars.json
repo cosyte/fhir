@@ -5,11 +5,22 @@
     { "type": "category", "label": "Quickstart", "items": ["quickstart"] },
     {
       "type": "category",
-      "label": "Core concepts",
-      "collapsed": false,
-      "items": ["core-concepts"]
+      "label": "How-to guides",
+      "items": [
+        "accept-json-and-xml",
+        "read-measured-values",
+        "check-safety-before-summarizing",
+        "validate-against-profiles",
+        "check-codes",
+        "read-bundles-and-references",
+        "stream-ndjson-exports",
+        "preserve-unknown-content",
+        "property-test-your-code"
+      ]
     },
-    { "type": "category", "label": "Guides", "items": ["guides"] },
-    { "type": "category", "label": "Troubleshooting", "items": ["troubleshooting", "limits"] }
+    { "type": "category", "label": "Explanation", "items": ["core-concepts", "limits"] },
+    { "type": "category", "label": "Troubleshooting", "items": ["troubleshooting"] },
+    "testing-and-quality",
+    "performance"
   ]
 }

@@ -478,3 +478,109 @@ describe("a slice's constraints apply only to the occurrences assigned to it", (
     ).toEqual([["INVARIANT_VIOLATED", "Observation.component[0].value[x]", "sys-1"]]);
   });
 });
+
+describe("a slice whose sliced element declares no slicing", () => {
+  /** An Observation profile: `head`, then the `coded` slice, `more` and a required child of it. */
+  function profile(
+    head: readonly Record<string, unknown>[],
+    more: readonly Record<string, unknown>[] = [],
+  ): StructureDefinition {
+    return loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/no-slicing",
+      type: "Observation",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          ...head,
+          { id: "Observation.component:coded", path: "Observation.component", sliceName: "coded" },
+          ...more,
+          {
+            id: "Observation.component:coded.interpretation",
+            path: "Observation.component.interpretation",
+            min: 1,
+          },
+        ],
+      },
+    });
+  }
+
+  const twoComponents = parseResource(
+    JSON.stringify({
+      resourceType: "Observation",
+      status: "final",
+      code: { text: "synthetic" },
+      component: [
+        { code: { text: "synthetic a" }, valueString: "a" },
+        { code: { text: "synthetic b" }, valueString: "b" },
+      ],
+    }),
+  ).resource;
+
+  it("reports the slice as not checked when the sliced element declares no slicing", () => {
+    const issues = collectProfileIssues(
+      twoComponents,
+      profile([{ id: "Observation.component", path: "Observation.component" }]),
+    );
+    expect(issues.map((i) => [i.code, i.severity, i.expression])).toEqual([
+      ["PROFILE_SLICE_NO_SLICING", "information", "Observation.component:coded"],
+    ]);
+  });
+
+  it("reports it the same way when the sliced element is missing from the snapshot", () => {
+    const issues = collectProfileIssues(twoComponents, profile([]));
+    expect(issues.map((i) => [i.code, i.severity, i.expression])).toEqual([
+      ["PROFILE_SLICE_NO_SLICING", "information", "Observation.component:coded"],
+    ]);
+  });
+
+  it("reports it once per present parent occurrence, and not where the parent is absent", () => {
+    const nested = loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/no-slicing-nested",
+      type: "Observation",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          { id: "Observation.component", path: "Observation.component" },
+          { id: "Observation.component.code", path: "Observation.component.code" },
+          { id: "Observation.component.code.coding", path: "Observation.component.code.coding" },
+          {
+            id: "Observation.component.code.coding:loinc",
+            path: "Observation.component.code.coding",
+            sliceName: "loinc",
+            min: 1,
+          },
+        ],
+      },
+    });
+    expect(collectProfileIssues(twoComponents, nested).map((i) => [i.code, i.expression])).toEqual([
+      ["PROFILE_SLICE_NO_SLICING", "Observation.component[0].code.coding:loinc"],
+      ["PROFILE_SLICE_NO_SLICING", "Observation.component[1].code.coding:loinc"],
+    ]);
+    const noComponent = parseResource(
+      JSON.stringify({ resourceType: "Observation", status: "final", code: { text: "x" } }),
+    ).resource;
+    expect(collectProfileIssues(noComponent, nested)).toEqual([]);
+  });
+
+  it("draws nothing new once the slicing is declared", () => {
+    const issues = collectProfileIssues(
+      twoComponents,
+      profile(
+        [
+          {
+            id: "Observation.component",
+            path: "Observation.component",
+            slicing: { discriminator: [{ type: "exists", path: "code" }], rules: "open" },
+          },
+        ],
+        [{ id: "Observation.component:coded.code", path: "Observation.component.code", min: 1 }],
+      ),
+    );
+    expect(issues.map((i) => [i.code, i.expression])).toEqual([
+      ["CARDINALITY_MIN", "Observation.component[0].interpretation"],
+      ["CARDINALITY_MIN", "Observation.component[1].interpretation"],
+    ]);
+  });
+});

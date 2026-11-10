@@ -465,6 +465,7 @@ function narrativeSource(element: XmlElement, scope: NamespaceScope): string {
     .filter((prefix) => prefix !== "xml" && scope.has(prefix))
     .sort()
     .map((prefix) => {
+      /* v8 ignore next -- the `?? ""` is unreachable: the filter above keeps only prefixes in scope */
       const uri = escapeNarrativeAttr(scope.get(prefix) ?? "");
       return prefix === "" ? ` xmlns="${uri}"` : ` xmlns:${prefix}="${uri}"`;
     })
@@ -550,6 +551,7 @@ function reportMixedSpelling(
     const occurrences = byName.get(name);
     if (occurrences === undefined || occurrences.length < 2) continue;
     const first = occurrences[0];
+    /* v8 ignore next -- unreachable: a name with two or more occurrences has a first */
     if (first === undefined) continue;
     if (occurrences.some((o) => !sameSpelling(o, first))) {
       issues.push(mixedXmlSpelling(childPath(path, name)));
@@ -593,6 +595,7 @@ function readComplex(
   const { order, byName } = groupChildren(children);
   reportMixedSpelling(order, byName, path, issues);
   for (const name of order) {
+    /* v8 ignore next -- the `?? []` is unreachable: every name in order is a key of byName */
     const occurrences = byName.get(name) ?? [];
     properties.push({
       name,
@@ -690,6 +693,7 @@ function buildNode(
     );
   }
   const only = occurrences[0];
+  /* v8 ignore next -- unreachable: a grouped name always has at least one occurrence */
   if (only === undefined) return list([]); // unreachable: a grouped name always has ≥1 occurrence
   return buildSingle(only, path, issues, parentNamespace);
 }
@@ -778,8 +782,14 @@ function buildSingle(
   const extensionChildren = children.filter((c) => c.modelName === "extension");
   const otherChildren = children.filter((c) => c.modelName !== "extension");
 
+  // An element carrying a `url` attribute is an Extension, a complex type: FHIR XML gives a
+  // primitive only `value` and `id`. Without this test an extension holding only nested extensions
+  // read as a value-absent primitive, and its `url` was reported unknown and then lost on the way
+  // back out, in either format.
+  const isExtension = !hasValue && element.attributes.some((a) => a.name === "url");
+
   // Primitive: a `value` attribute, or no child elements beyond `extension` (incl. value-absent).
-  if (hasValue || otherChildren.length === 0) {
+  if (hasValue || (otherChildren.length === 0 && !isExtension)) {
     for (const stray of otherChildren) {
       issues.push(unknownProperty(childPath(path, stray.modelName)));
     }

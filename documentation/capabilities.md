@@ -729,7 +729,9 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   A slice's own constraints (the elements under its id: fixed and pattern values, cardinalities,
   invariants) apply only to the occurrences assigned to it; the sliced element's own constraints
   apply to every occurrence. A re-slice nests the same way, checked within its parent slice's
-  members, and its fixed and pattern values decide the parent slice's membership.
+  members, and its fixed and pattern values decide the parent slice's membership. A slice under an
+  element that declares no `slicing` (or is missing from the snapshot) assigns no occurrence and is
+  reported `PROFILE_SLICE_NO_SLICING` (`information`): its constraints were not checked.
 - **`fixed[x]` vs `pattern[x]`** (`matchesFixed` / `matchesPattern`): `fixed` is exact equality
   (nothing extra), `pattern` is a subset (extras allowed); decimals compared precision-exactly, never
   via a float. A mismatch is `PROFILE_FIXED_MISMATCH` / `PROFILE_PATTERN_MISMATCH` (error).

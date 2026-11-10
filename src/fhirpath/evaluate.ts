@@ -94,9 +94,16 @@ function scalarOf(item: FpItem): PrimitiveValue | number | undefined {
   return undefined;
 }
 
-/** Whether two primitive scalars are equal (`decimal` precision-exact, `number` vs `decimal` numeric). */
+/**
+ * Whether two primitive scalars are equal under FHIRPath `=` (FHIRPath N1 §6.1.1, "Decimal: values
+ * must be equal, trailing zeroes after the decimal are ignored"): two `decimal`s compare by value, so
+ * `1.5 = 1.50` is true, with no float involved ({@link FhirDecimal.equalsValue}); a computed `number`
+ * against a `decimal` compares numerically. The model still keeps each decimal exactly as written,
+ * and `fixed[x]` / `pattern[x]` keep their own precision-exact comparison. `~` has its own rule and
+ * stays outside the subset.
+ */
 function scalarEquals(a: PrimitiveValue | number, b: PrimitiveValue | number): boolean {
-  if (a instanceof FhirDecimal && b instanceof FhirDecimal) return a.equals(b);
+  if (a instanceof FhirDecimal && b instanceof FhirDecimal) return a.equalsValue(b);
   if (a instanceof FhirDecimal) return typeof b === "number" && Number(a.toString()) === b;
   if (b instanceof FhirDecimal) return typeof a === "number" && Number(b.toString()) === a;
   return a === b;
@@ -267,6 +274,7 @@ function childrenOf(item: FpItem): FpItem[] {
       .filter((p) => p.name !== "resourceType")
       .flatMap((p) => wrap(p.value));
   }
+  /* v8 ignore else -- unreachable: wrap() flattens every list, so a node item is complex or primitive */
   if (isPrimitive(item.node)) {
     const id: FpItem[] = item.node.id === undefined ? [] : [{ t: "str", value: item.node.id }];
     const extensions: FpItem[] = (item.node.extension ?? []).map((ext) => ({
@@ -275,6 +283,7 @@ function childrenOf(item: FpItem): FpItem[] {
     }));
     return [...id, ...extensions];
   }
+  /* v8 ignore next -- unreachable, as above */
   return [];
 }
 
@@ -545,6 +554,7 @@ function systemTypeOf(item: FpItem): string | undefined {
   if (item.t === "bool") return "Boolean";
   if (item.t === "str") return "String";
   if (item.t === "num") return Number.isInteger(item.value) ? "Integer" : "Decimal";
+  /* v8 ignore else -- unreachable: callers pass no complex node, and wrap() flattens every list */
   if (isPrimitive(item.node)) {
     const value = item.node.value;
     if (typeof value === "boolean") return "Boolean";
@@ -854,6 +864,7 @@ function applyFunction(
     }
     case "matches":
       return applyMatches(input, args, callFocus, ctx);
+    /* v8 ignore next -- unreachable: the SUBSET_FUNCTIONS check above refuses every other name */
     default:
       throw new UnsupportedFhirPathError(`unsupported function '${name}()'`);
   }
@@ -871,6 +882,7 @@ function applyExtension(
   const url = stringOf(urlColl[0] as FpItem);
   if (url === undefined) throw new UnsupportedFhirPathError("extension(url) needs a string url");
   return navigate(input, "extension").filter((item) => {
+    /* v8 ignore next -- unreachable: navigating `extension` yields only node items */
     const urlNodes = item.t === "node" ? navigateItem(item.node, "url") : [];
     return urlNodes.some((u) => stringOf(u) === url);
   });
@@ -878,6 +890,7 @@ function applyExtension(
 
 /** Negate a three-valued truth (empty stays empty). */
 function negate(value: Trit): Trit {
+  /* v8 ignore next -- unreachable: `not()` returns early on an empty input, the only empty truth */
   return value === null ? null : !value;
 }
 
@@ -910,6 +923,7 @@ function evaluateBinary(
       const eq = equals(left, right);
       if (eq.length === 0) return [];
       const item = eq[0] as FpItem;
+      /* v8 ignore next -- unreachable: equals() yields only a boolean item */
       return [{ t: "bool", value: !(item.t === "bool" ? item.value : true) }];
     }
     case "<":
@@ -923,6 +937,7 @@ function evaluateBinary(
       return membership(left, right);
     case "contains":
       return membership(right, left);
+    /* v8 ignore next -- unreachable: the SUBSET_OPERATORS check above refuses every other operator */
     default:
       throw new UnsupportedFhirPathError(`unsupported operator '${op}'`);
   }

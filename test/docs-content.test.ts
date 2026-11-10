@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -11,6 +11,7 @@ import {
 } from "@cosyte/vitest-config/snippets";
 
 import {
+  compileEachErrors,
   compileErrors,
   fences,
   fixturesByContent,
@@ -19,10 +20,16 @@ import {
 } from "./_first-use.js";
 
 /**
- * Doc/code-agreement gate. Every ```` ```ts runnable ```` block in `docs-content/` and in `README.md`
- * is extracted, compiled and executed, and its inline `// =>` claims are asserted, so a documented
- * example cannot drift from the shipped code. Plain ` ```ts ` blocks are illustrative and are not
- * executed.
+ * Doc/code-agreement gate. Every TypeScript and JavaScript sample on a hand-written page of
+ * `docs-content/`, and every ```` ```ts runnable ```` block in `README.md`, is extracted, compiled and
+ * executed, and its inline `// =>` claims are asserted, so a documented example cannot drift from the
+ * shipped code. A sample that cannot run says why in its fence (` ```js no-run <reason> `), and the
+ * test below the suites refuses a sample on a page that does neither.
+ *
+ * The pages under `docs-content/api/` are generated from the TSDoc comments in `src/` by
+ * `cosyte-docs-reference`, and their `@example` blocks are fragments written for an editor's tooltip
+ * (many use a variable they never declare), so they are not part of this suite: only the top-level
+ * pages are passed in.
  *
  * Snippets import the package the way a consumer does: against the BUILT ESM artifact, which is
  * exactly what an installer loads. The harness executes each block as a standalone ES module, so it
@@ -33,25 +40,61 @@ import {
  */
 const root = join(import.meta.dirname, "..");
 const ENTRY = join(root, "dist", "index.mjs");
+const ARBITRARIES = join(root, "dist", "arbitraries.mjs");
 const README = join(root, "README.md");
+const DOCS_DIR = join(root, "docs-content");
 const resolveEntry = (specifier: string): string | undefined =>
-  specifier === "@cosyte/fhir" ? ENTRY : undefined;
+  specifier === "@cosyte/fhir"
+    ? ENTRY
+    : specifier === "@cosyte/fhir/arbitraries"
+      ? ARBITRARIES
+      : undefined;
 
 beforeAll(() => {
   execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit" });
 }, 180_000);
 
-docSnippetSuite({
-  docsDir: join(root, "docs-content"),
-  requireSnippet: true,
-  resolve: resolveEntry,
-});
+/** The hand-written pages: every `.md` file at the top of `docs-content/`, not the generated `api/`. */
+const PAGES = readdirSync(DOCS_DIR)
+  .filter((name) => name.endsWith(".md"))
+  .sort()
+  .map((name) => join(DOCS_DIR, name));
+
+/**
+ * `every` runs each TypeScript and JavaScript sample whether or not it is tagged `runnable`, and
+ * lists a `no-run` sample as skipped with its reason. It reaches the runner as a variable rather
+ * than a literal so the line compiles against a `@cosyte/vitest-config` that predates the option;
+ * such a runner ignores it and runs the `runnable` blocks, which is every sample that can run here,
+ * as the test below holds.
+ */
+const docsSuite = { files: PAGES, every: true, requireSnippet: true, resolve: resolveEntry };
+docSnippetSuite(docsSuite);
 
 docSnippetSuite({
   name: "doc/code agreement (README)",
   files: [README],
   requireSnippet: true,
   resolve: resolveEntry,
+});
+
+/** The fence languages that make a block a code sample. */
+const SAMPLE_LANGS = new Set(["ts", "typescript", "tsx", "js", "javascript", "mjs"]);
+
+describe("every sample on a hand-written page", () => {
+  it("runs, or names in its fence why it cannot", () => {
+    const unaccounted: string[] = [];
+    for (const path of PAGES) {
+      for (const fence of fences(readFileSync(path, "utf8"))) {
+        if (!SAMPLE_LANGS.has(fence.lang)) continue;
+        const noRun = fence.tags.indexOf("no-run");
+        const reason = noRun === -1 ? "" : fence.tags.slice(noRun + 1).join(" ");
+        if (fence.tags.includes("runnable") ? noRun !== -1 : reason === "") {
+          unaccounted.push(`${relative(DOCS_DIR, path)}: ${fence.lang} ${fence.tags.join(" ")}`);
+        }
+      }
+    }
+    expect(unaccounted).toEqual([]);
+  });
 });
 
 /**
@@ -64,7 +107,7 @@ docSnippetSuite({
  */
 const FIRST_USE_TMP = join(root, ".cosyte-first-use-snippets");
 const FIXTURE_DIR = join(root, "test", "__fixtures__");
-const QUICKSTART_TEXT = readFileSync(join(root, "docs-content", "quickstart.md"), "utf8");
+const QUICKSTART_TEXT = readFileSync(join(DOCS_DIR, "quickstart.md"), "utf8");
 const README_TEXT = readFileSync(README, "utf8");
 const FIRST_USE = [
   {
@@ -94,23 +137,27 @@ afterAll(() => {
   rmSync(FIRST_USE_TMP, { recursive: true, force: true });
 });
 
-describe("every runnable-tagged block under docs-content/ compiles", () => {
+describe("every runnable-tagged block on a hand-written page compiles", () => {
   it(
     "AC-FH1: each one compiles in a new TypeScript project against the package's types",
     () => {
-      const docsDir = join(root, "docs-content");
-      const blocks = readdirSync(docsDir, { recursive: true, encoding: "utf8" })
-        .filter((file) => file.endsWith(".md"))
-        .flatMap((file) =>
-          extractRunnableSnippets(readFileSync(join(docsDir, file), "utf8")).map((s) => ({
-            file,
-            code: s.code,
-          })),
-        );
+      const blocks = PAGES.flatMap((file) =>
+        extractRunnableSnippets(readFileSync(file, "utf8")).map((s) => ({
+          file: relative(DOCS_DIR, file),
+          code: s.code,
+        })),
+      );
       expect(blocks.length, "docs-content/ carries no runnable-tagged block").toBeGreaterThan(0);
-      for (const block of blocks) {
-        expect(compileErrors(root, SOURCE_PATHS, block.code), block.file).toEqual([]);
-      }
+      const errors = compileEachErrors(
+        root,
+        SOURCE_PATHS,
+        blocks.map((block) => block.code),
+      );
+      expect(
+        blocks.flatMap((block, index) =>
+          (errors[index] ?? []).map((error) => `${block.file}: ${error}`),
+        ),
+      ).toEqual([]);
     },
     COMPILE_TIMEOUT,
   );

@@ -1752,6 +1752,7 @@ function checkModifierExtension(value: FhirNode, path: string, out: string[]): v
   const items = isList(value) ? value.items : [value];
   items.forEach((ext, index) => {
     const url = isComplex(ext) ? primitiveString(getProperty(ext, "url")) : undefined;
+    /* v8 ignore else -- unreachable today: KNOWN_MODIFIER_EXTENSION_URLS is empty, so every modifier is unhandled */
     if (url === undefined || !KNOWN_MODIFIER_EXTENSION_URLS.has(url)) {
       out.push(
         isList(value) ? `${path}.modifierExtension[${String(index)}]` : `${path}.modifierExtension`,

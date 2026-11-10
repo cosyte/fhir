@@ -705,6 +705,176 @@ describe("the walk reaches every page the bundle publishes", () => {
   });
 });
 
+describe("the generated reference and the anchors links name", () => {
+  /** The link findings alone: a seeded control carries no sidebar, which the links arm also reports. */
+  function linkFindings(files: Record<string, string>): string {
+    return graded(files, ["links"])
+      .filter((finding) => finding.message.startsWith("relative link target"))
+      .map(formatFinding)
+      .join("\n");
+  }
+
+  /** A reference page in the shape the generator writes, with a heading repeated as one does. */
+  const REFERENCE = [
+    "# @cosyte/fhir",
+    "",
+    "## Functions",
+    "",
+    "### parseResource()",
+    "",
+    "```ts",
+    "### notAHeading",
+    "```",
+    "",
+    "### Quantity",
+    "",
+    "## Interfaces",
+    "",
+    "### Quantity",
+    "",
+    "###### STARTER\\_PROFILES",
+    "",
+    "### The DOCTYPE-free reader",
+    "",
+    "#hashtag, which is no heading without a space",
+    "",
+    "A line that mentions ## inline is no heading either.",
+    "",
+  ].join("\n");
+
+  it("does not grade the generated pages under api/ as pages", () => {
+    const findings = graded(
+      {
+        "api/README.md": [
+          "# @cosyte/fhir",
+          "",
+          "A brace { in prose, and a sample that cannot compile:",
+          "",
+          "```ts",
+          "parseResource(feed);",
+          "```",
+        ].join("\n"),
+      },
+      ["mdx-braces", "links", "samples"],
+    );
+    expect(findings.filter((finding) => finding.file.startsWith("api/"))).toEqual([]);
+  });
+
+  it("still grades a page in any other subdirectory", () => {
+    const findings = graded({ "apis/README.md": page("apis/README", "A", "A brace {.") }, [
+      "mdx-braces",
+    ]);
+    expect(messages(findings)).toContain("apis/README.md:6 [mdx-braces]");
+  });
+
+  it("resolves a link into the reference, page and anchor, as the site slugs a heading", () => {
+    const found = linkFindings({
+      "api/README.md": REFERENCE,
+      "intro.md": page(
+        "intro",
+        "Getting started",
+        [
+          "Read [the reference](./api/README.md), [parseResource](./api/README.md#parseresource),",
+          "[one Quantity](./api/README.md#quantity), [the other](./api/README.md#quantity-1) and",
+          "[a constant](./api/README.md#starter_profiles), [a hyphen](./api/README.md#the-doctype-free-reader).",
+        ].join("\n"),
+      ),
+    });
+    expect(found).toBe("");
+  });
+
+  it("refuses a reference page that is not there, and a directory named like one", () => {
+    const dir = mkdtempSync(join(tmpdir(), "fhir-docs-control-"));
+    try {
+      seed(dir, "api/README.md", REFERENCE);
+      mkdirSync(join(dir, "api", "folder.md"));
+      seed(
+        dir,
+        "intro.md",
+        page(
+          "intro",
+          "Getting started",
+          "See [gone](./api/gone.md) and [folder](./api/folder.md).",
+        ),
+      );
+      const found = messages(checkDocsSet(dir, { arms: ["links"] }));
+      expect(found).toContain(
+        'relative link target "./api/gone.md" is not a page of the generated reference',
+      );
+      expect(found).toContain(
+        'relative link target "./api/folder.md" is not a page of the generated reference',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "reads a FIFO named like a reference page as no page, without waiting for a writer",
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), "fhir-docs-control-"));
+      try {
+        seed(dir, "api/README.md", REFERENCE);
+        expect(spawnSync("mkfifo", [join(dir, "api", "pipe.md")]).status).toBe(0);
+        seed(dir, "intro.md", page("intro", "Getting started", "See [pipe](./api/pipe.md)."));
+        expect(messages(checkDocsSet(dir, { arms: ["links"] }))).toContain(
+          'relative link target "./api/pipe.md" is not a page of the generated reference',
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    10_000,
+  );
+
+  it("refuses an anchor that names no heading: a renamed export, a heading in code, a third repeat", () => {
+    const found = linkFindings({
+      "api/README.md": REFERENCE,
+      "intro.md": page(
+        "intro",
+        "Getting started",
+        [
+          "[renamed](./api/README.md#parseresources), [in code](./api/README.md#notaheading),",
+          "[third](./api/README.md#quantity-2), [tag](./api/README.md#hashtag-which-is-no-heading-without-a-space),",
+          "[inline](./api/README.md#inline-is-no-heading-either).",
+        ].join("\n"),
+      ),
+    });
+    expect(found).toContain('"./api/README.md#hashtag-which-is-no-heading-without-a-space" names');
+    expect(found).toContain('"./api/README.md#inline-is-no-heading-either" names');
+    expect(found).toContain('"./api/README.md#parseresources" names an anchor that is no heading');
+    expect(found).toContain('"./api/README.md#notaheading" names an anchor that is no heading');
+    expect(found).toContain('"./api/README.md#quantity-2" names an anchor that is no heading');
+  });
+
+  it("checks the anchor of a link to a hand-written page and to the page itself", () => {
+    const found = linkFindings({
+      "limits.md": page("limits", "Current limits", "## No terminology content is bundled\n"),
+      "renamed.md": page("moved", "Moved", "## Kept\n"),
+      "intro.md": [
+        "---",
+        "id: intro",
+        "# a frontmatter comment, which is no heading",
+        "title: Getting started",
+        "---",
+        "",
+        "## Current numbers",
+        "",
+        "[good](./limits.md#no-terminology-content-is-bundled) and [here](#current-numbers);",
+        "[by id](./limits#no-terminology-content-is-bundled), [by file](./renamed.md#kept);",
+        "[bad](./limits.md#no-terminology), [gone](#past-numbers), [yaml](#a-frontmatter-comment-which-is-no-heading).",
+        "",
+      ].join("\n"),
+    });
+    expect(found).not.toContain("#no-terminology-content-is-bundled");
+    expect(found).not.toContain('"#current-numbers"');
+    expect(found).not.toContain("#kept");
+    expect(found).toContain('"#a-frontmatter-comment-which-is-no-heading" names an anchor');
+    expect(found).toContain('"./limits.md#no-terminology" names an anchor that is no heading');
+    expect(found).toContain('"#past-numbers" names an anchor that is no heading');
+  });
+});
+
 describe("the gate's command-line entry point", () => {
   it(
     "exits non-zero and names the finding",

@@ -116,6 +116,7 @@ const STRING_MAX_LENGTH = 1_048_576;
  */
 function lexicalForm(value: PrimitiveValue): string {
   if (value instanceof FhirDecimal) return value.raw;
+  /* v8 ignore next -- unreachable: validatePrimitiveValue() answers a boolean before reading its form */
   if (typeof value === "boolean") return value ? "true" : "false";
   return value;
 }
@@ -173,6 +174,7 @@ export function validatePrimitiveValue(
   }
 
   const pattern = PATTERNS[datatype];
+  /* v8 ignore next -- unreachable: PATTERNS covers every primitive not answered above */
   if (pattern === undefined) return "ok";
   return pattern.test(lexicalForm(value)) ? "ok" : "invalid";
 }

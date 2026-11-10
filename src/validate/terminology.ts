@@ -198,6 +198,7 @@ function checkCoding(
   // release on such an answer is discarded with the answer; there is no finding to hang it on.
   if (answer.membership !== "not-in") return;
   const severity = notInSeverity(binding.strength);
+  /* v8 ignore else -- unreachable: notInSeverity() answers every BindingStrength */
   if (severity !== undefined) {
     issues.push(
       validationIssue("CODE_NOT_IN_VALUESET", severity, path, undefined, declaredRelease(answer)),

@@ -235,6 +235,7 @@ export function wouldLosePrecisionAsDouble(raw: string): boolean {
   if (!Number.isFinite(asDouble)) return true;
 
   const roundTripped = decompose(asDouble.toString());
+  /* v8 ignore next -- unreachable: a finite double always prints as a JSON number */
   if (roundTripped === null) return true;
 
   // Quantity changed, or precision (scale) was reduced, either is a loss.

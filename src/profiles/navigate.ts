@@ -43,6 +43,7 @@ export function resolvePath(node: FhirNode, path: string): FhirNode[] {
   if (path === "" || path === "$this") return [node];
   const [head, ...rest] = path.split(".");
   const restPath = rest.join(".");
+  /* v8 ignore next -- the `?? ""` is unreachable: split() always yields a first segment */
   const selected = step(node, head ?? "");
   if (restPath === "") return selected;
   return selected.flatMap((child) => resolvePath(child, restPath));

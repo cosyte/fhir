@@ -16,6 +16,17 @@
  *     a regular file nor a directory, so nothing under it reaches a reader this way. A link to a
  *     regular `.md` file IS read, exactly as it was before this walk recursed.
  *
+ * One directory is published and deliberately NOT graded as pages: `api/` at the top of the content
+ * directory, the API reference `cosyte-docs-reference` (from `@cosyte/process`) generates from the
+ * TSDoc comments in `src/`. It is graded where it is made. `cosyte-docs-reference --check` fails when
+ * the committed pages differ from what the source generates, so its text is the source's text; the
+ * public-surface gate (`pnpm check:no-internal-refs`) reads those same comments in `src/`; and its
+ * `@example` blocks are short fragments written for an editor's tooltip, not samples a reader runs.
+ * Grading it here would only re-grade the source through a copy. What this gate does read in it is
+ * every link INTO it: a hand-written page's link to `./api/README.md#parseresource` must name a page
+ * that exists and a heading on that page, so an export renamed in the source reds the page that
+ * links it.
+ *
  * `docs-content/` is the narrative content the docs site pulls from a release asset and publishes
  * verbatim. Three properties make an unguarded edit there expensive:
  *
@@ -45,24 +56,36 @@
 
 import { spawnSync } from "node:child_process";
 import {
+  closeSync,
+  constants,
   existsSync,
+  fstatSync,
+  mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   readdirSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
+import * as arbitraries from "../src/arbitraries/index.js";
 import * as fhir from "../src/index.js";
+import { PROPERTY_ENV } from "../test/property/_runner.js";
 
 /** The package root, derived from this file's own location so any working directory works. */
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Where a sample importing `@cosyte/fhir/arbitraries` is pointed: the subpath's source. */
+const ARBITRARIES_INDEX = join(REPO_ROOT, "src", "arbitraries", "index.js");
+
+/** The directory the samples are written under while they are graded. */
+const SAMPLE_PARENT = join(REPO_ROOT, "node_modules", ".cache");
 
 /** One graded property of the documentation set. Every arm is independently seedable. */
 export const ARMS = [
@@ -185,6 +208,9 @@ function frontmatter(lines: readonly LineInfo[]): Map<string, string> {
   return found;
 }
 
+/** The folder of the generated API reference, at the top of the content directory. */
+const REFERENCE_DIR = "api";
+
 /** One page file in the content tree: where it is on disk, and what the bundle will call it. */
 interface PageFile {
   /** The path relative to the content directory, `/`-separated, which is what the bundle carries. */
@@ -219,6 +245,8 @@ function pageFiles(root: string, prefix: string): PageFile[] {
     const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
     const path = join(here, entry.name);
     if (entry.isDirectory()) {
+      // The generated reference is graded where it is made, as this file's docblock says.
+      if (relative === REFERENCE_DIR) continue;
       found.push(...pageFiles(root, relative));
       continue;
     }
@@ -382,11 +410,71 @@ function resolveTarget(fromFile: string, target: string): string {
   return segments.join("/");
 }
 
-/** Sidebar entries and relative links must both land on a page that is really there. */
+/**
+ * The anchor the docs site gives a heading, as github-slugger computes it from the heading's text:
+ * lower-cased, every character that is not a letter, a digit, `_`, a space or a hyphen dropped (code
+ * ticks, escapes and parentheses included), and each space turned into a hyphen.
+ */
+function headingSlug(heading: string): string {
+  return heading
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_ -]/gu, "")
+    .replace(/ /g, "-");
+}
+
+/**
+ * Every anchor a page offers: one per ATX heading outside fenced code and frontmatter, a repeated
+ * slug numbered from `-1` in document order, as the site numbers it.
+ */
+function anchorsOf(lines: readonly LineInfo[]): Set<string> {
+  const anchors = new Set<string>();
+  const counts = new Map<string, number>();
+  for (const line of lines) {
+    if (line.inFence || line.inFrontmatter) continue;
+    const heading = /^#{1,6}[ \t]+(.*?)[ \t]*$/.exec(line.text);
+    if (heading === null) continue;
+    const base = headingSlug(heading[1] ?? "");
+    const seen = counts.get(base) ?? 0;
+    counts.set(base, seen + 1);
+    anchors.add(seen === 0 ? base : `${base}-${String(seen)}`);
+  }
+  return anchors;
+}
+
+/**
+ * The anchors of one page of the generated reference, or `undefined` when no regular file is there.
+ * One descriptor is checked and read, so the file judged regular is the file read, and `O_NONBLOCK`
+ * lets a FIFO named like a page open at once instead of waiting for a writer.
+ */
+function referenceAnchors(dir: string, relative: string): Set<string> | undefined {
+  let fd: number;
+  try {
+    fd = openSync(join(dir, ...relative.split("/")), constants.O_RDONLY | constants.O_NONBLOCK);
+  } catch {
+    return undefined;
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return undefined;
+    return anchorsOf(classifyLines(readFileSync(fd, "utf8")));
+  } finally {
+    // The one line no test can see: a descriptor left open changes no finding of this short-lived
+    // check, so dropping the close is an equivalent mutant.
+    closeSync(fd);
+  }
+}
+
+/**
+ * Sidebar entries and relative links must both land on a page that is really there, and a link
+ * that names an anchor must name a heading on that page.
+ *
+ * A link into the generated reference (`./api/README.md#parseresource`) is read off the disk, since
+ * that folder is not loaded as pages; a link to a hand-written page, or to an anchor on the page
+ * itself (`#current-numbers`), is read off the loaded page. The shared docs link check is off in
+ * this repository's CI, so this is what stops a renamed export or heading from breaking a link.
+ */
 function checkLinks(dir: string, pages: readonly DocPage[]): Finding[] {
   const findings: Finding[] = [];
   const byId = new Set(pages.map((p) => p.id));
-  const byFile = new Set(pages.map((p) => p.file));
   const sidebar = readSidebar(dir);
   if (sidebar.error !== undefined) {
     findings.push({ arm: "links", file: "sidebars.json", line: 1, message: sidebar.error });
@@ -415,21 +503,52 @@ function checkLinks(dir: string, pages: readonly DocPage[]): Finding[] {
       if (line.inFence || line.inFrontmatter) continue;
       for (const match of line.text.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
         const target = match[1] ?? "";
-        if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) continue;
-        const withoutAnchor = target.split("#")[0] ?? "";
-        if (withoutAnchor === "") continue;
-        const resolved = resolveTarget(page.file, withoutAnchor);
-        if (byFile.has(resolved) || byId.has(resolved.replace(/\.mdx?$/, ""))) continue;
+        if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
+        const hash = target.indexOf("#");
+        const withoutAnchor = hash === -1 ? target : target.slice(0, hash);
+        const anchor = hash === -1 ? undefined : target.slice(hash + 1);
+        const fault = linkFault(dir, page, withoutAnchor, anchor, pages);
+        if (fault === undefined) continue;
         findings.push({
           arm: "links",
           file: page.file,
           line: line.number,
-          message: `relative link target "${target}" is not a page in this content directory`,
+          message: `relative link target "${target}" ${fault}`,
         });
       }
     }
   }
   return findings;
+}
+
+/** What is wrong with one relative link target, or `undefined` when nothing is. */
+function linkFault(
+  dir: string,
+  from: DocPage,
+  path: string,
+  anchor: string | undefined,
+  pages: readonly DocPage[],
+): string | undefined {
+  let anchors: Set<string>;
+  if (path === "") {
+    anchors = anchorsOf(from.lines);
+  } else {
+    const resolved = resolveTarget(from.file, path);
+    if (resolved.startsWith(`${REFERENCE_DIR}/`)) {
+      const found = referenceAnchors(dir, resolved);
+      if (found === undefined) return "is not a page of the generated reference";
+      anchors = found;
+    } else {
+      const target = pages.find(
+        (candidate) =>
+          candidate.file === resolved || candidate.id === resolved.replace(/\.mdx?$/, ""),
+      );
+      if (target === undefined) return "is not a page in this content directory";
+      anchors = anchorsOf(target.lines);
+    }
+  }
+  if (anchor === undefined || anchors.has(anchor)) return undefined;
+  return "names an anchor that is no heading on that page";
 }
 
 // ---------------------------------------------------------------------------
@@ -1094,12 +1213,27 @@ const REQUIRED_PAGES: readonly RequiredPage[] = [
     ],
   },
   {
-    id: "guides",
-    role: "guides",
+    id: "validate-against-profiles",
+    role: "profile validation guide",
     requires: [
       { topic: "validating against a supplied profile", needle: "validateResource" },
       { topic: "caller-supplied profiles", needle: "profiles" },
+    ],
+  },
+  {
+    id: "check-safety-before-summarizing",
+    role: "safety guide",
+    requires: [
       { topic: "the safety readout", needle: "readSafety" },
+      { topic: "the refusal", needle: "assertSafeToSummarize" },
+    ],
+  },
+  {
+    id: "accept-json-and-xml",
+    role: "JSON and XML guide",
+    requires: [
+      { topic: "the JSON codec", needle: "parseResource" },
+      { topic: "the XML codec", needle: "parseResourceXml" },
     ],
   },
   {
@@ -1206,10 +1340,14 @@ function sectionNaming(page: DocPage, token: string): { line: number; body: stri
 // Arm: code tokens
 // ---------------------------------------------------------------------------
 
-/** Every screaming-snake token the package really defines: export names plus code-table values. */
+/**
+ * Every screaming-snake token the package really defines: export names plus code-table values, from
+ * the main entry point and the `arbitraries` subpath, and the environment variables the property
+ * runner reads, which the pages name as the way to run deeper.
+ */
 function knownCodeTokens(): Set<string> {
-  const known = new Set<string>();
-  for (const [name, value] of Object.entries(fhir)) {
+  const known = new Set<string>(Object.values(PROPERTY_ENV));
+  for (const [name, value] of Object.entries({ ...fhir, ...arbitraries })) {
     known.add(name);
     if (typeof value !== "object" || value === null) continue;
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
@@ -1330,7 +1468,9 @@ function rewriteSample(sample: Sample, sourceIndexPath: string): string {
       const expected = expectation[3] ?? "";
       return `${indent}__expect(${expression}, (${expected}), ${String(docLine)});`;
     }
-    return line.replace(/(["'])@cosyte\/fhir\1/g, `"${sourceIndexPath}"`);
+    return line
+      .replace(/(["'])@cosyte\/fhir\/arbitraries\1/g, `"${ARBITRARIES_INDEX}"`)
+      .replace(/(["'])@cosyte\/fhir\1/g, `"${sourceIndexPath}"`);
   });
   return [...SAMPLE_PREAMBLE, ...lines].join("\n");
 }
@@ -1360,15 +1500,30 @@ function sampleCompilerOptions(): ts.CompilerOptions {
     skipLibCheck: true,
     noEmit: true,
     typeRoots: [join(REPO_ROOT, "node_modules", "@types")],
+    // The `arbitraries` subpath imports the package by its own name, as the published one must.
+    paths: { "@cosyte/fhir": [join(REPO_ROOT, "src", "index.ts")] },
   };
 }
 
 /**
+ * What a sample may import: the package's two public entry points, `fast-check` (the optional peer
+ * dependency the `arbitraries` subpath is built on), and Node built-ins.
+ */
+const SAMPLE_IMPORTS: ReadonlySet<string> = new Set([
+  "@cosyte/fhir",
+  "@cosyte/fhir/arbitraries",
+  "fast-check",
+]);
+
+/**
  * Compile every sample, then run every sample.
  *
- * A sample that imports anything but the package's public entry point is refused before compilation:
- * a documented example that reaches into a deep path is teaching a consumer to import something the
- * `exports` map does not offer.
+ * A sample that imports anything but the package's public entry points (and the peer dependency one
+ * of them is built on) is refused before compilation: a documented example that reaches into a deep
+ * path is teaching a consumer to import something the `exports` map does not offer.
+ *
+ * The samples are written under `node_modules/.cache/` in this repository, not the system's temporary
+ * directory, so `fast-check` resolves from here as it does from a consumer's project.
  */
 function checkSamples(
   pages: readonly DocPage[],
@@ -1396,18 +1551,19 @@ function checkSamples(
       const importMatch = /\bfrom\s+["']([^"']+)["']/.exec(line);
       if (importMatch === null) continue;
       const specifier = importMatch[1] ?? "";
-      if (specifier === "@cosyte/fhir" || specifier.startsWith("node:")) continue;
+      if (SAMPLE_IMPORTS.has(specifier) || specifier.startsWith("node:")) continue;
       findings.push({
         arm: "samples",
         file: sample.page.file,
         line: sample.fenceLine + index + 1,
-        message: `sample imports "${specifier}"; documented samples may only import "@cosyte/fhir"`,
+        message: `sample imports "${specifier}"; documented samples may only import "@cosyte/fhir", "@cosyte/fhir/arbitraries" or "fast-check"`,
       });
     }
   }
   if (samples.length === 0) return findings;
 
-  const dir = mkdtempSync(join(tmpdir(), "fhir-docs-samples-"));
+  mkdirSync(SAMPLE_PARENT, { recursive: true });
+  const dir = mkdtempSync(join(SAMPLE_PARENT, "fhir-docs-samples-"));
   try {
     // `.mts`, so both the compiler and `tsx` read every sample as an ES module wherever the
     // temporary directory lands. A bare `.ts` in a directory with no `package.json` above it is read

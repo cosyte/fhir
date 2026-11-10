@@ -263,6 +263,7 @@ function reasonOf(marker: FhirComplex): AbsenceCode | undefined {
  */
 function carriesValue(node: FhirNode): boolean {
   if (isPrimitive(node)) return node.value !== undefined;
+  /* v8 ignore next -- unreachable: a list carries no extension, so visit() returns before asking */
   if (!isComplex(node)) return false;
   return [...node.properties, ...(node.duplicates ?? [])].some(
     (property) => !STRUCTURAL_MEMBERS.has(property.name),

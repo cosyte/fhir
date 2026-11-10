@@ -1,8 +1,8 @@
 ---
 id: limits
 title: Current limits
-sidebar_position: 6
-description: What @cosyte/fhir deliberately does not do, such as bundle terminology or profiles or offer typed per-resource models, and the findings that mean a check did not run.
+sidebar_label: Current limits
+description: "What @cosyte/fhir deliberately does not do (bundled terminology or profiles, typed models per resource) and the findings that mean a check did not run."
 ---
 
 # Current limits
@@ -46,9 +46,9 @@ element it has no field for, but it also cannot offer compile-time completions f
 elements. If you want typed access to a handful of elements, wrap the helpers in your own accessors
 at the edge of your program.
 
-## Two verdicts that say "not checked" rather than passing
+## Verdicts that say "not checked" rather than passing
 
-Both of these are findings the validator emits rather than silently letting something through. If
+Each of these is a finding the validator emits rather than silently letting something through. If
 you treat any non-error finding as a pass, you will misread them.
 
 - `INVARIANT_UNCHECKED`: a constraint whose FHIRPath expression is outside the bounded expression
@@ -65,8 +65,12 @@ you treat any non-error finding as a pass, you will misread them.
   set. Again, it means the slice membership was not decided, not that it matched. A slice's own
   constraints apply only to the occurrences assigned to it, so under an undecided slicing they are
   not checked either.
+- `PROFILE_SLICE_NO_SLICING`: a profile naming a slice (`Observation.component:coded`) under an
+  element that declares no `slicing`, or that is missing from the snapshot. Nothing in the profile
+  says which occurrences belong to the slice, so none is assigned to it, and the slice's own
+  constraints are not checked. It is reported at information, once per present parent.
 
-Both exist because the alternative, staying quiet, is indistinguishable from a pass to every
+All of them exist because the alternative, staying quiet, is indistinguishable from a pass to every
 consumer downstream.
 
 ## R4 first
@@ -88,3 +92,12 @@ finding. Either way the package reports the shape rather than guessing what the 
 The same posture governs the writers. When a model cannot be spelled back into the target format
 without inventing or losing content, the write is refused with a coded reason instead of emitting
 something plausible. [Troubleshooting](./troubleshooting.md) covers what each refusal means.
+
+## Put it to use
+
+- [Check codes without a terminology server](./check-codes.md) shows the content-free checks and
+  where a terminology service of your own plugs in.
+- [Validate against your own profiles](./validate-against-profiles.md) shows how to supply the
+  profiles this package does not bundle.
+- [Troubleshooting](./troubleshooting.md) has an entry for each finding above that means a check did
+  not run.

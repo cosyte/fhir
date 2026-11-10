@@ -150,3 +150,86 @@ describe("generateSnapshot: fail-safe", () => {
     expect(generateSnapshot(root, () => undefined).map((e) => e.id)).toEqual(["Basic.code"]);
   });
 });
+
+describe("snapshot generation at its edges", () => {
+  const minimalBase = loadSd({
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/base-no-min",
+    type: "Observation",
+    snapshot: {
+      element: [
+        { id: "Observation", path: "Observation" },
+        { id: "Observation.code", path: "Observation.code" },
+      ],
+    },
+  });
+  const resolveMinimal: BaseResolver = (url) => (url === minimalBase.url ? minimalBase : undefined);
+
+  it("takes a differential min over a base element that states none", () => {
+    const tightened = loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/needs-code",
+      type: "Observation",
+      baseDefinition: minimalBase.url,
+      differential: { element: [{ id: "Observation.code", path: "Observation.code", min: 1 }] },
+    });
+    const code = generateSnapshot(tightened, resolveMinimal).find(
+      (e) => e.id === "Observation.code",
+    );
+    expect(code?.min).toBe(1);
+  });
+
+  it("copies the base snapshot when a profile carries no differential", () => {
+    const bare = loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/bare",
+      type: "Observation",
+      baseDefinition: minimalBase.url,
+    });
+    expect(generateSnapshot(bare, resolveMinimal).map((e) => e.id)).toEqual([
+      "Observation",
+      "Observation.code",
+    ]);
+  });
+
+  it("is empty for a specialization root with neither a base nor a differential", () => {
+    const empty = loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/empty",
+      type: "Observation",
+    });
+    expect(generateSnapshot(empty, () => undefined)).toEqual([]);
+  });
+
+  it("appends a new element whose parent group the base does not carry", () => {
+    const deep = loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/deep",
+      type: "Observation",
+      baseDefinition: minimalBase.url,
+      differential: {
+        element: [{ id: "Observation.component.code", path: "Observation.component.code", min: 1 }],
+      },
+    });
+    expect(generateSnapshot(deep, resolveMinimal).map((e) => e.id)).toEqual([
+      "Observation",
+      "Observation.code",
+      "Observation.component.code",
+    ]);
+  });
+
+  it("refuses to generate without a resolver when the profile needs its base", () => {
+    const needsBase = loadSd({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/needs-base",
+      type: "Observation",
+      baseDefinition: minimalBase.url,
+      differential: { element: [{ id: "Observation.code", path: "Observation.code", min: 1 }] },
+    });
+    expect(() => snapshotElements(needsBase)).toThrow(FhirProfileError);
+    expect(snapshotElements(needsBase, resolveMinimal).map((e) => e.id)).toEqual([
+      "Observation",
+      "Observation.code",
+    ]);
+  });
+});

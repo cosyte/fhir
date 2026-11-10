@@ -14,8 +14,9 @@
  *   is `CARDINALITY_MIN`; one exceeding a profile max is `CARDINALITY_MAX`.
  * - **slicing**, each occurrence of a sliced element is matched to a slice ({@link ./slicing.js}); an
  *   unmatched occurrence under `closed` slicing is `PROFILE_SLICE_UNMATCHED`, a required slice with no
- *   occurrence is `CARDINALITY_MIN`, and a slicing whose discriminator cannot be evaluated is
- *   `PROFILE_SLICE_UNCHECKED` (never silently passed).
+ *   occurrence is `CARDINALITY_MIN`, a slicing whose discriminator cannot be evaluated is
+ *   `PROFILE_SLICE_UNCHECKED`, and a slice under an element that declares no slicing is
+ *   `PROFILE_SLICE_NO_SLICING` (both `information`, never silently passed).
  *
  * **A slice's constraints apply to its members alone.** An element under a slice
  * (`Observation.component:SystolicBP.code`) constrains only the occurrences the slicing assigned to
@@ -91,7 +92,13 @@ export function collectProfileIssues(
 
   for (const el of snapshot) {
     if (el.path === profile.type) continue; // the root element, nothing to check on the resource itself.
-    if (el.sliceName !== undefined) continue; // slice elements are handled via their sliced parent below.
+    if (el.sliceName !== undefined) {
+      // A slice is handled via its sliced parent below, when that parent declares the slicing that
+      // assigns the slice its members. Without one no occurrence is assigned, so nothing under the
+      // slice is checked, and that is reported rather than passed in silence.
+      if (!slicingDeclaredFor(snapshot, el)) collectNoSlicingIssues(scope, el, issues);
+      continue;
+    }
 
     // An element under a slice constrains the members of the slice its id names, and no others, so
     // its groups are the in-scope parents only; an element under no slice constrains every occurrence.
@@ -140,6 +147,42 @@ export function collectProfileIssues(
   return issues;
 }
 
+/**
+ * Whether the element a slice belongs to declares `slicing`. The sliced element is the first one the
+ * slice is a slice of ({@link isSliceOf}), the same element the slice scope reads by id; a slice whose
+ * sliced element is missing from the snapshot has none.
+ */
+function slicingDeclaredFor(
+  snapshot: readonly ElementDefinition[],
+  slice: ElementDefinition,
+): boolean {
+  const sliced = snapshot.find(
+    (e) => e !== slice && e.sliceName === undefined && isSliceOf(slice, e),
+  );
+  return sliced?.slicing !== undefined;
+}
+
+/**
+ * Report a slice whose sliced element declares no slicing as not checked, once per present parent
+ * occurrence of the sliced element, at the slice's location (`Observation.component:coded`).
+ */
+function collectNoSlicingIssues(
+  scope: SliceScope,
+  slice: ElementDefinition,
+  issues: ValidationIssue[],
+): void {
+  const leaf = slice.path.slice(slice.path.lastIndexOf(".") + 1);
+  for (const group of scope.parentGroups(slice)) {
+    issues.push(
+      validationIssue(
+        "PROFILE_SLICE_NO_SLICING",
+        ISSUE_SEVERITIES.INFORMATION,
+        `${group.path}.${leaf}:${String(slice.sliceName)}`,
+      ),
+    );
+  }
+}
+
 /** Emit the slice findings for one sliced element's occurrences within a single parent context. */
 function collectSlicingIssues(
   occ: readonly FhirNode[],
@@ -149,6 +192,7 @@ function collectSlicingIssues(
   issues: ValidationIssue[],
 ): void {
   const slices = resolveSlices(snapshot, slicedElement);
+  /* v8 ignore next -- the `?? []` is unreachable: called only for an element that declares slicing */
   const discriminators = slicedElement.slicing?.discriminator ?? [];
   const result = matchSlices(occ, slices, discriminators);
 
@@ -159,6 +203,7 @@ function collectSlicingIssues(
     return;
   }
 
+  /* v8 ignore next -- the `?? "open"` is unreachable: called only for an element that declares slicing */
   const rules = slicedElement.slicing?.rules ?? "open";
   if (rules === "closed") {
     result.assignments.forEach((sliceName, i) => {

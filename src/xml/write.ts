@@ -506,9 +506,8 @@ function writeElement(
  * primitive metadata is co-located (`id` attribute + child `<extension>`s), repeating elements are
  * repeated, and the root carries the FHIR namespace.
  *
- * ## What this output is NOT guaranteed to be, stated rather than implied
- *
- * "Spec-clean" is a claim about the FHIR structure, and the XML 1.0 grammar for a name and a
+ * **What this output is NOT guaranteed to be, stated rather than implied.** "Spec-clean" is a
+ * claim about the FHIR structure, and the XML 1.0 grammar for a name and a
  * character is now held at every site this writer writes one: a tag name that is not a `Name`
  * (`<a&b/>`, `<1abc/>`) is refused rather than written, although it re-reads through
  * {@link parseResourceXml} exactly as written, because a conforming third-party processor must
@@ -527,9 +526,8 @@ function writeElement(
  * The reader is unchanged and still reads `<1abc>` and `<a&b>` back, and `validateResource` still
  * returns `valid: true` for a `string` carrying U+0000; both are separate surfaces.
  *
- * ## The `div` branch, which writes markup rather than a name
- *
- * A `div` property is written back as its own raw string, so what that string spells is markup in
+ * **The `div` branch, which writes markup rather than a name.** A `div` property is written
+ * back as its own raw string, so what that string spells is markup in
  * the output. `emitsOneDivElement` is checked at that branch before the string is spliced in, and
  * the string is written only when it parses as exactly one element whose local name is `div`; a
  * string that fails raises `UNSERIALIZABLE_DIV_MARKUP` below. A string that passes is written only

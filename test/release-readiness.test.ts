@@ -1355,7 +1355,7 @@ describe("the certified public surface matches the package entry point", () => {
     // S0369-fhir-safety-modifier-4: two more (DatatypeUseCode, DatatypeUseReport), the types of
     // the `use` channel on Identifier, HumanName, Address and ContactPoint.
     expect(INVENTORY.types).toHaveLength(106);
-    expect(INVENTORY.exportSubpaths).toHaveLength(2);
+    expect(INVENTORY.exportSubpaths).toHaveLength(3);
   });
 
   it("fails if a certified RUNTIME name is absent from the entry point (a removal)", () => {
@@ -1454,8 +1454,10 @@ describe("the exports map publishes exactly the certified subpaths", () => {
     expect(delta(certified, lost).missing).toEqual([certified[0] ?? ""]);
   });
 
-  it("certifies the two subpaths a consumer may resolve today", () => {
-    expect(INVENTORY.exportSubpaths).toEqual([".", "./package.json"]);
+  it("certifies the three subpaths a consumer may resolve today", () => {
+    // `./arbitraries` is the optional fast-check generators; its own surface is held by
+    // `test/arbitraries.test.ts`, and the entry point's names below are unchanged by it.
+    expect(INVENTORY.exportSubpaths).toEqual([".", "./arbitraries", "./package.json"]);
   });
 });
 

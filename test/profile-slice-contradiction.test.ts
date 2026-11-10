@@ -371,7 +371,11 @@ describe("the neighbours of the contradiction, unchanged in both states", () => 
 
     expect([...slice.unsatisfiableExists]).toEqual([]);
     expect([...slice.existsExpectations.entries()]).toEqual([["dataAbsentReason", true]]);
-    expect(issues(componentWithReason(), profile)).toEqual([]);
+    // No error on the conformant document. The re-slice itself sits under an element that declares
+    // no slicing, so it assigns no member and is reported not checked, at information.
+    expect(issues(componentWithReason(), profile)).toEqual([
+      "information:PROFILE_SLICE_NO_SLICING at Observation.component.dataAbsentReason:Z",
+    ]);
   });
 
   it("still expects nothing from a descendant stating no bound at all", () => {
@@ -572,8 +576,11 @@ describe("the bound on what the change can retire", () => {
       component: [{ interpretation: { text: "high" }, code: { text: "systolic" } }],
     });
 
+    // The re-slice `X` sits under an element that declares no slicing, so it is reported not
+    // checked (information), which leaves the verdict where the base tree puts it.
     expect(issues(withInterpretation, profile)).toEqual([
       "error:CARDINALITY_MIN at Observation.component:B",
+      "information:PROFILE_SLICE_NO_SLICING at Observation.component.interpretation:X",
     ]);
   });
 

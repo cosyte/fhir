@@ -73,6 +73,7 @@ class Parser {
   public parse(): Expr {
     const expr = this.parseImplies();
     if (this.pos < this.tokens.length) {
+      /* v8 ignore next -- the `?? ""` is unreachable: a token exists at any position below the length */
       throw new UnsupportedFhirPathError(`unexpected trailing token '${this.peek()?.value ?? ""}'`);
     }
     return expr;

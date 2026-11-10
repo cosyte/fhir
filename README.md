@@ -61,7 +61,10 @@ pnpm add @cosyte/fhir
 
 Node.js 22 or later, tested on 22, 24, and 26. The package ships dual ESM and CommonJS builds with
 type declarations for both, so `import` and `require` both work and neither needs a compatibility
-shim. There are zero runtime dependencies, and it imports no Node built-in.
+shim. There are zero runtime dependencies, and it imports no Node built-in. The optional
+`@cosyte/fhir/arbitraries` entry point, fast-check generators for
+[property-testing your own code](https://github.com/cosyte/fhir/blob/main/docs-content/property-test-your-code.md),
+needs `fast-check` installed beside it; the main entry point never loads it.
 
 ## Usage
 
@@ -150,8 +153,9 @@ as PHI.
 
 ## Documentation
 
-- [docs.cosyte.com/fhir](https://docs.cosyte.com/fhir): installation, the quickstart, core
-  concepts, guides, current limits, and troubleshooting.
+- [docs.cosyte.com/fhir](https://docs.cosyte.com/fhir): installation, the quickstart, how-to
+  guides, core concepts, current limits, troubleshooting, the API reference, and how we test the
+  package and measure its performance.
 - [`documentation/capabilities.md`](https://github.com/cosyte/fhir/blob/main/documentation/capabilities.md):
   the full capability readout, layer by layer, with what each one checks and what it leaves open.
 - [`documentation/`](https://github.com/cosyte/fhir/tree/main/documentation) in the repository: the
@@ -167,6 +171,9 @@ Bug reports, questions, and FHIR quirks from the servers and EHRs you connect to
 synthetic data only. Ideas and open questions can also go to
 [Discussions](https://github.com/cosyte/.github/discussions). Our
 [support page](https://github.com/cosyte/.github/blob/main/SUPPORT.md) lists every route.
+
+Need a FHIR R4 integration built, or hosted and run for you? See our
+[integration services](https://cosyte.com/integration-services).
 
 ## Security
 

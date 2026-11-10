@@ -329,6 +329,7 @@ function isOfType(actual: string, tested: string): boolean {
  * ```
  */
 export function nodeIsOfType(node: FhirNode, type: ResolvedType, resource: FhirNode): boolean {
+  /* v8 ignore next -- unreachable: the evaluator flattens every list before a type test */
   if (isList(node)) throw new UnsupportedFhirPathError("type test on a repeating element");
   const positions = positionsIn(resource).get(node) ?? [];
   if (positions.some((p) => suffixContradicts(p.property, node))) {

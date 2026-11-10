@@ -394,6 +394,9 @@ describe("XML reader: well-formedness fatals", () => {
     ["unquoted attribute value", `<Patient ${FHIR_NS}><a value=x/></Patient>`],
     ["'<' inside attribute value", `<Patient ${FHIR_NS}><a value="<"/></Patient>`],
     ["duplicate attribute", `<Patient ${FHIR_NS}><a value="1" value="2"/></Patient>`],
+    ["unterminated comment", `<Patient ${FHIR_NS}><!-- never closed </Patient>`],
+    ["unterminated attribute value", `<Patient ${FHIR_NS}><a value="never closed`],
+    ["unterminated processing instruction", `<?xml version="1.0" <Patient ${FHIR_NS}/>`],
   ];
 
   it.each(cases)("throws MALFORMED_XML on %s", (_label, xml) => {
