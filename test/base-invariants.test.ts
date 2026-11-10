@@ -12,6 +12,7 @@ import {
   collectInvariantIssues,
   defineProfile,
   diagnosticFor,
+  nodesEquivalent,
   parseResource,
   parseResourceXml,
   serializeResource,
@@ -637,7 +638,7 @@ const NARRATIVE = {
 const COMMON = {
   text: NARRATIVE,
   contained: [CONTAINED_PRACTITIONER],
-  extension: [VALUE_EXTENSION],
+  extension: [VALUE_EXTENSION, NESTED_EXTENSION],
   // A value-absent primitive carrying an `id` and an extension, which R4 allows: ele-1 holds
   // because the extension is a child other than the `id`.
   _language: PRIMITIVE_EXTENSION,
@@ -649,11 +650,9 @@ const CONTAINED_REF = { reference: "#pr1" };
  * carrying a value, an extension carrying only nested extensions, a primitive's `_`-sibling, a
  * contained resource it references, and the type's own anchors.
  *
- * The extension carrying only nested extensions sits one level below the root, on a backbone
- * element or a datatype. At the root, the XML reader models an extension-only element with no
- * value as a primitive (a declared schema-free residual of that reader), and the root schema then
- * reports it as a type mismatch whatever this layer does; one level down, the same reading draws
- * only the reader's warning about the `url` attribute, which the XML leg pins below.
+ * An extension carrying only nested extensions sits at the root and again one level below it, on
+ * a backbone element or a datatype. The XML reader reads an element with a `url` attribute as an
+ * Extension, so both read from XML as they do from JSON, with no finding: the XML leg pins that.
  */
 const CONFORMANT: Readonly<Record<(typeof MODELED_TYPES)[number], Doc>> = {
   AllergyIntolerance: {
@@ -796,18 +795,6 @@ const CONFORMANT: Readonly<Record<(typeof MODELED_TYPES)[number], Doc>> = {
   },
 };
 
-/** Where each conformant document carries its extension that holds only nested extensions. */
-const NESTED_EXTENSION_AT: Readonly<Record<(typeof MODELED_TYPES)[number], string>> = {
-  AllergyIntolerance: "AllergyIntolerance.reaction.extension",
-  Condition: "Condition.stage.extension",
-  DiagnosticReport: "DiagnosticReport.code.extension",
-  Immunization: "Immunization.education.extension",
-  MedicationRequest: "MedicationRequest.dispenseRequest.extension",
-  MedicationStatement: "MedicationStatement.medicationCodeableConcept.extension",
-  Observation: "Observation.component.extension",
-  Patient: "Patient.contact[0].extension",
-};
-
 describe("AC-9: a conformant document of each type validates clean, from JSON and from XML", () => {
   for (const type of MODELED_TYPES) {
     const json = JSON.stringify(CONFORMANT[type]);
@@ -824,15 +811,12 @@ describe("AC-9: a conformant document of each type validates clean, from JSON an
     it(`AC-9: the same ${type} read from its XML spelling is valid with no INVARIANT_VIOLATED`, () => {
       const xml = serializeResourceXml(parseResource(json).resource);
       const read = parseResourceXml(xml);
-      // The one reader warning is the declared schema-free residual: an extension holding only
-      // nested extensions reads as a primitive, so its `url` attribute is reported unknown.
-      expect(read.issues).toEqual([
-        {
-          code: "UNKNOWN_PROPERTY",
-          severity: "warning",
-          expression: `${NESTED_EXTENSION_AT[type]}.@url`,
-        },
-      ]);
+      // The extension holding only nested extensions, at the root and one level down, reads as an
+      // Extension with its `url`, as it does from JSON, and writes back with it.
+      expect(read.issues).toEqual([]);
+      expect(xml.split(`<extension url="${NESTED_EXTENSION.url}">`)).toHaveLength(3);
+      expect(nodesEquivalent(read.resource, parseResource(json).resource)).toBe(true);
+      expect(serializeResourceXml(read.resource)).toBe(xml);
       const result = validateResource(read.resource);
       expect(result.issues.filter((i) => i.code === "INVARIANT_VIOLATED")).toEqual([]);
       expect(result.issues.filter((i) => i.severity === "error")).toEqual([]);
