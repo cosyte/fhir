@@ -7,17 +7,18 @@ description: "What we will measure on @cosyte/fhir (throughput, latency, memory,
 
 # Performance
 
-This page describes what we measure on `@cosyte/fhir`, how, and what the package does today to keep
-its cost bounded. The shared method every Cosyte package follows (throughput, latency percentiles,
-memory, import time and bundle size, and how a pull request is compared with `main`) is written down
-in the performance standard in
+This page describes what we will measure on `@cosyte/fhir` and what the package does today to keep
+its cost bounded. The shared method every Cosyte package will follow (throughput, latency
+percentiles, memory, import time and bundle size, and how a pull request is compared with `main`)
+will be written down in a performance standard among
 [cosyte/config's decision records](https://github.com/cosyte/config/tree/main/documentation/decisions).
+That standard is still in review and is not one of those records yet.
 The numbers for the current release are in [Current numbers](#current-numbers) below.
 
 ## What we measure
 
 We do not run a benchmark on this package yet, so this release has no measured numbers. When the
-benchmarks land they follow the performance standard and measure:
+benchmarks land they will follow that standard and measure:
 
 - **Throughput**: resources read and validated a second, from a small resource to a large Bundle.
 - **Latency**: the 50th, 95th and 99th percentile time to read and to validate one resource.
@@ -53,7 +54,8 @@ from costing more than a fixed amount.
 
 - **Not a guarantee for every input.** Very large Bundles and adversarial documents are not
   characterized here beyond the bounds above.
-- **Not a comparison with other libraries.** That is a separate suite with its own written method.
+- **Not a comparison with other libraries.** A comparison will be a separate suite with its own
+  written method. Neither exists yet.
 - **Not a behavior contract.** Nothing here changes how a resource is read or validated.
 
 ## Current numbers
