@@ -68,6 +68,22 @@ describe("defineProfile: authoring", () => {
     expect(() => defineProfile({ url: "", type: "Patient" })).toThrow(InvalidProfileError);
     expect(() => defineProfile({ url: "http://x", type: "" })).toThrow(InvalidProfileError);
     expect(() =>
+      defineProfile({
+        url: "http://x",
+        type: "Patient",
+        differential: [
+          { path: "Patient.name", constraint: [{ key: "", expression: "given.exists()" }] },
+        ],
+      }),
+    ).toThrow(/missing a key/);
+    expect(() =>
+      defineProfile({
+        url: "http://x",
+        type: "Patient",
+        differential: [{ path: "Patient.name", constraint: [{ key: "pat-x", expression: "" }] }],
+      }),
+    ).toThrow(/pat-x on Patient.name is missing an expression/);
+    expect(() =>
       defineProfile({ url: "http://x", type: "Patient", differential: [{ path: "" }] }),
     ).toThrow(InvalidProfileError);
     expect(() =>

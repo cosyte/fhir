@@ -164,3 +164,101 @@ describe("loadStructureDefinition", () => {
     expect(DISCRIMINATOR_TYPES).not.toContain("position");
   });
 });
+
+describe("loadStructureDefinition: shapes it reads leniently and parts it leaves out", () => {
+  function element(extra: Record<string, unknown>) {
+    const sd = req(
+      loadSd({
+        resourceType: "StructureDefinition",
+        url: "http://example.org/StructureDefinition/shapes",
+        type: "Observation",
+        differential: { element: [{ id: "Observation.code", path: "Observation.code", ...extra }] },
+      }),
+    );
+    return req(sd.differential?.[0]);
+  }
+
+  it("reads a single type, profile and constraint object as a one-item list", () => {
+    const el = element({
+      type: { code: "CodeableConcept", profile: "http://example.org/StructureDefinition/cc" },
+      constraint: { key: "x-1", expression: "coding.exists()" },
+    });
+    expect(el.type).toEqual([
+      { code: "CodeableConcept", profile: ["http://example.org/StructureDefinition/cc"] },
+    ]);
+    expect(el.constraint).toEqual([
+      { key: "x-1", severity: "error", expression: "coding.exists()" },
+    ]);
+  });
+
+  it("drops type, profile, constraint and discriminator entries that are not objects or strings", () => {
+    const el = element({
+      type: ["CodeableConcept"],
+      constraint: ["x-1"],
+      slicing: { discriminator: ["value"], rules: "closed" },
+    });
+    expect(el.type).toBeUndefined();
+    expect(el.constraint).toBeUndefined();
+    expect(el.slicing).toEqual({ discriminator: [], rules: "closed" });
+  });
+
+  it("drops a type with no code, and a profile list with no string in it", () => {
+    expect(element({ type: [{ profile: ["http://example.org/p"] }] }).type).toBeUndefined();
+    expect(element({ type: [{ code: "Quantity", profile: [1, true] }] }).type).toEqual([
+      { code: "Quantity" },
+    ]);
+  });
+
+  it("drops a discriminator missing its path, and reads slicing with no discriminator at all", () => {
+    const el = element({
+      slicing: { discriminator: [{ type: "value" }, { type: "pattern", path: "$this" }] },
+    });
+    expect(el.slicing).toEqual({
+      discriminator: [{ type: "pattern", path: "$this" }],
+      rules: "open",
+    });
+    expect(element({ slicing: { rules: "openAtEnd" } }).slicing).toEqual({
+      discriminator: [],
+      rules: "openAtEnd",
+    });
+  });
+
+  it("drops a binding with no strength", () => {
+    expect(element({ binding: { valueSet: "http://example.org/vs" } }).binding).toBeUndefined();
+    expect(element({ binding: { strength: "required" } }).binding).toEqual({
+      strength: "required",
+    });
+  });
+
+  it("reads fixed[x] and pattern[x] only under a type-suffixed name", () => {
+    const el = element({ fixed: "x", patternless: "y", fixedCode: "final" });
+    expect(el.fixed?.type).toBe("Code");
+    expect(el.pattern).toBeUndefined();
+  });
+
+  it("skips an element entry that is not an object, and reads a snapshot with no element as absent", () => {
+    const sd = req(
+      loadSd({
+        resourceType: "StructureDefinition",
+        url: "http://example.org/StructureDefinition/sparse",
+        type: "Observation",
+        differential: { element: ["Observation.code"] },
+        snapshot: {},
+      }),
+    );
+    expect(sd.differential).toEqual([]);
+    expect(sd.snapshot).toBeUndefined();
+  });
+
+  it("reads a single element object as a one-element list", () => {
+    const sd = req(
+      loadSd({
+        resourceType: "StructureDefinition",
+        url: "http://example.org/StructureDefinition/one",
+        type: "Observation",
+        snapshot: { element: { id: "Observation", path: "Observation" } },
+      }),
+    );
+    expect(sd.snapshot).toEqual([{ id: "Observation", path: "Observation" }]);
+  });
+});

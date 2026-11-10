@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { FATAL_CODES, FhirCodecError, readRawJson, type RawJson } from "../src/index.js";
+import {
+  FATAL_CODES,
+  FhirCodecError,
+  ISSUE_CODES,
+  parseResource,
+  readRawJson,
+  serializeResource,
+  type RawJson,
+} from "../src/index.js";
 import { nth } from "./_util.js";
 
 /** Narrow a raw node to a given tag or fail the test loudly. */
@@ -60,6 +68,8 @@ describe("readRawJson: precision-preserving JSON reader", () => {
       ["1e", "missing exponent"],
       ['"a\nb"', "unescaped control char"],
       ['"\\x"', "bad escape"],
+      ['"abc\\', "unterminated escape at end of input"],
+      ['"abc', "unterminated string"],
       ['"\\u00zz"', "bad unicode escape"],
       ["{} {}", "trailing content"],
     ];
@@ -75,5 +85,30 @@ describe("readRawJson: precision-preserving JSON reader", () => {
       expect(error.code).toBe(FATAL_CODES.MALFORMED_JSON);
       expect(typeof error.offset).toBe("number");
     });
+  });
+});
+
+describe("a boolean held inside a complex array is kept and written back as written", () => {
+  it.each(["true", "false"])("keeps %s at its position and writes it back", (literal) => {
+    const json = `{"resourceType":"Patient","name":[{"family":"X"},${literal}]}`;
+    const { resource, issues } = parseResource(json);
+    expect(issues.map((i) => [i.code, i.expression])).toEqual([
+      [ISSUE_CODES.UNKNOWN_PROPERTY, "Patient.name[1]"],
+    ]);
+    expect(serializeResource(resource)).toBe(json);
+  });
+});
+
+describe("readRawJson: the nesting bound", () => {
+  it("refuses a document nested past the bound with MAX_DEPTH_EXCEEDED, not a stack overflow", () => {
+    let thrown: unknown;
+    try {
+      readRawJson(`${"[".repeat(300)}${"]".repeat(300)}`);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(FhirCodecError);
+    expect((thrown as FhirCodecError).code).toBe(FATAL_CODES.MAX_DEPTH_EXCEEDED);
+    expect(() => readRawJson(`${"[".repeat(200)}${"]".repeat(200)}`)).not.toThrow();
   });
 });

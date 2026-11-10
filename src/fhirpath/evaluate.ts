@@ -267,6 +267,7 @@ function childrenOf(item: FpItem): FpItem[] {
       .filter((p) => p.name !== "resourceType")
       .flatMap((p) => wrap(p.value));
   }
+  /* v8 ignore else -- unreachable: wrap() flattens every list, so a node item is complex or primitive */
   if (isPrimitive(item.node)) {
     const id: FpItem[] = item.node.id === undefined ? [] : [{ t: "str", value: item.node.id }];
     const extensions: FpItem[] = (item.node.extension ?? []).map((ext) => ({
@@ -275,6 +276,7 @@ function childrenOf(item: FpItem): FpItem[] {
     }));
     return [...id, ...extensions];
   }
+  /* v8 ignore next -- unreachable, as above */
   return [];
 }
 
@@ -545,6 +547,7 @@ function systemTypeOf(item: FpItem): string | undefined {
   if (item.t === "bool") return "Boolean";
   if (item.t === "str") return "String";
   if (item.t === "num") return Number.isInteger(item.value) ? "Integer" : "Decimal";
+  /* v8 ignore else -- unreachable: callers pass no complex node, and wrap() flattens every list */
   if (isPrimitive(item.node)) {
     const value = item.node.value;
     if (typeof value === "boolean") return "Boolean";
@@ -854,6 +857,7 @@ function applyFunction(
     }
     case "matches":
       return applyMatches(input, args, callFocus, ctx);
+    /* v8 ignore next -- unreachable: the SUBSET_FUNCTIONS check above refuses every other name */
     default:
       throw new UnsupportedFhirPathError(`unsupported function '${name}()'`);
   }
@@ -871,6 +875,7 @@ function applyExtension(
   const url = stringOf(urlColl[0] as FpItem);
   if (url === undefined) throw new UnsupportedFhirPathError("extension(url) needs a string url");
   return navigate(input, "extension").filter((item) => {
+    /* v8 ignore next -- unreachable: navigating `extension` yields only node items */
     const urlNodes = item.t === "node" ? navigateItem(item.node, "url") : [];
     return urlNodes.some((u) => stringOf(u) === url);
   });
@@ -878,6 +883,7 @@ function applyExtension(
 
 /** Negate a three-valued truth (empty stays empty). */
 function negate(value: Trit): Trit {
+  /* v8 ignore next -- unreachable: `not()` returns early on an empty input, the only empty truth */
   return value === null ? null : !value;
 }
 
@@ -910,6 +916,7 @@ function evaluateBinary(
       const eq = equals(left, right);
       if (eq.length === 0) return [];
       const item = eq[0] as FpItem;
+      /* v8 ignore next -- unreachable: equals() yields only a boolean item */
       return [{ t: "bool", value: !(item.t === "bool" ? item.value : true) }];
     }
     case "<":
@@ -923,6 +930,7 @@ function evaluateBinary(
       return membership(left, right);
     case "contains":
       return membership(right, left);
+    /* v8 ignore next -- unreachable: the SUBSET_OPERATORS check above refuses every other operator */
     default:
       throw new UnsupportedFhirPathError(`unsupported operator '${op}'`);
   }

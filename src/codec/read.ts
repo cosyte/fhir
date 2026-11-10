@@ -535,6 +535,7 @@ function buildNode(
       return buildPrimitiveList(valueArr, metaArr, path, issues);
     }
     // valueArr is defined here (a complex array cannot be value-absent).
+    /* v8 ignore next -- the `??` fallback is unreachable: isPrimitiveArray() is true when valueArr is undefined */
     return buildComplexList(valueArr ?? { t: "arr", items: [] }, meta, path, issues);
   }
 

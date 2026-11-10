@@ -442,6 +442,7 @@ export function hasUnreadableCode(node: FhirNode | undefined): boolean {
   // primitive. An empty wrapper holds no position and therefore no content, and says `false`.
   if (isList(node)) return node.items.some((item) => hasUnreadableCode(item));
   if (isPrimitive(node)) return node.value !== undefined && typeof node.value !== "string";
+  /* v8 ignore else -- unreachable today: list, primitive and complex are every model kind */
   if (isComplex(node)) {
     // ANY member outside the set, not "none inside it". The other polarity exempts a shape as soon
     // as it carries one legal member, so `{"id":"s1","value":"not-done"}` and
@@ -464,6 +465,7 @@ export function hasUnreadableCode(node: FhirNode | undefined): boolean {
     return node.properties.length === 0;
   }
   // Any shape the model gains later reports rather than reading as clean.
+  /* v8 ignore next -- unreachable today, kept so a future model kind fails closed */
   return true;
 }
 
@@ -502,6 +504,7 @@ export function hasUnreadableCode(node: FhirNode | undefined): boolean {
  * never affirmed as summarizable over a value this could not read.
  */
 function codingScalar(node: FhirNode | undefined): string | undefined {
+  /* v8 ignore next -- unreachable: every caller passes a member or a one-item list's item */
   if (node === undefined) return undefined;
   if (isList(node)) return node.items.length === 1 ? codingScalar(node.items[0]) : undefined;
   return primitiveString(node);

@@ -89,3 +89,16 @@ describe("matchesPattern: subset match", () => {
     );
   });
 });
+
+describe("matchesFixed: a complex fixed value against a value of another shape", () => {
+  const fixedCoding = complex([
+    { name: "system", value: primitive("http://example.org/cs") },
+    { name: "code", value: primitive("a") },
+  ]);
+
+  it("does not match a primitive or a list standing where the object is fixed", () => {
+    expect(matchesFixed(primitive("a"), fixedCoding)).toBe(false);
+    expect(matchesFixed(list([fixedCoding]), fixedCoding)).toBe(false);
+    expect(matchesFixed(fixedCoding, fixedCoding)).toBe(true);
+  });
+});

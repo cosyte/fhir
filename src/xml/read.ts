@@ -465,6 +465,7 @@ function narrativeSource(element: XmlElement, scope: NamespaceScope): string {
     .filter((prefix) => prefix !== "xml" && scope.has(prefix))
     .sort()
     .map((prefix) => {
+      /* v8 ignore next -- the `?? ""` is unreachable: the filter above keeps only prefixes in scope */
       const uri = escapeNarrativeAttr(scope.get(prefix) ?? "");
       return prefix === "" ? ` xmlns="${uri}"` : ` xmlns:${prefix}="${uri}"`;
     })
@@ -550,6 +551,7 @@ function reportMixedSpelling(
     const occurrences = byName.get(name);
     if (occurrences === undefined || occurrences.length < 2) continue;
     const first = occurrences[0];
+    /* v8 ignore next -- unreachable: a name with two or more occurrences has a first */
     if (first === undefined) continue;
     if (occurrences.some((o) => !sameSpelling(o, first))) {
       issues.push(mixedXmlSpelling(childPath(path, name)));
@@ -593,6 +595,7 @@ function readComplex(
   const { order, byName } = groupChildren(children);
   reportMixedSpelling(order, byName, path, issues);
   for (const name of order) {
+    /* v8 ignore next -- the `?? []` is unreachable: every name in order is a key of byName */
     const occurrences = byName.get(name) ?? [];
     properties.push({
       name,
@@ -690,6 +693,7 @@ function buildNode(
     );
   }
   const only = occurrences[0];
+  /* v8 ignore next -- unreachable: a grouped name always has at least one occurrence */
   if (only === undefined) return list([]); // unreachable: a grouped name always has ≥1 occurrence
   return buildSingle(only, path, issues, parentNamespace);
 }

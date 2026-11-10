@@ -133,6 +133,7 @@ function baseSnapshot(
   resolve: BaseResolver,
   seen: ReadonlySet<string>,
 ): readonly ElementDefinition[] {
+  /* v8 ignore next -- unreachable: generateSnapshot() returns a carried snapshot before calling this */
   if (profile.snapshot !== undefined) return profile.snapshot;
   if (profile.baseDefinition === undefined) {
     // A specialization root with only a differential (no base): its differential is the whole surface.

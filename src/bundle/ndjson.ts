@@ -128,12 +128,14 @@ export function parseNdjsonLine(line: string, lineNumber = 1): NdjsonRecord {
   } catch (err) {
     // A structurally-unreadable object (e.g. a broken `_`-sibling alignment) is a JSON object but not
     // a well-formed resource, isolated to this line, never aborting the stream.
+    /* v8 ignore else -- defensive: parseResource raises only FhirCodecError on an object; anything else is a defect and propagates */
     if (err instanceof FhirCodecError) {
       return {
         line: lineNumber,
         error: ndjsonError(lineNumber, NDJSON_ERROR_CODES.NOT_A_RESOURCE),
       };
     }
+    /* v8 ignore next -- defensive, as above */
     throw err;
   }
   return result.issues.length > 0

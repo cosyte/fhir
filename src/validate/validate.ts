@@ -354,6 +354,7 @@ export function validateResource(
         if (reportedByBase(finding.focus, finding.issue)) continue;
         if (
           finding.issue.code === "INVARIANT_UNCHECKED" &&
+          /* v8 ignore next -- the `?? ""` is unreachable: an invariant issue always names its constraint */
           base.decides(finding.focus, finding.issue.constraint ?? "", finding.expression)
         ) {
           continue;
@@ -379,11 +380,14 @@ function alreadyReported(
   const byFocus = new Map<FhirNode, Set<string>>();
   for (const { focus, issue } of base) {
     const seen = byFocus.get(focus) ?? new Set<string>();
+    /* v8 ignore next -- the `?? ""` is unreachable: a base finding always names its constraint */
     seen.add(`${issue.code} ${issue.constraint ?? ""}`);
     byFocus.set(focus, seen);
   }
-  return (focus, issue) =>
-    byFocus.get(focus)?.has(`${issue.code} ${issue.constraint ?? ""}`) === true;
+  return (focus, issue) => {
+    /* v8 ignore next -- the `?? ""` is unreachable: an invariant issue always names its constraint */
+    return byFocus.get(focus)?.has(`${issue.code} ${issue.constraint ?? ""}`) === true;
+  };
 }
 
 /** Freeze the accumulator into an immutable {@link ValidationResult}. */
