@@ -692,6 +692,10 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
  * model, gathering value-free issues. Throws {@link FhirCodecError} on malformed JSON or broken
  * `_`-sibling alignment.
  *
+ * Strings of 13 or more characters are slices of the input text, so a parsed resource can keep the
+ * parsed text in memory while it lives. Copy what you keep (for example with `structuredClone` or a
+ * JSON round trip of the resource) or let the parsed result go.
+ *
  * @param input - JSON text, or a {@link RawJson} tree from {@link readRawJson}.
  * @throws FhirCodecError (`MALFORMED_JSON`) when the input is not a JSON object.
  * @throws FhirCodecError (`MAX_DEPTH_EXCEEDED`) when text input nests past the reader's depth bound.
