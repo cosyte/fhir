@@ -779,8 +779,10 @@ export function modifierLocationRebaser(
   if (declared === undefined) return (location) => location;
   const root = MODIFIER_ELEMENT_ROOT_TYPES.has(declared) ? rootPath(declared) : WITHHELD;
   if (root === prefix) return (location) => location;
-  return (location) =>
-    location.startsWith(prefix) ? `${root}${location.slice(prefix.length)}` : location;
+  return (location) => {
+    /* v8 ignore next -- the fallback is unreachable: every location the walk builds starts at the prefix */
+    return location.startsWith(prefix) ? `${root}${location.slice(prefix.length)}` : location;
+  };
 }
 
 /**

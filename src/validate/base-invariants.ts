@@ -198,6 +198,7 @@ const CONTAINED_SELECTION = compile("contained");
  * `unchecked`, never `satisfied`, exactly as {@link ../fhirpath/index.js evaluateInvariant} decides.
  */
 function outcomeOf(ast: Expr | undefined, focus: FhirNode, resource: FhirComplex): Outcome {
+  /* v8 ignore next -- unreachable today: every table expression but dom-3 parses, and dom-3 is decided apart */
   if (ast === undefined) return "unchecked";
   try {
     const at: FpColl = [{ t: "node", node: focus }];
@@ -205,6 +206,7 @@ function outcomeOf(ast: Expr | undefined, focus: FhirNode, resource: FhirComplex
       ? "satisfied"
       : "violated";
   } catch {
+    /* v8 ignore next -- defensive: no table expression refuses at evaluation today */
     return "unchecked";
   }
 }
@@ -216,12 +218,14 @@ function outcomeOf(ast: Expr | undefined, focus: FhirNode, resource: FhirComplex
  * reaches the criteria, which are outside the subset, so the outcome is `unchecked`.
  */
 function decideDom3(resource: FhirComplex): Outcome {
+  /* v8 ignore next -- unreachable: the constant expression `contained` always parses */
   if (CONTAINED_SELECTION === undefined) return "unchecked";
   try {
     const at: FpColl = [{ t: "node", node: resource }];
     const selected = evaluate(CONTAINED_SELECTION, at, { resource, context: at });
     return selected.length === 0 ? "satisfied" : "unchecked";
   } catch {
+    /* v8 ignore next -- defensive: navigating `contained` never refuses */
     return "unchecked";
   }
 }
@@ -294,11 +298,13 @@ function walkElements(
     visit(node, occurrence.path, extension, typedElement);
     if (isComplex(node)) {
       walkChildren(node, occurrence.path, extension, visit);
-    } else if (!isList(node)) {
-      (node.extension ?? []).forEach((ext, i) => {
-        walkElements(ext, `${occurrence.path}.extension[${String(i)}]`, true, true, visit);
-      });
+      continue;
     }
+    /* v8 ignore next -- unreachable: occurrencesOf() flattens every list */
+    if (isList(node)) continue;
+    (node.extension ?? []).forEach((ext, i) => {
+      walkElements(ext, `${occurrence.path}.extension[${String(i)}]`, true, true, visit);
+    });
   }
 }
 

@@ -149,6 +149,7 @@ function collectSlicingIssues(
   issues: ValidationIssue[],
 ): void {
   const slices = resolveSlices(snapshot, slicedElement);
+  /* v8 ignore next -- the `?? []` is unreachable: called only for an element that declares slicing */
   const discriminators = slicedElement.slicing?.discriminator ?? [];
   const result = matchSlices(occ, slices, discriminators);
 
@@ -159,6 +160,7 @@ function collectSlicingIssues(
     return;
   }
 
+  /* v8 ignore next -- the `?? "open"` is unreachable: called only for an element that declares slicing */
   const rules = slicedElement.slicing?.rules ?? "open";
   if (rules === "closed") {
     result.assignments.forEach((sliceName, i) => {

@@ -108,6 +108,7 @@ export class SliceScope {
    */
   parentGroups(el: ElementDefinition): ParentGroup[] {
     const names = el.path.split(".");
+    /* v8 ignore next -- the `?? ""` is unreachable: split() always yields a last segment */
     const leaf = names[names.length - 1] ?? "";
     return this.#walk(el, names.length - 1).map((parent) => ({
       path: parent.path,
@@ -121,6 +122,7 @@ export class SliceScope {
    */
   occurrences(el: ElementDefinition): ScopedNode[] {
     const names = el.path.split(".");
+    /* v8 ignore next -- the `?? ""` is unreachable: split() always yields a last segment */
     const leaf = names[names.length - 1] ?? "";
     if (names.length === 1) return [{ node: this.#resource, path: this.#root }];
     return this.#walk(el, names.length - 1).flatMap((parent) => {
@@ -135,6 +137,7 @@ export class SliceScope {
     const steps = idSteps(el);
     let contexts: ScopedNode[] = [{ node: this.#resource, path: this.#root }];
     for (let k = 1; k < depth; k += 1) {
+      /* v8 ignore next -- the `?? ""` is unreachable: k stays below the path's segment count */
       const name = names[k] ?? "";
       const step = steps?.[k];
       const next: ScopedNode[] = [];

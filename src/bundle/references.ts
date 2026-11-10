@@ -174,6 +174,7 @@ export function resolveReference(
 
   if (parsed.kind === "fragment") {
     if (contained === undefined) return { status: "unresolved" };
+    /* v8 ignore next -- the `?? ""` is unreachable: parseReference always sets a fragment's id */
     const anchor = parsed.id ?? "";
     // A bare `#` targets the containing resource itself; `#id` targets a contained resource.
     if (anchor === "") return { status: "resolved", target: contained.root };
@@ -186,6 +187,7 @@ export function resolveReference(
     // Key on the parsed Type/id (dropping any `/_history/{vid}` suffix) so a versioned relative
     // reference `Patient/1/_history/2` still resolves against the `Patient/1` entry, the index is
     // keyed version-free, exactly as the absolute branch below.
+    /* v8 ignore next -- the fallback is unreachable: parseReference sets type and id on every relative form */
     const key =
       parsed.type !== undefined && parsed.id !== undefined
         ? `${parsed.type}/${parsed.id}`
@@ -250,6 +252,7 @@ function walkFragments(node: FhirNode, skipContained: boolean, out: string[]): v
   const ref = stringOf(getProperty(node, "reference"));
   if (ref !== undefined) {
     const parsed = parseReference(ref);
+    /* v8 ignore next -- the `?? ""` is unreachable: parseReference always sets a fragment's id */
     if (parsed.kind === "fragment") out.push(parsed.id ?? "");
   }
   for (const property of node.properties) {
@@ -306,7 +309,9 @@ export function hasContainedCycle(resource: FhirComplex): boolean {
     while (stack.length > 0) {
       if (stack.length > MAX_REFERENCE_DEPTH) return true; // pathologically deep, treat as a cycle
       const frame = stack[stack.length - 1];
+      /* v8 ignore next -- unreachable: the stack is non-empty here */
       if (frame === undefined) break;
+      /* v8 ignore next -- the `?? []` is unreachable: the stack holds only ids the graph keys */
       const edges = graph.get(frame.node) ?? [];
       if (frame.edge >= edges.length) {
         color.set(frame.node, BLACK);

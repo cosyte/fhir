@@ -121,6 +121,7 @@ class PatternCheck {
 
   private atom(): Shape {
     const c = this.peek();
+    /* v8 ignore next -- unreachable: sequence() calls atom() only on a character; kept for narrowing */
     if (c === undefined) refuse();
     if (c === "(") {
       this.pos += 1;

@@ -56,6 +56,7 @@ function unwrapSingleton(node: FhirNode): FhirNode {
   let current = node;
   while (current.kind === "list" && current.items.length === 1) {
     const only = current.items[0];
+    /* v8 ignore next -- unreachable: the loop runs only on a one-item list */
     if (only === undefined) break; // unreachable (length === 1)
     current = only;
   }

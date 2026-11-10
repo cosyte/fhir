@@ -344,6 +344,7 @@ export function markNestedArray(
   // `undefined`: the model satisfies `exactOptionalPropertyTypes` and a node that preserved nothing
   // stays structurally equal to one built without the argument.
   if (node.kind === "complex") {
+    /* v8 ignore next -- unreachable: the reader always hands a complex node its value text */
     if (sources.value === undefined) return { ...node, nestedArray: true };
     return { ...node, nestedArray: true, nestedArraySource: sources.value };
   }

@@ -51,6 +51,7 @@ function matchResourcePath(
   const match = RELATIVE.exec(path);
   if (match === null) return undefined;
   const [, type, id, version] = match;
+  /* v8 ignore next -- unreachable: both groups are mandatory in the pattern, kept for narrowing */
   if (type === undefined || id === undefined) return undefined;
   return version === undefined ? { type, id } : { type, id, version };
 }

@@ -100,6 +100,7 @@ export function readMedicationDoses(resource: FhirComplex, rt: string | undefine
   const doses: Quantity[] = [];
   for (const { node } of locateDoseQuantities(resource, rt)) {
     const q = readQuantity(node);
+    /* v8 ignore else -- unreachable: locateDoseQuantities() yields only complex nodes, which always read */
     if (q !== undefined) doses.push(q);
   }
   return doses;
