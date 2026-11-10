@@ -28,7 +28,7 @@ permissions:
 jobs:
   reading:
     runs-on: ubuntu-latest
-    # A full reading took about 12 minutes on a developer machine; the bound is for a case that hangs.
+    # A full reading took about 7 minutes on a developer machine; the bound is for a case that hangs.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
