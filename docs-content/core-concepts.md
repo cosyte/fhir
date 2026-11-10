@@ -1,7 +1,7 @@
 ---
 id: core-concepts
 title: Core concepts
-sidebar_position: 4
+sidebar_label: Core concepts
 description: The schema-free model, exact decimals and 64-bit integers, the JSON and XML codecs, the validation layers, and value-free diagnostics.
 ---
 
@@ -23,7 +23,7 @@ a deliberate trade. A schema-free read cannot silently drop the element it has n
 is the failure mode that matters when the sender is a production system you do not control. What you
 give up is the compile-time shape of a typed model, and small helpers earn most of it back:
 
-```ts
+```ts runnable
 import { getProperty, isPrimitive, parseResource, resourceType } from "@cosyte/fhir";
 
 const { resource } = parseResource('{"resourceType":"Observation","status":"final"}');
@@ -54,7 +54,7 @@ patient.
 So the codec never converts. A magnitude is carried as the text the sender wrote, and it round-trips
 byte for byte:
 
-```ts
+```ts runnable
 import { parseResource, serializeResource } from "@cosyte/fhir";
 
 const source = '{"resourceType":"Observation","status":"final","valueQuantity":{"value":0.010}}';
@@ -76,7 +76,7 @@ The JSON codec is `parseResource` and `serializeResource`. The XML codec is `par
 `serializeResourceXml`. Both produce the same model, so a consumer written against one wire format
 already works with the other:
 
-```ts
+```ts runnable
 import { nodesEquivalent, parseResource, parseResourceXml } from "@cosyte/fhir";
 
 const fromJson = parseResource('{"resourceType":"Observation","status":"final"}').resource;
@@ -105,7 +105,7 @@ Together those close external entity expansion and billion-laughs expansion by c
 is no option to relax them, because an option is what turns a hardened parser into an exploitable
 one on somebody else's deployment:
 
-```ts
+```ts runnable
 import { FhirXmlError, XML_FATAL_CODES, parseResourceXml } from "@cosyte/fhir";
 
 const read = (input: string): string => {
@@ -156,7 +156,7 @@ worse. Warnings and informational findings leave it true.
 Every finding this library raises carries a coded reason and a FHIRPath location, and never the
 value it was raised over:
 
-```ts
+```ts runnable
 import { parseResource, validateResource } from "@cosyte/fhir";
 
 const { resource } = parseResource(
@@ -178,7 +178,7 @@ patient data into every one of them.
 `toOperationOutcome` renders the same findings as an `OperationOutcome` resource, which is the shape
 a FHIR server expects to receive:
 
-```ts
+```ts runnable
 import { parseResource, serializeResource, validateResource } from "@cosyte/fhir";
 
 const { resource } = parseResource('{"resourceType":"Observation","status":"final"}');
@@ -190,3 +190,14 @@ serializeResource(outcome).includes("OperationOutcome"); // => true
 One qualification, stated because the opposite is easy to assume: a location is bounded to the
 published form of a FHIR name, not guaranteed to be free of anything a sender wrote. A name that
 does not match that form is replaced by a withheld marker rather than echoed.
+
+## Put it to use
+
+- [Accept JSON and XML without writing the code twice](./accept-json-and-xml.md) uses the two
+  codecs and the one model.
+- [Read measured values](./read-measured-values.md) reads the exact decimals off a quantity.
+- [Keep what you cannot interpret](./preserve-unknown-content.md) relies on the lenient read and the
+  conservative write.
+- [Decide whether a resource is safe to summarize](./check-safety-before-summarizing.md) and
+  [Validate against your own profiles](./validate-against-profiles.md) put the validation layers to
+  work.

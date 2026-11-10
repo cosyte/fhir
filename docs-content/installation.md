@@ -1,7 +1,7 @@
 ---
 id: installation
 title: Installation
-sidebar_position: 2
+sidebar_label: Installation
 description: Install @cosyte/fhir from npm, with its Node.js and TypeScript requirements and its ESM and CommonJS entry points.
 ---
 
@@ -52,14 +52,14 @@ the repository tracks source, not build output.
 The package is **ESM** first. Its `package.json` declares `"type": "module"`, and the ESM build is
 what the `import` condition of its `exports` map resolves to:
 
-```ts
+```ts runnable
 import { parseResource } from "@cosyte/fhir";
 ```
 
 A **CommonJS** build is published beside it, reached through the `require` condition of the same
 `exports` map:
 
-```js
+```js no-run the samples run as ES modules where require is not defined
 const { parseResource } = require("@cosyte/fhir");
 ```
 
@@ -71,7 +71,7 @@ project on either module system gets the same editor completions.
 The `exports` map offers exactly two paths: the package itself, and its `package.json`. There is no
 supported deep import, so everything in this documentation is reached from a single specifier:
 
-```ts
+```ts runnable
 import { parseResource, readSafety, validateResource } from "@cosyte/fhir";
 ```
 
@@ -81,7 +81,7 @@ Reaching past that specifier into a build path is unsupported and will break wit
 
 Put this in a file and run it. It reads a minimal resource and asserts nothing went wrong:
 
-```ts
+```ts runnable
 import { VERSION, parseResource } from "@cosyte/fhir";
 
 typeof VERSION; // => "string"
@@ -91,5 +91,5 @@ read.resource.kind; // => "complex"
 read.issues; // => []
 ```
 
-If that runs clean, go to the [quickstart](./quickstart.md), which takes a real resource from an
+If that runs clean, go to the [quickstart](./quickstart.md), which takes a resource from an
 unparsed document to a validation verdict.
