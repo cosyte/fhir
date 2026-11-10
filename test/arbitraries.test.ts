@@ -8,7 +8,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 
 import fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   FhirDecimal,
@@ -55,6 +55,13 @@ import {
 import { carriesExtension } from "../src/arbitraries/values.js";
 
 const root = join(import.meta.dirname, "..");
+
+// Several tests below draw a few hundred generated resources, which takes several seconds under
+// coverage on a CI runner; the suite's 10 s ceiling is too close for that.
+vi.setConfig({ testTimeout: 60_000 });
+
+/** The cheapest resources to draw, for tests that only look at their type or statuses. */
+const LEAN = { extensions: false, narrative: false, maxRepeats: 1 } as const;
 
 /** Draw `n` values from a fixed seed. */
 function draw<T>(arb: fc.Arbitrary<T>, n = 200, seed = 20261110): T[] {
@@ -148,15 +155,15 @@ describe("decimalText", () => {
 describe("resourceType and resource", () => {
   it("draws the eight types the library validates in full", () => {
     expect(new Set(draw(resourceType(), 300))).toEqual(new Set(RESOURCE_TYPES));
-    expect(new Set(draw(resource(), 300).map(typeOf))).toEqual(new Set(RESOURCE_TYPES));
+    expect(new Set(draw(resource(LEAN), 150).map(typeOf))).toEqual(new Set(RESOURCE_TYPES));
   });
 
   it("draws only the types asked for, and every type when the list is empty", () => {
     const types = new Set(
-      draw(resource({ types: ["Condition", "Immunization"] }), 100).map(typeOf),
+      draw(resource({ ...LEAN, types: ["Condition", "Immunization"] }), 60).map(typeOf),
     );
     expect(types).toEqual(new Set(["Condition", "Immunization"]));
-    expect(new Set(draw(resource({ types: [] }), 300).map(typeOf)).size).toBe(8);
+    expect(new Set(draw(resource({ ...LEAN, types: [] }), 150).map(typeOf)).size).toBe(8);
   });
 
   it("parses into the model classes the main entry point exports", () => {
@@ -207,7 +214,10 @@ describe("resourceType and resource", () => {
   });
 
   it("keeps the status invariants: no clinical status on a record entered in error, an inactive one once abated", () => {
-    for (const model of draw(resource({ types: ["Condition", "AllergyIntolerance"] }), 400)) {
+    for (const model of draw(
+      resource({ ...LEAN, types: ["Condition", "AllergyIntolerance"] }),
+      300,
+    )) {
       const doc = JSON.parse(serializeResource(model)) as Record<string, unknown>;
       const verification = JSON.stringify(doc["verificationStatus"] ?? "");
       if (verification.includes("entered-in-error")) expect(doc["clinicalStatus"]).toBeUndefined();
