@@ -16,10 +16,14 @@
  * in code by `bench/shapes.mjs`, the same code the benchmarks use.
  *
  * The read of one very long string has a gate of its own: a DiagnosticReport whose base64 PDF is 4
- * times as long on the size axis, 64 reports of a 64 KiB PDF on the count axis. The reader once
+ * times as long on the size axis, 256 reports of a 64 KiB PDF on the count axis. The reader once
  * built a string a character at a time, and 4 times the payload took about 9 times as long. Its
  * self-check scans the text back to its start once for every 4 KiB of it, which is quadratic in the
  * payload's length.
+ *
+ * Every base phase must take 8 ms or more, twice the shared floor, so a fixture that a fast runner
+ * would read under the floor fails here rather than skipping; each gate prints its ratios and both
+ * phase times on a pass as well as a failure.
  */
 
 import {
@@ -46,9 +50,10 @@ import { KIB, observation, reportWithAttachment, transactionBundle } from "../..
 /**
  * Observations on the count axis for the read and the write: enough that each base phase is well
  * above the 4 ms floor on a GitHub-hosted runner. At 250, the read's base phase there was 3.9 ms
- * and the gate skipped.
+ * and the gate skipped; at 1,000 it was 7.6 to 15.3 ms across runners, under the 8 ms this file
+ * asserts on the fastest.
  */
-const COUNT = 1_000;
+const COUNT = 2_000;
 /**
  * Observations on the count axis for the validator. It once cost several times what the read does
  * and 250 were enough; it now costs about what the read does, and at 250 its base phase fell under
@@ -67,6 +72,11 @@ const ENTRIES = 500;
 const READ_ENTRIES = 1_000;
 /** Bundles in each size-axis phase. */
 const BUNDLES = 2;
+/**
+ * Bundles in each phase of the write's size axis. At 2 its base phase was 8.6 to 18.7 ms across
+ * runners, too near the 8 ms this file asserts; the entries per Bundle, which set the ratio, stay.
+ */
+const SERIALIZE_BUNDLES = 4;
 
 /**
  * The same read, reached the wrong way: each line of the text (one Bundle entry a line) is found by
@@ -118,15 +128,19 @@ function resolveEachEntryQuadratically(bundle: FhirComplex): void {
   }
 }
 
-/** Reports on the long-string count axis, each with a 64 KiB PDF. */
-const REPORTS = 64;
+/**
+ * Reports on the long-string count axis, each with a 64 KiB PDF. At 64 the base phase was 3.2 to
+ * 7.3 ms across runners and skipped under the 4 ms floor on the fastest.
+ */
+const REPORTS = 256;
 /** The PDF's length in the long-string size axis's base phase; the scaled phase's is 4 times it. */
 const PDF_BYTES = 256 * KIB;
 /**
  * Reports in each phase of the long-string size axis. At 8 the base phase fell to 3.99 ms, under
- * the 4 ms floor, once the reader crossed a long run with one search.
+ * the 4 ms floor, once the reader crossed a long run with one search; at 16 it was 3.0 to 7.1 ms
+ * across runners. The PDF's length, which sets the ratio, stays.
  */
-const PDF_REPORTS = 16;
+const PDF_REPORTS = 64;
 /** How far apart the regressed read starts each scan of the text. */
 const SCAN_STEP = 4 * KIB;
 
@@ -190,8 +204,15 @@ const serializeOptions: ScalingGateOptions<FhirComplex, string> = {
   parse: (model) => serializeResource(model),
   weigh: (text) => text.length,
   count: { n: COUNT, generate: observationModel },
-  size: { inputs: BUNDLES, size: ENTRIES, generate: bundleModel },
+  size: { inputs: SERIALIZE_BUNDLES, size: ENTRIES, generate: bundleModel },
 };
+
+/**
+ * The least a base phase may take here, well above the shared 4 ms floor: a fixture whose base phase
+ * reads under it on a fast runner is one runner away from skipping, so it fails here instead, and the
+ * fixture is grown. Each fixture above is sized for 10 ms or more on a GitHub-hosted runner.
+ */
+const LEAST_BASE_PHASE_MS = 8;
 
 /** A skip is not a pass: a gate that could not measure says so here, rather than reading green. */
 function expectMeasured(report: ReturnType<typeof scalingGate>): void {
@@ -199,8 +220,17 @@ function expectMeasured(report: ReturnType<typeof scalingGate>): void {
   // leaves its reading in the log.
   process.stderr.write(`${report.count.diagnostic}\n`);
   process.stderr.write(`${report.size.diagnostic}\n`);
-  expect(report.count.status, report.count.diagnostic).toBe("measured");
-  expect(report.size.status, report.size.diagnostic).toBe("measured");
+  for (const axis of [report.count, report.size]) {
+    expect(axis.status, axis.diagnostic).toBe("measured");
+    if (axis.status !== "measured") continue;
+    process.stderr.write(
+      `${report.name}, ${axis.axis} axis: ratio ${axis.ratio.toFixed(3)}, base ${axis.base.min.toFixed(2)} ms, scaled ${axis.scaled.min.toFixed(2)} ms\n`,
+    );
+    expect(
+      axis.base.min,
+      `${report.name}, ${axis.axis} axis: base phase ${axis.base.min.toFixed(2)} ms, under ${String(LEAST_BASE_PHASE_MS)} ms`,
+    ).toBeGreaterThanOrEqual(LEAST_BASE_PHASE_MS);
+  }
 }
 
 describe("the scaling gate: parseResource", () => {
