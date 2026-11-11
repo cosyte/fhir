@@ -4,7 +4,7 @@
 // Four budgets, each a proposal until a package's numbers show it can be held:
 // - peak heap under 20 times the input for a dense shape (a resource or a Bundle of many elements);
 // - peak heap under 3 times the input for a large opaque payload (the base64 PDF report and Binary);
-// - a cold import under 15 ms;
+// - a cold import under 10 ms, the budget `pnpm check:cold-import` holds in CI;
 // - throughput, in bytes a second, not falling by more than half from a shape's smallest size to its
 //   largest.
 // It prints a Markdown table and always exits 0 when it could read the reading: the budgets are
@@ -16,7 +16,7 @@ import { readResults } from "@cosyte/bench";
 
 const DENSE_PEAK_MULTIPLE = 20;
 const OPAQUE_PEAK_MULTIPLE = 3;
-const COLD_IMPORT_MS = 15;
+const COLD_IMPORT_MS = 10;
 const THROUGHPUT_KEPT = 0.5;
 
 /** The shape a benchmark measures: the text after the operation's name. */
