@@ -137,13 +137,13 @@ For an Observation's value, a dose or a reference range, the readers in
 
 ## Reference
 
-- [`parseResource`](./api/README.md#parseresource),
-  [`validateResource`](./api/README.md#validateresource) and
-  [`resourceType`](./api/README.md#resourcetype).
-- [`serializeResource`](./api/README.md#serializeresource) and
-  [`FhirSerializeError`](./api/README.md#fhirserializeerror).
-- [`getProperty`](./api/README.md#getproperty), [`isList`](./api/README.md#islist),
-  [`isComplex`](./api/README.md#iscomplex) and [`isPrimitive`](./api/README.md#isprimitive).
-- [`FhirDecimal`](./api/README.md#fhirdecimal).
+- [`parseResource`](./api/@cosyte/fhir.md#parseresource),
+  [`validateResource`](./api/@cosyte/fhir.md#validateresource) and
+  [`resourceType`](./api/@cosyte/fhir.md#resourcetype).
+- [`serializeResource`](./api/@cosyte/fhir.md#serializeresource) and
+  [`FhirSerializeError`](./api/@cosyte/fhir.md#fhirserializeerror).
+- [`getProperty`](./api/@cosyte/fhir.md#getproperty), [`isList`](./api/@cosyte/fhir.md#islist),
+  [`isComplex`](./api/@cosyte/fhir.md#iscomplex) and [`isPrimitive`](./api/@cosyte/fhir.md#isprimitive).
+- [`FhirDecimal`](./api/@cosyte/fhir.md#fhirdecimal).
 - [Core concepts](./core-concepts.md#numbers-stay-exactly-as-they-were-written) explains why a
   decimal is never a JavaScript number in the model.

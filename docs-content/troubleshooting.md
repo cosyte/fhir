@@ -15,12 +15,12 @@ A fatal read is thrown as a typed error carrying a code. A non-fatal finding is 
 the read result or in the validation findings, and is never thrown.
 
 Each code below is listed, with what it means, in the API reference:
-[`FATAL_CODES`](./api/README.md#fatal_codes) for the JSON reader's refusals,
-[`XML_FATAL_CODES`](./api/README.md#xml_fatal_codes) for the XML reader's,
-[`ISSUE_CODES`](./api/README.md#issue_codes) for the findings a read returns,
-[`VALIDATION_CODES`](./api/README.md#validation_codes) for the findings validation returns,
-[`SERIALIZE_ERROR_CODES`](./api/README.md#serialize_error_codes) for a refused write, and
-[`NDJSON_ERROR_CODES`](./api/README.md#ndjson_error_codes) for a line of an NDJSON export that did not
+[`FATAL_CODES`](./api/@cosyte/fhir.md#fatal_codes) for the JSON reader's refusals,
+[`XML_FATAL_CODES`](./api/@cosyte/fhir.md#xml_fatal_codes) for the XML reader's,
+[`ISSUE_CODES`](./api/@cosyte/fhir.md#issue_codes) for the findings a read returns,
+[`VALIDATION_CODES`](./api/@cosyte/fhir.md#validation_codes) for the findings validation returns,
+[`SERIALIZE_ERROR_CODES`](./api/@cosyte/fhir.md#serialize_error_codes) for a refused write, and
+[`NDJSON_ERROR_CODES`](./api/@cosyte/fhir.md#ndjson_error_codes) for a line of an NDJSON export that did not
 read.
 
 ## The XML reader refuses a document carrying a DOCTYPE

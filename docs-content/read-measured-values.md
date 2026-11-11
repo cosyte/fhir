@@ -127,16 +127,16 @@ outcome.issues.map((issue) => [issue.code, issue.expression]); // => [["VITAL_SI
 
 ## Reference
 
-- [`readObservationValue`](./api/README.md#readobservationvalue) and
-  [`ObservationValue`](./api/README.md#observationvalue).
-- [`readQuantity`](./api/README.md#readquantity), which reads any `Quantity` node, and the
-  [`Quantity`](./api/README.md#quantity-1) reading every reader here returns.
-- [`FhirDecimal`](./api/README.md#fhirdecimal) and [`decimal`](./api/README.md#decimal).
-- [`readMedicationDoses`](./api/README.md#readmedicationdoses),
-  [`readReferenceRanges`](./api/README.md#readreferenceranges) and
-  [`readInterpretations`](./api/README.md#readinterpretations).
-- [`requiredVitalSignUnits`](./api/README.md#requiredvitalsignunits),
-  [`VITAL_SIGN_UNITS`](./api/README.md#vital_sign_units) and
-  [`validateUcumShape`](./api/README.md#validateucumshape).
+- [`readObservationValue`](./api/@cosyte/fhir.md#readobservationvalue) and
+  [`ObservationValue`](./api/@cosyte/fhir.md#observationvalue).
+- [`readQuantity`](./api/@cosyte/fhir.md#readquantity), which reads any `Quantity` node, and the
+  [`Quantity`](./api/@cosyte/fhir.md#quantity-1) reading every reader here returns.
+- [`FhirDecimal`](./api/@cosyte/fhir.md#fhirdecimal) and [`decimal`](./api/@cosyte/fhir.md#decimal).
+- [`readMedicationDoses`](./api/@cosyte/fhir.md#readmedicationdoses),
+  [`readReferenceRanges`](./api/@cosyte/fhir.md#readreferenceranges) and
+  [`readInterpretations`](./api/@cosyte/fhir.md#readinterpretations).
+- [`requiredVitalSignUnits`](./api/@cosyte/fhir.md#requiredvitalsignunits),
+  [`VITAL_SIGN_UNITS`](./api/@cosyte/fhir.md#vital_sign_units) and
+  [`validateUcumShape`](./api/@cosyte/fhir.md#validateucumshape).
 - [Core concepts](./core-concepts.md#numbers-stay-exactly-as-they-were-written) explains why a
   magnitude is never a JavaScript number.

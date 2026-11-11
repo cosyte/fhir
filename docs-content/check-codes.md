@@ -77,12 +77,12 @@ recorded as undeclared.
 
 ## Reference
 
-- [`isKnownSystem`](./api/README.md#isknownsystem), [`KNOWN_SYSTEMS`](./api/README.md#known_systems)
-  and the system constants such as [`LOINC_SYSTEM`](./api/README.md#loinc_system).
-- [`TerminologyService`](./api/README.md#terminologyservice), the interface a service of your own
-  implements, passed as `terminology` in [`ValidateOptions`](./api/README.md#validateoptions), and
-  the [`CodeValidationResult`](./api/README.md#codevalidationresult) it returns.
-- [`TERMINOLOGY_BINDINGS`](./api/README.md#terminology_bindings), the bindings the validator checks
+- [`isKnownSystem`](./api/@cosyte/fhir.md#isknownsystem), [`KNOWN_SYSTEMS`](./api/@cosyte/fhir.md#known_systems)
+  and the system constants such as [`LOINC_SYSTEM`](./api/@cosyte/fhir.md#loinc_system).
+- [`TerminologyService`](./api/@cosyte/fhir.md#terminologyservice), the interface a service of your own
+  implements, passed as `terminology` in [`ValidateOptions`](./api/@cosyte/fhir.md#validateoptions), and
+  the [`CodeValidationResult`](./api/@cosyte/fhir.md#codevalidationresult) it returns.
+- [`TERMINOLOGY_BINDINGS`](./api/@cosyte/fhir.md#terminology_bindings), the bindings the validator checks
   without being told, and `bindings` in `ValidateOptions` to add your own.
 - [Current limits](./limits.md#no-terminology-content-is-bundled) explains why no terminology
   content ships with the package.

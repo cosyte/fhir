@@ -101,12 +101,12 @@ resolveReference("#p2", { contained }).status; // => "unresolved"
 
 ## Reference
 
-- [`readBundle`](./api/README.md#readbundle), [`BundleReadout`](./api/README.md#bundlereadout) and
-  [`BundleEntry`](./api/README.md#bundleentry).
-- [`buildBundleIndex`](./api/README.md#buildbundleindex),
-  [`containedIndex`](./api/README.md#containedindex) and
-  [`resolveReference`](./api/README.md#resolvereference), which returns a
-  [`ReferenceResolution`](./api/README.md#referenceresolution).
-- [`parseReference`](./api/README.md#parsereference), to split a reference string into its parts.
+- [`readBundle`](./api/@cosyte/fhir.md#readbundle), [`BundleReadout`](./api/@cosyte/fhir.md#bundlereadout) and
+  [`BundleEntry`](./api/@cosyte/fhir.md#bundleentry).
+- [`buildBundleIndex`](./api/@cosyte/fhir.md#buildbundleindex),
+  [`containedIndex`](./api/@cosyte/fhir.md#containedindex) and
+  [`resolveReference`](./api/@cosyte/fhir.md#resolvereference), which returns a
+  [`ReferenceResolution`](./api/@cosyte/fhir.md#referenceresolution).
+- [`parseReference`](./api/@cosyte/fhir.md#parsereference), to split a reference string into its parts.
 - [Stream a Bulk Data export](./stream-ndjson-exports.md) for NDJSON, the other way FHIR moves many
   resources at once.

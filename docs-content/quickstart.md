@@ -134,6 +134,6 @@ and each `// =>` line is checked, so a sample cannot drift from the code.
 - [Current limits](./limits.md) for what the package deliberately does not do.
 - [Troubleshooting](./troubleshooting.md) when a document is refused or read in a degraded way.
 - The [API reference](./api/README.md) for every export, starting at
-  [`parseResource`](./api/README.md#parseresource),
-  [`readObservationValue`](./api/README.md#readobservationvalue) and
-  [`validateResource`](./api/README.md#validateresource).
+  [`parseResource`](./api/@cosyte/fhir.md#parseresource),
+  [`readObservationValue`](./api/@cosyte/fhir.md#readobservationvalue) and
+  [`validateResource`](./api/@cosyte/fhir.md#validateresource).
