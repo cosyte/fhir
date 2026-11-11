@@ -54,7 +54,7 @@ describe("serializeResource on long values", () => {
     const long = payload(5000, 7);
     const text = JSON.stringify({
       resourceType: "Patient",
-      name: [{ given: [long, "Ann", long] }],
+      name: [{ given: [long, "SYNTHGIVEN", long] }],
       extension: [{ url: "http://example.org/fhir/x", valueString: long }],
     });
     expect(serializeResource(parseResource(text).resource)).toBe(text);
