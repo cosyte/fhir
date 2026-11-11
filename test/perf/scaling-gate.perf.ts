@@ -68,19 +68,19 @@ const ENTRIES = 500;
  * The read's cost per entry steps up once, where the tree one read keeps alive (its raw JSON tree
  * and the model built from it, about 15 KiB an entry on a developer machine) outgrows the young
  * generation: below that, a scavenge finds most of what it scans already dead; above it, nearly all
- * of it alive, so it copies it out and promotes it. `bench/scaling-trace.mjs` traces it. On two
- * GitHub-hosted runner reads (Node.js 22), the scavenge time per entry rose 7 to 8 times between
- * 1,000 and 2,000 entries a Bundle and at most 1.3 times more from there to 16,000. The time
- * outside collection rose too, by 11% on one read and 21% on the other across that step, and by at
- * most 7% from 2,000 to 16,000. Neither read showed a cost growing with the square of the size.
+ * of it alive, so it copies it out and promotes it. `bench/scaling-trace.mjs` traces it. On three
+ * GitHub-hosted runner reads (Node.js 22), the scavenge time per entry rose 6 to 8 times between
+ * 1,000 and 2,000 entries a Bundle and at most 1.4 times more from there to 16,000. The time
+ * outside collection rose too, by 7% to 21% across that step, and by at most 7% from 2,000 to
+ * 16,000. No read showed a cost growing with the square of the size.
  *
  * A phase on each side of the step reads the step as growth. At 500 against 2,000 the gate read 9.1
  * to 12.0; at 1,000 against 4,000 it read 5.2 to 6.6 and once 8.03. Traced, the base phase's two
  * scavenges found little alive and cost 2 to 4 ms, while the scaled phase's dozen copied nearly
- * everything and cost 68 to 94 ms of its 160 to 195. The two runner reads put that fixture at 6.53
- * to 7.72, and at 3.94 to 4.87 with collection taken out. 4,000 against 16,000 puts both phases
- * past the step, so each pays its share of collection: the same reads put it at 4.11 to 4.27, and
- * at 4.01 to 4.11 with collection taken out.
+ * everything and cost 68 to 94 ms of its 160 to 195. The three runner reads put that fixture at
+ * 6.36 to 7.72, and at 3.94 to 4.87 with collection taken out. 4,000 against 16,000 puts both
+ * phases past the step, so each pays its share of collection: the same reads put it at 4.11 to
+ * 4.27, and at 4.01 to 4.11 with collection taken out.
  */
 const READ_ENTRIES = 4_000;
 /**
