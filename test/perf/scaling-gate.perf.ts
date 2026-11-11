@@ -68,15 +68,18 @@ const ENTRIES = 500;
  * The read's cost per entry steps up once, where the tree one read keeps alive (its raw JSON tree
  * and the model built from it, about 15 KiB an entry) outgrows the young generation: below that, a
  * scavenge finds most of what it scans already dead; above it, nearly all of it alive, so it copies
- * it out and promotes it. `bench/scaling-trace.mjs` traces it: the time outside collection is flat
- * per entry at every size, and the scavenge time per entry rises about 7 times between 2,000 and
- * 4,000 entries a Bundle and stays flat from there to 16,000. It is a step, not a growth: past it
- * the read is linear again.
+ * it out and promotes it. `bench/scaling-trace.mjs` traces it. On a GitHub-hosted runner (Node.js
+ * 22) the time outside collection was 11.1 to 13.0 us an entry at every size from 250 entries to
+ * 16,000, while the scavenge time per entry rose about 7 times between 1,000 and 2,000 entries a
+ * Bundle and only 1.3 times more from there to 16,000. It is a step, not a growth: past it the read
+ * is linear again.
  *
  * A phase on each side of the step reads the step as growth. At 500 against 2,000 the gate read 9.1
- * to 12.0; at 1,000 against 4,000 it read 5.2 to 6.6 and once 8.03, because the base phase's fastest
- * repetition could fall between scavenges while every scaled repetition paid for several. 4,000
- * against 16,000 puts both phases past the step, so each pays its share of collection.
+ * to 12.0; at 1,000 against 4,000 it read 5.2 to 6.6 and once 8.03. Traced, the base phase's two
+ * scavenges found little alive and cost 3 to 4 ms, while the scaled phase's dozen copied nearly
+ * everything and cost 88 to 94 ms of its 188 to 195; outside collection the ratio was 3.94 to 3.99.
+ * 4,000 against 16,000 puts both phases past the step, so each pays its share of collection: on the
+ * same runner the old fixture read 6.53 to 6.67 and this one 4.15 to 4.19.
  */
 const READ_ENTRIES = 4_000;
 /**
@@ -99,7 +102,8 @@ const SERIALIZE_BUNDLES = 4;
  * it times anything. Each step is a native search for the next line break rather than a loop over
  * every character, so at the read's 16,000 entries a pass stays short enough for the self-check to
  * finish well inside its timeout. At 4,000 entries the stepping alone costs about 3 times the read,
- * so one pass is enough: the self-check's signal is about 13 against the ceiling of 8.
+ * so one pass is enough: on a GitHub-hosted runner the self-check's signal was 11.9 against the
+ * ceiling of 8.
  */
 function parseQuadratic(raw: string): ReadResult {
   let count = 1;
