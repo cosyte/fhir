@@ -49,8 +49,12 @@ import { KIB, observation, reportWithAttachment, transactionBundle } from "../..
  * and the gate skipped.
  */
 const COUNT = 1_000;
-/** The validator costs several times as much a resource, so fewer reach the same phase length. */
-const VALIDATE_COUNT = 250;
+/**
+ * Observations on the count axis for the validator. It once cost several times what the read does
+ * and 250 were enough; it now costs about what the read does, and at 250 its base phase fell under
+ * the 4 ms floor and the gate skipped.
+ */
+const VALIDATE_COUNT = 1_000;
 /** Entries in the size axis's base Bundle; the scaled phase has 4 times as many. */
 const ENTRIES = 500;
 /** Bundles in each size-axis phase. */
