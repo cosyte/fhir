@@ -11,6 +11,7 @@
         "read-measured-values",
         "check-safety-before-summarizing",
         "validate-against-profiles",
+        "validate-many-resources-with-one-registry",
         "check-codes",
         "read-bundles-and-references",
         "stream-ndjson-exports",

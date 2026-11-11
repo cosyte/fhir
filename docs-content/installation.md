@@ -66,16 +66,23 @@ const { parseResource } = require("@cosyte/fhir");
 Types are shipped for both: a `.d.ts` for the ESM entry and a `.d.cts` for the CommonJS one, so a
 project on either module system gets the same editor completions.
 
-## The public surface is one entry point
+## The public surface is two entry points
 
-The `exports` map offers exactly two paths: the package itself, and its `package.json`. There is no
-supported deep import, so everything in this documentation is reached from a single specifier:
+The `exports` map offers exactly three paths: the package itself, `@cosyte/fhir/arbitraries`, and
+the package's `package.json`. Everything in this documentation but one guide is reached from the
+package itself:
 
 ```ts runnable
 import { parseResource, readSafety, validateResource } from "@cosyte/fhir";
 ```
 
-Reaching past that specifier into a build path is unsupported and will break without notice.
+`@cosyte/fhir/arbitraries` holds the fast-check generators for
+[property-testing your own code](./property-test-your-code.md). It needs `fast-check` installed
+beside it, and the main entry point never loads it, so a project that does not import it does not
+need `fast-check`.
+
+There is no other supported deep import. Reaching past these specifiers into a build path is
+unsupported and will break without notice.
 
 ## Check the install
 

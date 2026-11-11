@@ -41,16 +41,17 @@ What it covers, against FHIR R4 (`4.0.1`): reading and writing JSON and XML into
 model; validation in layers (structure, cardinality, value domains, R4's own constraints on the
 eight modeled resource types, Quantity and UCUM, binding strength, and profiles you supply or author
 with `defineProfile`, including their FHIRPath invariants); the `readSafety` and
-`assertSafeToSummarize` safety readout; and Bundles, references and streaming Bulk Data NDJSON. R5
-and DSTU2 documents can be read, since the model is schema-free, but they are not validated against
-their own definitions.
+`assertSafeToSummarize` safety readout; and Bundles, references and streaming Bulk Data NDJSON.
 
 Not covered yet: typed per-resource models (the built-in structural schemas cover the base elements
 plus the eight modeled resource types), `type` and `profile` slicing discriminators (reported
 `PROFILE_SLICE_UNCHECKED`, and the slices' own constraints are then not checked, since no occurrence
 is assigned to them), FHIRPath outside the supported subset (reported
-`INVARIANT_UNCHECKED`, never passed), bundled terminology or US Core content, spec-clean JSON written
-from a model read out of XML, unit conversion, and executing a transaction Bundle.
+`INVARIANT_UNCHECKED`, never passed), bundled terminology or US Core content, validation of R4B
+(`4.3.0`), R5 and DSTU2 content against its own version's definitions (such a document is read, since
+the model is schema-free, and validated as R4), spec-clean JSON written from a model read out of XML,
+unit conversion, and executing a transaction Bundle. The current limits page on
+[docs.cosyte.com/fhir](https://docs.cosyte.com/fhir) takes each in turn.
 
 ## Install
 
@@ -109,7 +110,9 @@ programs: read and validate, the safety readout, JSON and XML, and Bundles with 
 
 ## API
 
-Everything ships from one entry point; there are no subpath imports.
+Two entry points. `@cosyte/fhir` carries everything below. `@cosyte/fhir/arbitraries` carries
+fast-check generators of synthetic resources for property-testing your own code; it needs
+`fast-check` installed beside it, and the main entry point never loads it.
 
 - **Read and write.** `parseResource` and `serializeResource` for JSON, `parseResourceXml` and
   `serializeResourceXml` for XML, over one schema-free model, and `nodesEquivalent` to compare a
