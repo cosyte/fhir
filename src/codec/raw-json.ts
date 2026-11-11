@@ -180,6 +180,14 @@ let scratch: Uint32Array | undefined;
 let scratchFree = true;
 
 /**
+ * The last tape a read that took {@link scratch} grew out of it into, held weakly so the collector
+ * can take it back. A read of a large document after another one reuses it instead of making a
+ * tape of several MiB each time, memory outside the heap the collector would otherwise count
+ * towards its next full collection. Only the read holding {@link scratch} uses it.
+ */
+let spare: WeakRef<Uint32Array> | undefined;
+
+/**
  * A JSON document read into a flat list of tokens, in source order: an object or an array is one
  * token followed by its members' or items' tokens, an object member is its key's string token
  * followed by its value's tokens. A string or a number is kept as where its text lies in the source,
@@ -274,18 +282,29 @@ class JsonTokenizer {
     let tokens = this.#tokens;
     const index = this.#count;
     const slot = WORDS * index;
-    if (slot + WORDS > tokens.length) {
-      const tokensNow = tokens.length / WORDS;
-      const grown = new Uint32Array(
-        WORDS * Math.max(tokensNow + (tokensNow >> 1), estimatedTokens(this.#src)),
-      );
-      grown.set(tokens);
-      this.#tokens = tokens = grown;
-    }
+    if (slot + WORDS > tokens.length) tokens = this.#grow();
     tokens[slot] = a * 8 + kind;
     tokens[slot + 1] = b;
     this.#count = index + 1;
     return index;
+  }
+
+  /** Move the tape to a longer one, the spare when this read holds the reused tape and it is long enough. */
+  #grow(): Uint32Array {
+    const tokens = this.#tokens;
+    const tokensNow = tokens.length / WORDS;
+    const words = WORDS * Math.max(tokensNow + (tokensNow >> 1), estimatedTokens(this.#src));
+    const kept = this.#borrowed ? spare?.deref() : undefined;
+    let grown: Uint32Array;
+    if (kept !== undefined && kept.length >= words) {
+      grown = kept;
+    } else {
+      grown = new Uint32Array(words);
+      if (this.#borrowed) spare = new WeakRef(grown);
+    }
+    grown.set(tokens);
+    this.#tokens = grown;
+    return grown;
   }
 
   /** Close the object or array token at `index`: its count, and the index of the token after it. */

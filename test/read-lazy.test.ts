@@ -155,6 +155,18 @@ describe("readRawJsonLazily", () => {
     });
   });
 
+  it("reads large documents one after another, reusing a tape, as each reads alone", () => {
+    // Each grows past the reused tape; the second reuses the tape the first grew into, the third
+    // is larger than that tape, and the lazy reads never take the reused tape at all.
+    const large = transactionBundle(11, 200);
+    const larger = transactionBundle(12, 600);
+    const alone = [large, larger].map((text) => plain(readRawJsonLazily(text)));
+    const read = [large, large, larger, large].map((text) => plain(readRawJson(text)));
+    expect(read).toEqual([alone[0], alone[0], alone[1], alone[0]]);
+    const parsed = [larger, large, larger].map((text) => parseResource(text));
+    expect(parsed).toEqual([larger, large, larger].map((text) => parseResource(readRawJson(text))));
+  });
+
   it("is what parseResource reads text through: the same model and issues as from readRawJson", () => {
     const text = transactionBundle(5, 30);
     expect(parseResource(text)).toEqual(parseResource(readRawJson(text)));
