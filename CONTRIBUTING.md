@@ -47,11 +47,16 @@ pnpm build
 pnpm bench:reading --out bench-results/reading.json --summary bench-results/reading.md
 node bench/budgets.mjs bench-results/reading.json
 node --enable-source-maps bench/profile.mjs dist/index.mjs --out bench-results/profiles
+node bench/scaling-trace.mjs dist/index.mjs --summary bench-results/scaling-trace.md
 ```
+
+`bench/scaling-trace.mjs` reads the `parseResource` size axis with garbage collection traced: the
+cost per entry at Bundle sizes from 250 to 16,000 entries, split into the time outside collection,
+scavenges and mark-compacts, and the scaling gate's size axis timed as the gate times it.
 
 A full reading takes several minutes; `--only <benchmark>` narrows it. On a pull request CI times
 the base build against the head build (advisory), and the Bench reading workflow takes a reading,
-the budgets and a profile on a GitHub-hosted runner when the bench changes, or when run by hand.
+the budgets, a profile and the scaling trace on a GitHub-hosted runner when the bench changes, or when run by hand.
 
 ## Architecture decisions
 

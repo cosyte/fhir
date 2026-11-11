@@ -63,13 +63,31 @@ const VALIDATE_COUNT = 1_000;
 /** Entries in the size axis's base Bundle; the scaled phase has 4 times as many. */
 const ENTRIES = 500;
 /**
- * Entries in the read's size-axis base Bundle. At 500 against 2,000 the two phases straddle the
- * point where a read's garbage stops dying young: once the reader allocated less per element, the
- * 500 entry phase got cheaper than the 2,000 entry one by more than a linear read explains, and
- * the gate read 9.1 to 12.0 though the read is linear from 1,000 entries up (the runner reading:
- * 1,000 entries in 11.13 ms, 5,000 in 58.29 ms). 1,000 against 4,000 puts both phases past it.
+ * Entries in the read's size-axis base Bundle; the scaled Bundle has 4 times as many.
+ *
+ * The read's cost per entry steps up once, mostly where the tree one read keeps alive (its raw
+ * JSON tree and the model built from it, about 15 KiB an entry on a developer machine) outgrows the
+ * young generation: below that, a scavenge finds most of what it scans already dead; above it,
+ * nearly all of it alive, so it copies it out and promotes it. `bench/scaling-trace.mjs` traces it.
+ * On five GitHub-hosted runner reads (Node.js 22), the scavenge time per entry rose 6 to 10 times
+ * between 1,000 and 2,000 entries a Bundle and at most 1.5 times more from there to 16,000. The
+ * time outside collection rose too, by 7% to 48% across that step and by at most 19% from 2,000 to
+ * 16,000, for a cause not yet found. No read showed a cost growing with the square of the size.
+ *
+ * A phase on each side of the step reads the step as growth. At 500 against 2,000 the gate read 9.1
+ * to 12.0; at 1,000 against 4,000 it read 5.2 to 6.6 and once 8.03. Traced, the base phase's two
+ * scavenges found little alive and cost 1.4 to 4.4 ms, while the scaled phase's dozen copied nearly
+ * everything and cost 50 to 94 ms of its 116 to 195. The five runner reads put that fixture at
+ * 6.36 to 8.81, and at 3.94 to 5.63 with collection taken out. 4,000 against 16,000 puts both
+ * phases past the step, so each pays its share of collection: the same reads put it at 4.00 to
+ * 4.35, and at 3.94 to 4.16 with collection taken out.
  */
-const READ_ENTRIES = 1_000;
+const READ_ENTRIES = 4_000;
+/**
+ * Bundles in each phase of the read's size axis. One Bundle of 4,000 entries is a base phase of 40
+ * ms or more, well over the 8 ms this file asserts.
+ */
+const READ_BUNDLES = 1;
 /** Bundles in each size-axis phase. */
 const BUNDLES = 2;
 /**
@@ -83,21 +101,18 @@ const SERIALIZE_BUNDLES = 4;
  * stepping from the start of the text one line at a time, so the cost grows with the square of the
  * entry count. It reads exactly the text `parseResource` reads, which the self-check confirms before
  * it times anything. Each step is a native search for the next line break rather than a loop over
- * every character, so at the read's 4,000 entries a pass stays short enough for its warmup to
- * settle.
+ * every character, so at the read's 16,000 entries a pass stays short enough for the self-check to
+ * finish well inside its timeout. At 4,000 entries the stepping alone costs about 3 times the read,
+ * so one pass is enough: on a GitHub-hosted runner the self-check's signal was 11.9 against the
+ * ceiling of 8.
  */
 function parseQuadratic(raw: string): ReadResult {
   let count = 1;
   for (let p = raw.indexOf("\n"); p !== -1; p = raw.indexOf("\n", p + 1)) count++;
   const lines: string[] = [];
   for (let i = 0; i < count; i++) {
-    // Stepped to twice over: once, the quadratic share at these sizes left the self-check only a
-    // 1.19x margin over the ceiling.
     let start = 0;
-    for (let pass = 0; pass < 2; pass++) {
-      start = 0;
-      for (let seen = 0; seen < i; seen++) start = raw.indexOf("\n", start) + 1;
-    }
+    for (let seen = 0; seen < i; seen++) start = raw.indexOf("\n", start) + 1;
     const end = raw.indexOf("\n", start);
     lines.push(raw.slice(start, end === -1 ? raw.length : end));
   }
@@ -179,7 +194,7 @@ function textOptions(): ScalingGateOptions<string, ReadResult> {
     weigh: (result) => result.issues.length + 1,
     count: { n: COUNT, generate: (i) => observation(i) },
     size: {
-      inputs: BUNDLES,
+      inputs: READ_BUNDLES,
       size: READ_ENTRIES,
       generate: (i, size) => transactionBundle(i, size),
     },
