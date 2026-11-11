@@ -80,9 +80,9 @@ parseNdjsonLine("{not json", 2).error?.code; // => "MALFORMED_JSON"
 
 ## Reference
 
-- [`streamNdjson`](./api/README.md#streamndjson), [`NdjsonOptions`](./api/README.md#ndjsonoptions)
-  and [`NdjsonRecord`](./api/README.md#ndjsonrecord).
-- [`parseNdjsonLine`](./api/README.md#parsendjsonline), [`NdjsonError`](./api/README.md#ndjsonerror)
-  and [`NDJSON_ERROR_CODES`](./api/README.md#ndjson_error_codes).
+- [`streamNdjson`](./api/@cosyte/fhir.md#streamndjson), [`NdjsonOptions`](./api/@cosyte/fhir.md#ndjsonoptions)
+  and [`NdjsonRecord`](./api/@cosyte/fhir.md#ndjsonrecord).
+- [`parseNdjsonLine`](./api/@cosyte/fhir.md#parsendjsonline), [`NdjsonError`](./api/@cosyte/fhir.md#ndjsonerror)
+  and [`NDJSON_ERROR_CODES`](./api/@cosyte/fhir.md#ndjson_error_codes).
 - [Read Bundles and resolve references](./read-bundles-and-references.md) for the resources once
   they are read.

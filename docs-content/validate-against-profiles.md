@@ -78,12 +78,12 @@ outcome.issues.some((issue) => issue.code === "CARDINALITY_MIN"); // => true
 
 ## Reference
 
-- [`validateResource`](./api/README.md#validateresource), its
-  [`ValidateOptions`](./api/README.md#validateoptions) and the
-  [`ValidationResult`](./api/README.md#validationresult) it returns.
-- [`defineProfile`](./api/README.md#defineprofile) and
-  [`loadStructureDefinition`](./api/README.md#loadstructuredefinition).
-- [`STARTER_PROFILES`](./api/README.md#starter_profiles) and
-  [`VALIDATION_CODES`](./api/README.md#validation_codes), which lists every code a finding can carry.
+- [`validateResource`](./api/@cosyte/fhir.md#validateresource), its
+  [`ValidateOptions`](./api/@cosyte/fhir.md#validateoptions) and the
+  [`ValidationResult`](./api/@cosyte/fhir.md#validationresult) it returns.
+- [`defineProfile`](./api/@cosyte/fhir.md#defineprofile) and
+  [`loadStructureDefinition`](./api/@cosyte/fhir.md#loadstructuredefinition).
+- [`STARTER_PROFILES`](./api/@cosyte/fhir.md#starter_profiles) and
+  [`VALIDATION_CODES`](./api/@cosyte/fhir.md#validation_codes), which lists every code a finding can carry.
 - [Current limits](./limits.md#verdicts-that-say-not-checked-rather-than-passing) explains the
   findings that mean a constraint or a slice was not checked.

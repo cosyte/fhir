@@ -71,9 +71,9 @@ either way. The benchmark suite reads the two side by side on the vital-signs Ob
 
 ## Reference
 
-- [`buildRegistry`](./api/README.md#buildregistry) and the
-  [`ResourceSchema`](./api/README.md#resourceschema) each schema is written as.
-- [`validateResource`](./api/README.md#validateresource), and `registry`, `schemas` and `mode` in
-  [`ValidateOptions`](./api/README.md#validateoptions).
+- [`buildRegistry`](./api/@cosyte/fhir.md#buildregistry) and the
+  [`ResourceSchema`](./api/@cosyte/fhir.md#resourceschema) each schema is written as.
+- [`validateResource`](./api/@cosyte/fhir.md#validateresource), and `registry`, `schemas` and `mode` in
+  [`ValidateOptions`](./api/@cosyte/fhir.md#validateoptions).
 - [Validate against your own profiles](./validate-against-profiles.md), for constraints a schema does
   not hold.

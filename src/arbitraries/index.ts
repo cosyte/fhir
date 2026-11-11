@@ -25,6 +25,7 @@
  * ```
  *
  * @packageDocumentation
+ * @module @cosyte/fhir/arbitraries
  */
 
 export { RESOURCE_TYPES, bundle, resource, resourceType } from "./resource.js";

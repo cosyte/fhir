@@ -119,8 +119,14 @@ jobs:
           (cd "${base}" && pnpm install --frozen-lockfile && pnpm build)
           pnpm check:cold-import --base "${base}/dist/index.mjs"
 
-  # The house checks from @cosyte/script-utils (README, CLAUDE.md card, catalog), and the
-  # @cosyte/process wiring check (the five delegating scripts and cosyte-process.config.json).
+  # The house checks from @cosyte/script-utils (README, CLAUDE.md card, catalog), the
+  # @cosyte/process wiring check (the five delegating scripts and cosyte-process.config.json), and
+  # the two docs checks. `pnpm check:docs-content` (cosyte-docs-content, @cosyte/script-utils)
+  # holds docs-content/ to the docs-content standard: the sidebar, front matter, required pages and
+  # the links into the reference. `pnpm check:docs-reference` (cosyte-docs-reference --check,
+  # @cosyte/process) fails when the API reference committed in docs-content/api/ differs from a
+  # fresh generation from the TSDoc of both entry points, or when an export has no TSDoc summary:
+  # regenerate with `pnpm docs:reference` and commit the pages with the change that moved them.
   standards:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -136,6 +142,8 @@ jobs:
       - run: pnpm check:claude-card
       - run: pnpm check:catalog
       - run: pnpm check:process
+      - run: pnpm check:docs-content
+      - run: pnpm check:docs-reference
 
   # Differential vs the official validator (`org.hl7.fhir.core` / validator_cli.jar).
   # AUTHORED, NOT YET PROVEN: the oracle is a JVM program, so this gate can only run here (never in the

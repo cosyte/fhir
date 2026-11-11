@@ -46,9 +46,16 @@ pnpm check:readme
 pnpm check:claude-card
 pnpm check:catalog
 pnpm check:process
+pnpm check:docs-content
+pnpm check:docs-reference
 pnpm check:no-emdash
 pnpm check:no-internal-refs
 ```
+
+`docs-content/api/` is generated from the TSDoc of both entry points, `@cosyte/fhir` and
+`@cosyte/fhir/arbitraries`. After a change to an export or its comment, run `pnpm docs:reference`
+and commit the pages with it: `pnpm check:docs-reference` fails on a stale page or an export with no
+TSDoc summary. The `version` script regenerates the pages, so a release carries its own version.
 
 CI also runs the differential against the HL7 reference validator (`pnpm corpus:fetch`, then
 `pnpm differential` and `pnpm differential:determinism`), which needs `java` and the pinned
