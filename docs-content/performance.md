@@ -87,6 +87,13 @@ results[1]?.issues.map((issue) => issue.code); // => ["CARDINALITY_MIN"]
 
 When a call passes both `registry` and `schemas`, the registry is used and `schemas` is not read.
 
+What this saves is the time of the merge on every call and a little peak heap; what a call allocates
+is about the same either way.
+
+The built-in schemas a registry returns are frozen and shared by every registry. To change one,
+copy it and its `elements` with a spread, change the copy, and register the copy with
+`buildRegistry`.
+
 ## Current numbers
 
 The numbers for this section are measured on `main` at each release and filled in when the release
