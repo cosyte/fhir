@@ -30,8 +30,9 @@ import {
 } from "./shapes.mjs";
 
 // Six shapes, each at the size real traffic has and at a size well past it. The pull request
-// comparison runs only the small Observation, the 100 entry transaction and the report with a 64 KiB
-// PDF (a long string, which the reader once built a character at a time), for each operation: a
+// comparison runs only the small Observation, the 100 and 1,000 entry transactions and the report
+// with a 64 KiB PDF (a long string, which the reader once built a character at a time), for each
+// operation: a
 // comparison runs every case 24 times in fresh processes, and its budget is 600 seconds. A reading
 // measures every size.
 const SHAPES = [
@@ -51,7 +52,14 @@ const SHAPES = [
         build: (i) => transactionBundle(i, 100),
         compare: true,
       },
-      { label: "1,000 entries, 0.9 MiB", inputs: 1, build: (i) => transactionBundle(i, 1_000) },
+      {
+        // Compared too, so a pull request reads its base and head at a size past where a read's
+        // garbage stops dying young, on one runner, beside the 100 entry case.
+        label: "1,000 entries, 0.9 MiB",
+        inputs: 1,
+        build: (i) => transactionBundle(i, 1_000),
+        compare: true,
+      },
       { label: "5,000 entries, 4.4 MiB", inputs: 1, build: (i) => transactionBundle(i, 5_000) },
     ],
   },

@@ -57,6 +57,14 @@ const COUNT = 1_000;
 const VALIDATE_COUNT = 1_000;
 /** Entries in the size axis's base Bundle; the scaled phase has 4 times as many. */
 const ENTRIES = 500;
+/**
+ * Entries in the read's size-axis base Bundle. At 500 against 2,000 the two phases straddle the
+ * point where a read's garbage stops dying young: once the reader allocated less per element, the
+ * 500 entry phase got cheaper than the 2,000 entry one by more than a linear read explains, and
+ * the gate read 9.1 to 12.0 though the read is linear from 1,000 entries up (the runner reading:
+ * 1,000 entries in 11.13 ms, 5,000 in 58.29 ms). 1,000 against 4,000 puts both phases past it.
+ */
+const READ_ENTRIES = 1_000;
 /** Bundles in each size-axis phase. */
 const BUNDLES = 2;
 
@@ -148,7 +156,11 @@ function textOptions(): ScalingGateOptions<string, ReadResult> {
     parse: (raw) => parseResource(raw),
     weigh: (result) => result.issues.length + 1,
     count: { n: COUNT, generate: (i) => observation(i) },
-    size: { inputs: BUNDLES, size: ENTRIES, generate: (i, size) => transactionBundle(i, size) },
+    size: {
+      inputs: BUNDLES,
+      size: READ_ENTRIES,
+      generate: (i, size) => transactionBundle(i, size),
+    },
   };
 }
 
@@ -175,6 +187,10 @@ const serializeOptions: ScalingGateOptions<FhirComplex, string> = {
 
 /** A skip is not a pass: a gate that could not measure says so here, rather than reading green. */
 function expectMeasured(report: ReturnType<typeof scalingGate>): void {
+  // The ratio and both phase times, on a pass as well as a failure, so a run that passes still
+  // leaves its reading in the log.
+  process.stderr.write(`${report.count.diagnostic}\n`);
+  process.stderr.write(`${report.size.diagnostic}\n`);
   expect(report.count.status, report.count.diagnostic).toBe("measured");
   expect(report.size.status, report.size.diagnostic).toBe("measured");
 }
