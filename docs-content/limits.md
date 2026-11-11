@@ -2,7 +2,7 @@
 id: limits
 title: Current limits
 sidebar_label: Current limits
-description: "What @cosyte/fhir deliberately does not do (bundled terminology or profiles, typed models per resource) and the findings that mean a check did not run."
+description: "What @cosyte/fhir does not do (bundled content, typed models, other FHIR versions, unit conversion) and the findings that mean a check did not run."
 ---
 
 # Current limits
@@ -10,6 +10,19 @@ description: "What @cosyte/fhir deliberately does not do (bundled terminology or
 What the package does not do, in its own words. Everything here is a deliberate boundary, and each
 one is stated because working around a limit you know about is cheap, while discovering one in
 production is not.
+
+The gaps, in the order the README lists them under "Not covered yet":
+
+- [typed per-resource models](#no-typed-per-resource-models);
+- `type` and `profile` slicing discriminators, reported `PROFILE_SLICE_UNCHECKED`, and FHIRPath
+  outside the subset we evaluate, reported `INVARIANT_UNCHECKED`
+  ([verdicts that say "not checked"](#verdicts-that-say-not-checked-rather-than-passing));
+- bundled [terminology](#no-terminology-content-is-bundled) or [US Core](#no-profile-content-is-bundled)
+  content;
+- validation of [R4B, R5 and DSTU2 content](#r4-first) against its own version's definitions;
+- [spec-clean JSON written from a model read out of XML](#json-written-from-an-xml-read-keeps-primitives-as-text);
+- [unit conversion](#no-unit-is-converted);
+- [executing a transaction Bundle](#a-transaction-bundle-is-read-never-executed).
 
 ## No terminology content is bundled
 
@@ -78,9 +91,90 @@ consumer downstream.
 
 ## R4 first
 
-FHIR R4 (`4.0.1`) is the modeled target. R5 and DSTU2 documents can be read, because the model is
-schema-free, but they are not validated against their own definitions. Treat cross-version reads as
-data recovery, not conformance.
+FHIR R4 (`4.0.1`) is the modeled target. R4B (`4.3.0`), R5 and DSTU2 documents can be read, because
+the model is schema-free, but they are not validated against their own definitions. Treat
+cross-version reads as data recovery, not conformance.
+
+Nothing in a document tells the package which version it is: no read looks at a `fhirVersion`, a
+MIME type parameter or a profile URL to pick a version. So an R4B resource is read and validated as
+if it were R4:
+
+- its values are read exactly as with R4, every `decimal` kept as written, and the safety readout
+  reads its status, modifiers and negations by the same rules;
+- a resource of one of the eight types we model (`Patient`, `Observation`, `DiagnosticReport`,
+  `Condition`, `MedicationRequest`, `AllergyIntolerance`, `Immunization` and
+  `MedicationStatement`) is validated against R4's definition of that type, so an element R4B
+  changed is judged by R4's rule;
+- a resource of any other type, including one R4B added, gets the information finding
+  `RESOURCE_NOT_MODELED`: only the elements every resource has are checked, and none of the type's
+  own.
+
+Here a synthetic `NutritionProduct`, a type R4B added, carries a status outside any code list and an
+element no version defines, and validation reports neither:
+
+```ts runnable
+import { parseResource, readSafety, validateResource } from "@cosyte/fhir";
+
+const { resource } = parseResource(
+  JSON.stringify({
+    resourceType: "NutritionProduct",
+    id: "syn-np-0001",
+    status: "not-a-status",
+    code: { text: "Synthetic formula" },
+    notAnElement: "kept as written",
+  }),
+);
+
+const result = validateResource(resource);
+result.valid; // => true
+result.issues.map((issue) => issue.code); // => ["RESOURCE_NOT_MODELED"]
+readSafety(resource).status; // => "not-a-status"
+```
+
+The same status on an `Observation`, a type we model, is an error:
+
+```ts runnable
+import { parseResource, validateResource } from "@cosyte/fhir";
+
+const { resource } = parseResource(
+  '{"resourceType":"Observation","id":"syn-0002","status":"not-a-status","code":{"text":"Synthetic reading"}}',
+);
+validateResource(resource).issues.map((issue) => issue.code); // => ["CODE_INVALID"]
+```
+
+To hold R4B content to its own rules, pass the R4B definitions you need as profiles: see
+[Validate against your own profiles](./validate-against-profiles.md).
+
+## No unit is converted
+
+A quantity is read with its magnitude exactly as written and its UCUM `code`, and the package never
+converts it to another unit, compares two quantities in different units, or computes an
+interpretation flag from a reference range. A vital sign's unit is checked against the units R4
+allows for it; it is not converted to one of them.
+[Read measured values and their units](./read-measured-values.md) shows what is read.
+
+## A transaction Bundle is read, never executed
+
+`readBundle` tells a transaction (all or nothing) from a batch (each entry on its own) and describes
+the entries. Nothing in the package applies either: there is no server, no storage and no request.
+[Read Bundles and resolve references](./read-bundles-and-references.md) shows what is read.
+
+## JSON written from an XML read keeps primitives as text
+
+The XML codec is schema-free like the JSON one, so a primitive read from XML is kept as the text of
+its `value` attribute. `serializeResource` writes such a model faithfully, but not in spec-clean JSON:
+a `boolean` or a number read from XML is written as a JSON string, because choosing the JSON type
+needs the datatype of every element, which the schema-free model does not carry. A model read from
+JSON writes back to JSON with its types, and the XML writer takes a model from either read.
+
+```ts runnable
+import { parseResourceXml, serializeResource } from "@cosyte/fhir";
+
+const { resource } = parseResourceXml(
+  '<Patient xmlns="http://hl7.org/fhir"><id value="syn-0001"/><active value="true"/></Patient>',
+);
+serializeResource(resource); // => '{"resourceType":"Patient","id":"syn-0001","active":"true"}'
+```
 
 ## Reported, not repaired
 
