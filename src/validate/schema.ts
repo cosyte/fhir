@@ -653,8 +653,13 @@ export function resolveElement(
     return { element: direct, datatype: direct.types[0] ?? "", base: property };
   }
   // A choice[x]: find a `<base>` whose `<base><Type>` matches the property.
-  for (const [base, element] of Object.entries(elements)) {
+  // `for...in` over own members is the order `Object.entries` lists them in, without the pairs.
+  for (const base in elements) {
+    if (!Object.hasOwn(elements, base)) continue;
+    const element = elements[base] as ElementSchema;
     if (!isChoice(element)) continue;
+    // Only a property that starts with the base can be one of its variants.
+    if (!property.startsWith(base)) continue;
     for (const datatype of element.types) {
       const variant = base + datatype.charAt(0).toUpperCase() + datatype.slice(1);
       if (variant === property) return { element, datatype, base };

@@ -1753,7 +1753,8 @@ function checkNegations(
       const at = childPath(path, read.element);
       for (const value of written) checkCodingWrapping(value, at, report);
     }
-    const spelled = written.flatMap((value) => [...read.values(value)]);
+    const spelled: string[] = [];
+    for (const value of written) for (const code of read.values(value)) spelled.push(code);
     // Per CODE, and the suppression is what keeps this channel off conformant documents. R4 lets a
     // `CodeableConcept` under a required binding carry translation codings beside the one from the
     // value set (terminologies.html), so a `verificationStatus` spelling `refuted` from the standard

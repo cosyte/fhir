@@ -23,11 +23,12 @@
  */
 
 import type { FhirComplex } from "../model/index.js";
+import { Trail } from "../model/path.js";
 import { parseReference } from "../model/reference.js";
 import {
   buildBundleIndex,
   containedIndex,
-  eachReference,
+  eachReferenceOn,
   hasContainedCycle,
   resolveReference,
 } from "../bundle/references.js";
@@ -88,9 +89,10 @@ export function collectBundleIssues(resource: FhirComplex): ValidationIssue[] {
     // Unresolved references: fragments against this resource's contained, relatives against the
     // Bundle. External absolute/logical references are not a defect and draw nothing.
     const contained = containedIndex(entry.resource);
-    eachReference(entry.resource, `${entryPath}.resource`, (location, reference) => {
+    eachReferenceOn(entry.resource, new Trail(`${entryPath}.resource`), (at, reference) => {
       const resolution = resolveReference(reference, { bundle: index, contained });
       if (resolution.status === "unresolved") {
+        const location = `${at.text()}.reference`;
         issues.push(validationIssue("REFERENCE_UNRESOLVED", ISSUE_SEVERITIES.WARNING, location));
       }
     });

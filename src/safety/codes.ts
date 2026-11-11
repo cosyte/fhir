@@ -1123,5 +1123,20 @@ export function typesOf(resource: FhirComplex): readonly string[] {
   // Most nodes a walk asks about are not resource roots and write no type: answer those without
   // building a list. The answer is the same empty list either way, and every caller only reads it.
   if (!writesProperty(resource, "resourceType")) return NO_TYPES;
-  return membersNamed(resource, "resourceType").flatMap((node) => [...primitiveStrings(node)]);
+  const types: string[] = [];
+  const written = membersNamed(resource, "resourceType");
+  for (let i = 0; i < written.length; i++) pushStrings(written[i], types);
+  return types;
+}
+
+/** {@link primitiveStrings} of `node`, appended to `out` in the same order. */
+function pushStrings(node: FhirNode | undefined, out: string[]): void {
+  if (node === undefined) return;
+  if (isPrimitive(node)) {
+    if (typeof node.value === "string") out.push(node.value);
+    return;
+  }
+  if (!isList(node)) return;
+  const items = node.items;
+  for (let i = 0; i < items.length; i++) pushStrings(items[i], out);
 }
