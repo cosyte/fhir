@@ -8,7 +8,7 @@
 - `NARRATIVE_ROOT_INVALID`: the root is not a `div` in the XHTML namespace.
 - `NARRATIVE_ELEMENT_ILLEGAL`: an element outside the basic HTML formatting set R4 allows, or outside the XHTML namespace.
 - `NARRATIVE_ATTRIBUTE_ILLEGAL`: an attribute R4 does not allow on that element.
-- `NARRATIVE_ACTIVE_CONTENT`: a `script`, `iframe`, `frame`, `frameset`, `object`, `embed` or `applet` element, an `on...` event handler, or a `javascript:` or `vbscript:` URL. It carries the new R4 issue type `security` (`ISSUE_TYPES.SECURITY`).
+- `NARRATIVE_ACTIVE_CONTENT`: a `script`, `iframe`, `frame`, `frameset`, `object`, `embed` or `applet` element, an `on...` event handler, or a `javascript:` or `vbscript:` URL, read the way a browser reads it, so a tab or line break inside the scheme does not hide it. A `data:` URL and a `url(...)` inside a `style` value are not checked. It carries the new R4 issue type `security` (`ISSUE_TYPES.SECURITY`).
 - `NARRATIVE_BLOCK_IN_PARAGRAPH`: a `div`, `blockquote`, `table`, `ol`, `ul` or `p` inside a `p`.
 - `NARRATIVE_EMPTY`: no content other than whitespace and no image.
 

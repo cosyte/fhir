@@ -125,6 +125,28 @@ describe("active content is reported as NARRATIVE_ACTIVE_CONTENT and fails valid
       "a javascript link written with a character reference",
       xhtml('<a href="&#106;avascript:1">x</a>'),
     ],
+    // A browser removes every tab, line feed and carriage return from a URL before it reads the
+    // scheme, and the reader keeps a character reference as the character it names.
+    [
+      "a javascript link with a tab inside the scheme",
+      xhtml('<a href="java&#9;script:alert(1)">x</a>'),
+    ],
+    [
+      "a javascript link with a line feed inside the scheme",
+      xhtml('<a href="java&#10;script:alert(1)">x</a>'),
+    ],
+    [
+      "a javascript link with a carriage return inside the scheme",
+      xhtml('<a href="java&#13;script:alert(1)">x</a>'),
+    ],
+    [
+      "a javascript image-map area with a hex tab inside the scheme",
+      xhtml('<map name="m"><area href="jav&#x9;ascript:alert(1)" alt="z"/></map>x'),
+    ],
+    [
+      "a vbscript image with a line feed before the colon",
+      xhtml('<img src="vbscript&#10;:msgbox(1)"/>'),
+    ],
     ["a vbscript image", xhtml('<img src="vbscript:msgbox(1)"/>')],
     ["a javascript citation", xhtml('<q cite="javascript:1">x</q>')],
   ])("%s", (_name, div) => {

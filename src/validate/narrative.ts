@@ -224,8 +224,24 @@ const ACTIVE_ELEMENTS: ReadonlySet<string> = new Set([
 /** The attributes that hold a URL a renderer follows or loads. */
 const URL_ATTRIBUTES: ReadonlySet<string> = new Set(["href", "src", "cite", "longdesc", "usemap"]);
 
-/** A URL scheme that runs script when followed, after leading whitespace and control characters. */
-const SCRIPT_URL = /^[\u0000- ]*(?:javascript|vbscript)\s*:/iu;
+/**
+ * A URL scheme that runs script when followed, read the way a browser reads it (the WHATWG URL
+ * parser): every tab, line feed and carriage return anywhere in the value is removed, then leading
+ * C0 control characters and spaces, and only then is the scheme read. So `java&#9;script:` is a
+ * `javascript:` URL, since the reader keeps a character reference as the character it names.
+ */
+const SCRIPT_URL = /^(?:javascript|vbscript)\s*:/iu;
+
+/** Tab, line feed and carriage return, which a browser strips from anywhere in a URL. */
+const URL_STRIPPED = /[\t\n\r]/gu;
+
+/** Leading C0 control characters and spaces, which a browser trims from a URL. */
+const URL_LEADING = /^[\u0000- ]+/u;
+
+/** Whether a URL value runs script when a browser follows or loads it. */
+function isScriptUrl(value: string): boolean {
+  return SCRIPT_URL.test(value.replace(URL_STRIPPED, "").replace(URL_LEADING, ""));
+}
 
 /** The findings in the order they are reported for one narrative. */
 const REPORT_ORDER: readonly ValidationCode[] = [
@@ -328,7 +344,7 @@ function narrativeFindings(div: string): Set<ValidationCode> {
         found.add("NARRATIVE_ACTIVE_CONTENT");
         continue;
       }
-      if (URL_ATTRIBUTES.has(name) && SCRIPT_URL.test(attribute.value)) {
+      if (URL_ATTRIBUTES.has(name) && isScriptUrl(attribute.value)) {
         found.add("NARRATIVE_ACTIVE_CONTENT");
       }
       if (

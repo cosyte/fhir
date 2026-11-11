@@ -215,8 +215,11 @@ What it does not check:
 
 - where a table or list part may sit, such as a `tr` outside a `table` or an `li` outside a list;
 - a URL beyond its scheme, and whether an internal image reference such as `src="#a"` points at
-  anything;
-- the content of a `style` attribute, and duplicate `id` values;
+  anything. Only a `javascript:` or `vbscript:` scheme is reported, read the way a browser reads
+  it (a tab or line break inside the scheme does not hide it); a `data:` URL, including
+  `data:text/html`, is not reported;
+- the content of a `style` attribute, and duplicate `id` values, so a `url(...)` inside a `style`
+  value, `javascript:` included, is not reported;
 - an HTML named entity such as `&nbsp;` is not read at all: XHTML in FHIR has only the five XML
   entities, so such a narrative is reported `NARRATIVE_UNREADABLE`, as the HL7 reference validator
   reports it.

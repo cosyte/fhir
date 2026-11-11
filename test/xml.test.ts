@@ -911,6 +911,8 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         // `<BR/>` is not XHTML's `br`, so the narrative breaks the R4 rules, and the spelling with
         // no namespace breaks them at its root too; nothing in it was read as a FHIR resource.
         expect(narrativeErrorsOnly(r.findings)).toBe(true);
+        expect(r.findings).toContain("NARRATIVE_ELEMENT_ILLEGAL/error");
+        expect(r.valid).toBe(false);
         // And the re-emitted document re-reads to the same narrative rather than laundering the
         // loss: the XHTML namespace the writer used to strip is carried on the fragment itself.
         expect(divOf(serializeResource(parseResourceXml(r.xml).resource))).toBe(divOf(r.json));

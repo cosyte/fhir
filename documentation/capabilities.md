@@ -1200,7 +1200,9 @@ before.
   - `NARRATIVE_ATTRIBUTE_ILLEGAL`: an attribute R4 does not allow on that element.
   - `NARRATIVE_ACTIVE_CONTENT` (issue type `security`): a `script`, `iframe`, `frame`, `frameset`,
     `object`, `embed` or `applet` element in any case and any namespace, an `on...` event-handler
-    attribute, or a `javascript:` or `vbscript:` URL in a link, image or citation. Reported under
+    attribute, or a `javascript:` or `vbscript:` URL in a link, image or citation, with the scheme
+    read the way a browser reads it: every tab, line feed and carriage return in the value is
+    removed and leading control characters and spaces are trimmed first. Reported under
     its own code, not as an illegal element or attribute, so a hazard is told apart from a
     formatting slip.
   - `NARRATIVE_BLOCK_IN_PARAGRAPH`: a `div`, `blockquote`, `table`, `ol`, `ul` or `p` inside a `p`,
@@ -1218,7 +1220,8 @@ before.
   both now report it.
 - **Not checked**: where a table or list part may sit (a `tr` outside a `table`, an `li` outside a
   list), a URL beyond its scheme, whether an internal image reference such as `src="#a"` resolves
-  (the reason `media-example-sound.json` stays held out), the content of a `style` attribute, and
+  (the reason `media-example-sound.json` stays held out), a `data:` URL (`data:text/html`
+  included), the content of a `style` attribute (a `url(...)` in it, `javascript:` included), and
   duplicate `id` values. A narrative with no finding is not thereby safe to render as HTML without
   the renderer's own sanitizer.
 
