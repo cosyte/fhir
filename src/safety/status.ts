@@ -1577,21 +1577,26 @@ function checkCodingWrapping(
   path: string,
   report: (location: string, unspellable: boolean) => void,
 ): void {
-  const concepts = isList(value) ? value.items : [value];
-  concepts.forEach((concept, conceptIndex) => {
-    if (!isComplex(concept)) return;
-    // An element that is itself array-wrapped holds several CodeableConcepts, and each needs its own
-    // address or the second one's wrapper has no location at all. A bare element is not indexed,
-    // since there is no array there to index into.
-    const base = isList(value) ? `${path}[${String(conceptIndex)}]` : path;
-    for (const member of membersNamed(concept, "coding")) {
+  const wrapped = isList(value);
+  const concepts = wrapped ? value.items : [value];
+  for (let conceptIndex = 0; conceptIndex < concepts.length; conceptIndex++) {
+    const concept = concepts[conceptIndex] as FhirNode;
+    if (!isComplex(concept)) continue;
+    const written = membersNamed(concept, "coding");
+    for (let m = 0; m < written.length; m++) {
+      const member = written[m] as FhirNode;
       const codings = isList(member) ? member.items : [member];
-      codings.forEach((coding, index) => {
-        if (!isComplex(coding)) return;
-        const at = isList(member) ? `${base}.coding[${String(index)}]` : `${base}.coding`;
+      for (let index = 0; index < codings.length; index++) {
+        const coding = codings[index] as FhirNode;
+        if (!isComplex(coding)) continue;
         for (const name of CODING_SCALAR_ELEMENTS) {
           const members = membersNamed(coding, name);
           if (members.some((scalar) => isList(scalar))) {
+            // An element that is itself array-wrapped holds several CodeableConcepts, and each needs
+            // its own address or the second one's wrapper has no location at all. A bare element is
+            // not indexed, since there is no array there to index into. Built only for a report.
+            const base = wrapped ? `${path}[${String(conceptIndex)}]` : path;
+            const at = isList(member) ? `${base}.coding[${String(index)}]` : `${base}.coding`;
             // Per WRITTEN MEMBER, not per location: a `Coding` whose `system` is a singleton and
             // whose `code` holds two entries loses the `system` wrapper on the way through XML even
             // though the `code` wrapper keeps the location reported. The member that vanishes is
@@ -1602,9 +1607,9 @@ function checkCodingWrapping(
             );
           }
         }
-      });
+      }
     }
-  });
+  }
 }
 
 /** The `0..1` scalars on a `Coding` this layer reads a safety verdict out of (datatypes.html). */
