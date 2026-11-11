@@ -62,6 +62,38 @@ from costing more than a fixed amount.
 
 To save copies, the JSON reader returns a string of 13 or more characters as a slice of the input text. A resource you keep can therefore hold the whole parsed text in memory for as long as it lives: parse a large Bundle, keep one small resource, and the Bundle's text stays too. Copy what you keep, for example with `structuredClone` or a JSON round trip of the resource, or let the parsed result go once you are done with it.
 
+## Build a schema registry once
+
+A `validateResource` call given `schemas` merges them with the built-in schemas into a new registry
+on every call. To validate many resources against the same schemas, build the registry once with
+`buildRegistry` and pass it as `registry`; every call then reads that one registry, and its
+findings are the same as with `schemas`:
+
+```ts runnable
+import { buildRegistry, parseResource, validateResource } from "@cosyte/fhir";
+
+// Once, where the schemas are made: here a made-up resource type with one required element.
+const registry = buildRegistry([
+  { type: "Widget", elements: { status: { min: 1, max: 1, types: ["code"] } } },
+]);
+
+const widgets = ['{"resourceType":"Widget","status":"on"}', '{"resourceType":"Widget"}'];
+const results = widgets.map((text) =>
+  validateResource(parseResource(text).resource, { mode: "lenient", registry }),
+);
+results.map((result) => result.valid); // => [true, false]
+results[1]?.issues.map((issue) => issue.code); // => ["CARDINALITY_MIN"]
+```
+
+When a call passes both `registry` and `schemas`, the registry is used and `schemas` is not read.
+
+What this saves is the time of the merge on every call and a little peak heap; what a call allocates
+is about the same either way.
+
+The built-in schemas a registry returns are frozen and shared by every registry. To change one,
+copy it and its `elements` with a spread, change the copy, and register the copy with
+`buildRegistry`.
+
 ## Current numbers
 
 The numbers for this section are measured on `main` at each release and filled in when the release
