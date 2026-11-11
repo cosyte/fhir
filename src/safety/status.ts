@@ -97,6 +97,7 @@ import {
   rootPath,
   type FhirComplex,
   type FhirNode,
+  type FhirPrimitive,
   type FhirProperty,
 } from "../model/index.js";
 import {
@@ -143,6 +144,7 @@ import {
 import { collectAbsence, type AbsenceMarker, type AbsenceReport } from "./absence.js";
 import { membersNamed, writesProperty } from "../model/node.js";
 import { Trail } from "../model/path.js";
+import { elementTargets, isDefinedContext, RESOURCE_TARGET } from "./element-definitions.js";
 
 /**
  * `doNotPerform` on **this** node, read across every value the document wrote for it and through an
@@ -716,6 +718,18 @@ export interface SafetyReadout {
    * resource and does not hide a resource position below it, and the node that carries it is listed
    * here too, since what such a document means is not known.
    *
+   * **An element the definitions do not define is listed here too, by its own location.** Inside a
+   * resource of one of the types above, every element at every depth (a backbone element, a
+   * datatype, an extension, a primitive's extension) is checked against what the R4 and R4B
+   * definitions say may be written there: `entry` on a Patient, `Entry` or `Contained` in the wrong
+   * case, an extra key on a Bundle entry or a Coding, a member of an object written where a
+   * primitive belongs, a foreign element in XML. No valid document carries one, but the reader keeps
+   * it in the model, where a caller that flattens the whole tree would summarize what sits under it,
+   * a retraction included. Nothing below such an element is checked against the definitions in
+   * turn. A name defined by
+   * either release is defined, so a document of either reads as it is written. `validateResource`
+   * reports the same elements as `UNKNOWN_ELEMENT`.
+   *
    * The status codes that withdraw or cancel a record differ by type (`revoked` on a
    * ServiceRequest, `cancelled` on an Encounter, `inactive` on an R4B NutritionProduct), and this
    * layer reads their meaning only for the types it models. For any other type it cannot tell a
@@ -727,12 +741,13 @@ export interface SafetyReadout {
    * **Value-free and document-wide**, like the location channels beside it: the location is the
    * root's own path, and the type name in it is bounded exactly as {@link resourceType} is.
    *
-   * Empty for every document whose resource roots are all of the types named above.
+   * Empty for every document whose resource roots are all of the types named above and whose
+   * elements are all ones the definitions define.
    */
   readonly notAssessed: readonly string[];
   /**
    * `false` when the resource must not be flattened: a resource root is of a type this layer does
-   * not model ({@link notAssessed}), an unhandled `modifierExtension` is present, a
+   * not model or an element is one the definitions do not define ({@link notAssessed}), an unhandled `modifierExtension` is present, a
    * modifier ELEMENT is present, a
    * repeated property name left an element with more than one value, a `0..1` safety element
    * arrived array-wrapped, an array inside an array left content the codec could not read, XML
@@ -1516,8 +1531,24 @@ interface SafetyWalk {
    * from. Built by the same pass, at the same window, as the reads that stepped over it.
    */
   readonly unreadableCode: string[];
-  /** Resource roots whose type this layer does not model, so it cannot assess them. */
+  /**
+   * Resource roots whose type this layer does not model, so it cannot assess them, and elements the
+   * definitions of an assessed root do not define.
+   */
   readonly notAssessed: string[];
+  /**
+   * The elements of {@link SafetyWalk.notAssessed} the definitions do not define, on their own, for
+   * the validator. `top` marks a member of the entry node itself, which the validator's schema layer
+   * reports in its own turn.
+   */
+  readonly unknownElements: UnknownElement[];
+}
+
+/** An element the definitions of the resource holding it do not define. */
+interface UnknownElement {
+  readonly location: string;
+  /** Whether it is a member of the entry node itself rather than of anything below it. */
+  readonly top: boolean;
 }
 
 /**
@@ -1542,6 +1573,7 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     nearMissCode: [],
     unreadableCode: [],
     notAssessed: [],
+    unknownElements: [],
   };
   walkComplex(resource, new Trail(path), out, NO_SCOPE, true);
   // A location reached by more than one reading (a repeated property name, two withheld segments)
@@ -1565,9 +1597,38 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     // A resource a repeated property name shadowed is walked at the same path as the one it
     // shadowed: one root, one location.
     notAssessed: [...new Set(out.notAssessed)],
+    unknownElements: dedupeUnknown(out.unknownElements),
     datatypeUses: uses.uses,
     unreadableDatatypeUse: uses.unreadable,
   };
+}
+
+/** One report per location, the first kept, as {@link SafetyWalk.notAssessed} is collapsed. */
+function dedupeUnknown(found: readonly UnknownElement[]): UnknownElement[] {
+  const seen = new Set<string>();
+  return found.filter(({ location }) => {
+    if (seen.has(location)) return false;
+    seen.add(location);
+    return true;
+  });
+}
+
+/**
+ * The elements in a resource that the R4 and R4B definitions of the resource holding them do not
+ * define, at every depth: the part of {@link SafetyReadout.notAssessed} the validator reports as
+ * `UNKNOWN_ELEMENT`. Read off the same walk, so the two cannot disagree. `top` marks a member of
+ * the resource handed in itself.
+ *
+ * @param resource - The resource model.
+ * @param path - The FHIRPath prefix for the resource root.
+ * @returns Each such element's location, in document order, once.
+ * @internal
+ */
+export function undefinedElements(
+  resource: FhirComplex,
+  path: string,
+): readonly { readonly location: string; readonly top: boolean }[] {
+  return [...sharedWalk(resource, path).unknownElements];
 }
 
 /**
@@ -1898,13 +1959,82 @@ function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): vo
 interface RootScope {
   readonly types: readonly string[];
   readonly elements: string;
+  /**
+   * The contexts of `./element-definitions.js` the node here is read against: what the R4 and R4B
+   * definitions say may be written on it. Empty where there is no such model (below a root of a
+   * type this layer does not assess, or below an element the definitions do not define), and then
+   * no member is checked.
+   */
+  readonly model: readonly string[];
 }
 
 /** The scope before the walk reaches its first resource root. */
-const NO_SCOPE: RootScope = { types: [], elements: "" };
+const NO_SCOPE: RootScope = { types: [], elements: "", model: [] };
 
-/** `parameter`, then `part` any number of times: `Parameters.parameter.part` repeats `parameter`. */
-const PARAMETER_ELEMENTS = /^parameter(?:\.part)*$/;
+/**
+ * Every element the R4 and R4B definitions type as `Resource`, as `Type.element.path`.
+ * `DomainResource.contained` stands for the `contained` every resource type inherits from
+ * `DomainResource`; the others are the elements of `Bundle` and `Parameters`.
+ * `test/element-definitions.test.ts` holds this list to the projection of both releases'
+ * definition files, so it cannot go stale in silence.
+ *
+ * @internal
+ */
+export const RESOURCE_POSITIONS: readonly string[] = [
+  "Bundle.entry.resource",
+  "Bundle.entry.response.outcome",
+  "DomainResource.contained",
+  "Parameters.parameter.resource",
+];
+
+/**
+ * The elements whose definition repeats another's, where a resource position lies below the one
+ * repeated, as `[element, the element it repeats]`: `Parameters.parameter.part` is a `parameter`,
+ * so `parameter.part.resource` is a resource position at any depth of `part`. Held to the
+ * definitions by the same test as {@link RESOURCE_POSITIONS}.
+ *
+ * @internal
+ */
+export const REPEATED_DEFINITIONS: readonly (readonly [string, string])[] = [
+  ["Parameters.parameter.part", "Parameters.parameter"],
+];
+
+/** One entry of {@link RESOURCE_POSITIONS}, split: the type, the elements between, the name. */
+interface ResourcePosition {
+  readonly type: string;
+  readonly elements: string;
+}
+
+/** {@link RESOURCE_POSITIONS}, keyed by the last element name, so a walk asks one map per member. */
+const POSITIONS_BY_NAME: ReadonlyMap<string, readonly ResourcePosition[]> = (() => {
+  const byName = new Map<string, ResourcePosition[]>();
+  for (const position of RESOURCE_POSITIONS) {
+    const segments = position.split(".");
+    const name = segments[segments.length - 1] as string;
+    const list = byName.get(name) ?? [];
+    list.push({ type: segments[0] as string, elements: segments.slice(1, -1).join(".") });
+    byName.set(name, list);
+  }
+  return byName;
+})();
+
+/**
+ * The element path `elements` inside a `type` root, with every repeat of
+ * {@link REPEATED_DEFINITIONS} folded into the element it repeats: `parameter.part.part` is read as
+ * `parameter`.
+ */
+function foldRepeats(type: string, elements: string): string {
+  let folded = elements;
+  for (const [element, repeats] of REPEATED_DEFINITIONS) {
+    const from = element.slice(element.indexOf(".") + 1);
+    const to = repeats.slice(repeats.indexOf(".") + 1);
+    if (element.slice(0, element.indexOf(".")) !== type) continue;
+    while (folded === from || folded.startsWith(`${from}.`)) {
+      folded = to + folded.slice(from.length);
+    }
+  }
+  return folded;
+}
 
 /**
  * Whether the element `name`, inside `scope`, is a position the R4 and R4B definitions type as
@@ -1920,13 +2050,116 @@ const PARAMETER_ELEMENTS = /^parameter(?:\.part)*$/;
  * positions of each.
  */
 function isResourcePosition(scope: RootScope, name: string): boolean {
+  const candidates = POSITIONS_BY_NAME.get(name);
+  if (candidates === undefined) return false;
   const { types, elements } = scope;
-  if (name === "contained") return elements === "";
-  if (types.includes("Bundle")) {
-    if (name === "resource" && elements === "entry") return true;
-    if (name === "outcome" && elements === "entry.response") return true;
+  for (const position of candidates) {
+    if (position.type === "DomainResource") {
+      if (elements === position.elements) return true;
+    } else if (
+      types.includes(position.type) &&
+      foldRepeats(position.type, elements) === position.elements
+    ) {
+      return true;
+    }
   }
-  return name === "resource" && types.includes("Parameters") && PARAMETER_ELEMENTS.test(elements);
+  return false;
+}
+
+/**
+ * The contexts a resource root is read against: its own type, when every type it names is one this
+ * layer assesses and the definitions model. Otherwise none, and its members are not checked: a root
+ * of any other type is already on {@link SafetyReadout.notAssessed} as a whole.
+ */
+function rootModel(types: readonly string[]): readonly string[] {
+  if (!isAssessedRoot(types)) return [];
+  for (const type of types) if (!isDefinedContext(type)) return [];
+  return types.length === 1 ? types : [...new Set(types)];
+}
+
+/**
+ * What the definitions put below the member `name` of the node `scope` describes, recording the
+ * member on {@link SafetyReadout.notAssessed} when they do not define it. The contexts returned are
+ * the ones the member's value is read against; none when there is nothing to check it against.
+ *
+ * `resourceType` is not checked here. At a resource root it is the type; anywhere else it is a
+ * stray key the walk already lists for itself.
+ */
+function memberModel(
+  scope: RootScope,
+  name: string,
+  trail: Trail,
+  out: SafetyWalk,
+): readonly string[] {
+  if (scope.model.length === 0 || name === "resourceType") return [];
+  const targets = elementTargets(scope.model, name);
+  if (targets === undefined) {
+    recordUnknown(trail.childText(name), trail.depth === 0, out);
+    return [];
+  }
+  return targets.filter((target) => target !== RESOURCE_TARGET);
+}
+
+/** List an element the definitions do not define, once per location. */
+function recordUnknown(location: string, top: boolean, out: SafetyWalk): void {
+  out.notAssessed.push(location);
+  out.unknownElements.push({ location, top });
+}
+
+/**
+ * Check what a primitive carries beside its value: its `extension`s, each an `Extension` as the
+ * definitions define it, for members they do not define. The rest of the walk does not reach into a
+ * primitive, so this is the one read made there.
+ */
+function checkPrimitiveExtensions(node: FhirPrimitive, trail: Trail, out: SafetyWalk): void {
+  const extensions = node.extension;
+  if (extensions === undefined) return;
+  trail.child("extension");
+  for (let index = 0; index < extensions.length; index++) {
+    trail.index(index);
+    checkDefined(extensions[index] as FhirNode, ["Extension"], trail, out);
+    trail.pop();
+  }
+  trail.pop();
+}
+
+/** Check a subtree against the contexts `model`, and nothing else; for {@link checkPrimitiveExtensions}. */
+function checkDefined(
+  node: FhirNode,
+  model: readonly string[],
+  trail: Trail,
+  out: SafetyWalk,
+): void {
+  if (model.length === 0) return;
+  if (isPrimitive(node)) {
+    checkPrimitiveExtensions(node, trail, out);
+    return;
+  }
+  if (isList(node)) {
+    const items = node.items;
+    for (let index = 0; index < items.length; index++) {
+      trail.index(index);
+      checkDefined(items[index] as FhirNode, model, trail, out);
+      trail.pop();
+    }
+    return;
+  }
+  for (const property of membersOf(node)) {
+    const name = property.name;
+    const targets = elementTargets(model, name);
+    if (targets === undefined) {
+      recordUnknown(trail.childText(name), false, out);
+      continue;
+    }
+    trail.child(name);
+    checkDefined(
+      property.value,
+      targets.filter((target) => target !== RESOURCE_TARGET),
+      trail,
+      out,
+    );
+    trail.pop();
+  }
 }
 
 /**
@@ -1955,7 +2188,8 @@ function walkComplex(
   let inner = scope;
   if (isRoot) {
     checkResourceRoot(node, trail.text(), out);
-    inner = { types: typesOf(node), elements: "" };
+    const types = typesOf(node);
+    inner = { types, elements: "", model: rootModel(types) };
   } else if (writesProperty(node, "resourceType")) {
     out.notAssessed.push(trail.text());
   }
@@ -2048,12 +2282,13 @@ function visitProperty(
   if (name === "modifierExtension") {
     checkModifierExtension(property.value, trail.text(), out.modifiers);
   }
+  const model = memberModel(scope, name, trail, out);
   trail.child(name);
   if (isResourcePosition(scope, name)) {
     descendResource(property.value, trail, out);
   } else {
     const elements = scope.elements === "" ? name : `${scope.elements}.${name}`;
-    descend(property.value, trail, { types: scope.types, elements }, out);
+    descend(property.value, trail, { types: scope.types, elements, model }, out);
   }
   trail.pop();
 }
@@ -2092,7 +2327,9 @@ function checkModifierExtension(value: FhirNode, path: string, out: string[]): v
 /** Descend into a node's children (complex → walk; list → each item) to catch nested findings. */
 function descend(node: FhirNode, trail: Trail, scope: RootScope, out: SafetyWalk): void {
   if (isComplex(node)) walkComplex(node, trail, out, scope);
-  else if (isList(node)) {
+  else if (isPrimitive(node)) {
+    if (scope.model.length > 0) checkPrimitiveExtensions(node, trail, out);
+  } else if (isList(node)) {
     const items = node.items;
     for (let index = 0; index < items.length; index++) {
       trail.index(index);
@@ -2112,7 +2349,9 @@ function descend(node: FhirNode, trail: Trail, scope: RootScope, out: SafetyWalk
  *
  * **A resource root of a type this layer does not model is not assessed**: its location is on
  * {@link SafetyReadout.notAssessed} and the readout is never `safeToSummarize`, whatever status it
- * carries. The un-gated reads above still run there, so what they find is still reported.
+ * carries. The un-gated reads above still run there, so what they find is still reported. **Nor is
+ * an element the FHIR definitions do not define** at any depth of a resource it does model: its
+ * location is listed there too.
  *
  * **The un-gated negation reads run at every resource root**, so a `contained` or `Bundle.entry`
  * resource's retraction, refutation, `not-done` / `not-taken` status or "do not perform" instruction
@@ -2265,8 +2504,9 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
 
 /**
  * A refusal raised when a caller tries to flatten or summarize a resource this library cannot
- * summarize honestly: a resource root in it is of a type the safety layer does not model (see
- * {@link SafetyReadout.notAssessed}), it carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
+ * summarize honestly: a resource root in it is of a type the safety layer does not model, or it
+ * holds an element the FHIR definitions do not define (see {@link SafetyReadout.notAssessed}), it
+ * carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
  * ignoring one), it carries a modifier ELEMENT (an ordinary base element R4 flags `?!`, which the
  * same rule forbids ignoring), a repeated property name left an element holding several values with no rule for
  * choosing between them, a `0..1` safety element arrived wrapped in a JSON array, an array inside
@@ -2310,7 +2550,8 @@ export class FhirSafetyError extends Error {
         "belongs, a use on an identifier, name, address or contact point this library cannot " +
         "read, a declared absence whose reason this library cannot read, or a declared absence " +
         "beside a value leaves an element this library must not flatten, or a resource is of a " +
-        "type this library does not assess " +
+        "type this library does not assess, or an element is one the FHIR definitions do not " +
+        "define " +
         `(${String(locations.length)} location(s)).`,
     );
     this.name = "FhirSafetyError";
@@ -2320,7 +2561,8 @@ export class FhirSafetyError extends Error {
 
 /**
  * Assert a resource is safe to flatten/summarize, throwing {@link FhirSafetyError} when a resource root
- * in it is of a type the safety layer does not model, or it carries an
+ * in it is of a type the safety layer does not model, or it holds an element the FHIR definitions
+ * do not define, or it carries an
  * unhandled `modifierExtension`, a modifier element, a repeated property name, an array-wrapped single-valued element, an
  * array inside an array, dropped XML element text, a boolean-valued safety element holding a written
  * value outside the datatype's lexical space, or a `code`-valued negation element holding a value
@@ -2367,7 +2609,8 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     // declaration the caller can read is a disclosure, not a loss.
     ...readout.unreadableAbsenceMarkers,
     ...readout.conflictingAbsenceMarkers,
-    // A resource root of a type this layer does not model: nothing above was assessed for it.
+    // A resource root of a type this layer does not model, or an element the definitions do not
+    // define: nothing above was assessed for it.
     ...readout.notAssessed,
   ];
   if (locations.length > 0) throw new FhirSafetyError(locations);

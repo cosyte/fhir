@@ -157,8 +157,13 @@ describe("the base-constraint walk past a type marker", () => {
       status: "final",
       code: { text: "synthetic", _other: { id: "r1" } },
     });
+    // `other` is no element of a CodeableConcept, so it is reported as one the definitions do not
+    // define, beside the ele-1 finding this test is about.
     expect(validateResource(other).issues.map((i) => [i.code, i.expression, i.constraint])).toEqual(
-      [["INVARIANT_VIOLATED", "Observation.code.other", "ele-1"]],
+      [
+        ["UNKNOWN_ELEMENT", "Observation.code.other", undefined],
+        ["INVARIANT_VIOLATED", "Observation.code.other", "ele-1"],
+      ],
     );
   });
 });

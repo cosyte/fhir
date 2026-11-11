@@ -207,6 +207,14 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `Bundle.entry.response.outcome`, `Parameters.parameter.resource`, `parameter.part.resource`) is a
   resource root whether or not it writes a `resourceType`; a `resourceType` written anywhere else
   is a stray key that starts no resource, hides no position below it, and is itself not assessed.
+- **An element the FHIR definitions do not define is not assessed, never affirmed.** Inside a
+  resource of one of those types, every element at every depth (backbone elements, datatypes,
+  extensions, a primitive's extensions) is checked against the union of the R4 and R4B definitions;
+  one neither defines is listed on `notAssessed` by its own location, and `validateResource`
+  reports it as `UNKNOWN_ELEMENT` at the same location, inside contained resources and Bundle
+  entries too. The element table and the list of resource positions are held by a test to a
+  projection of the R4 and R4B definition files, which CI re-derives from the files pinned by
+  SHA-256.
 - **A modifier is not only a `modifierExtension`, and the ordinary base elements R4 flags `?!` reach
   the readout too.** `modifierElements` carries one entry per location, each
   `{ element, location }`: `comparator` wherever a node the walk reaches carries it, `implicitRules`

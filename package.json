@@ -119,6 +119,8 @@
     "phi-scan:examples": "tsx scripts/phi-scan.ts examples/*.ts",
     "phi-scan": "tsx scripts/phi-scan.ts",
     "corpus:fetch": "node scripts/corpus-fetch.mjs",
+    "definitions:derive": "node scripts/element-definitions.mjs --write",
+    "definitions:check": "node scripts/element-definitions.mjs --check",
     "differential": "node scripts/differential.mjs",
     "differential:determinism": "node scripts/differential-determinism.mjs",
     "differential:read": "tsx scripts/read-differential.ts",

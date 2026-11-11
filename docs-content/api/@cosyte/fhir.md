@@ -355,8 +355,9 @@ A value-free description of why snapshot generation failed.
 ### FhirSafetyError
 
 A refusal raised when a caller tries to flatten or summarize a resource this library cannot
-summarize honestly: a resource root in it is of a type the safety layer does not model (see
-[SafetyReadout.notAssessed](#notassessed)), it carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
+summarize honestly: a resource root in it is of a type the safety layer does not model, or it
+holds an element the FHIR definitions do not define (see [SafetyReadout.notAssessed](#notassessed)), it
+carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
 ignoring one), it carries a modifier ELEMENT (an ordinary base element R4 flags `?!`, which the
 same rule forbids ignoring), a repeated property name left an element holding several values with no rule for
 choosing between them, a `0..1` safety element arrived wrapped in a JSON array, an array inside
@@ -2562,6 +2563,18 @@ Bundle entry, a backbone element or a datatype, is a stray key: it does not make
 resource and does not hide a resource position below it, and the node that carries it is listed
 here too, since what such a document means is not known.
 
+**An element the definitions do not define is listed here too, by its own location.** Inside a
+resource of one of the types above, every element at every depth (a backbone element, a
+datatype, an extension, a primitive's extension) is checked against what the R4 and R4B
+definitions say may be written there: `entry` on a Patient, `Entry` or `Contained` in the wrong
+case, an extra key on a Bundle entry or a Coding, a member of an object written where a
+primitive belongs, a foreign element in XML. No valid document carries one, but the reader keeps
+it in the model, where a caller that flattens the whole tree would summarize what sits under it,
+a retraction included. Nothing below such an element is checked against the definitions in
+turn. A name defined by
+either release is defined, so a document of either reads as it is written. `validateResource`
+reports the same elements as `UNKNOWN_ELEMENT`.
+
 The status codes that withdraw or cancel a record differ by type (`revoked` on a
 ServiceRequest, `cancelled` on an Encounter, `inactive` on an R4B NutritionProduct), and this
 layer reads their meaning only for the types it models. For any other type it cannot tell a
@@ -2573,7 +2586,8 @@ current record from a withdrawn one, so it says so here and the resource is not
 **Value-free and document-wide**, like the location channels beside it: the location is the
 root's own path, and the type name in it is bounded exactly as [resourceType](#resourcetype-1) is.
 
-Empty for every document whose resource roots are all of the types named above.
+Empty for every document whose resource roots are all of the types named above and whose
+elements are all ones the definitions define.
 
 ##### resourceType
 
@@ -2604,7 +2618,7 @@ leaves this `false` (a Bundle is not retracted because one of its entries is) an
 > `readonly` **safeToSummarize**: `boolean`
 
 `false` when the resource must not be flattened: a resource root is of a type this layer does
-not model ([notAssessed](#notassessed)), an unhandled `modifierExtension` is present, a
+not model or an element is one the definitions do not define ([notAssessed](#notassessed)), an unhandled `modifierExtension` is present, a
 modifier ELEMENT is present, a
 repeated property name left an element with more than one value, a `0..1` safety element
 arrived array-wrapped, an array inside an array left content the codec could not read, XML
@@ -5704,7 +5718,8 @@ arrayWrappedScalars(resource, "Observation"); // ["Observation.status"]
 > **assertSafeToSummarize**(`resource`): `void`
 
 Assert a resource is safe to flatten/summarize, throwing [FhirSafetyError](#fhirsafetyerror) when a resource root
-in it is of a type the safety layer does not model, or it carries an
+in it is of a type the safety layer does not model, or it holds an element the FHIR definitions
+do not define, or it carries an
 unhandled `modifierExtension`, a modifier element, a repeated property name, an array-wrapped single-valued element, an
 array inside an array, dropped XML element text, a boolean-valued safety element holding a written
 value outside the datatype's lexical space, or a `code`-valued negation element holding a value
@@ -8589,7 +8604,9 @@ asserts something *positive* about a patient.
 
 **A resource root of a type this layer does not model is not assessed**: its location is on
 [SafetyReadout.notAssessed](#notassessed) and the readout is never `safeToSummarize`, whatever status it
-carries. The un-gated reads above still run there, so what they find is still reported.
+carries. The un-gated reads above still run there, so what they find is still reported. **Nor is
+an element the FHIR definitions do not define** at any depth of a resource it does model: its
+location is listed there too.
 
 **The un-gated negation reads run at every resource root**, so a `contained` or `Bundle.entry`
 resource's retraction, refutation, `not-done` / `not-taken` status or "do not perform" instruction
@@ -9789,6 +9806,15 @@ validatePrimitiveValue("male", "boolean");      // "type-mismatch"
 > **validateResource**(`resource`, `options?`): [`ValidationResult`](#validationresult)
 
 Validate a FHIR resource model against structural, cardinality, and value-domain rules.
+
+An element the FHIR R4 and R4B definitions do not define is reported as `UNKNOWN_ELEMENT` at
+every depth, not only among the resource's own members: inside a backbone element, a datatype,
+an extension, a contained resource and a Bundle entry, for the resource types `readSafety`
+assesses (`AllergyIntolerance`, `Bundle`, `Condition`, `DiagnosticReport`, `Immunization`,
+`MedicationRequest`, `MedicationStatement`, `Observation`, `Patient`, `Practitioner`). These are
+exactly the elements `readSafety` lists on `notAssessed` for the same reason. A resource of
+another type is not checked below its root. The resource's own members are checked against its
+schema, a caller's included, where the registry has one.
 
 #### Parameters
 

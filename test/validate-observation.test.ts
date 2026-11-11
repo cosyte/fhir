@@ -511,7 +511,7 @@ describe("validateResource: Observation.status present as an object", () => {
   });
 });
 
-// -- AC12: backbone elements are checked for shape only, never entered --------------------------
+// -- AC12: backbone elements are checked for shape, and for members R4 does not define ------------
 
 describe("validateResource: Observation.component and Observation.referenceRange", () => {
   it("reports neither as an unknown element", () => {
@@ -537,12 +537,23 @@ describe("validateResource: Observation.component and Observation.referenceRange
     }
   });
 
-  it("emits nothing for a member of either backbone that R4 does not define there", () => {
+  it("reports a member of either backbone that R4 does not define there, at its location", () => {
+    // `referenceRange` defines no `value[x]`, so neither variant is an element there, and neither
+    // is a choice to call ambiguous.
     const json =
       `{"resourceType":"Observation","status":"final","code":${CODE},` +
       '"component":[{"nonesuch":1}],"referenceRange":[{"nonesuch":1,"valueString":"a","valueInteger":2}]}';
     const result = check(json, { mode: "strict" });
-    expect(codes(result)).not.toContain("UNKNOWN_ELEMENT");
+    expect(
+      result.issues
+        .filter((issue) => issue.code === "UNKNOWN_ELEMENT")
+        .map((issue) => [issue.expression, issue.severity]),
+    ).toEqual([
+      ["Observation.component[0].nonesuch", "error"],
+      ["Observation.referenceRange[0].nonesuch", "error"],
+      ["Observation.referenceRange[0].valueString", "error"],
+      ["Observation.referenceRange[0].valueInteger", "error"],
+    ]);
     expect(codes(result)).not.toContain("CHOICE_AMBIGUOUS");
   });
 

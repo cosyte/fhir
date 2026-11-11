@@ -1,0 +1,37 @@
+NOTICE for test/__data__/fhir-element-definitions.json
+======================================================
+
+Derived from: The HL7 FHIR R4 (4.0.1) and R4B (4.3.0) specifications' own
+              StructureDefinition bundles, profiles-resources.xml and
+              profiles-types.xml, as the HAPI FHIR project redistributes them
+              (github.com/hapifhir/hapi-fhir, modules
+              hapi-fhir-validation-resources-r4 and -r4b), read at the commit and
+              SHA-256 digests the file's own `sources` names.
+Licence:      CC0 1.0 Universal (SPDX: CC0-1.0). The specification states,
+              verbatim:
+
+                  "This document is licensed under Creative Commons 'No Rights
+                  Reserved' (CC0)."
+
+              (https://hl7.org/fhir/R4/license.html). The full CC0 1.0 legal code
+              is beside this file in fhir-element-definitions.LICENSE.txt.
+
+TRADEMARK, WHICH CC0 DOES NOT COVER
+-----------------------------------
+The same page reserves the marks separately:
+
+    "HL7(R), HEALTH LEVEL SEVEN(R), FHIR(R) and the FHIR (flame image)(R) are
+    trademarks owned by Health Level Seven International, registered with the
+    United States Patent and Trademark Office."
+
+Use of the definitions as test expectations carries no claim to those marks,
+and nothing here is endorsed by or affiliated with HL7.
+
+WHAT THIS REPOSITORY CARRIES, AND WHAT IT DOES NOT
+--------------------------------------------------
+The definition files themselves are not committed. The JSON beside this file is
+a projection of them: element paths, element names and the type each is
+declared as, made by scripts/element-definitions.mjs, whose docblock states the
+rule. `pnpm definitions:check` fetches the files, refuses any whose SHA-256 is
+not the pinned one, re-derives the projection and compares it with the committed
+copy; CI runs it.

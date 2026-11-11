@@ -402,8 +402,10 @@ describe("content where a code belongs is disclosed, not read through", () => {
      *    tolerance), so the same predicate would report a conformant DSTU2 document.
      * 2. `AllergyIntolerance.code` written as a bare string draws nothing. That is the boundary keeping
      *    `no-known-allergy` root- and type-scoped: absence there reads as UNKNOWN, not NONE.
-     * 3. `doNotPerform` written as an object draws nothing. `unreadableBooleans` asks about a
-     *    written value, and this slice does not widen it.
+     * 3. `doNotPerform` written as an object draws nothing on `unreadableBooleans`, which asks about
+     *    a written value and is not widened. The readout still declines it, since: a member of an
+     *    object at a `boolean` is an element the definitions do not define, so it is on
+     *    `notAssessed` and `safeToSummarize` is `false`.
      * 4. `clinicalStatus` written as a bare string draws nothing. It is not a negation element.
      * 5. `validateResource` still reports `valid: true`. The safety layer is this slice's window
      *    and no new `ValidationIssue` is raised.
@@ -431,12 +433,14 @@ describe("content where a code belongs is disclosed, not read through", () => {
       expect(safety.safeToSummarize).toBe(true);
     });
 
-    it("3. leaves an object at doNotPerform alone", () => {
+    it("3. leaves an object at doNotPerform off unreadableBooleans, and declines it as undefined", () => {
       const safety = safetyOf('{"resourceType":"MedicationRequest","doNotPerform":{"value":true}}');
 
       expect(disclosed(safety)).toEqual([]);
       expect(safety.unreadableBooleans).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      // `value` is no element of a `boolean`: the definitions do not define it there.
+      expect(safety.notAssessed).toEqual(["MedicationRequest.doNotPerform.value"]);
+      expect(safety.safeToSummarize).toBe(false);
     });
 
     it("4. leaves an object at clinicalStatus alone", () => {

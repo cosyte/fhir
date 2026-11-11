@@ -114,7 +114,11 @@ if it were R4:
   `RESOURCE_NOT_MODELED`: only the elements every resource has are checked, and none of the type's
   own;
 - `validateResource` reports an unmodeled type only at the top level, so a document can be valid
-  and still decline in `readSafety` for a type it does not model in `contained` or a Bundle entry.
+  and still decline in `readSafety` for a type it does not model in `contained` or a Bundle entry;
+- inside a resource of a type the safety readout assesses, every element at every depth is checked
+  against the union of what R4 and R4B define there, so an element either release defines is read
+  as written, and one neither defines is listed on `notAssessed` and reported as `UNKNOWN_ELEMENT`
+  ([an element the format does not define](./check-safety-before-summarizing.md#an-element-the-format-does-not-define)).
 
 Here a synthetic `NutritionProduct`, a type R4B added, carries a status outside any code list and an
 element no version defines. Validation reports neither, and the safety readout does not assess the
