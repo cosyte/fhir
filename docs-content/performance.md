@@ -61,23 +61,26 @@ from costing more than a fixed amount.
 
 ## Large Bundles cost more per entry
 
-`parseResource` costs about twice as much per entry on a large Bundle as on a small one. We
-measured this in three runs on a GitHub-hosted runner (Node.js 22) with `bench/scaling-trace.mjs`, reading
-synthetic transaction Bundles of about 0.9 KiB an entry:
+`parseResource` costs two to three times as much per entry on a large Bundle as on a small one. We
+measured this in four runs on a GitHub-hosted runner (Node.js 22) with `bench/scaling-trace.mjs`,
+reading synthetic transaction Bundles of about 0.9 KiB an entry:
 
-- Up to 1,000 entries a Bundle: 8.4 to 13.0 us an entry.
-- From 2,000 entries a Bundle up to 16,000: 20.3 to 27.7 us an entry.
+- Up to 1,000 entries a Bundle: 8.0 to 13.0 us an entry.
+- From 2,000 entries a Bundle up to 16,000: 16.6 to 27.7 us an entry.
 
-The step comes from garbage collection. A read keeps two things alive until it returns: the raw
-JSON tree it reads first, and the model it builds from that tree. On a developer machine they took
-about 15 KiB an entry together. Below the step, that fits in V8's young generation, and a
+Most of the step comes from garbage collection. A read keeps two things alive until it returns:
+the raw JSON tree it reads first, and the model it builds from that tree. On a developer machine
+they took about 15 KiB an entry together. Below the step, that fits in V8's young generation, and a
 collection finds most of what it scans already dead. Above the step it no longer fits, so the
 collector copies the live tree and moves it to the old generation. Across the step, the time in
-young-generation collections rose from about 1 us an entry to 8 to 12.5 us, and old-generation
-collections added 1 to 2 us more. The time outside collection rose too, but less: by 7% to 21%
-between 1,000 and 2,000 entries, depending on the run. From 2,000 to 16,000 entries, the total cost
-per entry rose by 15% to 24%, and the time outside collection by at most 7%. We found no cost that
-grows with the square of the size.
+young-generation collections rose from 0.5 to 1.5 us an entry to 6 to 12.5 us, and old-generation
+collections added 0.8 to 2.6 us more.
+
+The time outside collection rose too, by 7% to 33% between 1,000 and 2,000 entries, depending on
+the run, and by another 5% to 18% from 2,000 to 16,000. We have not found the cause of that part.
+From 2,000 to 16,000 entries, the total cost per entry rose by 15% to 38%. None of this is a cost
+that grows with the square of the size: at 4,000 against 16,000 entries, four times the entries
+cost 4.1 to 4.6 times as long in every run of the trace and of the scaling gate.
 
 Where the step falls depends on the size of the young generation. On the runner it was between
 1,000 and 2,000 entries a Bundle. On a developer machine running Node.js 26 it was between 2,000
