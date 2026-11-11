@@ -166,9 +166,9 @@ the summary instead of disappearing from it.
 
 ## Reference
 
-- [`readSafety`](./api/README.md#readsafety) and the fields of
-  [`SafetyReadout`](./api/README.md#safetyreadout).
-- [`assertSafeToSummarize`](./api/README.md#assertsafetosummarize) and
-  [`FhirSafetyError`](./api/README.md#fhirsafetyerror).
+- [`readSafety`](./api/@cosyte/fhir.md#readsafety) and the fields of
+  [`SafetyReadout`](./api/@cosyte/fhir.md#safetyreadout).
+- [`assertSafeToSummarize`](./api/@cosyte/fhir.md#assertsafetosummarize) and
+  [`FhirSafetyError`](./api/@cosyte/fhir.md#fhirsafetyerror).
 - [Troubleshooting](./troubleshooting.md#a-resource-carries-a-modifierextension-the-library-does-not-know)
   covers the unknown `modifierExtension` case and what to do about it.

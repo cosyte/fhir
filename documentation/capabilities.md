@@ -46,11 +46,15 @@ and binding strength without vendoring any SNOMED / CPT / LOINC content, validat
 profiles you supply, and evaluates their FHIRPath invariants** (failing safe to `INVARIANT_UNCHECKED`
 on any unsupported expression); it does **not** yet do `type`·`profile` slicing discriminator
 validation (still `PROFILE_SLICE_UNCHECKED`), and it bundles **no** US Core
-IG corpus. The `validator_cli.jar` **differential is authored but CI-only** (a JVM oracle job: there is
-no Java in the dev container, so it has not been observed green there) and now runs over **both** the
-synthetic spec-clean corpus **and** the real-world quirk corpus. The built-in structural schema set is the base-resource elements plus
-`Patient` as a worked demonstrator; other resource types validate only against a caller-supplied schema
-or profile. Without a supplied terminology service there is **no code-validity / value-set-membership**
+IG corpus. The `validator_cli.jar` **differential runs in CI** (a JVM oracle job; there is no Java in
+the dev container) over **both** the synthetic spec-clean corpus **and** the real-world quirk corpus,
+and it is green on main: CI run 43093454578 (job 130776168314, commit 8d066a3) compared 213
+documents (300 declared, 87 excluded) and agreed with the oracle within the documented deltas, and
+showed determinism over 31 documents. The built-in structural schema set has **eight** resource
+types, each with the base-resource elements merged in: `Patient`, `Observation`, `DiagnosticReport`,
+`Condition`, `MedicationRequest`, `AllergyIntolerance`, `Immunization` and `MedicationStatement`.
+Any other resource type validates its base elements only, with an informational
+`RESOURCE_NOT_MODELED`, unless a caller supplies a schema or profile for it. Without a supplied terminology service there is **no code-validity / value-set-membership**
 guarantee beyond `system` + strength (no terminology content is bundled: licensing). Its XML codec is
 schema-free like the JSON one, so an XML-sourced primitive is kept as its lexical string and **typed
 cross-format transcoding** (emitting spec-clean JSON booleans/numbers from an XML model) needs the
@@ -760,8 +764,8 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   The R4 base constraints are evaluated whether or not a profile is supplied (above), and a profile
   whose snapshot repeats one is reported once per occurrence, not twice. `collectInvariantIssues`,
   called directly, still reports every constraint the profile carries, base ones included.
-- **Deferred:** the bundled multi-version US Core IG corpus and the `validator_cli.jar` differential
-  (a JVM dev/CI job); the `type` / `profile` slicing discriminators and reslicing (still
+- **Deferred:** the bundled multi-version US Core IG corpus (the `validator_cli.jar` differential
+  runs in CI, see above); the `type` / `profile` slicing discriminators and reslicing (still
   `PROFILE_SLICE_UNCHECKED`: a genuine fail-safe deferral, they need per-occurrence type carriage /
   recursive profile resolution). Every finding is **value-free** (a code + a FHIRPath location,
   never the value).
@@ -826,7 +830,7 @@ validateResource(resource, { profiles: [...STARTER_PROFILES] });
   preserved byte-exact (Synthea #675), a primitive-extension `_`-sibling misalignment that **fails
   closed** (HAPI #5738), a searchset Bundle `link[next]` that survives the round-trip
   (bundle-example.json), and US Core race + birthsex extensions preserved on a base Patient. The
-  `validator_cli.jar` differential (CI-only) runs over this corpus too. **Values are synthetic;** a
+  `validator_cli.jar` differential, which runs in CI, covers this corpus too. **Values are synthetic;** a
   genuinely vendor-**proprietary** deviation absent from every public sample stays grounded-only. It is
   never invented. Missing-must-support and version-drift quirks are covered by the profile suite.
 

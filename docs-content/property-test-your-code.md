@@ -224,13 +224,14 @@ environment variable, as we do with `COSYTE_PROPERTY_RUNS`.
 
 ## Reference
 
-- [`parseResource`](./api/README.md#parseresource),
-  [`serializeResource`](./api/README.md#serializeresource),
-  [`parseResourceXml`](./api/README.md#parseresourcexml),
-  [`serializeResourceXml`](./api/README.md#serializeresourcexml),
-  [`nodesEquivalent`](./api/README.md#nodesequivalent) and
-  [`readSafety`](./api/README.md#readsafety).
-- The generators' options are in their TSDoc comments, which an editor shows on hover.
+- [`parseResource`](./api/@cosyte/fhir.md#parseresource),
+  [`serializeResource`](./api/@cosyte/fhir.md#serializeresource),
+  [`parseResourceXml`](./api/@cosyte/fhir.md#parseresourcexml),
+  [`serializeResourceXml`](./api/@cosyte/fhir.md#serializeresourcexml),
+  [`nodesEquivalent`](./api/@cosyte/fhir.md#nodesequivalent) and
+  [`readSafety`](./api/@cosyte/fhir.md#readsafety).
+- The generators and their options are in the
+  [`@cosyte/fhir/arbitraries` reference](./api/@cosyte/fhir/arbitraries.md).
 - [Testing and quality](./testing-and-quality.md) says how we use these generators on this
   library, and [Accept JSON and XML](./accept-json-and-xml.md) explains what each reader accepts
   and what it refuses.

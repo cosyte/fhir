@@ -30,8 +30,8 @@ instead. [Troubleshooting](./troubleshooting.md) lists the refusals and what eac
 
 ## Reference
 
-- [`parseResource`](./api/README.md#parseresource) and
-  [`serializeResource`](./api/README.md#serializeresource).
-- [`validateResource`](./api/README.md#validateresource) and its `mode` option in
-  [`ValidateOptions`](./api/README.md#validateoptions).
-- [`SERIALIZE_ERROR_CODES`](./api/README.md#serialize_error_codes), every reason a write is refused.
+- [`parseResource`](./api/@cosyte/fhir.md#parseresource) and
+  [`serializeResource`](./api/@cosyte/fhir.md#serializeresource).
+- [`validateResource`](./api/@cosyte/fhir.md#validateresource) and its `mode` option in
+  [`ValidateOptions`](./api/@cosyte/fhir.md#validateoptions).
+- [`SERIALIZE_ERROR_CODES`](./api/@cosyte/fhir.md#serialize_error_codes), every reason a write is refused.

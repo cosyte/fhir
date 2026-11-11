@@ -63,12 +63,12 @@ lists what it refuses.
 
 ## Reference
 
-- [`parseResource`](./api/README.md#parseresource) and
-  [`parseResourceXml`](./api/README.md#parseresourcexml), which both return a
-  [`ReadResult`](./api/README.md#readresult).
-- [`serializeResource`](./api/README.md#serializeresource),
-  [`serializeResourceXml`](./api/README.md#serializeresourcexml) and
-  [`FhirSerializeError`](./api/README.md#fhirserializeerror).
-- [`nodesEquivalent`](./api/README.md#nodesequivalent).
+- [`parseResource`](./api/@cosyte/fhir.md#parseresource) and
+  [`parseResourceXml`](./api/@cosyte/fhir.md#parseresourcexml), which both return a
+  [`ReadResult`](./api/@cosyte/fhir.md#readresult).
+- [`serializeResource`](./api/@cosyte/fhir.md#serializeresource),
+  [`serializeResourceXml`](./api/@cosyte/fhir.md#serializeresourcexml) and
+  [`FhirSerializeError`](./api/@cosyte/fhir.md#fhirserializeerror).
+- [`nodesEquivalent`](./api/@cosyte/fhir.md#nodesequivalent).
 - [Core concepts](./core-concepts.md#two-codecs-one-model) explains why the two codecs share one
   model and why the XML reader refuses a `DOCTYPE`.
