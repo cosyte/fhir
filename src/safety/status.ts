@@ -711,6 +711,11 @@ export interface SafetyReadout {
    * `resourceType`, so one that writes none is listed here, and so is a value there that is not an
    * object at all. A root that names several types is listed when any of them is outside that set.
    *
+   * What is a resource is decided by position alone. A `resourceType` written anywhere else, on a
+   * Bundle entry, a backbone element or a datatype, is a stray key: it does not make that node a
+   * resource and does not hide a resource position below it, and the node that carries it is listed
+   * here too, since what such a document means is not known.
+   *
    * The status codes that withdraw or cancel a record differ by type (`revoked` on a
    * ServiceRequest, `cancelled` on an Encounter, `inactive` on an R4B NutritionProduct), and this
    * layer reads their meaning only for the types it models. For any other type it cannot tell a
@@ -1938,14 +1943,21 @@ function walkComplex(
   scope: RootScope,
   isRoot = false,
 ): void {
-  // A resource root is the entry node, a node at a position the definitions type as `Resource` (a
-  // `contained` resource, a Bundle `entry.resource`; see `isResourcePosition`) whether or not it
-  // names a type, or any other nested node that carries its own `resourceType`. Only there does this
-  // library know a cardinality, and a root that names no type is not assessed.
+  // A resource root is decided by POSITION alone: the entry node, or a node at a position the
+  // definitions type as `Resource` (a `contained` resource, a Bundle `entry.resource`; see
+  // `isResourcePosition`) whether or not it names a type. Only there does this library know a
+  // cardinality, and a root that names no type is not assessed.
+  //
+  // A `resourceType` written anywhere else (on a Bundle entry, a backbone element, a datatype) is a
+  // stray key. It does not start a resource and does not reset the scope the positions are found
+  // in, so a typeless resource below it is still found where it sits. What such a document means is
+  // not known here, so the node that carries it is not assessed either.
   let inner = scope;
-  if (isRoot || writesProperty(node, "resourceType")) {
+  if (isRoot) {
     checkResourceRoot(node, trail.text(), out);
     inner = { types: typesOf(node), elements: "" };
+  } else if (writesProperty(node, "resourceType")) {
+    out.notAssessed.push(trail.text());
   }
   // Every node, not only a resource root: `comparator` modifies the value beside it wherever that
   // value sits, and the two type-gated rules decide their own gate off this node's `resourceType`.

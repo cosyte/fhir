@@ -355,7 +355,8 @@ A value-free description of why snapshot generation failed.
 ### FhirSafetyError
 
 A refusal raised when a caller tries to flatten or summarize a resource this library cannot
-summarize honestly: it carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
+summarize honestly: a resource root in it is of a type the safety layer does not model (see
+[SafetyReadout.notAssessed](#notassessed)), it carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
 ignoring one), it carries a modifier ELEMENT (an ordinary base element R4 flags `?!`, which the
 same rule forbids ignoring), a repeated property name left an element holding several values with no rule for
 choosing between them, a `0..1` safety element arrived wrapped in a JSON array, an array inside
@@ -2236,7 +2237,7 @@ reasons given there.
 `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
 `nearMissNegationCodes`, `unreadableNegationCodes`, `unreadableIntents`,
 `unreadableDatatypeUses`, `absenceMarkers`, `unreadableAbsenceMarkers`,
-`conflictingAbsenceMarkers`) and the `safeToSummarize` derived from them (from all but
+`conflictingAbsenceMarkers`, `notAssessed`) and the `safeToSummarize` derived from them (from all but
 `absenceMarkers`, `intents` and `datatypeUses`, which disclose rather than refuse) are
 **document-wide**: they carry FHIRPath locations, so a nested finding has an address to name, and
 `assertSafeToSummarize` refuses over a `Bundle`'s entries. The **single-valued** fields
@@ -2542,6 +2543,38 @@ inside a document could make a caller **less** careful about a patient, while le
 unsurfaced reads as *unknown*. So a nested `AllergyIntolerance` recording it reaches neither this
 field nor [negations](#negations): a declared gap in the fail-safe direction, not an oversight.
 
+##### notAssessed
+
+> `readonly` **notAssessed**: readonly `string`[]
+
+FHIRPath locations of the resource roots this layer did **not assess**, because their type is
+not one it models: the entry node, or a resource at any position the R4 and R4B definitions type
+as `Resource` (`contained`, `Bundle.entry.resource`, `Bundle.entry.response.outcome`,
+`Parameters.parameter.resource` and `parameter.part.resource`), whose `resourceType` names a
+type outside `AllergyIntolerance`, `Bundle`, `Condition`, `DiagnosticReport`, `Immunization`,
+`MedicationRequest`, `MedicationStatement`, `Observation`, `Patient` and `Practitioner`, or names
+no type at all. A node at one of those positions is a resource root whether or not it writes a
+`resourceType`, so one that writes none is listed here, and so is a value there that is not an
+object at all. A root that names several types is listed when any of them is outside that set.
+
+What is a resource is decided by position alone. A `resourceType` written anywhere else, on a
+Bundle entry, a backbone element or a datatype, is a stray key: it does not make that node a
+resource and does not hide a resource position below it, and the node that carries it is listed
+here too, since what such a document means is not known.
+
+The status codes that withdraw or cancel a record differ by type (`revoked` on a
+ServiceRequest, `cancelled` on an Encounter, `inactive` on an R4B NutritionProduct), and this
+layer reads their meaning only for the types it models. For any other type it cannot tell a
+current record from a withdrawn one, so it says so here and the resource is not
+[safeToSummarize](#safetosummarize). The un-gated reads still run at such a root, so a retraction or a
+`not-done` written there is still on [negations](#negations); an empty `negations` beside a non-empty
+`notAssessed` means "not looked for", never "none".
+
+**Value-free and document-wide**, like the location channels beside it: the location is the
+root's own path, and the type name in it is bounded exactly as [resourceType](#resourcetype-1) is.
+
+Empty for every document whose resource roots are all of the types named above.
+
 ##### resourceType
 
 > `readonly` **resourceType**: `string` \| `undefined`
@@ -2570,7 +2603,8 @@ leaves this `false` (a Bundle is not retracted because one of its entries is) an
 
 > `readonly` **safeToSummarize**: `boolean`
 
-`false` when the resource must not be flattened: an unhandled `modifierExtension` is present, a
+`false` when the resource must not be flattened: a resource root is of a type this layer does
+not model ([notAssessed](#notassessed)), an unhandled `modifierExtension` is present, a
 modifier ELEMENT is present, a
 repeated property name left an element with more than one value, a `0..1` safety element
 arrived array-wrapped, an array inside an array left content the codec could not read, XML
@@ -5669,7 +5703,8 @@ arrayWrappedScalars(resource, "Observation"); // ["Observation.status"]
 
 > **assertSafeToSummarize**(`resource`): `void`
 
-Assert a resource is safe to flatten/summarize, throwing [FhirSafetyError](#fhirsafetyerror) when it carries an
+Assert a resource is safe to flatten/summarize, throwing [FhirSafetyError](#fhirsafetyerror) when a resource root
+in it is of a type the safety layer does not model, or it carries an
 unhandled `modifierExtension`, a modifier element, a repeated property name, an array-wrapped single-valued element, an
 array inside an array, dropped XML element text, a boolean-valued safety element holding a written
 value outside the datatype's lexical space, or a `code`-valued negation element holding a value
@@ -8551,6 +8586,10 @@ type they are `undefined` and only the un-gated reads apply, which are the retra
 refutation, `doNotPerform`, the `not-done` / `not-taken` status negations, and the
 modifier-extension check. `noKnownAllergy` is the one negation that stays type-gated, because it
 asserts something *positive* about a patient.
+
+**A resource root of a type this layer does not model is not assessed**: its location is on
+[SafetyReadout.notAssessed](#notassessed) and the readout is never `safeToSummarize`, whatever status it
+carries. The un-gated reads above still run there, so what they find is still reported.
 
 **The un-gated negation reads run at every resource root**, so a `contained` or `Bundle.entry`
 resource's retraction, refutation, `not-done` / `not-taken` status or "do not perform" instruction

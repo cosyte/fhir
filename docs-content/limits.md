@@ -103,7 +103,8 @@ if it were R4:
   reads its status, modifiers and negations by the same rules;
 - the safety readout does not assess a resource of a type it does not model, including one R4B
   added: it lists the resource on `notAssessed` and never calls it safe to summarize, whatever
-  status it carries
+  status it carries, and it finds a resource by its position alone, so a `resourceType` written on
+  a Bundle entry or another element that is not a resource is listed there too
   ([a resource type the readout does not model](./check-safety-before-summarizing.md#a-resource-type-the-readout-does-not-model));
 - a resource of one of the eight types we model (`Patient`, `Observation`, `DiagnosticReport`,
   `Condition`, `MedicationRequest`, `AllergyIntolerance`, `Immunization` and

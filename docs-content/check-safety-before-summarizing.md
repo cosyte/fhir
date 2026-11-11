@@ -103,7 +103,10 @@ location is on `notAssessed` and the resource is never safe to summarize, whatev
 That holds wherever the resource sits: at the root, in `contained`, in a Bundle entry or a Bundle
 entry's `response.outcome`, or in a `Parameters` parameter. A resource at one of those positions
 that names no type at all is not assessed either, so a Bundle entry with no `resourceType` and a
-status of `entered-in-error` is never safe to summarize.
+status of `entered-in-error` is never safe to summarize. What is a resource is decided by position
+alone: a `resourceType` written anywhere else, such as on a Bundle entry itself, does not make that
+node a resource and does not hide the entry's resource, and the node that carries it is listed on
+`notAssessed` too.
 
 ```ts runnable
 import { parseResource, readSafety } from "@cosyte/fhir";

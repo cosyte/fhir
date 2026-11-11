@@ -205,7 +205,8 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   throws, whatever status the resource carries. The un-gated negation reads still run there. A node
   at a position the R4 and R4B definitions type as `Resource` (`contained`, `Bundle.entry.resource`,
   `Bundle.entry.response.outcome`, `Parameters.parameter.resource`, `parameter.part.resource`) is a
-  resource root whether or not it writes a `resourceType`.
+  resource root whether or not it writes a `resourceType`; a `resourceType` written anywhere else
+  is a stray key that starts no resource, hides no position below it, and is itself not assessed.
 - **A modifier is not only a `modifierExtension`, and the ordinary base elements R4 flags `?!` reach
   the readout too.** `modifierElements` carries one entry per location, each
   `{ element, location }`: `comparator` wherever a node the walk reaches carries it, `implicitRules`
