@@ -1637,6 +1637,9 @@ describe("AC-8: reading every document the prefix refusal is measured on is unch
     absenceMarkers: [],
     unreadableAbsenceMarkers: [],
     conflictingAbsenceMarkers: [],
+    // A readout field added for resource roots of a type the safety layer does not model. Every
+    // document here but D2 is of a modeled type, so it reads empty and nothing measured moves.
+    notAssessed: [],
     safeToSummarize: true,
   };
   const OBSERVATION_FINDINGS = [
@@ -1720,7 +1723,13 @@ describe("AC-8: reading every document the prefix refusal is measured on is unch
             expression: "<withheld>",
           },
         ],
-        safety: { ...QUIET, resourceType: "<withheld>" },
+        // D2's root names no type the safety layer models, so the readout no longer affirms it.
+        safety: {
+          ...QUIET,
+          resourceType: "<withheld>",
+          notAssessed: ["<withheld>"],
+          safeToSummarize: false,
+        },
       },
     ],
     [

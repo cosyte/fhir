@@ -101,16 +101,24 @@ if it were R4:
 
 - its values are read exactly as with R4, every `decimal` kept as written, and the safety readout
   reads its status, modifiers and negations by the same rules;
+- the safety readout does not assess a resource of a type it does not model, including one R4B
+  added: it lists the resource on `notAssessed` and never calls it safe to summarize, whatever
+  status it carries, and it finds a resource by its position alone, so a `resourceType` written on
+  a Bundle entry or another element that is not a resource is listed there too
+  ([a resource type the readout does not model](./check-safety-before-summarizing.md#a-resource-type-the-readout-does-not-model));
 - a resource of one of the eight types we model (`Patient`, `Observation`, `DiagnosticReport`,
   `Condition`, `MedicationRequest`, `AllergyIntolerance`, `Immunization` and
   `MedicationStatement`) is validated against R4's definition of that type, so an element R4B
   changed is judged by R4's rule;
 - a resource of any other type, including one R4B added, gets the information finding
   `RESOURCE_NOT_MODELED`: only the elements every resource has are checked, and none of the type's
-  own.
+  own;
+- `validateResource` reports an unmodeled type only at the top level, so a document can be valid
+  and still decline in `readSafety` for a type it does not model in `contained` or a Bundle entry.
 
 Here a synthetic `NutritionProduct`, a type R4B added, carries a status outside any code list and an
-element no version defines, and validation reports neither:
+element no version defines. Validation reports neither, and the safety readout does not assess the
+resource, so it is not safe to summarize:
 
 ```ts runnable
 import { parseResource, readSafety, validateResource } from "@cosyte/fhir";
@@ -129,6 +137,8 @@ const result = validateResource(resource);
 result.valid; // => true
 result.issues.map((issue) => issue.code); // => ["RESOURCE_NOT_MODELED"]
 readSafety(resource).status; // => "not-a-status"
+readSafety(resource).notAssessed; // => ["NutritionProduct"]
+readSafety(resource).safeToSummarize; // => false
 ```
 
 The same status on an `Observation`, a type we model, is an error:

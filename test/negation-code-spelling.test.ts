@@ -15,6 +15,7 @@ import {
   serializeResource,
   SNOMED_SCT,
 } from "../src/index.js";
+import { expectSafeButForType } from "./_not-assessed.js";
 import { isNearMissCode, NEGATION_CODE_READS } from "../src/safety/codes.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
@@ -142,7 +143,8 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
       } catch (err) {
         expect(err).toBeInstanceOf(FhirSafetyError);
         const safetyError = err as FhirSafetyError;
-        expect(safetyError.locations).toEqual(["Procedure.status"]);
+        // `Procedure` is the root itself, a type the safety layer does not assess.
+        expect(safetyError.locations).toEqual(["Procedure.status", "Procedure"]);
         // Value-free by contract: neither the text that failed to match nor the code it resembles
         // reaches the message. A near-miss can sit on an element a sender filled with anything.
         expect(safetyError.message).not.toContain("NOT-DONE");
@@ -385,7 +387,7 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
       for (const value of [" completed", "COMPLETED", "Final ", " active", "IN-PROGRESS"]) {
         const safety = safetyOf(`{"resourceType":"Procedure","status":${JSON.stringify(value)}}`);
         expect(safety.negations).toEqual([]);
-        expect(safety.safeToSummarize).toBe(true);
+        expectSafeButForType(safety);
       }
     });
 
@@ -394,7 +396,7 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
       // coercion this slice exists to refuse, one step removed.
       for (const value of ["notdone", "not_done", "not done", "not-don", "not-donee", "no-done"]) {
         const safety = safetyOf(`{"resourceType":"Procedure","status":${JSON.stringify(value)}}`);
-        expect(safety.safeToSummarize).toBe(true);
+        expectSafeButForType(safety);
       }
     });
 
@@ -407,7 +409,7 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
         const safety = safetyOf(
           `{"resourceType":"Procedure","status":${JSON.stringify(`${pad}${NOT_DONE}`)}}`,
         );
-        expect(safety.safeToSummarize).toBe(true);
+        expectSafeButForType(safety);
       }
     });
 
@@ -421,7 +423,7 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
       ] as const) {
         const safety = safetyOf(`{"resourceType":"${type}","status":"${code}"}`);
         expect(safety.negations).toEqual([code]);
-        expect(safety.safeToSummarize).toBe(true);
+        expectSafeButForType(safety);
       }
       const refutedDoc = safetyOf(
         '{"resourceType":"AllergyIntolerance","verificationStatus":{"coding":[{"code":"refuted"}]}}',
@@ -452,7 +454,7 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
       );
 
       expect(safety.negations).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      expectSafeButForType(safety);
     });
 
     it("leaves `no-known-allergy` root-scoped, and its near miss undisclosed", () => {

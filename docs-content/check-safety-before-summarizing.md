@@ -88,13 +88,60 @@ unreadable.safeToSummarize; // => false
 What this does not read: a practitioner's identifiers, names, and addresses (a practitioner's
 identifier `use` is reported on `modifierElements` instead, whatever its value), a `use` carried in an
 extension value, a contained resource of a type the safety readout does not model, such as an
-organization, and an ended `period` on an entry whose `use` is current.
+organization (the readout does not assess that resource at all, as the next section shows), and an
+ended `period` on an entry whose `use` is current.
+
+## A resource type the readout does not model
+
+The statuses that withdraw or cancel a record differ by resource type: `revoked` on a service
+request, `cancelled` on an encounter, `inactive` on a nutrition product. The safety readout knows
+what they mean for the types it models, which are `AllergyIntolerance`, `Condition`,
+`DiagnosticReport`, `Immunization`, `MedicationRequest`, `MedicationStatement`, `Observation`,
+`Patient`, `Practitioner`, and `Bundle` as a container whose entries are each judged. For any other
+type it cannot tell a current record from a withdrawn one, so it does not assess it: the resource's
+location is on `notAssessed` and the resource is never safe to summarize, whatever status it carries.
+That holds wherever the resource sits: at the root, in `contained`, in a Bundle entry or a Bundle
+entry's `response.outcome`, or in a `Parameters` parameter. A resource at one of those positions
+that names no type at all is not assessed either, so a Bundle entry with no `resourceType` and a
+status of `entered-in-error` is never safe to summarize. What is a resource is decided by position
+alone: a `resourceType` written anywhere else, such as on a Bundle entry itself, does not make that
+node a resource and does not hide the entry's resource, and the node that carries it is listed on
+`notAssessed` too.
+
+```ts runnable
+import { parseResource, readSafety } from "@cosyte/fhir";
+
+const request = readSafety(
+  parseResource('{"resourceType":"ServiceRequest","status":"revoked","intent":"order"}').resource,
+);
+
+request.status; // => "revoked"
+request.notAssessed; // => ["ServiceRequest"]
+request.safeToSummarize; // => false
+
+const bundle = readSafety(
+  parseResource(
+    '{"resourceType":"Bundle","type":"collection","entry":[' +
+      '{"resource":{"resourceType":"Observation","status":"final","code":{"text":"synthetic"}}},' +
+      '{"resource":{"resourceType":"Encounter","status":"cancelled"}}]}',
+  ).resource,
+);
+
+bundle.notAssessed; // => ["Bundle.entry[1].resource"]
+bundle.safeToSummarize; // => false
+```
+
+The reads that need no type still run on such a resource, so an `entered-in-error` or `not-done`
+status there is still on `negations`. An empty `negations` beside a non-empty `notAssessed` means
+nothing was looked for, not that nothing was found. To summarize a type the readout does not model,
+read its status yourself against that type's definition first.
 
 ## Refuse instead of warn
 
 When a summary must refuse rather than warn, `assertSafeToSummarize` is the executable form of the
 same rule: it throws a `FhirSafetyError` for an unhandled modifier, a value the document left
-ambiguous, and the other shapes that make an affirmative summary unsafe. The error carries the
+ambiguous, a resource the readout does not assess, and the other shapes that make an affirmative
+summary unsafe. The error carries the
 locations that forced the refusal and never a value:
 
 ```ts runnable

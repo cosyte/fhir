@@ -98,13 +98,16 @@ describe("a resourceType XML has no tag to name", () => {
 
     it("what base emitted for it, which is the half a refusal cannot show", () => {
       // Written as the document base produced, so this pins the harm rather than the remedy: the
-      // type gate and the modifier extension it carried are both absent, and every layer affirms.
+      // type gate and the modifier extension it carried are both absent, and every layer affirmed.
       const laundered = parseResourceXml(
         '<Resource xmlns="http://hl7.org/fhir"><status value="final"/></Resource>',
       );
       expect(laundered.issues).toEqual([]);
       expect(validateResource(laundered.resource).valid).toBe(true);
-      expect(readSafety(laundered.resource).safeToSummarize).toBe(true);
+      // The readout no longer affirms it: `Resource` is not a type the safety layer models, so the
+      // root is not assessed. Validation still affirms the laundered document.
+      expect(readSafety(laundered.resource).notAssessed).toEqual(["Resource"]);
+      expect(readSafety(laundered.resource).safeToSummarize).toBe(false);
       expect(readSafety(laundered.resource).unhandledModifierExtensions).toEqual([]);
     });
 

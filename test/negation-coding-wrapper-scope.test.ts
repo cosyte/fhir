@@ -11,6 +11,7 @@ import {
   serializeResourceXml,
   validateResource,
 } from "../src/index.js";
+import { expectSafeButForType } from "./_not-assessed.js";
 import { NEGATION_CODE_READS } from "../src/safety/codes.js";
 
 /**
@@ -241,8 +242,9 @@ describe("what does not move, pinned in both states", () => {
 
     expect(safety.negations).toContain("refuted");
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
-    expect(refuses(json)).toBe(false);
+    expectSafeButForType(safety);
+    // The only refusal left is the root's own type, which the safety layer does not assess.
+    expect(refuses(json)).toBe(safety.notAssessed.length > 0);
   });
 
   it("leaves a legitimately repeating element of the same name alone", () => {
@@ -253,7 +255,7 @@ describe("what does not move, pinned in both states", () => {
     );
 
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 
   it("leaves clinicalStatus unreported outside the table, and that is this rule's SURVIVING GAP", () => {
@@ -270,7 +272,7 @@ describe("what does not move, pinned in both states", () => {
 
     expect(safety.clinicalStatus).toBe("active");
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 
   it("declines a multi-position clinicalStatus wrapper without reporting it, the other half of that gap", () => {
@@ -282,7 +284,7 @@ describe("what does not move, pinned in both states", () => {
 
     expect(safety.clinicalStatus).toBeUndefined();
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 
   it("leaves a wrapped code on a type outside the table alone, since no-known-allergy stays type-scoped", () => {
@@ -295,7 +297,7 @@ describe("what does not move, pinned in both states", () => {
 
     expect(safety.negations).toStrictEqual([]);
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 
   it("leaves a Coding wrapper at a code-typed status alone, because nothing reads through it", () => {
@@ -311,7 +313,7 @@ describe("what does not move, pinned in both states", () => {
     expect(safety.negations).toStrictEqual([]);
     expect(safety.unreadableNegationCodes).toStrictEqual([]);
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 
   it("leaves a verificationStatus below a resource root alone", () => {
@@ -323,7 +325,7 @@ describe("what does not move, pinned in both states", () => {
 
     expect(safety.negations).toStrictEqual([]);
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 });
 
@@ -376,7 +378,7 @@ describe("the element-level wrappers stay open residuals", () => {
 
     expect(safety.negations).toContain("do-not-perform");
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 
   it("does not report an array-wrapped status outside the cardinality table", () => {
@@ -384,7 +386,7 @@ describe("the element-level wrappers stay open residuals", () => {
 
     expect(safety.negations).toContain("not-done");
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 
   it("does not report an array-wrapped verificationStatus element outside the cardinality table", () => {
@@ -394,6 +396,6 @@ describe("the element-level wrappers stay open residuals", () => {
 
     expect(safety.negations).toContain("refuted");
     expect(safety.arrayWrappedScalars).toStrictEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 });

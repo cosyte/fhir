@@ -9,6 +9,7 @@ import {
   unreadableNegationCodes,
   validateResource,
 } from "../src/index.js";
+import { expectSafeButForType } from "./_not-assessed.js";
 import { hasUnreadableCode, NEGATION_CODE_READS } from "../src/safety/codes.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
@@ -165,7 +166,8 @@ describe("content where a code belongs is disclosed, not read through", () => {
       } catch (err) {
         expect(err).toBeInstanceOf(FhirSafetyError);
         const locations = (err as FhirSafetyError).locations;
-        expect(locations).toEqual(["Procedure.status"]);
+        // `Procedure` is the root itself, a type the safety layer does not assess.
+        expect(locations).toEqual(["Procedure.status", "Procedure"]);
         // Value-free by contract: neither the content at the position nor anything read out of it
         // reaches the message or the locations.
         expect((err as FhirSafetyError).message).not.toContain("not-done");
@@ -214,7 +216,7 @@ describe("content where a code belongs is disclosed, not read through", () => {
       );
 
       expect(disclosed(safety)).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      expectSafeButForType(safety);
     });
   });
 
@@ -337,7 +339,8 @@ describe("content where a code belongs is disclosed, not read through", () => {
         const safety = safetyOf(json);
 
         expect(disclosed(safety)).toEqual([]);
-        expect(safety.safeToSummarize).toBe(summarizable);
+        if (summarizable) expectSafeButForType(safety);
+        else expect(safety.safeToSummarize).toBe(false);
       });
     }
 
@@ -352,7 +355,7 @@ describe("content where a code belongs is disclosed, not read through", () => {
 
       expect(safety.negations).toEqual(["not-done"]);
       expect(disclosed(safety)).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      expectSafeButForType(safety);
     });
 
     it("draws nothing for a conformant XML status with no value at all", () => {
@@ -363,7 +366,7 @@ describe("content where a code belongs is disclosed, not read through", () => {
       );
 
       expect(disclosed(safety)).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      expectSafeButForType(safety);
     });
   });
 
@@ -461,7 +464,7 @@ describe("content where a code belongs is disclosed, not read through", () => {
       const safety = safetyOf('{"resourceType":"Procedure","status":[]}');
 
       expect(disclosed(safety)).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      expectSafeButForType(safety);
     });
 
     it("a duplicate key cannot hide a CodeableConcept member", () => {
@@ -482,7 +485,7 @@ describe("content where a code belongs is disclosed, not read through", () => {
 
       expect(safety.negations).toEqual([]);
       expect(disclosed(safety)).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      expectSafeButForType(safety);
     });
   });
 });

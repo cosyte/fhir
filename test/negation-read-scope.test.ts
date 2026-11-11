@@ -9,6 +9,7 @@ import {
   serializeResourceXml,
   SAFETY_RESOURCE_TYPES,
 } from "../src/index.js";
+import { expectSafeButForType } from "./_not-assessed.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
 
@@ -69,7 +70,7 @@ describe("the doNotPerform negation is read wherever it is written", () => {
         expect(safety.negations).toEqual(["do-not-perform"]);
         expect(safety.doNotPerform).toBe(true);
         // Read, so nothing is withheld: the refusal channel is for values that cannot be read.
-        expect(safety.safeToSummarize).toBe(true);
+        expectSafeButForType(safety);
         expect(safety.unreadableBooleans).toEqual([]);
       });
 
@@ -133,7 +134,7 @@ describe("the doNotPerform negation is read wherever it is written", () => {
         // The convenience field stays the root read, exactly as `status` beside it does. The Bundle
         // wrote no `doNotPerform` of its own, and `negations` is the authoritative read.
         expect(safety.doNotPerform).toBeUndefined();
-        expect(safety.safeToSummarize).toBe(true);
+        expectSafeButForType(safety);
       });
     }
 
@@ -243,7 +244,7 @@ describe("the doNotPerform negation is read wherever it is written", () => {
 
       expect(safety.negations).toEqual([]);
       expect(safety.doNotPerform).toBeUndefined();
-      expect(safety.safeToSummarize).toBe(true);
+      expectSafeButForType(safety);
     });
 
     it("leaves noKnownAllergy type-gated, which is the opposite direction", () => {

@@ -185,7 +185,7 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
   `nearMissNegationCodes`, `unreadableNegationCodes`, `unreadableIntents`,
   `unreadableDatatypeUses`, `absenceMarkers`, `unreadableAbsenceMarkers`,
-  `conflictingAbsenceMarkers`) and `safeToSummarize` are document-wide.** Every one of them but
+  `conflictingAbsenceMarkers`, `notAssessed`) and `safeToSummarize` are document-wide.** Every one of them but
   `absenceMarkers`, `intents` and `datatypeUses`, which disclose rather than refuse, sets
   `safeToSummarize` to `false` when it is not empty. The **single-valued** fields (`status`, `retracted`, `doNotPerform`, `noKnownAllergy`
   and the rest) answer about the resource you handed in, because one value cannot say which resource
@@ -195,6 +195,18 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   not flag `?!`, and surfacing one from somewhere inside a document could make a caller less careful
   where leaving it unsurfaced reads as _unknown_.
   `assertSafeToSummarize` **refuses** (throws) rather than flatten past an unhandled modifier.
+- **A resource type the readout does not model is not assessed, never affirmed.** The status codes
+  that withdraw or cancel a record differ by type, and the readout reads their meaning only for
+  `AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`, `MedicationRequest`,
+  `MedicationStatement`, `Observation`, `Patient`, `Practitioner`, and `Bundle` (a container with no
+  modifier element of its own, whose entries are judged one by one). Every resource root of any
+  other type, an R4 type such as `ServiceRequest` or `Encounter`, a type R4B added, or a root naming
+  no type, is listed on `notAssessed`, `safeToSummarize` is `false`, and `assertSafeToSummarize`
+  throws, whatever status the resource carries. The un-gated negation reads still run there. A node
+  at a position the R4 and R4B definitions type as `Resource` (`contained`, `Bundle.entry.resource`,
+  `Bundle.entry.response.outcome`, `Parameters.parameter.resource`, `parameter.part.resource`) is a
+  resource root whether or not it writes a `resourceType`; a `resourceType` written anywhere else
+  is a stray key that starts no resource, hides no position below it, and is itself not assessed.
 - **A modifier is not only a `modifierExtension`, and the ordinary base elements R4 flags `?!` reach
   the readout too.** `modifierElements` carries one entry per location, each
   `{ element, location }`: `comparator` wherever a node the walk reaches carries it, `implicitRules`

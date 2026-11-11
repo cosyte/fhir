@@ -443,7 +443,9 @@ describe("AC-7: nested roots of the eight types are read, and only by their near
 
       expect(safety.datatypeUses, written).toEqual([]);
       expect(safety.unreadableDatatypeUses, written).toEqual([]);
-      expect(safety.safeToSummarize, written).toBe(true);
+      // The only refusal is the contained Organization, a type the safety layer does not assess.
+      expect(safety.notAssessed, written).toEqual(["Patient.contained[0]"]);
+      expect(safety.safeToSummarize, written).toBe(false);
     }
   });
 });

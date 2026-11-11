@@ -10,6 +10,7 @@ import {
   readSafety,
   type NegationKind,
 } from "../src/index.js";
+import { expectSafeButForType } from "./_not-assessed.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
 
@@ -132,8 +133,9 @@ describe("every negation is read at every resource root, not only the one handed
 
         expect(safety.negations).toEqual([kind]);
         // Read, so nothing is withheld: `safeToSummarize` does not move for a value that IS read.
-        expect(safety.safeToSummarize).toBe(true);
-        expect(refuses(bundleWith(resource))).toBe(false);
+        expectSafeButForType(safety);
+        // The only refusal left is an entry of a type the safety layer does not assess.
+        expect(refuses(bundleWith(resource))).toBe(safety.notAssessed.length > 0);
       });
 
       it(`surfaces ${kind} from ${label} in contained`, () => {
@@ -375,7 +377,7 @@ describe("every negation is read at every resource root, not only the one handed
       const safety = safetyOf(bundleWith('{"resourceType":"Procedure","status":"completed"}'));
 
       expect(safety.negations).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      expectSafeButForType(safety);
     });
 
     it("keeps reading the negations at the entry root", () => {
