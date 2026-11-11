@@ -94,7 +94,7 @@
  */
 
 import { decimal, wouldLosePrecisionAsDouble } from "../model/decimal.js";
-import { childPath, rootPath } from "../model/path.js";
+import { childPath, rootPath, Trail } from "../model/path.js";
 import {
   complex,
   list,
@@ -218,14 +218,14 @@ function isScalar(node: RawJson): boolean {
  *
  * @internal
  */
-function scalarValue(node: RawJson, path: string, issues: FhirIssue[]): PrimitiveValue | undefined {
+function scalarValue(node: RawJson, trail: Trail, issues: FhirIssue[]): PrimitiveValue | undefined {
   switch (node.t) {
     case "str":
       return node.value;
     case "bool":
       return node.value;
     case "num": {
-      if (wouldLosePrecisionAsDouble(node.raw)) issues.push(decimalPrecisionAtRisk(path));
+      if (wouldLosePrecisionAsDouble(node.raw)) issues.push(decimalPrecisionAtRisk(trail.text()));
       return decimal(node.raw);
     }
     case "null":
@@ -286,12 +286,12 @@ function applyNullRule(
   rawValue: RawJson | undefined,
   meta: PrimitiveMeta,
   inArray: boolean,
-  path: string,
+  trail: Trail,
   issues: FhirIssue[],
 ): FhirPrimitive {
   if (rawValue?.t !== "null") return node;
   if (inArray && carriesMetadata(meta)) return node;
-  issues.push(undefinedJsonNull(path));
+  issues.push(undefinedJsonNull(trail.text()));
   return markUndefinedNull(node);
 }
 
@@ -363,12 +363,12 @@ function applyMetaSlotRule(
   node: FhirPrimitive,
   rawMeta: RawJson | undefined,
   inArray: boolean,
-  path: string,
+  trail: Trail,
   issues: FhirIssue[],
 ): FhirPrimitive {
   if (rawMeta === undefined || rawMeta.t === "obj" || rawMeta.t === "arr") return node;
   if (inArray && rawMeta.t === "null") return node;
-  issues.push(unknownProperty(path));
+  issues.push(unknownProperty(trail.text()));
   return markNonObjectMeta(node, rawJsonText(rawMeta));
 }
 
@@ -424,8 +424,9 @@ function repeatedKeys(members: readonly RawMember[]): (m: number) => boolean {
  * it on every primitive node would buy no verdict. That limitation is stated on
  * {@link ../safety/status.js} `shadowedProperties`, which walks object elements.
  */
-function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue[]): PrimitiveMeta {
+function readMeta(metaNode: RawJson | undefined, trail: Trail, issues: FhirIssue[]): PrimitiveMeta {
   if (metaNode === undefined || metaNode.t !== "obj") return NO_META;
+  const path = trail.text();
   const result: { id?: string; extension?: readonly FhirComplex[] } = {};
   const members = metaNode.members;
   const repeats = repeatedKeys(members);
@@ -439,9 +440,13 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
     if (member.key === "id" && member.value.t === "str") {
       result.id = member.value.value;
     } else if (member.key === "extension" && member.value.t === "arr") {
-      result.extension = member.value.items.map((item, i) =>
-        readComplex(item, `${at}[${String(i)}]`, issues),
-      );
+      const items = new Trail(at);
+      result.extension = member.value.items.map((item, i) => {
+        items.index(i);
+        const extension = readComplex(item, items, issues);
+        items.pop();
+        return extension;
+      });
     } else {
       issues.push(unknownProperty(at));
     }
@@ -470,11 +475,11 @@ function readMeta(metaNode: RawJson | undefined, path: string, issues: FhirIssue
  * nothing one branch over: it hangs off the node instead of being modeled at it
  * ({@link FhirComplex.nonObjectSource}).
  */
-function readComplex(node: RawJson, path: string, issues: FhirIssue[]): FhirComplex {
-  if (node.t === "obj") return buildComplex(node, path, issues);
-  issues.push(unknownProperty(path));
+function readComplex(node: RawJson, trail: Trail, issues: FhirIssue[]): FhirComplex {
+  if (node.t === "obj") return buildComplex(node, trail, issues);
+  issues.push(unknownProperty(trail.text()));
   if (node.t !== "arr") return { ...complex([]), nonObjectSource: rawJsonText(node) };
-  issues.push(nestedArray(path));
+  issues.push(nestedArray(trail.text()));
   return markNestedArray(complex([]), { value: rawJsonText(node) });
 }
 
@@ -502,7 +507,7 @@ function isPrimitiveArray(value: RawArray | undefined): boolean {
 function buildPrimitiveList(
   value: RawArray | undefined,
   meta: RawArray | undefined,
-  path: string,
+  trail: Trail,
   issues: FhirIssue[],
 ): FhirNode {
   const valueItems = value?.items ?? [];
@@ -512,7 +517,7 @@ function buildPrimitiveList(
       FATAL_CODES.PRIMITIVE_EXTENSION_MISALIGNED,
       "Primitive value array and its _-sibling array have different lengths; " +
         "the null-padded alignment is broken and cannot be recovered safely.",
-      { expression: path },
+      { expression: trail.text() },
     );
   }
   const length = Math.max(valueItems.length, metaItems.length);
@@ -529,11 +534,11 @@ function buildPrimitiveList(
         continue;
       }
     }
-    const itemPath = `${path}[${String(i)}]`;
+    trail.index(i);
     // A non-scalar where a primitive value belongs (malformed mixed array) has no primitive
     // representation, flag it rather than drop it silently.
     if (rawValue !== undefined && (rawValue.t === "obj" || rawValue.t === "arr")) {
-      issues.push(unknownProperty(itemPath));
+      issues.push(unknownProperty(trail.text()));
     }
     // An array in either channel is an array inside an array, which FHIR JSON does not define. The
     // value channel already drew the warning above; the `_`-sibling channel drew nothing at all,
@@ -543,19 +548,20 @@ function buildPrimitiveList(
     // whatever value the value channel carried, so the null-padded alignment between the two arrays
     // is untouched, and the two channels stay distinguishable because either can nest alone.
     const nested = rawValue?.t === "arr" || rawMeta?.t === "arr";
-    if (nested) issues.push(nestedArray(itemPath));
-    const value_ = rawValue === undefined ? undefined : scalarValue(rawValue, itemPath, issues);
-    const metaValue = readMeta(rawMeta, itemPath, issues);
+    if (nested) issues.push(nestedArray(trail.text()));
+    const value_ = rawValue === undefined ? undefined : scalarValue(rawValue, trail, issues);
+    const metaValue = readMeta(rawMeta, trail, issues);
     // `true` in both: this is a slot of a repeating primitive, the one place json.html §2.6.2.3
     // defines a `null`, so the padding exemption is available here and nowhere else. It applies to
     // each channel separately, because §2.6.2.3 fills out both arrays.
     const node = applyMetaSlotRule(
-      applyNullRule(primitive(value_, metaValue), rawValue, metaValue, true, itemPath, issues),
+      applyNullRule(primitive(value_, metaValue), rawValue, metaValue, true, trail, issues),
       rawMeta,
       true,
-      itemPath,
+      trail,
       issues,
     );
+    trail.pop();
     if (!nested) {
       items.push(node);
       continue;
@@ -572,20 +578,27 @@ function buildPrimitiveList(
 function buildComplexList(
   value: RawArray,
   meta: RawJson | undefined,
-  path: string,
+  trail: Trail,
   issues: FhirIssue[],
 ): FhirNode {
   // A `_`-sibling belongs to a primitive; a complex array's members carry their own id/extension
   // inline. The sibling is not read, so this reports unreadable content, not a tolerated shape.
-  if (meta !== undefined) issues.push(misplacedPrimitiveExtension(path));
-  return list(value.items.map((item, i) => readComplex(item, `${path}[${String(i)}]`, issues)));
+  if (meta !== undefined) issues.push(misplacedPrimitiveExtension(trail.text()));
+  return list(
+    value.items.map((item, i) => {
+      trail.index(i);
+      const node = readComplex(item, trail, issues);
+      trail.pop();
+      return node;
+    }),
+  );
 }
 
 /** Build the node for a single base property from its value and `_`-sibling. */
 function buildNode(
   value: RawJson | undefined,
   meta: RawJson | undefined,
-  path: string,
+  trail: Trail,
   issues: FhirIssue[],
 ): FhirNode {
   // Arrays (repeating elements).
@@ -597,20 +610,20 @@ function buildNode(
         throw new FhirCodecError(
           FATAL_CODES.PRIMITIVE_EXTENSION_MISALIGNED,
           "A primitive array's _-sibling must itself be an array; found a scalar/object.",
-          { expression: path },
+          { expression: trail.text() },
         );
       }
-      return buildPrimitiveList(valueArr, metaArr, path, issues);
+      return buildPrimitiveList(valueArr, metaArr, trail, issues);
     }
     // valueArr is defined here (a complex array cannot be value-absent).
     /* v8 ignore next -- the `??` fallback is unreachable: isPrimitiveArray() is true when valueArr is undefined */
-    return buildComplexList(valueArr ?? { t: "arr", items: [] }, meta, path, issues);
+    return buildComplexList(valueArr ?? { t: "arr", items: [] }, meta, trail, issues);
   }
 
   // A complex (object) element, its id/extension are inline, so any `_`-sibling is misplaced.
   if (value?.t === "obj") {
-    if (meta !== undefined) issues.push(misplacedPrimitiveExtension(path));
-    return buildComplex(value, path, issues);
+    if (meta !== undefined) issues.push(misplacedPrimitiveExtension(trail.text()));
+    return buildComplex(value, trail, issues);
   }
 
   // A single primitive (scalar value, and/or a `_`-sibling object of id/extension).
@@ -618,18 +631,18 @@ function buildNode(
     throw new FhirCodecError(
       FATAL_CODES.PRIMITIVE_EXTENSION_MISALIGNED,
       "A single primitive's _-sibling must be an object; found an array.",
-      { expression: path },
+      { expression: trail.text() },
     );
   }
-  const scalar = value === undefined ? undefined : scalarValue(value, path, issues);
-  const metaValue = readMeta(meta, path, issues);
+  const scalar = value === undefined ? undefined : scalarValue(value, trail, issues);
+  const metaValue = readMeta(meta, trail, issues);
   // `false` in both: a singleton slot. §2.6.2.3 renders a value-absent singleton as the `_` property
   // alone, so no `null` here is ever padding, in either channel, however the other one is filled in.
   return applyMetaSlotRule(
-    applyNullRule(primitive(scalar, metaValue), value, metaValue, false, path, issues),
+    applyNullRule(primitive(scalar, metaValue), value, metaValue, false, trail, issues),
     meta,
     false,
-    path,
+    trail,
     issues,
   );
 }
@@ -651,30 +664,32 @@ function isPlain(members: readonly RawMember[]): boolean {
 }
 
 /** Build a {@link FhirComplex} from a raw object, recursing through its properties. */
-function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirComplex {
+function buildComplex(obj: RawObject, at: Trail, issues: FhirIssue[], root = false): FhirComplex {
   const members = obj.members;
   if (isPlain(members)) {
-    let rootedAt = path;
-    if (path === "") {
+    let trail = at;
+    if (root) {
       const rt = members.find((member) => member.key === "resourceType")?.value;
-      if (rt?.t === "str") rootedAt = rootPath(rt.value);
+      if (rt?.t === "str") trail = new Trail(rootPath(rt.value));
     }
     return complex(
-      members.map((member) => ({
-        name: member.key,
-        value:
-          plainPrimitive(member.value) ??
-          buildNode(member.value, undefined, childPath(rootedAt, member.key), issues),
-      })),
+      members.map((member) => {
+        const plain = plainPrimitive(member.value);
+        if (plain !== undefined) return { name: member.key, value: plain };
+        trail.child(member.key);
+        const node = buildNode(member.value, undefined, trail, issues);
+        trail.pop();
+        return { name: member.key, value: node };
+      }),
     );
   }
   const grouped = group(obj);
   const { order, value, meta, shadowed } = grouped;
   // Root path becomes the resource type once known, so FHIRPath expressions read `Patient.birthDate`.
-  let basePath = path;
-  if (path === "") {
+  let trail = at;
+  if (root) {
     const rt = value[order.indexOf("resourceType")];
-    if (rt?.t === "str") basePath = rootPath(rt.value);
+    if (rt?.t === "str") trail = new Trail(rootPath(rt.value));
   }
   const properties: FhirProperty[] = [];
   for (let i = 0; i < order.length; i++) {
@@ -682,10 +697,13 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
     const rawValue = value[i];
     const plain =
       meta[i] === undefined && rawValue !== undefined ? plainPrimitive(rawValue) : undefined;
-    properties.push({
-      name,
-      value: plain ?? buildNode(rawValue, meta[i], childPath(basePath, name), issues),
-    });
+    if (plain !== undefined) {
+      properties.push({ name, value: plain });
+      continue;
+    }
+    trail.child(name);
+    properties.push({ name, value: buildNode(rawValue, meta[i], trail, issues) });
+    trail.pop();
   }
   if (shadowed === undefined) return complex(properties);
   // Members a repeated property name shadowed: read them into the model too (a dropped value cannot
@@ -693,7 +711,8 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
   // of several with a clean result.
   const reported = new Set<string>();
   const duplicates = shadowed.map((member) => {
-    const at = childPath(basePath, member.base);
+    trail.child(member.base);
+    const at = trail.text();
     // One issue per element on this object, however many members shadowed the name here (a name and
     // its `_`-sibling can each repeat): the FHIRPath location is the same, so a second issue would
     // say nothing new. Two different objects that each repeat a name still report separately.
@@ -701,12 +720,11 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
       reported.add(member.base);
       issues.push(duplicateProperty(at));
     }
-    return {
-      name: member.base,
-      value: member.isMeta
-        ? buildNode(undefined, member.node, at, issues)
-        : buildNode(member.node, undefined, at, issues),
-    };
+    const node = member.isMeta
+      ? buildNode(undefined, member.node, trail, issues)
+      : buildNode(member.node, undefined, trail, issues);
+    trail.pop();
+    return { name: member.base, value: node };
   });
   return complex(properties, duplicates);
 }
@@ -740,6 +758,6 @@ export function parseResource(input: string | RawJson): ReadResult {
     );
   }
   const issues: FhirIssue[] = [];
-  const resource = buildComplex(raw, "", issues);
+  const resource = buildComplex(raw, new Trail(""), issues, true);
   return { resource, issues };
 }
