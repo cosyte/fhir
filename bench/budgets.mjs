@@ -3,7 +3,7 @@
 //
 // Four budgets, each a proposal until a package's numbers show it can be held:
 // - peak heap under 20 times the input for a dense shape (a resource or a Bundle of many elements);
-// - peak heap under 3 times the input for a large opaque payload (the base64 PDF report);
+// - peak heap under 3 times the input for a large opaque payload (the base64 PDF report and Binary);
 // - a cold import under 15 ms;
 // - throughput, in bytes a second, not falling by more than half from a shape's smallest size to its
 //   largest.
@@ -26,7 +26,8 @@ function shapeOf(benchmark) {
 }
 
 function isOpaque(benchmark) {
-  return shapeOf(benchmark).startsWith("DiagnosticReport");
+  const shape = shapeOf(benchmark);
+  return shape.startsWith("DiagnosticReport") || shape.startsWith("Binary");
 }
 
 /** A case's bytes a second, or why there is none. */
@@ -65,7 +66,7 @@ function main(argv) {
   const lines = [
     "### Budgets",
     "",
-    `Peak heap is one call's peak above the settled heap, over one input's bytes; the budget is ${String(DENSE_PEAK_MULTIPLE)} times for a dense shape and ${String(OPAQUE_PEAK_MULTIPLE)} times for the base64 PDF report.`,
+    `Peak heap is one call's peak above the settled heap, over one input's bytes; the budget is ${String(DENSE_PEAK_MULTIPLE)} times for a dense shape and ${String(OPAQUE_PEAK_MULTIPLE)} times for the base64 PDF report and Binary.`,
     "",
     "| Benchmark | Size | Input | Peak heap | Multiple | Budget | Within |",
     "| --- | --- | --- | --- | --- | --- | --- |",
