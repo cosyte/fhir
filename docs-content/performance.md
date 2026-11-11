@@ -71,7 +71,9 @@ expression itself, such as the stack running out, that validation reports the co
 `pnpm check:cold-import` starts a new Node.js process twenty times, each timing one
 `await import()` of the built `dist/index.mjs` with `performance.now()`, interleaved with imports
 of an empty module so a slow runner shows as a slow empty import, and fails when the median is over
-10 ms. CI runs it on a GitHub-hosted runner after every build.
+10 ms. CI runs it on a GitHub-hosted runner after every build. On a pull request it also builds
+the base and reads it in turns with the change, so both medians come from one runner at one time;
+only the change's median is gated.
 
 ## Large Bundles cost more per entry
 

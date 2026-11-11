@@ -11,6 +11,12 @@
  * budget. CI runs it on a GitHub-hosted runner after the build; on a loaded developer machine the
  * reading is context, not a verdict.
  *
+ *   pnpm check:cold-import --base <another build's index.mjs>
+ *
+ * also reads another build, the base of a pull request in CI, in turns with this one and the empty
+ * module, and prints its median beside this build's, so the two are compared on one machine at one
+ * time. The base's reading never fails the gate.
+ *
  * Plain JavaScript run by plain `node`, so nothing but Node.js itself sits between the clock and
  * the import.
  */
@@ -63,22 +69,40 @@ export function median(values) {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-/** Read `target` and an empty module `runs` times each, interleaved. */
-export function readColdImport(target, runs = RUNS) {
+/**
+ * Read `target` and an empty module `runs` times each, and `base` too when given, interleaved: each
+ * round starts at a different one of them, so none of them always runs first.
+ */
+export function readColdImport(target, runs = RUNS, base = undefined) {
   const dir = mkdtempSync(path.join(tmpdir(), "fhir-cold-import-"));
   try {
     const empty = path.join(dir, "empty.mjs");
     writeFileSync(empty, "export {};\n");
-    const cold = [];
-    const bare = [];
+    const files = base === undefined ? [target, empty] : [target, base, empty];
+    const readings = new Map(files.map((file) => [file, []]));
     for (let i = 0; i < runs; i++) {
-      const order = i % 2 === 0 ? [target, empty] : [empty, target];
-      for (const file of order) (file === target ? cold : bare).push(oneImport(file, dir));
+      const start = i % files.length;
+      const order = [...files.slice(start), ...files.slice(0, start)];
+      for (const file of order) readings.get(file).push(oneImport(file, dir));
     }
-    return { medianMs: median(cold), emptyMedianMs: median(bare), runs };
+    return {
+      medianMs: median(readings.get(target)),
+      emptyMedianMs: median(readings.get(empty)),
+      baseMedianMs: base === undefined ? undefined : median(readings.get(base)),
+      runs,
+    };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/** The file after `--base`, or `undefined` when the flag is absent; throws on a bare flag. */
+function baseArgument(argv) {
+  const at = argv.indexOf("--base");
+  if (at === -1) return undefined;
+  const file = argv[at + 1];
+  if (file === undefined || file === "") throw new Error("--base needs a file");
+  return path.resolve(file);
 }
 
 /** Run the gate; returns the exit code. */
@@ -89,15 +113,28 @@ function main() {
     process.stderr.write("check:cold-import: dist/index.mjs is missing; run pnpm build first\n");
     return 2;
   }
-  const { medianMs, emptyMedianMs, runs } = readColdImport(target);
+  const base = baseArgument(process.argv.slice(2));
+  if (base !== undefined && !existsSync(base)) {
+    process.stderr.write("check:cold-import: the --base file is missing\n");
+    return 2;
+  }
+  const { medianMs, emptyMedianMs, baseMedianMs, runs } = readColdImport(target, RUNS, base);
   const over = medianMs > BUDGET_MS;
-  const line =
+  const lines = [
     `cold import of dist/index.mjs: median ${medianMs.toFixed(2)} ms over ${String(runs)} runs ` +
-    `(an empty module: ${emptyMedianMs.toFixed(2)} ms); budget ${String(BUDGET_MS)} ms: ` +
-    `${over ? "over" : "within"}`;
-  process.stdout.write(`${line}\n`);
+      `(an empty module: ${emptyMedianMs.toFixed(2)} ms); budget ${String(BUDGET_MS)} ms: ` +
+      `${over ? "over" : "within"}`,
+  ];
+  if (baseMedianMs !== undefined) {
+    lines.push(
+      `cold import of the base build, in turns with it: median ${baseMedianMs.toFixed(2)} ms ` +
+        `over ${String(runs)} runs (context, not gated)`,
+    );
+  }
+  const text = lines.map((line) => `${line}\n`).join("");
+  process.stdout.write(text);
   const summary = process.env.GITHUB_STEP_SUMMARY;
-  if (summary !== undefined && summary !== "") appendFileSync(summary, `${line}\n`);
+  if (summary !== undefined && summary !== "") appendFileSync(summary, text);
   return over ? 1 : 0;
 }
 

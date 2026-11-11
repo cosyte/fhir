@@ -102,7 +102,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Cold import budget (pnpm check:cold-import)
+        if: github.event_name != 'pull_request'
         run: pnpm check:cold-import
+      # On a pull request the base is built too and read in turns with this build, so the two
+      # medians come from one runner at one time. Only this build's median is gated.
+      - name: Cold import budget, beside the base build (pnpm check:cold-import --base)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${RUNNER_TEMP}/base-tree"
+          git fetch --no-tags --depth=1 origin "${BASE_SHA}"
+          git worktree add --detach "${base}" "${BASE_SHA}"
+          (cd "${base}" && pnpm install --frozen-lockfile && pnpm build)
+          pnpm check:cold-import --base "${base}/dist/index.mjs"
 
   # The house checks from @cosyte/script-utils (README, CLAUDE.md card, catalog), and the
   # @cosyte/process wiring check (the five delegating scripts and cosyte-process.config.json).
