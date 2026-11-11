@@ -15,6 +15,7 @@
         "read-bundles-and-references",
         "stream-ndjson-exports",
         "preserve-unknown-content",
+        "type-resources-with-r4-types",
         "property-test-your-code"
       ]
     },
