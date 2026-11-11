@@ -44,7 +44,10 @@ class. The model is schema-free, and elements are reached by name through small 
 This is the cost side of the trade that makes a lenient read safe: a schema-free tree cannot drop an
 element it has no field for, but it also cannot offer compile-time completions for a resource's
 elements. If you want typed access to a handful of elements, wrap the helpers in your own accessors
-at the edge of your program.
+at the edge of your program. If you want the compile-time shape of a whole resource,
+[Type a parsed resource with the community R4 types](./type-resources-with-r4-types.md) types a
+plain JSON copy with `@types/fhir`, and says what that copy loses: exact decimals become JavaScript
+numbers.
 
 ## Verdicts that say "not checked" rather than passing
 
@@ -99,5 +102,7 @@ something plausible. [Troubleshooting](./troubleshooting.md) covers what each re
   where a terminology service of your own plugs in.
 - [Validate against your own profiles](./validate-against-profiles.md) shows how to supply the
   profiles this package does not bundle.
+- [Type a parsed resource with the community R4 types](./type-resources-with-r4-types.md) shows
+  the typed copy, and which values to keep reading from the model.
 - [Troubleshooting](./troubleshooting.md) has an entry for each finding above that means a check did
   not run.
