@@ -243,6 +243,11 @@ async function main() {
       pass: () => fhir.validateResource(txn1000Model).issues.length + 1,
     },
     {
+      // The small read whose peak the memory budget judges above the probe floor.
+      name: "parseResource: 64 vital-signs Observations",
+      pass: () => feed.reduce((n, text) => n + fhir.parseResource(text).issues.length + 1, 0),
+    },
+    {
       name: "validateResource: 64 vital-signs Observations",
       pass: () => feedModels.reduce((n, m) => n + fhir.validateResource(m).issues.length + 1, 0),
     },
