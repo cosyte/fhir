@@ -52,11 +52,43 @@ from costing more than a fixed amount.
 
 ## What these numbers are not
 
-- **Not a guarantee for every input.** Very large Bundles and adversarial documents are not
-  characterized here beyond the bounds above.
+- **Not a guarantee for every input.** Adversarial documents are not characterized here beyond
+  the bounds above. Large Bundles have one measured limit, described in
+  [Large Bundles cost more per entry](#large-bundles-cost-more-per-entry).
 - **Not a comparison with other libraries.** A comparison will be a separate suite with its own
   written method. Neither exists yet.
 - **Not a behavior contract.** Nothing here changes how a resource is read or validated.
+
+## Large Bundles cost more per entry
+
+`parseResource` costs about twice as much per entry on a large Bundle as on a small one. We
+measured this on a GitHub-hosted runner (Node.js 22) with `bench/scaling-trace.mjs`, reading
+synthetic transaction Bundles of about 0.9 KiB an entry:
+
+- Up to 1,000 entries a Bundle: 8.4 to 12.5 us an entry.
+- From 2,000 entries a Bundle up to 16,000: 20.3 to 26.6 us an entry.
+
+The step comes from garbage collection. A read keeps two things alive until it returns: the raw
+JSON tree it reads first, and the model it builds from that tree. On a developer machine they took
+about 15 KiB an entry together. Below the step, that fits in V8's young generation, and a
+collection finds most of what it scans already dead. Above the step it no longer fits, so the
+collector copies the live tree and moves it to the old generation. Across the step, the time in
+young-generation collections rose from about 1 us an entry to 8 to 12 us, and old-generation
+collections added 1 to 2 us more. The time outside collection rose too, but less: by 11% on one
+run and by 21% on another, between 1,000 and 2,000 entries. From 2,000 to 16,000 entries, the
+total cost per entry rose by less than 20%. We found no cost that grows with the square of the
+size.
+
+Where the step falls depends on the size of the young generation. On the runner it was between
+1,000 and 2,000 entries a Bundle. On a developer machine running Node.js 26 it was between 2,000
+and 4,000.
+
+If you read very large Bundles:
+
+- Read in smaller units where you control the shape: Bundles of a few hundred entries, or an NDJSON
+  export read one resource a line with `streamNdjson`, which keeps each read below the step.
+- Node.js's `--max-semi-space-size` option makes the young generation larger, which should move
+  the step up. We have not measured that.
 
 ## Parsed strings can keep the input alive
 
