@@ -5,7 +5,7 @@
  * not byte framing. The single contract this file proves, at fuzz-scale run counts, across every
  * hostile-input shape the roadmap names (truncation, deep nesting, `_element` games, huge /
  * scientific-notation numbers, `resourceType` games, and, for XML, XXE / billion-laughs / undefined
- * entities), is:
+ * entities, and hostile narrative XHTML: script variants, entities and nesting depth), is:
  *
  *   **Adversarial input never crashes, hangs, or OOMs, it becomes a *typed* error (a
  *   `FhirCodecError` / `FhirXmlError` whose `.code` is a registered fatal) or a bounded rejection,
@@ -38,6 +38,7 @@ import {
   readRawXml,
   serializeResource,
   validateResource,
+  VALIDATION_CODES,
 } from "../src/index.js";
 
 /**
@@ -607,6 +608,160 @@ describe("fuzz: XML, deep nesting is a typed MAX_DEPTH_EXCEEDED, never a stack o
         expect((error as FhirXmlError).code).toBe(XML_FATAL_CODES.MAX_DEPTH_EXCEEDED);
       }),
       { numRuns: 50, seed: RUN_CONFIG.seed },
+    );
+  });
+});
+
+// ── Narrative XHTML contract ─────────────────────────────────────────────────────────────────────
+
+/** A value no rule could print by accident; seeing it in a finding means the narrative leaked. */
+const NARRATIVE_SENTINEL = "Qqzxnarrativesentinel";
+
+/**
+ * Pieces of hostile narrative markup: script in every spelling a renderer might run, event
+ * handlers, script URLs, entities predefined, HTML-only, undefined, numeric and broken, markup
+ * declarations, foreign namespaces, and the sentinel as text, as a name and as an attribute value.
+ * Joined at random they are as often malformed as well-formed, which is the point.
+ */
+const NARRATIVE_PIECES: readonly string[] = [
+  "<p>",
+  "</p>",
+  "<span>",
+  "</span>",
+  "<div>",
+  "</div>",
+  "<table><tr><td>",
+  "</td></tr></table>",
+  "<br/>",
+  '<img src="#a"/>',
+  "<script>",
+  "</script>",
+  "<SCRIPT>",
+  "</SCRIPT>",
+  "<ScRiPt/>",
+  '<svg xmlns="urn:x"><script>1</script></svg>',
+  '<iframe src="https://example.org"/>',
+  "<object/>",
+  "<font>",
+  "</font>",
+  '<p onclick="1">',
+  '<img src="#a" ONERROR="1"/>',
+  '<a href="javascript:void(0)">',
+  '<a href=" &#106;avascript:1">',
+  "</a>",
+  '<p data-x="1">',
+  '<p xml:lang="en">',
+  '<p xmlns="">',
+  '<h:p xmlns:h="http://www.w3.org/1999/xhtml">',
+  "</h:p>",
+  "&amp;",
+  "&lt;",
+  "&nbsp;",
+  "&undefined;",
+  "&#x41;",
+  "&#xD800;",
+  "&#99999999;",
+  "&",
+  "<![CDATA[x]]>",
+  "<!-- c -->",
+  "<!DOCTYPE div>",
+  '<!ENTITY a "b">',
+  "<?pi x?>",
+  " ",
+  "\n",
+  NARRATIVE_SENTINEL,
+  `<${NARRATIVE_SENTINEL}>`,
+  `</${NARRATIVE_SENTINEL}>`,
+  `<p ${NARRATIVE_SENTINEL}="x">`,
+  `<p title="${NARRATIVE_SENTINEL}">`,
+];
+
+/** A hostile narrative: random pieces, often inside the XHTML root, sometimes nested very deep. */
+function hostileNarrative(): fc.Arbitrary<string> {
+  const body = fc
+    .array(fc.constantFrom(...NARRATIVE_PIECES), { minLength: 0, maxLength: 40 })
+    .map((parts) => parts.join(""));
+  const deep = fc
+    .tuple(fc.integer({ min: 0, max: 600 }), fc.constantFrom("span", "p", "div", "script", "b"))
+    .map(
+      ([depth, tag]) =>
+        `${`<${tag}>`.repeat(depth)}${NARRATIVE_SENTINEL}${`</${tag}>`.repeat(depth)}`,
+    );
+  const inner = fc.oneof(body, deep);
+  return fc.oneof(
+    {
+      weight: 4,
+      arbitrary: inner.map((x) => `<div xmlns="http://www.w3.org/1999/xhtml">${x}</div>`),
+    },
+    { weight: 1, arbitrary: inner },
+  );
+}
+
+describe("fuzz: narrative XHTML, hostile markup is checked, never echoed, never changed", () => {
+  const codes: ReadonlySet<string> = new Set(Object.keys(VALIDATION_CODES));
+
+  it("validation never throws, reports only registered codes, and leaves the div byte for byte", () => {
+    fc.assert(
+      fc.property(
+        hostileNarrative(),
+        fc.constantFrom("lenient" as const, "strict" as const),
+        (div, mode) => {
+          const text = JSON.stringify({
+            resourceType: "Patient",
+            text: { status: "generated", div },
+          });
+          const { resource } = parseResource(text);
+          // A throw here fails the property: validation is total over any narrative.
+          const result = validateResource(resource, { mode });
+          const issues = result.issues;
+          for (const issue of issues) expect(codes.has(issue.code)).toBe(true);
+          // Every narrative finding sits at the div and says nothing of what is in it.
+          for (const issue of issues.filter((i) => i.code.startsWith("NARRATIVE_"))) {
+            expect(issue.expression).toBe("Patient.text.div");
+          }
+          const surface = JSON.stringify(issues) + serializeResource(result.toOperationOutcome());
+          expect(surface).not.toContain(NARRATIVE_SENTINEL);
+          // The narrative is kept exactly as written.
+          expect(serializeResource(resource)).toBe(text);
+        },
+      ),
+      RUN_CONFIG,
+    );
+  });
+
+  it("markup carrying a script, a handler or a script URL is never reported clean", () => {
+    const active = fc
+      .tuple(
+        fc.array(fc.constantFrom("<p>x</p>", "<b>y</b>", " ", "<br/>"), { maxLength: 8 }),
+        fc.constantFrom(
+          "<script>1</script>",
+          "<SCRIPT/>",
+          "<Script>1</Script>",
+          '<span onclick="1">x</span>',
+          '<img src="#a" onError="1"/>',
+          '<a href="javascript:1">x</a>',
+          '<a href="\tJAVASCRIPT:1">x</a>',
+          '<area href="vbscript:1"/>',
+          "<iframe/>",
+          "<embed/>",
+          "<applet/>",
+        ),
+        fc.array(fc.constantFrom("<p>x</p>", "<i>z</i>", " "), { maxLength: 8 }),
+      )
+      .map(
+        ([before, hazard, after]) =>
+          `<div xmlns="http://www.w3.org/1999/xhtml">${before.join("")}${hazard}${after.join("")}</div>`,
+      );
+    fc.assert(
+      fc.property(active, (div) => {
+        const { resource } = parseResource(
+          JSON.stringify({ resourceType: "Patient", text: { status: "generated", div } }),
+        );
+        const result = validateResource(resource);
+        expect(result.valid).toBe(false);
+        expect(result.issues.map((i) => i.code)).toContain("NARRATIVE_ACTIVE_CONTENT");
+      }),
+      RUN_CONFIG,
     );
   });
 });

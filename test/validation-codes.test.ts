@@ -37,6 +37,7 @@ describe("validation code / severity / issue-type registries (stable public cont
       INFORMATIONAL: "informational",
       BUSINESS_RULE: "business-rule",
       NOT_FOUND: "not-found",
+      SECURITY: "security",
     });
   });
 
@@ -80,6 +81,13 @@ describe("validation code / severity / issue-type registries (stable public cont
       REFERENCE_UNRESOLVED: "REFERENCE_UNRESOLVED",
       CONTAINED_CYCLE: "CONTAINED_CYCLE",
       FULLURL_ID_MISMATCH: "FULLURL_ID_MISMATCH",
+      NARRATIVE_UNREADABLE: "NARRATIVE_UNREADABLE",
+      NARRATIVE_ROOT_INVALID: "NARRATIVE_ROOT_INVALID",
+      NARRATIVE_ELEMENT_ILLEGAL: "NARRATIVE_ELEMENT_ILLEGAL",
+      NARRATIVE_ATTRIBUTE_ILLEGAL: "NARRATIVE_ATTRIBUTE_ILLEGAL",
+      NARRATIVE_ACTIVE_CONTENT: "NARRATIVE_ACTIVE_CONTENT",
+      NARRATIVE_BLOCK_IN_PARAGRAPH: "NARRATIVE_BLOCK_IN_PARAGRAPH",
+      NARRATIVE_EMPTY: "NARRATIVE_EMPTY",
     });
   });
 
@@ -105,6 +113,9 @@ describe("validation code / severity / issue-type registries (stable public cont
       "informational",
     );
     expect(validationIssue("UCUM_UNIT_UNRECOGNIZED", "warning", "X").type).toBe("value");
+    expect(validationIssue("NARRATIVE_ACTIVE_CONTENT", "error", "X").type).toBe("security");
+    expect(validationIssue("NARRATIVE_ELEMENT_ILLEGAL", "error", "X").type).toBe("structure");
+    expect(validationIssue("NARRATIVE_EMPTY", "error", "X").type).toBe("invariant");
     expect(validationIssue("VITAL_SIGN_UNIT_NONCONFORMANT", "error", "X").type).toBe(
       "code-invalid",
     );

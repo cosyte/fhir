@@ -736,6 +736,14 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       };
     };
 
+    /**
+     * Whether every error a reading drew is a narrative finding: the narrative's own XHTML broke
+     * the R4 narrative rules, and nothing inside it was read as FHIR (no modifier extension, no
+     * contained resource).
+     */
+    const narrativeErrorsOnly = (findings: readonly string[]): boolean =>
+      findings.filter((f) => f.endsWith("/error")).every((f) => f.startsWith("NARRATIVE_"));
+
     /** The narrative text a reading preserved, as a single searchable string. */
     const carried = (src: string) => {
       const r = reading(src);
@@ -848,7 +856,9 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * That is not a weakening, and the only yardstick that settles it is the **same document spelled
      * with a default `xmlns`**, not the previous release: the finding existed only because a prefixed
      * narrative was not recognised as one, and the unprefixed twin has read `valid: true` all along.
-     * Nothing inside `Narrative.div` is a FHIR modifier extension. What this test pins is the two
+     * Nothing inside `Narrative.div` is a FHIR modifier extension. Since the narrative layer reads
+     * the XHTML, such a document is `valid: false` again, for the right reason: a
+     * `modifierExtension` element is not one R4 allows in a narrative. What this test pins is the two
      * spellings agreeing at head; the other half of the claim, that the default spelling read this
      * way on the previous release too, is a cross-version comparison no in-repo test can make and is
      * recorded in the changeset instead.
@@ -867,7 +877,10 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       expect(prefixed.findings).toEqual(dflt.findings);
       expect(prefixed.safeToSummarize).toBe(dflt.safeToSummarize);
       expect(prefixed.issues).toEqual(dflt.issues);
-      expect(prefixed.valid).toBe(true);
+      // The `modifierExtension` is not an XHTML element, so the narrative breaks the R4 narrative
+      // rules; what it no longer does is raise a FHIR modifier finding.
+      expect(prefixed.findings).toContain("NARRATIVE_ELEMENT_ILLEGAL/error");
+      expect(narrativeErrorsOnly(prefixed.findings)).toBe(true);
       expect(prefixed.json).toContain("Take 5 mg");
     });
 
@@ -895,7 +908,9 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         const r = reading(src);
         expect(r.json).toContain("Take 5 mg");
         expect(r.xml).toContain("Take 5 mg");
-        expect(r.valid).toBe(true);
+        // `<BR/>` is not XHTML's `br`, so the narrative breaks the R4 rules, and the spelling with
+        // no namespace breaks them at its root too; nothing in it was read as a FHIR resource.
+        expect(narrativeErrorsOnly(r.findings)).toBe(true);
         // And the re-emitted document re-reads to the same narrative rather than laundering the
         // loss: the XHTML namespace the writer used to strip is carried on the fragment itself.
         expect(divOf(serializeResource(parseResourceXml(r.xml).resource))).toBe(divOf(r.json));
@@ -922,7 +937,9 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
      * way** -- here, a lowercase child rather than an uppercase one -- not the previous release: an
      * uppercase tag and a lowercase one are the same XHTML element, the finding existed only because
      * the reader read `<Table>` as a FHIR resource type, and the lowercase twin has read
-     * `valid: true` all along. Nothing inside `Narrative.div` is a FHIR modifier extension.
+     * `valid: true` all along. Nothing inside `Narrative.div` is a FHIR modifier extension. Since
+     * the narrative layer reads the XHTML, both spellings are `valid: false` for the same reason: an
+     * element R4 does not allow in a narrative.
      *
      * What this test pins is the two spellings agreeing AT HEAD. The other half, that the lowercase
      * twin read this way on the previous release too, is a cross-version comparison no in-repo test
@@ -945,7 +962,8 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       expect(upper.findings).toEqual(lower.findings);
       expect(upper.issues).toEqual(lower.issues);
       expect(upper.safeToSummarize).toBe(lower.safeToSummarize);
-      expect(upper.valid).toBe(true);
+      expect(upper.findings).toContain("NARRATIVE_ELEMENT_ILLEGAL/error");
+      expect(narrativeErrorsOnly(upper.findings)).toBe(true);
       // The two differ only in the byte the document wrote, which is preserved on both sides.
       expect(upper.json).toContain("<Table>");
       expect(lower.json).toContain("<table>");

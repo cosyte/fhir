@@ -4461,6 +4461,12 @@ The content uses a modifier the processor does not support and cannot safely ign
 
 A required element (min cardinality ≥ 1) is missing.
 
+##### SECURITY
+
+> `readonly` **SECURITY**: `"security"` = `"security"`
+
+Content that is a security hazard to a consumer, such as script in a narrative.
+
 ##### STRUCTURE
 
 > `readonly` **STRUCTURE**: `"structure"` = `"structure"`
@@ -5282,6 +5288,62 @@ must-support rule): must-support is a *system obligation* on the sender to be ab
 element and on the receiver to tolerate its absence, it is **not** an instance-presence
 requirement. A strict client that errors on an absent must-support element is the classic bug this
 code exists to avoid.
+
+##### NARRATIVE\_ACTIVE\_CONTENT
+
+> `readonly` **NARRATIVE\_ACTIVE\_CONTENT**: `"NARRATIVE_ACTIVE_CONTENT"` = `"NARRATIVE_ACTIVE_CONTENT"`
+
+Narrative, `Narrative.div` carries content that runs or loads code in a renderer: a `script`,
+`iframe`, `frame`, `frameset`, `object`, `embed` or `applet` element, an `on...` event-handler
+attribute, or a `javascript:` or `vbscript:` URL. R4 forbids all of it (`txt-1`); it is reported
+under this code rather than as an illegal element or attribute so the hazard can be told apart.
+An `error` (`security`). Value-free.
+
+##### NARRATIVE\_ATTRIBUTE\_ILLEGAL
+
+> `readonly` **NARRATIVE\_ATTRIBUTE\_ILLEGAL**: `"NARRATIVE_ATTRIBUTE_ILLEGAL"` = `"NARRATIVE_ATTRIBUTE_ILLEGAL"`
+
+Narrative, an element in `Narrative.div` carries an attribute R4 does not allow (`txt-1`). An
+`error` (`structure`). Value-free: neither the attribute's name nor its value is reported.
+
+##### NARRATIVE\_BLOCK\_IN\_PARAGRAPH
+
+> `readonly` **NARRATIVE\_BLOCK\_IN\_PARAGRAPH**: `"NARRATIVE_BLOCK_IN_PARAGRAPH"` = `"NARRATIVE_BLOCK_IN_PARAGRAPH"`
+
+Narrative, a block element (`div`, `blockquote`, `table`, `ol`, `ul`, `p`) sits inside a `p`
+in `Narrative.div`, which XHTML does not allow. An `error` (`structure`). Value-free.
+
+##### NARRATIVE\_ELEMENT\_ILLEGAL
+
+> `readonly` **NARRATIVE\_ELEMENT\_ILLEGAL**: `"NARRATIVE_ELEMENT_ILLEGAL"` = `"NARRATIVE_ELEMENT_ILLEGAL"`
+
+Narrative, `Narrative.div` holds an element outside the basic HTML formatting set R4 allows
+(`txt-1`), or an element outside the XHTML namespace. An `error` (`structure`). Value-free.
+
+##### NARRATIVE\_EMPTY
+
+> `readonly` **NARRATIVE\_EMPTY**: `"NARRATIVE_EMPTY"` = `"NARRATIVE_EMPTY"`
+
+Narrative, `Narrative.div` has no content: no character other than whitespace and no image.
+R4 says a narrative SHALL have some non-whitespace content (`txt-2`). An `error` (`invariant`).
+Value-free.
+
+##### NARRATIVE\_ROOT\_INVALID
+
+> `readonly` **NARRATIVE\_ROOT\_INVALID**: `"NARRATIVE_ROOT_INVALID"` = `"NARRATIVE_ROOT_INVALID"`
+
+Narrative, the root element of `Narrative.div` is not a `div` in the XHTML namespace, as the R4
+`xhtml` datatype requires. An `error` (`structure`). Value-free.
+
+##### NARRATIVE\_UNREADABLE
+
+> `readonly` **NARRATIVE\_UNREADABLE**: `"NARRATIVE_UNREADABLE"` = `"NARRATIVE_UNREADABLE"`
+
+Narrative, `Narrative.div` could not be read as XHTML: it is not a string, not well-formed XML,
+or it uses what the XML reader refuses (a DTD, an entity other than the five XML predefines, a
+CDATA section, nesting past the depth bound). An `error` (`structure`); nothing else is checked
+in a narrative that cannot be read. The string is kept exactly as written. Value-free, the
+location of the `div`, never its content.
 
 ##### NESTED\_ARRAY
 

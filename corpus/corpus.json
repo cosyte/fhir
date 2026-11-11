@@ -1449,8 +1449,7 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "eventdefinition-example.json",
       "bytes": 991,
-      "sha256": "33603c65040b9563db928109581d095325f2c3d2bb8356aa742c137f763bdea1",
-      "exclude": "measured against validator_cli 6.10.2 on 2026-08-25: the reference validator reports 1 error(s) this library does not - 1x invariant (a FHIRPath invariant the reference validator evaluates and this library reports as unchecked); first at EventDefinition.text.div. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
+      "sha256": "33603c65040b9563db928109581d095325f2c3d2bb8356aa742c137f763bdea1"
     },
     {
       "id": "hl7-fhir-r4-examples/evidence-example.json",
