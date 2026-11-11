@@ -170,7 +170,7 @@ const Tok = {
  */
 const WORDS = 2;
 
-/** The tape kept for small documents, in words; a document that needs more gets its own. */
+/** The reused tape's length, in words; a read that needs more grows out of it into its own. */
 const SCRATCH_WORDS = WORDS * 8192;
 
 /** The tape reused by one read at a time (see {@link readJsonTape}), made on first use. */
@@ -210,6 +210,11 @@ function secondAt(tokens: Uint32Array, index: number): number {
   return tokens[WORDS * index + 1] as number;
 }
 
+/** About one token for every 8 characters of a typical document; a tape grows if it needs more. */
+function estimatedTokens(src: string): number {
+  return (src.length >> 3) + 16;
+}
+
 /**
  * A single-pass recursive-descent JSON reader that writes a {@link JsonTape}. Instances are
  * throwaway (one per parse); the entry points are {@link readRawJson} and {@link readRawJsonLazily}.
@@ -230,14 +235,14 @@ class JsonTokenizer {
 
   public constructor(src: string, mayUseScratch: boolean) {
     this.#src = src;
-    // About one token for every 8 characters of a typical document; the tape grows if it needs to.
-    const words = WORDS * ((src.length >> 3) + 16);
-    this.#borrowed = mayUseScratch && scratchFree && words <= SCRATCH_WORDS;
+    // The reused tape when it is free, whatever the document's size: a large document with few
+    // tokens (a base64 attachment) then needs no tape of its own, and one with many grows out of it.
+    this.#borrowed = mayUseScratch && scratchFree;
     if (this.#borrowed) {
       scratchFree = false;
       this.#tokens = scratch ??= new Uint32Array(SCRATCH_WORDS);
     } else {
-      this.#tokens = new Uint32Array(words);
+      this.#tokens = new Uint32Array(WORDS * estimatedTokens(src));
     }
   }
 
@@ -271,7 +276,9 @@ class JsonTokenizer {
     const slot = WORDS * index;
     if (slot + WORDS > tokens.length) {
       const tokensNow = tokens.length / WORDS;
-      const grown = new Uint32Array(WORDS * (tokensNow + (tokensNow >> 1)));
+      const grown = new Uint32Array(
+        WORDS * Math.max(tokensNow + (tokensNow >> 1), estimatedTokens(this.#src)),
+      );
       grown.set(tokens);
       this.#tokens = tokens = grown;
     }

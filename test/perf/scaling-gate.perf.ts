@@ -65,10 +65,13 @@ const ENTRIES = 500;
 /**
  * Entries in the read's size-axis base Bundle; the scaled Bundle has 4 times as many.
  *
- * The read's cost per entry steps up once, mostly where the tree one read keeps alive (its raw
- * JSON tree and the model built from it, about 15 KiB an entry on a developer machine) outgrows the
+ * The read's cost per entry steps up once, mostly where what one read keeps alive outgrows the
  * young generation: below that, a scavenge finds most of what it scans already dead; above it,
  * nearly all of it alive, so it copies it out and promotes it. `bench/scaling-trace.mjs` traces it.
+ * The reader once kept its whole raw JSON tree alive beside the model (about 15 KiB an entry
+ * together on a developer machine); it now makes that tree one entry at a time, so what stays alive
+ * is mostly the model, about 6 KiB an entry, and the step is smaller but still there. The figures
+ * below were read with the earlier reader.
  * On five GitHub-hosted runner reads (Node.js 22), the scavenge time per entry rose 6 to 10 times
  * between 1,000 and 2,000 entries a Bundle and at most 1.5 times more from there to 16,000. The
  * time outside collection rose too, by 7% to 48% across that step and by at most 19% from 2,000 to
