@@ -50,6 +50,7 @@
  * @packageDocumentation
  */
 
+import { UnsupportedFhirPathError } from "../fhirpath/errors.js";
 import { convertToBoolean, evaluate, type FpColl } from "../fhirpath/evaluate.js";
 import { parseFhirPath, type Expr } from "../fhirpath/parser.js";
 import {
@@ -172,12 +173,23 @@ const BASE_CONSTRAINTS: readonly BaseConstraint[] = [
  */
 export type Outcome = "satisfied" | "violated" | "unchecked";
 
-/** Parse an expression once, or `undefined` when it lies outside the subset's grammar. */
-function compile(expression: string): Expr | undefined {
+/**
+ * One expression parsed: its tree, or `undefined` when it lies outside the subset's grammar. A parse
+ * that failed for any other reason (the stack running out when the first validation happens deep in
+ * a caller's own recursion, say) is `failed`: its tree is `undefined` for this call, which reports
+ * the constraint unchecked, and nothing is kept, so the next call parses it again.
+ */
+interface Parsed {
+  readonly ast: Expr | undefined;
+  readonly failed: boolean;
+}
+
+/** Parse an expression, telling a grammar refusal (kept) from any other failure (not kept). */
+function compile(expression: string): Parsed {
   try {
-    return parseFhirPath(expression);
-  } catch {
-    return undefined;
+    return { ast: parseFhirPath(expression), failed: false };
+  } catch (error) {
+    return { ast: undefined, failed: !(error instanceof UnsupportedFhirPathError) };
   }
 }
 
@@ -187,18 +199,43 @@ interface Compiled {
   readonly ast: Expr | undefined;
 }
 
-const COMPILED: readonly Compiled[] = BASE_CONSTRAINTS.map((row) => ({
-  row,
-  ast: compile(row.expression),
-}));
+/**
+ * The table's expressions, parsed on the first validation rather than when the package is imported,
+ * so an import parses nothing. Kept only once every row has parsed or been refused by the grammar:
+ * a build that failed part way keeps nothing and the next call builds again. A call that reaches
+ * this while another build is under way (none does today: parsing calls back into nothing) builds
+ * its own copy, equal to the kept one.
+ */
+let compiledTable: readonly Compiled[] | undefined;
+
+/** The parsed table, built on first use. */
+function compiledConstraints(): readonly Compiled[] {
+  if (compiledTable !== undefined) return compiledTable;
+  let failed = false;
+  const built = BASE_CONSTRAINTS.map((row): Compiled => {
+    const parsed = compile(row.expression);
+    if (parsed.failed) failed = true;
+    return { row, ast: parsed.ast };
+  });
+  if (!failed) compiledTable = built;
+  return built;
+}
 
 /** Each key's verbatim expression, to tell a profile's copy of a base constraint from its own. */
 const EXPRESSION_OF: ReadonlyMap<string, string> = new Map(
   BASE_CONSTRAINTS.map((row) => [row.key, row.expression]),
 );
 
-/** The selection `dom-3` starts from, evaluated on its own by the same engine. */
-const CONTAINED_SELECTION = compile("contained");
+/** The selection `dom-3` starts from, parsed on first use and kept once it has parsed. */
+let containedSelection: Expr | undefined;
+
+/** The `contained` selection, or `undefined` when it could not be parsed on this call. */
+function containedSelectionExpr(): Expr | undefined {
+  if (containedSelection !== undefined) return containedSelection;
+  const { ast } = compile("contained");
+  if (ast !== undefined) containedSelection = ast;
+  return ast;
+}
 
 /**
  * The leaves a node selects in FHIRPath: itself, or for a list every item, a list inside a list
@@ -295,7 +332,7 @@ export function baseConstraintOutcomes(
   focus: FhirNode,
   resource: FhirComplex,
 ): { readonly engine: Outcome; readonly direct: Outcome | undefined } {
-  const ast = COMPILED.find(({ row }) => row.key === key)?.ast;
+  const ast = compiledConstraints().find(({ row }) => row.key === key)?.ast;
   return { engine: outcomeOf(ast, focus, resource), direct: DECIDED_DIRECTLY.get(key)?.(focus) };
 }
 
@@ -304,7 +341,8 @@ export function baseConstraintOutcomes(
  * `unchecked`, never `satisfied`, exactly as {@link ../fhirpath/index.js evaluateInvariant} decides.
  */
 function outcomeOf(ast: Expr | undefined, focus: FhirNode, resource: FhirComplex): Outcome {
-  /* v8 ignore next -- unreachable today: every table expression but dom-3 parses, and dom-3 is decided apart */
+  // Every table expression but dom-3 parses, and dom-3 is decided apart: a tree is missing here
+  // only when its parse failed on this call for a reason other than the grammar.
   if (ast === undefined) return "unchecked";
   try {
     const at: FpColl = [{ t: "node", node: focus }];
@@ -324,11 +362,12 @@ function outcomeOf(ast: Expr | undefined, focus: FhirNode, resource: FhirComplex
  * reaches the criteria, which are outside the subset, so the outcome is `unchecked`.
  */
 function decideDom3(resource: FhirComplex): Outcome {
-  /* v8 ignore next -- unreachable: the constant expression `contained` always parses */
-  if (CONTAINED_SELECTION === undefined) return "unchecked";
+  const selection = containedSelectionExpr();
+  // Missing only when the parse of `contained` failed on this call for a reason other than the grammar.
+  if (selection === undefined) return "unchecked";
   try {
     const at: FpColl = [{ t: "node", node: resource }];
-    const selected = evaluate(CONTAINED_SELECTION, at, { resource, context: at });
+    const selected = evaluate(selection, at, { resource, context: at });
     return selected.length === 0 ? "satisfied" : "unchecked";
   } catch {
     /* v8 ignore next -- defensive: navigating `contained` never refuses */
@@ -487,7 +526,8 @@ export function collectBaseInvariantFindings(
     findings.push({ issue, focus });
   };
 
-  for (const { row, ast } of COMPILED) {
+  const compiled = compiledConstraints();
+  for (const { row, ast } of compiled) {
     const { anchor } = row;
     if (anchor.kind === "root") {
       const outcome =
@@ -502,8 +542,8 @@ export function collectBaseInvariantFindings(
     }
   }
 
-  const elementRow = COMPILED.find(({ row }) => row.anchor.kind === "every-element");
-  const extensionRow = COMPILED.find(({ row }) => row.anchor.kind === "every-extension");
+  const elementRow = compiled.find(({ row }) => row.anchor.kind === "every-element");
+  const extensionRow = compiled.find(({ row }) => row.anchor.kind === "every-extension");
   const decide = (row: Compiled, node: FhirNode): Outcome => {
     const direct = DECIDED_DIRECTLY.get(row.row.key);
     /* v8 ignore next -- unreachable today: both rows asked at every element are decided directly */

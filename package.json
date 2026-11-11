@@ -133,6 +133,7 @@
     "check:claude-card": "cosyte-claude-card",
     "check:catalog": "cosyte-catalog",
     "check:process": "cosyte-process check",
+    "check:cold-import": "node scripts/check-cold-import.mjs",
     "version": "changeset version && cosyte-process sync-version && cosyte-process format",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",

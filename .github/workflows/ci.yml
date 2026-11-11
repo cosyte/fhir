@@ -82,6 +82,28 @@ jobs:
       - run: pnpm examples
       - run: pnpm phi-scan:examples
 
+  # The cold import budget: a new Node.js process imports dist/index.mjs, twenty times, interleaved
+  # with an empty module, and the median must be within the budget in scripts/check-cold-import.mjs
+  # on this runner. It is read here rather than on a developer's machine, where other work moves the
+  # number by milliseconds.
+  cold-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      # The lowest Node line the package supports, the one bench-reading.yml reads the import on.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Cold import budget (pnpm check:cold-import)
+        run: pnpm check:cold-import
+
   # The house checks from @cosyte/script-utils (README, CLAUDE.md card, catalog), and the
   # @cosyte/process wiring check (the five delegating scripts and cosyte-process.config.json).
   standards:
