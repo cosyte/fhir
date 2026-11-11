@@ -11,6 +11,11 @@
  * `resourceType` in any position) and number literals verbatim. Malformed input throws a value-free
  * {@link FhirCodecError} carrying an offset, never a snippet (the snippet could be PHI).
  *
+ * The document is checked and read first into a flat list of tokens ({@link JsonTape}), and the
+ * tree is made from that list: all at once by {@link readRawJson}, or one part at a time as it is
+ * read by {@link readRawJsonLazily}, which is how `parseResource` reads text without holding the
+ * whole raw tree alive beside the model it builds.
+ *
  * @packageDocumentation
  */
 
@@ -140,40 +145,173 @@ const STRING_STOP = /["\\\u0000-\u001f]/g;
 /** After this many plain characters in one run, the rest of the run is found by {@link STRING_STOP}. */
 const LONG_RUN = 32;
 
+/** The kinds of token a {@link JsonTape} holds, each in 3 bits. */
+const Tok = {
+  Null: 0,
+  /** An object: its member count, and the index of the token after its last member. */
+  Obj: 1,
+  /** An array: its item count, and the index of the token after its last item. */
+  Arr: 2,
+  /** A string with no escape: where its text starts and ends in the source. */
+  Str: 3,
+  /** A string with at least one escape: where its text starts and ends in the source. */
+  EscStr: 4,
+  /** A number: where its text starts and ends in the source. */
+  Num: 5,
+  True: 6,
+  False: 7,
+} as const;
+
 /**
- * A single-pass recursive-descent JSON reader. Instances are throwaway (one per parse); the public
- * entry point is {@link readRawJson}.
+ * The words a token takes on a tape. The first holds the token's kind in its low 3 bits and its
+ * first number above them (`a * 8 + kind`); the second holds its second number. The first number is
+ * a source offset or a count, both under 2^29 because a JavaScript string is (V8 caps a string's
+ * length below 2^29), so it fits in 29 bits.
+ */
+const WORDS = 2;
+
+/** The reused tape's length, in words; a read that needs more grows out of it into its own. */
+const SCRATCH_WORDS = WORDS * 8192;
+
+/** The tape reused by one read at a time (see {@link readJsonTape}), made on first use. */
+let scratch: Uint32Array | undefined;
+
+/** Whether {@link scratch} is free to be taken. */
+let scratchFree = true;
+
+/**
+ * The last tape a read that took {@link scratch} grew out of it into, held weakly so the collector
+ * can take it back. A read of a large document after another one reuses it instead of making a
+ * tape of several MiB each time, memory outside the heap the collector would otherwise count
+ * towards its next full collection. Only the read holding {@link scratch} uses it.
+ */
+let spare: WeakRef<Uint32Array> | undefined;
+
+/**
+ * A JSON document read into a flat list of tokens, in source order: an object or an array is one
+ * token followed by its members' or items' tokens, an object member is its key's string token
+ * followed by its value's tokens. A string or a number is kept as where its text lies in the source,
+ * so the tape holds no string of its own. The tokens are plain numbers in one typed array, which the
+ * garbage collector does not trace, so a tape of a large document costs it nothing to keep alive.
  *
  * @internal
  */
-class RawJsonReader {
+export interface JsonTape {
+  readonly src: string;
+  readonly tokens: Uint32Array;
+  /** Whether the read took the reused tape, which it holds until it is handed back. */
+  readonly borrowed: boolean;
+}
+
+/** A token's kind. */
+function kindAt(tokens: Uint32Array, index: number): number {
+  return (tokens[WORDS * index] as number) & 7;
+}
+
+/** A token's first number: a container's count, or where a string or number starts. */
+function firstAt(tokens: Uint32Array, index: number): number {
+  return (tokens[WORDS * index] as number) >>> 3;
+}
+
+/** A token's second number: the token after a container, or where a string or number ends. */
+function secondAt(tokens: Uint32Array, index: number): number {
+  return tokens[WORDS * index + 1] as number;
+}
+
+/** About one token for every 8 characters of a typical document; a tape grows if it needs more. */
+function estimatedTokens(src: string): number {
+  return (src.length >> 3) + 16;
+}
+
+/**
+ * A single-pass recursive-descent JSON reader that writes a {@link JsonTape}. Instances are
+ * throwaway (one per parse); the entry points are {@link readRawJson} and {@link readRawJsonLazily}.
+ *
+ * @internal
+ */
+class JsonTokenizer {
   readonly #src: string;
   #pos = 0;
+  #tokens: Uint32Array;
+  /** Tokens written so far. */
+  #count = 0;
   /**
-   * The members of every object being read, innermost last. An object's members are gathered here
-   * and copied out once, at their exact count, when it closes: an array grown a member at a time
-   * holds spare capacity, and a document is mostly small objects.
+   * Whether this read took the reused tape. It holds it until the tape is handed back, even after
+   * it has grown out of it into a tape of its own.
    */
-  readonly #members: RawMember[] = [];
-  /** The items of every array being read, gathered as {@link RawJsonReader.#members} are. */
-  readonly #items: RawJson[] = [];
+  readonly #borrowed: boolean;
 
-  public constructor(src: string) {
+  public constructor(src: string, mayUseScratch: boolean) {
     this.#src = src;
+    // The reused tape when it is free, whatever the document's size: a large document with few
+    // tokens (a base64 attachment) then needs no tape of its own, and one with many grows out of it.
+    this.#borrowed = mayUseScratch && scratchFree;
+    if (this.#borrowed) {
+      scratchFree = false;
+      this.#tokens = scratch ??= new Uint32Array(SCRATCH_WORDS);
+    } else {
+      this.#tokens = new Uint32Array(WORDS * estimatedTokens(src));
+    }
   }
 
-  /** Parse the whole input as a single JSON value; reject trailing non-whitespace. */
-  public parse(): RawJson {
-    this.skipWhitespace();
-    if (this.#pos >= this.#src.length) {
-      throw this.fail("Unexpected end of input: the document is empty");
+  /** Read the whole input as a single JSON value; reject trailing non-whitespace. */
+  public tokenize(): JsonTape {
+    try {
+      this.skipWhitespace();
+      if (this.#pos >= this.#src.length) {
+        throw this.fail("Unexpected end of input: the document is empty");
+      }
+      this.parseValue(0);
+      this.skipWhitespace();
+      if (this.#pos < this.#src.length) {
+        throw this.fail("Unexpected trailing content after the top-level JSON value");
+      }
+    } catch (error) {
+      releaseJsonTape(this.#tape());
+      throw error;
     }
-    const value = this.parseValue(0);
-    this.skipWhitespace();
-    if (this.#pos < this.#src.length) {
-      throw this.fail("Unexpected trailing content after the top-level JSON value");
+    return this.#tape();
+  }
+
+  #tape(): JsonTape {
+    return { src: this.#src, tokens: this.#tokens, borrowed: this.#borrowed };
+  }
+
+  /** Write one token; returns its index. */
+  #emit(kind: number, a: number, b: number): number {
+    let tokens = this.#tokens;
+    const index = this.#count;
+    const slot = WORDS * index;
+    if (slot + WORDS > tokens.length) tokens = this.#grow();
+    tokens[slot] = a * 8 + kind;
+    tokens[slot + 1] = b;
+    this.#count = index + 1;
+    return index;
+  }
+
+  /** Move the tape to a longer one, the spare when this read holds the reused tape and it is long enough. */
+  #grow(): Uint32Array {
+    const tokens = this.#tokens;
+    const tokensNow = tokens.length / WORDS;
+    const words = WORDS * Math.max(tokensNow + (tokensNow >> 1), estimatedTokens(this.#src));
+    const kept = this.#borrowed ? spare?.deref() : undefined;
+    let grown: Uint32Array;
+    if (kept !== undefined && kept.length >= words) {
+      grown = kept;
+    } else {
+      grown = new Uint32Array(words);
+      if (this.#borrowed) spare = new WeakRef(grown);
     }
-    return value;
+    grown.set(tokens);
+    this.#tokens = grown;
+    return grown;
+  }
+
+  /** Close the object or array token at `index`: its count, and the index of the token after it. */
+  #close(index: number, kind: number, count: number): void {
+    const slot = WORDS * index;
+    this.#tokens[slot] = count * 8 + kind;
+    this.#tokens[slot + 1] = this.#count;
   }
 
   #peek(): number {
@@ -191,7 +329,7 @@ class RawJsonReader {
     }
   }
 
-  private parseValue(depth: number): RawJson {
+  private parseValue(depth: number): void {
     // Refuse pathological nesting as a DoS guard, before descending, a typed fatal instead of a V8
     // stack overflow (mirrors the XML reader's MAX_DEPTH bound over the same data model).
     if (depth > MAX_DEPTH) {
@@ -204,50 +342,61 @@ class RawJsonReader {
     const c = this.#peek();
     switch (c) {
       case Code.OpenBrace:
-        return this.parseObject(depth);
+        this.parseObject(depth);
+        return;
       case Code.OpenBracket:
-        return this.parseArray(depth);
+        this.parseArray(depth);
+        return;
       case Code.Quote:
-        return { t: "str", value: this.parseString() };
+        this.parseString();
+        return;
       case Code.LowerT:
-        return this.parseLiteral("true", { t: "bool", value: true });
+        this.parseLiteral("true", Tok.True);
+        return;
       case Code.LowerF:
-        return this.parseLiteral("false", { t: "bool", value: false });
+        this.parseLiteral("false", Tok.False);
+        return;
       case Code.LowerN:
-        return this.parseLiteral("null", { t: "null" });
+        this.parseLiteral("null", Tok.Null);
+        return;
       default:
-        if (c === Code.Minus || (c >= Code.Zero && c <= Code.Nine)) return this.parseNumber();
+        if (c === Code.Minus || (c >= Code.Zero && c <= Code.Nine)) {
+          this.parseNumber();
+          return;
+        }
         throw this.fail("Unexpected character where a JSON value was expected");
     }
   }
 
-  private parseLiteral(word: string, node: RawJson): RawJson {
+  private parseLiteral(word: string, kind: number): void {
     if (this.#src.startsWith(word, this.#pos)) {
       this.#pos += word.length;
-      return node;
+      this.#emit(kind, 0, 0);
+      return;
     }
     throw this.fail(`Invalid literal: expected "${word}"`);
   }
 
-  private parseObject(depth: number): RawObject {
+  private parseObject(depth: number): void {
     this.#pos++; // consume '{'
+    const index = this.#emit(Tok.Obj, 0, 0);
     this.skipWhitespace();
     if (this.#peek() === Code.CloseBrace) {
       this.#pos++;
-      return { t: "obj", members: [] };
+      this.#close(index, Tok.Obj, 0);
+      return;
     }
-    const gathered = this.#members;
-    const start = gathered.length;
+    let count = 0;
     for (;;) {
       this.skipWhitespace();
       if (this.#peek() !== Code.Quote) throw this.fail("Expected a string key in object");
-      const key = this.parseString();
+      this.parseString();
       this.skipWhitespace();
       if (this.#peek() !== Code.Colon) throw this.fail("Expected ':' after object key");
       this.#pos++;
       this.skipWhitespace();
-      const value = this.parseValue(depth + 1);
-      gathered.push({ key, value });
+      this.parseValue(depth + 1);
+      count++;
       this.skipWhitespace();
       const c = this.#peek();
       if (c === Code.Comma) {
@@ -256,27 +405,27 @@ class RawJsonReader {
       }
       if (c === Code.CloseBrace) {
         this.#pos++;
-        const members = gathered.slice(start);
-        gathered.length = start;
-        return { t: "obj", members };
+        this.#close(index, Tok.Obj, count);
+        return;
       }
       throw this.fail("Expected ',' or '}' in object");
     }
   }
 
-  private parseArray(depth: number): RawArray {
+  private parseArray(depth: number): void {
     this.#pos++; // consume '['
+    const index = this.#emit(Tok.Arr, 0, 0);
     this.skipWhitespace();
     if (this.#peek() === Code.CloseBracket) {
       this.#pos++;
-      return { t: "arr", items: [] };
+      this.#close(index, Tok.Arr, 0);
+      return;
     }
-    const gathered = this.#items;
-    const start = gathered.length;
+    let count = 0;
     for (;;) {
       this.skipWhitespace();
-      const item = this.parseValue(depth + 1);
-      gathered.push(item);
+      this.parseValue(depth + 1);
+      count++;
       this.skipWhitespace();
       const c = this.#peek();
       if (c === Code.Comma) {
@@ -285,26 +434,26 @@ class RawJsonReader {
       }
       if (c === Code.CloseBracket) {
         this.#pos++;
-        const items = gathered.slice(start);
-        gathered.length = start;
-        return { t: "arr", items };
+        this.#close(index, Tok.Arr, count);
+        return;
       }
       throw this.fail("Expected ',' or ']' in array");
     }
   }
 
   /**
-   * Read a string token. The text between escapes is taken a run at a time with one `slice`, not
-   * a character at a time: appending each character built a new string per character, which made a
-   * long value (a base64 attachment) cost many times its length in garbage. The checks and the
-   * offsets a malformed string reports are the same as reading a character at a time.
+   * Read a string token: check it and write where its text lies. The text itself is taken from the
+   * source only when a value is built from the token ({@link decodeString}). Plain characters are
+   * crossed a run at a time, and the checks and the offsets a malformed string reports are the same
+   * as reading a character at a time.
    */
-  private parseString(): string {
+  private parseString(): void {
     const src = this.#src;
     const end = src.length;
-    let pos = this.#pos + 1; // past the opening '"'
+    const start = this.#pos + 1; // past the opening '"'
+    let pos = start;
     let runStart = pos;
-    let out = "";
+    let escaped = false;
     for (;;) {
       if (pos >= end) {
         this.#pos = pos;
@@ -313,14 +462,15 @@ class RawJsonReader {
       const c = src.charCodeAt(pos);
       if (c === Code.Quote) {
         this.#pos = pos + 1;
-        return runStart === pos ? out : out + src.slice(runStart, pos);
+        this.#emit(escaped ? Tok.EscStr : Tok.Str, start, pos);
+        return;
       }
       if (c === Code.Backslash) {
-        if (runStart !== pos) out += src.slice(runStart, pos);
         this.#pos = pos;
-        out += this.parseEscape();
+        this.skipEscape();
         pos = this.#pos;
         runStart = pos;
+        escaped = true;
         continue;
       }
       if (c < Code.Space) {
@@ -338,45 +488,36 @@ class RawJsonReader {
     }
   }
 
-  private parseEscape(): string {
+  /** Check one escape sequence and step past it. */
+  private skipEscape(): void {
     this.#pos++; // consume '\'
     if (this.#pos >= this.#src.length) throw this.fail("Unterminated escape sequence");
     const c = this.#src.charCodeAt(this.#pos);
     this.#pos++;
     switch (c) {
       case Code.Quote:
-        return '"';
       case Code.Backslash:
-        return "\\";
       case Code.Slash:
-        return "/";
       case Code.LowerB:
-        return "\b";
       case Code.LowerF:
-        return "\f";
       case Code.LowerN:
-        return "\n";
       case Code.LowerR:
-        return "\r";
       case Code.LowerT:
-        return "\t";
-      case Code.LowerU:
-        return this.parseUnicodeEscape();
+        return;
+      case Code.LowerU: {
+        const hex = this.#src.slice(this.#pos, this.#pos + 4);
+        if (hex.length !== 4 || !/^[0-9a-fA-F]{4}$/.test(hex)) {
+          throw this.fail("Invalid \\u escape: expected four hex digits");
+        }
+        this.#pos += 4;
+        return;
+      }
       default:
         throw this.fail("Invalid escape sequence in string");
     }
   }
 
-  private parseUnicodeEscape(): string {
-    const hex = this.#src.slice(this.#pos, this.#pos + 4);
-    if (hex.length !== 4 || !/^[0-9a-fA-F]{4}$/.test(hex)) {
-      throw this.fail("Invalid \\u escape: expected four hex digits");
-    }
-    this.#pos += 4;
-    return String.fromCharCode(Number.parseInt(hex, 16));
-  }
-
-  private parseNumber(): RawNumber {
+  private parseNumber(): void {
     const start = this.#pos;
     if (this.#peek() === Code.Minus) this.#pos++;
 
@@ -406,7 +547,7 @@ class RawJsonReader {
       while (this.isDigit(this.#peek())) this.#pos++;
     }
 
-    return { t: "num", raw: this.#src.slice(start, this.#pos) };
+    this.#emit(Tok.Num, start, this.#pos);
   }
 
   private isDigit(c: number): boolean {
@@ -418,6 +559,218 @@ class RawJsonReader {
       offset: this.#pos,
     });
   }
+}
+
+/**
+ * The logical value of a string the tokenizer checked and found to hold escapes: its text from
+ * `start` up to the closing quote at `end`. The text between escapes is taken a run at a time with
+ * one `slice`.
+ */
+function decodeString(src: string, start: number, end: number): string {
+  let out = "";
+  let runStart = start;
+  let pos = src.indexOf("\\", start);
+  while (pos !== -1 && pos < end) {
+    if (pos > runStart) out += src.slice(runStart, pos);
+    const c = src.charCodeAt(pos + 1);
+    pos += 2;
+    switch (c) {
+      case Code.Quote:
+        out += '"';
+        break;
+      case Code.Backslash:
+        out += "\\";
+        break;
+      case Code.Slash:
+        out += "/";
+        break;
+      case Code.LowerB:
+        out += "\b";
+        break;
+      case Code.LowerF:
+        out += "\f";
+        break;
+      case Code.LowerN:
+        out += "\n";
+        break;
+      case Code.LowerR:
+        out += "\r";
+        break;
+      case Code.LowerT:
+        out += "\t";
+        break;
+      default:
+        // The tokenizer let no other escape through: this is `\u` and its four hex digits.
+        out += String.fromCharCode(Number.parseInt(src.slice(pos, pos + 4), 16));
+        pos += 4;
+    }
+    runStart = pos;
+    pos = src.indexOf("\\", pos);
+  }
+  return runStart === end ? out : out + src.slice(runStart, end);
+}
+
+/** The string a string token stands for. */
+function stringAt(tape: JsonTape, index: number): string {
+  const { src, tokens } = tape;
+  const start = firstAt(tokens, index);
+  const end = secondAt(tokens, index);
+  return kindAt(tokens, index) === Tok.EscStr
+    ? decodeString(src, start, end)
+    : src.slice(start, end);
+}
+
+/** The index of the token after the value that starts at `index`. */
+function after(tokens: Uint32Array, index: number): number {
+  const kind = kindAt(tokens, index);
+  return kind === Tok.Obj || kind === Tok.Arr ? secondAt(tokens, index) : index + 1;
+}
+
+/** The node of a scalar token. */
+function scalarAt(tape: JsonTape, index: number): RawJson {
+  const tokens = tape.tokens;
+  const kind = kindAt(tokens, index);
+  if (kind === Tok.Num) {
+    return { t: "num", raw: tape.src.slice(firstAt(tokens, index), secondAt(tokens, index)) };
+  }
+  if (kind === Tok.True) return { t: "bool", value: true };
+  if (kind === Tok.False) return { t: "bool", value: false };
+  if (kind === Tok.Null) return { t: "null" };
+  return { t: "str", value: stringAt(tape, index) };
+}
+
+/** The whole tree of the value at `index`, built at once. */
+function treeAt(tape: JsonTape, index: number): RawJson {
+  const tokens = tape.tokens;
+  const kind = kindAt(tokens, index);
+  if (kind === Tok.Obj) {
+    const count = firstAt(tokens, index);
+    // Made at its exact length: an array grown a member at a time holds spare capacity, and a
+    // document is mostly small objects.
+    const members = new Array<RawMember>(count);
+    let at = index + 1;
+    for (let m = 0; m < count; m++) {
+      members[m] = { key: stringAt(tape, at), value: treeAt(tape, at + 1) };
+      at = after(tokens, at + 1);
+    }
+    return { t: "obj", members };
+  }
+  if (kind === Tok.Arr) {
+    const count = firstAt(tokens, index);
+    const items = new Array<RawJson>(count);
+    let at = index + 1;
+    for (let i = 0; i < count; i++) {
+      items[i] = treeAt(tape, at);
+      at = after(tokens, at);
+    }
+    return { t: "arr", items };
+  }
+  return scalarAt(tape, index);
+}
+
+/**
+ * An object of a tape whose members are made when they are first read, and kept from then on. A
+ * tree of these is built only as far as it is read, and a part of it that is let go once read takes
+ * the members made for it along.
+ */
+class LazyObject implements RawObject {
+  public readonly t = "obj";
+  readonly #tape: JsonTape;
+  readonly #index: number;
+  #members: readonly RawMember[] | undefined;
+
+  public constructor(tape: JsonTape, index: number) {
+    this.#tape = tape;
+    this.#index = index;
+  }
+
+  public get members(): readonly RawMember[] {
+    if (this.#members !== undefined) return this.#members;
+    const tape = this.#tape;
+    const tokens = tape.tokens;
+    const count = firstAt(tokens, this.#index);
+    const members = new Array<RawMember>(count);
+    let at = this.#index + 1;
+    for (let m = 0; m < count; m++) {
+      members[m] = { key: stringAt(tape, at), value: lazyAt(tape, at + 1) };
+      at = after(tokens, at + 1);
+    }
+    return (this.#members = members);
+  }
+}
+
+/** An array of a tape whose items are made when they are first read (see {@link LazyObject}). */
+class LazyArray implements RawArray {
+  public readonly t = "arr";
+  readonly #tape: JsonTape;
+  readonly #index: number;
+  #items: readonly RawJson[] | undefined;
+
+  public constructor(tape: JsonTape, index: number) {
+    this.#tape = tape;
+    this.#index = index;
+  }
+
+  public get items(): readonly RawJson[] {
+    if (this.#items !== undefined) return this.#items;
+    const tape = this.#tape;
+    const tokens = tape.tokens;
+    const count = firstAt(tokens, this.#index);
+    const items = new Array<RawJson>(count);
+    let at = this.#index + 1;
+    for (let i = 0; i < count; i++) {
+      items[i] = lazyAt(tape, at);
+      at = after(tokens, at);
+    }
+    return (this.#items = items);
+  }
+}
+
+/**
+ * The value at `index` of a tape, its objects and arrays made only when they are first read.
+ *
+ * @internal
+ */
+export function lazyAt(tape: JsonTape, index: number): RawJson {
+  const kind = kindAt(tape.tokens, index);
+  if (kind === Tok.Obj) return new LazyObject(tape, index);
+  if (kind === Tok.Arr) return new LazyArray(tape, index);
+  return scalarAt(tape, index);
+}
+
+/**
+ * Read a JSON document onto a {@link JsonTape}. Throws as {@link readRawJson} does.
+ *
+ * With `mayUseScratch`, a small document is read onto one tape kept for reuse, which saves making a
+ * typed array for every small read. The caller must then hand it back with {@link releaseJsonTape}
+ * once nothing will read the tape or a tree made from it again, and must not keep either past that.
+ *
+ * @internal
+ */
+export function readJsonTape(src: string, mayUseScratch = false): JsonTape {
+  return new JsonTokenizer(src, mayUseScratch).tokenize();
+}
+
+/**
+ * Hand back a tape from {@link readJsonTape}, so its words can be reused when it is the reused one.
+ *
+ * @internal
+ */
+export function releaseJsonTape(tape: JsonTape): void {
+  if (tape.borrowed) scratchFree = true;
+}
+
+/**
+ * Read a JSON document into a {@link RawJson} tree whose objects and arrays are made only when they
+ * are first read. The whole document is checked first, so it throws exactly what
+ * {@link readRawJson} throws, at the same offset; read in full, the tree is the same. A reader that
+ * builds from one part of the tree at a time and lets each part go holds only that part, not the
+ * whole tree.
+ *
+ * @internal
+ */
+export function readRawJsonLazily(src: string): RawJson {
+  return lazyAt(readJsonTape(src), 0);
 }
 
 /**
@@ -435,5 +788,10 @@ class RawJsonReader {
  * ```
  */
 export function readRawJson(src: string): RawJson {
-  return new RawJsonReader(src).parse();
+  const tape = readJsonTape(src, true);
+  try {
+    return treeAt(tape, 0);
+  } finally {
+    releaseJsonTape(tape);
+  }
 }

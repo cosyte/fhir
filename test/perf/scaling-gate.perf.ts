@@ -65,10 +65,13 @@ const ENTRIES = 500;
 /**
  * Entries in the read's size-axis base Bundle; the scaled Bundle has 4 times as many.
  *
- * The read's cost per entry steps up once, mostly where the tree one read keeps alive (its raw
- * JSON tree and the model built from it, about 15 KiB an entry on a developer machine) outgrows the
+ * The read's cost per entry steps up once, mostly where what one read keeps alive outgrows the
  * young generation: below that, a scavenge finds most of what it scans already dead; above it,
  * nearly all of it alive, so it copies it out and promotes it. `bench/scaling-trace.mjs` traces it.
+ * The reader once kept its whole raw JSON tree alive beside the model (about 15 KiB an entry
+ * together on a developer machine); it now makes that tree one entry at a time, so what stays alive
+ * is mostly the model, about 6 KiB an entry, and the step is smaller but still there. The figures
+ * below were read with the earlier reader.
  * On five GitHub-hosted runner reads (Node.js 22), the scavenge time per entry rose 6 to 10 times
  * between 1,000 and 2,000 entries a Bundle and at most 1.5 times more from there to 16,000. The
  * time outside collection rose too, by 7% to 48% across that step and by at most 19% from 2,000 to
@@ -84,10 +87,17 @@ const ENTRIES = 500;
  */
 const READ_ENTRIES = 4_000;
 /**
- * Bundles in each phase of the read's size axis. One Bundle of 4,000 entries is a base phase of 40
- * ms or more, well over the 8 ms this file asserts.
+ * Bundles in each phase of the read's size axis, so each timed pass and each warmup batch reads two.
+ *
+ * With one Bundle a pass, the reader that makes its raw tree one entry at a time warmed unstably on
+ * 3 of 10 runner runs: single passes of the 4,000-entry Bundle alternated between about 71 and 85
+ * ms, with a 130 to 138 ms pass every 8 or 9, and a pass over 50 ms is a warmup batch of its own,
+ * so three batches in a row within 5% of their median rarely came inside the 5 s bound. Two Bundles
+ * a pass puts one of each alternating read in every batch. The ratio compares the same sizes, 4,000
+ * against 16,000 entries a Bundle, and the base phase is about twice the 40 ms or more one Bundle
+ * took, well over the 8 ms this file asserts.
  */
-const READ_BUNDLES = 1;
+const READ_BUNDLES = 2;
 /** Bundles in each size-axis phase. */
 const BUNDLES = 2;
 /**
