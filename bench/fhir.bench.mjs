@@ -171,14 +171,26 @@ for (const shape of SHAPES) {
 }
 
 // A caller with schemas of its own validates many small resources against the same few, as a
-// converter's emit check does. The call passes the schemas and a registry built once from them: a
-// build that reads `registry` validates against the prebuilt one, and a build from before the option
-// existed ignores it and merges `schemas` into a new registry on every call, so a comparison of the
-// two reads what building it once saves. The caller schema is the built-in Observation schema, so
-// the findings are the same as the plain validateResource case above.
+// converter's emit check does. The first case passes the schemas alone, so every call merges them
+// into a new registry. The second passes the schemas and a registry built once from them: a build
+// that reads `registry` validates against the prebuilt one, and a build from before the option
+// existed ignores it and merges `schemas` on every call, so a comparison of the two builds reads what
+// building it once saves, and a reading of one build reads the two calls side by side. The caller
+// schema is the built-in Observation schema, so the findings are the same as the plain
+// validateResource case above.
 benchmarks.push(
   defineBenchmark({
-    name: "validateResource with caller schemas: Observation",
+    name: "validateResource with caller schemas each call: Observation",
+    sizes: sizes(SHAPES[0]),
+    bind: (fhir) => {
+      const model = modelOf(fhir, new WeakMap());
+      const schemas = [fhir.buildRegistry()("Observation")];
+      return (x) => fhir.validateResource(model(x), { schemas });
+    },
+    weigh: (result) => result.issues.length + 1,
+  }),
+  defineBenchmark({
+    name: "validateResource with a registry built once: Observation",
     sizes: sizes(SHAPES[0]),
     bind: (fhir) => {
       const model = modelOf(fhir, new WeakMap());
