@@ -56,7 +56,14 @@ scavenges and mark-compacts, and the scaling gate's size axis timed as the gate 
 
 A full reading takes several minutes; `--only <benchmark>` narrows it. On a pull request CI times
 the base build against the head build (advisory), and the Bench reading workflow takes a reading,
-the budgets, a profile and the scaling trace on a GitHub-hosted runner when the bench changes, or when run by hand.
+the budgets, a profile and the scaling trace on a GitHub-hosted runner on every push to `main`, on a
+pull request that changes the bench, and when run by hand.
+
+The memory budgets read the peak `@cosyte/bench` names for a budget (`budgetPeakBytes`): for an
+input under 64 KiB, the median call's peak above the empty-call floor the reading measures, because
+the probe alone costs tens of KiB on its highest call; for a larger input, the highest call's peak.
+The throughput budget does not judge `validateResource` on the base64 PDF shapes: validation skips
+the payload, so bytes a second there grow with a payload it never reads.
 
 ## Architecture decisions
 

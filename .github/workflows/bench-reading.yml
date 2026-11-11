@@ -9,10 +9,13 @@ name: Bench reading
 # document, its Markdown and the raw profiles are kept as the `bench-reading` artifact.
 #
 # Advisory: it fails only when it could not take a reading at all. A budget it finds exceeded is a
-# number to act on, not a red check. It runs on a pull request that changes the bench or this file,
-# and by hand on any branch (Actions, "Bench reading", "Run workflow").
+# number to act on, not a red check. It runs on every push to main, so each commit of main has a
+# reading to compare a change with, on a pull request that changes the bench or this file, and by
+# hand on any branch (Actions, "Bench reading", "Run workflow").
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
     paths:
@@ -20,9 +23,11 @@ on:
       - ".github/workflows/bench-reading.yml"
   workflow_dispatch:
 
+# A newer push to a pull request cancels its older reading. A push to main never cancels a reading
+# of main that has started: it waits for it (a reading still waiting gives way to a newer one).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

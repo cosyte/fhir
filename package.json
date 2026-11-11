@@ -145,7 +145,7 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
     "@changesets/cli": "2.31.0",
-    "@cosyte/bench": "^0.1.1",
+    "@cosyte/bench": "^0.1.5",
     "@cosyte/eslint-config": "^0.1.4",
     "@cosyte/prettier-config": "^0.1.2",
     "@cosyte/process": "^0.1.7",
