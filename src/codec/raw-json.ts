@@ -191,6 +191,8 @@ let scratchFree = true;
 export interface JsonTape {
   readonly src: string;
   readonly tokens: Uint32Array;
+  /** Whether the read took the reused tape, which it holds until it is handed back. */
+  readonly borrowed: boolean;
 }
 
 /** A token's kind. */
@@ -220,12 +222,18 @@ class JsonTokenizer {
   #tokens: Uint32Array;
   /** Tokens written so far. */
   #count = 0;
+  /**
+   * Whether this read took the reused tape. It holds it until the tape is handed back, even after
+   * it has grown out of it into a tape of its own.
+   */
+  readonly #borrowed: boolean;
 
   public constructor(src: string, mayUseScratch: boolean) {
     this.#src = src;
     // About one token for every 8 characters of a typical document; the tape grows if it needs to.
     const words = WORDS * ((src.length >> 3) + 16);
-    if (mayUseScratch && scratchFree && words <= SCRATCH_WORDS) {
+    this.#borrowed = mayUseScratch && scratchFree && words <= SCRATCH_WORDS;
+    if (this.#borrowed) {
       scratchFree = false;
       this.#tokens = scratch ??= new Uint32Array(SCRATCH_WORDS);
     } else {
@@ -246,10 +254,14 @@ class JsonTokenizer {
         throw this.fail("Unexpected trailing content after the top-level JSON value");
       }
     } catch (error) {
-      releaseJsonTape({ src: this.#src, tokens: this.#tokens });
+      releaseJsonTape(this.#tape());
       throw error;
     }
-    return { src: this.#src, tokens: this.#tokens };
+    return this.#tape();
+  }
+
+  #tape(): JsonTape {
+    return { src: this.#src, tokens: this.#tokens, borrowed: this.#borrowed };
   }
 
   /** Write one token; returns its index. */
@@ -261,7 +273,6 @@ class JsonTokenizer {
       const tokensNow = tokens.length / WORDS;
       const grown = new Uint32Array(WORDS * (tokensNow + (tokensNow >> 1)));
       grown.set(tokens);
-      if (tokens === scratch) scratchFree = true;
       this.#tokens = tokens = grown;
     }
     tokens[slot] = a * 8 + kind;
@@ -720,7 +731,7 @@ export function readJsonTape(src: string, mayUseScratch = false): JsonTape {
  * @internal
  */
 export function releaseJsonTape(tape: JsonTape): void {
-  if (tape.tokens === scratch) scratchFree = true;
+  if (tape.borrowed) scratchFree = true;
 }
 
 /**
