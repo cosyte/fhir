@@ -63,11 +63,11 @@ from costing more than a fixed amount.
 
 `parseResource` costs about twice as much per entry on a large Bundle as on a small one. We measured
 this with `bench/scaling-trace.mjs` on a GitHub-hosted runner (Node.js 22), reading synthetic
-transaction Bundles of about 0.9 KiB an entry, in six runs, each beside a run of the previous
+transaction Bundles of about 0.9 KiB an entry, in nine runs, each beside a run of the previous
 reader on the same runner:
 
-- Up to 1,000 entries a Bundle: 7.4 to 9.9 us an entry (the previous reader: 8.0 to 11.4).
-- From 2,000 entries a Bundle up to 16,000: 15.0 to 19.5 us an entry (the previous reader: 16.6
+- Up to 1,000 entries a Bundle: 5.8 to 9.9 us an entry (the previous reader: 7.0 to 11.4).
+- From 2,000 entries a Bundle up to 16,000: 14.2 to 19.5 us an entry (the previous reader: 16.6
   to 23.7).
 
 The times differ from run to run with the runner; the step between them is there in every run.
@@ -82,14 +82,14 @@ old-generation collections added 0.5 to 3.0 us more.
 The previous reader also kept the whole raw JSON tree it read first alive beside the model. The
 reader now checks the text into a compact list of tokens kept outside the JavaScript heap and makes
 the raw tree from it one part at a time as it builds, letting each Bundle entry's part go once that
-entry is built. In the same six runs:
+entry is built. In the same nine runs:
 
 - The peak heap of one read of a 16,000-entry Bundle (13.8 MiB of text) fell from 168 to 170 MiB
   to 118 MiB, plus 13.8 MiB of tokens outside the heap while the read runs. At 4,000 entries it fell
   from 48 MiB to 37 MiB, plus 3.5 MiB. The model a read returns is the same size as before: 96 MiB
   at 16,000 entries.
-- Past the step, the time outside collection fell from 9.7 to 12.1 us an entry to 7.7 to 8.8 us, and
-  the total at 16,000 entries fell by 13% to 24% against the previous reader in the same run.
+- Past the step, the time outside collection fell from 8.3 to 12.1 us an entry to 6.4 to 8.8 us, and
+  the total at 16,000 entries fell by 13% to 31% against the previous reader in the same run.
 - The step itself did not move, and did not shrink by much: the model is most of what the
   collector copies, and a caller keeps it.
 
