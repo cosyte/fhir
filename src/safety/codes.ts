@@ -1125,18 +1125,17 @@ export function typesOf(resource: FhirComplex): readonly string[] {
   if (!writesProperty(resource, "resourceType")) return NO_TYPES;
   const types: string[] = [];
   const written = membersNamed(resource, "resourceType");
-  for (let i = 0; i < written.length; i++) pushStrings(written[i], types);
+  for (let i = 0; i < written.length; i++) pushStrings(written[i] as FhirNode, types);
   return types;
 }
 
 /** {@link primitiveStrings} of `node`, appended to `out` in the same order. */
-function pushStrings(node: FhirNode | undefined, out: string[]): void {
-  if (node === undefined) return;
+function pushStrings(node: FhirNode, out: string[]): void {
   if (isPrimitive(node)) {
     if (typeof node.value === "string") out.push(node.value);
     return;
   }
   if (!isList(node)) return;
   const items = node.items;
-  for (let i = 0; i < items.length; i++) pushStrings(items[i], out);
+  for (let i = 0; i < items.length; i++) pushStrings(items[i] as FhirNode, out);
 }

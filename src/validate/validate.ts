@@ -321,10 +321,9 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
 
   // Layer 2 (min): a required element that never appeared.
   const elements = schema.elements;
-  // `for...in` over the schema's own members, in the order `Object.entries` lists them, without
-  // building that list of pairs on every call.
-  for (const name in elements) {
-    if (!Object.hasOwn(elements, name)) continue;
+  // The schema's own members, in the order `Object.entries` lists them, without building a pair
+  // for each on every call.
+  for (const name of Object.keys(elements)) {
     const element = elements[name] as ElementSchema;
     if (element.min >= 1 && (counts.get(name) ?? 0) < element.min) {
       const suffix = isChoice(element) ? `${name}[x]` : name;
