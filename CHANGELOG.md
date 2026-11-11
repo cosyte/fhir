@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.12
+
+### Patch Changes
+
+- 00a4c0e: `validateResource` takes a prebuilt schema registry as a new `registry` option. A call given `schemas` merges them with the built-in schemas into a new registry every time; build the registry once with `buildRegistry(schemas)` and pass it as `registry` to every call instead, with the same findings. When a call passes both, the registry is used and `schemas` is not read. `buildRegistry` itself now shares the built-in schemas, base elements merged in, across every registry it builds rather than merging them again each time, and those shared schemas are frozen. A caller that passes `schemas` needs no change; to stop the per-call build, replace `{ schemas }` with `{ registry }` where the registry is built once. On our benchmark of a small Observation with one caller schema, a call given the registry took 16 to 18% less time than the same call given `schemas` before this release, and reached a lower peak heap than a call given `schemas`; what a call allocates is about the same either way. A built-in schema that `buildRegistry()` returns is now frozen, so writing into it, or into its `elements`, throws in strict mode and is ignored otherwise. A caller that changed one must copy it first and register the copy, for example `buildRegistry([{ ...schema, elements: { ...schema.elements, status: { min: 1, max: 1, types: ["code"] } } }])`, or pass the copy in `schemas`.
+
 ## 0.1.11
 
 ### Patch Changes
