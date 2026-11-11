@@ -589,10 +589,24 @@ function buildComplexList(
       trail.index(i);
       const node = readComplex(item, trail, issues);
       trail.pop();
+      // A tree this read made from text is its own and nothing reads an item again once it is
+      // built, so the item is let go: a large Bundle's raw entries no longer stay alive beside
+      // the model being built from them, which is what made a large read cost more than its size.
+      if (releasing) (value.items as RawJson[])[i] = RELEASED;
       return node;
     }),
   );
 }
+
+/**
+ * Whether the read under way made its raw tree from text itself, and so may let an item of it go
+ * once the item is built (see {@link buildComplexList}). Set only by {@link parseResource} for text
+ * input: a tree a caller handed in is the caller's and is never changed.
+ */
+let releasing = false;
+
+/** What a released item of a raw tree is left holding. */
+const RELEASED: RawJson = Object.freeze({ t: "null" });
 
 /** Build the node for a single base property from its value and `_`-sibling. */
 function buildNode(
@@ -749,7 +763,8 @@ function buildComplex(obj: RawObject, at: Trail, issues: FhirIssue[], root = fal
  * ```
  */
 export function parseResource(input: string | RawJson): ReadResult {
-  const raw = typeof input === "string" ? readRawJson(input) : input;
+  const ownTree = typeof input === "string";
+  const raw = ownTree ? readRawJson(input) : input;
   if (raw.t !== "obj") {
     throw new FhirCodecError(
       FATAL_CODES.MALFORMED_JSON,
@@ -758,6 +773,11 @@ export function parseResource(input: string | RawJson): ReadResult {
     );
   }
   const issues: FhirIssue[] = [];
-  const resource = buildComplex(raw, new Trail(""), issues, true);
-  return { resource, issues };
+  releasing = ownTree;
+  try {
+    const resource = buildComplex(raw, new Trail(""), issues, true);
+    return { resource, issues };
+  } finally {
+    releasing = false;
+  }
 }

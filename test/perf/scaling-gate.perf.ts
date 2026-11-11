@@ -68,13 +68,13 @@ const READ_ENTRIES = 1_000;
 /** Bundles in each size-axis phase. */
 const BUNDLES = 2;
 
-const LINE_FEED = 10;
-
 /**
  * The same read, reached the wrong way: each line of the text (one Bundle entry a line) is found by
- * scanning from the start of the text, so the cost grows with the square of the entry count. It
- * reads exactly the text `parseResource` reads, which the self-check confirms before it times
- * anything.
+ * stepping from the start of the text one line at a time, so the cost grows with the square of the
+ * entry count. It reads exactly the text `parseResource` reads, which the self-check confirms before
+ * it times anything. Each step is a native search for the next line break rather than a loop over
+ * every character, so at the read's 4,000 entries a pass stays short enough for its warmup to
+ * settle.
  */
 function parseQuadratic(raw: string): ReadResult {
   let count = 1;
@@ -82,7 +82,7 @@ function parseQuadratic(raw: string): ReadResult {
   const lines: string[] = [];
   for (let i = 0; i < count; i++) {
     let start = 0;
-    for (let seen = 0; seen < i; start++) if (raw.charCodeAt(start) === LINE_FEED) seen++;
+    for (let seen = 0; seen < i; seen++) start = raw.indexOf("\n", start) + 1;
     const end = raw.indexOf("\n", start);
     lines.push(raw.slice(start, end === -1 ? raw.length : end));
   }
@@ -117,8 +117,11 @@ function resolveEachEntryQuadratically(bundle: FhirComplex): void {
 const REPORTS = 64;
 /** The PDF's length in the long-string size axis's base phase; the scaled phase's is 4 times it. */
 const PDF_BYTES = 256 * KIB;
-/** Reports in each phase of the long-string size axis. */
-const PDF_REPORTS = 8;
+/**
+ * Reports in each phase of the long-string size axis. At 8 the base phase fell to 3.99 ms, under
+ * the 4 ms floor, once the reader crossed a long run with one search.
+ */
+const PDF_REPORTS = 16;
 /** How far apart the regressed read starts each scan of the text. */
 const SCAN_STEP = 4 * KIB;
 
