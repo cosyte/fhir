@@ -158,6 +158,42 @@ describe("the reported cases decline, in JSON", () => {
     ]);
   });
 
+  it("an undefined member of an extension nested in a primitive's extension", () => {
+    const resource = json({
+      resourceType: "Patient",
+      gender: "unknown",
+      _gender: {
+        extension: [
+          {
+            url: "http://example.org/syn-outer",
+            extension: [
+              { url: "http://example.org/syn-a", valueString: "x" },
+              { url: "http://example.org/syn-b", valueString: "y", note: "z" },
+            ],
+          },
+        ],
+      },
+    });
+    expectDeclined(resource, ["Patient.gender.extension[0].extension[1].note"]);
+  });
+
+  it("contained below the root is no resource position, and no element there either", () => {
+    // `contained` is a resource position only on a resource itself. On a backbone element it is
+    // an element the definitions do not define, and the resource under it is not read as one: its
+    // `resourceType` is a stray key.
+    const resource = json({
+      resourceType: "Observation",
+      status: "final",
+      code: { text: "x" },
+      component: [{ code: { text: "y" }, contained: [RETRACTED] }],
+    });
+    expectDeclined(resource, [
+      "Observation.component[0].contained",
+      "Observation.component[0].contained[0]",
+    ]);
+    expect(readSafety(resource).negations).toEqual([]);
+  });
+
   it("an extension's own value[x] variants are defined, an invented one is not", () => {
     const resource = json({
       resourceType: "Condition",
@@ -308,6 +344,12 @@ describe("a conformant document is unaffected", () => {
  */
 const FUZZ_RUNS = Number.parseInt(process.env["FUZZ_RUNS"] ?? "", 10);
 const RUNS = Number.isFinite(FUZZ_RUNS) && FUZZ_RUNS > 0 ? FUZZ_RUNS : 1000;
+/**
+ * Each property's time limit, raised with its case count: at the fuzz depth one property takes
+ * longer than the suite's default limit on a GitHub runner, and a case count that cannot finish is
+ * no deeper check.
+ */
+const TIMEOUT = Math.max(10_000, RUNS * 10);
 
 type Json = string | number | boolean | JsonObject | Json[];
 interface JsonObject {
@@ -576,7 +618,7 @@ describe("property: an undefined element planted at random depth always declines
       expect(defined.has(name), name).toBe(false);
   });
 
-  it(`JSON, ${String(RUNS)} cases`, () => {
+  it(`JSON, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(
         DOCUMENT,
@@ -592,7 +634,7 @@ describe("property: an undefined element planted at random depth always declines
     );
   });
 
-  it(`XML, ${String(RUNS)} cases`, () => {
+  it(`XML, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(
         DOCUMENT,
@@ -608,17 +650,21 @@ describe("property: an undefined element planted at random depth always declines
     );
   });
 
-  it(`converse: the same documents with nothing planted read safe (${String(RUNS)} cases)`, () => {
-    fc.assert(
-      fc.property(DOCUMENT, fc.boolean(), (document, asXml) => {
-        const resource = asXml ? xml(toXml(document)) : json(document);
-        const safety = readSafety(resource);
-        expect(safety.notAssessed).toEqual([]);
-        expect(safety.safeToSummarize).toBe(true);
-        expect(() => assertSafeToSummarize(resource)).not.toThrow();
-        expect(unknownIn(validateResource(resource, { mode: "strict" }))).toEqual([]);
-      }),
-      { numRuns: RUNS, seed: 20261111 },
-    );
-  });
+  it(
+    `converse: the same documents with nothing planted read safe (${String(RUNS)} cases)`,
+    { timeout: TIMEOUT },
+    () => {
+      fc.assert(
+        fc.property(DOCUMENT, fc.boolean(), (document, asXml) => {
+          const resource = asXml ? xml(toXml(document)) : json(document);
+          const safety = readSafety(resource);
+          expect(safety.notAssessed).toEqual([]);
+          expect(safety.safeToSummarize).toBe(true);
+          expect(() => assertSafeToSummarize(resource)).not.toThrow();
+          expect(unknownIn(validateResource(resource, { mode: "strict" }))).toEqual([]);
+        }),
+        { numRuns: RUNS, seed: 20261111 },
+      );
+    },
+  );
 });

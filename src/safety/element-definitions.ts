@@ -164,22 +164,6 @@ function definitions(): ReadonlyMap<string, ReadonlyMap<string, readonly string[
 }
 
 /**
- * Whether the definitions give `type` a context of its own: one of the ten assessed resource types,
- * or a type below one of them.
- *
- * @param type - A resource type name, exactly as the document wrote it.
- * @returns Whether {@link elementTargets} can answer for a node of that type.
- * @example
- * ```ts
- * isDefinedContext("Patient"); // true
- * isDefinedContext("Encounter"); // false
- * ```
- */
-export function isDefinedContext(type: string): boolean {
-  return Object.hasOwn(ELEMENT_DEFINITIONS, type);
-}
-
-/**
  * What the definitions put below the element `name` in any of `contexts`: the contexts it is typed
  * as, {@link RESOURCE_TARGET}, or {@link PRIMITIVE_TARGET}. `undefined` when none of them defines
  * the name, which is how an element the format does not define is told apart.

@@ -144,7 +144,7 @@ import {
 import { collectAbsence, type AbsenceMarker, type AbsenceReport } from "./absence.js";
 import { membersNamed, writesProperty } from "../model/node.js";
 import { Trail } from "../model/path.js";
-import { elementTargets, isDefinedContext, RESOURCE_TARGET } from "./element-definitions.js";
+import { elementTargets, RESOURCE_TARGET } from "./element-definitions.js";
 
 /**
  * `doNotPerform` on **this** node, read across every value the document wrote for it and through an
@@ -2068,12 +2068,12 @@ function isResourcePosition(scope: RootScope, name: string): boolean {
 
 /**
  * The contexts a resource root is read against: its own type, when every type it names is one this
- * layer assesses and the definitions model. Otherwise none, and its members are not checked: a root
- * of any other type is already on {@link SafetyReadout.notAssessed} as a whole.
+ * layer assesses. Otherwise none, and its members are not checked: a root of any other type is
+ * already on {@link SafetyReadout.notAssessed} as a whole. Every assessed type is a context of
+ * `./element-definitions.js`; `test/element-definitions.test.ts` holds the table to that.
  */
 function rootModel(types: readonly string[]): readonly string[] {
   if (!isAssessedRoot(types)) return [];
-  for (const type of types) if (!isDefinedContext(type)) return [];
   return types.length === 1 ? types : [...new Set(types)];
 }
 
@@ -2123,14 +2123,17 @@ function checkPrimitiveExtensions(node: FhirPrimitive, trail: Trail, out: Safety
   trail.pop();
 }
 
-/** Check a subtree against the contexts `model`, and nothing else; for {@link checkPrimitiveExtensions}. */
+/**
+ * Check a subtree against the contexts `model`, and nothing else; for
+ * {@link checkPrimitiveExtensions}. Below an `Extension` the definitions type no element as
+ * `Resource`, so every target here is a context or a primitive.
+ */
 function checkDefined(
   node: FhirNode,
   model: readonly string[],
   trail: Trail,
   out: SafetyWalk,
 ): void {
-  if (model.length === 0) return;
   if (isPrimitive(node)) {
     checkPrimitiveExtensions(node, trail, out);
     return;
@@ -2152,12 +2155,7 @@ function checkDefined(
       continue;
     }
     trail.child(name);
-    checkDefined(
-      property.value,
-      targets.filter((target) => target !== RESOURCE_TARGET),
-      trail,
-      out,
-    );
+    checkDefined(property.value, targets, trail, out);
     trail.pop();
   }
 }
@@ -2327,15 +2325,16 @@ function checkModifierExtension(value: FhirNode, path: string, out: string[]): v
 /** Descend into a node's children (complex → walk; list → each item) to catch nested findings. */
 function descend(node: FhirNode, trail: Trail, scope: RootScope, out: SafetyWalk): void {
   if (isComplex(node)) walkComplex(node, trail, out, scope);
-  else if (isPrimitive(node)) {
-    if (scope.model.length > 0) checkPrimitiveExtensions(node, trail, out);
-  } else if (isList(node)) {
+  else if (isList(node)) {
     const items = node.items;
     for (let index = 0; index < items.length; index++) {
       trail.index(index);
       descend(items[index] as FhirNode, trail, scope, out);
       trail.pop();
     }
+  } else if (scope.model.length > 0) {
+    // A primitive: what it carries beside its value is the one thing below it to check.
+    checkPrimitiveExtensions(node, trail, out);
   }
 }
 

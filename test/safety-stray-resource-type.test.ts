@@ -151,6 +151,12 @@ describe("a stray resourceType never starts a resource or hides one", () => {
  */
 const FUZZ_RUNS = Number.parseInt(process.env["FUZZ_RUNS"] ?? "", 10);
 const RUNS = Number.isFinite(FUZZ_RUNS) && FUZZ_RUNS > 0 ? FUZZ_RUNS : 1000;
+/**
+ * Each property's time limit, raised with its case count: at the fuzz depth one property takes
+ * longer than the suite's default limit on a GitHub runner, and a case count that cannot finish is
+ * no deeper check.
+ */
+const TIMEOUT = Math.max(10_000, RUNS * 10);
 
 /**
  * A container resource, named for the resource position it offers: `contained` on an Observation,
@@ -473,7 +479,7 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
   const steps = (strays: boolean) =>
     fc.array(stepArbitrary(strays), { minLength: 1, maxLength: 4 });
 
-  it(`JSON, ${String(RUNS)} cases`, () => {
+  it(`JSON, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(steps(true), PLANTED, (path, planted) => {
         const document = build(path, planted);
@@ -486,7 +492,7 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
     );
   });
 
-  it(`XML, ${String(RUNS)} cases`, () => {
+  it(`XML, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(steps(true), PLANTED, (path, planted) => {
         const document = build(path, planted);
@@ -499,22 +505,26 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
     );
   });
 
-  it(`converse: only modeled resources at resource positions, no stray key, stays safe (${String(RUNS)} cases)`, () => {
-    fc.assert(
-      fc.property(steps(false), fc.boolean(), (path, asXml) => {
-        // Only the modeled containers: Parameters is a type this layer does not model.
-        const modeled = path.filter(
-          (step) => step.container !== "Parameters" && step.container !== "ParametersPart",
-        );
-        fc.pre(modeled.length > 0);
-        const document = build(modeled, MODELED_LEAF);
-        const resource = asXml ? xml(xmlResource(document, NS)) : json(resourceJson(document));
-        const safety = readSafety(resource);
-        expect(safety.notAssessed).toEqual([]);
-        expect(safety.safeToSummarize).toBe(true);
-        expect(() => assertSafeToSummarize(resource)).not.toThrow();
-      }),
-      { numRuns: RUNS, seed: 20261111 },
-    );
-  });
+  it(
+    `converse: only modeled resources at resource positions, no stray key, stays safe (${String(RUNS)} cases)`,
+    { timeout: TIMEOUT },
+    () => {
+      fc.assert(
+        fc.property(steps(false), fc.boolean(), (path, asXml) => {
+          // Only the modeled containers: Parameters is a type this layer does not model.
+          const modeled = path.filter(
+            (step) => step.container !== "Parameters" && step.container !== "ParametersPart",
+          );
+          fc.pre(modeled.length > 0);
+          const document = build(modeled, MODELED_LEAF);
+          const resource = asXml ? xml(xmlResource(document, NS)) : json(resourceJson(document));
+          const safety = readSafety(resource);
+          expect(safety.notAssessed).toEqual([]);
+          expect(safety.safeToSummarize).toBe(true);
+          expect(() => assertSafeToSummarize(resource)).not.toThrow();
+        }),
+        { numRuns: RUNS, seed: 20261111 },
+      );
+    },
+  );
 });
