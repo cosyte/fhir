@@ -145,8 +145,9 @@ const STRING_STOP = /["\\\u0000-\u001f]/g;
 /** After this many plain characters in one run, the rest of the run is found by {@link STRING_STOP}. */
 const LONG_RUN = 32;
 
-/** The kinds of token a {@link JsonTape} holds. */
+/** The kinds of token a {@link JsonTape} holds, each in 3 bits. */
 const Tok = {
+  Null: 0,
   /** An object: its member count, and the index of the token after its last member. */
   Obj: 1,
   /** An array: its item count, and the index of the token after its last item. */
@@ -159,11 +160,24 @@ const Tok = {
   Num: 5,
   True: 6,
   False: 7,
-  Null: 8,
 } as const;
 
-/** The slots a token takes on a tape: its kind and two numbers. */
-const STRIDE = 3;
+/**
+ * The words a token takes on a tape. The first holds the token's kind in its low 3 bits and its
+ * first number above them (`a * 8 + kind`); the second holds its second number. The first number is
+ * a source offset or a count, both under 2^29 because a JavaScript string is (V8 caps a string's
+ * length below 2^29), so it fits in 29 bits.
+ */
+const WORDS = 2;
+
+/** The tape kept for small documents, in words; a document that needs more gets its own. */
+const SCRATCH_WORDS = WORDS * 8192;
+
+/** The tape reused by one read at a time (see {@link readJsonTape}), made on first use. */
+let scratch: Uint32Array | undefined;
+
+/** Whether {@link scratch} is free to be taken. */
+let scratchFree = true;
 
 /**
  * A JSON document read into a flat list of tokens, in source order: an object or an array is one
@@ -176,7 +190,22 @@ const STRIDE = 3;
  */
 export interface JsonTape {
   readonly src: string;
-  readonly tokens: Int32Array;
+  readonly tokens: Uint32Array;
+}
+
+/** A token's kind. */
+function kindAt(tokens: Uint32Array, index: number): number {
+  return (tokens[WORDS * index] as number) & 7;
+}
+
+/** A token's first number: a container's count, or where a string or number starts. */
+function firstAt(tokens: Uint32Array, index: number): number {
+  return (tokens[WORDS * index] as number) >>> 3;
+}
+
+/** A token's second number: the token after a container, or where a string or number ends. */
+function secondAt(tokens: Uint32Array, index: number): number {
+  return tokens[WORDS * index + 1] as number;
 }
 
 /**
@@ -188,26 +217,37 @@ export interface JsonTape {
 class JsonTokenizer {
   readonly #src: string;
   #pos = 0;
-  #tokens: Int32Array;
+  #tokens: Uint32Array;
   /** Tokens written so far. */
   #count = 0;
 
-  public constructor(src: string) {
+  public constructor(src: string, mayUseScratch: boolean) {
     this.#src = src;
-    // About one token for every 16 characters of a typical document; the tape doubles if it needs to.
-    this.#tokens = new Int32Array(STRIDE * ((src.length >> 4) + 16));
+    // About one token for every 8 characters of a typical document; the tape grows if it needs to.
+    const words = WORDS * ((src.length >> 3) + 16);
+    if (mayUseScratch && scratchFree && words <= SCRATCH_WORDS) {
+      scratchFree = false;
+      this.#tokens = scratch ??= new Uint32Array(SCRATCH_WORDS);
+    } else {
+      this.#tokens = new Uint32Array(words);
+    }
   }
 
   /** Read the whole input as a single JSON value; reject trailing non-whitespace. */
   public tokenize(): JsonTape {
-    this.skipWhitespace();
-    if (this.#pos >= this.#src.length) {
-      throw this.fail("Unexpected end of input: the document is empty");
-    }
-    this.parseValue(0);
-    this.skipWhitespace();
-    if (this.#pos < this.#src.length) {
-      throw this.fail("Unexpected trailing content after the top-level JSON value");
+    try {
+      this.skipWhitespace();
+      if (this.#pos >= this.#src.length) {
+        throw this.fail("Unexpected end of input: the document is empty");
+      }
+      this.parseValue(0);
+      this.skipWhitespace();
+      if (this.#pos < this.#src.length) {
+        throw this.fail("Unexpected trailing content after the top-level JSON value");
+      }
+    } catch (error) {
+      releaseJsonTape({ src: this.#src, tokens: this.#tokens });
+      throw error;
     }
     return { src: this.#src, tokens: this.#tokens };
   }
@@ -216,24 +256,25 @@ class JsonTokenizer {
   #emit(kind: number, a: number, b: number): number {
     let tokens = this.#tokens;
     const index = this.#count;
-    const slot = STRIDE * index;
-    if (slot + STRIDE > tokens.length) {
-      const grown = new Int32Array(tokens.length * 2);
+    const slot = WORDS * index;
+    if (slot + WORDS > tokens.length) {
+      const tokensNow = tokens.length / WORDS;
+      const grown = new Uint32Array(WORDS * (tokensNow + (tokensNow >> 1)));
       grown.set(tokens);
+      if (tokens === scratch) scratchFree = true;
       this.#tokens = tokens = grown;
     }
-    tokens[slot] = kind;
-    tokens[slot + 1] = a;
-    tokens[slot + 2] = b;
+    tokens[slot] = a * 8 + kind;
+    tokens[slot + 1] = b;
     this.#count = index + 1;
     return index;
   }
 
   /** Close the object or array token at `index`: its count, and the index of the token after it. */
-  #close(index: number, count: number): void {
-    const slot = STRIDE * index;
-    this.#tokens[slot + 1] = count;
-    this.#tokens[slot + 2] = this.#count;
+  #close(index: number, kind: number, count: number): void {
+    const slot = WORDS * index;
+    this.#tokens[slot] = count * 8 + kind;
+    this.#tokens[slot + 1] = this.#count;
   }
 
   #peek(): number {
@@ -305,7 +346,7 @@ class JsonTokenizer {
     this.skipWhitespace();
     if (this.#peek() === Code.CloseBrace) {
       this.#pos++;
-      this.#close(index, 0);
+      this.#close(index, Tok.Obj, 0);
       return;
     }
     let count = 0;
@@ -327,7 +368,7 @@ class JsonTokenizer {
       }
       if (c === Code.CloseBrace) {
         this.#pos++;
-        this.#close(index, count);
+        this.#close(index, Tok.Obj, count);
         return;
       }
       throw this.fail("Expected ',' or '}' in object");
@@ -340,7 +381,7 @@ class JsonTokenizer {
     this.skipWhitespace();
     if (this.#peek() === Code.CloseBracket) {
       this.#pos++;
-      this.#close(index, 0);
+      this.#close(index, Tok.Arr, 0);
       return;
     }
     let count = 0;
@@ -356,7 +397,7 @@ class JsonTokenizer {
       }
       if (c === Code.CloseBracket) {
         this.#pos++;
-        this.#close(index, count);
+        this.#close(index, Tok.Arr, count);
         return;
       }
       throw this.fail("Expected ',' or ']' in array");
@@ -535,73 +576,58 @@ function decodeString(src: string, start: number, end: number): string {
 /** The string a string token stands for. */
 function stringAt(tape: JsonTape, index: number): string {
   const { src, tokens } = tape;
-  const slot = STRIDE * index;
-  const start = tokens[slot + 1] as number;
-  const end = tokens[slot + 2] as number;
-  return tokens[slot] === Tok.EscStr ? decodeString(src, start, end) : src.slice(start, end);
+  const start = firstAt(tokens, index);
+  const end = secondAt(tokens, index);
+  return kindAt(tokens, index) === Tok.EscStr
+    ? decodeString(src, start, end)
+    : src.slice(start, end);
 }
 
 /** The index of the token after the value that starts at `index`. */
-function after(tokens: Int32Array, index: number): number {
-  const slot = STRIDE * index;
-  const kind = tokens[slot];
-  return kind === Tok.Obj || kind === Tok.Arr ? (tokens[slot + 2] as number) : index + 1;
+function after(tokens: Uint32Array, index: number): number {
+  const kind = kindAt(tokens, index);
+  return kind === Tok.Obj || kind === Tok.Arr ? secondAt(tokens, index) : index + 1;
 }
 
 /** The node of a scalar token. */
 function scalarAt(tape: JsonTape, index: number): RawJson {
-  const { src, tokens } = tape;
-  const slot = STRIDE * index;
-  const kind = tokens[slot];
-  if (kind === Tok.Num) return { t: "num", raw: src.slice(tokens[slot + 1], tokens[slot + 2]) };
+  const tokens = tape.tokens;
+  const kind = kindAt(tokens, index);
+  if (kind === Tok.Num) {
+    return { t: "num", raw: tape.src.slice(firstAt(tokens, index), secondAt(tokens, index)) };
+  }
   if (kind === Tok.True) return { t: "bool", value: true };
   if (kind === Tok.False) return { t: "bool", value: false };
   if (kind === Tok.Null) return { t: "null" };
   return { t: "str", value: stringAt(tape, index) };
 }
 
-/** The members of the object token at `index`, each value made by `node`. */
-function membersAt(
-  tape: JsonTape,
-  index: number,
-  node: (tape: JsonTape, index: number) => RawJson,
-): RawMember[] {
-  const tokens = tape.tokens;
-  const count = tokens[STRIDE * index + 1] as number;
-  // Made at its exact length: an array grown a member at a time holds spare capacity, and a
-  // document is mostly small objects.
-  const members = new Array<RawMember>(count);
-  let at = index + 1;
-  for (let m = 0; m < count; m++) {
-    const key = stringAt(tape, at);
-    members[m] = { key, value: node(tape, at + 1) };
-    at = after(tokens, at + 1);
-  }
-  return members;
-}
-
-/** The items of the array token at `index`, each made by `node`. */
-function itemsAt(
-  tape: JsonTape,
-  index: number,
-  node: (tape: JsonTape, index: number) => RawJson,
-): RawJson[] {
-  const tokens = tape.tokens;
-  const count = tokens[STRIDE * index + 1] as number;
-  const items = new Array<RawJson>(count);
-  let at = index + 1;
-  for (let i = 0; i < count; i++) {
-    items[i] = node(tape, at);
-    at = after(tokens, at);
-  }
-  return items;
-}
-
 /** The whole tree of the value at `index`, built at once. */
 function treeAt(tape: JsonTape, index: number): RawJson {
-  const kind = tape.tokens[STRIDE * index];
-  if (kind === Tok.Obj) return { t: "obj", members: membersAt(tape, index, treeAt) };
-  if (kind === Tok.Arr) return { t: "arr", items: itemsAt(tape, index, treeAt) };
+  const tokens = tape.tokens;
+  const kind = kindAt(tokens, index);
+  if (kind === Tok.Obj) {
+    const count = firstAt(tokens, index);
+    // Made at its exact length: an array grown a member at a time holds spare capacity, and a
+    // document is mostly small objects.
+    const members = new Array<RawMember>(count);
+    let at = index + 1;
+    for (let m = 0; m < count; m++) {
+      members[m] = { key: stringAt(tape, at), value: treeAt(tape, at + 1) };
+      at = after(tokens, at + 1);
+    }
+    return { t: "obj", members };
+  }
+  if (kind === Tok.Arr) {
+    const count = firstAt(tokens, index);
+    const items = new Array<RawJson>(count);
+    let at = index + 1;
+    for (let i = 0; i < count; i++) {
+      items[i] = treeAt(tape, at);
+      at = after(tokens, at);
+    }
+    return { t: "arr", items };
+  }
   return scalarAt(tape, index);
 }
 
@@ -622,7 +648,17 @@ class LazyObject implements RawObject {
   }
 
   public get members(): readonly RawMember[] {
-    return (this.#members ??= membersAt(this.#tape, this.#index, lazyAt));
+    if (this.#members !== undefined) return this.#members;
+    const tape = this.#tape;
+    const tokens = tape.tokens;
+    const count = firstAt(tokens, this.#index);
+    const members = new Array<RawMember>(count);
+    let at = this.#index + 1;
+    for (let m = 0; m < count; m++) {
+      members[m] = { key: stringAt(tape, at), value: lazyAt(tape, at + 1) };
+      at = after(tokens, at + 1);
+    }
+    return (this.#members = members);
   }
 }
 
@@ -639,13 +675,27 @@ class LazyArray implements RawArray {
   }
 
   public get items(): readonly RawJson[] {
-    return (this.#items ??= itemsAt(this.#tape, this.#index, lazyAt));
+    if (this.#items !== undefined) return this.#items;
+    const tape = this.#tape;
+    const tokens = tape.tokens;
+    const count = firstAt(tokens, this.#index);
+    const items = new Array<RawJson>(count);
+    let at = this.#index + 1;
+    for (let i = 0; i < count; i++) {
+      items[i] = lazyAt(tape, at);
+      at = after(tokens, at);
+    }
+    return (this.#items = items);
   }
 }
 
-/** The value at `index`, an object or array made lazily. */
-function lazyAt(tape: JsonTape, index: number): RawJson {
-  const kind = tape.tokens[STRIDE * index];
+/**
+ * The value at `index` of a tape, its objects and arrays made only when they are first read.
+ *
+ * @internal
+ */
+export function lazyAt(tape: JsonTape, index: number): RawJson {
+  const kind = kindAt(tape.tokens, index);
   if (kind === Tok.Obj) return new LazyObject(tape, index);
   if (kind === Tok.Arr) return new LazyArray(tape, index);
   return scalarAt(tape, index);
@@ -654,10 +704,23 @@ function lazyAt(tape: JsonTape, index: number): RawJson {
 /**
  * Read a JSON document onto a {@link JsonTape}. Throws as {@link readRawJson} does.
  *
+ * With `mayUseScratch`, a small document is read onto one tape kept for reuse, which saves making a
+ * typed array for every small read. The caller must then hand it back with {@link releaseJsonTape}
+ * once nothing will read the tape or a tree made from it again, and must not keep either past that.
+ *
  * @internal
  */
-export function readJsonTape(src: string): JsonTape {
-  return new JsonTokenizer(src).tokenize();
+export function readJsonTape(src: string, mayUseScratch = false): JsonTape {
+  return new JsonTokenizer(src, mayUseScratch).tokenize();
+}
+
+/**
+ * Hand back a tape from {@link readJsonTape}, so its words can be reused when it is the reused one.
+ *
+ * @internal
+ */
+export function releaseJsonTape(tape: JsonTape): void {
+  if (tape.tokens === scratch) scratchFree = true;
 }
 
 /**
@@ -688,5 +751,10 @@ export function readRawJsonLazily(src: string): RawJson {
  * ```
  */
 export function readRawJson(src: string): RawJson {
-  return treeAt(readJsonTape(src), 0);
+  const tape = readJsonTape(src, true);
+  try {
+    return treeAt(tape, 0);
+  } finally {
+    releaseJsonTape(tape);
+  }
 }

@@ -137,6 +137,24 @@ describe("readRawJsonLazily", () => {
     );
   });
 
+  it("reads one document after another, through refusals and growth, as each reads alone", () => {
+    const texts = [...DOCUMENTS, ...MALFORMED, `[${"0,".repeat(5_000)}0]`];
+    const alone = texts.map((text) => [
+      outcome(() => plain(readRawJson(text))),
+      outcome(() => parseResource(text)),
+    ]);
+    const kept = texts.map((text) => outcome(() => readRawJson(text)));
+    const results = texts.map((text) => outcome(() => parseResource(text)));
+    texts.forEach((text, i) => {
+      const tree = kept[i] as { result?: RawJson };
+      expect(tree.result === undefined ? kept[i] : { result: plain(tree.result) }).toEqual(
+        alone[i]?.[0],
+      );
+      expect(results[i]).toEqual(alone[i]?.[1]);
+      expect(outcome(() => plain(readRawJsonLazily(text)))).toEqual(alone[i]?.[0]);
+    });
+  });
+
   it("is what parseResource reads text through: the same model and issues as from readRawJson", () => {
     const text = transactionBundle(5, 30);
     expect(parseResource(text)).toEqual(parseResource(readRawJson(text)));

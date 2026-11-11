@@ -121,8 +121,11 @@ import {
   type FhirIssue,
 } from "./issues.js";
 import {
+  lazyAt,
   rawJsonText,
-  readRawJsonLazily,
+  readJsonTape,
+  releaseJsonTape,
+  type JsonTape,
   type RawArray,
   type RawJson,
   type RawMember,
@@ -591,7 +594,7 @@ function buildComplexList(
       trail.pop();
       // A tree this read made from text is its own and nothing reads an item again once it is
       // built, so the item is let go. That tree is made one part at a time as it is read
-      // (`readRawJsonLazily`), so a large Bundle's raw entries are made one at a time and let go
+      // (`lazyAt`), so a large Bundle's raw entries are made one at a time and let go
       // one at a time, and only the entry being built stays alive beside the model.
       if (releasing) (value.items as RawJson[])[i] = RELEASED;
       return node;
@@ -764,23 +767,30 @@ function buildComplex(obj: RawObject, at: Trail, issues: FhirIssue[], root = fal
  * ```
  */
 export function parseResource(input: string | RawJson): ReadResult {
-  const ownTree = typeof input === "string";
   // Text is checked whole first, so a malformed document throws before anything is built; its tree
-  // is then made only as far as it is read.
-  const raw = ownTree ? readRawJsonLazily(input) : input;
-  if (raw.t !== "obj") {
-    throw new FhirCodecError(
-      FATAL_CODES.MALFORMED_JSON,
-      "A FHIR resource must be a JSON object at the top level.",
-      { offset: 0 },
-    );
+  // is then made only as far as it is read. Neither the tape nor that tree outlives this call.
+  let tape: JsonTape | undefined;
+  let raw: RawJson;
+  if (typeof input === "string") {
+    tape = readJsonTape(input, true);
+    raw = lazyAt(tape, 0);
+  } else {
+    raw = input;
   }
-  const issues: FhirIssue[] = [];
-  releasing = ownTree;
   try {
+    if (raw.t !== "obj") {
+      throw new FhirCodecError(
+        FATAL_CODES.MALFORMED_JSON,
+        "A FHIR resource must be a JSON object at the top level.",
+        { offset: 0 },
+      );
+    }
+    const issues: FhirIssue[] = [];
+    releasing = tape !== undefined;
     const resource = buildComplex(raw, new Trail(""), issues, true);
     return { resource, issues };
   } finally {
     releasing = false;
+    if (tape !== undefined) releaseJsonTape(tape);
   }
 }
