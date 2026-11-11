@@ -88,7 +88,6 @@
 
 import {
   childPath,
-  getAllProperties,
   getProperty,
   isComplex,
   isList,
@@ -142,7 +141,7 @@ import {
   type ModifierElementReport,
 } from "./modifier-elements.js";
 import { collectAbsence, type AbsenceMarker, type AbsenceReport } from "./absence.js";
-import { writesProperty } from "../model/node.js";
+import { membersNamed, writesProperty } from "../model/node.js";
 import { Trail } from "../model/path.js";
 
 /**
@@ -180,7 +179,7 @@ import { Trail } from "../model/path.js";
  * documents they cover.
  */
 function readDoNotPerform(resource: FhirComplex): boolean | undefined {
-  const values = getAllProperties(resource, "doNotPerform");
+  const values = membersNamed(resource, "doNotPerform");
   if (values.some((node) => primitiveBooleans(node).includes(true))) return true;
   return primitiveBooleans(values[0])[0];
 }
@@ -1585,13 +1584,13 @@ function checkCodingWrapping(
     // address or the second one's wrapper has no location at all. A bare element is not indexed,
     // since there is no array there to index into.
     const base = isList(value) ? `${path}[${String(conceptIndex)}]` : path;
-    for (const member of getAllProperties(concept, "coding")) {
+    for (const member of membersNamed(concept, "coding")) {
       const codings = isList(member) ? member.items : [member];
       codings.forEach((coding, index) => {
         if (!isComplex(coding)) return;
         const at = isList(member) ? `${base}.coding[${String(index)}]` : `${base}.coding`;
         for (const name of CODING_SCALAR_ELEMENTS) {
-          const members = getAllProperties(coding, name);
+          const members = membersNamed(coding, name);
           if (members.some((scalar) => isList(scalar))) {
             // Per WRITTEN MEMBER, not per location: a `Coding` whose `system` is a singleton and
             // whose `code` holds two entries loses the `system` wrapper on the way through XML even
@@ -1722,7 +1721,7 @@ function checkNegations(
   // Across every member a repeated property name left, exactly as `readDoNotPerform` reads them: a
   // value must not become invisible, read or unread, by arriving second under a duplicate key. One
   // location however many members, because FHIRPath cannot address an individual member.
-  const written = getAllProperties(node, "doNotPerform");
+  const written = membersNamed(node, "doNotPerform");
   if (written.length > 0) {
     const at = childPath(path, "doNotPerform");
     if (written.some((value) => primitiveBooleans(value).includes(true))) {
@@ -1731,9 +1730,7 @@ function checkNegations(
     if (written.some(hasUnreadableBoolean)) out.unreadableBoolean.push(at);
   }
   if (isRetracted(node)) out.negations.add(ENTERED_IN_ERROR);
-  if (
-    getAllProperties(node, "verificationStatus").some((v) => safetyHasCodeAnySystem(v, REFUTED))
-  ) {
+  if (membersNamed(node, "verificationStatus").some((v) => safetyHasCodeAnySystem(v, REFUTED))) {
     out.negations.add(REFUTED);
   }
   if (statusSpells(node, NOT_TAKEN)) out.negations.add(NOT_TAKEN);
@@ -1743,7 +1740,7 @@ function checkNegations(
   // repeated name left and however many values a wrapper held, exactly as `doNotPerform` above is
   // reported: FHIRPath cannot address an individual member.
   for (const read of NEGATION_CODE_READS) {
-    const written = getAllProperties(node, read.element);
+    const written = membersNamed(node, read.element);
     if (written.length === 0) continue;
     // The wrapper complement of the read, in the same loop over the same table, so the shape that
     // decided what `values` returned is reported at exactly the window the read runs at. `Coding` is
@@ -2011,7 +2008,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   // Its type gate is the same asymmetry seen from the other side. Declared and pinned, not claimed.
   const noKnownAllergy =
     isType("AllergyIntolerance") &&
-    getAllProperties(resource, "code").some((node) =>
+    membersNamed(resource, "code").some((node) =>
       safetyHasCoding(node, SNOMED_SCT, NO_KNOWN_ALLERGY),
     );
 

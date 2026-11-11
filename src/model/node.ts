@@ -672,6 +672,33 @@ export function getAllProperties(node: FhirComplex, name: string): readonly Fhir
 }
 
 /**
+ * {@link getAllProperties} for this package's own reads, which only read the list: the same values in
+ * the same order, but one shared empty list when the node wrote no member called `name`, which is the
+ * answer almost every node gives, so asking costs nothing then.
+ *
+ * @internal
+ */
+export function membersNamed(node: FhirComplex, name: string): readonly FhirNode[] {
+  let out: FhirNode[] | undefined;
+  const properties = node.properties;
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
+    if (property.name === name) (out ??= []).push(property.value);
+  }
+  const duplicates = node.duplicates;
+  if (duplicates !== undefined) {
+    for (let i = 0; i < duplicates.length; i++) {
+      const property = duplicates[i] as FhirProperty;
+      if (property.name === name) (out ??= []).push(property.value);
+    }
+  }
+  return out ?? NO_MEMBERS;
+}
+
+/** The list {@link membersNamed} answers with when a node wrote no member of the name. */
+const NO_MEMBERS: readonly FhirNode[] = Object.freeze([]);
+
+/**
  * Whether `node` wrote a member named `name`, in `properties` or among the members a repeated name
  * shadowed: `getAllProperties(node, name).length > 0`, without building the list. A walk asks this
  * at every node, so it allocates nothing.

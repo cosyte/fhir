@@ -151,7 +151,6 @@
 
 import {
   childPath,
-  getAllProperties,
   isComplex,
   isList,
   isPrimitive,
@@ -161,7 +160,7 @@ import {
   type FhirNode,
   type FhirProperty,
 } from "../model/index.js";
-import { writesProperty } from "../model/node.js";
+import { membersNamed, writesProperty } from "../model/node.js";
 import type { Trail } from "../model/path.js";
 import { SAFETY_RESOURCE_TYPES, typesOf } from "./codes.js";
 
@@ -577,7 +576,7 @@ export function collectModifierElements(
   }
   if (types.includes(PRACTITIONER)) {
     const at = childPath(path, IDENTIFIER);
-    for (const written of getAllProperties(node, IDENTIFIER)) {
+    for (const written of membersNamed(node, IDENTIFIER)) {
       eachEntry(written, at, (entry, entryPath) => {
         if (carries(entry, "use")) {
           out.push({ element: "use", location: childPath(entryPath, "use") });
@@ -655,8 +654,8 @@ export function collectIntent(
 ): void {
   if (!writesProperty(node, "resourceType")) return;
   if (!typesOf(node).includes(MEDICATION_REQUEST)) return;
-  const written = getAllProperties(node, INTENT);
-  if (written.length === 0 && getAllProperties(node, `_${INTENT}`).length === 0) return;
+  const written = membersNamed(node, INTENT);
+  if (written.length === 0 && membersNamed(node, `_${INTENT}`).length === 0) return;
   const at = trail.childText(INTENT);
   const only = written.length === 1 ? written[0] : undefined;
   const value = only !== undefined && isPrimitive(only) ? only.value : undefined;
@@ -794,8 +793,8 @@ function readUse(
   codes: ReadonlySet<string>,
   out: DatatypeUseReading[],
 ): void {
-  const written = getAllProperties(entry, USE);
-  if (written.length === 0 && getAllProperties(entry, `_${USE}`).length === 0) return;
+  const written = membersNamed(entry, USE);
+  if (written.length === 0 && membersNamed(entry, `_${USE}`).length === 0) return;
   const only = written.length === 1 ? written[0] : undefined;
   const value = only !== undefined && isPrimitive(only) ? only.value : undefined;
   const code = typeof value === "string" && isUseCode(value, codes) ? value : undefined;

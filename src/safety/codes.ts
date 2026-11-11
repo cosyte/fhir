@@ -21,7 +21,6 @@
  */
 
 import {
-  getAllProperties,
   isComplex,
   isList,
   isPrimitive,
@@ -31,7 +30,7 @@ import {
   type FhirProperty,
   type PrimitiveValue,
 } from "../model/index.js";
-import { writesProperty } from "../model/node.js";
+import { membersNamed, writesProperty } from "../model/node.js";
 
 /** What {@link typesOf} answers for a node that writes no `resourceType`. */
 const NO_TYPES: readonly string[] = Object.freeze([]);
@@ -692,8 +691,8 @@ function pushCoding(
     });
     return;
   }
-  const systems = getAllProperties(item, "system").map((n) => read(n));
-  const codes = getAllProperties(item, "code").map((n) => read(n));
+  const systems = membersNamed(item, "system").map((n) => read(n));
+  const codes = membersNamed(item, "code").map((n) => read(n));
   for (const s of systems.length > 0 ? systems : [undefined]) {
     for (const c of codes.length > 0 ? codes : [undefined]) out.push({ system: s, code: c });
   }
@@ -919,7 +918,7 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * @internal
  */
 export function statusSpells(resource: FhirComplex, code: string): boolean {
-  return getAllProperties(resource, "status").some((node) => primitiveStrings(node).includes(code));
+  return membersNamed(resource, "status").some((node) => primitiveStrings(node).includes(code));
 }
 
 /**
@@ -1074,7 +1073,7 @@ export const NEGATION_CODE_READS: readonly {
  */
 export function isRetracted(resource: FhirComplex): boolean {
   if (statusSpells(resource, ENTERED_IN_ERROR)) return true;
-  return getAllProperties(resource, "verificationStatus").some((node) =>
+  return membersNamed(resource, "verificationStatus").some((node) =>
     safetyHasCodeAnySystem(node, ENTERED_IN_ERROR),
   );
 }
@@ -1124,5 +1123,5 @@ export function typesOf(resource: FhirComplex): readonly string[] {
   // Most nodes a walk asks about are not resource roots and write no type: answer those without
   // building a list. The answer is the same empty list either way, and every caller only reads it.
   if (!writesProperty(resource, "resourceType")) return NO_TYPES;
-  return getAllProperties(resource, "resourceType").flatMap((node) => [...primitiveStrings(node)]);
+  return membersNamed(resource, "resourceType").flatMap((node) => [...primitiveStrings(node)]);
 }

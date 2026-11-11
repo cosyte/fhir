@@ -19,7 +19,6 @@
 
 import {
   childPath,
-  getAllProperties,
   getProperty,
   isComplex,
   isList,
@@ -28,6 +27,7 @@ import {
   type FhirNode,
   type FhirProperty,
 } from "../model/index.js";
+import { membersNamed } from "../model/node.js";
 import { Trail } from "../model/path.js";
 import { codingsOf, primitiveString, typesOf, type Coded } from "../safety/codes.js";
 // The published validation-code registry, which has no imports of its own, so naming a code here
@@ -230,7 +230,7 @@ function collectAtObservationRoot(
   collectChoiceWrappers(node, path, keep, out);
   // `Observation.component` is `0..*`, so the array there is the conformant encoding; each entry
   // carries its own `value[x]`, `0..1` exactly as the root's is (observation.html).
-  for (const member of getAllProperties(node, "component")) {
+  for (const member of membersNamed(node, "component")) {
     const items = isList(member) ? member.items : [member];
     items.forEach((item, index) => {
       if (!isComplex(item)) return;

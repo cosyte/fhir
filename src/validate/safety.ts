@@ -67,7 +67,8 @@
  * @packageDocumentation
  */
 
-import { getAllProperties, getProperty, rootPath, type FhirComplex } from "../model/index.js";
+import { getProperty, rootPath, type FhirComplex } from "../model/index.js";
+import { membersNamed } from "../model/node.js";
 import {
   ALLERGY_VERIFICATION_SYSTEM,
   choicePresent,
@@ -181,7 +182,7 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
   // location read matches `isRetracted`'s own fail-safe read over every value written for `status`,
   // so a retraction in a member a repeated name shadowed is still reported at `status`.
   if (isRetracted(resource)) {
-    const retractedStatus = getAllProperties(resource, "status").some((node) =>
+    const retractedStatus = membersNamed(resource, "status").some((node) =>
       primitiveStrings(node).includes(ENTERED_IN_ERROR),
     );
     const at = retractedStatus ? `${root}.status` : `${root}.verificationStatus`;

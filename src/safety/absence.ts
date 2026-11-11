@@ -54,7 +54,6 @@
  */
 
 import {
-  getAllProperties,
   isComplex,
   isList,
   isPrimitive,
@@ -62,7 +61,7 @@ import {
   type FhirNode,
   type FhirProperty,
 } from "../model/index.js";
-import { writesProperty } from "../model/node.js";
+import { membersNamed, writesProperty } from "../model/node.js";
 import { Trail } from "../model/path.js";
 import { primitiveString } from "./codes.js";
 
@@ -214,7 +213,7 @@ function extensionsOf(node: FhirNode): readonly FhirNode[] {
   if (isPrimitive(node)) return node.extension ?? NO_EXTENSIONS;
   // Most nodes write no `extension` at all: answered without building the list below.
   if (!isComplex(node) || !writesProperty(node, "extension")) return NO_EXTENSIONS;
-  return getAllProperties(node, "extension").flatMap((written) =>
+  return membersNamed(node, "extension").flatMap((written) =>
     isList(written) ? written.items : [written],
   );
 }
@@ -231,7 +230,7 @@ function extensionsOf(node: FhirNode): readonly FhirNode[] {
  */
 function isAbsenceMarker(extension: FhirNode): extension is FhirComplex {
   if (!isComplex(extension)) return false;
-  return getAllProperties(extension, "url").some(
+  return membersNamed(extension, "url").some(
     (written) => primitiveString(written) === DATA_ABSENT_REASON_URL,
   );
 }
@@ -249,7 +248,7 @@ function isAbsenceMarker(extension: FhirNode): extension is FhirComplex {
  * values the sender left unranked; reading a non-member would author a reason nobody spelled.
  */
 function reasonOf(marker: FhirComplex): AbsenceCode | undefined {
-  const written = getAllProperties(marker, "valueCode");
+  const written = membersNamed(marker, "valueCode");
   if (written.length !== 1) return undefined;
   const spelled = primitiveString(written[0]);
   if (spelled === undefined || !isAbsenceCode(spelled)) return undefined;
