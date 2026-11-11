@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { eachReference } from "../src/bundle/references.js";
-import { codingsOf, complex, list, parseResource, primitive } from "../src/index.js";
+import { codingsOf, complex, list, parseResource, primitive, readSafety } from "../src/index.js";
 import { safetyCodingsOf, typesOf } from "../src/safety/codes.js";
 
 describe("eachReference", () => {
@@ -64,6 +64,11 @@ describe("the coding reads", () => {
     expect(codingsOf(complex([{ name: "coding", value: complex([]) }]))).toEqual([
       { system: undefined, code: undefined },
     ]);
+    // A model built by hand can hold a member only among the shadowed ones.
+    const onlyShadowed = complex([], [{ name: "code", value: primitive("c") }]);
+    expect(codingsOf(complex([{ name: "coding", value: onlyShadowed }]))).toEqual([
+      { system: undefined, code: "c" },
+    ]);
   });
 });
 
@@ -82,5 +87,26 @@ describe("typesOf", () => {
         ),
       ),
     ).toEqual(["Observation", "Patient"]);
+  });
+});
+
+describe("the use reads", () => {
+  it("read a Practitioner identifier written as one object, and skip a list item that is not one", () => {
+    const practitioner = parseResource(
+      JSON.stringify({ resourceType: "Practitioner", identifier: { use: "official", value: "1" } }),
+    ).resource;
+    expect(readSafety(practitioner).modifierElements).toEqual([
+      { element: "use", location: "Practitioner.identifier.use" },
+    ]);
+    const patient = complex([
+      { name: "resourceType", value: primitive("Patient") },
+      {
+        name: "identifier",
+        value: list([primitive("x"), complex([{ name: "use", value: primitive("usual") }])]),
+      },
+    ]);
+    expect(readSafety(patient).datatypeUses).toEqual([
+      { code: "usual", location: "Patient.identifier[1].use" },
+    ]);
   });
 });

@@ -25,6 +25,8 @@ describe("membersNamed", () => {
       expect(membersNamed(node, name)).toEqual(getAllProperties(node, name));
     }
     expect(membersNamed(node, "status")).toEqual([status, shadowed]);
+    const plain = complex([{ name: "status", value: status }]);
+    expect(membersNamed(plain, "status")).toEqual(getAllProperties(plain, "status"));
   });
 
   it("shares one frozen empty list for a name the node did not write", () => {
