@@ -221,6 +221,11 @@ describe("the reported cases", () => {
     const safety = readSafety(resource);
     expect(safety.notAssessed).toEqual(["Bundle.entry[0].resource"]);
     expect(safety.safeToSummarize).toBe(false);
+    // The XML spelling: an empty `<resource/>` holds no resource element to unwrap.
+    const text = `<Bundle${NS}><type value="collection"/><entry><resource/></entry></Bundle>`;
+    const xml = readSafety(parseResourceXml(text).resource);
+    expect(xml.notAssessed).toEqual(["Bundle.entry.resource"]);
+    expect(xml.safeToSummarize).toBe(false);
   });
 
   it("an element named like a resource position elsewhere is not a resource root", () => {
