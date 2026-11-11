@@ -33,7 +33,7 @@ writer, and parse that text into a plain object:
 import { parseResource, resourceType, serializeResource, validateResource } from "@cosyte/fhir";
 
 const source =
-  '{"resourceType":"Patient","id":"syn-0001","name":[{"family":"Synthetic","given":["Test"]}],"telecom":[{"system":"phone","value":"555-555-0100"}],"birthDate":"1970-01-01"}';
+  '{"resourceType":"Patient","id":"syn-0001","name":[{"family":"Synthfamily","given":["Synthgiven"]}],"telecom":[{"system":"phone","value":"555-555-0100"}],"birthDate":"1970-01-01"}';
 
 const { resource, issues } = parseResource(source);
 
@@ -44,7 +44,7 @@ resourceType(resource); // => "Patient"
 /** @type {import("fhir/r4").Patient} */
 const patient = JSON.parse(serializeResource(resource));
 
-patient.name?.[0]?.family; // => "Synthetic"
+patient.name?.[0]?.family; // => "Synthfamily"
 patient.telecom?.[0]?.value; // => "555-555-0100"
 patient.birthDate; // => "1970-01-01"
 ```
@@ -76,7 +76,7 @@ copy cannot hold what the model holds:
 import { parseResource, serializeResource } from "@cosyte/fhir";
 
 const source =
-  '{"resourceType":"Patient","id":"syn-0002","extension":[{"url":"http://example.com/fhir/StructureDefinition/synthetic-score","valueDecimal":0.010},{"url":"http://example.com/fhir/StructureDefinition/synthetic-count","valueDecimal":9007199254740993}],"name":[{"family":"Synthetic"}]}';
+  '{"resourceType":"Patient","id":"syn-0002","extension":[{"url":"http://example.com/fhir/StructureDefinition/synthetic-score","valueDecimal":0.010},{"url":"http://example.com/fhir/StructureDefinition/synthetic-count","valueDecimal":9007199254740993}],"name":[{"family":"Synthfamily"}]}';
 
 const { resource, issues } = parseResource(source);
 const text = serializeResource(resource);
