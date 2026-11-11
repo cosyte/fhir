@@ -111,7 +111,9 @@ if it were R4:
   changed is judged by R4's rule;
 - a resource of any other type, including one R4B added, gets the information finding
   `RESOURCE_NOT_MODELED`: only the elements every resource has are checked, and none of the type's
-  own.
+  own;
+- `validateResource` reports an unmodeled type only at the top level, so a document can be valid
+  and still decline in `readSafety` for a type it does not model in `contained` or a Bundle entry.
 
 Here a synthetic `NutritionProduct`, a type R4B added, carries a status outside any code list and an
 element no version defines. Validation reports neither, and the safety readout does not assess the

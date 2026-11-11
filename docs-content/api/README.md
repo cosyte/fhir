@@ -2546,11 +2546,14 @@ field nor [negations](#negations): a declared gap in the fail-safe direction, no
 > `readonly` **notAssessed**: readonly `string`[]
 
 FHIRPath locations of the resource roots this layer did **not assess**, because their type is
-not one it models: the entry node, a `contained` resource or a `Bundle.entry` resource whose
-`resourceType` names a type outside `AllergyIntolerance`, `Bundle`, `Condition`,
-`DiagnosticReport`, `Immunization`, `MedicationRequest`, `MedicationStatement`, `Observation`,
-`Patient` and `Practitioner`, or names no type at all. A root that names several types is listed
-when any of them is outside that set.
+not one it models: the entry node, or a resource at any position the R4 and R4B definitions type
+as `Resource` (`contained`, `Bundle.entry.resource`, `Bundle.entry.response.outcome`,
+`Parameters.parameter.resource` and `parameter.part.resource`), whose `resourceType` names a
+type outside `AllergyIntolerance`, `Bundle`, `Condition`, `DiagnosticReport`, `Immunization`,
+`MedicationRequest`, `MedicationStatement`, `Observation`, `Patient` and `Practitioner`, or names
+no type at all. A node at one of those positions is a resource root whether or not it writes a
+`resourceType`, so one that writes none is listed here, and so is a value there that is not an
+object at all. A root that names several types is listed when any of them is outside that set.
 
 The status codes that withdraw or cancel a record differ by type (`revoked` on a
 ServiceRequest, `cancelled` on an Encounter, `inactive` on an R4B NutritionProduct), and this

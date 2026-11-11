@@ -702,11 +702,14 @@ export interface SafetyReadout {
   readonly conflictingAbsenceMarkers: readonly string[];
   /**
    * FHIRPath locations of the resource roots this layer did **not assess**, because their type is
-   * not one it models: the entry node, a `contained` resource or a `Bundle.entry` resource whose
-   * `resourceType` names a type outside `AllergyIntolerance`, `Bundle`, `Condition`,
-   * `DiagnosticReport`, `Immunization`, `MedicationRequest`, `MedicationStatement`, `Observation`,
-   * `Patient` and `Practitioner`, or names no type at all. A root that names several types is listed
-   * when any of them is outside that set.
+   * not one it models: the entry node, or a resource at any position the R4 and R4B definitions type
+   * as `Resource` (`contained`, `Bundle.entry.resource`, `Bundle.entry.response.outcome`,
+   * `Parameters.parameter.resource` and `parameter.part.resource`), whose `resourceType` names a
+   * type outside `AllergyIntolerance`, `Bundle`, `Condition`, `DiagnosticReport`, `Immunization`,
+   * `MedicationRequest`, `MedicationStatement`, `Observation`, `Patient` and `Practitioner`, or names
+   * no type at all. A node at one of those positions is a resource root whether or not it writes a
+   * `resourceType`, so one that writes none is listed here, and so is a value there that is not an
+   * object at all. A root that names several types is listed when any of them is outside that set.
    *
    * The status codes that withdraw or cancel a record differ by type (`revoked` on a
    * ServiceRequest, `cancelled` on an Encounter, `inactive` on an R4B NutritionProduct), and this
@@ -1535,7 +1538,7 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     unreadableCode: [],
     notAssessed: [],
   };
-  walkComplex(resource, new Trail(path), out, true);
+  walkComplex(resource, new Trail(path), out, NO_SCOPE, true);
   // A location reached by more than one reading (a repeated property name, two withheld segments)
   // is resolved once, here, into exactly one of the two `use` channels.
   const uses = resolveDatatypeUses(out.useReadings);
@@ -1883,17 +1886,66 @@ function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): vo
 }
 
 /**
+ * Where the walk is relative to the resource root it is inside: the types that root names, and the
+ * element names from the root down to here, joined by `.` and without array indices. It is what
+ * {@link isResourcePosition} reads to tell a position the definitions type as `Resource`.
+ */
+interface RootScope {
+  readonly types: readonly string[];
+  readonly elements: string;
+}
+
+/** The scope before the walk reaches its first resource root. */
+const NO_SCOPE: RootScope = { types: [], elements: "" };
+
+/** `parameter`, then `part` any number of times: `Parameters.parameter.part` repeats `parameter`. */
+const PARAMETER_ELEMENTS = /^parameter(?:\.part)*$/;
+
+/**
+ * Whether the element `name`, inside `scope`, is a position the R4 and R4B definitions type as
+ * `Resource`: `DomainResource.contained`, `Bundle.entry.resource`, `Bundle.entry.response.outcome`
+ * and `Parameters.parameter.resource` (with `parameter.part.resource` at any depth, since `part`
+ * repeats the `parameter` definition). Those are every element of type `Resource` in both releases.
+ *
+ * A node at such a position is a resource root **whether or not it writes a `resourceType`**: one
+ * that names no type is still a resource, of a type this layer cannot know, so it is listed on
+ * {@link SafetyReadout.notAssessed} rather than read as part of its parent. `contained` is taken at
+ * every resource root, a Bundle, a Parameters and a root that names no type included, so a root
+ * that may not carry one does not hide one it carries anyway. A root naming several types takes the
+ * positions of each.
+ */
+function isResourcePosition(scope: RootScope, name: string): boolean {
+  const { types, elements } = scope;
+  if (name === "contained") return elements === "";
+  if (types.includes("Bundle")) {
+    if (name === "resource" && elements === "entry") return true;
+    if (name === "outcome" && elements === "entry.response") return true;
+  }
+  return name === "resource" && types.includes("Parameters") && PARAMETER_ELEMENTS.test(elements);
+}
+
+/**
  * Walk a complex node: check its `modifierExtension` property, then descend into every child.
  *
  * A member shadowed by a repeated property name is walked too. It is part of the document, so a
  * `modifierExtension` sitting inside it has to fail closed exactly as one on the surviving member
  * does; skipping it would make an unhandled modifier hideable behind a duplicate key.
  */
-function walkComplex(node: FhirComplex, trail: Trail, out: SafetyWalk, isRoot = false): void {
-  // A resource root is the entry node, or any nested node that carries its own `resourceType` (a
-  // `contained` resource, a Bundle `entry.resource`). Only there does this library know a cardinality.
+function walkComplex(
+  node: FhirComplex,
+  trail: Trail,
+  out: SafetyWalk,
+  scope: RootScope,
+  isRoot = false,
+): void {
+  // A resource root is the entry node, a node at a position the definitions type as `Resource` (a
+  // `contained` resource, a Bundle `entry.resource`; see `isResourcePosition`) whether or not it
+  // names a type, or any other nested node that carries its own `resourceType`. Only there does this
+  // library know a cardinality, and a root that names no type is not assessed.
+  let inner = scope;
   if (isRoot || writesProperty(node, "resourceType")) {
     checkResourceRoot(node, trail.text(), out);
+    inner = { types: typesOf(node), elements: "" };
   }
   // Every node, not only a resource root: `comparator` modifies the value beside it wherever that
   // value sits, and the two type-gated rules decide their own gate off this node's `resourceType`.
@@ -1909,7 +1961,7 @@ function walkComplex(node: FhirComplex, trail: Trail, out: SafetyWalk, isRoot = 
   collectDatatypeUses(node, trail, out.useReadings);
   const properties = node.properties;
   for (let i = 0; i < properties.length; i++) {
-    visitProperty(properties[i] as FhirProperty, trail, out);
+    visitProperty(properties[i] as FhirProperty, trail, out, inner);
   }
   const duplicates = node.duplicates;
   if (duplicates === undefined) return;
@@ -1921,7 +1973,7 @@ function walkComplex(node: FhirComplex, trail: Trail, out: SafetyWalk, isRoot = 
       reported.add(property.name);
       out.shadowed.push(trail.childText(property.name));
     }
-    visitProperty(property, trail, out);
+    visitProperty(property, trail, out, inner);
   }
 }
 
@@ -1974,13 +2026,41 @@ function shadowedUnder(node: FhirNode, path: string, out: string[]): void {
 }
 
 /** Check one property for an unhandled modifier, then descend into it. */
-function visitProperty(property: FhirProperty, trail: Trail, out: SafetyWalk): void {
-  if (property.name === "modifierExtension") {
+function visitProperty(
+  property: FhirProperty,
+  trail: Trail,
+  out: SafetyWalk,
+  scope: RootScope,
+): void {
+  const name = property.name;
+  if (name === "modifierExtension") {
     checkModifierExtension(property.value, trail.text(), out.modifiers);
   }
-  trail.child(property.name);
-  descend(property.value, trail, out);
+  trail.child(name);
+  if (isResourcePosition(scope, name)) {
+    descendResource(property.value, trail, out);
+  } else {
+    const elements = scope.elements === "" ? name : `${scope.elements}.${name}`;
+    descend(property.value, trail, { types: scope.types, elements }, out);
+  }
   trail.pop();
+}
+
+/**
+ * Descend into the value at a position the definitions type as `Resource`: each node there is a
+ * resource root, an object that names no type included. A value that is not an object (a string, a
+ * value-absent XML element) is no resource this layer can read, so its location is not assessed.
+ */
+function descendResource(node: FhirNode, trail: Trail, out: SafetyWalk): void {
+  if (isComplex(node)) walkComplex(node, trail, out, NO_SCOPE, true);
+  else if (isList(node)) {
+    const items = node.items;
+    for (let index = 0; index < items.length; index++) {
+      trail.index(index);
+      descendResource(items[index] as FhirNode, trail, out);
+      trail.pop();
+    }
+  } else out.notAssessed.push(trail.text());
 }
 
 /** Record every unhandled modifier in a `modifierExtension` element (a single Extension or a list). */
@@ -1998,13 +2078,13 @@ function checkModifierExtension(value: FhirNode, path: string, out: string[]): v
 }
 
 /** Descend into a node's children (complex → walk; list → each item) to catch nested findings. */
-function descend(node: FhirNode, trail: Trail, out: SafetyWalk): void {
-  if (isComplex(node)) walkComplex(node, trail, out);
+function descend(node: FhirNode, trail: Trail, scope: RootScope, out: SafetyWalk): void {
+  if (isComplex(node)) walkComplex(node, trail, out, scope);
   else if (isList(node)) {
     const items = node.items;
     for (let index = 0; index < items.length; index++) {
       trail.index(index);
-      descend(items[index] as FhirNode, trail, out);
+      descend(items[index] as FhirNode, trail, scope, out);
       trail.pop();
     }
   }

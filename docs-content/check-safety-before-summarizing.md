@@ -100,7 +100,10 @@ what they mean for the types it models, which are `AllergyIntolerance`, `Conditi
 `Patient`, `Practitioner`, and `Bundle` as a container whose entries are each judged. For any other
 type it cannot tell a current record from a withdrawn one, so it does not assess it: the resource's
 location is on `notAssessed` and the resource is never safe to summarize, whatever status it carries.
-That holds wherever the resource sits, at the root, in `contained`, or in a Bundle entry.
+That holds wherever the resource sits: at the root, in `contained`, in a Bundle entry or a Bundle
+entry's `response.outcome`, or in a `Parameters` parameter. A resource at one of those positions
+that names no type at all is not assessed either, so a Bundle entry with no `resourceType` and a
+status of `entered-in-error` is never safe to summarize.
 
 ```ts runnable
 import { parseResource, readSafety } from "@cosyte/fhir";
