@@ -90,8 +90,18 @@ export type ValidationMode = "lenient" | "strict";
 export interface ValidateOptions {
   /** Lenient (read, the default) or strict (emit). Only affects the severity of unknown elements. */
   readonly mode?: ValidationMode;
-  /** Extra resource schemas, overriding the built-ins by type (profiles feed these). */
+  /**
+   * Extra resource schemas, overriding the built-ins by type (profiles feed these). A call given
+   * `schemas` merges them into a new registry; to validate many resources against the same schemas,
+   * build the registry once with {@link buildRegistry} and pass it as `registry` instead.
+   */
   readonly schemas?: readonly ResourceSchema[];
+  /**
+   * A registry built once by {@link buildRegistry} and reused across calls, in place of `schemas`.
+   * A call reads it exactly as it reads the `schemas` it was built from. When a call passes both,
+   * the registry is used and `schemas` is not read.
+   */
+  readonly registry?: SchemaRegistry;
   /**
    * A pluggable terminology service for value-set membership. **None is bundled**; without
    * one, terminology binding checks degrade to the content-free system checks and never false-error.
@@ -266,9 +276,10 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   // the only one of the two that reaches an `expression`.
   const root = rootPath(rt);
   const registry =
-    options.schemas === undefined || options.schemas.length === 0
+    options.registry ??
+    (options.schemas === undefined || options.schemas.length === 0
       ? builtInRegistry()
-      : buildRegistry(options.schemas);
+      : buildRegistry(options.schemas));
   const modeled = registry(rt);
   const schema = modeled ?? baseSchema(rt);
   if (modeled === undefined) emit(ctx, "RESOURCE_NOT_MODELED", root);

@@ -605,6 +605,9 @@ export function baseSchema(type: string): ResourceSchema {
  * caller schema for a type replaces the built-in for that type (so a consumer can, for example,
  * provide a resource type this package does not ship). Base elements are always merged in.
  *
+ * Build a registry once and hand it to every `validateResource` call as `registry`: a call given
+ * `schemas` merges them into a new registry each time.
+ *
  * @param extra - Additional resource schemas to register (override built-ins by type).
  * @returns A resolver from resource type to its merged schema.
  * @example
@@ -616,10 +619,34 @@ export function baseSchema(type: string): ResourceSchema {
  * ```
  */
 export function buildRegistry(extra: readonly ResourceSchema[] = []): SchemaRegistry {
-  const byType = new Map<string, ResourceSchema>();
-  for (const schema of BUILTIN_SCHEMAS) byType.set(schema.type, withBase(schema));
+  const builtIn = builtInSchemas();
+  if (extra.length === 0) {
+    return (resourceType: string): ResourceSchema | undefined => builtIn.get(resourceType);
+  }
+  const byType = new Map(builtIn);
   for (const schema of extra) byType.set(schema.type, withBase(schema));
   return (resourceType: string): ResourceSchema | undefined => byType.get(resourceType);
+}
+
+/** The built-in schemas with base elements merged in, by type, made the first time a call needs them. */
+let mergedBuiltIns: ReadonlyMap<string, ResourceSchema> | undefined;
+
+/**
+ * The built-in schemas, base elements merged in, made once and shared by every registry. They are
+ * this package's own constants, so each is frozen: a caller holding one from a registry cannot
+ * change what another registry, or another call, reads.
+ */
+function builtInSchemas(): ReadonlyMap<string, ResourceSchema> {
+  if (mergedBuiltIns === undefined) {
+    const byType = new Map<string, ResourceSchema>();
+    for (const schema of BUILTIN_SCHEMAS) {
+      const merged = withBase(schema);
+      Object.freeze(merged.elements);
+      byType.set(schema.type, Object.freeze(merged));
+    }
+    mergedBuiltIns = byType;
+  }
+  return mergedBuiltIns;
 }
 
 /**

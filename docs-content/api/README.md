@@ -3124,6 +3124,14 @@ supplies the US Core (or vendor) profiles. Every supplied profile whose `type` m
 resource type is applied (fixed/pattern, must-support, slicing, profile cardinality), and the
 resource's `meta.profile` version pins are checked against the supplied set.
 
+##### registry?
+
+> `readonly` `optional` **registry?**: [`SchemaRegistry`](#schemaregistry)
+
+A registry built once by [buildRegistry](#buildregistry) and reused across calls, in place of `schemas`.
+A call reads it exactly as it reads the `schemas` it was built from. When a call passes both,
+the registry is used and `schemas` is not read.
+
 ##### resolveBase?
 
 > `readonly` `optional` **resolveBase?**: [`BaseResolver`](#baseresolver)
@@ -3135,7 +3143,9 @@ generate a snapshot for a supplied profile that carries a differential but no sn
 
 > `readonly` `optional` **schemas?**: readonly [`ResourceSchema`](#resourceschema)[]
 
-Extra resource schemas, overriding the built-ins by type (profiles feed these).
+Extra resource schemas, overriding the built-ins by type (profiles feed these). A call given
+`schemas` merges them into a new registry; to validate many resources against the same schemas,
+build the registry once with [buildRegistry](#buildregistry) and pass it as `registry` instead.
 
 ##### terminology?
 
@@ -5803,6 +5813,9 @@ resolveReference("Patient/1", { bundle: index }).status; // "resolved"
 Build a [SchemaRegistry](#schemaregistry) from the built-in schemas plus any caller-supplied ones. A
 caller schema for a type replaces the built-in for that type (so a consumer can, for example,
 provide a resource type this package does not ship). Base elements are always merged in.
+
+Build a registry once and hand it to every `validateResource` call as `registry`: a call given
+`schemas` merges them into a new registry each time.
 
 #### Parameters
 
