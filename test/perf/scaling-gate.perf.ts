@@ -81,8 +81,13 @@ function parseQuadratic(raw: string): ReadResult {
   for (let p = raw.indexOf("\n"); p !== -1; p = raw.indexOf("\n", p + 1)) count++;
   const lines: string[] = [];
   for (let i = 0; i < count; i++) {
+    // Stepped to twice over: once, the quadratic share at these sizes left the self-check only a
+    // 1.19x margin over the ceiling.
     let start = 0;
-    for (let seen = 0; seen < i; seen++) start = raw.indexOf("\n", start) + 1;
+    for (let pass = 0; pass < 2; pass++) {
+      start = 0;
+      for (let seen = 0; seen < i; seen++) start = raw.indexOf("\n", start) + 1;
+    }
     const end = raw.indexOf("\n", start);
     lines.push(raw.slice(start, end === -1 ? raw.length : end));
   }
