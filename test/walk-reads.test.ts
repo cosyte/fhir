@@ -64,6 +64,24 @@ describe("the coding reads", () => {
     expect(codingsOf(complex([{ name: "coding", value: complex([]) }]))).toEqual([
       { system: undefined, code: undefined },
     ]);
+    // A model built by hand can repeat a name inside `properties` itself, and a concept can carry a
+    // `coding` a repeated name shadowed; both read as getAllProperties lists them.
+    const repeatedInProperties = complex([
+      { name: "system", value: primitive("s1") },
+      { name: "system", value: primitive("s2") },
+    ]);
+    expect(codingsOf(complex([{ name: "coding", value: repeatedInProperties }]))).toEqual([
+      { system: "s1", code: undefined },
+      { system: "s2", code: undefined },
+    ]);
+    const shadowedCoding = complex(
+      [{ name: "coding", value: complex([{ name: "code", value: primitive("a") }]) }],
+      [{ name: "coding", value: complex([{ name: "code", value: primitive("b") }]) }],
+    );
+    expect(codingsOf(shadowedCoding)).toEqual([
+      { system: undefined, code: "a" },
+      { system: undefined, code: "b" },
+    ]);
     // A model built by hand can hold a member only among the shadowed ones.
     const onlyShadowed = complex([], [{ name: "code", value: primitive("c") }]);
     expect(codingsOf(complex([{ name: "coding", value: onlyShadowed }]))).toEqual([
@@ -98,6 +116,10 @@ describe("the use reads", () => {
     expect(readSafety(practitioner).modifierElements).toEqual([
       { element: "use", location: "Practitioner.identifier.use" },
     ]);
+    const scalarIdentifier = parseResource(
+      JSON.stringify({ resourceType: "Practitioner", identifier: "x" }),
+    ).resource;
+    expect(readSafety(scalarIdentifier).modifierElements).toEqual([]);
     const patient = complex([
       { name: "resourceType", value: primitive("Patient") },
       {
