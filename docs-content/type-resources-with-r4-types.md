@@ -33,7 +33,7 @@ writer, and parse that text into a plain object:
 import { parseResource, resourceType, serializeResource, validateResource } from "@cosyte/fhir";
 
 const source =
-  '{"resourceType":"Patient","id":"syn-0001","name":[{"family":"Synthfamily","given":["Synthgiven"]}],"telecom":[{"system":"phone","value":"555-555-0100"}],"birthDate":"1970-01-01"}';
+  '{"resourceType":"Patient","id":"syn-0001","name":[{"family":"Synthfamily","given":["Synthgiven"]}],"gender":"unknown","birthDate":"1970-01-01"}';
 
 const { resource, issues } = parseResource(source);
 
@@ -45,11 +45,11 @@ resourceType(resource); // => "Patient"
 const patient = JSON.parse(serializeResource(resource));
 
 patient.name?.[0]?.family; // => "Synthfamily"
-patient.telecom?.[0]?.value; // => "555-555-0100"
+patient.gender; // => "unknown"
 patient.birthDate; // => "1970-01-01"
 ```
 
-In TypeScript, the same step is `import type { Patient } from "fhir/r4";` and then
+In TypeScript, import the `Patient` type from `fhir/r4` with `import type`, and the same step is
 `const patient: Patient = JSON.parse(serializeResource(resource));`.
 
 Two things to know about that annotation:
@@ -75,8 +75,15 @@ copy cannot hold what the model holds:
 ```js runnable
 import { parseResource, serializeResource } from "@cosyte/fhir";
 
+// 2 to the power 53, plus 1: the first whole number a double cannot hold.
+const large = String(2n ** 53n + 1n);
+
 const source =
-  '{"resourceType":"Patient","id":"syn-0002","extension":[{"url":"http://example.com/fhir/StructureDefinition/synthetic-score","valueDecimal":0.010},{"url":"http://example.com/fhir/StructureDefinition/synthetic-count","valueDecimal":9007199254740993}],"name":[{"family":"Synthfamily"}]}';
+  '{"resourceType":"Patient","id":"syn-0002","extension":[' +
+  '{"url":"http://example.com/fhir/StructureDefinition/synthetic-score","valueDecimal":0.010},' +
+  '{"url":"http://example.com/fhir/StructureDefinition/synthetic-count","valueDecimal":' +
+  large +
+  '}],"name":[{"family":"Synthfamily"}]}';
 
 const { resource, issues } = parseResource(source);
 const text = serializeResource(resource);
@@ -88,7 +95,8 @@ issues.map((issue) => issue.code); // => ["DECIMAL_PRECISION_AT_RISK", "DECIMAL_
 const patient = JSON.parse(text);
 
 patient.extension?.[0]?.valueDecimal; // => 0.01
-patient.extension?.[1]?.valueDecimal; // => 9007199254740992
+String(patient.extension?.[1]?.valueDecimal) === large; // => false
+patient.extension?.[1]?.valueDecimal === 2 ** 53; // => true
 ```
 
 What that means, plainly:
@@ -96,8 +104,8 @@ What that means, plainly:
 - **Trailing zeros are gone.** `0.010` becomes `0.01`. In FHIR the trailing zero records how
   precisely a value was measured, so the copy states less than the sender did.
 - **Long numbers are rounded.** A number with more digits than a double holds, about 15 to 17
-  significant digits, comes back changed in its last digits: `9007199254740993` becomes
-  `9007199254740992`. That holds for any number written as a JSON number, a whole number included.
+  significant digits, comes back changed in its last digits: 2 to the power 53, plus 1, comes back
+  as 2 to the power 53. That holds for any number written as a JSON number, a whole number included.
 - **Nothing in the copy says so.** The read reported `DECIMAL_PRECISION_AT_RISK` for both values;
   the copy carries no finding, and a typed `number` looks the same whether or not it was rounded.
 
