@@ -87,10 +87,17 @@ const ENTRIES = 500;
  */
 const READ_ENTRIES = 4_000;
 /**
- * Bundles in each phase of the read's size axis. One Bundle of 4,000 entries is a base phase of 40
- * ms or more, well over the 8 ms this file asserts.
+ * Bundles in each phase of the read's size axis, so each timed pass and each warmup batch reads two.
+ *
+ * With one Bundle a pass, the reader that makes its raw tree one entry at a time warmed unstably on
+ * 3 of 10 runner runs: single passes of the 4,000-entry Bundle alternated between about 71 and 85
+ * ms, with a 130 to 138 ms pass every 8 or 9, and a pass over 50 ms is a warmup batch of its own,
+ * so three batches in a row within 5% of their median rarely came inside the 5 s bound. Two Bundles
+ * a pass puts one of each alternating read in every batch. The ratio compares the same sizes, 4,000
+ * against 16,000 entries a Bundle, and the base phase is about twice the 40 ms or more one Bundle
+ * took, well over the 8 ms this file asserts.
  */
-const READ_BUNDLES = 1;
+const READ_BUNDLES = 2;
 /** Bundles in each size-axis phase. */
 const BUNDLES = 2;
 /**

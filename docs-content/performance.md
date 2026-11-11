@@ -64,7 +64,7 @@ from costing more than a fixed amount.
 `parseResource` costs about twice as much per entry on a large Bundle as on a small one. We measured
 this with `bench/scaling-trace.mjs` on a GitHub-hosted runner (Node.js 22), reading synthetic
 transaction Bundles of about 0.9 KiB an entry, in eighteen runs, each beside a run of the previous
-reader on the same runner:
+reader on the same runner (the pull request that changed the reader lists every run):
 
 - Up to 1,000 entries a Bundle: 5.8 to 12.5 us an entry (the previous reader: 7.0 to 15.1).
 - From 2,000 entries a Bundle up to 16,000: 14.2 to 24.3 us an entry (the previous reader: 16.6
