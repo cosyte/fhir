@@ -59,6 +59,22 @@ from costing more than a fixed amount.
   written method. Neither exists yet.
 - **Not a behavior contract.** Nothing here changes how a resource is read or validated.
 
+## The cold import
+
+Importing the package costs a process time before it reads anything, which matters most to a
+short-lived process and to a package that imports this one. Importing `@cosyte/fhir` parses no
+FHIRPath expression: the expressions of the base constraints that `validateResource` evaluates are
+parsed on the first validation, once, and kept. If a parse fails for a reason other than the
+expression itself, such as the stack running out, that validation reports the constraint
+`INVARIANT_UNCHECKED`, nothing is kept, and the next validation parses it again.
+
+`pnpm check:cold-import` starts a new Node.js process twenty times, each timing one
+`await import()` of the built `dist/index.mjs` with `performance.now()`, interleaved with imports
+of an empty module so a slow runner shows as a slow empty import, and fails when the median is over
+10 ms. CI runs it on a GitHub-hosted runner after every build. On a pull request it also builds
+the base and reads it in turns with the change, so both medians come from one runner at one time;
+only the change's median is gated.
+
 ## Large Bundles cost more per entry
 
 `parseResource` costs about twice as much per entry on a large Bundle as on a small one. We measured
