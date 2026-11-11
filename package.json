@@ -42,7 +42,8 @@
       "esbuild@>=0.27.3 <0.28.2": "0.28.2",
       "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
       "js-yaml@>=3.0.0 <3.15.2": "3.15.2",
-      "minimatch@>=10.0.0 <11.0.1": "11.0.1"
+      "minimatch@>=10.0.0 <11.0.1": "11.0.1",
+      "typedoc>minimatch": "10.2.6"
     }
   },
   "main": "./dist/index.cjs",
@@ -129,12 +130,15 @@
     "check:no-emdash": "cosyte-no-emdash",
     "check:no-internal-refs": "cosyte-internal-refs",
     "check:docs-set": "tsx scripts/docs-set-check.ts",
+    "check:docs-content": "cosyte-docs-content",
+    "check:docs-reference": "cosyte-docs-reference --check",
+    "docs:reference": "cosyte-docs-reference",
     "check:readme": "cosyte-readme",
     "check:claude-card": "cosyte-claude-card",
     "check:catalog": "cosyte-catalog",
     "check:process": "cosyte-process check",
     "check:cold-import": "node scripts/check-cold-import.mjs",
-    "version": "changeset version && cosyte-process sync-version && cosyte-process format",
+    "version": "changeset version && cosyte-process sync-version && cosyte-docs-reference && cosyte-process format",
     "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm attw",
     "prepare": "command -v simple-git-hooks >/dev/null 2>&1 && simple-git-hooks 1>&2 || true"

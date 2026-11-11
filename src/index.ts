@@ -1,5 +1,8 @@
 /**
  * Public entry point for the `@cosyte/fhir` package.
+ *
+ * @packageDocumentation
+ * @module @cosyte/fhir
  */
 
 /**
