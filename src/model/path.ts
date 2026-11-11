@@ -176,3 +176,77 @@ export function childPath(parent: string, name: string): string {
 export function rootPath(type: string): string {
   return safeDerivedName(type, "resourceTypeName");
 }
+
+/**
+ * A location built a segment at a time while a walk descends, and rendered to text only when a
+ * finding needs it.
+ *
+ * A walk that names the position of what it finds used to build that name at every node it passed,
+ * a string per element per walk, though almost every walk finds nothing. A trail holds the segments
+ * it has been given (an element name, or an array index) on one stack the walk pushes onto before it
+ * descends and pops when it comes back, so descending costs nothing, and {@link Trail.text} renders
+ * the location only when it is asked for. The text is exactly what joining the same segments with
+ * {@link childPath} and `[index]` gives: each name is bounded the same way, at the time it is
+ * rendered.
+ *
+ * A trail is changed by the walk that owns it, so a location that must outlive the current position
+ * is taken with {@link Trail.text}, never kept as the trail itself.
+ *
+ * @internal
+ */
+export class Trail {
+  /** The location the trail starts at, as {@link childPath} would be handed it. */
+  readonly #root: string;
+  /** The segments below the root, innermost last: a name, or an array index. */
+  readonly #segments: (string | number)[] = [];
+
+  /**
+   * Start a trail at `root`.
+   *
+   * @param root - The location the walk starts at, as {@link childPath} would be handed it.
+   */
+  public constructor(root: string) {
+    this.#root = root;
+  }
+
+  /** Step into the element called `name`, as written by the document. */
+  public child(name: string): void {
+    this.#segments.push(name);
+  }
+
+  /** Step into the item at `index` of the list the trail is at. */
+  public index(index: number): void {
+    this.#segments.push(index);
+  }
+
+  /** Step back out of the last segment. */
+  public pop(): void {
+    this.#segments.pop();
+  }
+
+  /** How many segments are below the root; {@link Trail.truncate} returns to a depth. */
+  public get depth(): number {
+    return this.#segments.length;
+  }
+
+  /** Step back out to `depth` segments below the root. */
+  public truncate(depth: number): void {
+    this.#segments.length = depth;
+  }
+
+  /** The location the trail is at, rendered as {@link childPath} and `[index]` would build it. */
+  public text(): string {
+    let text = this.#root;
+    const segments = this.#segments;
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i] as string | number;
+      text = typeof segment === "number" ? `${text}[${String(segment)}]` : childPath(text, segment);
+    }
+    return text;
+  }
+
+  /** The location of the element `name` below where the trail is, without stepping into it. */
+  public childText(name: string): string {
+    return childPath(this.text(), name);
+  }
+}

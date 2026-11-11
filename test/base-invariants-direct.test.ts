@@ -172,5 +172,12 @@ describe("what the layer records as decided", () => {
     expect(decides(patient, "ele-1", ELE1)).toBe(false);
     expect(decides(complex([]), "ext-1", EXT1)).toBe(false);
     expect(decides(extension, "ext-1", "value.exists()")).toBe(false);
+
+    // Asked not to keep the table (the validator, when no profile is supplied), it records nothing,
+    // and the findings are the same either way.
+    const untracked = collectBaseInvariantFindings(patient, "Patient", { decides: false });
+    expect(untracked.decides(extension, "ext-1", EXT1)).toBe(false);
+    expect(untracked.decides(shared, "ele-1", ELE1)).toBe(false);
+    expect(untracked.findings).toEqual(collectBaseInvariantFindings(patient, "Patient").findings);
   });
 });

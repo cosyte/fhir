@@ -131,6 +131,16 @@ const Code = {
 } as const;
 
 /**
+ * The characters a string's text stops at: the closing quote, an escape, and an unescaped control
+ * character, which is malformed. Searched from `lastIndex` (the `g` flag); without the `u` flag it
+ * reads UTF-16 code units, as `charCodeAt` does.
+ */
+const STRING_STOP = /["\\\u0000-\u001f]/g;
+
+/** After this many plain characters in one run, the rest of the run is found by {@link STRING_STOP}. */
+const LONG_RUN = 32;
+
+/**
  * A single-pass recursive-descent JSON reader. Instances are throwaway (one per parse); the public
  * entry point is {@link readRawJson}.
  *
@@ -318,6 +328,13 @@ class RawJsonReader {
         throw this.fail("Unescaped control character in string");
       }
       pos++;
+      // A run longer than a few characters (a base64 attachment) is crossed by the regular
+      // expression engine, which finds the next character this loop would stop at much faster
+      // than a character at a time. Either way the loop resumes at that character, or at the end.
+      if (pos - runStart === LONG_RUN) {
+        STRING_STOP.lastIndex = pos;
+        pos = STRING_STOP.test(src) ? STRING_STOP.lastIndex - 1 : end;
+      }
     }
   }
 

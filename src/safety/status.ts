@@ -88,7 +88,6 @@
 
 import {
   childPath,
-  getAllProperties,
   getProperty,
   isComplex,
   isList,
@@ -142,7 +141,8 @@ import {
   type ModifierElementReport,
 } from "./modifier-elements.js";
 import { collectAbsence, type AbsenceMarker, type AbsenceReport } from "./absence.js";
-import { writesProperty } from "../model/node.js";
+import { membersNamed, writesProperty } from "../model/node.js";
+import { Trail } from "../model/path.js";
 
 /**
  * `doNotPerform` on **this** node, read across every value the document wrote for it and through an
@@ -179,7 +179,7 @@ import { writesProperty } from "../model/node.js";
  * documents they cover.
  */
 function readDoNotPerform(resource: FhirComplex): boolean | undefined {
-  const values = getAllProperties(resource, "doNotPerform");
+  const values = membersNamed(resource, "doNotPerform");
   if (values.some((node) => primitiveBooleans(node).includes(true))) return true;
   return primitiveBooleans(values[0])[0];
 }
@@ -1264,17 +1264,27 @@ export function collectMarked(
 /** Whether {@link collectNested} would record anything: the same traversal, building no location. */
 function anyMarked(node: FhirNode, marked: (node: FhirNode) => boolean): boolean {
   if (marked(node)) return true;
-  if (isList(node)) {
-    for (const item of node.items) if (anyMarked(item, marked)) return true;
-    return false;
-  }
-  if (isPrimitive(node)) {
-    for (const ext of node.extension ?? NO_NODES) if (anyMarked(ext, marked)) return true;
-    return false;
-  }
-  for (const property of node.properties) if (anyMarked(property.value, marked)) return true;
-  for (const property of node.duplicates ?? NO_PROPERTIES) {
-    if (anyMarked(property.value, marked)) return true;
+  if (isList(node)) return anyItemMarked(node.items, marked);
+  if (isPrimitive(node)) return anyItemMarked(node.extension ?? NO_NODES, marked);
+  return (
+    anyMemberMarked(node.properties, marked) ||
+    anyMemberMarked(node.duplicates ?? NO_PROPERTIES, marked)
+  );
+}
+
+/** {@link anyMarked} over each of `items`, by index, so no iterator is made per node. */
+function anyItemMarked(items: readonly FhirNode[], marked: (node: FhirNode) => boolean): boolean {
+  for (let i = 0; i < items.length; i++) if (anyMarked(items[i] as FhirNode, marked)) return true;
+  return false;
+}
+
+/** {@link anyMarked} over the value of each of `properties`, as {@link anyItemMarked} is. */
+function anyMemberMarked(
+  properties: readonly FhirProperty[],
+  marked: (node: FhirNode) => boolean,
+): boolean {
+  for (let i = 0; i < properties.length; i++) {
+    if (anyMarked((properties[i] as FhirProperty).value, marked)) return true;
   }
   return false;
 }
@@ -1466,7 +1476,7 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     nearMissCode: [],
     unreadableCode: [],
   };
-  walkComplex(resource, path, out, true);
+  walkComplex(resource, new Trail(path), out, true);
   // A location reached by more than one reading (a repeated property name, two withheld segments)
   // is resolved once, here, into exactly one of the two `use` channels.
   const uses = resolveDatatypeUses(out.useReadings);
@@ -1567,21 +1577,26 @@ function checkCodingWrapping(
   path: string,
   report: (location: string, unspellable: boolean) => void,
 ): void {
-  const concepts = isList(value) ? value.items : [value];
-  concepts.forEach((concept, conceptIndex) => {
-    if (!isComplex(concept)) return;
-    // An element that is itself array-wrapped holds several CodeableConcepts, and each needs its own
-    // address or the second one's wrapper has no location at all. A bare element is not indexed,
-    // since there is no array there to index into.
-    const base = isList(value) ? `${path}[${String(conceptIndex)}]` : path;
-    for (const member of getAllProperties(concept, "coding")) {
+  const wrapped = isList(value);
+  const concepts = wrapped ? value.items : [value];
+  for (let conceptIndex = 0; conceptIndex < concepts.length; conceptIndex++) {
+    const concept = concepts[conceptIndex] as FhirNode;
+    if (!isComplex(concept)) continue;
+    const written = membersNamed(concept, "coding");
+    for (let m = 0; m < written.length; m++) {
+      const member = written[m] as FhirNode;
       const codings = isList(member) ? member.items : [member];
-      codings.forEach((coding, index) => {
-        if (!isComplex(coding)) return;
-        const at = isList(member) ? `${base}.coding[${String(index)}]` : `${base}.coding`;
+      for (let index = 0; index < codings.length; index++) {
+        const coding = codings[index] as FhirNode;
+        if (!isComplex(coding)) continue;
         for (const name of CODING_SCALAR_ELEMENTS) {
-          const members = getAllProperties(coding, name);
+          const members = membersNamed(coding, name);
           if (members.some((scalar) => isList(scalar))) {
+            // An element that is itself array-wrapped holds several CodeableConcepts, and each needs
+            // its own address or the second one's wrapper has no location at all. A bare element is
+            // not indexed, since there is no array there to index into. Built only for a report.
+            const base = wrapped ? `${path}[${String(conceptIndex)}]` : path;
+            const at = isList(member) ? `${base}.coding[${String(index)}]` : `${base}.coding`;
             // Per WRITTEN MEMBER, not per location: a `Coding` whose `system` is a singleton and
             // whose `code` holds two entries loses the `system` wrapper on the way through XML even
             // though the `code` wrapper keeps the location reported. The member that vanishes is
@@ -1592,9 +1607,9 @@ function checkCodingWrapping(
             );
           }
         }
-      });
+      }
     }
-  });
+  }
 }
 
 /** The `0..1` scalars on a `Coding` this layer reads a safety verdict out of (datatypes.html). */
@@ -1711,7 +1726,7 @@ function checkNegations(
   // Across every member a repeated property name left, exactly as `readDoNotPerform` reads them: a
   // value must not become invisible, read or unread, by arriving second under a duplicate key. One
   // location however many members, because FHIRPath cannot address an individual member.
-  const written = getAllProperties(node, "doNotPerform");
+  const written = membersNamed(node, "doNotPerform");
   if (written.length > 0) {
     const at = childPath(path, "doNotPerform");
     if (written.some((value) => primitiveBooleans(value).includes(true))) {
@@ -1720,9 +1735,7 @@ function checkNegations(
     if (written.some(hasUnreadableBoolean)) out.unreadableBoolean.push(at);
   }
   if (isRetracted(node)) out.negations.add(ENTERED_IN_ERROR);
-  if (
-    getAllProperties(node, "verificationStatus").some((v) => safetyHasCodeAnySystem(v, REFUTED))
-  ) {
+  if (membersNamed(node, "verificationStatus").some((v) => safetyHasCodeAnySystem(v, REFUTED))) {
     out.negations.add(REFUTED);
   }
   if (statusSpells(node, NOT_TAKEN)) out.negations.add(NOT_TAKEN);
@@ -1732,7 +1745,7 @@ function checkNegations(
   // repeated name left and however many values a wrapper held, exactly as `doNotPerform` above is
   // reported: FHIRPath cannot address an individual member.
   for (const read of NEGATION_CODE_READS) {
-    const written = getAllProperties(node, read.element);
+    const written = membersNamed(node, read.element);
     if (written.length === 0) continue;
     // The wrapper complement of the read, in the same loop over the same table, so the shape that
     // decided what `values` returned is reported at exactly the window the read runs at. `Coding` is
@@ -1745,7 +1758,8 @@ function checkNegations(
       const at = childPath(path, read.element);
       for (const value of written) checkCodingWrapping(value, at, report);
     }
-    const spelled = written.flatMap((value) => [...read.values(value)]);
+    const spelled: string[] = [];
+    for (const value of written) for (const code of read.values(value)) spelled.push(code);
     // Per CODE, and the suppression is what keeps this channel off conformant documents. R4 lets a
     // `CodeableConcept` under a required binding carry translation codings beside the one from the
     // value set (terminologies.html), so a `verificationStatus` spelling `refuted` from the standard
@@ -1779,8 +1793,9 @@ function checkNegations(
  * behind.
  */
 function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): void {
-  const reported = new Set<string>();
-  const unspellable = new Set<string>();
+  // Made at the first wrapper reported here, since almost every root reports none.
+  let reported: Set<string> | undefined;
+  let unspellable: Set<string> | undefined;
   // The two sets are de-duplicated INDEPENDENTLY on purpose. A repeated property name puts two
   // wrappers at one location, and if only the first were considered, `{"status":["b","c"],
   // "status":["a"]}` would hide the unwritable one behind the writable one that arrived first.
@@ -1788,11 +1803,14 @@ function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): vo
   // negation read overlap on a safety type's `verificationStatus`, and a location a caller can act
   // on once must not arrive twice because two windows both cover it.
   const report: WrapperReport = (location, unwritable) => {
+    reported ??= new Set<string>();
     if (!reported.has(location)) {
       reported.add(location);
       out.arrayWrapped.push(location);
     }
-    if (unwritable && !unspellable.has(location)) {
+    if (!unwritable) return;
+    unspellable ??= new Set<string>();
+    if (!unspellable.has(location)) {
       unspellable.add(location);
       out.unspellableInXml.push(location);
     }
@@ -1808,25 +1826,28 @@ function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): vo
  * `modifierExtension` sitting inside it has to fail closed exactly as one on the surviving member
  * does; skipping it would make an unhandled modifier hideable behind a duplicate key.
  */
-function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = false): void {
+function walkComplex(node: FhirComplex, trail: Trail, out: SafetyWalk, isRoot = false): void {
   // A resource root is the entry node, or any nested node that carries its own `resourceType` (a
   // `contained` resource, a Bundle `entry.resource`). Only there does this library know a cardinality.
   if (isRoot || writesProperty(node, "resourceType")) {
-    checkResourceRoot(node, path, out);
+    checkResourceRoot(node, trail.text(), out);
   }
   // Every node, not only a resource root: `comparator` modifies the value beside it wherever that
   // value sits, and the two type-gated rules decide their own gate off this node's `resourceType`.
   // Reported at the path the walk already built, so the report window IS the read window and the
   // array indices are the walk's own.
-  collectModifierElements(node, path, out.modifierElements);
+  collectModifierElements(node, trail, out.modifierElements);
   // `MedicationRequest.intent`, gated off this node's own `resourceType` exactly as the reports
   // above are, so it is read at every MedicationRequest root the walk reaches and nowhere else.
-  collectIntent(node, path, out.intents, out.unreadableIntent);
+  collectIntent(node, trail, out.intents, out.unreadableIntent);
   // `use` on the four datatypes, gated off this node's own `resourceType` the same way: at a root of
   // one of the eight modeled types it reads that root's covered positions, down to (and not into)
   // any nested resource root, which this walk reaches and reads in its own turn.
-  collectDatatypeUses(node, path, out.useReadings);
-  for (const property of node.properties) visitProperty(property, path, out);
+  collectDatatypeUses(node, trail, out.useReadings);
+  const properties = node.properties;
+  for (let i = 0; i < properties.length; i++) {
+    visitProperty(properties[i] as FhirProperty, trail, out);
+  }
   const duplicates = node.duplicates;
   if (duplicates === undefined) return;
   const reported = new Set<string>();
@@ -1835,9 +1856,9 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
     // individual members, so repeating the same path would be noise a caller cannot act on.
     if (!reported.has(property.name)) {
       reported.add(property.name);
-      out.shadowed.push(childPath(path, property.name));
+      out.shadowed.push(trail.childText(property.name));
     }
-    visitProperty(property, path, out);
+    visitProperty(property, trail, out);
   }
 }
 
@@ -1890,11 +1911,13 @@ function shadowedUnder(node: FhirNode, path: string, out: string[]): void {
 }
 
 /** Check one property for an unhandled modifier, then descend into it. */
-function visitProperty(property: FhirProperty, path: string, out: SafetyWalk): void {
+function visitProperty(property: FhirProperty, trail: Trail, out: SafetyWalk): void {
   if (property.name === "modifierExtension") {
-    checkModifierExtension(property.value, path, out.modifiers);
+    checkModifierExtension(property.value, trail.text(), out.modifiers);
   }
-  descend(property.value, childPath(path, property.name), out);
+  trail.child(property.name);
+  descend(property.value, trail, out);
+  trail.pop();
 }
 
 /** Record every unhandled modifier in a `modifierExtension` element (a single Extension or a list). */
@@ -1912,10 +1935,16 @@ function checkModifierExtension(value: FhirNode, path: string, out: string[]): v
 }
 
 /** Descend into a node's children (complex → walk; list → each item) to catch nested findings. */
-function descend(node: FhirNode, path: string, out: SafetyWalk): void {
-  if (isComplex(node)) walkComplex(node, path, out);
-  else if (isList(node))
-    node.items.forEach((item, index) => descend(item, `${path}[${String(index)}]`, out));
+function descend(node: FhirNode, trail: Trail, out: SafetyWalk): void {
+  if (isComplex(node)) walkComplex(node, trail, out);
+  else if (isList(node)) {
+    const items = node.items;
+    for (let index = 0; index < items.length; index++) {
+      trail.index(index);
+      descend(items[index] as FhirNode, trail, out);
+      trail.pop();
+    }
+  }
 }
 
 /**
@@ -1989,7 +2018,7 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   // Its type gate is the same asymmetry seen from the other side. Declared and pinned, not claimed.
   const noKnownAllergy =
     isType("AllergyIntolerance") &&
-    getAllProperties(resource, "code").some((node) =>
+    membersNamed(resource, "code").some((node) =>
       safetyHasCoding(node, SNOMED_SCT, NO_KNOWN_ALLERGY),
     );
 

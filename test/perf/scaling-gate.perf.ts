@@ -49,28 +49,45 @@ import { KIB, observation, reportWithAttachment, transactionBundle } from "../..
  * and the gate skipped.
  */
 const COUNT = 1_000;
-/** The validator costs several times as much a resource, so fewer reach the same phase length. */
-const VALIDATE_COUNT = 250;
+/**
+ * Observations on the count axis for the validator. It once cost several times what the read does
+ * and 250 were enough; it now costs about what the read does, and at 250 its base phase fell under
+ * the 4 ms floor and the gate skipped.
+ */
+const VALIDATE_COUNT = 1_000;
 /** Entries in the size axis's base Bundle; the scaled phase has 4 times as many. */
 const ENTRIES = 500;
+/**
+ * Entries in the read's size-axis base Bundle. At 500 against 2,000 the two phases straddle the
+ * point where a read's garbage stops dying young: once the reader allocated less per element, the
+ * 500 entry phase got cheaper than the 2,000 entry one by more than a linear read explains, and
+ * the gate read 9.1 to 12.0 though the read is linear from 1,000 entries up (the runner reading:
+ * 1,000 entries in 11.13 ms, 5,000 in 58.29 ms). 1,000 against 4,000 puts both phases past it.
+ */
+const READ_ENTRIES = 1_000;
 /** Bundles in each size-axis phase. */
 const BUNDLES = 2;
 
-const LINE_FEED = 10;
-
 /**
  * The same read, reached the wrong way: each line of the text (one Bundle entry a line) is found by
- * scanning from the start of the text, so the cost grows with the square of the entry count. It
- * reads exactly the text `parseResource` reads, which the self-check confirms before it times
- * anything.
+ * stepping from the start of the text one line at a time, so the cost grows with the square of the
+ * entry count. It reads exactly the text `parseResource` reads, which the self-check confirms before
+ * it times anything. Each step is a native search for the next line break rather than a loop over
+ * every character, so at the read's 4,000 entries a pass stays short enough for its warmup to
+ * settle.
  */
 function parseQuadratic(raw: string): ReadResult {
   let count = 1;
   for (let p = raw.indexOf("\n"); p !== -1; p = raw.indexOf("\n", p + 1)) count++;
   const lines: string[] = [];
   for (let i = 0; i < count; i++) {
+    // Stepped to twice over: once, the quadratic share at these sizes left the self-check only a
+    // 1.19x margin over the ceiling.
     let start = 0;
-    for (let seen = 0; seen < i; start++) if (raw.charCodeAt(start) === LINE_FEED) seen++;
+    for (let pass = 0; pass < 2; pass++) {
+      start = 0;
+      for (let seen = 0; seen < i; seen++) start = raw.indexOf("\n", start) + 1;
+    }
     const end = raw.indexOf("\n", start);
     lines.push(raw.slice(start, end === -1 ? raw.length : end));
   }
@@ -105,8 +122,11 @@ function resolveEachEntryQuadratically(bundle: FhirComplex): void {
 const REPORTS = 64;
 /** The PDF's length in the long-string size axis's base phase; the scaled phase's is 4 times it. */
 const PDF_BYTES = 256 * KIB;
-/** Reports in each phase of the long-string size axis. */
-const PDF_REPORTS = 8;
+/**
+ * Reports in each phase of the long-string size axis. At 8 the base phase fell to 3.99 ms, under
+ * the 4 ms floor, once the reader crossed a long run with one search.
+ */
+const PDF_REPORTS = 16;
 /** How far apart the regressed read starts each scan of the text. */
 const SCAN_STEP = 4 * KIB;
 
@@ -144,7 +164,11 @@ function textOptions(): ScalingGateOptions<string, ReadResult> {
     parse: (raw) => parseResource(raw),
     weigh: (result) => result.issues.length + 1,
     count: { n: COUNT, generate: (i) => observation(i) },
-    size: { inputs: BUNDLES, size: ENTRIES, generate: (i, size) => transactionBundle(i, size) },
+    size: {
+      inputs: BUNDLES,
+      size: READ_ENTRIES,
+      generate: (i, size) => transactionBundle(i, size),
+    },
   };
 }
 
@@ -171,6 +195,10 @@ const serializeOptions: ScalingGateOptions<FhirComplex, string> = {
 
 /** A skip is not a pass: a gate that could not measure says so here, rather than reading green. */
 function expectMeasured(report: ReturnType<typeof scalingGate>): void {
+  // The ratio and both phase times, on a pass as well as a failure, so a run that passes still
+  // leaves its reading in the log.
+  process.stderr.write(`${report.count.diagnostic}\n`);
+  process.stderr.write(`${report.size.diagnostic}\n`);
   expect(report.count.status, report.count.diagnostic).toBe("measured");
   expect(report.size.status, report.size.diagnostic).toBe("measured");
 }

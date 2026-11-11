@@ -19,8 +19,9 @@
  * @packageDocumentation
  */
 
-import { childPath, getProperty, isComplex, isList, isPrimitive } from "../model/index.js";
-import type { FhirComplex, FhirNode } from "../model/index.js";
+import { getProperty, isComplex, isList, isPrimitive } from "../model/index.js";
+import type { FhirComplex, FhirNode, FhirProperty } from "../model/index.js";
+import { Trail } from "../model/path.js";
 import { parseReference } from "../model/reference.js";
 
 /**
@@ -223,15 +224,40 @@ export function eachReference(
   path: string,
   visit: (location: string, reference: string) => void,
 ): void {
+  eachReferenceOn(node, new Trail(path), (at, reference) => {
+    visit(`${at.text()}.reference`, reference);
+  });
+}
+
+/**
+ * {@link eachReference} on a {@link Trail}: `visit` is handed the trail at the element carrying the
+ * reference, so a caller renders the location only for a reference it reports.
+ *
+ * @internal
+ */
+export function eachReferenceOn(
+  node: FhirNode,
+  trail: Trail,
+  visit: (at: Trail, reference: string) => void,
+): void {
   if (isList(node)) {
-    node.items.forEach((item, index) => eachReference(item, `${path}[${String(index)}]`, visit));
+    const items = node.items;
+    for (let index = 0; index < items.length; index++) {
+      trail.index(index);
+      eachReferenceOn(items[index] as FhirNode, trail, visit);
+      trail.pop();
+    }
     return;
   }
   if (!isComplex(node)) return;
   const ref = stringOf(getProperty(node, "reference"));
-  if (ref !== undefined) visit(`${path}.reference`, ref);
-  for (const property of node.properties) {
-    eachReference(property.value, childPath(path, property.name), visit);
+  if (ref !== undefined) visit(trail, ref);
+  const properties = node.properties;
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
+    trail.child(property.name);
+    eachReferenceOn(property.value, trail, visit);
+    trail.pop();
   }
 }
 

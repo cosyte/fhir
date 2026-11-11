@@ -427,4 +427,17 @@ export function reportWithAttachment(i, bytes) {
   });
 }
 
+/**
+ * A FHIR Binary carrying a PDF of `bytes` bytes as base64 in `data`, as a document server returns
+ * one: the large opaque payload with almost nothing around it.
+ */
+export function binaryResource(i, bytes) {
+  return JSON.stringify({
+    resourceType: "Binary",
+    id: `BIN-${pad(i)}`,
+    contentType: "application/pdf",
+    data: base64Payload(i, bytes),
+  });
+}
+
 export { KIB };

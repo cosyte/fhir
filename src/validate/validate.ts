@@ -154,15 +154,12 @@ function emit(ctx: Ctx, code: ValidationCode, expression: string): void {
   ctx.issues.push(validationIssue(code, severityFor(code, ctx.mode), expression));
 }
 
-/** The occurrences of an element node as (leaf, path) pairs, one for a singleton, N for a list. */
-function occurrences(
-  node: FhirNode,
-  path: string,
-): { readonly leaf: FhirNode; readonly path: string }[] {
-  if (isList(node)) {
-    return node.items.map((leaf, i) => ({ leaf, path: `${path}[${String(i)}]` }));
-  }
-  return [{ leaf: node, path }];
+/**
+ * The location of one occurrence of an element at `at`: `at` itself for a singleton (`index` -1), or
+ * its item at `index` for a list. Built only when a finding is reported there.
+ */
+function occurrencePath(at: string, index: number): string {
+  return index < 0 ? at : `${at}[${String(index)}]`;
 }
 
 /** Validate one occurrence's datatype / value-domain against the element's declared datatype. */
@@ -171,33 +168,37 @@ function checkLeaf(
   leaf: FhirNode,
   datatype: string,
   element: ElementSchema,
-  path: string,
+  at: string,
+  index: number,
 ): void {
   const primitiveExpected = isPrimitiveType(datatype);
 
   if (isComplex(leaf)) {
     // A primitive datatype cannot be an object; a complex datatype's internals are Phase 6.
-    if (primitiveExpected) emit(ctx, "TYPE_MISMATCH", path);
+    if (primitiveExpected) emit(ctx, "TYPE_MISMATCH", occurrencePath(at, index));
     return;
   }
   if (isList(leaf)) {
     // A nested list where a single element belongs, recurse into its items.
-    for (const inner of occurrences(leaf, path))
-      checkLeaf(ctx, inner.leaf, datatype, element, inner.path);
+    const base = occurrencePath(at, index);
+    const items = leaf.items;
+    for (let i = 0; i < items.length; i++) {
+      checkLeaf(ctx, items[i] as FhirNode, datatype, element, base, i);
+    }
     return;
   }
 
   // leaf is a primitive.
   if (!primitiveExpected) {
     // A complex datatype (e.g. HumanName) cannot be a bare primitive.
-    emit(ctx, "TYPE_MISMATCH", path);
+    emit(ctx, "TYPE_MISMATCH", occurrencePath(at, index));
     return;
   }
   if (leaf.value === undefined) return; // metadata-only primitive (extension without a value), nothing to check.
 
   const verdict = validatePrimitiveValue(leaf.value, datatype);
-  if (verdict === "type-mismatch") emit(ctx, "TYPE_MISMATCH", path);
-  else if (verdict === "invalid") emit(ctx, "PRIMITIVE_INVALID", path);
+  if (verdict === "type-mismatch") emit(ctx, "TYPE_MISMATCH", occurrencePath(at, index));
+  else if (verdict === "invalid") emit(ctx, "PRIMITIVE_INVALID", occurrencePath(at, index));
 
   // Required-strength enumerated code binding (Phase 2 enforces `required` only).
   if (
@@ -207,7 +208,7 @@ function checkLeaf(
     typeof leaf.value === "string" &&
     !element.binding.codes.includes(leaf.value)
   ) {
-    emit(ctx, "CODE_INVALID", path);
+    emit(ctx, "CODE_INVALID", occurrencePath(at, index));
   }
 }
 
@@ -288,12 +289,13 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
     }
 
     const { element, datatype, base } = match;
-    const occ = occurrences(property.value, path);
+    const value = property.value;
+    const occurrenceCount = isList(value) ? value.items.length : 1;
     // `counts` accumulates across a choice's variants so a choice with any variant present satisfies
     // its min. The max check is per-property (this variant's own occurrences): a two-variant choice
     // is one logical problem, reported once as CHOICE_AMBIGUOUS below rather than also as a spurious
     // CARDINALITY_MAX; a single variant repeated as an array is still a real max violation.
-    counts.set(base, (counts.get(base) ?? 0) + occ.length);
+    counts.set(base, (counts.get(base) ?? 0) + occurrenceCount);
 
     if (isChoice(element)) {
       const seen = choiceVariants.get(base) ?? new Set<string>();
@@ -301,8 +303,15 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
       choiceVariants.set(base, seen);
     }
 
-    if (occ.length > element.max) emit(ctx, "CARDINALITY_MAX", path);
-    for (const { leaf, path: leafPath } of occ) checkLeaf(ctx, leaf, datatype, element, leafPath);
+    if (occurrenceCount > element.max) emit(ctx, "CARDINALITY_MAX", path);
+    if (!isList(value)) {
+      checkLeaf(ctx, value, datatype, element, path, -1);
+      continue;
+    }
+    const items = value.items;
+    for (let i = 0; i < items.length; i++) {
+      checkLeaf(ctx, items[i] as FhirNode, datatype, element, path, i);
+    }
   }
 
   // A choice[x] with more than one variant present is ambiguous (structure).
@@ -311,7 +320,11 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   }
 
   // Layer 2 (min): a required element that never appeared.
-  for (const [name, element] of Object.entries(schema.elements)) {
+  const elements = schema.elements;
+  // The schema's own members, in the order `Object.entries` lists them, without building a pair
+  // for each on every call.
+  for (const name of Object.keys(elements)) {
+    const element = elements[name] as ElementSchema;
     if (element.min >= 1 && (counts.get(name) ?? 0) < element.min) {
       const suffix = isChoice(element) ? `${name}[x]` : name;
       emit(ctx, "CARDINALITY_MIN", `${root}.${suffix}`);
@@ -346,7 +359,9 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   // on their DomainResource / Element / Extension base, whether or not a profile is supplied. A type
   // outside the eight draws nothing here. The seven named safety invariants stay with the safety
   // layer above, so each is reported once.
-  const base = collectBaseInvariantFindings(resource, rt);
+  // Which constraints were decided where is asked only by the profile layer below.
+  const withProfiles = options.profiles !== undefined && options.profiles.length > 0;
+  const base = collectBaseInvariantFindings(resource, rt, { decides: withProfiles });
   for (const finding of base.findings) ctx.issues.push(finding.issue);
   const reportedByBase = alreadyReported(base.findings);
 

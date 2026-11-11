@@ -21,16 +21,16 @@
  */
 
 import {
-  getAllProperties,
   isComplex,
   isList,
   isPrimitive,
   resourceType,
   type FhirComplex,
   type FhirNode,
+  type FhirProperty,
   type PrimitiveValue,
 } from "../model/index.js";
-import { writesProperty } from "../model/node.js";
+import { membersNamed, writesProperty } from "../model/node.js";
 
 /** What {@link typesOf} answers for a node that writes no `resourceType`. */
 const NO_TYPES: readonly string[] = Object.freeze([]);
@@ -622,34 +622,108 @@ export function safetyCodingsOf(node: FhirNode | undefined): Coded[] {
  * before this rule, only as a bare primitive.
  */
 function collectCodings(node: FhirNode | undefined, unwrap: boolean): Coded[] {
-  if (node === undefined) return [];
-  if (isList(node)) return node.items.flatMap((item) => collectCodings(item, unwrap));
-  if (!isComplex(node)) return [];
-  const read = unwrap ? codingScalar : primitiveString;
-  const codings = getAllProperties(node, "coding").flatMap((coding) =>
-    isList(coding) ? [...coding.items] : [coding],
-  );
   const out: Coded[] = [];
-  for (const item of codings) {
-    if (!isComplex(item)) continue;
-    // FHIR-CODING-SCALAR-WRAPPER. These read through an array wrapper, but ONLY a single-position
-    // one, and the restriction is the whole safety argument rather than caution. `Coding.system` and
-    // `Coding.code` feed the `system` x `code` CROSS-PRODUCT below, so a rule yielding more than one
-    // value on either side manufactures a pair the sender never wrote, and one pair matched
-    // downstream is a recorded "no known allergy", a POSITIVE clinical assertion. `codingScalar`
-    // returns AT MOST ONE value per written member, so these two arrays have exactly the lengths they
-    // had when a wrapper read as `undefined`: the cross-product cannot grow, and unwrapping can only
-    // fill in a value, never add a pair. Two earlier attempts were refuted for breaking exactly that
-    // bound; the second counted strings rather than array positions, and a FHIR JSON `null` is a real
-    // position marker, not padding, so `["716186003", null]` unwrapped wrongly. `codingScalar` counts
-    // positions. The property is pinned in `test/array-wrapped-scalar.test.ts`.
-    const systems = getAllProperties(item, "system").map((n) => read(n));
-    const codes = getAllProperties(item, "code").map((n) => read(n));
-    for (const system of systems.length > 0 ? systems : [undefined]) {
-      for (const code of codes.length > 0 ? codes : [undefined]) out.push({ system, code });
-    }
-  }
+  pushCodings(node, unwrap ? codingScalar : primitiveString, out);
   return out;
+}
+
+/** {@link collectCodings} into `out`: a list item by item, then each `coding` member in order. */
+function pushCodings(
+  node: FhirNode | undefined,
+  read: (node: FhirNode | undefined) => string | undefined,
+  out: Coded[],
+): void {
+  if (node === undefined) return;
+  if (isList(node)) {
+    const items = node.items;
+    for (let i = 0; i < items.length; i++) pushCodings(items[i], read, out);
+    return;
+  }
+  if (!isComplex(node)) return;
+  pushCodingMembers(node.properties, read, out);
+  if (node.duplicates !== undefined) pushCodingMembers(node.duplicates, read, out);
+}
+
+/** The codings of each `coding` member among `properties`, a wrapper's items in order. */
+function pushCodingMembers(
+  properties: readonly FhirProperty[],
+  read: (node: FhirNode | undefined) => string | undefined,
+  out: Coded[],
+): void {
+  for (let p = 0; p < properties.length; p++) {
+    const property = properties[p] as FhirProperty;
+    if (property.name !== "coding") continue;
+    const coding = property.value;
+    if (!isList(coding)) {
+      pushCoding(coding, read, out);
+      continue;
+    }
+    const items = coding.items;
+    for (let i = 0; i < items.length; i++) pushCoding(items[i] as FhirNode, read, out);
+  }
+}
+
+/** The `(system, code)` pairs of one `Coding`. */
+function pushCoding(
+  item: FhirNode,
+  read: (node: FhirNode | undefined) => string | undefined,
+  out: Coded[],
+): void {
+  if (!isComplex(item)) return;
+  // FHIR-CODING-SCALAR-WRAPPER. These read through an array wrapper, but ONLY a single-position
+  // one, and the restriction is the whole safety argument rather than caution. `Coding.system` and
+  // `Coding.code` feed the `system` x `code` CROSS-PRODUCT below, so a rule yielding more than one
+  // value on either side manufactures a pair the sender never wrote, and one pair matched
+  // downstream is a recorded "no known allergy", a POSITIVE clinical assertion. `codingScalar`
+  // returns AT MOST ONE value per written member, so these two arrays have exactly the lengths they
+  // had when a wrapper read as `undefined`: the cross-product cannot grow, and unwrapping can only
+  // fill in a value, never add a pair. Two earlier attempts were refuted for breaking exactly that
+  // bound; the second counted strings rather than array positions, and a FHIR JSON `null` is a real
+  // position marker, not padding, so `["716186003", null]` unwrapped wrongly. `codingScalar` counts
+  // positions. The property is pinned in `test/array-wrapped-scalar.test.ts`.
+  // A `Coding` writes each of the two at most once, and the pair is then read without the lists.
+  const system = onlyMember(item, "system");
+  const code = onlyMember(item, "code");
+  if (system !== SEVERAL && code !== SEVERAL) {
+    out.push({
+      system: system === undefined ? undefined : read(system),
+      code: code === undefined ? undefined : read(code),
+    });
+    return;
+  }
+  const systems = membersNamed(item, "system").map((n) => read(n));
+  const codes = membersNamed(item, "code").map((n) => read(n));
+  for (const s of systems.length > 0 ? systems : [undefined]) {
+    for (const c of codes.length > 0 ? codes : [undefined]) out.push({ system: s, code: c });
+  }
+}
+
+/** What {@link onlyMember} answers for a node that wrote a name more than once. */
+const SEVERAL = Symbol("several");
+
+/**
+ * The one value `node` wrote under `name`, `undefined` when it wrote none, or {@link SEVERAL} when a
+ * repeated name left more than one: `getAllProperties(node, name)` when that has at most one entry,
+ * without building it.
+ */
+function onlyMember(node: FhirComplex, name: string): FhirNode | undefined | typeof SEVERAL {
+  let found: FhirNode | undefined;
+  const properties = node.properties;
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
+    if (property.name !== name) continue;
+    if (found !== undefined) return SEVERAL;
+    found = property.value;
+  }
+  const duplicates = node.duplicates;
+  if (duplicates === undefined) return found;
+  for (let i = 0; i < duplicates.length; i++) {
+    const property = duplicates[i] as FhirProperty;
+    if (property.name !== name) continue;
+    if (found !== undefined) return SEVERAL;
+    found = property.value;
+  }
+  return found;
 }
 
 /**
@@ -844,7 +918,7 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * @internal
  */
 export function statusSpells(resource: FhirComplex, code: string): boolean {
-  return getAllProperties(resource, "status").some((node) => primitiveStrings(node).includes(code));
+  return membersNamed(resource, "status").some((node) => primitiveStrings(node).includes(code));
 }
 
 /**
@@ -999,7 +1073,7 @@ export const NEGATION_CODE_READS: readonly {
  */
 export function isRetracted(resource: FhirComplex): boolean {
   if (statusSpells(resource, ENTERED_IN_ERROR)) return true;
-  return getAllProperties(resource, "verificationStatus").some((node) =>
+  return membersNamed(resource, "verificationStatus").some((node) =>
     safetyHasCodeAnySystem(node, ENTERED_IN_ERROR),
   );
 }
@@ -1049,5 +1123,19 @@ export function typesOf(resource: FhirComplex): readonly string[] {
   // Most nodes a walk asks about are not resource roots and write no type: answer those without
   // building a list. The answer is the same empty list either way, and every caller only reads it.
   if (!writesProperty(resource, "resourceType")) return NO_TYPES;
-  return getAllProperties(resource, "resourceType").flatMap((node) => [...primitiveStrings(node)]);
+  const types: string[] = [];
+  const written = membersNamed(resource, "resourceType");
+  for (let i = 0; i < written.length; i++) pushStrings(written[i] as FhirNode, types);
+  return types;
+}
+
+/** {@link primitiveStrings} of `node`, appended to `out` in the same order. */
+function pushStrings(node: FhirNode, out: string[]): void {
+  if (isPrimitive(node)) {
+    if (typeof node.value === "string") out.push(node.value);
+    return;
+  }
+  if (!isList(node)) return;
+  const items = node.items;
+  for (let i = 0; i < items.length; i++) pushStrings(items[i] as FhirNode, out);
 }

@@ -51,6 +51,7 @@ import {
 import { primitiveString } from "../safety/codes.js";
 import {
   buildBindingRegistry,
+  type BindingRegistry,
   type BindingStrength,
   type TerminologyBinding,
 } from "../terminology/bindings.js";
@@ -106,7 +107,10 @@ export function collectTerminologyIssues(
   rt: string,
   options: TerminologyOptions = {},
 ): ValidationIssue[] {
-  const registry = buildBindingRegistry(options.bindings ?? []);
+  const registry =
+    options.bindings === undefined || options.bindings.length === 0
+      ? builtInBindings()
+      : buildBindingRegistry(options.bindings);
   const service = options.terminology;
   const issues: ValidationIssue[] = [];
 
@@ -125,6 +129,15 @@ export function collectTerminologyIssues(
     }
   }
   return issues;
+}
+
+/** The registry of the built-in bindings alone, built once: it never changes. */
+let builtIn: BindingRegistry | undefined;
+
+/** {@link buildBindingRegistry} with no extra bindings, built the first time it is asked for. */
+function builtInBindings(): BindingRegistry {
+  builtIn ??= buildBindingRegistry();
+  return builtIn;
 }
 
 /** Read every `Coding` (with its FHIRPath location) out of a `CodeableConcept` node, or a list of them. */

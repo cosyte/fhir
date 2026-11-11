@@ -151,7 +151,6 @@
 
 import {
   childPath,
-  getAllProperties,
   isComplex,
   isList,
   isPrimitive,
@@ -161,7 +160,8 @@ import {
   type FhirNode,
   type FhirProperty,
 } from "../model/index.js";
-import { writesProperty } from "../model/node.js";
+import { membersNamed, writesProperty } from "../model/node.js";
+import type { Trail } from "../model/path.js";
 import { SAFETY_RESOURCE_TYPES, typesOf } from "./codes.js";
 
 /**
@@ -468,12 +468,17 @@ export const MODIFIER_ELEMENT_ROOT_TYPES: ReadonlySet<string> = new Set([
 function carries(node: FhirComplex, name: string): boolean {
   // `getAllProperties(node, name)` or `getAllProperties(node, "_" + name)` is non-empty: decided
   // without building either list or the `_` name, since this runs at every node the walk reaches.
-  return writesMember(node.properties, name) || writesMember(node.duplicates ?? [], name);
+  const duplicates = node.duplicates;
+  return (
+    writesMember(node.properties, name) ||
+    (duplicates !== undefined && writesMember(duplicates, name))
+  );
 }
 
 /** Whether one of `properties` is named `name` or `_` followed by `name`. */
 function writesMember(properties: readonly FhirProperty[], name: string): boolean {
-  for (const { name: written } of properties) {
+  for (let i = 0; i < properties.length; i++) {
+    const written = (properties[i] as FhirProperty).name;
     if (written === name) return true;
     if (
       written.length === name.length + 1 &&
@@ -511,6 +516,30 @@ function eachEntry(
 }
 
 /**
+ * {@link readUse} on each entry of a covered member, the trail at each entry in turn and back where
+ * it was afterwards, indexed at the array as {@link eachEntry} indexes it.
+ */
+function readUses(
+  value: FhirNode,
+  trail: Trail,
+  codes: ReadonlySet<string>,
+  out: DatatypeUseReading[],
+): void {
+  if (isList(value)) {
+    const items = value.items;
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index] as FhirNode;
+      if (!isComplex(item)) continue;
+      trail.index(index);
+      readUse(item, trail, codes, out);
+      trail.pop();
+    }
+    return;
+  }
+  if (isComplex(value)) readUse(value, trail, codes, out);
+}
+
+/**
  * Record every modifier element THIS node is an occurrence of. Called once per complex node the
  * safety walk reaches, so the window this reports at is exactly the window the walk reads at, and
  * the location is the path the walk had already built (array indices included, unconditionally).
@@ -523,12 +552,15 @@ function eachEntry(
  */
 export function collectModifierElements(
   node: FhirComplex,
-  path: string,
+  trail: Trail,
   out: ModifierElementReport[],
 ): void {
-  for (const element of UNGATED_ELEMENTS) {
-    if (carries(node, element)) out.push({ element, location: childPath(path, element) });
+  for (let i = 0; i < UNGATED_ELEMENTS.length; i++) {
+    const element = UNGATED_ELEMENTS[i] as (typeof UNGATED_ELEMENTS)[number];
+    if (carries(node, element)) out.push({ element, location: trail.childText(element) });
   }
+  if (!writesProperty(node, "resourceType")) return;
+  const path = trail.text();
   const types = typesOf(node);
   if (types.includes(PATIENT)) {
     if (carries(node, "active")) {
@@ -544,7 +576,7 @@ export function collectModifierElements(
   }
   if (types.includes(PRACTITIONER)) {
     const at = childPath(path, IDENTIFIER);
-    for (const written of getAllProperties(node, IDENTIFIER)) {
+    for (const written of membersNamed(node, IDENTIFIER)) {
       eachEntry(written, at, (entry, entryPath) => {
         if (carries(entry, "use")) {
           out.push({ element: "use", location: childPath(entryPath, "use") });
@@ -616,14 +648,15 @@ function deceasedMembers(node: FhirComplex): string[] {
  */
 export function collectIntent(
   node: FhirComplex,
-  path: string,
+  trail: Trail,
   intents: IntentReport[],
   unreadable: string[],
 ): void {
+  if (!writesProperty(node, "resourceType")) return;
   if (!typesOf(node).includes(MEDICATION_REQUEST)) return;
-  const written = getAllProperties(node, INTENT);
-  if (written.length === 0 && getAllProperties(node, `_${INTENT}`).length === 0) return;
-  const at = childPath(path, INTENT);
+  const written = membersNamed(node, INTENT);
+  if (written.length === 0 && membersNamed(node, `_${INTENT}`).length === 0) return;
+  const at = trail.childText(INTENT);
   const only = written.length === 1 ? written[0] : undefined;
   const value = only !== undefined && isPrimitive(only) ? only.value : undefined;
   if (typeof value === "string" && isIntentCode(value)) {
@@ -657,13 +690,14 @@ function isIntentCode(value: string): value is MedicationRequestIntent {
  */
 export function collectDatatypeUses(
   node: FhirComplex,
-  path: string,
+  trail: Trail,
   out: DatatypeUseReading[],
 ): void {
+  if (!writesProperty(node, "resourceType")) return;
   const types = typesOf(node);
   if (types.includes(PRACTITIONER)) return;
   if (!types.some((type) => USE_ROOT_TYPES.has(type))) return;
-  readUsesUnder(node, path, types.includes(PATIENT) ? "patient-root" : "other", out);
+  readUsesUnder(node, trail, types.includes(PATIENT) ? "patient-root" : "other", out);
 }
 
 /**
@@ -673,31 +707,35 @@ export function collectDatatypeUses(
  */
 function readUsesUnder(
   node: FhirComplex,
-  path: string,
+  trail: Trail,
   place: UsePlace,
   out: DatatypeUseReading[],
 ): void {
-  for (const property of node.properties) readUsesAt(property, path, place, out);
-  for (const property of node.duplicates ?? []) readUsesAt(property, path, place, out);
+  const properties = node.properties;
+  for (let i = 0; i < properties.length; i++) {
+    readUsesAt(properties[i] as FhirProperty, trail, place, out);
+  }
+  const duplicates = node.duplicates;
+  if (duplicates === undefined) return;
+  for (let i = 0; i < duplicates.length; i++) {
+    readUsesAt(duplicates[i] as FhirProperty, trail, place, out);
+  }
 }
 
 /** {@link readUsesUnder}, for one member of the node. */
 function readUsesAt(
   property: FhirProperty,
-  path: string,
+  trail: Trail,
   place: UsePlace,
   out: DatatypeUseReading[],
 ): void {
-  const at = childPath(path, property.name);
+  trail.child(property.name);
   const codes = coveredCodes(property.name, place);
-  if (codes !== undefined) {
-    eachEntry(property.value, at, (entry, entryPath) => {
-      readUse(entry, entryPath, codes, out);
-    });
-  }
+  if (codes !== undefined) readUses(property.value, trail, codes, out);
   const next: UsePlace =
     place === "patient-root" && property.name === CONTACT ? "patient-contact" : "other";
-  descendForUses(property.value, at, next, out);
+  descendForUses(property.value, trail, next, out);
+  trail.pop();
 }
 
 /**
@@ -708,24 +746,32 @@ function readUsesAt(
  */
 function descendForUses(
   value: FhirNode,
-  path: string,
+  trail: Trail,
   place: UsePlace,
   out: DatatypeUseReading[],
 ): void {
   if (isList(value)) {
-    value.items.forEach((item, index) => {
-      descendForUses(item, `${path}[${String(index)}]`, place, out);
-    });
+    const items = value.items;
+    for (let index = 0; index < items.length; index++) {
+      trail.index(index);
+      descendForUses(items[index] as FhirNode, trail, place, out);
+      trail.pop();
+    }
     return;
   }
   if (isPrimitive(value)) {
-    (value.extension ?? []).forEach((extension, index) => {
-      descendForUses(extension, `${path}.extension[${String(index)}]`, "other", out);
-    });
+    const extensions = value.extension;
+    if (extensions === undefined) return;
+    for (let index = 0; index < extensions.length; index++) {
+      trail.child("extension");
+      trail.index(index);
+      descendForUses(extensions[index] as FhirNode, trail, "other", out);
+      trail.truncate(trail.depth - 2);
+    }
     return;
   }
   if (writesProperty(value, "resourceType")) return;
-  readUsesUnder(value, path, place, out);
+  readUsesUnder(value, trail, place, out);
 }
 
 /** The value set a member named `name` is read against at `place`, or `undefined` when not covered. */
@@ -743,16 +789,16 @@ function coveredCodes(name: string, place: UsePlace): ReadonlySet<string> | unde
  */
 function readUse(
   entry: FhirComplex,
-  at: string,
+  at: Trail,
   codes: ReadonlySet<string>,
   out: DatatypeUseReading[],
 ): void {
-  const written = getAllProperties(entry, USE);
-  if (written.length === 0 && getAllProperties(entry, `_${USE}`).length === 0) return;
+  const written = membersNamed(entry, USE);
+  if (written.length === 0 && membersNamed(entry, `_${USE}`).length === 0) return;
   const only = written.length === 1 ? written[0] : undefined;
   const value = only !== undefined && isPrimitive(only) ? only.value : undefined;
   const code = typeof value === "string" && isUseCode(value, codes) ? value : undefined;
-  out.push({ location: childPath(at, USE), code });
+  out.push({ location: at.childText(USE), code });
 }
 
 /** Whether `value` is exactly one of `codes`, a subset of the {@link DatatypeUseCode} values. */
