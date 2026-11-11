@@ -54,15 +54,16 @@
  */
 
 import {
-  childPath,
   getAllProperties,
   isComplex,
   isList,
   isPrimitive,
   type FhirComplex,
   type FhirNode,
+  type FhirProperty,
 } from "../model/index.js";
 import { writesProperty } from "../model/node.js";
+import { Trail } from "../model/path.js";
 import { primitiveString } from "./codes.js";
 
 /**
@@ -281,12 +282,13 @@ function pushOnce(out: string[], location: string): void {
 }
 
 /** Record what the markers on ONE node say, if it carries any. */
-function visit(node: FhirNode, path: string, out: MutableReport): void {
+function visit(node: FhirNode, trail: Trail, out: MutableReport): void {
   const written = extensionsOf(node);
   // A node with no extension carries no marker: answered without filtering an empty list.
   if (written.length === 0) return;
   const markers = written.filter(isAbsenceMarker);
   if (markers.length === 0) return;
+  const path = trail.text();
   // The conflict is a property of the ELEMENT, not of an individual marker, so it is decided once
   // however many markers sit here: FHIRPath cannot address one extension apart from the element.
   if (carriesValue(node)) pushOnce(out.conflicting, path);
@@ -316,23 +318,40 @@ function visit(node: FhirNode, path: string, out: MutableReport): void {
  * An extension is itself a complex element, so a marker nested inside another extension is reached
  * by the ordinary descent rather than by a special case.
  */
-function walk(node: FhirNode, path: string, out: MutableReport): void {
-  visit(node, path, out);
+function walk(node: FhirNode, trail: Trail, out: MutableReport): void {
+  visit(node, trail, out);
   if (isList(node)) {
-    node.items.forEach((item, index) => {
-      walk(item, `${path}[${String(index)}]`, out);
-    });
+    const items = node.items;
+    for (let index = 0; index < items.length; index++) {
+      trail.index(index);
+      walk(items[index] as FhirNode, trail, out);
+      trail.pop();
+    }
     return;
   }
   if (isPrimitive(node)) {
-    (node.extension ?? []).forEach((extension, index) => {
-      walk(extension, `${path}.extension[${String(index)}]`, out);
-    });
+    const extensions = node.extension;
+    if (extensions === undefined) return;
+    for (let index = 0; index < extensions.length; index++) {
+      trail.child("extension");
+      trail.index(index);
+      walk(extensions[index] as FhirNode, trail, out);
+      trail.truncate(trail.depth - 2);
+    }
     return;
   }
-  for (const property of node.properties) walk(property.value, childPath(path, property.name), out);
-  for (const property of node.duplicates ?? []) {
-    walk(property.value, childPath(path, property.name), out);
+  walkMembers(node.properties, trail, out);
+  const duplicates = node.duplicates;
+  if (duplicates !== undefined) walkMembers(duplicates, trail, out);
+}
+
+/** {@link walk} into each of `properties`, in order. */
+function walkMembers(properties: readonly FhirProperty[], trail: Trail, out: MutableReport): void {
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
+    trail.child(property.name);
+    walk(property.value, trail, out);
+    trail.pop();
   }
 }
 
@@ -357,6 +376,6 @@ function walk(node: FhirNode, path: string, out: MutableReport): void {
  */
 export function collectAbsence(resource: FhirComplex, path: string): AbsenceReport {
   const out: MutableReport = { markers: [], unreadable: [], conflicting: [] };
-  walk(resource, path, out);
+  walk(resource, new Trail(path), out);
   return out;
 }

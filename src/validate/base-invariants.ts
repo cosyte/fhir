@@ -61,7 +61,9 @@ import {
   rootPath,
   type FhirComplex,
   type FhirNode,
+  type FhirProperty,
 } from "../model/index.js";
+import { Trail } from "../model/path.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issues.js";
 
 /** The eight resource types whose base constraints this layer evaluates. */
@@ -379,8 +381,11 @@ function occurrencesOf(node: FhirNode, path: string): { node: FhirNode; path: st
   return node.items.flatMap((item, i) => occurrencesOf(item, `${path}[${String(i)}]`));
 }
 
-/** Called once per element occurrence the walk reaches. */
-type Visit = (node: FhirNode, path: string, extension: boolean, typedElement: boolean) => void;
+/**
+ * Called once per element occurrence the walk reaches, with the trail at that occurrence: its
+ * location is `trail.text()`, rendered only when a finding needs it.
+ */
+type Visit = (node: FhirNode, trail: Trail, extension: boolean, typedElement: boolean) => void;
 
 /**
  * Walk every element occurrence under `value`, depth first, in document order.
@@ -392,7 +397,7 @@ type Visit = (node: FhirNode, path: string, extension: boolean, typedElement: bo
  */
 function walkElements(
   value: FhirNode,
-  path: string,
+  trail: Trail,
   extension: boolean,
   typedElement: boolean,
   visit: Visit,
@@ -400,33 +405,39 @@ function walkElements(
   // Each occurrence, a list followed item by item at its own index as `occurrencesOf` does, is
   // visited and then walked into before the next one.
   if (isList(value)) {
-    value.items.forEach((item, i) => {
-      walkElements(item, `${path}[${String(i)}]`, extension, typedElement, visit);
-    });
+    const items = value.items;
+    for (let i = 0; i < items.length; i++) {
+      trail.index(i);
+      walkElements(items[i] as FhirNode, trail, extension, typedElement, visit);
+      trail.pop();
+    }
     return;
   }
-  visit(value, path, extension, typedElement);
+  visit(value, trail, extension, typedElement);
   if (isComplex(value)) {
-    walkChildren(value, path, extension, visit);
+    walkChildren(value, trail, extension, visit);
     return;
   }
-  (value.extension ?? []).forEach((ext, i) => {
-    walkElements(ext, `${path}.extension[${String(i)}]`, true, true, visit);
-  });
+  const extensions = value.extension;
+  if (extensions === undefined) return;
+  for (let i = 0; i < extensions.length; i++) {
+    trail.child("extension");
+    trail.index(i);
+    walkElements(extensions[i] as FhirNode, trail, true, true, visit);
+    trail.truncate(trail.depth - 2);
+  }
 }
 
 /** Walk the members of one complex node. `resourceType` is a type marker, not an element. */
-function walkChildren(node: FhirComplex, path: string, isExtension: boolean, visit: Visit): void {
-  for (const property of node.properties) {
+function walkChildren(node: FhirComplex, trail: Trail, isExtension: boolean, visit: Visit): void {
+  const properties = node.properties;
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
     if (property.name === "resourceType") continue;
     const plainString = property.name === "id" || (isExtension && property.name === "url");
-    walkElements(
-      property.value,
-      childPath(path, property.name),
-      holdsExtensions(property.name),
-      !plainString,
-      visit,
-    );
+    trail.child(property.name);
+    walkElements(property.value, trail, holdsExtensions(property.name), !plainString, visit);
+    trail.pop();
   }
 }
 
@@ -442,6 +453,7 @@ function walkChildren(node: FhirComplex, path: string, isExtension: boolean, vis
 export function collectBaseInvariantFindings(
   resource: FhirComplex,
   rt: string,
+  track: { readonly decides: boolean } = TRACK_DECIDED,
 ): BaseInvariantResult {
   const findings: BaseInvariantFinding[] = [];
   // The keys decided (held or not held) at each node; an unchecked outcome is never recorded here.
@@ -459,14 +471,15 @@ export function collectBaseInvariantFindings(
   if (!BASE_CONSTRAINT_TYPES.has(rt)) return result;
   const root = rootPath(rt);
 
-  const report = (outcome: Outcome, key: string, focus: FhirNode, path: string): void => {
-    if (outcome !== "unchecked") {
+  const report = (outcome: Outcome, key: string, focus: FhirNode, at: string | Trail): void => {
+    if (outcome !== "unchecked" && track.decides) {
       const keys = decided.get(focus);
       if (keys === undefined) decided.set(focus, key);
       else if (typeof keys !== "string") keys.add(key);
       else if (keys !== key) decided.set(focus, new Set([keys, key]));
     }
     if (outcome === "satisfied") return;
+    const path = typeof at === "string" ? at : at.text();
     const issue =
       outcome === "violated"
         ? validationIssue("INVARIANT_VIOLATED", ISSUE_SEVERITIES.ERROR, path, key)
@@ -496,25 +509,38 @@ export function collectBaseInvariantFindings(
     /* v8 ignore next -- unreachable today: both rows asked at every element are decided directly */
     return direct === undefined ? outcomeOf(row.ast, node, resource) : direct(node);
   };
-  const visit: Visit = (node, path, extension, typedElement) => {
+  const visit: Visit = (node, trail, extension, typedElement) => {
     if (elementRow !== undefined && typedElement) {
-      report(decide(elementRow, node), elementRow.row.key, node, path);
+      report(decide(elementRow, node), elementRow.row.key, node, trail);
     }
     if (extensionRow !== undefined && extension) {
-      report(decide(extensionRow, node), extensionRow.row.key, node, path);
+      report(decide(extensionRow, node), extensionRow.row.key, node, trail);
     }
   };
   // The resource root is a resource, not an element, and `contained` holds resources whose own
   // content this layer does not evaluate; every other member of the root is walked.
-  for (const property of resource.properties) {
+  const trail = new Trail(root);
+  const properties = resource.properties;
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
     if (property.name === "resourceType" || property.name === "contained") continue;
+    trail.child(property.name);
     walkElements(
       property.value,
-      childPath(root, property.name),
+      trail,
       holdsExtensions(property.name),
       property.name !== "id",
       visit,
     );
+    trail.pop();
   }
   return result;
 }
+
+/**
+ * The default for {@link collectBaseInvariantFindings}: record which constraints were decided at
+ * which node, for {@link BaseInvariantResult.decides}. The validator asks that only when a profile is
+ * supplied, and passes `{ decides: false }` otherwise, so a call without one keeps no table of every
+ * node; `decides` then answers `false` for every node.
+ */
+const TRACK_DECIDED = { decides: true } as const;

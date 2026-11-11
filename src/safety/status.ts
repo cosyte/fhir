@@ -143,6 +143,7 @@ import {
 } from "./modifier-elements.js";
 import { collectAbsence, type AbsenceMarker, type AbsenceReport } from "./absence.js";
 import { writesProperty } from "../model/node.js";
+import { Trail } from "../model/path.js";
 
 /**
  * `doNotPerform` on **this** node, read across every value the document wrote for it and through an
@@ -1264,17 +1265,27 @@ export function collectMarked(
 /** Whether {@link collectNested} would record anything: the same traversal, building no location. */
 function anyMarked(node: FhirNode, marked: (node: FhirNode) => boolean): boolean {
   if (marked(node)) return true;
-  if (isList(node)) {
-    for (const item of node.items) if (anyMarked(item, marked)) return true;
-    return false;
-  }
-  if (isPrimitive(node)) {
-    for (const ext of node.extension ?? NO_NODES) if (anyMarked(ext, marked)) return true;
-    return false;
-  }
-  for (const property of node.properties) if (anyMarked(property.value, marked)) return true;
-  for (const property of node.duplicates ?? NO_PROPERTIES) {
-    if (anyMarked(property.value, marked)) return true;
+  if (isList(node)) return anyItemMarked(node.items, marked);
+  if (isPrimitive(node)) return anyItemMarked(node.extension ?? NO_NODES, marked);
+  return (
+    anyMemberMarked(node.properties, marked) ||
+    anyMemberMarked(node.duplicates ?? NO_PROPERTIES, marked)
+  );
+}
+
+/** {@link anyMarked} over each of `items`, by index, so no iterator is made per node. */
+function anyItemMarked(items: readonly FhirNode[], marked: (node: FhirNode) => boolean): boolean {
+  for (let i = 0; i < items.length; i++) if (anyMarked(items[i] as FhirNode, marked)) return true;
+  return false;
+}
+
+/** {@link anyMarked} over the value of each of `properties`, as {@link anyItemMarked} is. */
+function anyMemberMarked(
+  properties: readonly FhirProperty[],
+  marked: (node: FhirNode) => boolean,
+): boolean {
+  for (let i = 0; i < properties.length; i++) {
+    if (anyMarked((properties[i] as FhirProperty).value, marked)) return true;
   }
   return false;
 }
@@ -1466,7 +1477,7 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     nearMissCode: [],
     unreadableCode: [],
   };
-  walkComplex(resource, path, out, true);
+  walkComplex(resource, new Trail(path), out, true);
   // A location reached by more than one reading (a repeated property name, two withheld segments)
   // is resolved once, here, into exactly one of the two `use` channels.
   const uses = resolveDatatypeUses(out.useReadings);
@@ -1808,25 +1819,28 @@ function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): vo
  * `modifierExtension` sitting inside it has to fail closed exactly as one on the surviving member
  * does; skipping it would make an unhandled modifier hideable behind a duplicate key.
  */
-function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = false): void {
+function walkComplex(node: FhirComplex, trail: Trail, out: SafetyWalk, isRoot = false): void {
   // A resource root is the entry node, or any nested node that carries its own `resourceType` (a
   // `contained` resource, a Bundle `entry.resource`). Only there does this library know a cardinality.
   if (isRoot || writesProperty(node, "resourceType")) {
-    checkResourceRoot(node, path, out);
+    checkResourceRoot(node, trail.text(), out);
   }
   // Every node, not only a resource root: `comparator` modifies the value beside it wherever that
   // value sits, and the two type-gated rules decide their own gate off this node's `resourceType`.
   // Reported at the path the walk already built, so the report window IS the read window and the
   // array indices are the walk's own.
-  collectModifierElements(node, path, out.modifierElements);
+  collectModifierElements(node, trail, out.modifierElements);
   // `MedicationRequest.intent`, gated off this node's own `resourceType` exactly as the reports
   // above are, so it is read at every MedicationRequest root the walk reaches and nowhere else.
-  collectIntent(node, path, out.intents, out.unreadableIntent);
+  collectIntent(node, trail, out.intents, out.unreadableIntent);
   // `use` on the four datatypes, gated off this node's own `resourceType` the same way: at a root of
   // one of the eight modeled types it reads that root's covered positions, down to (and not into)
   // any nested resource root, which this walk reaches and reads in its own turn.
-  collectDatatypeUses(node, path, out.useReadings);
-  for (const property of node.properties) visitProperty(property, path, out);
+  collectDatatypeUses(node, trail, out.useReadings);
+  const properties = node.properties;
+  for (let i = 0; i < properties.length; i++) {
+    visitProperty(properties[i] as FhirProperty, trail, out);
+  }
   const duplicates = node.duplicates;
   if (duplicates === undefined) return;
   const reported = new Set<string>();
@@ -1835,9 +1849,9 @@ function walkComplex(node: FhirComplex, path: string, out: SafetyWalk, isRoot = 
     // individual members, so repeating the same path would be noise a caller cannot act on.
     if (!reported.has(property.name)) {
       reported.add(property.name);
-      out.shadowed.push(childPath(path, property.name));
+      out.shadowed.push(trail.childText(property.name));
     }
-    visitProperty(property, path, out);
+    visitProperty(property, trail, out);
   }
 }
 
@@ -1890,11 +1904,13 @@ function shadowedUnder(node: FhirNode, path: string, out: string[]): void {
 }
 
 /** Check one property for an unhandled modifier, then descend into it. */
-function visitProperty(property: FhirProperty, path: string, out: SafetyWalk): void {
+function visitProperty(property: FhirProperty, trail: Trail, out: SafetyWalk): void {
   if (property.name === "modifierExtension") {
-    checkModifierExtension(property.value, path, out.modifiers);
+    checkModifierExtension(property.value, trail.text(), out.modifiers);
   }
-  descend(property.value, childPath(path, property.name), out);
+  trail.child(property.name);
+  descend(property.value, trail, out);
+  trail.pop();
 }
 
 /** Record every unhandled modifier in a `modifierExtension` element (a single Extension or a list). */
@@ -1912,10 +1928,16 @@ function checkModifierExtension(value: FhirNode, path: string, out: string[]): v
 }
 
 /** Descend into a node's children (complex → walk; list → each item) to catch nested findings. */
-function descend(node: FhirNode, path: string, out: SafetyWalk): void {
-  if (isComplex(node)) walkComplex(node, path, out);
-  else if (isList(node))
-    node.items.forEach((item, index) => descend(item, `${path}[${String(index)}]`, out));
+function descend(node: FhirNode, trail: Trail, out: SafetyWalk): void {
+  if (isComplex(node)) walkComplex(node, trail, out);
+  else if (isList(node)) {
+    const items = node.items;
+    for (let index = 0; index < items.length; index++) {
+      trail.index(index);
+      descend(items[index] as FhirNode, trail, out);
+      trail.pop();
+    }
+  }
 }
 
 /**

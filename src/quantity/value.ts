@@ -26,7 +26,9 @@ import {
   isPrimitive,
   type FhirComplex,
   type FhirNode,
+  type FhirProperty,
 } from "../model/index.js";
+import { Trail } from "../model/path.js";
 import { codingsOf, primitiveString, typesOf, type Coded } from "../safety/codes.js";
 // The published validation-code registry, which has no imports of its own, so naming a code here
 // does not put the value layer behind the validator: `../validate/quantity.js` still imports this
@@ -99,14 +101,25 @@ export interface ObservationValue {
 
 /** The present `value[x]` variants as `{ type, node }`, in FHIR's declared order (`[]` when none). */
 function presentValues(node: FhirComplex): { type: ObservationValueType; node: FhirNode }[] {
-  const byName = new Map(node.properties.map((p) => [p.name, p.value]));
   const out: { type: ObservationValueType; node: FhirNode }[] = [];
-  for (const type of OBSERVATION_VALUE_TYPES) {
-    const value = byName.get(`value${type}`);
-    if (value !== undefined) out.push({ type, node: value });
+  const properties = node.properties;
+  for (let t = 0; t < OBSERVATION_VALUE_TYPES.length; t++) {
+    const name = OBSERVATION_VALUE_NAMES[t] as string;
+    // The last property of the name, as a `Map` built over the properties in order would hold.
+    for (let p = properties.length - 1; p >= 0; p--) {
+      const property = properties[p] as FhirProperty;
+      if (property.name !== name) continue;
+      out.push({ type: OBSERVATION_VALUE_TYPES[t] as ObservationValueType, node: property.value });
+      break;
+    }
   }
   return out;
 }
+
+/** `value` + each {@link OBSERVATION_VALUE_TYPES} suffix, in the same order. */
+const OBSERVATION_VALUE_NAMES: readonly string[] = OBSERVATION_VALUE_TYPES.map(
+  (type) => `value${type}`,
+);
 
 /**
  * Read the present `value[x]` variant off an Observation (or a `component`), typed by what is actually
@@ -181,37 +194,64 @@ function collectChoiceWrappers(
  */
 function walkForObservationRoots(
   node: FhirNode,
-  path: string,
+  trail: Trail,
   keep: (items: readonly FhirNode[]) => boolean,
   out: string[],
 ): void {
   if (isList(node)) {
-    node.items.forEach((item, index) =>
-      walkForObservationRoots(item, `${path}[${String(index)}]`, keep, out),
-    );
+    const items = node.items;
+    for (let index = 0; index < items.length; index++) {
+      trail.index(index);
+      walkForObservationRoots(items[index] as FhirNode, trail, keep, out);
+      trail.pop();
+    }
     return;
   }
   // A primitive holds no resource; its `extension` metadata holds complexes, but an `Extension` is
   // a datatype and never a resource root, so nothing below one can be an Observation.
   if (isPrimitive(node)) return;
-  if (typesOf(node).includes("Observation")) {
-    collectChoiceWrappers(node, path, keep, out);
-    // `Observation.component` is `0..*`, so the array there is the conformant encoding; each entry
-    // carries its own `value[x]`, `0..1` exactly as the root's is (observation.html).
-    for (const member of getAllProperties(node, "component")) {
-      const items = isList(member) ? member.items : [member];
-      items.forEach((item, index) => {
-        if (!isComplex(item)) return;
-        const at = isList(member) ? `${path}.component[${String(index)}]` : `${path}.component`;
-        collectChoiceWrappers(item, at, keep, out);
-      });
-    }
+  if (typesOf(node).includes("Observation"))
+    collectAtObservationRoot(node, trail.text(), keep, out);
+  walkMembersForObservationRoots(node.properties, trail, keep, out);
+  const duplicates = node.duplicates;
+  if (duplicates !== undefined) walkMembersForObservationRoots(duplicates, trail, keep, out);
+}
+
+/**
+ * The `value[x]` wrappers at one Observation resource root at `path`, its `component` entries
+ * included. Apart from the walk, so the walk makes no closure at the nodes that are not one.
+ */
+function collectAtObservationRoot(
+  node: FhirComplex,
+  path: string,
+  keep: (items: readonly FhirNode[]) => boolean,
+  out: string[],
+): void {
+  collectChoiceWrappers(node, path, keep, out);
+  // `Observation.component` is `0..*`, so the array there is the conformant encoding; each entry
+  // carries its own `value[x]`, `0..1` exactly as the root's is (observation.html).
+  for (const member of getAllProperties(node, "component")) {
+    const items = isList(member) ? member.items : [member];
+    items.forEach((item, index) => {
+      if (!isComplex(item)) return;
+      const at = isList(member) ? `${path}.component[${String(index)}]` : `${path}.component`;
+      collectChoiceWrappers(item, at, keep, out);
+    });
   }
-  for (const property of node.properties) {
-    walkForObservationRoots(property.value, childPath(path, property.name), keep, out);
-  }
-  for (const property of node.duplicates ?? []) {
-    walkForObservationRoots(property.value, childPath(path, property.name), keep, out);
+}
+
+/** {@link walkForObservationRoots} into each of `properties`, in order. */
+function walkMembersForObservationRoots(
+  properties: readonly FhirProperty[],
+  trail: Trail,
+  keep: (items: readonly FhirNode[]) => boolean,
+  out: string[],
+): void {
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
+    trail.child(property.name);
+    walkForObservationRoots(property.value, trail, keep, out);
+    trail.pop();
   }
 }
 
@@ -238,7 +278,7 @@ const ANY_ARITY = (): boolean => true;
  */
 export function arrayWrappedValueChoices(resource: FhirComplex, path: string): string[] {
   const out: string[] = [];
-  walkForObservationRoots(resource, path, ANY_ARITY, out);
+  walkForObservationRoots(resource, new Trail(path), ANY_ARITY, out);
   return out;
 }
 
@@ -267,7 +307,7 @@ export function arrayWrappedValueChoices(resource: FhirComplex, path: string): s
  */
 export function unspellableXmlValueChoices(resource: FhirComplex, path: string): string[] {
   const out: string[] = [];
-  walkForObservationRoots(resource, path, (items) => items.length < 2, out);
+  walkForObservationRoots(resource, new Trail(path), (items) => items.length < 2, out);
   return out;
 }
 

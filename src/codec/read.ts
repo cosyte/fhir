@@ -376,6 +376,16 @@ function applyMetaSlotRule(
 const NO_META: PrimitiveMeta = Object.freeze({});
 
 /**
+ * The primitive {@link buildNode} makes of a string or boolean value with no `_`-sibling, or
+ * `undefined` for any other value. Such a value draws no finding and needs no location, so it is
+ * built here without one: `buildNode` would build `primitive(value)` and return it unchanged.
+ */
+function plainPrimitive(value: RawJson): FhirPrimitive | undefined {
+  if (value.t === "str" || value.t === "bool") return primitive(value.value, NO_META);
+  return undefined;
+}
+
+/**
  * A test of whether a member's key was already written earlier in the same object, member by
  * member in order. A `_`-sibling object has a member or two, so a scan back is cheaper than a `Set`;
  * a large one (hostile input) is indexed in a `Set` instead so the read stays linear.
@@ -508,8 +518,18 @@ function buildPrimitiveList(
   const length = Math.max(valueItems.length, metaItems.length);
   const items: FhirNode[] = [];
   for (let i = 0; i < length; i++) {
-    const itemPath = `${path}[${String(i)}]`;
     const rawValue = valueItems[i];
+    const rawMeta = metaItems[i];
+    // The common slot, a string or boolean with no `_`-sibling entry, draws no finding, so it is
+    // built without its location.
+    if (rawMeta === undefined && rawValue !== undefined) {
+      const plain = plainPrimitive(rawValue);
+      if (plain !== undefined) {
+        items.push(plain);
+        continue;
+      }
+    }
+    const itemPath = `${path}[${String(i)}]`;
     // A non-scalar where a primitive value belongs (malformed mixed array) has no primitive
     // representation, flag it rather than drop it silently.
     if (rawValue !== undefined && (rawValue.t === "obj" || rawValue.t === "arr")) {
@@ -522,7 +542,6 @@ function buildPrimitiveList(
     // own text kept verbatim. The slot itself is unchanged: still one primitive, still holding
     // whatever value the value channel carried, so the null-padded alignment between the two arrays
     // is untouched, and the two channels stay distinguishable because either can nest alone.
-    const rawMeta = metaItems[i];
     const nested = rawValue?.t === "arr" || rawMeta?.t === "arr";
     if (nested) issues.push(nestedArray(itemPath));
     const value_ = rawValue === undefined ? undefined : scalarValue(rawValue, itemPath, issues);
@@ -643,7 +662,9 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
     return complex(
       members.map((member) => ({
         name: member.key,
-        value: buildNode(member.value, undefined, childPath(rootedAt, member.key), issues),
+        value:
+          plainPrimitive(member.value) ??
+          buildNode(member.value, undefined, childPath(rootedAt, member.key), issues),
       })),
     );
   }
@@ -658,9 +679,12 @@ function buildComplex(obj: RawObject, path: string, issues: FhirIssue[]): FhirCo
   const properties: FhirProperty[] = [];
   for (let i = 0; i < order.length; i++) {
     const name = order[i] as string;
+    const rawValue = value[i];
+    const plain =
+      meta[i] === undefined && rawValue !== undefined ? plainPrimitive(rawValue) : undefined;
     properties.push({
       name,
-      value: buildNode(value[i], meta[i], childPath(basePath, name), issues),
+      value: plain ?? buildNode(rawValue, meta[i], childPath(basePath, name), issues),
     });
   }
   if (shadowed === undefined) return complex(properties);
