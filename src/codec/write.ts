@@ -149,6 +149,25 @@ function hasMeta(node: FhirPrimitive): boolean {
   );
 }
 
+/** Parts at least this long in total are joined by concatenation rather than by `join`. */
+const LONG_TEXT = 4096;
+
+/**
+ * `parts.join(",")`. A large opaque value (a base64 attachment) is one long part, and `join` copies
+ * it into each enclosing level's text in turn, one full copy per level of nesting; joining a long
+ * run by concatenation instead lets the engine link the parts and copy the text once, when it is
+ * read. Short runs, the dense case, keep `join`, which builds one compact string.
+ */
+function joinText(parts: readonly string[]): string {
+  let total = 0;
+  for (let i = 0; i < parts.length; i++) total += (parts[i] as string).length;
+  if (total < LONG_TEXT) return parts.join(",");
+  let text = "";
+  for (let i = 0; i < parts.length; i++)
+    text = i === 0 ? (parts[i] as string) : `${text},${parts[i] as string}`;
+  return text;
+}
+
 /**
  * Emit a primitive's `_`-sibling: the object `{ id?, extension? }`, or the array or scalar the
  * reader preserved in its place. A preserved scalar is handed back for the reason the module comment
@@ -161,9 +180,9 @@ function emitMeta(node: FhirPrimitive): string {
   const parts: string[] = [];
   if (node.id !== undefined) parts.push(`"id":${JSON.stringify(node.id)}`);
   if (node.extension !== undefined && node.extension.length > 0) {
-    parts.push(`"extension":[${node.extension.map(emitComplex).join(",")}]`);
+    parts.push(`"extension":[${joinText(node.extension.map(emitComplex))}]`);
   }
-  return `{${parts.join(",")}}`;
+  return `{${joinText(parts)}}`;
 }
 
 /** Emit the `key:value` entries for a single primitive property (0, 1, or 2 entries). */
@@ -184,7 +203,7 @@ function emitListProperty(name: string, node: FhirList): string[] {
 
   const allPrimitive = node.items.every(isPrimitive);
   if (!allPrimitive) {
-    return [`${JSON.stringify(name)}:[${node.items.map(emitNode).join(",")}]`];
+    return [`${JSON.stringify(name)}:[${joinText(node.items.map(emitNode))}]`];
   }
 
   const primitives = node.items.filter(isPrimitive);
@@ -195,7 +214,7 @@ function emitListProperty(name: string, node: FhirList): string[] {
   // extension-only repeating primitive) the value array would be all-`null`, non-canonical, so we
   // emit the `_`-sibling array alone, which round-trips to the same value-absent list.
   if (anyValue) {
-    const values = primitives.map(emitPrimitiveValue).join(",");
+    const values = joinText(primitives.map(emitPrimitiveValue));
     entries.push(`${JSON.stringify(name)}:[${values}]`);
   }
   if (anyMeta) {
@@ -211,7 +230,7 @@ function emitNode(node: FhirNode): string {
     case "complex":
       return emitComplex(node);
     case "list":
-      return `[${node.items.map(emitNode).join(",")}]`;
+      return `[${joinText(node.items.map(emitNode))}]`;
     case "primitive":
       return emitPrimitiveValue(node);
   }
@@ -261,7 +280,7 @@ function emitComplex(node: FhirComplex): string {
     }
   }
 
-  return `{${parts.join(",")}}`;
+  return `{${joinText(parts)}}`;
 }
 
 /**

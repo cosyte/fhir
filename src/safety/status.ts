@@ -1787,8 +1787,9 @@ function checkNegations(
  * behind.
  */
 function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): void {
-  const reported = new Set<string>();
-  const unspellable = new Set<string>();
+  // Made at the first wrapper reported here, since almost every root reports none.
+  let reported: Set<string> | undefined;
+  let unspellable: Set<string> | undefined;
   // The two sets are de-duplicated INDEPENDENTLY on purpose. A repeated property name puts two
   // wrappers at one location, and if only the first were considered, `{"status":["b","c"],
   // "status":["a"]}` would hide the unwritable one behind the writable one that arrived first.
@@ -1796,11 +1797,14 @@ function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): vo
   // negation read overlap on a safety type's `verificationStatus`, and a location a caller can act
   // on once must not arrive twice because two windows both cover it.
   const report: WrapperReport = (location, unwritable) => {
+    reported ??= new Set<string>();
     if (!reported.has(location)) {
       reported.add(location);
       out.arrayWrapped.push(location);
     }
-    if (unwritable && !unspellable.has(location)) {
+    if (!unwritable) return;
+    unspellable ??= new Set<string>();
+    if (!unspellable.has(location)) {
       unspellable.add(location);
       out.unspellableInXml.push(location);
     }
