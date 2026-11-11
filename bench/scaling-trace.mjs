@@ -1,10 +1,14 @@
 // The read's size axis with garbage collection traced:
-//   pnpm build && node bench/scaling-trace.mjs dist/index.mjs [--summary <file.md>]
+//   pnpm build && node bench/scaling-trace.mjs dist/index.mjs [--summary <file.md>] [--label <name>]
 //
-// Two readings, each with the collector's own account of every collection (node:v8 GCProfiler: the
-// kind of each collection, its cost, and the young generation it left behind), so time the read
-// spends collecting is told apart from time it spends reading.
+// Three readings, each with the collector's own account of every collection (node:v8 GCProfiler:
+// the kind of each collection, its cost, and the heap before and after it), so time the read spends
+// collecting is told apart from time it spends reading.
 //
+// 0. The heap of one read of a large Bundle: the most the heap held while the read ran, above what
+//    it held before, the same for memory outside the heap (typed arrays), and what the result keeps
+//    once the read has returned. A peak is seen only at each collection and at the end, so it is a
+//    lower bound. Read first, before the process has read anything large.
 // 1. Cost per entry by Bundle size. Each size reads the same number of entries in all, so a cost per
 //    entry that grows with the size is a cost that grows faster than the input. Split into the time
 //    outside any collection, scavenges (the young generation) and mark-compacts (the old one).
@@ -18,7 +22,8 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { GCProfiler } from "node:v8";
+import { GCProfiler, setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 
 import { transactionBundle } from "./shapes.mjs";
 
@@ -30,6 +35,9 @@ const REPS = 5;
 const STEP = 4;
 const WARMUP_MS = 500;
 const ROUNDS = 3;
+/** Bundle sizes the heap reading reads once each. */
+const HEAP_SIZES = [1_000, 4_000, 16_000];
+const MIB = 1024 * 1024;
 /** The size axis fixtures: the one the gate used, and the one it uses now. */
 const FIXTURES = [
   { label: "2 Bundles, 1,000 against 4,000 entries", bundles: 2, entries: 1_000 },
@@ -37,9 +45,10 @@ const FIXTURES = [
 ];
 
 function args(argv) {
-  const out = { target: argv[0], summary: undefined };
+  const out = { target: argv[0], summary: undefined, label: undefined };
   for (let i = 1; i < argv.length; i++) {
     if (argv[i] === "--summary") out.summary = argv[++i];
+    else if (argv[i] === "--label") out.label = argv[++i];
   }
   return out;
 }
@@ -79,6 +88,53 @@ function traced(fn) {
   const profile = profiler.stop();
   if (weight < 0) throw new Error("unreachable");
   return { ms, gc: collections(profile ?? { statistics: [] }) };
+}
+
+/** A full collection, through the `gc` function the `--expose-gc` flag makes. */
+function collector() {
+  setFlagsFromString("--expose-gc");
+  const gc = runInNewContext("gc");
+  return () => {
+    gc();
+    gc();
+  };
+}
+
+/** One read of each heap size, after a full collection, with the heap traced. */
+function heap(parse) {
+  const gc = collector();
+  const rows = [];
+  for (const size of HEAP_SIZES) {
+    const text = transactionBundle(3, size);
+    pass(parse, [transactionBundle(4, 100)]);
+    gc();
+    const before = process.memoryUsage();
+    const profiler = new GCProfiler();
+    profiler.start();
+    let result = parse(text);
+    const end = process.memoryUsage();
+    const profile = profiler.stop() ?? { statistics: [] };
+    let peakHeap = end.heapUsed;
+    let peakExternal = end.external;
+    for (const event of profile.statistics) {
+      const stats = event.beforeGC.heapStatistics;
+      peakHeap = Math.max(peakHeap, stats.usedHeapSize);
+      peakExternal = Math.max(peakExternal, stats.externalMemory);
+    }
+    gc();
+    const kept = process.memoryUsage().heapUsed - before.heapUsed;
+    if (result.issues.length < 0) throw new Error("unreachable");
+    result = undefined;
+    rows.push({
+      size,
+      textMiB: text.length / MIB,
+      peakHeapMiB: (peakHeap - before.heapUsed) / MIB,
+      peakExternalMiB: (peakExternal - before.external) / MIB,
+      keptMiB: kept / MIB,
+      collections: profile.statistics.length,
+    });
+  }
+  return rows;
 }
 
 function bySize(parse) {
@@ -148,15 +204,27 @@ function gateAxis(parse) {
 
 const f2 = (x) => x.toFixed(2);
 
-function markdown(sizes, axis) {
+function markdown(label, heapRows, sizes, axis) {
   const lines = [
-    `## parseResource size axis, garbage collection traced (Node.js ${process.version})`,
+    `## parseResource size axis, garbage collection traced (Node.js ${process.version})${label === undefined ? "" : `: ${label}`}`,
+    "",
+    "Heap of one read of a Bundle, after a full collection, above what was in use before it:",
+    "",
+    "| Entries a Bundle | Text MiB | Peak heap MiB | Peak outside the heap MiB | Kept by the result MiB | Collections during the read |",
+    "| ---: | ---: | ---: | ---: | ---: | ---: |",
+  ];
+  for (const r of heapRows) {
+    lines.push(
+      `| ${r.size.toLocaleString("en-US")} | ${f2(r.textMiB)} | ${f2(r.peakHeapMiB)} | ${f2(r.peakExternalMiB)} | ${f2(r.keptMiB)} | ${String(r.collections)} |`,
+    );
+  }
+  lines.push(
     "",
     `Cost per entry by Bundle size, ${TOTAL_ENTRIES.toLocaleString("en-US")} entries read at each size, warmed:`,
     "",
     "| Entries a Bundle | Total us/entry | Outside GC us/entry | Scavenge us/entry | Mark-compact us/entry | Scavenges | Mark-compacts | Young generation left per scavenge |",
     "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-  ];
+  );
   for (const r of sizes) {
     lines.push(
       `| ${r.size.toLocaleString("en-US")} | ${f2(r.totalUs)} | ${f2(r.outsideUs)} | ${f2(r.scavengeUs)} | ${f2(r.markUs)} | ${String(r.scavenges)} | ${String(r.marks)} | ${r.survivedKib.toFixed(0)} KiB |`,
@@ -180,12 +248,16 @@ function markdown(sizes, axis) {
 async function main() {
   const options = args(process.argv.slice(2));
   if (options.target === undefined) {
-    process.stderr.write("usage: node bench/scaling-trace.mjs <dist/index.mjs> [--summary <file.md>]\n");
+    process.stderr.write(
+      "usage: node bench/scaling-trace.mjs <dist/index.mjs> [--summary <file.md>] [--label <name>]\n",
+    );
     return 2;
   }
   const fhir = await import(pathToFileURL(resolve(options.target)).href);
   const parse = (text) => fhir.parseResource(text);
-  const text = markdown(bySize(parse), gateAxis(parse));
+  // The heap is read first, in a process that has read nothing large yet.
+  const heapRows = heap(parse);
+  const text = markdown(options.label, heapRows, bySize(parse), gateAxis(parse));
   process.stdout.write(text);
   if (options.summary !== undefined) writeFileSync(options.summary, text);
   return 0;

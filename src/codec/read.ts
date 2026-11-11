@@ -122,7 +122,7 @@ import {
 } from "./issues.js";
 import {
   rawJsonText,
-  readRawJson,
+  readRawJsonLazily,
   type RawArray,
   type RawJson,
   type RawMember,
@@ -590,8 +590,9 @@ function buildComplexList(
       const node = readComplex(item, trail, issues);
       trail.pop();
       // A tree this read made from text is its own and nothing reads an item again once it is
-      // built, so the item is let go: a large Bundle's raw entries no longer stay alive beside
-      // the model being built from them, which is what made a large read cost more than its size.
+      // built, so the item is let go. That tree is made one part at a time as it is read
+      // (`readRawJsonLazily`), so a large Bundle's raw entries are made one at a time and let go
+      // one at a time, and only the entry being built stays alive beside the model.
       if (releasing) (value.items as RawJson[])[i] = RELEASED;
       return node;
     }),
@@ -764,7 +765,9 @@ function buildComplex(obj: RawObject, at: Trail, issues: FhirIssue[], root = fal
  */
 export function parseResource(input: string | RawJson): ReadResult {
   const ownTree = typeof input === "string";
-  const raw = ownTree ? readRawJson(input) : input;
+  // Text is checked whole first, so a malformed document throws before anything is built; its tree
+  // is then made only as far as it is read.
+  const raw = ownTree ? readRawJsonLazily(input) : input;
   if (raw.t !== "obj") {
     throw new FhirCodecError(
       FATAL_CODES.MALFORMED_JSON,

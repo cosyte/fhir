@@ -4,7 +4,8 @@ name: Bench reading
 # latency p50/p95/p99, allocations, peak heap, a long run for leaks, the cold import with every file
 # it loads and its gzip size), the budgets read from it (bench/budgets.mjs), a CPU and heap profile
 # of the hottest paths (bench/profile.mjs), and the read's size axis with garbage collection traced
-# (bench/scaling-trace.mjs). The tables go to the run's summary; the results
+# (bench/scaling-trace.mjs), on a pull request for the base build too, in turns with this build. The
+# tables go to the run's summary; the results
 # document, its Markdown and the raw profiles are kept as the `bench-reading` artifact.
 #
 # Advisory: it fails only when it could not take a reading at all. A budget it finds exceeded is a
@@ -78,16 +79,43 @@ jobs:
           node --enable-source-maps bench/profile.mjs dist/index.mjs \
             --out "${out}/profiles" --summary "${out}/profile.md"
           { echo; cat "${out}/profile.md"; } >> "${GITHUB_STEP_SUMMARY}"
-      # The read's size axis with garbage collection traced: cost per entry by Bundle size, split into
-      # the time outside collection, scavenges and mark-compacts, and the scaling gate's size axis
-      # timed as the gate times it (bench/scaling-trace.mjs).
+      # On a pull request, the base build, so the trace below reads both on the same runner.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: ${{ github.event_name == 'pull_request' }}
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base-tree
+          persist-credentials: false
+      - name: Base build
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        working-directory: base-tree
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm build
+      # The read's size axis with garbage collection traced: the heap of one read of a large Bundle,
+      # cost per entry by Bundle size, split into the time outside collection, scavenges and
+      # mark-compacts, and the scaling gate's size axis timed as the gate times it
+      # (bench/scaling-trace.mjs). On a pull request it reads the base build and this build in turns,
+      # three times each, each in a process of its own, and every run goes to the summary.
       - name: Scaling trace
         shell: bash
         run: |
           set -euo pipefail
           out="${RUNNER_TEMP}/bench-reading"
-          node bench/scaling-trace.mjs dist/index.mjs --summary "${out}/scaling-trace.md"
-          { echo; cat "${out}/scaling-trace.md"; } >> "${GITHUB_STEP_SUMMARY}"
+          if [ -f base-tree/dist/index.mjs ]; then
+            for round in 1 2 3; do
+              node bench/scaling-trace.mjs base-tree/dist/index.mjs --label "base, run ${round}" \
+                --summary "${out}/scaling-trace-base-${round}.md"
+              node bench/scaling-trace.mjs dist/index.mjs --label "head, run ${round}" \
+                --summary "${out}/scaling-trace-head-${round}.md"
+              { echo; cat "${out}/scaling-trace-base-${round}.md"; echo; cat "${out}/scaling-trace-head-${round}.md"; } >> "${GITHUB_STEP_SUMMARY}"
+            done
+          else
+            node bench/scaling-trace.mjs dist/index.mjs --summary "${out}/scaling-trace.md"
+            { echo; cat "${out}/scaling-trace.md"; } >> "${GITHUB_STEP_SUMMARY}"
+          fi
       - name: Keep the reading
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
