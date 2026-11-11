@@ -8,6 +8,7 @@ import {
   serializeResource,
   SAFETY_RESOURCE_TYPES,
 } from "../src/index.js";
+import { expectSafeButForType } from "./_not-assessed.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
 
@@ -88,7 +89,7 @@ describe("the not-done / not-taken negations are read wherever a status spells t
 
         expect(safety.negations).toEqual(["not-done"]);
         // Read, so nothing is withheld: the refusal channel is for values that cannot be read.
-        expect(safety.safeToSummarize).toBe(true);
+        expectSafeButForType(safety);
         // The convenience field surfaces the raw code either way and is not the safety read.
         expect(safety.status).toBe("not-done");
       });

@@ -32,6 +32,11 @@
  * allowance no corpus document reaches is a hole, not a pass. The corpus carries one document per
  * key the change decides for that reason.
  *
+ * ONE MORE MOVE IS ALLOWED, IN THE FAIL-SAFE DIRECTION ONLY: `safeToSummarize` may move TRUE TO
+ * FALSE on a document carrying a resource root of a type the safety layer does not model, which head
+ * lists on `notAssessed` and base had no channel for. The documents it moves on are written out
+ * (`NOT_ASSESSED_MOVES`), so a move nobody listed fails, and so does a listed one that stopped.
+ *
  * The previous allowance set (`use` surfaced on four datatypes, and the unreadable-`use` refusal)
  * is GONE, and not because it was relaxed: the base was re-captured at the ref that shipped that
  * behaviour, so both trees now carry it and those channels are asserted identical.
@@ -82,7 +87,6 @@ const IDENTICAL_CHANNELS = [
   "retracted",
   "noKnownAllergy",
   "negations",
-  "safeToSummarize",
   "unhandledModifierExtensions",
   "modifierElements",
   "intents",
@@ -97,6 +101,25 @@ const IDENTICAL_CHANNELS = [
   "unreadableIntents",
   "unreadableDatatypeUses",
 ] as const;
+
+/**
+ * Every document whose `safeToSummarize` head moves true to false because a resource root in it is of
+ * a type the safety layer does not model, in corpus order. Written out rather than derived.
+ */
+const NOT_ASSESSED_MOVES: readonly string[] = [
+  "fixture:bundle.json",
+  "added:patient-contained-organization-use",
+  "added:base-dom-2-nested-contained",
+];
+
+/** Head's `notAssessed` locations for a document, or none when head cannot read it. */
+function headNotAssessed(json: string): readonly string[] {
+  try {
+    return readSafety(parseResource(json).resource).notAssessed;
+  } catch {
+    return [];
+  }
+}
 
 /** The 19 constraint keys and the severity R4 4.0.1 declares for each. */
 const KEY_SEVERITY: Readonly<Record<string, "error" | "warning">> = {
@@ -227,6 +250,17 @@ describe("AC-13: base versus head, the read differential over the JSON corpus", 
         }
       });
 
+      it("moves safeToSummarize true to false only, and only over a root it did not assess", () => {
+        const captured2 = base as Readout;
+        if (!NOT_ASSESSED_MOVES.includes(document.name)) {
+          expect(head.safeToSummarize, "safeToSummarize moved").toBe(captured2.safeToSummarize);
+          return;
+        }
+        expect(captured2.safeToSummarize, "a listed move whose base was not affirmed").toBe(true);
+        expect(head.safeToSummarize).toBe(false);
+        expect(headNotAssessed(document.json).length).toBeGreaterThan(0);
+      });
+
       it("AC-13: withdraws, relocates and re-severities no finding", () => {
         const { removed } = delta((base as Readout).findings, head.findings);
         expect(removed, "a finding was removed, re-severitied or relocated").toEqual([]);
@@ -261,6 +295,14 @@ describe("AC-13: base versus head, the read differential over the JSON corpus", 
 
     it("AC-13: adds exactly the findings written out, and no other", () => {
       expect(added).toEqual(ADDED_FINDINGS);
+    });
+
+    it("moves safeToSummarize on exactly the documents written out, and no other", () => {
+      expect(
+        moves
+          .filter((move) => move.base.safeToSummarize !== move.head.safeToSummarize)
+          .map((move) => move.name),
+      ).toEqual(NOT_ASSESSED_MOVES);
     });
 
     for (const key of DECIDED_KEYS) {

@@ -10,6 +10,7 @@ import {
   unreadableBooleans,
   validateResource,
 } from "../src/index.js";
+import { expectSafeButForType } from "./_not-assessed.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
 
@@ -105,8 +106,8 @@ describe("a doNotPerform value outside the boolean lexical space is reported", (
           "a code that spells a negation bar its case or its surrounding whitespace, content " +
           "where a code belongs, a use on an identifier, name, address or contact point this " +
           "library cannot read, a declared absence whose reason this library cannot read, or a " +
-          "declared absence beside a value leaves an element this library must not flatten " +
-          "(1 location(s)).",
+          "declared absence beside a value leaves an element this library must not flatten, or a " +
+          "resource is of a type this library does not assess (1 location(s)).",
       );
     }
   });
@@ -358,7 +359,7 @@ describe("declared residuals of the unreadable-boolean report, pinned", () => {
     const safety = readSafety(resource);
 
     expect(safety.unreadableBooleans).toEqual([]);
-    expect(safety.safeToSummarize).toBe(true);
+    expectSafeButForType(safety);
   });
 
   it("reports nothing for an unreadable value at a non-boolean datatype", () => {

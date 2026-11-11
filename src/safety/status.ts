@@ -261,7 +261,7 @@ const NEGATION_ORDER: readonly NegationKind[] = [
  * `shadowedProperties`, `arrayWrappedScalars`, `nestedArrays`, `droppedText`, `unreadableBooleans`,
  * `nearMissNegationCodes`, `unreadableNegationCodes`, `unreadableIntents`,
  * `unreadableDatatypeUses`, `absenceMarkers`, `unreadableAbsenceMarkers`,
- * `conflictingAbsenceMarkers`) and the `safeToSummarize` derived from them (from all but
+ * `conflictingAbsenceMarkers`, `notAssessed`) and the `safeToSummarize` derived from them (from all but
  * `absenceMarkers`, `intents` and `datatypeUses`, which disclose rather than refuse) are
  * **document-wide**: they carry FHIRPath locations, so a nested finding has an address to name, and
  * `assertSafeToSummarize` refuses over a `Bundle`'s entries. The **single-valued** fields
@@ -701,7 +701,30 @@ export interface SafetyReadout {
    */
   readonly conflictingAbsenceMarkers: readonly string[];
   /**
-   * `false` when the resource must not be flattened: an unhandled `modifierExtension` is present, a
+   * FHIRPath locations of the resource roots this layer did **not assess**, because their type is
+   * not one it models: the entry node, a `contained` resource or a `Bundle.entry` resource whose
+   * `resourceType` names a type outside `AllergyIntolerance`, `Bundle`, `Condition`,
+   * `DiagnosticReport`, `Immunization`, `MedicationRequest`, `MedicationStatement`, `Observation`,
+   * `Patient` and `Practitioner`, or names no type at all. A root that names several types is listed
+   * when any of them is outside that set.
+   *
+   * The status codes that withdraw or cancel a record differ by type (`revoked` on a
+   * ServiceRequest, `cancelled` on an Encounter, `inactive` on an R4B NutritionProduct), and this
+   * layer reads their meaning only for the types it models. For any other type it cannot tell a
+   * current record from a withdrawn one, so it says so here and the resource is not
+   * {@link safeToSummarize}. The un-gated reads still run at such a root, so a retraction or a
+   * `not-done` written there is still on {@link negations}; an empty `negations` beside a non-empty
+   * `notAssessed` means "not looked for", never "none".
+   *
+   * **Value-free and document-wide**, like the location channels beside it: the location is the
+   * root's own path, and the type name in it is bounded exactly as {@link resourceType} is.
+   *
+   * Empty for every document whose resource roots are all of the types named above.
+   */
+  readonly notAssessed: readonly string[];
+  /**
+   * `false` when the resource must not be flattened: a resource root is of a type this layer does
+   * not model ({@link notAssessed}), an unhandled `modifierExtension` is present, a
    * modifier ELEMENT is present, a
    * repeated property name left an element with more than one value, a `0..1` safety element
    * arrived array-wrapped, an array inside an array left content the codec could not read, XML
@@ -785,6 +808,39 @@ export function modifierElements(resource: FhirComplex): ModifierElementReport[]
 function safetyPrefix(types: readonly string[]): string {
   const rt = types[0];
   return rt === undefined ? "$this" : rootPath(rt);
+}
+
+/**
+ * The resource types whose safety-critical elements this layer reads, so a root of one of them can
+ * be assessed: the seven `SAFETY_RESOURCE_TYPES`, `Patient` and `Practitioner`, whose modifier
+ * elements the modifier read covers, and `Bundle`, which R4 gives no modifier element of its own
+ * and whose entries are judged one by one as resource roots. Written out rather than derived from
+ * another set, so a set that grew elsewhere cannot widen what this layer affirms.
+ *
+ * Any other type, an R4 type this layer does not model or one a later version added, is listed on
+ * {@link SafetyReadout.notAssessed}: what its status codes mean is not known here, so a cancelled
+ * or withdrawn record of that type could not be told from a current one.
+ */
+const ASSESSED_RESOURCE_TYPES: ReadonlySet<string> = new Set([
+  "AllergyIntolerance",
+  "Bundle",
+  "Condition",
+  "DiagnosticReport",
+  "Immunization",
+  "MedicationRequest",
+  "MedicationStatement",
+  "Observation",
+  "Patient",
+  "Practitioner",
+]);
+
+/**
+ * Whether a resource root can be assessed: it names at least one type, and every type it names is
+ * one this layer models. A root naming two types, one of them unmodeled, is not assessed, so the
+ * second name cannot be hidden behind the first.
+ */
+function isAssessedRoot(types: readonly string[]): boolean {
+  return types.length > 0 && types.every((type) => ASSESSED_RESOURCE_TYPES.has(type));
 }
 
 /**
@@ -1452,6 +1508,8 @@ interface SafetyWalk {
    * from. Built by the same pass, at the same window, as the reads that stepped over it.
    */
   readonly unreadableCode: string[];
+  /** Resource roots whose type this layer does not model, so it cannot assess them. */
+  readonly notAssessed: string[];
 }
 
 /**
@@ -1475,6 +1533,7 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     unreadableBoolean: [],
     nearMissCode: [],
     unreadableCode: [],
+    notAssessed: [],
   };
   walkComplex(resource, new Trail(path), out, true);
   // A location reached by more than one reading (a repeated property name, two withheld segments)
@@ -1495,6 +1554,9 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
       return true;
     }),
     unreadableIntent: [...new Set(out.unreadableIntent)],
+    // A resource a repeated property name shadowed is walked at the same path as the one it
+    // shadowed: one root, one location.
+    notAssessed: [...new Set(out.notAssessed)],
     datatypeUses: uses.uses,
     unreadableDatatypeUse: uses.unreadable,
   };
@@ -1817,6 +1879,7 @@ function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): vo
   };
   checkArrayWrapping(node, path, report);
   checkNegations(node, path, report, out);
+  if (!isAssessedRoot(typesOf(node))) out.notAssessed.push(path);
 }
 
 /**
@@ -1955,6 +2018,10 @@ function descend(node: FhirNode, trail: Trail, out: SafetyWalk): void {
  * modifier-extension check. `noKnownAllergy` is the one negation that stays type-gated, because it
  * asserts something *positive* about a patient.
  *
+ * **A resource root of a type this layer does not model is not assessed**: its location is on
+ * {@link SafetyReadout.notAssessed} and the readout is never `safeToSummarize`, whatever status it
+ * carries. The un-gated reads above still run there, so what they find is still reported.
+ *
  * **The un-gated negation reads run at every resource root**, so a `contained` or `Bundle.entry`
  * resource's retraction, refutation, `not-done` / `not-taken` status or "do not perform" instruction
  * is classified on {@link SafetyReadout.negations}, while the **single-valued** fields (`status`,
@@ -2029,8 +2096,15 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
   if (noKnownAllergy) found.add("no-known-allergy");
   const negations = NEGATION_ORDER.filter((kind) => found.has(kind));
 
-  const { modifiers, shadowed, arrayWrapped, unreadableBoolean, nearMissCode, unreadableCode } =
-    walk;
+  const {
+    modifiers,
+    shadowed,
+    arrayWrapped,
+    unreadableBoolean,
+    nearMissCode,
+    unreadableCode,
+    notAssessed,
+  } = walk;
   // The channels whose root is not the walk's prefix: a resource type name roots a
   // modifier-element or intent location only when this library defines the name (see
   // `./modifier-elements.js`). Applied here, to those channels' locations and to no other's.
@@ -2078,7 +2152,9 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
     absenceMarkers: absence.markers,
     unreadableAbsenceMarkers: absence.unreadable,
     conflictingAbsenceMarkers: absence.conflicting,
+    notAssessed,
     safeToSummarize:
+      notAssessed.length === 0 &&
       modifiers.length === 0 &&
       modifierElementReports.length === 0 &&
       shadowed.length === 0 &&
@@ -2097,7 +2173,8 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
 
 /**
  * A refusal raised when a caller tries to flatten or summarize a resource this library cannot
- * summarize honestly: it carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
+ * summarize honestly: a resource root in it is of a type the safety layer does not model (see
+ * {@link SafetyReadout.notAssessed}), it carries a `modifierExtension` we do not understand (FHIR's `?!` rule forbids
  * ignoring one), it carries a modifier ELEMENT (an ordinary base element R4 flags `?!`, which the
  * same rule forbids ignoring), a repeated property name left an element holding several values with no rule for
  * choosing between them, a `0..1` safety element arrived wrapped in a JSON array, an array inside
@@ -2140,7 +2217,8 @@ export class FhirSafetyError extends Error {
         "spells a negation bar its case or its surrounding whitespace, content where a code " +
         "belongs, a use on an identifier, name, address or contact point this library cannot " +
         "read, a declared absence whose reason this library cannot read, or a declared absence " +
-        "beside a value leaves an element this library must not flatten " +
+        "beside a value leaves an element this library must not flatten, or a resource is of a " +
+        "type this library does not assess " +
         `(${String(locations.length)} location(s)).`,
     );
     this.name = "FhirSafetyError";
@@ -2149,7 +2227,8 @@ export class FhirSafetyError extends Error {
 }
 
 /**
- * Assert a resource is safe to flatten/summarize, throwing {@link FhirSafetyError} when it carries an
+ * Assert a resource is safe to flatten/summarize, throwing {@link FhirSafetyError} when a resource root
+ * in it is of a type the safety layer does not model, or it carries an
  * unhandled `modifierExtension`, a modifier element, a repeated property name, an array-wrapped single-valued element, an
  * array inside an array, dropped XML element text, a boolean-valued safety element holding a written
  * value outside the datatype's lexical space, or a `code`-valued negation element holding a value
@@ -2196,6 +2275,8 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     // declaration the caller can read is a disclosure, not a loss.
     ...readout.unreadableAbsenceMarkers,
     ...readout.conflictingAbsenceMarkers,
+    // A resource root of a type this layer does not model: nothing above was assessed for it.
+    ...readout.notAssessed,
   ];
   if (locations.length > 0) throw new FhirSafetyError(locations);
 }

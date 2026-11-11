@@ -177,7 +177,10 @@ describe("an array wrapper XML cannot spell back is refused rather than flattene
         '<code value="716186003"/></coding></code>';
       const laundered = parseResourceXml(`<Resource xmlns="http://hl7.org/fhir">${NKA}</Resource>`);
       expect(readSafety(laundered.resource).negations).toEqual([]);
-      expect(readSafety(laundered.resource).safeToSummarize).toBe(true);
+      // The readout no longer affirms it: `Resource` is not a type the safety layer models, so the
+      // root is not assessed. The negation above is still lost; the verdict no longer hides that.
+      expect(readSafety(laundered.resource).notAssessed).toEqual(["Resource"]);
+      expect(readSafety(laundered.resource).safeToSummarize).toBe(false);
       // The identical content under the tag the sender's type would have produced, so the assertion
       // above is a statement about the lost type rather than about the document's content.
       const kept = parseResourceXml(

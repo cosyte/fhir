@@ -1,0 +1,5 @@
+---
+"@cosyte/fhir": patch
+---
+
+`readSafety` no longer calls a resource of a type it does not model safe to summarize. Before, a `ServiceRequest`, an `Encounter`, a type R4B added such as `NutritionProduct`, or any other type outside the ones the safety readout reads was reported `safeToSummarize: true` whatever its status, so a revoked, cancelled or withdrawn record of that type could be summarized as current. Now every resource root of such a type, at the root, in `contained` or in a Bundle entry, is listed on a new readout field, `notAssessed`, `safeToSummarize` is `false`, and `assertSafeToSummarize` throws with that location. The types still assessed are `AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`, `MedicationRequest`, `MedicationStatement`, `Observation`, `Patient`, `Practitioner`, and `Bundle` as a container. What a caller must change: code that summarized other types because `safeToSummarize` was `true` now sees `false`; check `notAssessed`, read that type's status against its own definition, and decide for yourself before summarizing it.
