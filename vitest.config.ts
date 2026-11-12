@@ -87,7 +87,11 @@ const config = cosyteVitest({
     // A deeper property run scales the budget with its depth, so the nightly run is not cut off by
     // a budget set for a pull request's cases.
     testTimeout: 10_000 * propertyDepth,
-    hookTimeout: 10_000,
+    // On Windows a hook gets 60 s. The PHI scan's test removes its temporary git repositories in an
+    // `afterAll`, and on a Windows runner that took longer than 10 s in 2 of the 22 Windows legs
+    // this suite first ran in; deleting many small files is slower there. No test's own budget
+    // changes, and Linux and macOS keep 10 s.
+    hookTimeout: process.platform === "win32" ? 60_000 : 10_000,
     ...(testNamePattern === undefined ? {} : { testNamePattern }),
   },
 });
