@@ -28,7 +28,8 @@
  * `<div xmlns="http://hl7.org/fhir">x</div>`, a declaration the sender never wrote.
  * A decimal value is emitted from its exact lexical text and never routes
  * through a JavaScript `number`. Narrative `<div>` XHTML is written back as the opaque string the
- * model carries, verbatim. Its XHTML is not validated, but the string is checked at that branch for
+ * model carries, verbatim. The writer does not check its XHTML against the narrative rules (the
+ * validator does), but the string is checked at that branch for
  * the two properties splicing it in depends on: that it spells the one `div` element the property
  * names ({@link emitsOneDivElement}), and that every prefix its markup names is bound inside it
  * ({@link bindsEveryPrefix}).

@@ -750,8 +750,9 @@ function buildElement(
   // A narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, exactly the
   // representation FHIR JSON uses for `Narrative.div` (a string). The reader does not model the XHTML
   // element tree, but it never drops or garbles it: the writer re-emits this string verbatim, so a
-  // narrative round-trips as `<div>…</div>`, not an escaped attribute. (The XHTML structure itself is
-  // not validated, the same fidelity as the JSON codec.) `narrativeSource` is what makes the
+  // narrative round-trips as `<div>…</div>`, not an escaped attribute. (The reader does not check
+  // the XHTML, the same fidelity as the JSON codec; `validateResource` checks it against the R4
+  // narrative rules.) `narrativeSource` is what makes the
   // lifted-out fragment carry its own namespace declarations.
   //
   // THIS SITS BEFORE THE RESOURCE-VALUED BRANCH, AND THAT ORDER IS THE WHOLE POINT OF THE BRANCH.

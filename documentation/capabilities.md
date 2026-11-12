@@ -48,9 +48,9 @@ on any unsupported expression); it does **not** yet do `type`·`profile` slicing
 validation (still `PROFILE_SLICE_UNCHECKED`), and it bundles **no** US Core
 IG corpus. The `validator_cli.jar` **differential runs in CI** (a JVM oracle job; there is no Java in
 the dev container) over **both** the synthetic spec-clean corpus **and** the real-world quirk corpus,
-and it is green on main: CI run 43093454578 (job 130776168314, commit 8d066a3) compared 213
-documents (300 declared, 87 excluded) and agreed with the oracle within the documented deltas, and
-showed determinism over 31 documents. The built-in structural schema set has **eight** resource
+and it is green: CI run 43120027962 (job 130857848284, commit 8b66923, the change that added the
+narrative checks) compared 214 documents (300 declared, 86 excluded) and agreed with the oracle
+within the documented deltas, and showed determinism over 31 documents. The built-in structural schema set has **eight** resource
 types, each with the base-resource elements merged in: `Patient`, `Observation`, `DiagnosticReport`,
 `Condition`, `MedicationRequest`, `AllergyIntolerance`, `Immunization` and `MedicationStatement`.
 Any other resource type validates its base elements only, with an informational
@@ -58,8 +58,9 @@ Any other resource type validates its base elements only, with an informational
 guarantee beyond `system` + strength (no terminology content is bundled: licensing). Its XML codec is
 schema-free like the JSON one, so an XML-sourced primitive is kept as its lexical string and **typed
 cross-format transcoding** (emitting spec-clean JSON booleans/numbers from an XML model) needs the
-datatype schema and is not yet done; the XHTML **structure** inside `Narrative.div` is not modeled or
-validated (carried opaquely as a string (the JSON codec's fidelity), never dropped), and RDF/Turtle is
+datatype schema and is not yet done; the XHTML inside `Narrative.div` is carried as a string exactly
+as written (the JSON codec's fidelity), never modeled and never dropped, and `validateResource`
+checks it against the R4 narrative rules (see [Narrative XHTML](#narrative-xhtml)); RDF/Turtle is
 out of scope. It has no typed per-resource models
 yet, and it **never converts a unit** or evaluates a reference range.
 
@@ -1183,6 +1184,69 @@ for await (const record of streamNdjson(readableChunks)) {
     console.warn("bad line", record.error.line); // line number, never content
   else handle(record.resource);
 }
+```
+
+### Narrative XHTML
+
+`Narrative.div` is carried as an opaque string, exactly as the document wrote it, and
+`validateResource` reads that string as XHTML and checks it against the R4 narrative rules. The
+string is never changed: the check reads a copy of the parse, and both writers emit the string as
+before.
+
+- **Where it looks**: the narrative of the resource, and of every resource carried inside it at a
+  position R4 defines for one: `contained`, a Bundle's `entry.resource` and
+  `entry.response.outcome`, and a Parameters resource's `parameter.resource` and
+  `parameter.part.resource`, at any depth. A resource type with no built-in schema is checked too.
+- **What it reports**, each an `error` in both modes, at most once per narrative, at the location of
+  the `div` (`Patient.text.div`, `Bundle.entry[1].resource.text.div`):
+  - `NARRATIVE_UNREADABLE`: not a string, not well-formed XML, or something the XML reader refuses
+    (a DTD, an entity other than the five XML predefines, so `&nbsp;` too, a CDATA section, or
+    nesting deeper than 256 elements). Nothing else is checked in a narrative that cannot be read.
+  - `NARRATIVE_ROOT_INVALID`: the root is not a `div` in the XHTML namespace.
+  - `NARRATIVE_ELEMENT_ILLEGAL`: an element outside the basic HTML formatting set R4 allows
+    (`txt-1`), or outside the XHTML namespace. XHTML is case-sensitive, so `<BR/>` is not `<br/>`.
+  - `NARRATIVE_ATTRIBUTE_ILLEGAL`: an attribute R4 does not allow on that element.
+  - `NARRATIVE_ACTIVE_CONTENT` (issue type `security`): a `script`, `iframe`, `frame`, `frameset`,
+    `object`, `embed` or `applet` element in any case and any namespace, an `on...` event-handler
+    attribute, or a `javascript:` or `vbscript:` URL in a link, image or citation, with the scheme
+    read the way a browser reads it: every tab, line feed and carriage return in the value is
+    removed and leading control characters and spaces are trimmed first. Reported under
+    its own code, not as an illegal element or attribute, so a hazard is told apart from a
+    formatting slip.
+  - `NARRATIVE_BLOCK_IN_PARAGRAPH`: a `div`, `blockquote`, `table`, `ol`, `ul` or `p` inside a `p`,
+    at any depth.
+  - `NARRATIVE_EMPTY`: no character other than whitespace and no image (`txt-2`).
+- **Where the lists come from**: the elements and attributes are the ones the HL7 reference
+  validator enforces for `txt-1`, R4's reading of the HTML 4.0 formatting chapters. Elements compare
+  by expanded name, so a narrative spelled with a prefix bound to the XHTML namespace reads like
+  the default spelling.
+- **Value-free**: no finding names an element, an attribute or a value from the narrative, and the
+  PHI-leak tier and the fuzz suite plant sentinels in all three to hold that.
+- **Against the reference validator**: the differential compares documents whose narratives draw
+  these findings. `eventdefinition-example.json` from the R4 examples, held out before because the
+  reference validator reported its empty narrative and this library did not, is compared again, and
+  both now report it.
+- **Not checked**: where a table or list part may sit (a `tr` outside a `table`, an `li` outside a
+  list), a URL beyond its scheme, whether an internal image reference such as `src="#a"` resolves
+  (the reason `media-example-sound.json` stays held out), a `data:` URL (`data:text/html`
+  included), the content of a `style` attribute (a `url(...)` in it, `javascript:` included), and
+  duplicate `id` values. A narrative with no finding is not thereby safe to render as HTML without
+  the renderer's own sanitizer.
+
+```ts
+import { parseResource, validateResource } from "@cosyte/fhir";
+
+const { resource } = parseResource(
+  JSON.stringify({
+    resourceType: "Patient",
+    text: {
+      status: "generated",
+      div: '<div xmlns="http://www.w3.org/1999/xhtml"><p onclick="track()">Synthetic</p></div>',
+    },
+  }),
+);
+validateResource(resource).issues.map((i) => `${i.code} ${i.expression}`);
+// ["NARRATIVE_ACTIVE_CONTENT Patient.text.div"]
 ```
 
 ## What this will be

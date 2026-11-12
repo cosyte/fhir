@@ -7,10 +7,10 @@ ten in-tree fixtures any more. It is **four corpora, and only the first was writ
 | --------------------------- | ---------------------------------------- | ------------ | ----------- | -------- | -------- |
 | `cosyte-fhir-fixtures`      | in-tree at the commit under test         | `MIT`        | this repo   | 10       | 10       |
 | `fhir-test-cases`           | tag `1.7.67` (`0d7196d7`)                | `Apache-2.0` | third party | 73       | 43       |
-| `hl7-fhir-r4-examples`      | FHIR R4 `4.0.1`                          | `CC0-1.0`    | third party | 183      | 126      |
+| `hl7-fhir-r4-examples`      | FHIR R4 `4.0.1`                          | `CC0-1.0`    | third party | 183      | 127      |
 | `hl7-fhir-us-core-examples` | US Core `6.1.0` and `9.0.0` (by sha256)  | `CC0-1.0`    | third party | 34       | 34       |
 
-**300 declared, 213 compared, 87 excluded**, and 203 of the 213 are third party, so the floor of one
+**300 declared, 214 compared, 86 excluded**, and 204 of the 214 are third party, so the floor of one
 hundred clears without counting a single document written here. Every declared document records
 which corpus it came from, that corpus's exact pinned version, that corpus's licence identifier, its
 byte count and its SHA-256; a US Core document also records its own US Core version and licence.
@@ -58,7 +58,7 @@ Practitioners), each declared by its path inside that version's package tarball.
 
 ## The exclusion rate is the honest headline
 
-**87 of 300 declared documents are excluded, and every one carries the reason it was excluded**,
+**86 of 300 declared documents are excluded, and every one carries the reason it was excluded**,
 printed on every run. They are not noise and they are not a convenience: they were each measured
 against `validator_cli` 6.10.2, and the reason records the release, the date, the error count, the
 class breakdown by `OperationOutcome.issue.code`, and the first locations.
@@ -81,9 +81,17 @@ document this library reports clean, is still a false valid and still fails the 
 naming any non-terminology class are untouched, and `test/differential-corpus.test.ts` fails if an
 exclusion whose only recorded class is `code-invalid` ever reappears.
 
-So the number a consumer can quote is **213 real documents from four public corpora on which this
+**One more came back when the library started reading narratives.** `eventdefinition-example.json`
+from the R4 examples was held out because the reference validator reported an `invariant` error at
+`EventDefinition.text.div` that this library did not: the narrative holds only whitespace, which R4's
+`txt-2` forbids. `validateResource` now checks `Narrative.div` against the R4 narrative rules and
+reports `NARRATIVE_EMPTY` there, so the document is compared again. `media-example-sound.json` stays
+held out: its narrative's image points at `#11`, an internal reference the reference validator
+resolves and this library does not.
+
+So the number a consumer can quote is **214 real documents from four public corpora on which this
 library and the reference validator were shown to agree, within a recorded terminology delta**, next
-to **87 on which they did not, each with the disagreement recorded**. Reading only the first number
+to **86 on which they did not, each with the disagreement recorded**. Reading only the first number
 is reading half of this file.
 
 ## The terminology inputs are declared, and the verdict is repeatable

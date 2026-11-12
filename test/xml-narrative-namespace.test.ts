@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { parseResource, parseResourceXml, serializeResourceXml } from "../src/index.js";
+import {
+  parseResource,
+  parseResourceXml,
+  serializeResourceXml,
+  validateResource,
+} from "../src/index.js";
 
 /**
  * A KNOWN GAP, PINNED: a narrative `div` that declares no namespace changes namespace when the XML
@@ -16,8 +21,10 @@ import { parseResource, parseResourceXml, serializeResourceXml } from "../src/in
  *   the FHIR default namespace, and the re-read raises nothing, so the finding is gone after one
  *   round trip. The next read records the inherited declaration in the `div` string, so the first
  *   rewrite is not a fixed point of the XML normalizer.
- * - From JSON: `"div":"<div><p>...</p></div>"` reads and validates with no finding, and is written
- *   to XML in the FHIR namespace.
+ * - From JSON: `"div":"<div><p>...</p></div>"` reads with no finding and is written to XML in the
+ *   FHIR namespace. Validation does report it: the narrative layer finds the root outside the XHTML
+ *   namespace (`NARRATIVE_ROOT_INVALID`), so the document is not `valid`, but the writer still moves
+ *   it into the FHIR namespace.
  *
  * Found by the idempotent-normalize property on `hostileInput({ format: "xml" })`, which skips this
  * one shape until it is closed. When a change closes the gap these assertions red: rewrite them to
@@ -51,6 +58,11 @@ describe("pinned gap: a narrative div with no namespace, written as XML", () => 
       '{"resourceType":"Patient","text":{"status":"generated","div":"<div><p>synthetic</p></div>"}}',
     );
     expect(read.issues).toEqual([]);
+    const validation = validateResource(read.resource);
+    expect(validation.valid).toBe(false);
+    expect(validation.issues.map((i) => `${i.code} ${i.expression}`)).toContain(
+      "NARRATIVE_ROOT_INVALID Patient.text.div",
+    );
     expect(serializeResourceXml(read.resource)).toBe(
       '<Patient xmlns="http://hl7.org/fhir"><text><status value="generated"/><div><p>synthetic</p></div></text></Patient>',
     );
