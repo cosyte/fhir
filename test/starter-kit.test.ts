@@ -295,6 +295,8 @@ describe("veterinary Patient starter", () => {
   });
 
   it("passes a veterinary Patient carrying species, breed and gender status", () => {
+    // What the starter states of the extension is checked; the extension's own published
+    // definition is not supplied, so conformance to it is reported not checked.
     expect(
       veterinaryIssues([
         {
@@ -307,7 +309,7 @@ describe("veterinary Patient starter", () => {
         },
         { url: "http://example.org/fhir/StructureDefinition/synthetic", valueString: "syn" },
       ]),
-    ).toEqual([]);
+    ).toEqual([["PROFILE_CONSTRAINT_UNCHECKED", "information", "Patient.extension[0]"]]);
   });
 
   it("requires the animal extension", () => {

@@ -168,7 +168,9 @@ describe("a type discriminator on a choice element is decided from the choice su
       resourceType: "Observation",
       effectivePeriod: { start: "2020-01-01" },
     });
+    // The sliced element itself narrows `effective[x]` to dateTime, so a Period breaks it too.
     expect(findings(collectProfileIssues(obs, effectiveByType))).toEqual([
+      ["PROFILE_TYPE_MISMATCH", "Observation.effective[x]"],
       ["PROFILE_SLICE_UNMATCHED", "Observation.effective[x][0]"],
       ["CARDINALITY_MIN", "Observation.effective[x]:effectiveDateTime"],
     ]);
@@ -192,7 +194,9 @@ describe("a type discriminator on a choice element is decided from the choice su
       '<code><text value="fake"/></code><effectivePeriod><start value="2020-01-01"/>' +
       "</effectivePeriod></Observation>";
     const obs = parseResourceXml(xml).resource;
+    // The sliced element itself narrows `effective[x]` to dateTime, so a Period breaks it too.
     expect(findings(collectProfileIssues(obs, effectiveByType))).toEqual([
+      ["PROFILE_TYPE_MISMATCH", "Observation.effective[x]"],
       ["PROFILE_SLICE_UNMATCHED", "Observation.effective[x][0]"],
       ["CARDINALITY_MIN", "Observation.effective[x]:effectiveDateTime"],
     ]);
@@ -908,9 +912,10 @@ describe("type and profile discriminators: the bounds of what is decided", () =>
       code: "Reference",
       targetProfile: [`${BASE}two-types`],
     });
+    // Decided: the member is an Observation. Its conformance to the profile is not checked.
     expect(
       findings(collectProfileIssues(member, sd, { profiles: [of("1", "Observation")] })),
-    ).toEqual([]);
+    ).toEqual([["PROFILE_CONSTRAINT_UNCHECKED", "Observation.hasMember"]]);
     expect(
       unchecked(
         collectProfileIssues(member, sd, {
@@ -1033,7 +1038,11 @@ describe("type and profile discriminators: the bounds of what is decided", () =>
       ],
       performer: [{ reference: "#p1" }, { reference: "#g1" }],
     });
-    const decided = [["PROFILE_SLICE_UNMATCHED", "Observation.performer[1]"]];
+    // The Patient is assigned to the slice; its conformance to the slice's profile is not checked.
+    const decided = [
+      ["PROFILE_SLICE_UNMATCHED", "Observation.performer[1]"],
+      ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.performer[0]"],
+    ];
     const unavailable = [["Observation.performer", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE]];
     const resolve = (url: string) => (url === genderedPatient.url ? genderedPatient : undefined);
     const profiles = [genderedPatient];

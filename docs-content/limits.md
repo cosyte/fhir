@@ -15,8 +15,10 @@ The gaps, in the order the README lists them under "Not covered yet":
 
 - [typed per-resource models](#no-typed-per-resource-models);
 - `profile` slicing discriminators, `type` discriminators the document holds no answer to, and the
-  R5 `position` discriminator, reported `PROFILE_SLICE_UNCHECKED`, and FHIRPath outside the subset
-  we evaluate, reported `INVARIANT_UNCHECKED`
+  R5 `position` discriminator, reported `PROFILE_SLICE_UNCHECKED`, FHIRPath outside the subset
+  we evaluate, reported `INVARIANT_UNCHECKED`, and a profile's type profiles, constraining target
+  profiles, non-numeric value ranges, bindings beyond the structure layer's and what the model does
+  not read, reported `PROFILE_CONSTRAINT_UNCHECKED`
   ([verdicts that say "not checked"](#verdicts-that-say-not-checked-rather-than-passing));
 - bundled [terminology](#no-terminology-content-is-bundled) or [US Core](#no-profile-content-is-bundled)
   content;
@@ -119,6 +121,38 @@ you treat any non-error finding as a pass, you will misread them.
   element that declares no `slicing`, or that is missing from the snapshot. Nothing in the profile
   says which occurrences belong to the slice, so none is assigned to it, and the slice's own
   constraints are not checked. It is reported at information, once per present parent.
+- `PROFILE_CONSTRAINT_UNCHECKED`: a constraint a supplied profile places on an element that is
+  present, of a kind this library does not check. It is reported at information, at the element or
+  the occurrence, and the finding's `uncheckedConstraint` says which kind (it reaches an
+  `OperationOutcome` as `issue.details.text`):
+  - `type-profile`: a `type.profile` the occurrence must conform to, such as an extension's own
+    definition or a datatype profile. The R4 `SimpleQuantity` profile is the exception: its one rule,
+    `sqty-1`, is checked;
+  - `target-profile`: a `Reference` whose target's type cannot be read (no `Type/id` form and no
+    target in the resource's `contained` set or, for a Bundle, its entries), or whose target is of
+    the type a constraining profile names, since conformance to that profile is not checked, or that
+    names a profile neither supplied nor returned by `resolveBase`; and any `targetProfile` on a
+    `canonical`. A target of a type no `targetProfile` names is an error,
+    `PROFILE_REFERENCE_TARGET_MISMATCH`;
+  - `max-length`: a `maxLength` on a value that is not a string. On a string it is checked, counted
+    in UTF-16 code units as the reference validator counts it, and a longer one is
+    `PROFILE_MAX_LENGTH`;
+  - `value-range`: a `minValue[x]` or `maxValue[x]` that is not an integer or decimal type (a date, a
+    time, a `Quantity`), or whose type is not the occurrence's. A number is compared exactly, and one
+    outside the range is `PROFILE_MIN_VALUE` or `PROFILE_MAX_VALUE`;
+  - `binding`: a `required` or `extensible` binding, unless it binds the very R4 value set whose
+    codes the structure layer enumerates for that element of the resource, such as
+    `Observation.status`. A `preferred` or `example` binding asks nothing and is not reported;
+  - `slice-order`: an `ordered` slicing, or `openAtEnd` rules, over more than one occurrence;
+  - `slice-invariant`: a slice's own invariant that the element it slices does not carry;
+  - `primitive-invariant`: an invariant on an element present as a primitive value, other than
+    `ele-1`;
+  - `unread`: a member or extension of the element definition, its binding or one of its types that
+    this library does not read and that is not documentation, such as `contentReference`,
+    `type.aggregation`, or an extension it does not know.
+
+  A `choice[x]` occurrence of a type the profile does not list is an error,
+  `PROFILE_TYPE_MISMATCH`. A base `Resource` or `DomainResource` target profile allows any target.
 
 All of them exist because the alternative, staying quiet, is indistinguishable from a pass to every
 consumer downstream.

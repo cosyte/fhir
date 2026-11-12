@@ -9,9 +9,11 @@
  *
  * **What is modeled** is deliberately the profile-validation surface: identity (`url` / `version` /
  * `type` / `kind` / `derivation` / `baseDefinition`), the `differential` and `snapshot` element lists,
- * and per-element cardinality, `mustSupport`, `type`, `binding`, `slicing`, and the `fixed[x]` /
- * `pattern[x]` constraints. Narrative, mapping, and documentation fields the validator does not act on
- * are ignored (lenient read, an unmodeled field is never an error).
+ * and per-element cardinality, `mustSupport`, `type`, `binding`, `slicing`, `maxLength`, and the
+ * `fixed[x]` / `pattern[x]` / `minValue[x]` / `maxValue[x]` constraints. Narrative, mapping, and
+ * documentation fields ask nothing of an instance and are ignored (lenient read, an unmodeled field is
+ * never an error). Anything else an element states is named in its `unmodeled` list, so profile
+ * validation can report the element as not checked rather than pass it in silence.
  *
  * **No StructureDefinition content is bundled.** Like the terminology layer, this ships
  * the *engine*, not the *content*: a caller supplies the US Core (or vendor) StructureDefinitions to
@@ -137,6 +139,21 @@ export interface ElementDefinition {
   readonly binding?: ElementBinding;
   /** The element's invariant constraints (FHIRPath), when the definition states any. */
   readonly constraint?: readonly ElementConstraint[];
+  /** The most characters a string-valued occurrence may hold (`maxLength`), when stated. */
+  readonly maxLength?: number;
+  /** The lowest value an occurrence may hold (`minValue[x]`), when stated. */
+  readonly minValue?: TypedValue;
+  /** The highest value an occurrence may hold (`maxValue[x]`), when stated. */
+  readonly maxValue?: TypedValue;
+  /**
+   * What the definition states that this model does not read and that is not documentation, one
+   * entry per statement, when there is any: a member's name (`contentReference`,
+   * `defaultValueString`), an extension's url (`extension:<url>`), or a member or extension of a
+   * binding or a type (`binding.extension:<url>`, `type.aggregation`). Each may ask something of an
+   * instance that no validation layer checks, so profile validation reports an element that carries
+   * any as not checked wherever the element is present.
+   */
+  readonly unmodeled?: readonly string[];
 }
 
 /** The modeled slice of a FHIR `StructureDefinition`. */
@@ -159,6 +176,121 @@ export interface StructureDefinition {
   readonly differential?: readonly ElementDefinition[];
   /** The fully-resolved snapshot element list, when the definition carries one. */
   readonly snapshot?: readonly ElementDefinition[];
+}
+
+/**
+ * Whether an `ElementDefinition` member is one this model reads, or one that only documents the
+ * element and asks nothing of an instance (elementdefinition.html): names, descriptions, mappings,
+ * examples, the summary and modifier flags a profile cannot change, the base it derives from. A
+ * `fixed[x]`, `pattern[x]`, `minValue[x]` or `maxValue[x]` member is read, whatever its type.
+ */
+function elementMemberKnown(name: string): boolean {
+  if (/^(fixed|pattern|minValue|maxValue)[A-Z]/u.test(name)) return true;
+  return [
+    "id",
+    "path",
+    "sliceName",
+    "min",
+    "max",
+    "mustSupport",
+    "slicing",
+    "type",
+    "binding",
+    "constraint",
+    "maxLength",
+    "extension",
+    "representation",
+    "sliceIsConstraining",
+    "label",
+    "code",
+    "short",
+    "definition",
+    "comment",
+    "requirements",
+    "alias",
+    "base",
+    "meaningWhenMissing",
+    "orderMeaning",
+    "example",
+    "condition",
+    "isModifier",
+    "isModifierReason",
+    "isSummary",
+    "mapping",
+  ].includes(name);
+}
+
+/**
+ * Whether an extension on an element, a binding or a type only documents it: a name, a display or
+ * translation hint, a status, a requirement note, the type's own FHIR type, an obligation on a
+ * system rather than on an instance.
+ */
+function documentaryExtension(url: string | undefined): boolean {
+  return [
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-translatable",
+    "http://hl7.org/fhir/StructureDefinition/structuredefinition-display-hint",
+    "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+    "http://hl7.org/fhir/StructureDefinition/structuredefinition-explicit-type-name",
+    "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
+    "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-isCommonBinding",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+    "http://hl7.org/fhir/StructureDefinition/obligation",
+    "http://hl7.org/fhir/us/core/StructureDefinition/uscdi-requirement",
+  ].some((documentary) => documentary === url);
+}
+
+/**
+ * What one definition node states beyond the members `known` accepts and documentary extensions,
+ * as {@link ElementDefinition.unmodeled} spells it, each entry under `prefix`.
+ */
+function unmodeledOf(
+  node: FhirComplex,
+  known: (name: string) => boolean,
+  prefix: string,
+): string[] {
+  const out: string[] = [];
+  for (const { name, value } of node.properties) {
+    if (name === "extension") {
+      for (const ext of isList(value) ? value.items : [value]) {
+        const url = isComplex(ext) ? primitiveString(getProperty(ext, "url")) : undefined;
+        if (!documentaryExtension(url)) out.push(`${prefix}extension:${url ?? ""}`);
+      }
+    } else if (!known(name)) {
+      out.push(`${prefix}${name}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Everything an element definition node states that this model does not read: its own members, its
+ * binding's and its types'. A binding with no strength, or an invariant with no key or expression,
+ * is stated and not read too.
+ */
+function unmodeledIn(node: FhirComplex): string[] {
+  const out = unmodeledOf(node, elementMemberKnown, "");
+  const binding = getProperty(node, "binding");
+  if (binding !== undefined) {
+    if (isComplex(binding)) {
+      const bindingKnown = (name: string): boolean =>
+        ["strength", "valueSet", "description", "extension"].includes(name);
+      out.push(...unmodeledOf(binding, bindingKnown, "binding."));
+    }
+    if (readBinding(binding) === undefined) out.push("binding");
+  }
+  const type = getProperty(node, "type");
+  for (const item of type === undefined ? [] : isList(type) ? type.items : [type]) {
+    if (!isComplex(item)) continue;
+    const typeKnown = (name: string): boolean =>
+      ["code", "profile", "targetProfile", "extension"].includes(name);
+    out.push(...unmodeledOf(item, typeKnown, "type."));
+  }
+  const constraint = getProperty(node, "constraint");
+  const stated = constraint === undefined ? 0 : isList(constraint) ? constraint.items.length : 1;
+  if (stated !== (readConstraints(constraint)?.length ?? 0)) out.push("constraint");
+  return [...new Set(out)];
 }
 
 /** Parse a FHIR `max` string (`"*"` → {@link UNBOUNDED}, a numeric string → its integer) or `undefined`. */
@@ -350,6 +482,11 @@ function readElementDefinition(node: FhirNode): ElementDefinition | undefined {
   const pattern = readTypedValue(node, "pattern");
   const binding = readBinding(getProperty(node, "binding"));
   const constraint = readConstraints(getProperty(node, "constraint"));
+  // `maxLength` is an `integer`, read exactly as `min`'s `unsignedInt` is: a negative one is no bound.
+  const maxLength = parseMin(getProperty(node, "maxLength"));
+  const minValue = readTypedValue(node, "minValue");
+  const maxValue = readTypedValue(node, "maxValue");
+  const unmodeled = unmodeledIn(node);
 
   const el: {
     -readonly [K in keyof ElementDefinition]: ElementDefinition[K];
@@ -364,6 +501,10 @@ function readElementDefinition(node: FhirNode): ElementDefinition | undefined {
   if (pattern !== undefined) el.pattern = pattern;
   if (binding !== undefined) el.binding = binding;
   if (constraint !== undefined) el.constraint = constraint;
+  if (maxLength !== undefined) el.maxLength = maxLength;
+  if (minValue !== undefined) el.minValue = minValue;
+  if (maxValue !== undefined) el.maxValue = maxValue;
+  if (unmodeled.length > 0) el.unmodeled = unmodeled;
   return el;
 }
 

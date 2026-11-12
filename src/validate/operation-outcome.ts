@@ -59,7 +59,8 @@ function issueNode(issue: ValidationIssue): FhirComplex {
  * all; `diagnostics` is untouched either way and stays keyed by the finding code alone.
  *
  * - An **invariant** finding names its constraint key in `details.text`, a public FHIR identifier
- *   (e.g. `"ait-1"`), never an instance value.
+ *   (e.g. `"ait-1"`), never an instance value. A `PROFILE_CONSTRAINT_UNCHECKED` finding names the
+ *   kind of constraint not checked there the same way (e.g. `"binding"`), a fixed name.
  * - A **membership** finding names its code-system release record in `details.coding`: the marker
  *   from {@link CODE_SYSTEM_VERSION_RECORD_CODES} says whether the caller's service declared a
  *   release, and a declared one rides verbatim in `details.text`. The two elements are separate on
@@ -74,7 +75,7 @@ function detailsNode(issue: ValidationIssue): FhirComplex | undefined {
   const record = issue.codeSystemVersion;
   if (record !== undefined) members.push({ name: "coding", value: list([recordCoding(record)]) });
 
-  let text: string | undefined = issue.constraint;
+  let text: string | undefined = issue.constraint ?? issue.uncheckedConstraint;
   if (record !== undefined) text = record.declared ? record.version : undefined;
   if (text !== undefined) members.push({ name: "text", value: primitive(text) });
 

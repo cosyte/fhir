@@ -277,3 +277,41 @@ export function decimal(raw: string): FhirDecimal {
 export function decimalFromLexical(raw: string): FhirDecimal | undefined {
   return JSON_NUMBER.test(raw) ? new FhirDecimal(raw) : undefined;
 }
+
+/**
+ * The order of two decimals by value: negative when `a` is the smaller, positive when it is the
+ * larger, `0` when they are equal (`1.0` and `1` compare equal; precision is not value). Compared
+ * digit by digit over the exact decomposition, never through a float and never by raising ten to an
+ * exponent the text chose, so `1e999999999` costs no more than `1`. `undefined` when either is not
+ * a decimal literal, which a value read off the wire always is.
+ *
+ * @param a - The first decimal.
+ * @param b - The second decimal.
+ * @returns The sign of `a - b`, or `undefined` when either cannot be read.
+ * @internal
+ */
+export function compareDecimals(a: FhirDecimal, b: FhirDecimal): number | undefined {
+  const pa = decompose(a.raw);
+  const pb = decompose(b.raw);
+  if (pa === null || pb === null) return undefined;
+  const ca = canonical(pa);
+  const cb = canonical(pb);
+  const sa = signOf(ca.coefficient);
+  const sb = signOf(cb.coefficient);
+  if (sa !== sb || sa === 0) return sa - sb;
+  const da = (sa < 0 ? -ca.coefficient : ca.coefficient).toString();
+  const db = (sb < 0 ? -cb.coefficient : cb.coefficient).toString();
+  // The position of the leading digit: the larger magnitude has it further left.
+  const ea = da.length - ca.scale;
+  const eb = db.length - cb.scale;
+  if (ea !== eb) return ea > eb ? sa : -sa;
+  // Same leading position: the digits, read left to right, order the magnitudes. Neither ends in a
+  // zero, so equal values spell the same digits and a shorter prefix is the smaller value.
+  if (da === db) return 0;
+  return da > db ? sa : -sa;
+}
+
+/** The sign of a coefficient, `-1`, `0` or `1`. */
+function signOf(coefficient: bigint): number {
+  return coefficient < 0n ? -1 : coefficient > 0n ? 1 : 0;
+}

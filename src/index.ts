@@ -98,6 +98,7 @@ export {
   CODE_SYSTEM_VERSION_RECORD_SYSTEM,
   ISSUE_SEVERITIES,
   ISSUE_TYPES,
+  PROFILE_UNCHECKED_CONSTRAINTS,
   SLICE_UNCHECKED_REASONS,
   VALIDATION_CODES,
 } from "./validate/issues.js";
@@ -105,6 +106,7 @@ export type {
   CodeSystemVersionRecord,
   CodeSystemVersionRecordCode,
   IssueType,
+  ProfileUncheckedConstraint,
   SliceUncheckedReason,
   ValidationCode,
   ValidationIssue,

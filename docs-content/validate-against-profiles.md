@@ -35,6 +35,13 @@ Two things to read off that result. Must-support is reported as informational, b
 is an obligation on a system, not a requirement that an instance carry the element. The cardinality
 finding is the error, and it is the one that moves the verdict.
 
+A profile's narrowed `choice[x]` types, reference `targetProfile`s, `maxLength`, and integer or
+decimal `minValue[x]` and `maxValue[x]` are checked the same way, each with its own error code. A
+constraint on a present element that we do not check, such as a type profile, a binding to a value
+set we hold no codes for, or a date range, is reported as `PROFILE_CONSTRAINT_UNCHECKED` at
+information, with its kind in `uncheckedConstraint`, so a clean verdict never stands over a
+constraint nobody looked at. [Current limits](./limits.md) lists each kind.
+
 ## Rely on the constraints R4 declares
 
 You do not need a profile for the constraints R4 itself declares. On the eleven modeled resource
