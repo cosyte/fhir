@@ -174,15 +174,22 @@ see it: check the findings.
 
 You get a `PROFILE_SLICE_UNCHECKED` finding at informational severity.
 
-The slicing discriminator on that element is one this library cannot apply: a `type` or `profile`
-discriminator, which needs a FHIRPath engine, or a `position` discriminator, which is not part of
-the R4 discriminator set at all.
+The slicing on that element could not be decided, and the finding's `sliceReason` says why. The
+common ones: a `profile` discriminator, which this library does not decide yet
+(`profile-discriminator`); a `position` discriminator, which is not part of the R4 discriminator set
+(`discriminator-unsupported`); a `resolve()` whose reference points outside the resource's
+`contained` set and, for a Bundle, its entries (`target-unresolved`); a slice whose `targetProfile`
+names a profile you did not pass in `profiles` (`profile-unavailable`). The diagnostic text says "an
+unsupported discriminator" whatever the reason, so read `sliceReason`. The
+[current limits](./limits.md#verdicts-that-say-not-checked-rather-than-passing) list every reason.
 
 **What to do**: the same as the previous entry. It means the slice membership was not decided, not
 that it matched. A slice's own constraints (its fixed and pattern values, cardinalities and
-invariants) apply only to the occurrences assigned to it, so none of them were checked either. If
-the profile is yours, an equivalent slice expressed with a value, pattern, or exists discriminator
-will be evaluated.
+invariants) apply only to the occurrences assigned to it, so none of them were checked either. For
+`profile-unavailable`, pass the profile the slice's `targetProfile` names in `profiles`. For
+`target-unresolved`, validate the Bundle that holds the target, or contain it. If the profile is
+yours, an equivalent slice expressed with a value, pattern, or exists discriminator will be
+evaluated.
 
 ## A profile slice has no slicing over it
 

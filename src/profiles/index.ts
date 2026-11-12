@@ -35,7 +35,13 @@ export { matchesFixed, matchesPattern } from "./fixed-pattern.js";
 export { pathExists, resolvePath } from "./navigate.js";
 
 export { matchSlices, resolveSlices } from "./slicing.js";
-export type { SliceConstraint, SliceDefinition, SliceMatchResult } from "./slicing.js";
+export type {
+  SliceConstraint,
+  SliceContext,
+  SliceDefinition,
+  SliceEnvironment,
+  SliceMatchResult,
+} from "./slicing.js";
 
 export { collectProfileIssues, collectProfileVersionIssues } from "./validate-profile.js";
 export type { ProfileOptions } from "./validate-profile.js";

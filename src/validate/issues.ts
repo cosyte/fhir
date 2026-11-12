@@ -296,10 +296,11 @@ export const VALIDATION_CODES = {
    */
   PROFILE_SLICE_UNMATCHED: "PROFILE_SLICE_UNMATCHED",
   /**
-   * Profile, a slicing whose discriminator this library cannot evaluate (a `profile`
-   * discriminator, which needs recursive profile resolution, or the R5-only `position`). Emitted as
-   * `information` so slice membership is reported **unchecked, never silently passed** (the
-   * fail-safe): the library does not guess a slice assignment it cannot justify.
+   * Profile, a slicing whose membership this library could not decide (a `profile` discriminator,
+   * the R5-only `position`, a reference that leaves the closure, ...; the finding's
+   * `sliceReason` names which). Emitted as `information` so slice membership is reported
+   * **unchecked, never silently passed** (the fail-safe): the library does not guess a slice
+   * assignment it cannot justify.
    */
   PROFILE_SLICE_UNCHECKED: "PROFILE_SLICE_UNCHECKED",
   /**
@@ -470,6 +471,44 @@ export type CodeSystemVersionRecord =
   { readonly declared: true; readonly version: string } | { readonly declared: false };
 
 /**
+ * Why a slicing was reported `PROFILE_SLICE_UNCHECKED`: which part of deciding membership this
+ * library could not do. Each is a fixed reason about the profile or the closure, never instance
+ * content, so it rides on the finding as {@link ValidationIssue.sliceReason}.
+ *
+ * - `no-discriminator`: the slicing declares no discriminator.
+ * - `discriminator-unsupported`: a discriminator kind outside R4's `value | exists | pattern | type |
+ *   profile` (the R5 `position`, or an unknown kind).
+ * - `profile-discriminator`: a `profile` discriminator, which this library does not decide yet; a
+ *   slicing with one among its discriminators is left unchecked whatever else it discriminates on.
+ * - `path-unsupported`: a `type` discriminator path outside the element-path subset (dotted names,
+ *   `[x]` choices, `$this` and `resolve()`), such as `ofType(...)`, or one that selects more than
+ *   one node in an occurrence.
+ * - `slice-unconstrained`: a slice declares nothing at a discriminator path: no fixed or pattern
+ *   value, no cardinality for `exists`, no type for `type`.
+ * - `type-undetermined`: an occurrence's concrete type cannot be read (it is neither a choice
+ *   variant nor a resource), or a slice names an abstract type such as `Resource`.
+ * - `target-unresolved`: a `resolve()` reference names nothing in the resource's `contained` or,
+ *   for a Bundle, its entries.
+ * - `profile-unavailable`: a slice's `targetProfile` names a profile that is neither a base R4 type,
+ *   nor in the supplied profile set, nor returned by the base resolver, or whose supplied versions
+ *   constrain different types, so the type it asks for is unknown.
+ */
+export const SLICE_UNCHECKED_REASONS = {
+  NO_DISCRIMINATOR: "no-discriminator",
+  DISCRIMINATOR_UNSUPPORTED: "discriminator-unsupported",
+  PROFILE_DISCRIMINATOR: "profile-discriminator",
+  PATH_UNSUPPORTED: "path-unsupported",
+  SLICE_UNCONSTRAINED: "slice-unconstrained",
+  TYPE_UNDETERMINED: "type-undetermined",
+  TARGET_UNRESOLVED: "target-unresolved",
+  PROFILE_UNAVAILABLE: "profile-unavailable",
+} as const;
+
+/** One of the {@link SLICE_UNCHECKED_REASONS}. */
+export type SliceUncheckedReason =
+  (typeof SLICE_UNCHECKED_REASONS)[keyof typeof SLICE_UNCHECKED_REASONS];
+
+/**
  * A single value-free validation finding.
  *
  * `expression` is a FHIRPath location into the document (e.g. `Patient.gender`,
@@ -511,6 +550,12 @@ export interface ValidationIssue {
    * code alone.
    */
   readonly codeSystemVersion?: CodeSystemVersionRecord;
+  /**
+   * Why slice membership was not decided, on a `PROFILE_SLICE_UNCHECKED` finding and only there
+   * ({@link SLICE_UNCHECKED_REASONS}). A fixed reason about the profile or the closure, never an
+   * instance value. `undefined` on every other finding.
+   */
+  readonly sliceReason?: SliceUncheckedReason;
 }
 
 /** The fixed R4 `IssueType` each validation code maps to. */
@@ -690,6 +735,8 @@ export function diagnosticFor(code: ValidationCode): string {
  * @param codeSystemVersion - The code-system release record, for a finding a terminology service
  *   produced only. Omit it for every finding no service was consulted for; passing
  *   `{ declared: false }` is the distinct claim that a service answered and named no release.
+ * @param sliceReason - Why slice membership was not decided, for a `PROFILE_SLICE_UNCHECKED`
+ *   finding only.
  * @example
  * ```ts
  * import { validationIssue } from "@cosyte/fhir";
@@ -702,10 +749,11 @@ export function validationIssue(
   expression: string,
   constraint?: string,
   codeSystemVersion?: CodeSystemVersionRecord,
+  sliceReason?: SliceUncheckedReason,
 ): ValidationIssue {
   const issue: ValidationIssue = { code, severity, type: ISSUE_TYPE_OF[code], expression };
   const withConstraint = constraint === undefined ? issue : { ...issue, constraint };
-  return codeSystemVersion === undefined
-    ? withConstraint
-    : { ...withConstraint, codeSystemVersion };
+  const withVersion =
+    codeSystemVersion === undefined ? withConstraint : { ...withConstraint, codeSystemVersion };
+  return sliceReason === undefined ? withVersion : { ...withVersion, sliceReason };
 }

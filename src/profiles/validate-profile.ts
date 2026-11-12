@@ -26,11 +26,19 @@
  * parent slice's membership (the R4 blood-pressure shape, where
  * `component:SystolicBP.code.coding:SBPCode.code` fixes the code the component slicing
  * discriminates on). A slicing reported `PROFILE_SLICE_UNCHECKED` assigns no occurrence, so its
- * slices' own constraints are not checked either: membership is never assumed.
+ * slices' own constraints are not checked either: membership is never assumed. The finding carries
+ * its `sliceReason`.
+ *
+ * **`type` and `profile` discriminators.** A `type` discriminator is decided from the occurrence's
+ * concrete type (a choice suffix or a `resourceType`), through `resolve()` over the resource's
+ * `contained` set or, for a Bundle, its entries when the path ends in it; a slice's `targetProfile`
+ * there names a type through the base definitions or {@link ProfileOptions.profiles}. A `profile`
+ * discriminator is not decided yet: a slicing that uses one is reported `PROFILE_SLICE_UNCHECKED`
+ * with the `profile-discriminator` reason.
  *
  * Every finding is **value-free**, a code, a severity, and a FHIRPath location, never a value.
  * **Deferred:** binding enforcement from profile bindings (the terminology layer already covers
- * bindings), the `profile`/`type` discriminators (need FHIRPath), and invariant `constraint`s.
+ * bindings), and invariant `constraint`s (the invariant layer, {@link ./invariants.js}).
  *
  * @packageDocumentation
  */
@@ -44,19 +52,86 @@ import {
   type FhirComplex,
   type FhirNode,
 } from "../model/index.js";
+import { buildBundleIndex, containedIndex, resolveReference } from "../bundle/references.js";
 import { primitiveString } from "../safety/codes.js";
 import { UNBOUNDED } from "../validate/schema.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "../validate/issues.js";
 import { matchesFixed, matchesPattern } from "./fixed-pattern.js";
 import { SliceScope } from "./scope.js";
-import { isSliceOf, matchSlices, resolveSlices } from "./slicing.js";
+import { isSliceOf, matchSlices, resolveSlices, type SliceEnvironment } from "./slicing.js";
 import { snapshotElements, type BaseResolver } from "./snapshot.js";
 import type { ElementDefinition, StructureDefinition } from "./structure-definition.js";
 
 /** Options for {@link collectProfileIssues}. */
 export interface ProfileOptions {
-  /** Base resolver for snapshot generation, needed only when the profile carries no snapshot. */
-  readonly resolve?: BaseResolver;
+  /**
+   * Base resolver for snapshot generation, needed only when the profile carries no snapshot. A
+   * `type` slicing discriminator through `resolve()` also asks it for a slice's `targetProfile`
+   * the supplied set does not carry, to read the type that profile constrains.
+   */
+  readonly resolve?: BaseResolver | undefined;
+  /**
+   * The supplied profile set. A `type` slicing discriminator through `resolve()` reads the type a
+   * slice's `targetProfile` constrains from the profile here at that canonical (and version, when the
+   * canonical pins one); one neither here, nor a base R4 type, nor returned by {@link resolve} leaves
+   * the slicing unchecked.
+   */
+  readonly profiles?: readonly StructureDefinition[] | undefined;
+}
+
+/**
+ * The {@link SliceEnvironment} for a resource validated against a profile: reference resolution
+ * over its closure (its `contained` set and, for a Bundle, its entries), and the type a supplied
+ * profile constrains.
+ *
+ * @param resource - The resource model being validated.
+ * @param options - The supplied profile set and base resolver.
+ * @returns The environment the slicing of this resource is decided in.
+ * @internal
+ */
+export function sliceEnvironment(
+  resource: FhirComplex,
+  options: ProfileOptions = {},
+): SliceEnvironment {
+  const contained = containedIndex(resource);
+  const closure =
+    resourceType(resource) === "Bundle"
+      ? { contained, bundle: buildBundleIndex(resource) }
+      : { contained };
+  return {
+    resolve: (reference) => {
+      // Only a resolved answer carries a target.
+      const answer: { readonly status: string; readonly target?: FhirComplex } = resolveReference(
+        reference,
+        closure,
+      );
+      return answer.target;
+    },
+    profileType: (canonical) => {
+      const types = profileTypes(canonical, options);
+      return types.size === 1 ? [...types][0] : undefined;
+    },
+  };
+}
+
+/**
+ * The types the profiles a canonical names constrain: the supplied ones at that url (and version,
+ * when the canonical pins one), else the one the resolver returns there.
+ */
+function profileTypes(canonical: string, options: ProfileOptions): Set<string> {
+  const bar = canonical.indexOf("|");
+  const url = bar === -1 ? canonical : canonical.slice(0, bar);
+  const version = bar === -1 ? undefined : canonical.slice(bar + 1);
+  const fits = (p: StructureDefinition): boolean =>
+    p.url === url && (version === undefined || p.version === version);
+  const types = new Set<string>();
+  options.profiles?.forEach((p) => {
+    if (fits(p)) types.add(p.type);
+  });
+  if (types.size > 0) return types;
+  const resolved = options.resolve?.(url);
+  if (resolved !== undefined && fits(resolved)) types.add(resolved.type);
+  return types;
 }
 
 /**
@@ -87,7 +162,8 @@ export function collectProfileIssues(
   const root = rootPath(rt);
 
   const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
-  const scope = new SliceScope(resource, root, snapshot);
+  const environment = sliceEnvironment(resource, options);
+  const scope = new SliceScope(resource, root, snapshot, environment);
   const issues: ValidationIssue[] = [];
 
   for (const el of snapshot) {
@@ -140,7 +216,7 @@ export function collectProfileIssues(
 
       // slicing, evaluated within this parent occurrence.
       if (el.slicing !== undefined) {
-        collectSlicingIssues(group.children, here, snapshot, el, issues);
+        collectSlicingIssues(group.children, group.types, here, snapshot, el, environment, issues);
       }
     }
   }
@@ -186,19 +262,28 @@ function collectNoSlicingIssues(
 /** Emit the slice findings for one sliced element's occurrences within a single parent context. */
 function collectSlicingIssues(
   occ: readonly FhirNode[],
+  occurrenceTypes: readonly (string | undefined)[],
   slicedPath: string,
   snapshot: readonly ElementDefinition[],
   slicedElement: ElementDefinition,
+  environment: SliceEnvironment,
   issues: ValidationIssue[],
 ): void {
   const slices = resolveSlices(snapshot, slicedElement);
   /* v8 ignore next -- the `?? []` is unreachable: called only for an element that declares slicing */
   const discriminators = slicedElement.slicing?.discriminator ?? [];
-  const result = matchSlices(occ, slices, discriminators);
+  const result = matchSlices(occ, slices, discriminators, { ...environment, occurrenceTypes });
 
   if (result.unchecked) {
     issues.push(
-      validationIssue("PROFILE_SLICE_UNCHECKED", ISSUE_SEVERITIES.INFORMATION, slicedPath),
+      validationIssue(
+        "PROFILE_SLICE_UNCHECKED",
+        ISSUE_SEVERITIES.INFORMATION,
+        slicedPath,
+        undefined,
+        undefined,
+        result.reason,
+      ),
     );
     return;
   }

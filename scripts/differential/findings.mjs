@@ -88,6 +88,7 @@ export function ourFindings(text, options = {}) {
         location: String(i.expression),
         code: String(i.code),
         ...(i.constraint === undefined ? {} : { constraint: String(i.constraint) }),
+        ...(i.sliceReason === undefined ? {} : { sliceReason: String(i.sliceReason) }),
       })),
       parseRefused: false,
     };

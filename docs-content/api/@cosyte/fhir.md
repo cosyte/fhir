@@ -1516,6 +1516,13 @@ Options for [collectInvariantIssues](#collectinvariantissues).
 
 #### Properties
 
+##### profiles?
+
+> `readonly` `optional` **profiles?**: readonly [`StructureDefinition`](#structuredefinition)[]
+
+The supplied profile set, so a slicing discriminated by `type` through `resolve()` decides
+which occurrences a slice's invariants apply to exactly as the profile layer decides it.
+
 ##### resolve?
 
 > `readonly` `optional` **resolve?**: [`BaseResolver`](#baseresolver)
@@ -2002,11 +2009,22 @@ Options for [collectProfileIssues](#collectprofileissues).
 
 #### Properties
 
+##### profiles?
+
+> `readonly` `optional` **profiles?**: readonly [`StructureDefinition`](#structuredefinition)[]
+
+The supplied profile set. A `type` slicing discriminator through `resolve()` reads the type a
+slice's `targetProfile` constrains from the profile here at that canonical (and version, when the
+canonical pins one); one neither here, nor a base R4 type, nor returned by [resolve](#resolve-1) leaves
+the slicing unchecked.
+
 ##### resolve?
 
 > `readonly` `optional` **resolve?**: [`BaseResolver`](#baseresolver)
 
-Base resolver for snapshot generation, needed only when the profile carries no snapshot.
+Base resolver for snapshot generation, needed only when the profile carries no snapshot. A
+`type` slicing discriminator through `resolve()` also asks it for a slice's `targetProfile`
+the supplied set does not carry, to read the type that profile constrains.
 
 ***
 
@@ -2908,6 +2926,67 @@ The constraint value node.
 
 ***
 
+### SliceContext
+
+[SliceEnvironment](#sliceenvironment) plus what the caller knows about the occurrences themselves: the concrete
+type of each, by position, where the sliced element is a choice (`valueQuantity` → `"Quantity"`).
+
+#### Extends
+
+- [`SliceEnvironment`](#sliceenvironment)
+
+#### Properties
+
+##### occurrenceTypes?
+
+> `readonly` `optional` **occurrenceTypes?**: readonly (`string` \| `undefined`)[]
+
+Per occurrence, in order, its choice suffix, or `undefined` when it is not a choice variant.
+
+##### profileType?
+
+> `readonly` `optional` **profileType?**: (`canonical`) => `string` \| `undefined`
+
+The resource type a profile canonical constrains, when the profile is known: how a `type`
+discriminator through `resolve()` reads a slice's `targetProfile`.
+
+###### Parameters
+
+###### canonical
+
+`string`
+
+###### Returns
+
+`string` \| `undefined`
+
+###### Inherited from
+
+[`SliceEnvironment`](#sliceenvironment).[`profileType`](#profiletype-1)
+
+##### resolve?
+
+> `readonly` `optional` **resolve?**: (`reference`) => [`FhirComplex`](#fhircomplex) \| `undefined`
+
+Resolve a `Reference.reference` string to the resource it names in the closure (the resource's
+`contained` set and, for a Bundle, its entries), or `undefined` when it names none there.
+
+###### Parameters
+
+###### reference
+
+`string`
+
+###### Returns
+
+[`FhirComplex`](#fhircomplex) \| `undefined`
+
+###### Inherited from
+
+[`SliceEnvironment`](#sliceenvironment).[`resolve`](#resolve-3)
+
+***
+
 ### SliceDefinition
 
 A resolved slice: its name, cardinality, value constraints, and existence expectations.
@@ -2944,6 +3023,14 @@ The slice's minimum cardinality, when stated.
 
 The slice name (e.g. `"VSCat"`).
 
+##### types?
+
+> `readonly` `optional` **types?**: `ReadonlyMap`\<`string`, readonly [`ElementType`](#elementtype)[]\>
+
+The types the slice allows, by path relative to the sliced element (`"$this"` for the slice
+element itself), from the slice element and its own descendants. Read by the `type`
+discriminator. Absent on a definition built by hand, which then decides none.
+
 ##### unsatisfiableExists
 
 > `readonly` **unsatisfiableExists**: `ReadonlySet`\<`string`\>
@@ -2953,6 +3040,54 @@ No instance can meet such an expectation, so an `exists` discriminator on one of
 assigns no occurrence to the slice. Kept apart from [existsExpectations](#existsexpectations) rather than
 resolved into a boolean there: neither boolean is true of a contradiction, and picking one
 admits occurrences the profile forbids.
+
+***
+
+### SliceEnvironment
+
+What deciding a `type` discriminator needs beyond the occurrence itself, supplied by the profile
+layer. Every member is optional; a discriminator that needs a missing one is reported unchecked
+with its reason rather than guessed.
+
+#### Extended by
+
+- [`SliceContext`](#slicecontext)
+
+#### Properties
+
+##### profileType?
+
+> `readonly` `optional` **profileType?**: (`canonical`) => `string` \| `undefined`
+
+The resource type a profile canonical constrains, when the profile is known: how a `type`
+discriminator through `resolve()` reads a slice's `targetProfile`.
+
+###### Parameters
+
+###### canonical
+
+`string`
+
+###### Returns
+
+`string` \| `undefined`
+
+##### resolve?
+
+> `readonly` `optional` **resolve?**: (`reference`) => [`FhirComplex`](#fhircomplex) \| `undefined`
+
+Resolve a `Reference.reference` string to the resource it names in the closure (the resource's
+`contained` set and, for a Bundle, its entries), or `undefined` when it names none there.
+
+###### Parameters
+
+###### reference
+
+`string`
+
+###### Returns
+
+[`FhirComplex`](#fhircomplex) \| `undefined`
 
 ***
 
@@ -2967,6 +3102,12 @@ The outcome of matching a sliced element's instance occurrences to its slices.
 > `readonly` **assignments**: readonly (`string` \| `undefined`)[]
 
 Per instance occurrence (in order), the matched slice name, or `undefined` when none matched.
+
+##### reason?
+
+> `readonly` `optional` **reason?**: [`SliceUncheckedReason`](#sliceuncheckedreason)
+
+Why membership could not be evaluated, when [unchecked](#unchecked-1) is `true`.
 
 ##### unchecked
 
@@ -3334,6 +3475,14 @@ FHIRPath location of the finding.
 ##### severity
 
 > `readonly` **severity**: [`ValidationSeverity`](#validationseverity)
+
+##### sliceReason?
+
+> `readonly` `optional` **sliceReason?**: [`SliceUncheckedReason`](#sliceuncheckedreason)
+
+Why slice membership was not decided, on a `PROFILE_SLICE_UNCHECKED` finding and only there
+([SLICE\_UNCHECKED\_REASONS](#slice_unchecked_reasons)). A fixed reason about the profile or the closure, never an
+instance value. `undefined` on every other finding.
 
 ##### type
 
@@ -3891,6 +4040,14 @@ A resolver from a resource type name to its [ResourceSchema](#resourceschema) (b
 > **SerializeErrorCode** = *typeof* [`SERIALIZE_ERROR_CODES`](#serialize_error_codes)\[keyof *typeof* [`SERIALIZE_ERROR_CODES`](#serialize_error_codes)\]
 
 Discriminant union of every [SERIALIZE\_ERROR\_CODES](#serialize_error_codes) value.
+
+***
+
+### SliceUncheckedReason
+
+> **SliceUncheckedReason** = *typeof* [`SLICE_UNCHECKED_REASONS`](#slice_unchecked_reasons)\[keyof *typeof* [`SLICE_UNCHECKED_REASONS`](#slice_unchecked_reasons)\]
+
+One of the [SLICE\_UNCHECKED\_REASONS](#slice_unchecked_reasons).
 
 ***
 
@@ -5117,6 +5274,68 @@ try {
 
 ***
 
+### SLICE\_UNCHECKED\_REASONS
+
+> `const` **SLICE\_UNCHECKED\_REASONS**: `object`
+
+Why a slicing was reported `PROFILE_SLICE_UNCHECKED`: which part of deciding membership this
+library could not do. Each is a fixed reason about the profile or the closure, never instance
+content, so it rides on the finding as [ValidationIssue.sliceReason](#slicereason).
+
+- `no-discriminator`: the slicing declares no discriminator.
+- `discriminator-unsupported`: a discriminator kind outside R4's `value | exists | pattern | type |
+  profile` (the R5 `position`, or an unknown kind).
+- `profile-discriminator`: a `profile` discriminator, which this library does not decide yet; a
+  slicing with one among its discriminators is left unchecked whatever else it discriminates on.
+- `path-unsupported`: a `type` discriminator path outside the element-path subset (dotted names,
+  `[x]` choices, `$this` and `resolve()`), such as `ofType(...)`, or one that selects more than
+  one node in an occurrence.
+- `slice-unconstrained`: a slice declares nothing at a discriminator path: no fixed or pattern
+  value, no cardinality for `exists`, no type for `type`.
+- `type-undetermined`: an occurrence's concrete type cannot be read (it is neither a choice
+  variant nor a resource), or a slice names an abstract type such as `Resource`.
+- `target-unresolved`: a `resolve()` reference names nothing in the resource's `contained` or,
+  for a Bundle, its entries.
+- `profile-unavailable`: a slice's `targetProfile` names a profile that is neither a base R4 type,
+  nor in the supplied profile set, nor returned by the base resolver, or whose supplied versions
+  constrain different types, so the type it asks for is unknown.
+
+#### Type Declaration
+
+##### DISCRIMINATOR\_UNSUPPORTED
+
+> `readonly` **DISCRIMINATOR\_UNSUPPORTED**: `"discriminator-unsupported"` = `"discriminator-unsupported"`
+
+##### NO\_DISCRIMINATOR
+
+> `readonly` **NO\_DISCRIMINATOR**: `"no-discriminator"` = `"no-discriminator"`
+
+##### PATH\_UNSUPPORTED
+
+> `readonly` **PATH\_UNSUPPORTED**: `"path-unsupported"` = `"path-unsupported"`
+
+##### PROFILE\_DISCRIMINATOR
+
+> `readonly` **PROFILE\_DISCRIMINATOR**: `"profile-discriminator"` = `"profile-discriminator"`
+
+##### PROFILE\_UNAVAILABLE
+
+> `readonly` **PROFILE\_UNAVAILABLE**: `"profile-unavailable"` = `"profile-unavailable"`
+
+##### SLICE\_UNCONSTRAINED
+
+> `readonly` **SLICE\_UNCONSTRAINED**: `"slice-unconstrained"` = `"slice-unconstrained"`
+
+##### TARGET\_UNRESOLVED
+
+> `readonly` **TARGET\_UNRESOLVED**: `"target-unresolved"` = `"target-unresolved"`
+
+##### TYPE\_UNDETERMINED
+
+> `readonly` **TYPE\_UNDETERMINED**: `"type-undetermined"` = `"type-undetermined"`
+
+***
+
 ### SNOMED\_SCT
 
 > `const` **SNOMED\_SCT**: `"http://snomed.info/sct"` = `"http://snomed.info/sct"`
@@ -5518,10 +5737,11 @@ checked as usual.
 
 > `readonly` **PROFILE\_SLICE\_UNCHECKED**: `"PROFILE_SLICE_UNCHECKED"` = `"PROFILE_SLICE_UNCHECKED"`
 
-Profile, a slicing whose discriminator this library cannot evaluate (a `profile`
-discriminator, which needs recursive profile resolution, or the R5-only `position`). Emitted as
-`information` so slice membership is reported **unchecked, never silently passed** (the
-fail-safe): the library does not guess a slice assignment it cannot justify.
+Profile, a slicing whose membership this library could not decide (a `profile` discriminator,
+the R5-only `position`, a reference that leaves the closure, ...; the finding's
+`sliceReason` names which). Emitted as `information` so slice membership is reported
+**unchecked, never silently passed** (the fail-safe): the library does not guess a slice
+assignment it cannot justify.
 
 ##### PROFILE\_SLICE\_UNMATCHED
 
@@ -7838,14 +8058,15 @@ matchesPattern(instance, pattern); // true, the extra system/display are allowed
 
 ### matchSlices()
 
-> **matchSlices**(`instances`, `slices`, `discriminators`): [`SliceMatchResult`](#slicematchresult)
+> **matchSlices**(`instances`, `slices`, `discriminators`, `context?`): [`SliceMatchResult`](#slicematchresult)
 
 Assign each instance occurrence of a sliced element to a slice (or none), per the discriminators.
 
-Returns `unchecked: true`, and no assignments the caller should act on, when membership cannot be
-evaluated: an empty discriminator set, any discriminator of an unsupported type (`type`, `profile`,
-R5 `position`, …), or any slice that declares no constraint at a discriminator path. The library
-does **not** guess a slice assignment it cannot justify.
+Returns `unchecked: true`, with the [SliceMatchResult.reason](#reason) and no assignments the caller
+should act on, when membership cannot be evaluated: an empty discriminator set, a discriminator of
+an unsupported kind (R5 `position`, …), a `profile` discriminator (not decided yet), a slice that
+declares nothing at a discriminator path, or a `type` discriminator whose answer needs what
+`context` does not supply. The library does **not** guess a slice assignment it cannot justify.
 
 #### Parameters
 
@@ -7867,11 +8088,19 @@ readonly `Discriminator`[]
 
 The slicing's discriminators.
 
+##### context?
+
+[`SliceContext`](#slicecontext) = `{}`
+
+What a `type` discriminator needs: each occurrence's choice suffix, reference
+  resolution, and the type a target profile constrains. Optional; without it a type is decided
+  only from what the occurrences state themselves (a resource's `resourceType`).
+
 #### Returns
 
 [`SliceMatchResult`](#slicematchresult)
 
-The per-occurrence assignments and the `unchecked` flag.
+The per-occurrence assignments, the `unchecked` flag and, when unchecked, its reason.
 
 #### Example
 
@@ -7879,6 +8108,10 @@ The per-occurrence assignments and the `unchecked` flag.
 import { matchSlices } from "@cosyte/fhir";
 const result = matchSlices(categoryOccurrences, slices, [{ type: "pattern", path: "$this" }]);
 result.assignments; // e.g. ["VSCat", undefined]
+const values = matchSlices([quantityNode], valueSlices, [{ type: "type", path: "$this" }], {
+  occurrenceTypes: ["Quantity"],
+});
+values.assignments; // e.g. ["valueQuantity"]
 ```
 
 ***
@@ -10148,7 +10381,7 @@ validateUcumShape("[lb_av"); // "invalid", unbalanced bracket
 
 ### validationIssue()
 
-> **validationIssue**(`code`, `severity`, `expression`, `constraint?`, `codeSystemVersion?`): [`ValidationIssue`](#validationissue)
+> **validationIssue**(`code`, `severity`, `expression`, `constraint?`, `codeSystemVersion?`, `sliceReason?`): [`ValidationIssue`](#validationissue)
 
 Construct a value-free [ValidationIssue](#validationissue). The `IssueType` is fixed by the code; only the
 `severity` is caller-chosen (it varies with lenient vs strict mode for some codes).
@@ -10186,6 +10419,13 @@ The spec constraint key, for an invariant finding only (e.g. `"ait-1"`).
 The code-system release record, for a finding a terminology service
   produced only. Omit it for every finding no service was consulted for; passing
   `{ declared: false }` is the distinct claim that a service answered and named no release.
+
+##### sliceReason?
+
+[`SliceUncheckedReason`](#sliceuncheckedreason)
+
+Why slice membership was not decided, for a `PROFILE_SLICE_UNCHECKED`
+  finding only.
 
 #### Returns
 

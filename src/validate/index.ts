@@ -23,9 +23,16 @@ export {
   validationIssue,
   ISSUE_SEVERITIES,
   ISSUE_TYPES,
+  SLICE_UNCHECKED_REASONS,
   VALIDATION_CODES,
 } from "./issues.js";
-export type { IssueType, ValidationCode, ValidationIssue, ValidationSeverity } from "./issues.js";
+export type {
+  IssueType,
+  SliceUncheckedReason,
+  ValidationCode,
+  ValidationIssue,
+  ValidationSeverity,
+} from "./issues.js";
 export { isPrimitiveType, validatePrimitiveValue, PRIMITIVE_TYPES } from "./primitives.js";
 export type { PrimitiveType } from "./primitives.js";
 export { baseSchema, buildRegistry, isChoice, resolveElement, UNBOUNDED } from "./schema.js";
