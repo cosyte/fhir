@@ -233,6 +233,27 @@ describe("a reference's target profiles", () => {
     ]);
   });
 
+  it("places a finding on each repeat of an element that repeats", () => {
+    const focus = sd("Observation", [
+      {
+        id: "Observation.focus",
+        path: "Observation.focus",
+        type: [{ code: "Reference", targetProfile: [`${CORE}Patient`] }],
+      },
+    ]);
+    expect(
+      profileFindings(
+        collectProfileIssues(
+          parse({
+            ...OBS,
+            focus: [{ reference: "Patient/fake-1" }, { reference: "Group/fake-1" }],
+          }),
+          focus,
+        ),
+      ),
+    ).toEqual([["PROFILE_REFERENCE_TARGET_MISMATCH", "Observation.focus[1]"]]);
+  });
+
   it("reports a canonical's target profile as not checked, and a type without one as nothing", () => {
     const canonical = sd("Observation", [
       {
@@ -790,6 +811,25 @@ describe("constraints reported as not checked", () => {
     expect(findings(differs, { ...OBS, category: [{ text: "fake-a" }] }, false)).toEqual([
       ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.category:fake", "slice-invariant"],
     ]);
+    // The same expression under another key is another invariant.
+    const otherKey = sd("Observation", [
+      {
+        id: "Observation.category",
+        path: "Observation.category",
+        slicing: { discriminator: [{ type: "pattern", path: "$this" }], rules: "open" },
+        constraint: [{ key: "fake-2", severity: "error", expression: "text.exists()" }],
+      },
+      {
+        id: "Observation.category:fake",
+        path: "Observation.category",
+        sliceName: "fake",
+        patternCodeableConcept: { text: "fake-a" },
+        constraint: [{ key: "fake-1", severity: "error", expression: "text.exists()" }],
+      },
+    ]);
+    expect(findings(otherKey, { ...OBS, category: [{ text: "fake-a" }] }, false)).toEqual([
+      ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.category:fake", "slice-invariant"],
+    ]);
     // A sliced element with no invariant of its own shares none.
     const bare = sd("Observation", [
       {
@@ -916,6 +956,13 @@ describe("what the model records it does not read", () => {
     expect(el?.minValue?.type).toBe("Integer");
     expect(el?.maxValue?.type).toBe("Decimal");
     expect(el?.unmodeled).toBeUndefined();
+    // An element that states none of them carries none, not even as an absent member.
+    const bare = req(
+      sd("Observation", [{ id: "Observation.status", path: "Observation.status" }]).snapshot?.find(
+        (e) => e.path === "Observation.status",
+      ),
+    );
+    expect(Object.keys(bare)).toEqual(["path", "id"]);
   });
 
   it("carries a differential's maxLength, minValue[x] and maxValue[x] into the snapshot", () => {
@@ -965,6 +1012,32 @@ describe("what the model records it does not read", () => {
     expect(findingsFor({ multipleBirthInteger: 4, gender: "male" })).toEqual([
       ["PROFILE_MAX_VALUE", "Patient.multipleBirth[x]"],
     ]);
+    // A differential silent on them keeps the base's.
+    const silent = req(
+      loadStructureDefinition(
+        parse({
+          resourceType: "StructureDefinition",
+          url: `${BASE}fake-silent`,
+          type: "Patient",
+          baseDefinition: `${BASE}fake-derived`,
+          differential: {
+            element: [
+              { id: "Patient.multipleBirth[x]", path: "Patient.multipleBirth[x]", short: "x" },
+            ],
+          },
+        }),
+      ),
+    );
+    const chain = (url: string): StructureDefinition | undefined =>
+      url === `${BASE}fake-derived` ? derived : resolve(url);
+    const silentFindings = (n: number): [string, string, string?][] =>
+      profileFindings(
+        collectProfileIssues(parse({ resourceType: "Patient", multipleBirthInteger: n }), silent, {
+          resolve: chain,
+        }),
+      );
+    expect(silentFindings(1)).toEqual([["PROFILE_MIN_VALUE", "Patient.multipleBirth[x]"]]);
+    expect(silentFindings(4)).toEqual([["PROFILE_MAX_VALUE", "Patient.multipleBirth[x]"]]);
   });
 });
 
@@ -1044,6 +1117,10 @@ describe("the edges of each check", () => {
     expect(findings(subject(`${CORE}fakePatient`), group)).toEqual(unchecked);
     expect(findings(subject(`${CORE}Patient-fake`), group)).toEqual(unchecked);
     expect(findings(subject(`${CORE}Group`), group)).toEqual([]);
+    // As long as a core canonical, and capitalized where a core tail would start: still not core.
+    expect(
+      findings(subject(`${BASE}xPatient`), { ...OBS, subject: { reference: "Patient/fake-1" } }),
+    ).toEqual(unchecked);
   });
 
   it("reports a maxLength on a complex value, a bound with no number, and an unreadable number", () => {
@@ -1061,6 +1138,7 @@ describe("the edges of each check", () => {
     const notChecked = [["PROFILE_CONSTRAINT_UNCHECKED", "Observation.value[x]", "value-range"]];
     expect(findings(bound("fake"), { ...OBS, valueInteger: 1 })).toEqual(notChecked);
     expect(findings(bound(true), { ...OBS, valueInteger: 1 })).toEqual(notChecked);
+    expect(findings(bound({ value: 1 }), { ...OBS, valueInteger: 1 })).toEqual(notChecked);
     const xml = parseResourceXml(
       '<Patient xmlns="http://hl7.org/fhir"><multipleBirthInteger value="fake"/></Patient>',
     ).resource;

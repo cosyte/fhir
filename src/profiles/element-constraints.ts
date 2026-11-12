@@ -35,7 +35,7 @@
  * @internal
  */
 
-import { compareDecimals, decimalFromLexical, FhirDecimal } from "../model/decimal.js";
+import { compareDecimals, decimalFromLexical, type FhirDecimal } from "../model/decimal.js";
 import {
   getProperty,
   isComplex,
@@ -228,6 +228,7 @@ function checkTargets(
       continue;
     }
     const verdict = targetVerdict(occurrence.node, canonicals, environment);
+    // `undefined`: a base R4 canonical names the target's type, so the constraint holds.
     if (verdict === "mismatch") {
       issues.push(
         validationIssue(
@@ -249,7 +250,7 @@ function anyResource(canonical: string): boolean {
 }
 
 /**
- * Whether a reference's target is of a type its `targetProfile`s allow: `held` when a base R4
+ * Whether a reference's target is of a type its `targetProfile`s allow: `undefined` when a base R4
  * canonical names it, `mismatch` when every canonical names a known type and none is it, and
  * `unchecked` when its type cannot be read, a canonical's type is unknown, or only a constraining
  * profile names it.
@@ -258,14 +259,14 @@ function targetVerdict(
   node: FhirNode,
   canonicals: readonly string[],
   environment: Required<SliceEnvironment>,
-): "held" | "mismatch" | "unchecked" {
+): "mismatch" | "unchecked" | undefined {
   const target = targetType(node, environment);
   if (target === undefined) return "unchecked";
   let open = false;
   for (const canonical of canonicals) {
     const base = coreType(canonical);
     if (base !== undefined) {
-      if (base === target) return "held";
+      if (base === target) return undefined;
       continue;
     }
     const constrained = environment.profileType(canonical);
@@ -284,7 +285,7 @@ function targetType(node: FhirNode, environment: Required<SliceEnvironment>): st
   if (reference === undefined) return undefined;
   const resolved = environment.resolve(reference);
   const type = resolved === undefined ? parseReference(reference).type : resourceType(resolved);
-  return type !== undefined && /^[A-Z][A-Za-z]*$/u.test(type) ? type : undefined;
+  return /^[A-Z][A-Za-z]*$/u.test(type ?? "") ? type : undefined;
 }
 
 /** The type a base R4 canonical names (its capitalized tail), or `undefined` for any other. */
@@ -353,9 +354,8 @@ function checkBound(
 /** The number a primitive holds, whichever reader built it, or `undefined`. */
 function decimalOf(node: FhirNode): FhirDecimal | undefined {
   if (!isPrimitive(node)) return undefined;
-  const { value } = node;
-  if (value instanceof FhirDecimal) return value;
-  return typeof value === "string" ? decimalFromLexical(value) : undefined;
+  // A `FhirDecimal` spells its own lexical text; a boolean or an absent value spells no number.
+  return decimalFromLexical(String(node.value));
 }
 
 /**
@@ -373,7 +373,7 @@ function bindingChecked(
   const name = el.path.slice(context.resourceType.length + 1);
   const enumerated = context.schema?.elements[name]?.binding?.valueSet;
   const valueSet = binding.valueSet;
-  if (enumerated === undefined || valueSet === undefined) return false;
+  if (valueSet === undefined) return false;
   const bar = valueSet.indexOf("|");
   const url = bar === -1 ? valueSet : valueSet.slice(0, bar);
   const version = bar === -1 ? R4_VERSION : valueSet.slice(bar + 1);
@@ -385,8 +385,8 @@ function bindingChecked(
  * the sliced element's invariants on every occurrence, and a slice's own on none.
  */
 function hasOwnSliceInvariant(slice: ElementDefinition, sliced: ElementDefinition): boolean {
-  const shared = sliced.constraint ?? [];
+  const shared = sliced.constraint;
   return (slice.constraint ?? []).some(
-    (c) => !shared.some((s) => s.key === c.key && s.expression === c.expression),
+    (c) => shared?.some((s) => s.key === c.key && s.expression === c.expression) !== true,
   );
 }

@@ -353,22 +353,14 @@ function collectSlicingIssues(
       issues.push(validationIssue("CARDINALITY_MAX", ISSUE_SEVERITIES.ERROR, slicePath));
     }
     // The slice's own types, targets, length, range, and what is not checked, on its members.
-    // Stryker disable next-line ConditionalExpression: unreachable when false, `resolveSlices` reads every slice from this snapshot
-    if (sliceElement !== undefined) {
-      const members = occ.flatMap((node, i) =>
-        result.assignments[i] === slice.sliceName
-          ? [{ node, type: occurrenceTypes[i], path: located(slicedPath, i, occ.length) }]
-          : [],
-      );
-      collectElementConstraintIssues(
-        sliceElement,
-        members,
-        slicePath,
-        context,
-        issues,
-        slicedElement,
-      );
-    }
+    /* v8 ignore next -- the `?? slicedElement` is unreachable: `resolveSlices` reads every slice from this snapshot */
+    const own = sliceElement ?? slicedElement;
+    const members = occ.flatMap((node, i) =>
+      result.assignments[i] === slice.sliceName
+        ? [{ node, type: occurrenceTypes[i], path: located(slicedPath, i, occ.length) }]
+        : [],
+    );
+    collectElementConstraintIssues(own, members, slicePath, context, issues, slicedElement);
   }
 }
 

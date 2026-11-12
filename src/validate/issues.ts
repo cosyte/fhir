@@ -796,6 +796,7 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   PROFILE_FIXED_MISMATCH:
     "Element value does not exactly match the value the profile fixes for it.",
   PROFILE_PATTERN_MISMATCH: "Element does not match the pattern the profile requires for it.",
+  // Stryker disable StringLiteral: a module-level table, built once when the module loads, which the mutation runner does not reload per mutant; test/validation-codes.test.ts reads it
   PROFILE_TYPE_MISMATCH: "Element is of a type the profile does not allow for it.",
   PROFILE_REFERENCE_TARGET_MISMATCH:
     "Reference names a resource of a type none of the profile's target profiles allows.",
@@ -804,6 +805,7 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   PROFILE_MAX_VALUE: "Element value is above the maximum value the profile sets for it.",
   PROFILE_CONSTRAINT_UNCHECKED:
     "Profile constraint on this element was not checked; conformance to it is not asserted.",
+  // Stryker restore StringLiteral
   REFERENCE_UNRESOLVED:
     "Reference could not be resolved within the supplied closure; it is preserved and flagged, " +
     "never dropped (the target may live outside this Bundle).",

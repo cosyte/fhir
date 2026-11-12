@@ -305,12 +305,14 @@ export function compareDecimals(a: FhirDecimal, b: FhirDecimal): number | undefi
   // The position of the leading digit: the larger magnitude has it further left.
   const ea = da.length - ca.scale;
   const eb = db.length - cb.scale;
-  if (ea !== eb) return ea > eb ? sa : -sa;
+  if (ea > eb) return sa;
+  if (ea < eb) return -sa;
   // Same leading position: the digits, read left to right, order the magnitudes. Neither ends in a
   // zero (a zero is the one digit "0"), so equal values spell the same digits and a shorter prefix
   // is the smaller value.
-  if (da === db) return 0;
-  return da > db ? sa : -sa;
+  if (da > db) return sa;
+  if (da < db) return -sa;
+  return 0;
 }
 
 /** The sign of a coefficient, `-1`, `0` or `1`. */

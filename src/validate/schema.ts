@@ -88,6 +88,10 @@ export function isChoice(element: ElementSchema): boolean {
   return element.types.length > 1;
 }
 
+// Stryker disable all: module-level tables, evaluated once when the module loads, which the
+// mutation runner does not reload per mutant; test/validate-safety-types.test.ts,
+// test/validate-exchange-types.test.ts and test/validate-observation.test.ts pin each one against
+// the R4 definitions, and test/profile-element-constraints.test.ts pins each binding's value set.
 /**
  * The direct elements shared by every resource: `Resource` (`id`, `meta`, `implicitRules`,
  * `language`) plus `DomainResource` (`text`, `contained`, `extension`, `modifierExtension`). All are
@@ -811,6 +815,7 @@ const BUILTIN_SCHEMAS: readonly ResourceSchema[] = [
   { type: "Procedure", elements: PROCEDURE_ELEMENTS },
   { type: "DocumentReference", elements: DOCUMENT_REFERENCE_ELEMENTS },
 ];
+// Stryker restore all
 
 /**
  * A resolver from a resource type name to its {@link ResourceSchema} (base elements merged in), or

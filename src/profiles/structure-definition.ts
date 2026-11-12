@@ -198,7 +198,6 @@ function elementMemberKnown(name: string): boolean {
     "binding",
     "constraint",
     "maxLength",
-    "extension",
     "representation",
     "sliceIsConstraining",
     "label",
@@ -275,17 +274,19 @@ function unmodeledIn(node: FhirComplex): string[] {
   if (binding !== undefined) {
     if (isComplex(binding)) {
       const bindingKnown = (name: string): boolean =>
-        ["strength", "valueSet", "description", "extension"].includes(name);
+        ["strength", "valueSet", "description"].includes(name);
       out.push(...unmodeledOf(binding, bindingKnown, "binding."));
     }
     if (readBinding(binding) === undefined) out.push("binding");
   }
   const type = getProperty(node, "type");
-  for (const item of type === undefined ? [] : isList(type) ? type.items : [type]) {
-    if (!isComplex(item)) continue;
-    const typeKnown = (name: string): boolean =>
-      ["code", "profile", "targetProfile", "extension"].includes(name);
-    out.push(...unmodeledOf(item, typeKnown, "type."));
+  if (type !== undefined) {
+    for (const item of isList(type) ? type.items : [type]) {
+      if (!isComplex(item)) continue;
+      const typeKnown = (name: string): boolean =>
+        ["code", "profile", "targetProfile"].includes(name);
+      out.push(...unmodeledOf(item, typeKnown, "type."));
+    }
   }
   const constraint = getProperty(node, "constraint");
   const stated = constraint === undefined ? 0 : isList(constraint) ? constraint.items.length : 1;
