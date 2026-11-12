@@ -243,3 +243,18 @@ neither format can spell that namespace, so both writers refuse it with
 **What to do**: read the code to find out which shape stopped it, and fix the model rather than the
 writer. In almost every case the underlying document was already non-conformant on the read, and the
 finding raised there names the same position.
+
+## A stack trace points into one long line
+
+A stack trace that runs through the package names a file in `dist/` (`index.mjs` or `index.cjs`)
+and a column on one of a few very long lines, rather than a short line of its own.
+
+We publish the built files with their whitespace left out, so the package is smaller and a cold
+import of it is faster. Only the whitespace goes: every function keeps its name and the code its
+syntax, so each frame still names the package's own function, such as `parseResource` or
+`validateResource`. No source map is published.
+
+**What to do**: read the function names in the trace; they are the ones in the
+[API reference](./api/@cosyte/fhir.md) and in our source. To see the source line, run your program
+against a build of [cosyte/fhir](https://github.com/cosyte/fhir) at the same version: `pnpm build`
+writes source maps beside the files in `dist/`, and `node --enable-source-maps` reads them.

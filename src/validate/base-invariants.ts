@@ -110,9 +110,10 @@ interface BaseConstraint {
  * The base constraints this layer evaluates, verbatim from R4 4.0.1. `DiagnosticReport`,
  * `DocumentReference`, `Encounter`, `MedicationRequest`, `MedicationStatement` and `Procedure`
  * declare no constraint of their own, so they are reached by the `DomainResource`, `Element` and
- * `Extension` rows alone.
+ * `Extension` rows alone. Written inside a function and made on first use ({@link baseConstraints}),
+ * so an import that never validates does not compile or build it.
  */
-const BASE_CONSTRAINTS: readonly BaseConstraint[] = [
+const BASE_CONSTRAINTS = (): readonly BaseConstraint[] => [
   {
     key: "dom-2",
     anchor: { kind: "root" },
@@ -171,6 +172,15 @@ const BASE_CONSTRAINTS: readonly BaseConstraint[] = [
   },
 ];
 
+/** The rows, written out on first use and kept. */
+let baseConstraintTable: readonly BaseConstraint[] | undefined;
+
+/** The table of base constraints, made the first time a validation asks for it. */
+function baseConstraints(): readonly BaseConstraint[] {
+  baseConstraintTable ??= BASE_CONSTRAINTS();
+  return baseConstraintTable;
+}
+
 /**
  * The outcome of one constraint at one focus.
  *
@@ -217,7 +227,7 @@ let compiledTable: readonly Compiled[] | undefined;
 function compiledConstraints(): readonly Compiled[] {
   if (compiledTable !== undefined) return compiledTable;
   let failed = false;
-  const built = BASE_CONSTRAINTS.map((row): Compiled => {
+  const built = baseConstraints().map((row): Compiled => {
     const parsed = compile(row.expression);
     if (parsed.failed) failed = true;
     return { row, ast: parsed.ast };
@@ -226,10 +236,14 @@ function compiledConstraints(): readonly Compiled[] {
   return built;
 }
 
-/** Each key's verbatim expression, to tell a profile's copy of a base constraint from its own. */
-const EXPRESSION_OF: ReadonlyMap<string, string> = new Map(
-  BASE_CONSTRAINTS.map((row) => [row.key, row.expression]),
-);
+/** Each key's verbatim expression, made on first use and kept. */
+let expressionByKey: ReadonlyMap<string, string> | undefined;
+
+/** A key's verbatim expression, to tell a profile's copy of a base constraint from its own. */
+function expressionOf(key: string): string | undefined {
+  expressionByKey ??= new Map(baseConstraints().map((row) => [row.key, row.expression]));
+  return expressionByKey.get(key);
+}
 
 /** The selection `dom-3` starts from, parsed on first use and kept once it has parsed. */
 let containedSelection: Expr | undefined;
@@ -509,8 +523,7 @@ export function collectBaseInvariantFindings(
   };
   const result: BaseInvariantResult = {
     findings,
-    decides: (focus, key, expression) =>
-      EXPRESSION_OF.get(key) === expression && isDecided(focus, key),
+    decides: (focus, key, expression) => expressionOf(key) === expression && isDecided(focus, key),
   };
   if (!BASE_CONSTRAINT_TYPES.has(rt)) return result;
   const root = rootPath(rt);

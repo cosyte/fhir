@@ -659,9 +659,12 @@ export interface ValidationIssue {
   readonly uncheckedConstraint?: ProfileUncheckedConstraint;
 }
 
-/** The fixed R4 `IssueType` each validation code maps to. */
-// Stryker disable next-line ObjectLiteral: a module-level table, built once when the module loads, which the mutation runner does not reload per mutant; test/validation-codes.test.ts reads it
-const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
+/**
+ * The fixed R4 `IssueType` each validation code maps to. Written inside a function and made on
+ * first use ({@link issueTypeOf}), so an import that never validates does not compile or build it.
+ */
+// Stryker disable next-line ObjectLiteral: a module-level table, built once per process on first use, which the mutation runner does not repeat per mutant; test/validation-codes.test.ts reads it
+const ISSUE_TYPE_OF = (): Readonly<Record<ValidationCode, IssueType>> => ({
   UNKNOWN_ELEMENT: ISSUE_TYPES.STRUCTURE,
   RESOURCE_TYPE_UNKNOWN: ISSUE_TYPES.STRUCTURE,
   RESOURCE_NOT_MODELED: ISSUE_TYPES.INFORMATIONAL,
@@ -713,15 +716,25 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   NARRATIVE_ACTIVE_CONTENT: ISSUE_TYPES.SECURITY,
   NARRATIVE_BLOCK_IN_PARAGRAPH: ISSUE_TYPES.STRUCTURE,
   NARRATIVE_EMPTY: ISSUE_TYPES.INVARIANT,
-};
+});
+
+/** The `IssueType` table, made on first use and kept. */
+let issueTypes: Readonly<Record<ValidationCode, IssueType>> | undefined;
+
+/** The fixed R4 `IssueType` of a validation code. */
+function issueTypeOf(code: ValidationCode): IssueType {
+  issueTypes ??= ISSUE_TYPE_OF();
+  return issueTypes[code];
+}
 
 /**
  * The single value-free human-readable line for each code. **This is the redaction chokepoint**: it
  * is keyed only by the code, so no instance value can ever reach `diagnostics`. Every string here is
- * a description of the *kind* of problem, never a rendering of the offending data.
+ * a description of the *kind* of problem, never a rendering of the offending data. Written inside a
+ * function and made on first use ({@link diagnosticFor}), like the `IssueType` table above.
  */
-// Stryker disable next-line ObjectLiteral: a module-level table, built once when the module loads, which the mutation runner does not reload per mutant; test/validation-codes.test.ts reads it
-const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
+// Stryker disable next-line ObjectLiteral: a module-level table, built once per process on first use, which the mutation runner does not repeat per mutant; test/validation-codes.test.ts reads it
+const DIAGNOSTIC_OF = (): Readonly<Record<ValidationCode, string>> => ({
   UNKNOWN_ELEMENT: "Element is not defined at this location in the resource structure.",
   RESOURCE_TYPE_UNKNOWN: "Resource is missing a resourceType and cannot be structurally validated.",
   RESOURCE_NOT_MODELED:
@@ -836,7 +849,10 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
     "attribute, or a script URL), which FHIR forbids and a renderer must not run.",
   NARRATIVE_BLOCK_IN_PARAGRAPH: "Narrative contains a block element inside a paragraph.",
   NARRATIVE_EMPTY: "Narrative has no content other than whitespace.",
-};
+});
+
+/** The diagnostic lines, made on first use and kept. */
+let diagnostics: Readonly<Record<ValidationCode, string>> | undefined;
 
 /**
  * The value-free diagnostic line for a code, the only text that reaches an `OperationOutcome`.
@@ -850,7 +866,8 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
  * ```
  */
 export function diagnosticFor(code: ValidationCode): string {
-  return DIAGNOSTIC_OF[code];
+  diagnostics ??= DIAGNOSTIC_OF();
+  return diagnostics[code];
 }
 
 /**
@@ -883,7 +900,7 @@ export function validationIssue(
   sliceReason?: SliceUncheckedReason,
   uncheckedConstraint?: ProfileUncheckedConstraint,
 ): ValidationIssue {
-  const issue: ValidationIssue = { code, severity, type: ISSUE_TYPE_OF[code], expression };
+  const issue: ValidationIssue = { code, severity, type: issueTypeOf(code), expression };
   const withConstraint = constraint === undefined ? issue : { ...issue, constraint };
   const withVersion =
     codeSystemVersion === undefined ? withConstraint : { ...withConstraint, codeSystemVersion };

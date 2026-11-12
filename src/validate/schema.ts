@@ -88,8 +88,8 @@ export function isChoice(element: ElementSchema): boolean {
   return element.types.length > 1;
 }
 
-// Stryker disable all: module-level tables, evaluated once when the module loads, which the
-// mutation runner does not reload per mutant; test/validate-safety-types.test.ts,
+// Stryker disable all: module-level tables, written out once per process the first time a registry
+// is built, which the mutation runner does not repeat per mutant; test/validate-safety-types.test.ts,
 // test/validate-exchange-types.test.ts and test/validate-observation.test.ts pin each one against
 // the R4 definitions, and test/profile-element-constraints.test.ts pins each binding's value set.
 /**
@@ -119,7 +119,7 @@ const ADMINISTRATIVE_GENDER = ["male", "female", "other", "unknown"] as const;
  * `deceased[x]` and `multipleBirth[x]` are `choice[x]` elements. Complex-typed elements are checked
  * for cardinality and node shape only.
  */
-const PATIENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const PATIENT_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   active: { min: 0, max: 1, types: ["boolean"] },
   name: { min: 0, max: UNBOUNDED, types: ["HumanName"] },
@@ -145,7 +145,7 @@ const PATIENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   generalPractitioner: { min: 0, max: UNBOUNDED, types: ["Reference"] },
   managingOrganization: { min: 0, max: 1, types: ["Reference"] },
   link: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
-};
+});
 
 /**
  * R4 `ObservationStatus`, the required binding on `Observation.status`, in the order the published
@@ -181,7 +181,7 @@ const OBSERVATION_STATUS = [
  * layer. The two FHIRPath invariants on this type (a data-absent reason beside a value, and a
  * component code repeating the observation's own) are the profile/invariant layer's, not this one's.
  */
-const OBSERVATION_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const OBSERVATION_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   basedOn: { min: 0, max: UNBOUNDED, types: ["Reference"] },
   partOf: { min: 0, max: UNBOUNDED, types: ["Reference"] },
@@ -231,7 +231,7 @@ const OBSERVATION_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   hasMember: { min: 0, max: UNBOUNDED, types: ["Reference"] },
   derivedFrom: { min: 0, max: UNBOUNDED, types: ["Reference"] },
   component: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
-};
+});
 
 /**
  * R4 `DiagnosticReportStatus`, the required binding on `DiagnosticReport.status`, in the order the
@@ -261,7 +261,7 @@ const DIAGNOSTIC_REPORT_STATUS = [
  * node shape only, its children deliberately unentered. `code` (preferred), `category` and
  * `conclusionCode` (example) are the terminology layer's.
  */
-const DIAGNOSTIC_REPORT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const DIAGNOSTIC_REPORT_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   basedOn: { min: 0, max: UNBOUNDED, types: ["Reference"] },
   status: {
@@ -289,7 +289,7 @@ const DIAGNOSTIC_REPORT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   conclusion: { min: 0, max: 1, types: ["string"] },
   conclusionCode: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
   presentedForm: { min: 0, max: UNBOUNDED, types: ["Attachment"] },
-};
+});
 
 /**
  * `Condition` direct elements, from the R4 4.0.1 base StructureDefinition (condition.html).
@@ -301,7 +301,7 @@ const DIAGNOSTIC_REPORT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
  * `onset[x]` and `abatement[x]` are five-variant choices. `stage` and `evidence` are backbone
  * elements, modeled for cardinality and node shape only.
  */
-const CONDITION_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const CONDITION_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   clinicalStatus: { min: 0, max: 1, types: ["CodeableConcept"] },
   verificationStatus: { min: 0, max: 1, types: ["CodeableConcept"] },
@@ -319,7 +319,7 @@ const CONDITION_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   stage: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
   evidence: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
   note: { min: 0, max: UNBOUNDED, types: ["Annotation"] },
-};
+});
 
 /**
  * R4 `medicationrequest Status`, the required binding on `MedicationRequest.status`, in the order
@@ -367,7 +367,7 @@ const REQUEST_PRIORITY = ["routine", "urgent", "asap", "stat"] as const;
  * `dispenseRequest` and `substitution` are backbone elements, modeled for cardinality and node shape
  * only, so nothing inside a `dispenseRequest.quantity` is entered from this layer.
  */
-const MEDICATION_REQUEST_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const MEDICATION_REQUEST_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   status: {
     min: 1,
@@ -427,7 +427,7 @@ const MEDICATION_REQUEST_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   priorPrescription: { min: 0, max: 1, types: ["Reference"] },
   detectedIssue: { min: 0, max: UNBOUNDED, types: ["Reference"] },
   eventHistory: { min: 0, max: UNBOUNDED, types: ["Reference"] },
-};
+});
 
 /** R4 `AllergyIntoleranceType`, the required binding on `AllergyIntolerance.type`. */
 const ALLERGY_INTOLERANCE_TYPE = ["allergy", "intolerance"] as const;
@@ -449,7 +449,7 @@ const ALLERGY_INTOLERANCE_CRITICALITY = ["low", "high", "unable-to-assess"] as c
  * is a backbone element, modeled for cardinality and node shape only, so `reaction.manifestation`
  * being `1..*` in R4 is not entered from this layer.
  */
-const ALLERGY_INTOLERANCE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const ALLERGY_INTOLERANCE_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   clinicalStatus: { min: 0, max: 1, types: ["CodeableConcept"] },
   verificationStatus: { min: 0, max: 1, types: ["CodeableConcept"] },
@@ -493,7 +493,7 @@ const ALLERGY_INTOLERANCE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   lastOccurrence: { min: 0, max: 1, types: ["dateTime"] },
   note: { min: 0, max: UNBOUNDED, types: ["Annotation"] },
   reaction: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
-};
+});
 
 /**
  * R4 `ImmunizationStatusCodes`, the required binding on `Immunization.status`. This value set is the
@@ -513,7 +513,7 @@ const IMMUNIZATION_STATUS = ["completed", "entered-in-error", "not-done"] as con
  * `performer`, `education`, `reaction` and `protocolApplied` are backbone elements, modeled for
  * cardinality and node shape only.
  */
-const IMMUNIZATION_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const IMMUNIZATION_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   status: {
     min: 1,
@@ -551,7 +551,7 @@ const IMMUNIZATION_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   fundingSource: { min: 0, max: 1, types: ["CodeableConcept"] },
   reaction: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
   protocolApplied: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
-};
+});
 
 /**
  * R4 `Medication Status Codes`, the required binding on `MedicationStatement.status`, in the order
@@ -580,7 +580,7 @@ const MEDICATION_STATEMENT_STATUS = [
  * `statusReason` is `0..*` here and `0..1` there, and `category` is `0..1` here and `0..*` there.
  * This type has no backbone element of its own; `dosage` is the `Dosage` datatype.
  */
-const MEDICATION_STATEMENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const MEDICATION_STATEMENT_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   basedOn: { min: 0, max: UNBOUNDED, types: ["Reference"] },
   partOf: { min: 0, max: UNBOUNDED, types: ["Reference"] },
@@ -607,7 +607,7 @@ const MEDICATION_STATEMENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   reasonReference: { min: 0, max: UNBOUNDED, types: ["Reference"] },
   note: { min: 0, max: UNBOUNDED, types: ["Annotation"] },
   dosage: { min: 0, max: UNBOUNDED, types: ["Dosage"] },
-};
+});
 
 /**
  * R4 `EncounterStatus`, the required binding on `Encounter.status`, in the order the published code
@@ -635,7 +635,7 @@ const ENCOUNTER_STATUS = [
  * backbone elements, modeled for cardinality and node shape only, so the required binding on
  * `statusHistory.status` and `location.status` is not entered from this layer.
  */
-const ENCOUNTER_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const ENCOUNTER_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   status: {
     min: 1,
@@ -668,7 +668,7 @@ const ENCOUNTER_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   location: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
   serviceProvider: { min: 0, max: 1, types: ["Reference"] },
   partOf: { min: 0, max: 1, types: ["Reference"] },
-};
+});
 
 /**
  * R4 `EventStatus`, the required binding on `Procedure.status`, in the order the published code
@@ -694,7 +694,7 @@ const EVENT_STATUS = [
  * binding. `performed[x]` is a five-variant choice. `performer` and `focalDevice` are backbone
  * elements, modeled for cardinality and node shape only.
  */
-const PROCEDURE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const PROCEDURE_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   instantiatesCanonical: { min: 0, max: UNBOUNDED, types: ["canonical"] },
   instantiatesUri: { min: 0, max: UNBOUNDED, types: ["uri"] },
@@ -732,7 +732,7 @@ const PROCEDURE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   focalDevice: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
   usedReference: { min: 0, max: UNBOUNDED, types: ["Reference"] },
   usedCode: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
-};
+});
 
 /**
  * R4 `DocumentReferenceStatus`, the required binding on `DocumentReference.status`.
@@ -759,7 +759,7 @@ const COMPOSITION_STATUS = ["preliminary", "final", "amended", "entered-in-error
  * `relatesTo`, `content` and `context` are backbone elements, modeled for cardinality and node
  * shape only, so `content.attachment` being `1..1` in R4 is not entered from this layer.
  */
-const DOCUMENT_REFERENCE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+const DOCUMENT_REFERENCE_ELEMENTS = (): Readonly<Record<string, ElementSchema>> => ({
   masterIdentifier: { min: 0, max: 1, types: ["Identifier"] },
   identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
   status: {
@@ -794,26 +794,30 @@ const DOCUMENT_REFERENCE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   securityLabel: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
   content: { min: 1, max: UNBOUNDED, types: ["BackboneElement"] },
   context: { min: 0, max: 1, types: ["BackboneElement"] },
-};
+});
 
 /**
- * The built-in schemas (base elements are merged into each). This array IS the built-in set, and it
+ * The built-in schemas (base elements are merged into each). This list IS the built-in set, and it
  * is the only place that enumeration exists: `Patient`, every resource type this library treats as
  * safety-critical, and `Encounter`, `Procedure` and `DocumentReference`. A type is added here only once its table names every direct element R4 defines
  * for it, because the registry treats a registered type as fully described.
+ *
+ * Each table is written inside a function, called once, the first time a registry is built: a
+ * table written out at the top level would be compiled and built by every import of the package,
+ * validating or not.
  */
-const BUILTIN_SCHEMAS: readonly ResourceSchema[] = [
-  { type: "Patient", elements: PATIENT_ELEMENTS },
-  { type: "Observation", elements: OBSERVATION_ELEMENTS },
-  { type: "DiagnosticReport", elements: DIAGNOSTIC_REPORT_ELEMENTS },
-  { type: "Condition", elements: CONDITION_ELEMENTS },
-  { type: "MedicationRequest", elements: MEDICATION_REQUEST_ELEMENTS },
-  { type: "AllergyIntolerance", elements: ALLERGY_INTOLERANCE_ELEMENTS },
-  { type: "Immunization", elements: IMMUNIZATION_ELEMENTS },
-  { type: "MedicationStatement", elements: MEDICATION_STATEMENT_ELEMENTS },
-  { type: "Encounter", elements: ENCOUNTER_ELEMENTS },
-  { type: "Procedure", elements: PROCEDURE_ELEMENTS },
-  { type: "DocumentReference", elements: DOCUMENT_REFERENCE_ELEMENTS },
+const BUILTIN_SCHEMAS = (): readonly ResourceSchema[] => [
+  { type: "Patient", elements: PATIENT_ELEMENTS() },
+  { type: "Observation", elements: OBSERVATION_ELEMENTS() },
+  { type: "DiagnosticReport", elements: DIAGNOSTIC_REPORT_ELEMENTS() },
+  { type: "Condition", elements: CONDITION_ELEMENTS() },
+  { type: "MedicationRequest", elements: MEDICATION_REQUEST_ELEMENTS() },
+  { type: "AllergyIntolerance", elements: ALLERGY_INTOLERANCE_ELEMENTS() },
+  { type: "Immunization", elements: IMMUNIZATION_ELEMENTS() },
+  { type: "MedicationStatement", elements: MEDICATION_STATEMENT_ELEMENTS() },
+  { type: "Encounter", elements: ENCOUNTER_ELEMENTS() },
+  { type: "Procedure", elements: PROCEDURE_ELEMENTS() },
+  { type: "DocumentReference", elements: DOCUMENT_REFERENCE_ELEMENTS() },
 ];
 // Stryker restore all
 
@@ -885,7 +889,7 @@ let mergedBuiltIns: ReadonlyMap<string, ResourceSchema> | undefined;
 function builtInSchemas(): ReadonlyMap<string, ResourceSchema> {
   if (mergedBuiltIns === undefined) {
     const byType = new Map<string, ResourceSchema>();
-    for (const schema of BUILTIN_SCHEMAS) {
+    for (const schema of BUILTIN_SCHEMAS()) {
       const merged = withBase(schema);
       Object.freeze(merged.elements);
       byType.set(schema.type, Object.freeze(merged));
