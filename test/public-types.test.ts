@@ -111,7 +111,6 @@ describe("public types: validation & the typed fatal", () => {
     expectTypeOf(validateResource).parameter(0).toEqualTypeOf<FhirComplex>();
     expectTypeOf(validateResource).returns.toEqualTypeOf<ValidationResult>();
     expectTypeOf<ValidationResult["valid"]>().toEqualTypeOf<boolean>();
-    expectTypeOf<ValidationResult["fullyChecked"]>().toEqualTypeOf<boolean>();
     expectTypeOf<ValidationResult["toOperationOutcome"]>().toEqualTypeOf<() => FhirComplex>();
   });
 

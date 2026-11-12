@@ -42,44 +42,6 @@ set we hold no codes for, or a date range, is reported as `PROFILE_CONSTRAINT_UN
 information, with its kind in `uncheckedConstraint`, so a clean verdict never stands over a
 constraint nobody looked at. [Current limits](./limits.md) lists each kind.
 
-Such a finding does not change `valid`, since it is not an error. Read `fullyChecked` beside it:
-
-```ts runnable
-import { defineProfile, parseResource, validateResource } from "@cosyte/fhir";
-
-const profiledCode = defineProfile({
-  url: "http://example.org/StructureDefinition/profiled-code",
-  name: "ProfiledCode",
-  type: "Observation",
-  differential: [
-    {
-      path: "Observation.code",
-      type: [
-        {
-          code: "CodeableConcept",
-          profile: ["http://example.org/StructureDefinition/local-concept"],
-        },
-      ],
-    },
-  ],
-});
-
-const { resource } = parseResource(
-  '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"}}',
-);
-
-const result = validateResource(resource, { profiles: [profiledCode] });
-
-result.valid; // => true
-result.fullyChecked; // => false
-result.issues.map((issue) => issue.uncheckedConstraint); // => ["type-profile"]
-```
-
-`fullyChecked` is `false` when any finding says a rule was not checked, at any severity:
-`PROFILE_CONSTRAINT_UNCHECKED`, `PROFILE_SLICE_UNCHECKED`, `INVARIANT_UNCHECKED` and the others
-[Current limits](./limits.md) lists. A result that is `valid` but not `fullyChecked` asserts nothing
-about the rules it reports unchecked.
-
 ## Rely on the constraints R4 declares
 
 You do not need a profile for the constraints R4 itself declares. On the eleven modeled resource

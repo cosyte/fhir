@@ -3580,17 +3580,6 @@ The result of validating a resource: the findings plus an `OperationOutcome` vie
 
 #### Properties
 
-##### fullyChecked
-
-> `readonly` **fullyChecked**: `boolean`
-
-Whether every rule that applies was checked: `false` when any finding says one was not, at any
-severity. Those are `INVARIANT_UNCHECKED`, `PROFILE_SLICE_UNCHECKED`,
-`PROFILE_CONSTRAINT_UNCHECKED`, `PROFILE_SLICE_NO_SLICING`, `PROFILE_VERSION_MISMATCH`,
-`RESOURCE_NOT_MODELED` and `CODE_SYSTEM_UNKNOWN`. A result that is `valid` but not
-`fullyChecked` asserts nothing about the rules it lists unchecked. Code membership in a value
-set is checked only through a `terminology` service, and without one nothing is reported for it.
-
 ##### issues
 
 > `readonly` **issues**: readonly [`ValidationIssue`](#validationissue)[]
@@ -3611,9 +3600,7 @@ Render the findings as an `OperationOutcome` resource model (value-free, seriali
 
 > `readonly` **valid**: `boolean`
 
-Whether there were no `error`/`fatal` findings (warnings and information do not fail). `valid`
-says nothing broke a rule that was checked; read [ValidationResult.fullyChecked](#fullychecked) for
-whether every rule was.
+Whether there were no `error`/`fatal` findings (warnings and information do not fail).
 
 ***
 

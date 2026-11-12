@@ -12,13 +12,11 @@ import {
   PROFILE_UNCHECKED_CONSTRAINTS,
   serializeResource,
   validateResource,
-  VALIDATION_CODES,
   type FhirComplex,
   type StructureDefinition,
   type ValidationIssue,
 } from "../src/index.js";
 import { compareDecimals } from "../src/model/decimal.js";
-import { saysNotChecked } from "../src/validate/validate.js";
 import { req } from "./_util.js";
 
 /**
@@ -1461,15 +1459,8 @@ describe("a target profile that names a kind of resource", () => {
   });
 });
 
-describe("whether a result was fully checked", () => {
-  it("is true when nothing was left unchecked, whatever the errors", () => {
-    expect(validateResource(parse(OBS)).fullyChecked).toBe(true);
-    const wrong = validateResource(parse({ ...OBS, status: "fake" }));
-    expect(wrong.valid).toBe(false);
-    expect(wrong.fullyChecked).toBe(true);
-  });
-
-  it("is false beside any finding that says something was not checked, valid or not", () => {
+describe("the result of validating against a profile", () => {
+  it("carries the findings, the verdict and the OperationOutcome view, nothing more", () => {
     const typeProfile = sd("Observation", [
       {
         id: "Observation.code",
@@ -1478,32 +1469,10 @@ describe("whether a result was fully checked", () => {
       },
     ]);
     const result = validateResource(parse(OBS), { profiles: [typeProfile] });
+    // An unchecked constraint is information: valid stays true beside it, and no other field
+    // claims the resource was checked in full.
     expect(result.valid).toBe(true);
-    expect(result.fullyChecked).toBe(false);
-    // A resource type this library does not model is not checked below its root.
-    const unmodeled = validateResource(parse({ resourceType: "Basic", code: { text: "fake" } }));
-    expect(unmodeled.issues.map((i) => i.code)).toContain("RESOURCE_NOT_MODELED");
-    expect(unmodeled.fullyChecked).toBe(false);
-  });
-
-  it("reads exactly the codes that say a rule was not checked", () => {
-    const notChecked = [
-      "CODE_SYSTEM_UNKNOWN",
-      "INVARIANT_UNCHECKED",
-      "PROFILE_CONSTRAINT_UNCHECKED",
-      "PROFILE_SLICE_NO_SLICING",
-      "PROFILE_SLICE_UNCHECKED",
-      "PROFILE_VERSION_MISMATCH",
-      "RESOURCE_NOT_MODELED",
-    ];
-    const codes = Object.values(VALIDATION_CODES);
-    expect(codes.filter((code) => saysNotChecked(code))).toEqual(
-      codes.filter((code) => notChecked.includes(code)),
-    );
-    expect(codes.filter((code) => saysNotChecked(code))).toHaveLength(notChecked.length);
-    // Every code named as unchecked is among them.
-    for (const code of codes.filter((c) => c.endsWith("_UNCHECKED"))) {
-      expect(saysNotChecked(code)).toBe(true);
-    }
+    expect(result.issues.map((i) => i.uncheckedConstraint)).toEqual(["type-profile"]);
+    expect(Object.keys(result).sort()).toEqual(["issues", "toOperationOutcome", "valid"]);
   });
 });

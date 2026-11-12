@@ -68,13 +68,17 @@ numbers.
 ## Verdicts that say "not checked" rather than passing
 
 Each of these is a finding the validator emits rather than silently letting something through. If
-you treat any non-error finding as a pass, you will misread them. A result carries one answer for
-all of them: `fullyChecked` is `false` when any finding below is present, or
-`PROFILE_VERSION_MISMATCH`, `RESOURCE_NOT_MODELED` or `CODE_SYSTEM_UNKNOWN`, each of which also says
-something was not checked. `valid` stays `true` beside them, since none is an error, so read
-`fullyChecked` beside `valid` before you treat a resource as conforming. Membership of a code in a
-value set is checked only through a `terminology` service you pass, and without one nothing is
-reported for it, so `fullyChecked` does not cover that.
+you treat any non-error finding as a pass, you will misread them. `valid` stays `true` beside them,
+since none is an error, so a result that is `valid` and carries any of them, or
+`PROFILE_VERSION_MISMATCH`, `RESOURCE_NOT_MODELED` or `CODE_SYSTEM_UNKNOWN`, does not mean the
+resource was fully checked. Membership of a code in a value set is checked only through a
+`terminology` service you pass, and without one nothing is reported for it.
+
+Some rules are not evaluated yet and draw no finding at all: the invariants R4 defines on datatypes
+such as Quantity and Period. A Quantity with a unit `code` and no `system` (`qty-3`), a Period whose
+`end` is before its `start` (`per-1`), and a `comparator` on an element R4 types `SimpleQuantity`,
+such as `Observation.referenceRange.low`, where no profile names `SimpleQuantity` (`sqty-1`) each
+pass with `valid: true` and nothing said.
 
 - `INVARIANT_UNCHECKED`: a constraint whose FHIRPath expression is outside the bounded expression
   subset this library evaluates, whether a profile supplied it or R4 declares it on the resource

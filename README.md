@@ -126,8 +126,7 @@ fast-check generators of synthetic resources for property-testing your own code;
   model read from one format with a model read from the other. A `decimal` or an `integer64` keeps
   its exact text (`FhirDecimal`, `FhirInteger64`) and never passes through a JavaScript number.
 - **Validate.** `validateResource` returns `valid`, the issues, and `toOperationOutcome()` to render
-  them as an `OperationOutcome`, and `fullyChecked`, which is `false` when any finding says a rule
-  was not checked: `valid` alone says only that nothing checked was broken. Pass the `profiles` you load with `loadStructureDefinition` or
+  them as an `OperationOutcome`. Pass the `profiles` you load with `loadStructureDefinition` or
   author with `defineProfile`, and a `terminology` service of your own for code validity.
 - **Read status and negation.** `readSafety` surfaces status, modifiers, and negations.
   `assertSafeToSummarize` throws `FhirSafetyError`, carrying locations only, when a resource holds
