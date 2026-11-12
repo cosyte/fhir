@@ -235,8 +235,9 @@ function scalarValue(node: RawJson, trail: Trail, issues: FhirIssue[]): Primitiv
       return undefined;
     case "obj":
     case "arr":
-      // An object/array reaches here only via a malformed mixed array; treat as value-absent
-      // (the caller's primitive/complex decision governs the surrounding shape).
+      // An array reaches here only from a primitive list that nests one, which keeps its text
+      // (`markNestedArray`); an object never does, since an array holding one is read as complex
+      // (`isPrimitiveArray`). Either way the slot holds no primitive value.
       return undefined;
   }
 }
@@ -494,9 +495,18 @@ function readComplex(node: RawJson, trail: Trail, issues: FhirIssue[]): FhirComp
  * still be read as complex so its objects are preserved-and-flagged, never misrouted to the primitive
  * path and dropped. Only when there is no value array at all (a `_`-sibling-only, value-absent list)
  * does the `_`-sibling decide.
+ *
+ * **An object anywhere in the array makes it a complex list, whatever comes before it.** A primitive
+ * slot has no place for an object's members, so an object read into a primitive list loses its
+ * content: `["x",{"url":"…"}]` once came back as `["x",null]` with only a warning at the object's
+ * position. Read as a complex list, the object is an element with every member it was sent, and a
+ * scalar or `null` beside it keeps its own text ({@link readComplex}), so the writer hands back
+ * every member and the read reports each scalar it could not place. An array mixing scalars with
+ * arrays and no object stays primitive: an inner array keeps its text on either route.
  */
 function isPrimitiveArray(value: RawArray | undefined): boolean {
   if (value === undefined) return true; // only a `_`-sibling array → a value-absent primitive list
+  if (value.items.some((item) => item.t === "obj")) return false;
   const firstMeaningful = value.items.find((item) => item.t !== "null");
   return firstMeaningful === undefined || isScalar(firstMeaningful);
 }
@@ -538,9 +548,10 @@ function buildPrimitiveList(
       }
     }
     trail.index(i);
-    // A non-scalar where a primitive value belongs (malformed mixed array) has no primitive
-    // representation, flag it rather than drop it silently.
-    if (rawValue !== undefined && (rawValue.t === "obj" || rawValue.t === "arr")) {
+    // An array where a primitive value belongs has no primitive representation, so it is flagged
+    // here and its text kept below. An object never reaches this: `isPrimitiveArray` reads an array
+    // that holds one as a complex list, where the object keeps its members.
+    if (rawValue?.t === "arr") {
       issues.push(unknownProperty(trail.text()));
     }
     // An array in either channel is an array inside an array, which FHIR JSON does not define. The

@@ -2392,8 +2392,16 @@ function descend(node: FhirNode, trail: Trail, scope: RootScope, out: SafetyWalk
   // checked against the definitions; the other reads still run there.
   const foreign = scope.model.length > 0 && recordForeign(node, trail, out);
   const inner = foreign ? { ...scope, model: [] } : scope;
-  if (isComplex(node)) walkComplex(node, trail, out, inner);
-  else if (inner.model.length > 0) {
+  if (isComplex(node)) {
+    // A scalar or `null` the JSON reader found in an array beside objects is held as an empty
+    // element carrying the text it was written as (`nonObjectSource`). Nothing in it is the element
+    // the definitions put here, and a caller that reads the text would read it as though it were,
+    // so its location is not assessed, as a value at a complex position is in `checkPrimitive`.
+    if (inner.model.length > 0 && node.nonObjectSource !== undefined) {
+      out.notAssessed.push(trail.text());
+    }
+    walkComplex(node, trail, out, inner);
+  } else if (inner.model.length > 0) {
     // A primitive: its value against the position, and what it carries beside it.
     checkPrimitive(node, inner.model, trail, out);
   }
