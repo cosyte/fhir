@@ -22,6 +22,7 @@ import {
   type FpColl,
 } from "../src/index.js";
 import { evaluate } from "../src/fhirpath/evaluate.js";
+import { compileMatchesPattern } from "../src/fhirpath/matches.js";
 import { req } from "./_util.js";
 
 const PROJECTION = loadProjection();
@@ -156,5 +157,44 @@ describe("AC-9: matches() refuses what it cannot decide, and is empty over an em
     expect(() => evaluate(parseFhirPath("value.matches('^[0-9]{5}$')"), at, ctx)).not.toThrow(
       UnsupportedFhirPathError,
     );
+  });
+});
+
+describe("matches() compiles the pattern the expression supplies, as FHIRPath N1 section 5.6.9 reads it", () => {
+  const UCUM = "http://unitsofmeasure.org";
+
+  it("compiles the pattern exactly as written: not escaped, not anchored", () => {
+    const compiled = compileMatchesPattern("a.b");
+    expect(compiled.source).toBe("a.b");
+    expect(compiled.flags).toBe("su");
+    expect(compiled.test("xxaXbxx")).toBe(true);
+  });
+
+  it("takes an environment variable's value as the pattern, so a URL with unescaped dots matches more than the URL", () => {
+    // `%ucum` reaches matches() as its pattern: the dots match any character and nothing anchors
+    // the match, which is the specified behaviour for an expression that uses a URL as a pattern.
+    for (const value of [
+      UCUM,
+      "http://unitsofmeasureXorg",
+      "https://host.example/?next=http://unitsofmeasure.org",
+      "http://unitsofmeasure.org.host.example",
+    ]) {
+      expect(atIdentifier("value.matches(%ucum)", value), value).toEqual(SATISFIED);
+    }
+    expect(atIdentifier("value.matches(%ucum)", "http://unitsofmeasure")).toEqual(NOT_SATISFIED);
+  });
+
+  it("matches only the URL when the author anchors and escapes the pattern, or compares with =", () => {
+    const anchored = "value.matches('^http://unitsofmeasure\\\\.org$')";
+    expect(atIdentifier(anchored, UCUM)).toEqual(SATISFIED);
+    expect(atIdentifier("value = %ucum", UCUM)).toEqual(SATISFIED);
+    for (const value of [
+      "http://unitsofmeasureXorg",
+      "https://host.example/?next=http://unitsofmeasure.org",
+      "http://unitsofmeasure.org.host.example",
+    ]) {
+      expect(atIdentifier(anchored, value), value).toEqual(NOT_SATISFIED);
+      expect(atIdentifier("value = %ucum", value), value).toEqual(NOT_SATISFIED);
+    }
   });
 });

@@ -1264,9 +1264,13 @@ describe("a type or profile discriminator path that selects more than one node",
       profiles: [byContained("type", { code: "Organization" })],
     });
     expect(unchecked(result.issues)).toEqual([]);
+    // With nothing contained, `#o1` names no resource, which R4's `ref-1` forbids.
     expect(
       result.issues.filter((i) => i.severity === "error").map((i) => [i.code, i.expression]),
-    ).toEqual([["PROFILE_SLICE_UNMATCHED", "Bundle.entry[0]"]]);
+    ).toEqual([
+      ["INVARIANT_VIOLATED", "Bundle.entry[0].resource.managingOrganization"],
+      ["PROFILE_SLICE_UNMATCHED", "Bundle.entry[0]"],
+    ]);
   });
 
   it("assigns nothing by profile, so an entry with nothing at the path draws no finding", () => {
@@ -1285,7 +1289,10 @@ describe("a type or profile discriminator path that selects more than one node",
     expect(unchecked(result.issues)).toEqual([
       ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_DISCRIMINATOR],
     ]);
-    expect(result.issues.filter((i) => i.severity === "error")).toEqual([]);
+    // The one error is `ref-1`: with nothing contained, `#o1` names no resource.
+    expect(
+      result.issues.filter((i) => i.severity === "error").map((i) => [i.code, i.constraint]),
+    ).toEqual([["INVARIANT_VIOLATED", "ref-1"]]);
   });
 
   it("still decides a path that selects one node", () => {

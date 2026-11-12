@@ -98,6 +98,8 @@ describe("validation code / severity / issue-type registries (stable public cont
       NARRATIVE_ACTIVE_CONTENT: "NARRATIVE_ACTIVE_CONTENT",
       NARRATIVE_BLOCK_IN_PARAGRAPH: "NARRATIVE_BLOCK_IN_PARAGRAPH",
       NARRATIVE_EMPTY: "NARRATIVE_EMPTY",
+      EXTENSION_UNCHECKED: "EXTENSION_UNCHECKED",
+      PROFILE_UNCHECKED: "PROFILE_UNCHECKED",
     });
   });
 
@@ -126,6 +128,8 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(validationIssue("NARRATIVE_ACTIVE_CONTENT", "error", "X").type).toBe("security");
     expect(validationIssue("NARRATIVE_ELEMENT_ILLEGAL", "error", "X").type).toBe("structure");
     expect(validationIssue("NARRATIVE_EMPTY", "error", "X").type).toBe("invariant");
+    expect(validationIssue("EXTENSION_UNCHECKED", "information", "X").type).toBe("informational");
+    expect(validationIssue("PROFILE_UNCHECKED", "information", "X").type).toBe("informational");
     expect(validationIssue("VITAL_SIGN_UNIT_NONCONFORMANT", "error", "X").type).toBe(
       "code-invalid",
     );

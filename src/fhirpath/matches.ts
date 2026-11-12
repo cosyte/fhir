@@ -210,7 +210,18 @@ class PatternCheck {
 }
 
 /**
- * Compile a `matches()` pattern, or refuse it.
+ * Compile a `matches()` pattern, or refuse it. This is the engine's one place a string becomes a
+ * regular expression.
+ *
+ * The pattern is whatever the expression's argument evaluated to: a string literal the
+ * expression's author wrote, an element of the instance (`value.matches(%resource.pattern)`) or an
+ * environment variable such as `%ucum`. FHIRPath N1 (2.0.0) section 5.6.9, `matches(regex : String)
+ * : Boolean`, takes that value as the regular expression itself, so it is compiled as written: not
+ * escaped, and not anchored, the match testing the pattern anywhere in the input. A URL used as a
+ * pattern therefore matches more than the URL (`%ucum` matches `http://unitsofmeasureXorg` and any
+ * text containing the URL); that is the specified reading, and an author who means the whole value
+ * writes `^` and `$`, escapes the dots, or compares with `=`. What this function adds is the
+ * portable subset check above, which bounds what any pattern, wherever it came from, can do.
  *
  * @param pattern - The regular expression text, as the expression's argument evaluated to it.
  * @returns A `RegExp` that tests the pattern anywhere in the input (FHIRPath does not anchor it).

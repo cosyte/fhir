@@ -132,6 +132,44 @@ describe("a first validation whose parses fail", () => {
   });
 });
 
+describe("the datatype constraints", () => {
+  /** An Observation whose `valueQuantity` has a code and no system, so `qty-3` does not hold. */
+  const OBSERVATION = JSON.stringify({
+    resourceType: "Observation",
+    status: "final",
+    code: { text: "Synthetic" },
+    valueQuantity: { value: 1, code: "mg" },
+  });
+
+  it("parses a row only when an occurrence asks for it, once", async () => {
+    const seen = countParses();
+    const fhir = await importFresh();
+    baseFindings(fhir, PATIENT);
+    expect(seen.calls).not.toContain("code.empty() or system.exists()");
+    expect(baseFindings(fhir, OBSERVATION)).toContain(
+      "INVARIANT_VIOLATED qty-3 Observation.valueQuantity",
+    );
+    const parsed = seen.calls.filter((e) => e === "code.empty() or system.exists()").length;
+    expect(parsed).toBe(1);
+    baseFindings(fhir, OBSERVATION);
+    expect(seen.calls.filter((e) => e === "code.empty() or system.exists()").length).toBe(1);
+  });
+
+  it("reports a row unchecked when its parse fails, and parses it again on the next call", async () => {
+    let failing = true;
+    const seen = countParses(() => failing);
+    const fhir = await importFresh();
+    expect(baseFindings(fhir, OBSERVATION)).toContain(
+      "INVARIANT_UNCHECKED qty-3 Observation.valueQuantity",
+    );
+    failing = false;
+    expect(baseFindings(fhir, OBSERVATION)).toContain(
+      "INVARIANT_VIOLATED qty-3 Observation.valueQuantity",
+    );
+    expect(seen.calls.filter((e) => e === "code.empty() or system.exists()").length).toBe(2);
+  });
+});
+
 describe("a first validation inside a stream", () => {
   it("answers as a validation after a warm start does", async () => {
     const fhir = await importFresh();

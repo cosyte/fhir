@@ -3460,7 +3460,8 @@ Lenient (read, the default) or strict (emit). Only affects the severity of unkno
 Profiles (`StructureDefinition`s) to validate against. **None is bundled**, a caller
 supplies the US Core (or vendor) profiles. Every supplied profile whose `type` matches the
 resource type is applied (fixed/pattern, must-support, slicing, profile cardinality), and the
-resource's `meta.profile` version pins are checked against the supplied set.
+resource's `meta.profile` version pins are checked against the supplied set. A `meta.profile`
+claim that no supplied profile of the resource's type carries is reported `PROFILE_UNCHECKED`.
 
 ##### registry?
 
@@ -3537,8 +3538,9 @@ code alone.
 > `readonly` `optional` **constraint?**: `string`
 
 The spec constraint key when the finding is an invariant violation (e.g. `"ait-1"`, `"obs-6"`),
-a public FHIR identifier, never an instance value, so it is safe to surface. `undefined` for
-every non-invariant finding. It reaches the `OperationOutcome` as `issue.details.text`.
+a public FHIR identifier, never an instance value, so it is safe to surface: on an
+`INVARIANT_VIOLATED` or `INVARIANT_UNCHECKED` finding, and on a narrative finding that breaches
+`txt-1` or `txt-2`. `undefined` for every other finding. It reaches the `OperationOutcome` as `issue.details.text`.
 
 ##### expression
 
@@ -3580,6 +3582,33 @@ The result of validating a resource: the findings plus an `OperationOutcome` vie
 
 #### Properties
 
+##### fullyChecked
+
+> `readonly` **fullyChecked**: `boolean`
+
+Whether every rule that applies to this resource was checked, so `valid` is a verdict over all
+of them rather than over the ones this library could check. `true` only when all of these hold:
+
+- the resource is an `AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`,
+  `MedicationRequest`, `MedicationStatement`, `Observation` or `Patient`, the eight types whose
+  structure, own constraints and datatype constraints this library evaluates at every depth, and
+  the registry has a schema for it;
+- it has no `contained` resource, whose own constraints are not evaluated;
+- no finding says something was left unchecked or unread: no `INVARIANT_UNCHECKED`,
+  `EXTENSION_UNCHECKED` (every `extension`, since no extension definition is applied),
+  `PROFILE_UNCHECKED` (a `meta.profile` claim with no matching profile supplied),
+  `PROFILE_VERSION_MISMATCH`, `PROFILE_SLICE_UNCHECKED`, `PROFILE_SLICE_NO_SLICING`,
+  `PROFILE_CONSTRAINT_UNCHECKED`, `UNKNOWN_ELEMENT`, `RESOURCE_NOT_MODELED`,
+  `UNHANDLED_MODIFIER_EXTENSION`, `DUPLICATE_PROPERTY`, `NESTED_ARRAY`, `DROPPED_ELEMENT_TEXT`,
+  `ARRAY_WRAPPED_CHOICE`, `ABSENCE_MARKER_UNREADABLE`, `CONTAINED_ID_DUPLICATE` or
+  `NARRATIVE_UNREADABLE`.
+
+**What it cannot cover: value set membership without a terminology service.** None is bundled.
+Without one, a code is checked only against the required bindings this library enumerates and
+by the content-free code-system checks; whether a code is a member of any other bound value set
+is not decided, and `fullyChecked` does not count that question as unchecked. Supply a
+[ValidateOptions.terminology](#terminology-1) service to have membership decided.
+
 ##### issues
 
 > `readonly` **issues**: readonly [`ValidationIssue`](#validationissue)[]
@@ -3601,6 +3630,9 @@ Render the findings as an `OperationOutcome` resource model (value-free, seriali
 > `readonly` **valid**: `boolean`
 
 Whether there were no `error`/`fatal` findings (warnings and information do not fail).
+
+`valid: true` says no rule that was checked failed. It does not say every rule was checked:
+read [fullyChecked](#fullychecked) for that.
 
 ***
 
@@ -5745,6 +5777,18 @@ and nothing says which the sender meant. FHIR JSON requires unique property name
 `SHALL` and an `error`. The reader keeps every value (see ../model/node.js `duplicates`),
 so this reports an ambiguity, never a loss.
 
+##### EXTENSION\_UNCHECKED
+
+> `readonly` **EXTENSION\_UNCHECKED**: `"EXTENSION_UNCHECKED"` = `"EXTENSION_UNCHECKED"`
+
+Extension, an `extension` was not checked against the definition its `url` names: no
+`StructureDefinition` for it was supplied, and this library does not apply an extension
+definition to an extension's content even when one is. Emitted as `information` at the
+extension: its value and its nested extensions are checked only as the base `Extension`
+(`ext-1`, `ele-1` and the datatype of its value), never as the definition constrains them. A
+result carrying it never reads `fullyChecked: true`. Value-free, the location of the
+extension, never its `url`.
+
 ##### FULLURL\_DUPLICATE
 
 > `readonly` **FULLURL\_DUPLICATE**: `"FULLURL_DUPLICATE"` = `"FULLURL_DUPLICATE"`
@@ -5980,6 +6024,16 @@ closed-slicing miss and leaves the ordering nuance unenforced.)
 Profile, an occurrence of a `choice[x]` element is of a type the profile does not allow there
 (`valueString` where the profile narrows `value[x]` to `Quantity`). A `structure` `error`.
 Decided from the occurrence's own name, never its value.
+
+##### PROFILE\_UNCHECKED
+
+> `readonly` **PROFILE\_UNCHECKED**: `"PROFILE_UNCHECKED"` = `"PROFILE_UNCHECKED"`
+
+Profile, the resource claims a profile in `meta.profile` that no supplied profile of its type
+carries at that canonical URL, so the resource was not checked against it. Emitted as
+`information` at the `meta.profile` entry: a claimed profile is reported **not checked**, never
+silently passed. A result carrying it never reads `fullyChecked: true`. Value-free,
+the location of the claim, never the URL.
 
 ##### PROFILE\_VERSION\_MISMATCH
 

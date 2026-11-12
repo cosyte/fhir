@@ -6,7 +6,8 @@
  * AST over the generic {@link ../model/node.js} tree, implementing the subset of FHIRPath the R4 /
  * US Core invariant set actually uses:
  *
- * - **navigation** (`a.b.c`, choice access `value` → `valueQuantity`), `$this`, `%resource` / `%context`;
+ * - **navigation** (`a.b.c`, choice access `value` → `valueQuantity`), `$this`, `%resource` / `%context`,
+ *   and `%ucum`, the UCUM system URL;
  * - **existence / filtering**, `exists`, `empty`, `not`, `where`, `all`, `select`, `count`, `first`,
  *   `last`, `distinct`, `hasValue`, `children`, `extension`, `intersect`;
  * - **logic**, `and` / `or` / `xor` / `implies` with FHIRPath three-valued (empty-propagating) truth;
@@ -73,7 +74,18 @@ export type FpColl = readonly FpItem[];
 interface EvalCtx {
   readonly resource: FhirNode;
   readonly context: FpColl;
+  /**
+   * The member names the caller knows to be elements of their own, never the stem of a choice:
+   * such a name selects only a property of exactly that name, so `period` over a node holding only
+   * `periodMax` selects nothing rather than reading `periodMax` as a `period[x]` variant. Absent, every
+   * name falls back to its choice variants.
+   */
+  readonly exact?: (name: string) => boolean;
 }
+
+/** The value of `%ucum`, which FHIRPath defines as the UCUM code system's URL. */
+// Stryker disable next-line StringLiteral: a module-level constant, evaluated once when the module loads, which the mutation runner does not reload per mutant; test/fhirpath.test.ts pins its value
+const UCUM_SYSTEM = "http://unitsofmeasure.org";
 
 /** Wrap a node into collection items, flattening a list into its (recursively flattened) members. */
 function wrap(node: FhirNode): FpItem[] {
@@ -225,6 +237,27 @@ function navigate(focus: FpColl, name: string): FpItem[] {
   for (let i = 0; i < focus.length; i++) {
     const item = focus[i] as FpItem;
     if (item.t === "node") pushNavigated(item.node, name, out);
+  }
+  return out;
+}
+
+/**
+ * Navigate `name` as an element of its own, never as the stem of a choice: from a complex node, only
+ * the property of exactly that name, so `period` over a node holding only `periodMax` selects
+ * nothing. From a primitive node it navigates as {@link navigate} does; a computed item has no
+ * members.
+ */
+function navigateExact(focus: FpColl, name: string): FpItem[] {
+  const out: FpItem[] = [];
+  for (let i = 0; i < focus.length; i++) {
+    const item = focus[i] as FpItem;
+    if (item.t !== "node") continue;
+    if (!isComplex(item.node)) {
+      pushNavigated(item.node, name, out);
+      continue;
+    }
+    const exact = getProperty(item.node, name);
+    if (exact !== undefined) pushWrapped(exact, out);
   }
   return out;
 }
@@ -1037,15 +1070,20 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
     case "envvar":
       if (expr.name === "resource" || expr.name === "rootResource") return wrap(ctx.resource);
       if (expr.name === "context") return ctx.context;
+      if (expr.name === "ucum") return [{ t: "str", value: UCUM_SYSTEM }];
       throw new UnsupportedFhirPathError(`unsupported environment variable %${expr.name}`);
     case "variable":
       if (expr.name === "this") return focus;
       throw new UnsupportedFhirPathError(`unsupported variable $${expr.name}`);
-    case "member":
+    case "member": {
       if (expr.target === null && isTypeQualifier(expr.name)) {
         return resolveTypeQualifier(expr.name, focus);
       }
-      return navigate(expr.target === null ? focus : evaluate(expr.target, focus, ctx), expr.name);
+      const input = expr.target === null ? focus : evaluate(expr.target, focus, ctx);
+      return ctx.exact?.(expr.name) === true
+        ? navigateExact(input, expr.name)
+        : navigate(input, expr.name);
+    }
     case "call": {
       const input = expr.target === null ? focus : evaluate(expr.target, focus, ctx);
       return applyFunction(expr.name, input, expr.args, focus, ctx);

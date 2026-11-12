@@ -71,19 +71,26 @@ Each of these is a finding the validator emits rather than silently letting some
 you treat any non-error finding as a pass, you will misread them. `valid` stays `true` beside them,
 since none is an error, so a result that is `valid` and carries any of them, or
 `PROFILE_VERSION_MISMATCH`, `RESOURCE_NOT_MODELED` or `CODE_SYSTEM_UNKNOWN`, does not mean the
-resource was fully checked. Membership of a code in a value set is checked only through a
-`terminology` service you pass, and without one nothing is reported for it.
+resource was fully checked. Read `fullyChecked` on the result for that: it is `false` whenever one
+of these findings is present, and on the cases it lists that draw no finding (a resource type
+outside the eight it covers, a `contained` resource). Membership of a code in a value set is checked
+only through a `terminology` service you pass, and without one nothing is reported for it; this is
+the one question `fullyChecked` does not count.
 
-Some rules are not evaluated yet and draw no finding at all: the invariants R4 defines on datatypes
-such as Quantity and Period. A Quantity with a unit `code` and no `system` (`qty-3`), a Period whose
-`end` is before its `start` (`per-1`), and a `comparator` on an element R4 types `SimpleQuantity`,
-such as `Observation.referenceRange.low`, where no profile names `SimpleQuantity` (`sqty-1`) each
-pass with `valid: true` and nothing said.
+- `EXTENSION_UNCHECKED`: an `extension`, at any depth, that was not checked against the definition
+  its `url` names. No extension definition is applied, supplied or not, so every extension draws
+  one; its content is checked only as a base `Extension` (`ext-1`, `ele-1`, the datatype of its
+  value). A nested extension is part of the extension holding it and is not reported again.
+- `PROFILE_UNCHECKED`: a `meta.profile` claim that no supplied profile of the resource's type carries
+  at that canonical URL, so the resource was not checked against it.
 
 - `INVARIANT_UNCHECKED`: a constraint whose FHIRPath expression is outside the bounded expression
   subset this library evaluates, whether a profile supplied it or R4 declares it on the resource
   type. It is reported as informational, and it means the invariant was **not** evaluated, not that
-  it held. With no profile, the one base constraint reported this way is `dom-3` on a resource that
+  it held. Among the datatype constraints, `cnt-3` (on a `Count`) and `trd-3` (on a
+  `TriggerDefinition`) are reported this way wherever those types occur, `rng-2` where a Range's two
+  bounds carry different units or a bound carries no value, and `ref-1` on a bare `#` reference.
+  With no profile, the one base constraint reported this way is `dom-3` on a resource that
   carries a contained resource: checking that every contained resource is referenced needs
   reference resolution the subset does not have. With nothing contained, `dom-3` holds by its own
   terms and nothing is reported, also when a supplied profile carries R4's `dom-3` as written. A
@@ -163,8 +170,10 @@ pass with `valid: true` and nothing said.
 
   A `choice[x]` occurrence of a type the profile does not list is an error,
   `PROFILE_TYPE_MISMATCH`. A list of type profiles, or of target profiles, is met by meeting any one
-  of them, so `sqty-1` is an error only where `SimpleQuantity` is the only profile listed; beside
-  another, a quantity with a `comparator` is reported `type-profile`. A base `Resource` target
+  of them, so a profile's `sqty-1` is an error only where `SimpleQuantity` is the only profile
+  listed; beside another, a quantity with a `comparator` is reported `type-profile`. Where R4 itself
+  types the element `SimpleQuantity`, the datatype constraints report `sqty-1` whatever a profile
+  lists. A base `Resource` target
   profile allows any target, and `DomainResource` any target but a `Binary`, `Bundle` or
   `Parameters`. A target profile naming `MetadataResource`, `CanonicalResource` or an element type
   decides nothing and is reported `target-profile`.

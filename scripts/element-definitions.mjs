@@ -173,17 +173,36 @@ function structureDefinitions(xml) {
       .slice(1)
       .map((chunk) => {
         const element = chunk.slice(0, chunk.indexOf("</element>"));
-        const types = [...element.matchAll(/<type>([\s\S]*?)<\/type>/g)].map((m) => {
+        const typeBlocks = [...element.matchAll(/<type>([\s\S]*?)<\/type>/g)];
+        const types = typeBlocks.map((m) => {
           const code = valueOf(m[1], "code");
           if (code === undefined) throw new Error("a type with no code");
           return code;
         });
+        const profiles = typeBlocks.map((m) => valueOf(m[1], "profile"));
+        const constraints = [...element.matchAll(/<constraint>([\s\S]*?)<\/constraint>/g)].map(
+          (m) => {
+            const key = valueOf(m[1], "key");
+            const severity = valueOf(m[1], "severity");
+            if (key === undefined || severity === undefined) {
+              throw new Error("a constraint with no key or severity");
+            }
+            return { key, severity, expression: valueOf(m[1], "expression") };
+          },
+        );
         const elementPath = valueOf(element, "path");
         if (elementPath === undefined) throw new Error("an element with no path");
-        return { path: elementPath, types, contentReference: valueOf(element, "contentReference") };
+        return {
+          path: elementPath,
+          types,
+          profiles,
+          constraints,
+          contentReference: valueOf(element, "contentReference"),
+        };
       });
     out.push({
       name: valueOf(header, "name"),
+      url: valueOf(header, "url"),
       type: valueOf(header, "type"),
       kind: valueOf(header, "kind"),
       derivation: valueOf(header, "derivation"),
@@ -205,10 +224,12 @@ function project(resourcesXml, typesXml) {
   ];
   const byType = new Map();
   const alias = new Map();
+  const profileByUrl = new Map();
   for (const sd of definitions) {
     if (sd.derivation === "specialization") byType.set(sd.type, sd);
     else if (sd.derivation === "constraint" && sd.kind === "complex-type") {
       alias.set(sd.name, sd.type);
+      profileByUrl.set(sd.url, sd);
     }
   }
 
@@ -233,6 +254,8 @@ function project(resourcesXml, typesXml) {
   contentReferences.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 
   const contexts = new Map();
+  const typeProfiles = {};
+  const profilesReached = new Map();
   const todo = [...ASSESSED];
   const target = (code, elementPath, all) => {
     if (code === "Resource") return "Resource";
@@ -263,16 +286,29 @@ function project(resourcesXml, typesXml) {
         members[memberName] = list;
         if (to !== "primitive" && to !== "Resource") todo.push(to);
       };
+      // A type the definitions narrow with a datatype profile of their own (`SimpleQuantity` on
+      // `Range.low`): the member is typed by the profile, whose constraints apply there.
+      const profiled = (memberName, i) => {
+        const profile = profileByUrl.get(element.profiles[i]);
+        if (profile === undefined) return;
+        typeProfiles[`${context}.${memberName}`] = profile.name;
+        profilesReached.set(profile.name, profile);
+      };
       if (element.contentReference !== undefined) {
         const ref = element.contentReference;
         add(name, ref.slice(ref.indexOf("#") + 1));
       } else if (name.endsWith("[x]")) {
         const stem = name.slice(0, -3);
-        for (const code of element.types) {
-          add(stem + code[0].toUpperCase() + code.slice(1), target(code, element.path, sd.elements));
-        }
+        element.types.forEach((code, i) => {
+          const memberName = stem + code[0].toUpperCase() + code.slice(1);
+          add(memberName, target(code, element.path, sd.elements));
+          profiled(memberName, i);
+        });
       } else {
-        for (const code of element.types) add(name, target(code, element.path, sd.elements));
+        element.types.forEach((code, i) => {
+          add(name, target(code, element.path, sd.elements));
+          profiled(name, i);
+        });
       }
     }
     contexts.set(context, members);
@@ -284,7 +320,39 @@ function project(resourcesXml, typesXml) {
     for (const name of Object.keys(members).sort()) sorted[name] = members[name];
     elements[context] = sorted;
   }
-  return { resourcePositions, contentReferences, elements };
+  // The error-severity constraints of every datatype the closure reaches, and of every datatype
+  // profile it reaches, by the element that carries them. `ele-1` and `ext-1`, which every element
+  // and every extension carries, are left out.
+  const datatypeConstraints = {};
+  const constraintsOf = (sd, as) => {
+    for (const element of sd.elements) {
+      for (const { key, severity, expression } of element.constraints) {
+        if (severity !== "error" || key === "ele-1" || key === "ext-1") continue;
+        const at = as + element.path.slice(sd.type.length);
+        const list = (datatypeConstraints[at] ??= []);
+        if (!list.some(([k]) => k === key)) list.push([key, expression ?? ""]);
+      }
+    }
+  };
+  const datatypes = new Set([...contexts.keys()].map((context) => context.split(".")[0]));
+  for (const typeName of datatypes) {
+    const sd = byType.get(typeName);
+    if (sd.kind === "complex-type") constraintsOf(sd, typeName);
+  }
+  for (const [name, sd] of profilesReached) constraintsOf(sd, name);
+  const sortedConstraints = {};
+  for (const at of Object.keys(datatypeConstraints).sort()) {
+    sortedConstraints[at] = datatypeConstraints[at].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  }
+  const sortedProfiles = {};
+  for (const at of Object.keys(typeProfiles).sort()) sortedProfiles[at] = typeProfiles[at];
+  return {
+    resourcePositions,
+    contentReferences,
+    elements,
+    datatypeConstraints: sortedConstraints,
+    typeProfiles: sortedProfiles,
+  };
 }
 
 async function derive(dir) {
@@ -326,6 +394,8 @@ async function derive(dir) {
     elements: Object.fromEntries(
       Object.entries(releases).map(([release, p]) => [release, p.elements]),
     ),
+    datatypeConstraints: { r4: releases.r4.datatypeConstraints },
+    typeProfiles: { r4: releases.r4.typeProfiles },
   };
   return `${JSON.stringify(projection, null, 2)}\n`;
 }

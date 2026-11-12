@@ -1323,11 +1323,17 @@ describe("a list of profiles is met by any one of them", () => {
     const either = lowTyped([
       { code: "Quantity", profile: [`${CORE}SimpleQuantity`, `${BASE}fake-quantity`] },
     ]);
-    const result = validateResource(withLow(comparator), { profiles: [either] });
-    expect(profileFindings(result.issues)).toEqual([
+    expect(profileFindings(collectProfileIssues(withLow(comparator), either))).toEqual([
       ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.referenceRange.low", "type-profile"],
     ]);
-    expect(result.valid).toBe(true);
+    // R4 itself types referenceRange.low as a SimpleQuantity, so the datatype layer reports
+    // sqty-1 there whatever the profile lists, and the result is invalid.
+    const result = validateResource(withLow(comparator), { profiles: [either] });
+    expect(profileFindings(result.issues)).toEqual([
+      ["INVARIANT_VIOLATED", "Observation.referenceRange[0].low", "sqty-1"],
+      ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.referenceRange.low", "type-profile"],
+    ]);
+    expect(result.valid).toBe(false);
     // Without a comparator the value fits SimpleQuantity, so it fits the list.
     expect(profileFindings(collectProfileIssues(withLow({ value: 1 }), either))).toEqual([]);
     // SimpleQuantity named twice, once pinned, is still SimpleQuantity alone.
@@ -1337,6 +1343,10 @@ describe("a list of profiles is met by any one of them", () => {
     expect(profileFindings(collectProfileIssues(withLow(comparator), twice))).toEqual([
       ["INVARIANT_VIOLATED", "Observation.referenceRange.low", "sqty-1"],
     ]);
+    // The same breach the datatype layer reports is reported once.
+    expect(
+      profileFindings(validateResource(withLow(comparator), { profiles: [twice] }).issues),
+    ).toEqual([["INVARIANT_VIOLATED", "Observation.referenceRange[0].low", "sqty-1"]]);
   });
 
   it("reads two entries of one type code as either", () => {
@@ -1469,10 +1479,16 @@ describe("the result of validating against a profile", () => {
       },
     ]);
     const result = validateResource(parse(OBS), { profiles: [typeProfile] });
-    // An unchecked constraint is information: valid stays true beside it, and no other field
-    // claims the resource was checked in full.
+    // An unchecked constraint is information: valid stays true beside it, and fullyChecked says
+    // the resource was not checked in full.
     expect(result.valid).toBe(true);
     expect(result.issues.map((i) => i.uncheckedConstraint)).toEqual(["type-profile"]);
-    expect(Object.keys(result).sort()).toEqual(["issues", "toOperationOutcome", "valid"]);
+    expect(Object.keys(result).sort()).toEqual([
+      "fullyChecked",
+      "issues",
+      "toOperationOutcome",
+      "valid",
+    ]);
+    expect(result.fullyChecked).toBe(false);
   });
 });

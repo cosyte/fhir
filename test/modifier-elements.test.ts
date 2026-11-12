@@ -107,14 +107,16 @@ describe("Quantity.comparator is reported wherever the walk reaches it, and lowe
     expect(serialized).not.toContain("<");
     // The validator's findings for this document. `MedicationRequest` has a built-in element table
     // now, so the informational not-modeled note is gone and the four direct elements R4 makes
-    // mandatory are reported absent instead. NONE of them is about the comparator: the modifier
-    // element the readout reports is still invisible to the validator, which is the asymmetry this
-    // channel exists to close and the reason the readout carries it.
+    // mandatory are reported absent instead. R4 types `doseQuantity` as a SimpleQuantity, which
+    // carries no comparator (`sqty-1`), so the validator reports the comparator too, as a breach of
+    // that constraint; the readout still carries it as a modifier element, which says what it does
+    // to the value beside it.
     expect(findingsOf(json)).toEqual([
       "CARDINALITY_MIN/error at MedicationRequest.status",
       "CARDINALITY_MIN/error at MedicationRequest.intent",
       "CARDINALITY_MIN/error at MedicationRequest.medication[x]",
       "CARDINALITY_MIN/error at MedicationRequest.subject",
+      "INVARIANT_VIOLATED/error at MedicationRequest.dosageInstruction[0].doseAndRate[0].doseQuantity",
     ]);
     expect(validateResource(parseResource(json).resource).valid).toBe(false);
   });

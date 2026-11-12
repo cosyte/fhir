@@ -359,7 +359,14 @@ describe("evaluateInvariant: fail-safe (unchecked, never a false pass)", () => {
   });
 
   it("reports an unsupported environment variable as unchecked", () => {
-    expect(evalOn("%ucum.exists()", { resourceType: "Observation" }).unchecked).toBe(true);
+    expect(evalOn("%fake.exists()", { resourceType: "Observation" }).unchecked).toBe(true);
+  });
+
+  it("answers %ucum with the UCUM system URL", () => {
+    expect(evalOn("%ucum = 'http://unitsofmeasure.org'", { resourceType: "Observation" })).toEqual({
+      unchecked: false,
+      satisfied: true,
+    });
   });
 
   it("does not throw out of the engine: every failure is caught into unchecked", () => {
