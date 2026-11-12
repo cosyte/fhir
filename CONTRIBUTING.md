@@ -23,9 +23,10 @@ EHR that produced it, and say what you expected beside what happened.
   validator, which needs `java` and the pinned `validator_cli.jar`.
 - Add a changeset (`pnpm changeset`). The Changesets changelog generator is on in this repository,
   so the changeset summary is the `CHANGELOG.md` entry; do not edit `CHANGELOG.md` by hand. While
-  the version is below 1.0, pick `minor` for new capability or for any change that withdraws or
-  narrows working behavior (a new write refusal does), and `patch` only when every public observable
-  is unchanged.
+  the version is below 1.0, every release is a `patch`, including a change that withdraws or
+  narrows working behavior (a new write refusal does). Such a change states the break in its
+  changeset and adds a paragraph opening `What a caller must change:` that says what a caller must
+  do; the release readiness check refuses a breaking `patch` without it.
 - Use no em or en dashes (U+2014, U+2013) anywhere: in tracked files, the PR title, the PR body, or
   any commit message. CI checks all four (`.github/workflows/no-emdash.yml`), and
   `pnpm check:no-emdash` runs the file half locally. Rewrite with a period, colon, comma, or

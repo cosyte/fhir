@@ -31,9 +31,10 @@ not read safely.
 ## Status
 
 **The 0.1 line.** From 0.1 the public API is settled: the exported names, options, result shapes, and
-issue codes are the surface we keep stable. While the package is below 1.0, a breaking change ships
-in a minor version and is called out in the
-[changelog](https://github.com/cosyte/fhir/blob/main/CHANGELOG.md). Upgrading from 0.0.10 changes
+issue codes are the surface we keep stable. While the package is below 1.0, every release is a patch
+version, a breaking change included, and the entry for a breaking change in the
+[changelog](https://github.com/cosyte/fhir/blob/main/CHANGELOG.md) says what changed and what a
+caller must do. Upgrading from 0.0.10 changes
 verdicts: R4's own constraints are now evaluated with no profile supplied, so a document that read
 valid can read invalid. The changelog sets out each change.
 
@@ -200,9 +201,9 @@ pnpm lint
 pnpm test
 ```
 
-Every meaningful change gets a changeset (`pnpm changeset`: `minor` for new capability or a breaking
-change while the version is below 1.0, `patch` for a fix), and its summary becomes the change's
-entry in `CHANGELOG.md`. See [`CONTRIBUTING.md`](https://github.com/cosyte/fhir/blob/main/CONTRIBUTING.md).
+Every meaningful change gets a changeset (`pnpm changeset`: `patch` while the version is below 1.0,
+a breaking change included, whose changeset says what a caller must do), and its summary becomes the
+change's entry in `CHANGELOG.md`. See [`CONTRIBUTING.md`](https://github.com/cosyte/fhir/blob/main/CONTRIBUTING.md).
 
 ## License
 

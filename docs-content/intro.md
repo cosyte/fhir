@@ -23,8 +23,9 @@ typed model per resource type; [current limits](./limits.md) lists what it delib
 ## Status
 
 `@cosyte/fhir` is on the `0.1` line and installs from npm; [installation](./installation.md) has the
-command. While the package is below 1.0, a breaking change ships in a minor version and is called out
-in the changelog. What the package does not do is listed in [current limits](./limits.md), which is
+command. While the package is below 1.0, every release is a patch version, a breaking change
+included, and the changelog entry for a breaking change says what changed and what a caller must
+do. What the package does not do is listed in [current limits](./limits.md), which is
 worth reading before you plan around it.
 
 ## Start here
