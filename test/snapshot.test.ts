@@ -259,6 +259,7 @@ describe("generateSnapshot: what the model does not read", () => {
         element: [
           { id: "Patient.id", path: "Patient.id", maxLength: 3, minValueInteger: 1 },
           { id: "Patient.gender", path: "Patient.gender", min: 1 },
+          { id: "Patient.gender", path: "Patient.gender", maxLength: 9 },
         ],
       },
     });
@@ -267,6 +268,7 @@ describe("generateSnapshot: what the model does not read", () => {
       "maxLength",
       "minValueInteger",
     ]);
-    expect(snapshot.find((e) => e.id === "Patient.gender")?.unmodeled).toBeUndefined();
+    // A differential element alone states what the base element did not.
+    expect(snapshot.find((e) => e.id === "Patient.gender")?.unmodeled).toEqual(["maxLength"]);
   });
 });

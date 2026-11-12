@@ -172,11 +172,11 @@ const KINDS: readonly Kind[] = [
     ],
   },
   {
-    kind: "maxLength",
+    kind: "unmodeled:maxLength",
     elements: [{ id: "Observation.id", path: "Observation.id", maxLength: 64 }],
   },
   {
-    kind: "minValueDecimal",
+    kind: "unmodeled:minValueDecimal",
     elements: [
       {
         id: "Observation.value[x].value",
@@ -186,7 +186,7 @@ const KINDS: readonly Kind[] = [
     ],
   },
   {
-    kind: "maxValueDecimal",
+    kind: "unmodeled:maxValueDecimal",
     elements: [
       {
         id: "Observation.value[x].value",
@@ -196,13 +196,13 @@ const KINDS: readonly Kind[] = [
     ],
   },
   {
-    kind: "contentReference",
+    kind: "unmodeled:contentReference",
     elements: [
       { id: "Observation.note", path: "Observation.note", contentReference: "#Observation.note" },
     ],
   },
   {
-    kind: "extension:http://example.org/StructureDefinition/fake-rule",
+    kind: "unmodeled:extension:http://example.org/StructureDefinition/fake-rule",
     elements: [
       {
         id: "Observation.status",
@@ -212,7 +212,7 @@ const KINDS: readonly Kind[] = [
     ],
   },
   {
-    kind: "binding.extension:http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet",
+    kind: "unmodeled:binding.extension:http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet",
     elements: [
       {
         id: "Observation.method",
@@ -231,7 +231,7 @@ const KINDS: readonly Kind[] = [
     ],
   },
   {
-    kind: "type.aggregation",
+    kind: "unmodeled:type.aggregation",
     elements: [
       {
         id: "Observation.performer",
@@ -241,7 +241,47 @@ const KINDS: readonly Kind[] = [
     ],
   },
   {
-    kind: "fakeRule",
+    kind: "slicing:ordered",
+    elements: [
+      {
+        id: "Observation.interpretation",
+        path: "Observation.interpretation",
+        slicing: { discriminator: [{ type: "value", path: "text" }], rules: "open", ordered: true },
+      },
+    ],
+  },
+  {
+    kind: "slicing:openAtEnd",
+    elements: [
+      {
+        id: "Observation.performer",
+        path: "Observation.performer",
+        slicing: { discriminator: [{ type: "value", path: "reference" }], rules: "openAtEnd" },
+      },
+    ],
+  },
+  {
+    kind: "unmodeled:binding:unread",
+    elements: [
+      {
+        id: "Observation.effective[x]",
+        path: "Observation.effective[x]",
+        binding: { valueSet: "http://example.org/ValueSet/fake-times" },
+      },
+    ],
+  },
+  {
+    kind: "unmodeled:constraint:unread",
+    elements: [
+      {
+        id: "Observation.value[x]",
+        path: "Observation.value[x]",
+        constraint: [{ key: "fake-3", severity: "error", xpath: "true()" }],
+      },
+    ],
+  },
+  {
+    kind: "unmodeled:fakeRule",
     elements: [
       { id: "Observation.interpretation", path: "Observation.interpretation", fakeRule: true },
     ],

@@ -1943,6 +1943,35 @@ describe("a type or profile discriminator path that selects more than one node",
     ]);
   });
 
+  it("places an occurrence with nothing at the path in no slice", () => {
+    const result = validateResource(bundleWith([]), {
+      profiles: [byContained("type", { code: "Organization" })],
+    });
+    expect(unchecked(result.issues)).toEqual([]);
+    expect(
+      result.issues.filter((i) => i.severity === "error").map((i) => [i.code, i.expression]),
+    ).toEqual([["PROFILE_SLICE_UNMATCHED", "Bundle.entry[0]"]]);
+  });
+
+  it("places an occurrence with no resource at a profile path in no slice", () => {
+    const finalOnly = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}fake-final-obs`,
+      type: "Observation",
+      snapshot: { element: [{ id: "Observation", path: "Observation" }] },
+    });
+    const result = validateResource(bundleWith([]), {
+      profiles: [
+        byContained("profile", { code: "Observation", profile: [finalOnly.url] }),
+        finalOnly,
+      ],
+    });
+    expect(unchecked(result.issues)).toEqual([]);
+    expect(
+      result.issues.filter((i) => i.severity === "error").map((i) => [i.code, i.expression]),
+    ).toEqual([["PROFILE_SLICE_UNMATCHED", "Bundle.entry[0]"]]);
+  });
+
   it("still decides a path that selects one node", () => {
     const typed = validateResource(bundleWith([organization]), {
       profiles: [byContained("type", { code: "Organization" })],

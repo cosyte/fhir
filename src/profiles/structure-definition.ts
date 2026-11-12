@@ -262,6 +262,12 @@ function unmodeledOf(node: FhirComplex, known: readonly string[], prefix: string
   return out;
 }
 
+/** How many members a repeating (or single) node holds: none when it is absent. */
+function countOf(node: FhirNode | undefined): number {
+  if (node === undefined) return 0;
+  return isList(node) ? node.items.length : 1;
+}
+
 /** Everything an element definition node states that {@link unmodeledOf} records, its parts included. */
 function unmodeledIn(node: FhirComplex): string[] {
   const out = unmodeledOf(node, ELEMENT_MEMBERS_READ_OR_DOCUMENTARY, "");
@@ -465,6 +471,11 @@ function readElementDefinition(node: FhirNode): ElementDefinition | undefined {
   const binding = readBinding(getProperty(node, "binding"));
   const constraint = readConstraints(getProperty(node, "constraint"));
   const unmodeled = unmodeledIn(node);
+  // A binding with no strength, or an invariant with no key or expression, is stated and not read.
+  if (getProperty(node, "binding") !== undefined && binding === undefined)
+    unmodeled.push("binding:unread");
+  if (countOf(getProperty(node, "constraint")) !== (constraint?.length ?? 0))
+    unmodeled.push("constraint:unread");
 
   const el: {
     -readonly [K in keyof ElementDefinition]: ElementDefinition[K];

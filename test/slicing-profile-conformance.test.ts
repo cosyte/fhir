@@ -964,6 +964,38 @@ describe("the kinds of constraint one element places on a target", () => {
     ).toEqual([]);
   });
 
+  it("names what the model does not read under a prefix no allowed kind has", () => {
+    // A bare `fixed` member is no `fixed[x]`: it must not read as the allowed `fixed` kind.
+    expect(
+      kindsOf(
+        "Patient",
+        { gender: "other" },
+        [{ id: "Patient.gender", path: "Patient.gender", fixed: "other", maxLength: 9 }],
+        "Patient.gender",
+      ),
+    ).toEqual(["unmodeled:fixed", "unmodeled:maxLength"]);
+  });
+
+  it("names the order a slicing asks for, which no layer checks", () => {
+    const slicing = (extra: Record<string, unknown>) =>
+      kindsOf(
+        "Patient",
+        { identifier: [{ system: "urn:fake" }] },
+        [
+          {
+            id: "Patient.identifier",
+            path: "Patient.identifier",
+            slicing: { discriminator: [{ type: "value", path: "system" }], ...extra },
+          },
+        ],
+        "Patient.identifier",
+      );
+    expect(slicing({ rules: "closed" })).toEqual(["slicing"]);
+    expect(slicing({ rules: "open", ordered: false })).toEqual(["slicing"]);
+    expect(slicing({ rules: "closed", ordered: true })).toEqual(["slicing", "slicing:ordered"]);
+    expect(slicing({ rules: "openAtEnd" })).toEqual(["slicing", "slicing:openAtEnd"]);
+  });
+
   it("takes a binding as the schema's only at that value set and the R4 release", () => {
     const status = (binding: Record<string, unknown>) =>
       kindsOf(
@@ -986,6 +1018,16 @@ describe("the kinds of constraint one element places on a target", () => {
     expect(status({ strength: "fake-strength", valueSet: vs })).toEqual(["binding:unenforced"]);
     expect(status({ strength: "preferred", valueSet: `${vs}-fake` })).toEqual(["binding:advisory"]);
     expect(status({ strength: "example", valueSet: `${vs}-fake` })).toEqual(["binding:advisory"]);
+    // An element the schema enumerates nothing for is never the schema's, value set or none.
+    const code = (binding: Record<string, unknown>) =>
+      kindsOf(
+        "Observation",
+        { code: { text: "fake" } },
+        [{ id: "Observation.code", path: "Observation.code", binding }],
+        "Observation.code",
+      );
+    expect(code({ strength: "required" })).toEqual(["binding:unenforced"]);
+    expect(code({ strength: "required", valueSet: vs })).toEqual(["binding:unenforced"]);
   });
 
   it("takes a slice's profile as the slicing's when a profile discriminator decides it", () => {
@@ -1016,6 +1058,32 @@ describe("the kinds of constraint one element places on a target", () => {
     expect(slice("$this", own)).toEqual(["slicing", "type:code"]);
     expect(slice("", own)).toEqual(["slicing", "type:code"]);
     expect(slice("resolve()", own)).toEqual(["type:profile", "type:code"]);
+    // Only a profile discriminator decides a profile.
+    const byType = kindsOf(
+      "Observation",
+      { hasMember: [{ reference: "Observation/fake-o" }] },
+      [
+        {
+          id: "Observation.hasMember",
+          path: "Observation.hasMember",
+          slicing: { discriminator: [{ type: "type", path: "$this" }], rules: "open" },
+        },
+        {
+          id: "Observation.hasMember:m",
+          path: "Observation.hasMember",
+          sliceName: "m",
+          type: [{ code: "Reference", ...own }],
+        },
+      ],
+      "Observation.hasMember:m",
+    );
+    expect(byType).toEqual(["type:profile", "type:code"]);
+    // Any one target profile other than any resource narrows.
+    expect(
+      slice("$this", {
+        targetProfile: ["http://hl7.org/fhir/StructureDefinition/Resource", `${BASE}fake-member`],
+      }),
+    ).toEqual(["type:targetProfile", "type:code"]);
     // Any resource at all is no narrowing.
     expect(
       slice("$this", { targetProfile: ["http://hl7.org/fhir/StructureDefinition/Resource"] }),

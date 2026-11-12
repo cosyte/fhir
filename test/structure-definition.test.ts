@@ -329,6 +329,9 @@ describe("what an element definition states that the model does not read", () =>
     const el = elementOf({
       maxLength: 3,
       minValueInteger: 1,
+      fixedlower: 1,
+      fixed: 1,
+      prefixedFake: 1,
       contentReference: "#Patient.y",
       extension: [
         { url: "http://example.org/StructureDefinition/fake-rule" },
@@ -345,12 +348,15 @@ describe("what an element definition states that the model does not read", () =>
       },
       type: [
         { code: "Reference", aggregation: ["contained"] },
-        { code: "Reference", versioning: "specific" },
+        { code: "Reference", versioning: "specific", patternFake: 1 },
       ],
     });
     expect(el.unmodeled).toEqual([
       "maxLength",
       "minValueInteger",
+      "fixedlower",
+      "fixed",
+      "prefixedFake",
       "contentReference",
       "extension:http://example.org/StructureDefinition/fake-rule",
       "extension:",
@@ -359,6 +365,41 @@ describe("what an element definition states that the model does not read", () =>
       "binding.additional",
       "type.aggregation",
       "type.versioning",
+      "type.patternFake",
+    ]);
+  });
+
+  it("records a binding or an invariant it could not read", () => {
+    expect(
+      elementOf({ binding: { valueSet: "http://example.org/ValueSet/fake" } }).unmodeled,
+    ).toEqual(["binding:unread"]);
+    expect(
+      elementOf({
+        constraint: [
+          { key: "fake-1", severity: "error", expression: "true" },
+          { key: "fake-2", severity: "error", xpath: "true()" },
+        ],
+      }).unmodeled,
+    ).toEqual(["constraint:unread"]);
+    expect(
+      elementOf({ constraint: { key: "fake-1", expression: "true" } }).unmodeled,
+    ).toBeUndefined();
+  });
+
+  it("reads past a binding or a type that is not an object", () => {
+    expect(elementOf({ type: ["fake"] }).unmodeled).toBeUndefined();
+    // A binding that is not an object is stated, and not read.
+    expect(elementOf({ binding: "fake" }).unmodeled).toEqual(["binding:unread"]);
+  });
+
+  it("reads one extension written bare, and one that is not an object, as unrecognised", () => {
+    const el = elementOf({
+      extension: { url: "http://example.org/StructureDefinition/fake-single" },
+      binding: { strength: "required", extension: ["fake"] },
+    });
+    expect(el.unmodeled).toEqual([
+      "extension:http://example.org/StructureDefinition/fake-single",
+      "binding.extension:",
     ]);
   });
 });

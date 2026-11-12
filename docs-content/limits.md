@@ -114,9 +114,10 @@ you treat any non-error finding as a pass, you will misread them.
     type (a choice suffix or a `resourceType`) is read against. Anything else leaves it undecided: a
     type list narrower than the occurrence's type, a type `profile` (an extension's definition, say)
     or `targetProfile` the slicing does not itself decide, a binding to any other value set (even
-    one whose codes are all among the enumerated ones), an invariant on a slice itself,
-    `maxLength`, `minValue[x]`, `maxValue[x]`, `contentReference`, and any member or extension of
-    the element definition this library does not read.
+    one whose codes are all among the enumerated ones), an invariant on a slice itself, an
+    `ordered` or `openAtEnd` slicing (the order of its members is not checked), `maxLength`,
+    `minValue[x]`, `maxValue[x]`, `contentReference`, a binding or an invariant this library could
+    not read, and any member or extension of the element definition it does not read.
 
   Two warts to know about. The finding's diagnostic text still says the slicing used "an
   unsupported discriminator" whatever the reason; read `sliceReason` for the reason. And a

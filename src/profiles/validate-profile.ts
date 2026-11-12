@@ -81,6 +81,7 @@ import type {
   ElementBinding,
   ElementConstraint,
   ElementDefinition,
+  ElementType,
   StructureDefinition,
 } from "./structure-definition.js";
 
@@ -248,9 +249,9 @@ function environmentIn(
   };
 }
 
-// Stryker disable all: a module-level constant, evaluated once when the module loads, which the
+// Stryker disable all: module-level constants, evaluated once when the module loads, which the
 // mutation runner does not reload per mutant; test/slicing-profile-conformance.property.test.ts
-// pins every entry by behaviour.
+// and test/slicing-profile-conformance.test.ts pin each by behaviour.
 /**
  * The kinds of constraint a nested profile check may affirm, each with what enforces it when the
  * check runs. A profile discriminator's check says a target conforms only when every constraint the
@@ -277,7 +278,6 @@ export const ENFORCED_CONSTRAINT_KINDS: Readonly<Record<string, string>> = {
   "binding:advisory": "nothing to enforce: a preferred or example binding asks nothing",
   "type:code": "this check: each present occurrence's own type is one the element allows",
 };
-// Stryker restore all
 
 /** The canonical of the base `Resource` definition: as a `targetProfile`, it narrows nothing. */
 const ANY_RESOURCE = "http://hl7.org/fhir/StructureDefinition/Resource";
@@ -287,6 +287,7 @@ const ANY_RESOURCE = "http://hl7.org/fhir/StructureDefinition/Resource";
  * may pin it, and pins nothing else.
  */
 const R4_VERSION = "4.0.1";
+// Stryker restore all
 
 /**
  * Whether the profile asks something of the target that the layers which ran do not check: an
@@ -314,7 +315,7 @@ function checksLeftOut(
 /**
  * The kinds of constraint one element of a profile places on a target the element is present in,
  * as {@link ENFORCED_CONSTRAINT_KINDS} names them; what the model does not read comes back as
- * {@link ElementDefinition.unmodeled} spells it, a kind never on that list.
+ * {@link ElementDefinition.unmodeled} spells it under `unmodeled:`, a kind never on that list.
  *
  * @param el - The element.
  * @param type - The resource type the profile constrains.
@@ -337,19 +338,26 @@ export function constraintKinds(
   if (el.mustSupport !== undefined) kinds.push("mustSupport");
   if (el.fixed !== undefined) kinds.push("fixed");
   if (el.pattern !== undefined) kinds.push("pattern");
-  if (el.slicing !== undefined) kinds.push("slicing");
+  if (el.slicing !== undefined) {
+    kinds.push("slicing");
+    // The profile layer checks a closed slicing's unmatched occurrences, never their order.
+    if (el.slicing.ordered === true) kinds.push("slicing:ordered");
+    if (el.slicing.rules === "openAtEnd") kinds.push("slicing:openAtEnd");
+  }
   for (const constraint of el.constraint ?? [])
     kinds.push(constraintKind(el, constraint, snapshot));
   if (el.binding !== undefined) kinds.push(bindingKind(el, el.binding, type, schema));
   const slicedBy = sliceDiscriminators(el, snapshot);
-  for (const t of el.type ?? []) {
+  const types = el.type ?? [];
+  for (const t of types) {
     if ((t.profile ?? []).length > 0)
       kinds.push(decidesProfile(slicedBy, false) ? "slicing" : "type:profile");
     if ((t.targetProfile ?? []).some((c) => c !== ANY_RESOURCE))
       kinds.push(decidesProfile(slicedBy, true) ? "slicing" : "type:targetProfile");
   }
-  if ((el.type ?? []).length > 0 && el.path !== type) kinds.push(typeKind(el, scope));
-  kinds.push(...(el.unmodeled ?? []));
+  if (types.length > 0 && el.path !== type) kinds.push(typeKind(el, types, scope));
+  // Under a prefix of their own, so nothing the model does not read can spell an allowed kind.
+  for (const statement of el.unmodeled ?? []) kinds.push(`unmodeled:${statement}`);
   return kinds;
 }
 
@@ -359,7 +367,7 @@ function sliceDiscriminators(
   snapshot: readonly ElementDefinition[],
 ): readonly { readonly type: string; readonly path: string }[] {
   if (el.sliceName === undefined) return [];
-  const sliced = snapshot.find((e) => e !== el && e.sliceName === undefined && isSliceOf(el, e));
+  const sliced = snapshot.find((e) => e.sliceName === undefined && isSliceOf(el, e));
   return sliced?.slicing?.discriminator ?? [];
 }
 
@@ -387,7 +395,7 @@ function constraintKind(
   snapshot: readonly ElementDefinition[],
 ): string {
   if (el.sliceName === undefined) return "constraint";
-  const sliced = snapshot.find((e) => e !== el && e.sliceName === undefined && isSliceOf(el, e));
+  const sliced = snapshot.find((e) => e.sliceName === undefined && isSliceOf(el, e));
   const shared = sliced?.constraint?.some(
     (c) => c.key === constraint.key && c.expression === constraint.expression,
   );
@@ -409,12 +417,12 @@ function bindingKind(
   // A nested path's tail has a dot, which names no schema element.
   const enumerated = schema?.elements[el.path.slice(type.length + 1)]?.binding?.valueSet;
   const valueSet = binding.valueSet;
-  const bar = valueSet?.indexOf("|") ?? -1;
-  const url = bar === -1 ? valueSet : valueSet?.slice(0, bar);
-  const version = bar === -1 ? R4_VERSION : valueSet?.slice(bar + 1);
+  if (valueSet === undefined) return "binding:unenforced";
+  const bar = valueSet.indexOf("|");
+  const url = bar === -1 ? valueSet : valueSet.slice(0, bar);
+  const version = bar === -1 ? R4_VERSION : valueSet.slice(bar + 1);
   const same =
     (binding.strength === "required" || binding.strength === "extensible") &&
-    enumerated !== undefined &&
     url === enumerated &&
     version === R4_VERSION;
   return same ? "binding:schema" : "binding:unenforced";
@@ -426,9 +434,10 @@ function bindingKind(
  * that is not a choice, the type the structure layer read it as. Otherwise the narrowing is not
  * checked here, and the kind says so.
  */
-function typeKind(el: ElementDefinition, scope: SliceScope): string {
-  const codes = (el.type ?? []).map((t) => t.code);
-  const single = codes.length === 1 && !el.path.endsWith("[x]");
+function typeKind(el: ElementDefinition, types: readonly ElementType[], scope: SliceScope): string {
+  const codes = types.map((t) => t.code);
+  // A choice's occurrences always carry their suffix, so only another element reads `single`.
+  const single = codes.length === 1;
   for (const group of scope.parentGroups(el)) {
     for (const [i, child] of group.children.entries()) {
       const suffix = group.types[i];
