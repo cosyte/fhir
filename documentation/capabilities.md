@@ -44,9 +44,10 @@ structurally validates, never drops a modifier / status / negation, surfaces mea
 true type with the UCUM `code`** (never the display string, never converted), **validates code systems
 and binding strength without vendoring any SNOMED / CPT / LOINC content, validates against US Core
 profiles you supply, and evaluates their FHIRPath invariants** (failing safe to `INVARIANT_UNCHECKED`
-on any unsupported expression); it decides `type` and `profile` slicing discriminators where the
-document holds the answer (still `PROFILE_SLICE_UNCHECKED`, with its reason, where it does not), and
-it bundles **no** US Core IG corpus. The `validator_cli.jar` **differential runs in CI** (a JVM oracle job; there is no Java in
+on any unsupported expression); it decides `type` slicing discriminators where the document
+states the type (still `PROFILE_SLICE_UNCHECKED`, with its reason, where it does not), does **not**
+yet decide `profile` discriminators (`PROFILE_SLICE_UNCHECKED`, `profile-discriminator`), and it
+bundles **no** US Core IG corpus. The `validator_cli.jar` **differential runs in CI** (a JVM oracle job; there is no Java in
 the dev container) over **both** the synthetic spec-clean corpus **and** the real-world quirk corpus,
 and it is green: CI run 43130002820 (job 130891488814, commit 56613a8, after the change that added
 the `Encounter`, `Procedure` and `DocumentReference` schemas) compared 236 documents (325 declared,
@@ -752,25 +753,18 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   failing closed (`FhirProfileError`) on an unresolvable base or a `baseDefinition` cycle. A caller
   supplies the base via a resolver; a profile that already ships a snapshot is used as-is.
 - **Slicing** matches each occurrence of a sliced element to a slice by its discriminators. The R4
-  set is `value | exists | pattern | type | profile`, and all five are decided where the document
-  holds the answer (**`position` is R5-only** and excluded). A `type` discriminator is decided from
+  set is `value | exists | pattern | type | profile` (**`position` is R5-only** and excluded). The
+  first four are decided where the document holds the answer. A `type` discriminator is decided from
   the occurrence's concrete type: a choice element's suffix (`valueQuantity` is a `Quantity`) or a
-  resource's `resourceType`, at the discriminator path or through a trailing `resolve()`. A
-  `profile` discriminator is decided for a resource held in place (`contained`, a Bundle entry's
-  `resource`) or reached by `resolve()` through the resource's `contained` set or, for a Bundle, its
-  entries: the resource is checked against the profile the slice names, taken from the supplied
-  `profiles` or from `resolveBase`, with every layer `validateResource` runs (the profile's own
-  invariants and the base constraints among them): an error there means it does not conform, and a
-  check that left something unevaluated decides nothing: an invariant or a slicing it could not
-  decide, or a constraint on an element present in the resource of a kind no layer that ran
-  enforces (a narrowed type, a type `profile` or `targetProfile`, a binding to a value set other
-  than the one the schema enumerates there, `maxLength`, `minValue[x]`, `maxValue[x]`, an invariant
-  on a slice itself, anything the model does not read). A discriminator path that selects more
-  than one node in an occurrence decides nothing either. A slicing that
-  cannot be decided is reported `PROFILE_SLICE_UNCHECKED` (`information`) with a `sliceReason`
-  (`SLICE_UNCHECKED_REASONS`: the `position` discriminator, a reference that leaves the closure, a
-  profile not supplied, a type the document does not state, and the rest): **never silently
-  passed**. Nested profile checks are bounded: eight deep and 4096 per validation. An unmatched occurrence under
+  resource's `resourceType`, at the discriminator path or through a trailing `resolve()` over the
+  resource's `contained` set or, for a Bundle, its entries; there a slice's `targetProfile` names a
+  type through the base R4 definitions or the supplied `profiles`. A discriminator path that selects
+  more than one node in an occurrence decides nothing. A `profile` discriminator is not decided yet:
+  a slicing with one among its discriminators is left undecided. A slicing that cannot be decided is
+  reported `PROFILE_SLICE_UNCHECKED` (`information`) with a `sliceReason`
+  (`SLICE_UNCHECKED_REASONS`: a `profile` discriminator, the `position` discriminator, a reference
+  that leaves the closure, a target profile not supplied, a type the document does not state, and
+  the rest): **never silently passed**. An unmatched occurrence under
   `closed` slicing is `PROFILE_SLICE_UNMATCHED` (error); a missing required slice is `CARDINALITY_MIN`.
   A slice's own constraints (the elements under its id: fixed and pattern values, cardinalities,
   invariants) apply only to the occurrences assigned to it; the sliced element's own constraints
@@ -796,10 +790,11 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   whose snapshot repeats one is reported once per occurrence, not twice. `collectInvariantIssues`,
   called directly, still reports every constraint the profile carries, base ones included.
 - **Deferred:** the bundled multi-version US Core IG corpus (the `validator_cli.jar` differential
-  runs in CI, see above); a `type` or `profile` discriminator whose answer is outside the document
-  (a reference to a server, which is never fetched; a profile not supplied), a discriminator path
-  outside element names, `[x]`, `$this` and `resolve()`, and the R5 `position` discriminator (each
-  still `PROFILE_SLICE_UNCHECKED`, with its reason: a fail-safe deferral). Every finding is **value-free** (a code + a FHIRPath location,
+  runs in CI, see above); the `profile` slicing discriminator, a `type` discriminator whose answer
+  is outside the document (a reference to a server, which is never fetched; a target profile not
+  supplied), a discriminator path outside element names, `[x]`, `$this` and `resolve()`, and the R5
+  `position` discriminator (each still `PROFILE_SLICE_UNCHECKED`, with its reason: a fail-safe
+  deferral). Every finding is **value-free** (a code + a FHIRPath location,
   never the value).
 
 ```ts

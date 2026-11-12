@@ -14,9 +14,9 @@ production is not.
 The gaps, in the order the README lists them under "Not covered yet":
 
 - [typed per-resource models](#no-typed-per-resource-models);
-- `type` and `profile` slicing discriminators the document holds no answer to, and the R5
-  `position` discriminator, reported `PROFILE_SLICE_UNCHECKED`, and FHIRPath outside the subset we
-  evaluate, reported `INVARIANT_UNCHECKED`
+- `profile` slicing discriminators, `type` discriminators the document holds no answer to, and the
+  R5 `position` discriminator, reported `PROFILE_SLICE_UNCHECKED`, and FHIRPath outside the subset
+  we evaluate, reported `INVARIANT_UNCHECKED`
   ([verdicts that say "not checked"](#verdicts-that-say-not-checked-rather-than-passing));
 - bundled [terminology](#no-terminology-content-is-bundled) or [US Core](#no-profile-content-is-bundled)
   content;
@@ -81,50 +81,31 @@ you treat any non-error finding as a pass, you will misread them.
   means the slice membership was not decided, not that it matched. A slice's own constraints apply
   only to the occurrences assigned to it, so under an undecided slicing they are not checked either.
   The finding's `sliceReason` says which part could not be decided:
+  - `profile-discriminator`: a `profile` discriminator, which this library does not decide yet. A
+    slicing with one among its discriminators is left undecided whatever else it discriminates on;
   - `discriminator-unsupported`: the `position` discriminator, which is not part of the R4
     discriminator set, or a kind outside it; `no-discriminator`: a slicing that declares none;
   - `slice-unconstrained`: a slice that states nothing at a discriminator path (no fixed or pattern
-    value, no cardinality, no type, no profile);
-  - `path-unsupported`: a `type` or `profile` discriminator path outside dotted element names, `[x]`
-    choices, `$this` and a trailing `resolve()`, such as `ofType(Quantity)`, or one that selects
-    more than one node in an occurrence (a discriminator path selects one element, so several
-    decide nothing rather than matching when any one of them does);
+    value, no cardinality, no type);
+  - `path-unsupported`: a `type` discriminator path outside dotted element names, `[x]` choices,
+    `$this` and a trailing `resolve()`, such as `ofType(Quantity)`, or one that selects more than
+    one node in an occurrence (a discriminator path selects one element, so several decide nothing
+    rather than matching when any one of them does);
   - `type-undetermined`: an occurrence whose type the document does not state (a `type`
     discriminator is decided from a choice element's suffix, `valueQuantity`, or a resource's
     `resourceType`), or a slice naming an abstract type such as `Resource`;
   - `target-unresolved`: a `resolve()` whose reference names nothing in the resource's `contained`
     set or, when the resource is a Bundle, its entries; a reference to a server is never fetched;
-  - `target-not-resource`: a `profile` discriminator that selects a datatype rather than a resource;
-  - `profile-unavailable`: a slice naming a profile that is not in the `profiles` you supplied and
-    that your `resolveBase` does not return;
-  - `profile-undecided`: the check of the resource against the slice's profile was itself
-    incomplete, two supplied versions of an unpinned profile disagreed, or the bound on nested
-    checks was reached: eight profiles deep, which is also where a reference cycle stops, or 4096
-    checks in one validation. That check runs every layer `validateResource` runs, the profile's own
-    invariants and the base constraints among them: any error means the resource does not conform,
-    a warning decides nothing, and it is incomplete when it reports a slicing undecided
-    (`PROFILE_SLICE_UNCHECKED`, `PROFILE_SLICE_NO_SLICING`), an invariant it could not evaluate
-    (`INVARIANT_UNCHECKED`, such as `dom-3` over a resource that holds a contained resource), a
-    resource type with no schema here (`RESOURCE_NOT_MODELED`), or when the profile places on an
-    element present in the resource a constraint of a kind no layer that ran enforces. The check
-    says "conforms" only when every such constraint is one of: a cardinality, a fixed or pattern
-    value, a slicing, an invariant on an element that is not itself a slice, a `required` or
-    `extensible` binding to exactly the R4 value set whose codes the schema enumerates for that
-    element, a `preferred` or `example` binding, must-support, or a type list the occurrence's own
-    type (a choice suffix or a `resourceType`) is read against. Anything else leaves it undecided: a
-    type list narrower than the occurrence's type, a type `profile` (an extension's definition, say)
-    or `targetProfile` the slicing does not itself decide, a binding to any other value set (even
-    one whose codes are all among the enumerated ones), an invariant on a slice itself, an
-    `ordered` or `openAtEnd` slicing (the order of its members is not checked), `maxLength`,
-    `minValue[x]`, `maxValue[x]`, `contentReference`, a binding or an invariant this library could
-    not read, and any member or extension of the element definition it does not read.
+  - `profile-unavailable`: after `resolve()`, a slice's `targetProfile` that is neither a base R4
+    type, nor in the `profiles` you supplied, nor returned by your `resolveBase`, or whose supplied
+    versions constrain different types, so the type it asks for is unknown.
 
   Two warts to know about. The finding's diagnostic text still says the slicing used "an
   unsupported discriminator" whatever the reason; read `sliceReason` for the reason. And a
   `resolve()` takes an absolute reference to its `Type/id` tail when no entry has that full URL, as
   Bundle reference resolution does everywhere in this library, so a reference to another server,
   `https://other.example.org/fhir/Patient/1`, reaches the Bundle's `Patient/1` entry even when that
-  entry has a different base, and a `profile` discriminator checks that entry.
+  entry has a different base, and a `type` discriminator reads that entry's type.
 - `PROFILE_SLICE_NO_SLICING`: a profile naming a slice (`Observation.component:coded`) under an
   element that declares no `slicing`, or that is missing from the snapshot. Nothing in the profile
   says which occurrences belong to the slice, so none is assigned to it, and the slice's own

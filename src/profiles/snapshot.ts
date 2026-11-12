@@ -94,10 +94,6 @@ function mergeElement(base: ElementDefinition, diff: ElementDefinition): Element
   if (diff.pattern !== undefined) merged.pattern = diff.pattern;
   if (diff.binding !== undefined) merged.binding = diff.binding;
   if (diff.sliceName !== undefined) merged.sliceName = diff.sliceName;
-  // What neither element's model reads is kept from both: a differential's `maxLength` adds to
-  // whatever the base states, and a check that reads it must see both.
-  if (diff.unmodeled !== undefined)
-    merged.unmodeled = [...new Set([...(base.unmodeled ?? []), ...diff.unmodeled])];
   // Invariants are *additive* down the derivation chain (profiling.html): a profile adds constraints
   // to those it inherits. Accumulate by key, letting a same-key differential constraint win.
   if (diff.constraint !== undefined) {

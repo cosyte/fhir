@@ -70,12 +70,7 @@ import { collectSafetyIssues } from "./safety.js";
 import { typesOf } from "../safety/codes.js";
 import { nestedArrays, shareSafetyWalks, undefinedElements } from "../safety/status.js";
 import { collectTerminologyIssues } from "./terminology.js";
-import {
-  collectProfileIssues,
-  collectProfileVersionIssues,
-  profileIssuesIn,
-} from "../profiles/validate-profile.js";
-import type { SliceEnvironment } from "../profiles/slicing.js";
+import { collectProfileIssues, collectProfileVersionIssues } from "../profiles/validate-profile.js";
 import { invariantFindings } from "../profiles/invariants.js";
 import { collectBaseInvariantFindings, type BaseInvariantFinding } from "./base-invariants.js";
 import type { BaseResolver } from "../profiles/snapshot.js";
@@ -136,7 +131,7 @@ export interface ValidateOptions {
    * A resolver from a `baseDefinition` canonical URL to a loaded `StructureDefinition`, used only to
    * generate a snapshot for a supplied profile that carries a differential but no snapshot.
    */
-  readonly resolveBase?: BaseResolver | undefined;
+  readonly resolveBase?: BaseResolver;
 }
 
 /** The result of validating a resource: the findings plus an `OperationOutcome` view of them. */
@@ -159,17 +154,6 @@ let builtIn: SchemaRegistry | undefined;
 function builtInRegistry(): SchemaRegistry {
   builtIn ??= buildRegistry();
   return builtIn;
-}
-
-/**
- * The built-in schema for a resource type, when this package models it.
- *
- * @param type - The resource type.
- * @returns Its built-in schema, or `undefined`.
- * @internal
- */
-export function builtInSchema(type: string): ResourceSchema | undefined {
-  return builtInRegistry()(type);
 }
 
 /** The severity a code carries in a given mode (only the unknown element varies by mode). */
@@ -280,40 +264,8 @@ export function validateResource(
   return shareSafetyWalks(() => validateOnce(resource, options));
 }
 
-/**
- * The findings of validating a resource against one profile with every layer
- * {@link validateResource} runs, for a `profile` slicing discriminator deciding whether the resource
- * conforms. The profile and invariant layers decide their own slicings in `environment`, the nested
- * one the discriminator's check runs in, so a reference inside the resource resolves in the closure
- * of the document it was reached from.
- *
- * @param resource - The resource a `profile` discriminator reached.
- * @param profile - The profile the slice names.
- * @param resolveBase - The base resolver for snapshot generation.
- * @param environment - The nested slice environment.
- * @returns The result, exactly as {@link validateResource} reports it.
- * @internal
- */
-export function conformanceResult(
-  resource: FhirComplex,
-  profile: StructureDefinition,
-  resolveBase: BaseResolver | undefined,
-  environment: SliceEnvironment,
-): ValidationResult {
-  return shareSafetyWalks(() =>
-    validateOnce(resource, { profiles: [profile], resolveBase }, environment),
-  );
-}
-
-/**
- * {@link validateResource}, inside its shared-walk scope. A nested check passes the slice
- * `environment` its profile and invariant layers decide their slicings in.
- */
-function validateOnce(
-  resource: FhirComplex,
-  options: ValidateOptions,
-  environment?: SliceEnvironment,
-): ValidationResult {
+/** {@link validateResource}, inside its shared-walk scope. */
+function validateOnce(resource: FhirComplex, options: ValidateOptions): ValidationResult {
   const mode: ValidationMode = options.mode ?? "lenient";
   const ctx: Ctx = { mode, issues: [] };
 
@@ -469,11 +421,7 @@ function validateOnce(
     const profileOptions = { profiles: options.profiles, resolve: options.resolveBase };
     for (const profile of options.profiles) {
       if (profile.type !== rt) continue;
-      const profileLayer =
-        environment === undefined
-          ? collectProfileIssues(resource, profile, profileOptions)
-          : profileIssuesIn(resource, profile, profileOptions, environment);
-      for (const issue of profileLayer) {
+      for (const issue of collectProfileIssues(resource, profile, profileOptions)) {
         ctx.issues.push(issue);
       }
       // Invariant layer (Phase 7): evaluate the profile's FHIRPath `constraint`s via the bounded
@@ -487,7 +435,7 @@ function validateOnce(
       // the same expression, the profile layer's INVARIANT_UNCHECKED for it would say "not
       // evaluated" about a constraint that was: dom-3 over a resource with no `contained` entry,
       // which the subset cannot parse but the base layer decides by the expression's own semantics.
-      for (const finding of invariantFindings(resource, profile, profileOptions, environment)) {
+      for (const finding of invariantFindings(resource, profile, profileOptions)) {
         if (reportedByBase(finding.focus, finding.issue)) continue;
         if (
           finding.issue.code === "INVARIANT_UNCHECKED" &&

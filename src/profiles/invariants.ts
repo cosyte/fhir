@@ -40,7 +40,6 @@ import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "../vali
 import { SliceScope } from "./scope.js";
 import { snapshotElements, type BaseResolver } from "./snapshot.js";
 import type { ElementDefinition, StructureDefinition } from "./structure-definition.js";
-import type { SliceEnvironment } from "./slicing.js";
 import { sliceEnvironment } from "./validate-profile.js";
 
 /** Options for {@link collectInvariantIssues}. */
@@ -48,8 +47,8 @@ export interface InvariantOptions {
   /** Base resolver for snapshot generation, needed only when the profile carries no snapshot. */
   readonly resolve?: BaseResolver | undefined;
   /**
-   * The supplied profile set, so a slicing discriminated by `profile` decides which occurrences a
-   * slice's invariants apply to, exactly as the profile layer decides it.
+   * The supplied profile set, so a slicing discriminated by `type` through `resolve()` decides
+   * which occurrences a slice's invariants apply to exactly as the profile layer decides it.
    */
   readonly profiles?: readonly StructureDefinition[] | undefined;
 }
@@ -132,8 +131,6 @@ export interface InvariantFinding {
  * @param resource - The resource model.
  * @param profile - The profile whose `constraint`s to evaluate.
  * @param options - Optional base resolver for snapshot generation.
- * @param environment - The slice environment, when a nested profile check supplies its own;
- *   otherwise one is built over the resource's closure.
  * @returns The findings, in the order {@link collectInvariantIssues} returns their issues.
  * @internal
  */
@@ -141,7 +138,6 @@ export function invariantFindings(
   resource: FhirComplex,
   profile: StructureDefinition,
   options: InvariantOptions = {},
-  environment?: SliceEnvironment,
 ): InvariantFinding[] {
   const rt = resourceType(resource);
   if (rt === undefined || rt !== profile.type) return [];
@@ -149,12 +145,7 @@ export function invariantFindings(
   const root = rootPath(rt);
 
   const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
-  const scope = new SliceScope(
-    resource,
-    root,
-    snapshot,
-    environment ?? sliceEnvironment(resource, options),
-  );
+  const scope = new SliceScope(resource, root, snapshot, sliceEnvironment(resource, options));
   const findings: InvariantFinding[] = [];
 
   for (const el of snapshot) {

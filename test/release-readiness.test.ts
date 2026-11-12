@@ -1529,7 +1529,7 @@ describe("the certified public surface matches the package entry point", () => {
     // MedicationRequestIntent), the types of the two safety readout fields that change adds.
     // S0369-fhir-safety-modifier-4: two more (DatatypeUseCode, DatatypeUseReport), the types of
     // the `use` channel on Identifier, HumanName, Address and ContactPoint.
-    // One runtime name and three types added with the type and profile slicing discriminators:
+    // One runtime name and three types added with the type slicing discriminator:
     // SLICE_UNCHECKED_REASONS, SliceUncheckedReason, SliceContext and SliceEnvironment.
     expect(INVENTORY.types).toHaveLength(110);
     expect(INVENTORY.exportSubpaths).toHaveLength(3);

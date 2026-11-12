@@ -154,13 +154,12 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(SLICE_UNCHECKED_REASONS).toEqual({
       NO_DISCRIMINATOR: "no-discriminator",
       DISCRIMINATOR_UNSUPPORTED: "discriminator-unsupported",
+      PROFILE_DISCRIMINATOR: "profile-discriminator",
       PATH_UNSUPPORTED: "path-unsupported",
       SLICE_UNCONSTRAINED: "slice-unconstrained",
       TYPE_UNDETERMINED: "type-undetermined",
       TARGET_UNRESOLVED: "target-unresolved",
-      TARGET_NOT_RESOURCE: "target-not-resource",
       PROFILE_UNAVAILABLE: "profile-unavailable",
-      PROFILE_UNDECIDED: "profile-undecided",
     });
     expect(validationIssue("PROFILE_SLICE_UNCHECKED", "information", "X").sliceReason).toBe(
       undefined,

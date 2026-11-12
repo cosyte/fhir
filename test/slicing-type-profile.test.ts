@@ -21,8 +21,8 @@ import { stepTypes } from "../src/profiles/navigate.js";
 import { req } from "./_util.js";
 
 /**
- * The `type` and `profile` slicing discriminators. Every profile and document here is synthetic:
- * example.org canonicals, plainly fake ids and codes.
+ * The `type` slicing discriminator, and the `profile` one left unchecked. Every profile and document
+ * here is synthetic: example.org canonicals, plainly fake ids and codes.
  */
 
 function loadSd(obj: unknown): StructureDefinition {
@@ -408,296 +408,6 @@ const genderedPatient = loadSd({
   },
 });
 
-/** A Bundle profile slicing `entry` by the profile its `resource` conforms to. */
-const entryByProfile = loadSd({
-  resourceType: "StructureDefinition",
-  url: `${BASE}entry-by-profile`,
-  type: "Bundle",
-  snapshot: {
-    element: [
-      { id: "Bundle", path: "Bundle" },
-      {
-        id: "Bundle.entry",
-        path: "Bundle.entry",
-        slicing: { discriminator: [{ type: "profile", path: "resource" }], rules: "closed" },
-      },
-      { id: "Bundle.entry:patient", path: "Bundle.entry", sliceName: "patient", min: 1, max: "1" },
-      { id: "Bundle.entry:patient.fullUrl", path: "Bundle.entry.fullUrl", min: 1, max: "1" },
-      {
-        id: "Bundle.entry:patient.resource",
-        path: "Bundle.entry.resource",
-        type: [{ code: "Patient", profile: [`${BASE}gendered-patient`] }],
-      },
-    ],
-  },
-});
-
-describe("a profile discriminator on a Bundle entry", () => {
-  const profiles = [genderedPatient];
-
-  it("assigns a conforming entry and checks the slice's own constraints on it", () => {
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1", gender: "unknown" } }],
-    });
-    expect(findings(collectProfileIssues(bundle, entryByProfile, { profiles }))).toEqual([
-      ["CARDINALITY_MIN", "Bundle.entry.fullUrl"],
-    ]);
-  });
-
-  it("does not assign an entry that fails the slice's profile", () => {
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ fullUrl: "urn:uuid:fake-1", resource: { resourceType: "Patient", id: "fake-1" } }],
-    });
-    expect(findings(collectProfileIssues(bundle, entryByProfile, { profiles }))).toEqual([
-      ["PROFILE_SLICE_UNMATCHED", "Bundle.entry[0]"],
-      ["CARDINALITY_MIN", "Bundle.entry:patient"],
-    ]);
-  });
-
-  it("does not assign a resource of another type than the profile's", () => {
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ fullUrl: "urn:uuid:fake-1", resource: { resourceType: "Group", id: "fake-1" } }],
-    });
-    expect(findings(collectProfileIssues(bundle, entryByProfile, { profiles }))).toEqual([
-      ["PROFILE_SLICE_UNMATCHED", "Bundle.entry[0]"],
-      ["CARDINALITY_MIN", "Bundle.entry:patient"],
-    ]);
-  });
-
-  it("finds the profile through the base resolver when the set does not carry it", () => {
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ fullUrl: "urn:uuid:fake-1", resource: { resourceType: "Patient", id: "fake-1" } }],
-    });
-    const resolve = (url: string) => (url === genderedPatient.url ? genderedPatient : undefined);
-    expect(findings(collectProfileIssues(bundle, entryByProfile, { resolve }))).toEqual([
-      ["PROFILE_SLICE_UNMATCHED", "Bundle.entry[0]"],
-      ["CARDINALITY_MIN", "Bundle.entry:patient"],
-    ]);
-  });
-
-  it("stays unchecked, with its reason, when the slice's profile is not supplied", () => {
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1" } }],
-    });
-    const issues = collectProfileIssues(bundle, entryByProfile);
-    expect(findings(issues)).toEqual([["PROFILE_SLICE_UNCHECKED", "Bundle.entry"]]);
-    expect(unchecked(issues)).toEqual([
-      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE],
-    ]);
-  });
-
-  it("matches a pinned version only against that version", () => {
-    const pinned = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}entry-by-pinned-profile`,
-      type: "Bundle",
-      snapshot: {
-        element: [
-          { id: "Bundle", path: "Bundle" },
-          {
-            id: "Bundle.entry",
-            path: "Bundle.entry",
-            slicing: { discriminator: [{ type: "profile", path: "resource" }], rules: "open" },
-          },
-          { id: "Bundle.entry:patient", path: "Bundle.entry", sliceName: "patient" },
-          {
-            id: "Bundle.entry:patient.resource",
-            path: "Bundle.entry.resource",
-            type: [{ code: "Patient", profile: [`${BASE}gendered-patient|2.0.0`] }],
-          },
-        ],
-      },
-    });
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1", gender: "other" } }],
-    });
-    expect(unchecked(collectProfileIssues(bundle, pinned, { profiles }))).toEqual([
-      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE],
-    ]);
-  });
-
-  it("decides through validateResource from the supplied profile set", () => {
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ fullUrl: "urn:uuid:fake-1", resource: { resourceType: "Patient", id: "fake-1" } }],
-    });
-    const result = validateResource(bundle, { profiles: [entryByProfile, genderedPatient] });
-    const codes = result.issues.map((i) => i.code);
-    expect(codes).toContain("PROFILE_SLICE_UNMATCHED");
-    expect(codes).not.toContain("PROFILE_SLICE_UNCHECKED");
-  });
-
-  it("reports the unchecked reason through validateResource when the profile is not supplied", () => {
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ fullUrl: "urn:uuid:fake-1", resource: { resourceType: "Patient", id: "fake-1" } }],
-    });
-    const issue = validateResource(bundle, { profiles: [entryByProfile] }).issues.find(
-      (i) => i.code === "PROFILE_SLICE_UNCHECKED",
-    );
-    expect(issue?.sliceReason).toBe(SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE);
-  });
-});
-
-/** An Observation profile slicing `performer` by the profile each reference resolves to. */
-const performerByProfile = loadSd({
-  resourceType: "StructureDefinition",
-  url: `${BASE}performer-by-profile`,
-  type: "Observation",
-  snapshot: {
-    element: [
-      { id: "Observation", path: "Observation" },
-      {
-        id: "Observation.performer",
-        path: "Observation.performer",
-        slicing: { discriminator: [{ type: "profile", path: "resolve()" }], rules: "open" },
-      },
-      {
-        id: "Observation.performer:patient",
-        path: "Observation.performer",
-        sliceName: "patient",
-        min: 1,
-        type: [{ code: "Reference", targetProfile: [`${BASE}gendered-patient|1.0.0`] }],
-      },
-    ],
-  },
-});
-
-describe("a profile discriminator through resolve()", () => {
-  const profiles = [genderedPatient];
-
-  it("checks the contained resource the reference reaches", () => {
-    const conforming = parse({
-      resourceType: "Observation",
-      contained: [{ resourceType: "Patient", id: "p1", gender: "unknown" }],
-      performer: [{ reference: "#p1" }],
-    });
-    expect(findings(collectProfileIssues(conforming, performerByProfile, { profiles }))).toEqual(
-      [],
-    );
-    const failing = parse({
-      resourceType: "Observation",
-      contained: [{ resourceType: "Patient", id: "p1" }],
-      performer: [{ reference: "#p1" }],
-    });
-    expect(findings(collectProfileIssues(failing, performerByProfile, { profiles }))).toEqual([
-      ["CARDINALITY_MIN", "Observation.performer:patient"],
-    ]);
-  });
-
-  it("checks a Bundle entry a reference in another entry reaches", () => {
-    const bundleWithMembers = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}bundle-members`,
-      type: "Bundle",
-      snapshot: {
-        element: [
-          { id: "Bundle", path: "Bundle" },
-          {
-            id: "Bundle.entry",
-            path: "Bundle.entry",
-            slicing: {
-              discriminator: [{ type: "profile", path: "resource.subject.resolve()" }],
-              rules: "open",
-            },
-          },
-          { id: "Bundle.entry:about", path: "Bundle.entry", sliceName: "about", min: 1 },
-          {
-            id: "Bundle.entry:about.resource.subject",
-            path: "Bundle.entry.resource.subject",
-            type: [{ code: "Reference", targetProfile: [`${BASE}gendered-patient`] }],
-          },
-        ],
-      },
-    });
-    const doc = (gender?: string) =>
-      parse({
-        resourceType: "Bundle",
-        type: "collection",
-        entry: [
-          {
-            fullUrl: "urn:uuid:fake-p",
-            resource: { resourceType: "Patient", id: "fake-p", ...(gender ? { gender } : {}) },
-          },
-          {
-            fullUrl: "urn:uuid:fake-o",
-            resource: {
-              resourceType: "Observation",
-              id: "fake-o",
-              subject: { reference: "urn:uuid:fake-p" },
-            },
-          },
-        ],
-      });
-    // The Patient entry has no subject, so the walk reaches nothing there: of no profile.
-    expect(findings(collectProfileIssues(doc("other"), bundleWithMembers, { profiles }))).toEqual(
-      [],
-    );
-    expect(findings(collectProfileIssues(doc(), bundleWithMembers, { profiles }))).toEqual([
-      ["CARDINALITY_MIN", "Bundle.entry:about"],
-    ]);
-  });
-
-  it("stays unchecked when the reference leaves the closure", () => {
-    const obs = parse({
-      resourceType: "Observation",
-      performer: [{ reference: "https://example.org/fhir/Patient/fake-9" }],
-    });
-    expect(unchecked(collectProfileIssues(obs, performerByProfile, { profiles }))).toEqual([
-      ["Observation.performer", SLICE_UNCHECKED_REASONS.TARGET_UNRESOLVED],
-    ]);
-  });
-
-  it("stays unchecked when a reference cycle leaves conformance undecided", () => {
-    const loop = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}member-loop`,
-      type: "Observation",
-      snapshot: {
-        element: [
-          { id: "Observation", path: "Observation" },
-          {
-            id: "Observation.hasMember",
-            path: "Observation.hasMember",
-            slicing: { discriminator: [{ type: "profile", path: "resolve()" }], rules: "open" },
-          },
-          {
-            id: "Observation.hasMember:member",
-            path: "Observation.hasMember",
-            sliceName: "member",
-            type: [{ code: "Reference", targetProfile: [`${BASE}member-loop`] }],
-          },
-        ],
-      },
-    });
-    const obs = parse({
-      resourceType: "Observation",
-      contained: [
-        { ...anObservation, id: "a", hasMember: [{ reference: "#b" }] },
-        { ...anObservation, id: "b", hasMember: [{ reference: "#a" }] },
-      ],
-      hasMember: [{ reference: "#a" }],
-    });
-    expect(unchecked(collectProfileIssues(obs, loop, { profiles: [loop] }))).toEqual([
-      ["Observation.hasMember", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
-    ]);
-  });
-});
-
 describe("what stays unchecked, each with its reason", () => {
   const slicesOf = (sd: StructureDefinition, id: string) =>
     resolveSlices(req(sd.snapshot), req(sd.snapshot?.find((e) => e.id === id)));
@@ -765,7 +475,7 @@ describe("what stays unchecked, each with its reason", () => {
     },
   );
 
-  it("a profile discriminator that selects a datatype", () => {
+  it("a profile discriminator, which is not decided yet", () => {
     const datatype = loadSd({
       resourceType: "StructureDefinition",
       url: `${BASE}datatype`,
@@ -789,7 +499,7 @@ describe("what stays unchecked, each with its reason", () => {
     });
     const obs = parse({ resourceType: "Observation", identifier: [{ value: "fake-1" }] });
     expect(unchecked(collectProfileIssues(obs, datatype))).toEqual([
-      ["Observation.identifier", SLICE_UNCHECKED_REASONS.TARGET_NOT_RESOURCE],
+      ["Observation.identifier", SLICE_UNCHECKED_REASONS.PROFILE_DISCRIMINATOR],
     ]);
   });
 
@@ -820,48 +530,6 @@ describe("what stays unchecked, each with its reason", () => {
     ]);
   });
 });
-
-/** An Observation profile slicing `hasMember` by the profile each reference resolves to: itself. */
-function memberChainProfile(): StructureDefinition {
-  return loadSd({
-    resourceType: "StructureDefinition",
-    url: `${BASE}member-chain`,
-    type: "Observation",
-    snapshot: {
-      element: [
-        { id: "Observation", path: "Observation" },
-        { id: "Observation.status", path: "Observation.status", min: 1 },
-        {
-          id: "Observation.hasMember",
-          path: "Observation.hasMember",
-          slicing: { discriminator: [{ type: "profile", path: "resolve()" }], rules: "open" },
-        },
-        {
-          id: "Observation.hasMember:member",
-          path: "Observation.hasMember",
-          sliceName: "member",
-          type: [{ code: "Reference", targetProfile: [`${BASE}member-chain`] }],
-        },
-      ],
-    },
-  });
-}
-
-/** A root Observation whose members form a chain of `length` contained Observations. */
-function chain(length: number): FhirComplex {
-  return parse({
-    resourceType: "Observation",
-    status: "final",
-    contained: Array.from({ length }, (_, i) => ({
-      resourceType: "Observation",
-      id: `c${String(i)}`,
-      status: "final",
-      code: { text: "fake code" },
-      ...(i + 1 < length ? { hasMember: [{ reference: `#c${String(i + 1)}` }] } : {}),
-    })),
-    hasMember: [{ reference: "#c0" }],
-  });
-}
 
 describe("type and profile discriminators: the edges", () => {
   it("reads an empty discriminator path as the occurrence itself", () => {
@@ -1049,7 +717,7 @@ describe("type and profile discriminators: the edges", () => {
     ).toEqual([["PROFILE_SLICE_UNMATCHED", "Observation.hasMember[0]"]]);
   });
 
-  it("leaves a slice that names no target or no profile unconstrained", () => {
+  it("leaves a slice that names no target unconstrained, and any profile slicing unchecked", () => {
     const naming = (discriminator: string, path: string, type: unknown) =>
       loadSd({
         resourceType: "StructureDefinition",
@@ -1077,172 +745,17 @@ describe("type and profile discriminators: the edges", () => {
       contained: [{ resourceType: "Observation", id: "o1" }],
       hasMember: [{ reference: "#o1" }],
     });
+    expect(
+      unchecked(collectProfileIssues(obs, naming("type", "resolve()", { code: "Reference" }))),
+    ).toEqual([["Observation.hasMember", SLICE_UNCHECKED_REASONS.SLICE_UNCONSTRAINED]]);
     for (const sd of [
-      naming("type", "resolve()", { code: "Reference" }),
       naming("profile", "resolve()", { code: "Reference" }),
       naming("profile", "$this", { code: "Reference" }),
     ]) {
       expect(unchecked(collectProfileIssues(obs, sd))).toEqual([
-        ["Observation.hasMember", SLICE_UNCHECKED_REASONS.SLICE_UNCONSTRAINED],
+        ["Observation.hasMember", SLICE_UNCHECKED_REASONS.PROFILE_DISCRIMINATOR],
       ]);
     }
-  });
-
-  it("decides no profile without an environment to check one in", () => {
-    const slices = resolveSlices(
-      req(entryByProfile.snapshot),
-      req(entryByProfile.snapshot?.find((e) => e.id === "Bundle.entry")),
-    );
-    const entry = complex([
-      {
-        name: "resource",
-        value: complex([{ name: "resourceType", value: primitive("Patient") }]),
-      },
-    ]);
-    const result = matchSlices([entry], slices, [{ type: "profile", path: "resource" }]);
-    expect(result.reason).toBe(SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE);
-  });
-
-  it("reads a slice's profile it cannot generate a snapshot for as unavailable", () => {
-    const differentialOnly = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}gendered-patient`,
-      type: "Patient",
-      baseDefinition: `${BASE}not-supplied-base`,
-      differential: { element: [{ id: "Patient.gender", path: "Patient.gender", min: 1 }] },
-    });
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1" } }],
-    });
-    expect(
-      unchecked(collectProfileIssues(bundle, entryByProfile, { profiles: [differentialOnly] })),
-    ).toEqual([["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE]]);
-  });
-
-  it("lets any other failure of a nested check propagate, as it does unnested", () => {
-    const differentialOnly = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}gendered-patient`,
-      type: "Patient",
-      baseDefinition: `${BASE}failing-base`,
-      differential: { element: [{ id: "Patient.gender", path: "Patient.gender", min: 1 }] },
-    });
-    const resolve = (url: string) => {
-      if (url === differentialOnly.url) return differentialOnly;
-      throw new Error("fake resolver failure");
-    };
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1" } }],
-    });
-    expect(() => collectProfileIssues(bundle, entryByProfile, { resolve })).toThrow(
-      "fake resolver failure",
-    );
-  });
-
-  it("asserts nothing when two supplied versions of an unpinned profile disagree", () => {
-    const strict = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}gendered-patient`,
-      version: "2.0.0",
-      type: "Patient",
-      snapshot: {
-        element: [
-          { id: "Patient", path: "Patient" },
-          { id: "Patient.birthDate", path: "Patient.birthDate", min: 1 },
-        ],
-      },
-    });
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1", gender: "other" } }],
-    });
-    expect(
-      unchecked(
-        collectProfileIssues(bundle, entryByProfile, { profiles: [genderedPatient, strict] }),
-      ),
-    ).toEqual([["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED]]);
-  });
-
-  it("decides when two supplied versions of an unpinned profile agree", () => {
-    const again = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}gendered-patient`,
-      version: "1.0.1",
-      type: "Patient",
-      snapshot: {
-        element: [
-          { id: "Patient", path: "Patient" },
-          { id: "Patient.gender", path: "Patient.gender", min: 1 },
-        ],
-      },
-    });
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1", gender: "other" } }],
-    });
-    expect(
-      findings(
-        collectProfileIssues(bundle, entryByProfile, { profiles: [genderedPatient, again] }),
-      ),
-    ).toEqual([["CARDINALITY_MIN", "Bundle.entry.fullUrl"]]);
-  });
-
-  it("asserts nothing when the slice's profile check is itself incomplete", () => {
-    const withLooseSlice = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}gendered-patient`,
-      type: "Patient",
-      snapshot: {
-        element: [
-          { id: "Patient", path: "Patient" },
-          { id: "Patient.identifier", path: "Patient.identifier" },
-          {
-            id: "Patient.identifier:fake",
-            path: "Patient.identifier",
-            sliceName: "fake",
-          },
-        ],
-      },
-    });
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [
-        {
-          resource: { resourceType: "Patient", id: "fake-1", identifier: [{ system: "urn:fake" }] },
-        },
-      ],
-    });
-    expect(
-      unchecked(collectProfileIssues(bundle, entryByProfile, { profiles: [withLooseSlice] })),
-    ).toEqual([["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED]]);
-  });
-
-  it("decides a short chain of nested profile checks and bounds a long one", () => {
-    const profile = memberChainProfile();
-    expect(unchecked(collectProfileIssues(chain(3), profile, { profiles: [profile] }))).toEqual([]);
-    // Eight deep is decided, nine is not.
-    expect(unchecked(collectProfileIssues(chain(8), profile, { profiles: [profile] }))).toEqual([]);
-    expect(unchecked(collectProfileIssues(chain(9), profile, { profiles: [profile] }))).toEqual([
-      ["Observation.hasMember", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
-    ]);
-  });
-
-  it("checks a resource against a profile once, however many references reach it", () => {
-    const obs = parse({
-      resourceType: "Observation",
-      contained: [{ resourceType: "Patient", id: "p1" }],
-      performer: [{ reference: "#p1" }, { reference: "#p1" }],
-    });
-    expect(
-      findings(collectProfileIssues(obs, performerByProfile, { profiles: [genderedPatient] })),
-    ).toEqual([["CARDINALITY_MIN", "Observation.performer:patient"]]);
   });
 
   it("aligns the choice types of a step with its occurrences, through a list", () => {
@@ -1258,30 +771,6 @@ describe("type and profile discriminators: the edges", () => {
     expect(stepTypes(parent, "absent")).toEqual([]);
     expect(stepTypes(primitive("fake"), "value[x]")).toEqual([]);
   });
-});
-
-/** An Observation profile whose `performer` must include a Patient conforming to gendered-patient. */
-const withGenderedPerformer = loadSd({
-  resourceType: "StructureDefinition",
-  url: `${BASE}with-gendered-performer`,
-  type: "Observation",
-  snapshot: {
-    element: [
-      { id: "Observation", path: "Observation" },
-      {
-        id: "Observation.performer",
-        path: "Observation.performer",
-        slicing: { discriminator: [{ type: "profile", path: "resolve()" }], rules: "open" },
-      },
-      {
-        id: "Observation.performer:patient",
-        path: "Observation.performer",
-        sliceName: "patient",
-        min: 1,
-        type: [{ code: "Reference", targetProfile: [`${BASE}gendered-patient`] }],
-      },
-    ],
-  },
 });
 
 describe("type and profile discriminators: the bounds of what is decided", () => {
@@ -1352,9 +841,9 @@ describe("type and profile discriminators: the bounds of what is decided", () =>
   });
 
   it("selects no choice variant whose tail is not capitalized", () => {
-    const componentByProfile = loadSd({
+    const componentByType = loadSd({
       resourceType: "StructureDefinition",
-      url: `${BASE}component-by-profile`,
+      url: `${BASE}component-by-type-tail`,
       type: "Observation",
       snapshot: {
         element: [
@@ -1362,79 +851,23 @@ describe("type and profile discriminators: the bounds of what is decided", () =>
           {
             id: "Observation.component",
             path: "Observation.component",
-            slicing: { discriminator: [{ type: "profile", path: "value[x]" }], rules: "open" },
+            slicing: { discriminator: [{ type: "type", path: "value[x]" }], rules: "closed" },
           },
-          { id: "Observation.component:p", path: "Observation.component", sliceName: "p" },
+          { id: "Observation.component:q", path: "Observation.component", sliceName: "q" },
           {
-            id: "Observation.component:p.value[x]",
+            id: "Observation.component:q.value[x]",
             path: "Observation.component.value[x]",
-            type: [{ code: "Quantity", profile: [`${BASE}fake-quantity`] }],
+            type: [{ code: "Quantity" }],
           },
         ],
       },
     });
+    // `valuefakeQ` is no variant: the path selects the one Quantity, so the component is decided.
     const obs = parse({
       resourceType: "Observation",
-      component: [{ code: { text: "fake" }, valuefakeQ: {} }],
+      component: [{ code: { text: "fake" }, valueQuantity: { value: 1 }, valuefakeQ: {} }],
     });
-    expect(findings(collectProfileIssues(obs, componentByProfile))).toEqual([]);
-  });
-
-  it("gives the first reason no profile the slice names could be decided for", () => {
-    const loose = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}loose-patient`,
-      type: "Patient",
-      snapshot: {
-        element: [
-          { id: "Patient", path: "Patient" },
-          { id: "Patient.identifier", path: "Patient.identifier" },
-          { id: "Patient.identifier:fake", path: "Patient.identifier", sliceName: "fake" },
-        ],
-      },
-    });
-    const twoProfiles = (first: string, second: string) =>
-      loadSd({
-        resourceType: "StructureDefinition",
-        url: `${BASE}two-profiles`,
-        type: "Bundle",
-        snapshot: {
-          element: [
-            { id: "Bundle", path: "Bundle" },
-            {
-              id: "Bundle.entry",
-              path: "Bundle.entry",
-              slicing: { discriminator: [{ type: "profile", path: "resource" }], rules: "open" },
-            },
-            { id: "Bundle.entry:patient", path: "Bundle.entry", sliceName: "patient" },
-            {
-              id: "Bundle.entry:patient.resource",
-              path: "Bundle.entry.resource",
-              type: [{ code: "Patient", profile: [first, second] }],
-            },
-          ],
-        },
-      });
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [
-        {
-          resource: { resourceType: "Patient", id: "fake-1", identifier: [{ system: "urn:fake" }] },
-        },
-      ],
-    });
-    const options = { profiles: [loose] };
-    expect(
-      unchecked(
-        collectProfileIssues(bundle, twoProfiles(`${BASE}not-supplied`, loose.url), options),
-      ),
-    ).toEqual([["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE]]);
-    expect(
-      unchecked(
-        collectProfileIssues(bundle, twoProfiles(loose.url, `${BASE}not-supplied`), options),
-      ),
-    ).toEqual([["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED]]);
+    expect(findings(collectProfileIssues(obs, componentByType))).toEqual([]);
   });
 
   it.each([
@@ -1542,36 +975,6 @@ describe("type and profile discriminators: the bounds of what is decided", () =>
     ).toBe(SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE);
   });
 
-  it("checks no profile on a primitive", () => {
-    const valueByProfile = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}value-by-profile`,
-      type: "Observation",
-      snapshot: {
-        element: [
-          { id: "Observation", path: "Observation" },
-          {
-            id: "Observation.value[x]",
-            path: "Observation.value[x]",
-            slicing: { discriminator: [{ type: "profile", path: "$this" }], rules: "open" },
-          },
-          {
-            id: "Observation.value[x]:fake",
-            path: "Observation.value[x]",
-            sliceName: "fake",
-            type: [{ code: "string", profile: [`${BASE}fake-string`] }],
-          },
-        ],
-      },
-    });
-    for (const value of [{ valueString: "fake" }, { valueQuantity: { value: 1 } }]) {
-      const obs = parse({ resourceType: "Observation", ...value });
-      expect(unchecked(collectProfileIssues(obs, valueByProfile))).toEqual([
-        ["Observation.value[x]", SLICE_UNCHECKED_REASONS.TARGET_NOT_RESOURCE],
-      ]);
-    }
-  });
-
   it("resolves into Bundle entries only from a Bundle", () => {
     // Not a Bundle, so an `entry` it carries is not a closure, whatever it holds.
     const obs = parse({
@@ -1586,169 +989,58 @@ describe("type and profile discriminators: the bounds of what is decided", () =>
     ]);
   });
 
-  it("takes a resolved profile only at the version a canonical pins", () => {
-    const pinned = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}performer-pinned`,
-      type: "Observation",
-      snapshot: {
-        element: [
-          { id: "Observation", path: "Observation" },
-          {
-            id: "Observation.performer",
-            path: "Observation.performer",
-            slicing: { discriminator: [{ type: "profile", path: "resolve()" }], rules: "open" },
-          },
-          {
-            id: "Observation.performer:patient",
-            path: "Observation.performer",
-            sliceName: "patient",
-            type: [{ code: "Reference", targetProfile: [`${BASE}gendered-patient|2.0.0`] }],
-          },
-        ],
-      },
-    });
-    const obs = parse({
-      resourceType: "Observation",
-      contained: [{ resourceType: "Patient", id: "p1", gender: "other" }],
-      performer: [{ reference: "#p1" }],
-    });
-    const resolve = (url: string) => (url === genderedPatient.url ? genderedPatient : undefined);
-    expect(unchecked(collectProfileIssues(obs, pinned, { resolve }))).toEqual([
-      ["Observation.performer", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE],
-    ]);
-  });
-
-  it("resolves a contained resource's references among its container's", () => {
-    const outer = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}outer`,
-      type: "Observation",
-      snapshot: {
-        element: [
-          { id: "Observation", path: "Observation" },
-          {
-            id: "Observation.hasMember",
-            path: "Observation.hasMember",
-            slicing: { discriminator: [{ type: "profile", path: "resolve()" }], rules: "open" },
-          },
-          {
-            id: "Observation.hasMember:member",
-            path: "Observation.hasMember",
-            sliceName: "member",
-            min: 1,
-            type: [{ code: "Reference", targetProfile: [withGenderedPerformer.url] }],
-          },
-        ],
-      },
-    });
-    const obs = parse({
-      resourceType: "Observation",
-      contained: [
-        { ...anObservation, id: "o1", performer: [{ reference: "#p1" }] },
-        { resourceType: "Patient", id: "p1", gender: "other" },
-      ],
-      hasMember: [{ reference: "#o1" }],
-    });
-    const profiles = [withGenderedPerformer, genderedPatient];
-    expect(findings(collectProfileIssues(obs, outer, { profiles }))).toEqual([]);
-  });
-
-  it("resolves a Bundle entry's references among its own contained resources", () => {
-    const entries = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}entries`,
-      type: "Bundle",
-      snapshot: {
-        element: [
-          { id: "Bundle", path: "Bundle" },
-          {
-            id: "Bundle.entry",
-            path: "Bundle.entry",
-            slicing: { discriminator: [{ type: "profile", path: "resource" }], rules: "open" },
-          },
-          { id: "Bundle.entry:obs", path: "Bundle.entry", sliceName: "obs", min: 1 },
-          {
-            id: "Bundle.entry:obs.resource",
-            path: "Bundle.entry.resource",
-            type: [{ code: "Observation", profile: [withGenderedPerformer.url] }],
-          },
-        ],
-      },
-    });
-    const bundle = (gender?: string) =>
-      parse({
-        resourceType: "Bundle",
-        type: "collection",
-        entry: [
-          {
-            resource: {
-              ...anObservation,
-              id: "fake-o",
-              contained: [{ resourceType: "Patient", id: "p1", ...(gender ? { gender } : {}) }],
-              performer: [{ reference: "#p1" }],
+  it("reads a target profile's type from the supplied set, else the base resolver, at the version pinned", () => {
+    const pinned = (version: string) =>
+      loadSd({
+        resourceType: "StructureDefinition",
+        url: `${BASE}performer-pinned`,
+        type: "Observation",
+        snapshot: {
+          element: [
+            { id: "Observation", path: "Observation" },
+            {
+              id: "Observation.performer",
+              path: "Observation.performer",
+              slicing: { discriminator: [{ type: "type", path: "resolve()" }], rules: "closed" },
             },
-          },
-        ],
+            {
+              id: "Observation.performer:patient",
+              path: "Observation.performer",
+              sliceName: "patient",
+              type: [{ code: "Reference", targetProfile: [`${BASE}gendered-patient${version}`] }],
+            },
+          ],
+        },
       });
-    const profiles = [withGenderedPerformer, genderedPatient];
-    // The reference resolves to the entry's own contained Patient: one without a gender fails the
-    // performer slice, so the entry conforms to no slice. Unresolved, it would be undecided.
-    expect(findings(collectProfileIssues(bundle(), entries, { profiles }))).toEqual([
-      ["CARDINALITY_MIN", "Bundle.entry:obs"],
-    ]);
-    // A conforming one leaves only dom-3 over the entry's `contained`, which the subset cannot
-    // evaluate, so the entry's conformance is undecided rather than assumed.
-    expect(unchecked(collectProfileIssues(bundle("other"), entries, { profiles }))).toEqual([
-      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
-    ]);
-  });
-
-  it("keeps no undecided answer: a target too deep on one path is decided on another", () => {
-    const profile = memberChainProfile();
-    // c0 has no status, so it is decided `no` however deep its own members run; c7 reaches x at
-    // the depth bound. x is then reached again from the root, where it is decided.
     const obs = parse({
       resourceType: "Observation",
-      status: "final",
       contained: [
-        ...Array.from({ length: 8 }, (_, i) => ({
-          resourceType: "Observation",
-          id: `c${String(i)}`,
-          ...(i === 0 ? {} : { status: "final" }),
-          hasMember: [{ reference: i === 7 ? "#x" : `#c${String(i + 1)}` }],
-        })),
-        { resourceType: "Observation", id: "x", status: "final" },
+        { resourceType: "Patient", id: "p1" },
+        { resourceType: "Group", id: "g1" },
       ],
-      hasMember: [{ reference: "#c0" }, { reference: "#x" }],
+      performer: [{ reference: "#p1" }, { reference: "#g1" }],
     });
-    expect(unchecked(collectProfileIssues(obs, profile, { profiles: [profile] }))).toEqual([]);
-  });
-
-  it("bounds how many resources one validation checks against a profile", () => {
-    const performers = (count: number, distinct: boolean) =>
-      parse({
-        resourceType: "Observation",
-        contained: Array.from({ length: distinct ? count : 1 }, (_, i) => ({
-          resourceType: "Patient",
-          id: `p${String(i)}`,
-          gender: "other",
-        })),
-        performer: Array.from({ length: count }, (_, i) => ({
-          reference: `#p${String(distinct ? i : 0)}`,
-        })),
-      });
+    const decided = [["PROFILE_SLICE_UNMATCHED", "Observation.performer[1]"]];
+    const unavailable = [["Observation.performer", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE]];
+    const resolve = (url: string) => (url === genderedPatient.url ? genderedPatient : undefined);
     const profiles = [genderedPatient];
+    for (const version of ["", "|1.0.0"]) {
+      expect(findings(collectProfileIssues(obs, pinned(version), { profiles }))).toEqual(decided);
+      expect(findings(collectProfileIssues(obs, pinned(version), { resolve }))).toEqual(decided);
+    }
+    expect(unchecked(collectProfileIssues(obs, pinned("|2.0.0"), { profiles }))).toEqual(
+      unavailable,
+    );
+    expect(unchecked(collectProfileIssues(obs, pinned("|2.0.0"), { resolve }))).toEqual(
+      unavailable,
+    );
+    // The supplied set is read first: the resolver is not asked for a profile it carries.
+    const refusing = () => {
+      throw new Error("fake resolver asked");
+    };
     expect(
-      unchecked(collectProfileIssues(performers(4096, true), performerByProfile, { profiles })),
-    ).toEqual([]);
-    expect(
-      unchecked(collectProfileIssues(performers(4097, true), performerByProfile, { profiles })),
-    ).toEqual([["Observation.performer", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED]]);
-    // One resource reached many times is checked once.
-    expect(
-      unchecked(collectProfileIssues(performers(5000, false), performerByProfile, { profiles })),
-    ).toEqual([]);
+      findings(collectProfileIssues(obs, pinned(""), { profiles, resolve: refusing })),
+    ).toEqual(decided);
   });
 });
 
@@ -1841,40 +1133,6 @@ describe("type and profile discriminators: each of several", () => {
       ["PROFILE_FIXED_MISMATCH", "Observation.category.coding[0].code"],
     ]);
   });
-
-  it("decides yes for a resource whose check draws only information", () => {
-    const supportive = loadSd({
-      resourceType: "StructureDefinition",
-      url: `${BASE}gendered-patient`,
-      type: "Patient",
-      snapshot: {
-        element: [
-          { id: "Patient", path: "Patient" },
-          { id: "Patient.gender", path: "Patient.gender", min: 1 },
-          { id: "Patient.birthDate", path: "Patient.birthDate", mustSupport: true },
-        ],
-      },
-    });
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1", gender: "other" } }],
-    });
-    expect(
-      findings(collectProfileIssues(bundle, entryByProfile, { profiles: [supportive] })),
-    ).toEqual([["CARDINALITY_MIN", "Bundle.entry.fullUrl"]]);
-  });
-
-  it("checks a non-conforming resource once, however many references reach it", () => {
-    const obs = parse({
-      resourceType: "Observation",
-      contained: [{ resourceType: "Patient", id: "p0" }],
-      performer: Array.from({ length: 5000 }, () => ({ reference: "#p0" })),
-    });
-    expect(
-      findings(collectProfileIssues(obs, performerByProfile, { profiles: [genderedPatient] })),
-    ).toEqual([["CARDINALITY_MIN", "Observation.performer:patient"]]);
-  });
 });
 
 describe("a type or profile discriminator path that selects more than one node", () => {
@@ -1933,7 +1191,7 @@ describe("a type or profile discriminator path that selects more than one node",
     ]);
   });
 
-  it("decides nothing by profile, instead of matching when any one node conforms", () => {
+  it("leaves a profile discriminator over several nodes unchecked, as any profile one", () => {
     // Two contained Observations: the first keeps the profile's fixed status, the second breaks it.
     const finalOnly = loadSd({
       resourceType: "StructureDefinition",
@@ -1971,7 +1229,7 @@ describe("a type or profile discriminator path that selects more than one node",
       ],
     });
     expect(unchecked(result.issues)).toEqual([
-      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PATH_UNSUPPORTED],
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_DISCRIMINATOR],
     ]);
   });
 
@@ -1985,7 +1243,7 @@ describe("a type or profile discriminator path that selects more than one node",
     ).toEqual([["PROFILE_SLICE_UNMATCHED", "Bundle.entry[0]"]]);
   });
 
-  it("places an occurrence with no resource at a profile path in no slice", () => {
+  it("assigns nothing by profile, so an entry with nothing at the path draws no finding", () => {
     const finalOnly = loadSd({
       resourceType: "StructureDefinition",
       url: `${BASE}fake-final-obs`,
@@ -1998,10 +1256,10 @@ describe("a type or profile discriminator path that selects more than one node",
         finalOnly,
       ],
     });
-    expect(unchecked(result.issues)).toEqual([]);
-    expect(
-      result.issues.filter((i) => i.severity === "error").map((i) => [i.code, i.expression]),
-    ).toEqual([["PROFILE_SLICE_UNMATCHED", "Bundle.entry[0]"]]);
+    expect(unchecked(result.issues)).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_DISCRIMINATOR],
+    ]);
+    expect(result.issues.filter((i) => i.severity === "error")).toEqual([]);
   });
 
   it("still decides a path that selects one node", () => {

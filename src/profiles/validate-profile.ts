@@ -30,15 +30,11 @@
  * its `sliceReason`.
  *
  * **`type` and `profile` discriminators.** A `type` discriminator is decided from the occurrence's
- * concrete type (a choice suffix or a `resourceType`). A `profile` discriminator is decided for a
- * resource held in place (`contained`, a Bundle entry) or reached by `resolve()` through the
- * resource's `contained` set or, for a Bundle, its entries: the resource is checked against the
- * profile the slice names, found in {@link ProfileOptions.profiles} or through
- * {@link ProfileOptions.resolve}, with every layer `validateResource` runs (the profile's own
- * invariants and the base constraints among them). An error there means it does not conform. A
- * clean check means it does only when nothing was left unchecked inside and every constraint the
- * profile places on an element present in the target is of a kind a layer that ran enforces
- * ({@link ENFORCED_CONSTRAINT_KINDS}); anything else leaves the slicing unchecked.
+ * concrete type (a choice suffix or a `resourceType`), through `resolve()` over the resource's
+ * `contained` set or, for a Bundle, its entries when the path ends in it; a slice's `targetProfile`
+ * there names a type through the base definitions or {@link ProfileOptions.profiles}. A `profile`
+ * discriminator is not decided yet: a slicing that uses one is reported `PROFILE_SLICE_UNCHECKED`
+ * with the `profile-discriminator` reason.
  *
  * Every finding is **value-free**, a code, a severity, and a FHIRPath location, never a value.
  * **Deferred:** binding enforcement from profile bindings (the terminology layer already covers
@@ -56,85 +52,37 @@ import {
   type FhirComplex,
   type FhirNode,
 } from "../model/index.js";
-import {
-  buildBundleIndex,
-  containedIndex,
-  resolveReference,
-  type BundleIndex,
-  type ContainedIndex,
-} from "../bundle/references.js";
+import { buildBundleIndex, containedIndex, resolveReference } from "../bundle/references.js";
 import { primitiveString } from "../safety/codes.js";
-import { UNBOUNDED, type ResourceSchema } from "../validate/schema.js";
-import { builtInSchema, conformanceResult } from "../validate/validate.js";
-import {
-  ISSUE_SEVERITIES,
-  SLICE_UNCHECKED_REASONS,
-  validationIssue,
-  type SliceUncheckedReason,
-  type ValidationIssue,
-} from "../validate/issues.js";
+import { UNBOUNDED } from "../validate/schema.js";
+import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "../validate/issues.js";
 import { matchesFixed, matchesPattern } from "./fixed-pattern.js";
 import { SliceScope } from "./scope.js";
 import { isSliceOf, matchSlices, resolveSlices, type SliceEnvironment } from "./slicing.js";
-import { FhirProfileError, snapshotElements, type BaseResolver } from "./snapshot.js";
-import type {
-  ElementBinding,
-  ElementConstraint,
-  ElementDefinition,
-  ElementType,
-  StructureDefinition,
-} from "./structure-definition.js";
-
-/** The base resolver when none is supplied: it knows no definition. */
-const noBase: BaseResolver = () => undefined;
+import { snapshotElements, type BaseResolver } from "./snapshot.js";
+import type { ElementDefinition, StructureDefinition } from "./structure-definition.js";
 
 /** Options for {@link collectProfileIssues}. */
 export interface ProfileOptions {
   /**
    * Base resolver for snapshot generation, needed only when the profile carries no snapshot. A
-   * `profile` slicing discriminator also asks it for a profile the supplied set does not carry.
+   * `type` slicing discriminator through `resolve()` also asks it for a slice's `targetProfile`
+   * the supplied set does not carry, to read the type that profile constrains.
    */
   readonly resolve?: BaseResolver | undefined;
   /**
-   * The supplied profile set. A `profile` slicing discriminator checks a resource against the
-   * profile a slice names, looked up here by canonical (and version, when the canonical pins one);
-   * a profile neither here nor returned by {@link resolve} leaves the slicing unchecked.
+   * The supplied profile set. A `type` slicing discriminator through `resolve()` reads the type a
+   * slice's `targetProfile` constrains from the profile here at that canonical (and version, when the
+   * canonical pins one); one neither here, nor a base R4 type, nor returned by {@link resolve} leaves
+   * the slicing unchecked.
    */
   readonly profiles?: readonly StructureDefinition[] | undefined;
 }
 
 /**
- * How many profiles deep a `profile` discriminator may check a resource against a slice's profile,
- * which may itself slice by profile. Deeper than this, the slicing is reported unchecked: that is
- * also where a reference cycle stops, since a cycle only ever deepens.
- */
-const MAX_PROFILE_DEPTH = 8;
-
-/**
- * How many resource-against-profile checks one validation may run for its `profile`
- * discriminators. A decided answer is checked once and reused; past this budget the rest are
- * reported unchecked, so a document with many references cannot make validation run without bound.
- */
-const MAX_PROFILE_CHECKS = 4096;
-
-/** The resources a `resolve()` can reach: the `contained` set and, for a Bundle, its entries. */
-interface Closure {
-  readonly contained: ContainedIndex;
-  readonly bundle?: BundleIndex;
-}
-
-/** One answer to "does this resource conform to that profile", or why it cannot be given. */
-type Conformance = "yes" | "no" | SliceUncheckedReason;
-
-/** What one validation's nested profile checks share: the answers decided, and the budget spent. */
-interface CheckState {
-  readonly decided: WeakMap<FhirComplex, Map<string, "yes" | "no">>;
-  checks: number;
-}
-
-/**
  * The {@link SliceEnvironment} for a resource validated against a profile: reference resolution
- * over its closure, and profile conformance through this layer, bounded in depth and in count.
+ * over its closure (its `contained` set and, for a Bundle, its entries), and the type a supplied
+ * profile constrains.
  *
  * @param resource - The resource model being validated.
  * @param options - The supplied profile set and base resolver.
@@ -146,81 +94,10 @@ export function sliceEnvironment(
   options: ProfileOptions = {},
 ): SliceEnvironment {
   const contained = containedIndex(resource);
-  const closure: Closure =
+  const closure =
     resourceType(resource) === "Bundle"
       ? { contained, bundle: buildBundleIndex(resource) }
       : { contained };
-  return environmentIn(closure, options, 0, { decided: new WeakMap(), checks: 0 });
-}
-
-/** The profiles a canonical names: the supplied ones at that url (and version), else the resolver's. */
-function profilesNamed(canonical: string, options: ProfileOptions): StructureDefinition[] {
-  const bar = canonical.indexOf("|");
-  const url = bar === -1 ? canonical : canonical.slice(0, bar);
-  const version = bar === -1 ? undefined : canonical.slice(bar + 1);
-  const fits = (p: StructureDefinition): boolean =>
-    p.url === url && (version === undefined || p.version === version);
-  const supplied = options.profiles?.filter(fits) ?? [];
-  if (supplied.length > 0) return supplied;
-  const resolved = options.resolve?.(url);
-  return resolved !== undefined && fits(resolved) ? [resolved] : [];
-}
-
-/** The environment at one depth of profile checking. */
-function environmentIn(
-  closure: Closure,
-  options: ProfileOptions,
-  depth: number,
-  state: CheckState,
-): SliceEnvironment {
-  const check = (target: FhirComplex, profile: StructureDefinition): Conformance => {
-    if (resourceType(target) !== profile.type) return "no";
-    // A contained resource contains nothing (dom-2), so its references resolve among its
-    // container's; any other target's `#` references resolve among its own `contained`.
-    const inner = [...closure.contained.byId.values()].includes(target)
-      ? closure
-      : { ...closure, contained: containedIndex(target) };
-    const environment = environmentIn(inner, options, depth + 1, state);
-    let result: { readonly issues: readonly ValidationIssue[]; readonly valid: boolean };
-    let leftOut: boolean;
-    try {
-      // Every layer validateResource runs, the profile's own invariants among them, so a target is
-      // judged against the slice's profile exactly as it would be validated against it alone.
-      result = conformanceResult(target, profile, options.resolve, environment);
-      leftOut = checksLeftOut(target, profile, options, environment);
-    } catch (error) {
-      // Any other throw (a caller's resolver failing, say) propagates exactly as it does unnested.
-      if (!(error instanceof FhirProfileError)) throw error;
-      // A profile whose snapshot cannot be generated was not available to check against.
-      return SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
-    }
-    if (!result.valid) return "no";
-    // Something the profile asks of the target that was not evaluated: a slicing, an invariant, a
-    // resource type with no schema, or a constraint of a kind no layer that ran enforces.
-    const incomplete =
-      leftOut ||
-      result.issues.some(
-        (i) =>
-          i.code === "PROFILE_SLICE_UNCHECKED" ||
-          i.code === "PROFILE_SLICE_NO_SLICING" ||
-          i.code === "INVARIANT_UNCHECKED" ||
-          i.code === "RESOURCE_NOT_MODELED",
-      );
-    return incomplete ? SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED : "yes";
-  };
-
-  const decide = (target: FhirComplex, canonical: string): Conformance => {
-    const profiles = profilesNamed(canonical, options);
-    if (profiles.length === 0) return SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
-    if (depth >= MAX_PROFILE_DEPTH || state.checks >= MAX_PROFILE_CHECKS)
-      return SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED;
-    state.checks += 1;
-    // Every version supplied under an unpinned canonical must agree, or nothing is asserted.
-    return profiles
-      .map((p) => check(target, p))
-      .reduce((a, b) => (a === b ? a : SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED));
-  };
-
   return {
     resolve: (reference) => {
       // Only a resolved answer carries a target.
@@ -234,226 +111,20 @@ function environmentIn(
       const types = new Set(profilesNamed(canonical, options).map((p) => p.type));
       return types.size === 1 ? [...types][0] : undefined;
     },
-    conforms: (target, canonical) => {
-      const known = state.decided.get(target)?.get(canonical);
-      if (known !== undefined) return known;
-      const answer = decide(target, canonical);
-      // Only a decision is kept: an undecided answer may come from the depth or the budget alone.
-      if (answer === "yes" || answer === "no") {
-        const byCanonical = state.decided.get(target) ?? new Map<string, "yes" | "no">();
-        byCanonical.set(canonical, answer);
-        state.decided.set(target, byCanonical);
-      }
-      return answer;
-    },
   };
 }
 
-// Stryker disable all: module-level constants, evaluated once when the module loads, which the
-// mutation runner does not reload per mutant; test/slicing-profile-conformance.property.test.ts
-// and test/slicing-profile-conformance.test.ts pin each by behaviour.
-/**
- * The kinds of constraint a nested profile check may affirm, each with what enforces it when the
- * check runs. A profile discriminator's check says a target conforms only when every constraint the
- * slice's profile places on an element present in the target is of one of these kinds
- * ({@link constraintKinds} names the kinds of one element). Any other kind, a narrowed type the
- * occurrence's own type cannot be read against, a type `profile`, a `targetProfile`, a binding to a
- * value set other than the one the schema enumerates there, an invariant on a slice itself,
- * `maxLength`, `minValue[x]`, `maxValue[x]`, and everything the model does not recognise, leaves
- * the check undecided: the reference validator would check it, and a "yes" without it is a guess.
- *
- * @internal
- */
-export const ENFORCED_CONSTRAINT_KINDS: Readonly<Record<string, string>> = {
-  min: "the profile layer: cardinality, per parent occurrence",
-  max: "the profile layer: cardinality, per parent occurrence",
-  mustSupport: "nothing to enforce: an obligation on a system, never on an instance",
-  fixed: "the profile layer: fixed[x]",
-  pattern: "the profile layer: pattern[x]",
-  slicing: "the profile layer; a slicing it cannot decide is reported and leaves this undecided",
-  constraint:
-    "the invariant layer; an invariant it cannot evaluate is reported and leaves this undecided",
-  "binding:schema":
-    "the structure layer: the schema's enumerated codes, bound to the very value set they enumerate",
-  "binding:advisory": "nothing to enforce: a preferred or example binding asks nothing",
-  "type:code": "this check: each present occurrence's own type is one the element allows",
-};
-
-/** The canonical of the base `Resource` definition: as a `targetProfile`, it narrows nothing. */
-const ANY_RESOURCE = "http://hl7.org/fhir/StructureDefinition/Resource";
-
-/**
- * The version of the R4 base value sets the schema enumerates: a profile's binding to one of them
- * may pin it, and pins nothing else.
- */
-const R4_VERSION = "4.0.1";
-// Stryker restore all
-
-/**
- * Whether the profile asks something of the target that the layers which ran do not check: an
- * element present in the target carries a constraint whose kind is not on
- * {@link ENFORCED_CONSTRAINT_KINDS}.
- */
-function checksLeftOut(
-  target: FhirComplex,
-  profile: StructureDefinition,
-  options: ProfileOptions,
-  environment: SliceEnvironment,
-): boolean {
-  const snapshot = snapshotElements(profile, options.resolve ?? noBase);
-  const scope = new SliceScope(target, rootPath(profile.type), snapshot, environment);
-  const schema = builtInSchema(profile.type);
-  return snapshot.some(
-    (el) =>
-      scope.occurrences(el).length > 0 &&
-      constraintKinds(el, profile.type, snapshot, schema, scope).some(
-        (kind) => !Object.hasOwn(ENFORCED_CONSTRAINT_KINDS, kind),
-      ),
-  );
-}
-
-/**
- * The kinds of constraint one element of a profile places on a target the element is present in,
- * as {@link ENFORCED_CONSTRAINT_KINDS} names them; what the model does not read comes back as
- * {@link ElementDefinition.unmodeled} spells it under `unmodeled:`, a kind never on that list.
- *
- * @param el - The element.
- * @param type - The resource type the profile constrains.
- * @param snapshot - The profile's snapshot, which the element is one of.
- * @param schema - The built-in schema of that type, when there is one.
- * @param scope - The target's slice scope against the snapshot.
- * @returns The kinds, one entry per constraint.
- * @internal
- */
-export function constraintKinds(
-  el: ElementDefinition,
-  type: string,
-  snapshot: readonly ElementDefinition[],
-  schema: ResourceSchema | undefined,
-  scope: SliceScope,
-): string[] {
-  const kinds: string[] = [];
-  if (el.min !== undefined) kinds.push("min");
-  if (el.max !== undefined) kinds.push("max");
-  if (el.mustSupport !== undefined) kinds.push("mustSupport");
-  if (el.fixed !== undefined) kinds.push("fixed");
-  if (el.pattern !== undefined) kinds.push("pattern");
-  if (el.slicing !== undefined) {
-    kinds.push("slicing");
-    // The profile layer checks a closed slicing's unmatched occurrences, never their order.
-    if (el.slicing.ordered === true) kinds.push("slicing:ordered");
-    if (el.slicing.rules === "openAtEnd") kinds.push("slicing:openAtEnd");
-  }
-  for (const constraint of el.constraint ?? [])
-    kinds.push(constraintKind(el, constraint, snapshot));
-  if (el.binding !== undefined) kinds.push(bindingKind(el, el.binding, type, schema));
-  const slicedBy = sliceDiscriminators(el, snapshot);
-  const types = el.type ?? [];
-  for (const t of types) {
-    if ((t.profile ?? []).length > 0)
-      kinds.push(decidesProfile(slicedBy, false) ? "slicing" : "type:profile");
-    if ((t.targetProfile ?? []).some((c) => c !== ANY_RESOURCE))
-      kinds.push(decidesProfile(slicedBy, true) ? "slicing" : "type:targetProfile");
-  }
-  if (types.length > 0 && el.path !== type) kinds.push(typeKind(el, types, scope));
-  // Under a prefix of their own, so nothing the model does not read can spell an allowed kind.
-  for (const statement of el.unmodeled ?? []) kinds.push(`unmodeled:${statement}`);
-  return kinds;
-}
-
-/**
- * The discriminators of the slicing a slice element belongs to; `undefined` for any other element,
- * which `isSliceOf` matches to nothing, and for a slice whose sliced element carries no slicing.
- */
-function sliceDiscriminators(
-  el: ElementDefinition,
-  snapshot: readonly ElementDefinition[],
-): readonly { readonly type: string; readonly path: string }[] | undefined {
-  const sliced = snapshot.find((e) => e.sliceName === undefined && isSliceOf(el, e));
-  return sliced?.slicing?.discriminator;
-}
-
-/**
- * Whether a slicing's discriminators decide a slice's type `profile` (at the slice itself) or its
- * `targetProfile` (at `resolve()`): a member is then assigned only once it conforms, so the
- * slicing enforces what the slice names there.
- */
-function decidesProfile(
-  discriminators: readonly { readonly type: string; readonly path: string }[] | undefined,
-  resolves: boolean,
-): boolean {
-  const at = resolves ? ["resolve()", "$this.resolve()"] : ["$this", ""];
-  return discriminators?.some((d) => d.type === "profile" && at.includes(d.path)) === true;
-}
-
-/**
- * An invariant's kind. The invariant layer evaluates an element's invariants on every occurrence in
- * its scope, and skips a slice element's own: one of those is evaluated only when the sliced element
- * carries the same invariant, which then reaches every occurrence.
- */
-function constraintKind(
-  el: ElementDefinition,
-  constraint: ElementConstraint,
-  snapshot: readonly ElementDefinition[],
-): string {
-  if (el.sliceName === undefined) return "constraint";
-  const sliced = snapshot.find((e) => e.sliceName === undefined && isSliceOf(el, e));
-  const shared = sliced?.constraint?.some(
-    (c) => c.key === constraint.key && c.expression === constraint.expression,
-  );
-  return shared === true ? "constraint" : "constraint:slice";
-}
-
-/**
- * A binding's kind. The schema checks a resource's direct `code` element against the codes of one
- * R4 value set; a `required` or `extensible` binding to exactly that value set asks nothing more,
- * and a binding to any other value set, even one whose codes are all among those, asks more.
- */
-function bindingKind(
-  el: ElementDefinition,
-  binding: ElementBinding,
-  type: string,
-  schema: ResourceSchema | undefined,
-): string {
-  if (binding.strength === "preferred" || binding.strength === "example") return "binding:advisory";
-  // A nested path's tail has a dot, which names no schema element.
-  const enumerated = schema?.elements[el.path.slice(type.length + 1)]?.binding?.valueSet;
-  const valueSet = binding.valueSet;
-  if (valueSet === undefined) return "binding:unenforced";
-  const bar = valueSet.indexOf("|");
-  const url = bar === -1 ? valueSet : valueSet.slice(0, bar);
-  const version = bar === -1 ? R4_VERSION : valueSet.slice(bar + 1);
-  const same =
-    (binding.strength === "required" || binding.strength === "extensible") &&
-    url === enumerated &&
-    version === R4_VERSION;
-  return same ? "binding:schema" : "binding:unenforced";
-}
-
-/**
- * A type list's kind: `type:code` when every present occurrence's own type is one the element
- * allows, read from a choice suffix or a resource's `resourceType`, or, on an element of one type
- * that is not a choice, the type the structure layer read it as. Otherwise the narrowing is not
- * checked here, and the kind says so.
- */
-function typeKind(el: ElementDefinition, types: readonly ElementType[], scope: SliceScope): string {
-  const codes = types.map((t) => t.code);
-  // A choice's occurrences always carry their suffix, so only another element reads `single`.
-  const single = codes.length === 1;
-  for (const group of scope.parentGroups(el)) {
-    for (const [i, child] of group.children.entries()) {
-      const suffix = group.types[i];
-      const resource = isComplex(child) ? resourceType(child) : undefined;
-      const allowed =
-        suffix !== undefined
-          ? codes.some((c) => c.charAt(0).toUpperCase() + c.slice(1) === suffix)
-          : resource !== undefined
-            ? codes.some((c) => c === resource || c === "Resource" || c === "DomainResource")
-            : single;
-      if (!allowed) return "type:unchecked";
-    }
-  }
-  return "type:code";
+/** The profiles a canonical names: the supplied ones at that url (and version), else the resolver's. */
+function profilesNamed(canonical: string, options: ProfileOptions): StructureDefinition[] {
+  const bar = canonical.indexOf("|");
+  const url = bar === -1 ? canonical : canonical.slice(0, bar);
+  const version = bar === -1 ? undefined : canonical.slice(bar + 1);
+  const fits = (p: StructureDefinition): boolean =>
+    p.url === url && (version === undefined || p.version === version);
+  const supplied = options.profiles?.filter(fits) ?? [];
+  if (supplied.length > 0) return supplied;
+  const resolved = options.resolve?.(url);
+  return resolved !== undefined && fits(resolved) ? [resolved] : [];
 }
 
 /**
@@ -478,32 +149,13 @@ export function collectProfileIssues(
   profile: StructureDefinition,
   options: ProfileOptions = {},
 ): ValidationIssue[] {
-  return profileIssuesIn(resource, profile, options, sliceEnvironment(resource, options));
-}
-
-/**
- * {@link collectProfileIssues} in a given slice environment (a nested profile check reuses its
- * closure).
- *
- * @param resource - The resource model.
- * @param profile - The profile to validate against.
- * @param options - The supplied profile set and base resolver.
- * @param environment - The slice environment the profile's slicings are decided in.
- * @returns The value-free profile findings.
- * @internal
- */
-export function profileIssuesIn(
-  resource: FhirComplex,
-  profile: StructureDefinition,
-  options: ProfileOptions,
-  environment: SliceEnvironment,
-): ValidationIssue[] {
   const rt = resourceType(resource);
   if (rt === undefined || rt !== profile.type) return [];
   // The profile only applies when the two agree, so the location is bounded once, here.
   const root = rootPath(rt);
 
-  const snapshot = snapshotElements(profile, options.resolve ?? noBase);
+  const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
+  const environment = sliceEnvironment(resource, options);
   const scope = new SliceScope(resource, root, snapshot, environment);
   const issues: ValidationIssue[] = [];
 

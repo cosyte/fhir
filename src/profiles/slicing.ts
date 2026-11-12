@@ -19,21 +19,17 @@
  * at the discriminator path, through `resolve()` when the path ends in it. The slice must name the
  * type at that path (`type.code`, or `type.targetProfile` after `resolve()`).
  *
- * **`profile`** is decided for a resource the path reaches: one held in place (a `contained`
- * resource, a Bundle entry's `resource`) or one a `resolve()` reaches through the resource's
- * `contained` set or, for a Bundle, its entries ({@link ../bundle/references.js}). The resource is
- * checked against the profile the slice names (`type.profile`, or `type.targetProfile` after
- * `resolve()`) by the caller's {@link SliceEnvironment}: an error there decides `no`, a clean and
- * complete check decides `yes`.
+ * A discriminator path selects one element (profiling.html): a `type` path that selects more than
+ * one node in an occurrence decides nothing, rather than matching when any one of them does.
  *
- * A discriminator path selects one element (profiling.html): a `type` or `profile` path that
- * selects more than one node in an occurrence decides nothing, rather than matching when any one
- * of them does.
+ * **`profile`** is not decided yet: a slicing with a `profile` discriminator among its
+ * discriminators is reported unchecked with the `profile-discriminator` reason, whatever else it
+ * discriminates on.
  *
  * Anything else is **not guessed**: an R5 `position`, an empty discriminator set, a path outside the
  * subset, a slice that declares nothing at a discriminator path, a type the document does not state,
- * a reference that resolves to nothing, or a profile that was not supplied. The whole slicing is
- * then reported *unchecked* (`PROFILE_SLICE_UNCHECKED`) with its {@link SliceUncheckedReason}, so
+ * a reference that resolves to nothing, or a target profile that was not supplied. The whole slicing
+ * is then reported *unchecked* (`PROFILE_SLICE_UNCHECKED`) with its {@link SliceUncheckedReason}, so
  * membership is never silently assumed to pass or fail (fail-safe).
  *
  * **A re-slice is read, not reported unchecked.** A slice's `fixed[x]` / `pattern[x]` constraints
@@ -68,13 +64,12 @@ import type { ElementDefinition, ElementType } from "./structure-definition.js";
 // Stryker disable all: module-level constants, evaluated once when the module loads, which the
 // mutation runner does not reload per mutant; test/slicing-type-profile.test.ts pins each one by
 // behaviour (every discriminator kind, each pattern's anchors and classes).
-/** The discriminator kinds this module can evaluate. */
+/** The discriminator kinds this module can evaluate (`profile` is an R4 kind it does not, yet). */
 const SUPPORTED_DISCRIMINATORS: ReadonlySet<string> = new Set([
   "value",
   "pattern",
   "exists",
   "type",
-  "profile",
 ]);
 
 /** The canonical prefix of a base R4 definition: its tail is the type it defines. */
@@ -125,16 +120,16 @@ export interface SliceDefinition {
   readonly unsatisfiableExists: ReadonlySet<string>;
   /**
    * The types the slice allows, by path relative to the sliced element (`"$this"` for the slice
-   * element itself), from the slice element and its own descendants. Read by the `type` and
-   * `profile` discriminators. Absent on a definition built by hand, which then decides neither.
+   * element itself), from the slice element and its own descendants. Read by the `type`
+   * discriminator. Absent on a definition built by hand, which then decides none.
    */
   readonly types?: ReadonlyMap<string, readonly ElementType[]>;
 }
 
 /**
- * What deciding a `type` or `profile` discriminator needs beyond the occurrence itself, supplied by
- * the profile layer. Every member is optional; a discriminator that needs a missing one is reported
- * unchecked with its reason rather than guessed.
+ * What deciding a `type` discriminator needs beyond the occurrence itself, supplied by the profile
+ * layer. Every member is optional; a discriminator that needs a missing one is reported unchecked
+ * with its reason rather than guessed.
  */
 export interface SliceEnvironment {
   /**
@@ -143,14 +138,9 @@ export interface SliceEnvironment {
    */
   readonly resolve?: (reference: string) => FhirComplex | undefined;
   /**
-   * Decide whether a resource conforms to the profile a canonical names: `"yes"`, `"no"`, or a
-   * reason it cannot be decided.
+   * The resource type a profile canonical constrains, when the profile is known: how a `type`
+   * discriminator through `resolve()` reads a slice's `targetProfile`.
    */
-  readonly conforms?: (
-    resource: FhirComplex,
-    canonical: string,
-  ) => "yes" | "no" | SliceUncheckedReason;
-  /** The resource type a profile canonical constrains, when the profile is known. */
   readonly profileType?: (canonical: string) => string | undefined;
 }
 
@@ -295,9 +285,7 @@ function discriminatorHolds(
   context: SliceContext,
 ): Verdict {
   const { type, path } = discriminator;
-  if (type === "type" || type === "profile") {
-    return typedHolds(instance, selfType, type, path, slice, context);
-  }
+  if (type === "type") return typeHolds(instance, selfType, path, slice, context);
   if (type === "exists") {
     // A contradiction is answered `no`, never `unevaluable`. `unevaluable` reports the whole slicing
     // `unchecked`, which returns before the unmatched-occurrence and slice-cardinality arms and so
@@ -424,19 +412,17 @@ function typeOfProfile(canonical: string, context: SliceContext): string | undef
 }
 
 /**
- * What a slice says an occurrence must be at a `type` or `profile` discriminator path: type names
- * for `type`, profile canonicals for `profile`, or why the slice cannot say.
+ * The type names a slice says an occurrence must be of at a `type` discriminator path: its
+ * `type.code`s, or after `resolve()` the types its `targetProfile`s constrain, or why it cannot say.
  */
 function sliceDemands(
-  kind: "type" | "profile",
   split: SplitPath,
   slice: SliceDefinition,
   context: SliceContext,
 ): readonly string[] | SliceUncheckedReason {
   const declared = slice.types?.get(split.element) ?? [];
-  if (kind === "type" && !split.resolves) return declared.map((t) => t.code);
-  const canonicals = declared.flatMap((t) => (split.resolves ? t.targetProfile : t.profile) ?? []);
-  if (kind === "profile") return canonicals;
+  if (!split.resolves) return declared.map((t) => t.code);
+  const canonicals = declared.flatMap((t) => t.targetProfile ?? []);
   const names: string[] = [];
   for (const canonical of canonicals) {
     const name = typeOfProfile(canonical, context);
@@ -460,24 +446,23 @@ function isAbstractType(name: string): boolean {
   );
 }
 
-/** A `type` or `profile` discriminator's verdict for one occurrence and one slice. */
-function typedHolds(
+/** A `type` discriminator's verdict for one occurrence and one slice. */
+function typeHolds(
   instance: FhirNode,
   selfType: string | undefined,
-  kind: "type" | "profile",
   path: string,
   slice: SliceDefinition,
   context: SliceContext,
 ): Verdict {
   const split = splitPath(path);
   if (split === undefined) return undecided(SLICE_UNCHECKED_REASONS.PATH_UNSUPPORTED);
-  const names = sliceDemands(kind, split, slice, context);
+  const names = sliceDemands(split, slice, context);
   if (typeof names === "string") return undecided(names);
   if (names.length === 0) return undecided(SLICE_UNCHECKED_REASONS.SLICE_UNCONSTRAINED);
-  if (kind === "type" && names.some((n) => isAbstractType(n) || !TYPE_NAME.test(n)))
+  if (names.some((n) => isAbstractType(n) || !TYPE_NAME.test(n)))
     return undecided(SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED);
 
-  // An occurrence with nothing at the path is of no type there and conforms to no profile.
+  // An occurrence with nothing at the path is of no type there.
   const targets = walkTyped(instance, selfType, split, context);
   if (typeof targets === "string") return undecided(targets);
   // A discriminator path selects one element (profiling.html); the reference validator's type test
@@ -485,26 +470,9 @@ function typedHolds(
   // occurrence decides nothing, rather than matching when any one of them does.
   if (targets.length > 1) return undecided(SLICE_UNCHECKED_REASONS.PATH_UNSUPPORTED);
   const target = targets[0];
-
-  if (kind === "type") {
-    if (target === undefined) return false;
-    if (target.type === undefined) return undecided(SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED);
-    return names.some((name) => asSuffix(name) === target.type);
-  }
-
-  // profile: the target must be a resource, checked against the profiles the slice names.
   if (target === undefined) return false;
-  const { node } = target;
-  const resource = isComplex(node) && resourceType(node) !== undefined ? node : undefined;
-  if (resource === undefined) return undecided(SLICE_UNCHECKED_REASONS.TARGET_NOT_RESOURCE);
-  let pending: SliceUncheckedReason | undefined;
-  for (const canonical of names) {
-    const answer =
-      context.conforms?.(resource, canonical) ?? SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
-    if (answer === "yes") return true;
-    if (answer !== "no") pending ??= answer;
-  }
-  return pending === undefined ? false : undecided(pending);
+  if (target.type === undefined) return undecided(SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED);
+  return names.some((name) => asSuffix(name) === target.type);
 }
 
 /**
@@ -512,16 +480,16 @@ function typedHolds(
  *
  * Returns `unchecked: true`, with the {@link SliceMatchResult.reason} and no assignments the caller
  * should act on, when membership cannot be evaluated: an empty discriminator set, a discriminator of
- * an unsupported kind (R5 `position`, …), a slice that declares nothing at a discriminator path, or
- * a `type` / `profile` discriminator whose answer needs what `context` does not supply. The library
- * does **not** guess a slice assignment it cannot justify.
+ * an unsupported kind (R5 `position`, …), a `profile` discriminator (not decided yet), a slice that
+ * declares nothing at a discriminator path, or a `type` discriminator whose answer needs what
+ * `context` does not supply. The library does **not** guess a slice assignment it cannot justify.
  *
  * @param instances - The instance occurrences of the sliced element, in order.
  * @param slices - The resolved slice definitions.
  * @param discriminators - The slicing's discriminators.
- * @param context - What a `type` or `profile` discriminator needs: each occurrence's choice suffix,
- *   reference resolution, and profile conformance. Optional; without it those are decided only from
- *   what the occurrences state themselves (a resource's `resourceType`).
+ * @param context - What a `type` discriminator needs: each occurrence's choice suffix, reference
+ *   resolution, and the type a target profile constrains. Optional; without it a type is decided
+ *   only from what the occurrences state themselves (a resource's `resourceType`).
  * @returns The per-occurrence assignments, the `unchecked` flag and, when unchecked, its reason.
  * @example
  * ```ts
@@ -547,8 +515,11 @@ export function matchSlices(
   });
 
   if (discriminators.length === 0) return unchecked(SLICE_UNCHECKED_REASONS.NO_DISCRIMINATOR);
-  if (discriminators.some((d) => !SUPPORTED_DISCRIMINATORS.has(d.type)))
+  if (discriminators.some((d) => d.type !== "profile" && !SUPPORTED_DISCRIMINATORS.has(d.type)))
     return unchecked(SLICE_UNCHECKED_REASONS.DISCRIMINATOR_UNSUPPORTED);
+  // A profile discriminator is not decided yet, so neither is any slicing that uses one.
+  if (discriminators.some((d) => d.type === "profile"))
+    return unchecked(SLICE_UNCHECKED_REASONS.PROFILE_DISCRIMINATOR);
 
   const assignments: (string | undefined)[] = [];
   for (const [i, instance] of instances.entries()) {

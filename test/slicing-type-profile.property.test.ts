@@ -6,10 +6,8 @@
  *   type, and to no other, and is never reported unchecked when every slice names a type.
  * - Deciding membership only adds findings: every error the same profile draws with its slicing
  *   left undecided (an R5 `position` discriminator) is still drawn when the slicing is decided.
- * - A `profile` discriminator over any graph of references among contained resources terminates,
- *   and answers either a decision or `profile-undecided`, never a guess.
- * - A target that breaks an error invariant of the slice's profile conforms to no slice; one whose
- *   invariant could not be evaluated leaves the slicing `profile-undecided`; a warning decides nothing.
+ * - A `profile` discriminator, alone or beside any other kinds, in any order, leaves the slicing
+ *   unchecked with the `profile-discriminator` reason and draws no membership finding either way.
  */
 
 import fc from "fast-check";
@@ -140,163 +138,78 @@ describe("property: a type discriminator on a choice element", () => {
   });
 });
 
-/** A profile slicing `hasMember` by the profile each reference resolves to: this profile itself. */
-const memberLoop = loadSd({
-  resourceType: "StructureDefinition",
-  url: `${BASE}generated-member-loop`,
-  type: "Observation",
-  snapshot: {
-    element: [
-      { id: "Observation", path: "Observation" },
-      { id: "Observation.status", path: "Observation.status", min: 1 },
-      {
-        id: "Observation.hasMember",
-        path: "Observation.hasMember",
-        slicing: { discriminator: [{ type: "profile", path: "resolve()" }], rules: "open" },
-      },
-      {
-        id: "Observation.hasMember:member",
-        path: "Observation.hasMember",
-        sliceName: "member",
-        type: [{ code: "Reference", targetProfile: [`${BASE}generated-member-loop`] }],
-      },
-    ],
-  },
-});
+/** The other discriminators a generated slicing may carry beside its `profile` one. */
+const OTHER_DISCRIMINATORS = [
+  { type: "type", path: "$this" },
+  { type: "value", path: "system" },
+  { type: "pattern", path: "$this" },
+  { type: "exists", path: "id" },
+] as const;
 
-/** A graph over up to five contained Observations: per node, whether it has a status, and its edges. */
-const graph = fc.integer({ min: 1, max: 5 }).chain((n) =>
-  fc.tuple(
-    fc.array(fc.boolean(), { minLength: n, maxLength: n }),
-    fc.array(fc.array(fc.integer({ min: 0, max: n }), { maxLength: 3 }), {
-      minLength: n,
-      maxLength: n,
-    }),
-    fc.array(fc.integer({ min: 0, max: n }), { minLength: 1, maxLength: 3 }),
-  ),
-);
-
-/** A reference to node `i`, or, at `i === n`, one that names nothing in the closure. */
-function ref(i: number, n: number): { reference: string } {
-  return { reference: i === n ? "#fake-missing" : `#n${String(i)}` };
-}
-
-describe("property: a profile discriminator over contained references", () => {
-  it("terminates on any reference graph and never guesses", () => {
-    fc.assert(
-      fc.property(graph, ([status, edges, roots]) => {
-        const n = status.length;
-        const obs = parse({
-          resourceType: "Observation",
-          status: "final",
-          contained: status.map((has, i) => ({
-            resourceType: "Observation",
-            id: `n${String(i)}`,
-            ...(has ? { status: "final" } : {}),
-            hasMember: (edges[i] ?? []).map((j) => ref(j, n)),
-          })),
-          hasMember: roots.map((j) => ref(j, n)),
-        });
-        const issues = collectProfileIssues(obs, memberLoop, { profiles: [memberLoop] });
-        const reasons = issues
-          .filter((i) => i.code === "PROFILE_SLICE_UNCHECKED")
-          .map((i) => i.sliceReason);
-        for (const reason of reasons) {
-          expect([
-            SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED,
-            SLICE_UNCHECKED_REASONS.TARGET_UNRESOLVED,
-          ]).toContain(reason);
-        }
-        // A root reference that resolves nowhere always leaves the slicing unchecked.
-        if (roots.includes(n)) expect(reasons).not.toEqual([]);
-      }),
-      RUN,
-    );
-  });
-});
-
-/** The invariants a generated slice profile carries on its Patient root. */
-const INVARIANTS = {
-  evaluable: "name.exists()",
-  unevaluable: "link.other.resolve().active.exists()",
-} as const;
-
-/** A Patient profile with one root invariant of the given severity and expression. */
-function patientInvariant(severity: string, expression: string): StructureDefinition {
+/** A profile slicing `value[x]` by `profile` and the given others, one required slice per variant. */
+function profileSlicing(
+  sliceTypes: readonly string[],
+  others: readonly (typeof OTHER_DISCRIMINATORS)[number][],
+  rule: string,
+  profileFirst: boolean,
+): StructureDefinition {
+  const profile = { type: "profile", path: "$this" };
   return loadSd({
     resourceType: "StructureDefinition",
-    url: `${BASE}generated-patient`,
-    type: "Patient",
+    url: `${BASE}generated-profile-${rule}`,
+    type: "Observation",
     snapshot: {
       element: [
+        { id: "Observation", path: "Observation" },
         {
-          id: "Patient",
-          path: "Patient",
-          constraint: [{ key: "fake-gen-1", severity, expression }],
+          id: "Observation.value[x]",
+          path: "Observation.value[x]",
+          slicing: {
+            discriminator: profileFirst ? [profile, ...others] : [...others, profile],
+            rules: rule,
+          },
         },
+        ...sliceTypes.flatMap((suffix) => [
+          {
+            id: `Observation.value[x]:value${suffix}`,
+            path: "Observation.value[x]",
+            sliceName: `value${suffix}`,
+            min: 1,
+            max: "1",
+            type: [{ code: code(suffix), profile: [`${BASE}generated-${suffix}`] }],
+          },
+          {
+            id: `Observation.value[x]:value${suffix}.id`,
+            path: "Observation.value[x].id",
+            min: 1,
+          },
+        ]),
       ],
     },
   });
 }
 
-/** A closed Bundle slicing on `entry` by the profile of its `resource`, one required slice. */
-const entryByGenerated = loadSd({
-  resourceType: "StructureDefinition",
-  url: `${BASE}generated-entry-by-profile`,
-  type: "Bundle",
-  snapshot: {
-    element: [
-      { id: "Bundle", path: "Bundle" },
-      {
-        id: "Bundle.entry",
-        path: "Bundle.entry",
-        slicing: { discriminator: [{ type: "profile", path: "resource" }], rules: "closed" },
-      },
-      { id: "Bundle.entry:pat", path: "Bundle.entry", sliceName: "pat", min: 1 },
-      {
-        id: "Bundle.entry:pat.resource",
-        path: "Bundle.entry.resource",
-        type: [{ code: "Patient", profile: [`${BASE}generated-patient`] }],
-      },
-    ],
-  },
-});
-
-describe("property: a slice profile's invariants decide a profile discriminator", () => {
-  it("never assigns a target that breaks an error invariant, nor one never evaluated", () => {
+describe("property: a profile discriminator", () => {
+  it("leaves the slicing unchecked, with its reason, and draws no membership finding", () => {
     fc.assert(
       fc.property(
+        variant,
+        sliceTypes,
+        rules,
+        fc.subarray([...OTHER_DISCRIMINATORS]),
         fc.boolean(),
-        fc.constantFrom("error", "warning"),
-        fc.constantFrom<keyof typeof INVARIANTS>("evaluable", "unevaluable"),
-        (named, severity, kind) => {
-          const bundle = parse({
-            resourceType: "Bundle",
-            type: "collection",
-            entry: [
-              {
-                fullUrl: "urn:uuid:fake-1",
-                resource: {
-                  resourceType: "Patient",
-                  id: "fake-1",
-                  ...(named ? { name: [{ family: "Synthfamily" }] } : {}),
-                },
-              },
-            ],
-          });
-          const profile = patientInvariant(severity, INVARIANTS[kind]);
-          const issues = collectProfileIssues(bundle, entryByGenerated, { profiles: [profile] });
-          const reasons = issues
-            .filter((i) => i.code === "PROFILE_SLICE_UNCHECKED")
-            .map((i) => i.sliceReason);
-          const unassigned = errors(issues).includes("PROFILE_SLICE_UNMATCHED Bundle.entry[0]");
-          // An invariant that cannot be evaluated is never decided either way, whatever its severity.
-          const undecided = kind === "unevaluable";
-          // An evaluable error invariant the target breaks decides that it conforms to no slice.
-          const broken = kind === "evaluable" && severity === "error" && !named;
-          expect(reasons).toEqual(undecided ? [SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED] : []);
-          expect(unassigned).toBe(broken);
-          if (broken) expect(errors(issues)).toContain("CARDINALITY_MIN Bundle.entry:pat");
+        (suffix, types, rule, others, profileFirst) => {
+          const profile = profileSlicing(types, others, rule, profileFirst);
+          const obs = parse({ resourceType: "Observation", [`value${suffix}`]: VARIANTS[suffix] });
+          const issues = collectProfileIssues(obs, profile, { profiles: [profile] });
+          expect(
+            issues
+              .filter((i) => i.code === "PROFILE_SLICE_UNCHECKED")
+              .map((i) => [i.expression, i.sliceReason]),
+          ).toEqual([["Observation.value[x]", SLICE_UNCHECKED_REASONS.PROFILE_DISCRIMINATOR]]);
+          // Nothing is assigned, so no slice is missing, no occurrence is outside the slicing, and
+          // no slice's own constraint is applied.
+          expect(errors(issues)).toEqual([]);
         },
       ),
       RUN,

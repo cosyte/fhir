@@ -37,6 +37,7 @@ import {
   parseResourceXml,
   readRawJson,
   readRawXml,
+  resourceType,
   serializeResource,
   SLICE_UNCHECKED_REASONS,
   validateResource,
@@ -367,8 +368,8 @@ describe("fuzz: JSON, validateResource never throws over any resource that parse
 /**
  * Synthetic profiles that slice by `type` and `profile` discriminators, every path form this library
  * walks: a choice element's `$this`, a resource held in place (`resource`), and `resolve()` through
- * `contained` and Bundle entries. Each profile's slices name another of these profiles, so a
- * profile check nests and can meet itself.
+ * `contained` and Bundle entries. A `profile` discriminator is not decided: the slicings that use
+ * one (`Observation.hasMember`, and `Bundle.entry` beside a `type` one) are always left unchecked.
  */
 const SLICING_PROFILES: readonly StructureDefinition[] = [
   {
@@ -377,33 +378,7 @@ const SLICING_PROFILES: readonly StructureDefinition[] = [
     type: "Observation",
     snapshot: {
       element: [
-        {
-          id: "Observation",
-          path: "Observation",
-          // A nested profile check runs these too: an error one decides, a warning one does not,
-          // and an unevaluable one leaves the check undecided.
-          constraint: [
-            { key: "fuzz-1", severity: "error", expression: "code.exists()" },
-            { key: "fuzz-2", severity: "warning", expression: "note.exists()" },
-          ],
-        },
-        {
-          id: "Observation.derivedFrom",
-          path: "Observation.derivedFrom",
-          constraint: [{ key: "fuzz-3", severity: "error", expression: "resolve().exists()" }],
-        },
-        {
-          id: "Observation.interpretation",
-          path: "Observation.interpretation",
-          binding: { strength: "required", valueSet: "http://example.org/ValueSet/fuzz-interp" },
-        },
-        // Constraints no layer enforces: a nested check over a target carrying these is undecided.
-        { id: "Observation.id", path: "Observation.id", maxLength: 1 },
-        {
-          id: "Observation.code",
-          path: "Observation.code",
-          extension: [{ url: "http://example.org/StructureDefinition/fuzz-rule" }],
-        },
+        { id: "Observation", path: "Observation" },
         {
           id: "Observation.value[x]",
           path: "Observation.value[x]",
@@ -552,12 +527,6 @@ function hostileObservation(id: string): fc.Arbitrary<Record<string, unknown>> {
       id: fc.constant(id),
       valueQuantity: fc.constantFrom({ system: "x" }, {}, [], "x", null),
       valueString: fc.constantFrom("x", 1, {}),
-      code: fc.constantFrom({ text: "fake" }, {}, "x"),
-      interpretation: fc.constantFrom([{ text: "fake" }], [], "x"),
-      derivedFrom: fc.array(
-        HOSTILE_REFERENCE.map((reference) => ({ reference })),
-        { maxLength: 1 },
-      ),
       hasMember: fc.array(
         fc.oneof(
           HOSTILE_REFERENCE.map((reference) => ({ reference })),
@@ -617,6 +586,26 @@ describe("fuzz: JSON, type and profile slicing discriminators never throw and st
           } else {
             expect(issue.sliceReason).toBeUndefined();
           }
+          // A slicing with a profile discriminator assigns nothing, so none of its slices is
+          // missing and no occurrence falls outside it.
+          expect(issue.expression.startsWith("Observation.hasMember:")).toBe(false);
+          expect(issue.expression.startsWith("Bundle.entry:obs")).toBe(false);
+          if (issue.code === "PROFILE_SLICE_UNMATCHED") {
+            expect(issue.expression.startsWith("Observation.hasMember")).toBe(false);
+            expect(issue.expression.startsWith("Bundle.entry")).toBe(false);
+          }
+        }
+        // Every Observation and Bundle root carries a profile-discriminated slicing, always unchecked.
+        const sliced = { Observation: "Observation.hasMember", Bundle: "Bundle.entry" } as const;
+        const rt = resourceType(result.resource);
+        if (rt === "Observation" || rt === "Bundle") {
+          expect(issues).toContainEqual(
+            expect.objectContaining({
+              code: "PROFILE_SLICE_UNCHECKED",
+              expression: sliced[rt],
+              sliceReason: SLICE_UNCHECKED_REASONS.PROFILE_DISCRIMINATOR,
+            }),
+          );
         }
       }),
       RUN_CONFIG,

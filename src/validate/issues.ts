@@ -296,8 +296,8 @@ export const VALIDATION_CODES = {
    */
   PROFILE_SLICE_UNMATCHED: "PROFILE_SLICE_UNMATCHED",
   /**
-   * Profile, a slicing whose membership this library could not decide (the R5-only `position`, a
-   * reference that leaves the closure, a profile that was not supplied, ...; the finding's
+   * Profile, a slicing whose membership this library could not decide (a `profile` discriminator,
+   * the R5-only `position`, a reference that leaves the closure, ...; the finding's
    * `sliceReason` names which). Emitted as `information` so slice membership is reported
    * **unchecked, never silently passed** (the fail-safe): the library does not guess a slice
    * assignment it cannot justify.
@@ -478,33 +478,30 @@ export type CodeSystemVersionRecord =
  * - `no-discriminator`: the slicing declares no discriminator.
  * - `discriminator-unsupported`: a discriminator kind outside R4's `value | exists | pattern | type |
  *   profile` (the R5 `position`, or an unknown kind).
- * - `path-unsupported`: a `type` or `profile` discriminator path outside the element-path subset
- *   (dotted names, `[x]` choices, `$this` and `resolve()`), such as `ofType(...)`.
+ * - `profile-discriminator`: a `profile` discriminator, which this library does not decide yet; a
+ *   slicing with one among its discriminators is left unchecked whatever else it discriminates on.
+ * - `path-unsupported`: a `type` discriminator path outside the element-path subset (dotted names,
+ *   `[x]` choices, `$this` and `resolve()`), such as `ofType(...)`, or one that selects more than
+ *   one node in an occurrence.
  * - `slice-unconstrained`: a slice declares nothing at a discriminator path: no fixed or pattern
- *   value, no cardinality for `exists`, no type for `type`, no profile for `profile`.
+ *   value, no cardinality for `exists`, no type for `type`.
  * - `type-undetermined`: an occurrence's concrete type cannot be read (it is neither a choice
  *   variant nor a resource), or a slice names an abstract type such as `Resource`.
  * - `target-unresolved`: a `resolve()` reference names nothing in the resource's `contained` or,
  *   for a Bundle, its entries.
- * - `target-not-resource`: a `profile` discriminator selects a datatype, not a resource.
- * - `profile-unavailable`: a slice names a profile that is neither in the supplied profile set nor
- *   returned by the base resolver.
- * - `profile-undecided`: the target was checked against the slice's profile and that check was
- *   itself incomplete (a slicing inside it unchecked), two supplied versions of an unpinned profile
- *   disagreed, or the bound on nested checks was reached (eight profiles deep, which is also where a
- *   reference cycle stops, or 4096 checks in one validation), so conformance is not asserted either
- *   way.
+ * - `profile-unavailable`: a slice's `targetProfile` names a profile that is neither a base R4 type,
+ *   nor in the supplied profile set, nor returned by the base resolver, or whose supplied versions
+ *   constrain different types, so the type it asks for is unknown.
  */
 export const SLICE_UNCHECKED_REASONS = {
   NO_DISCRIMINATOR: "no-discriminator",
   DISCRIMINATOR_UNSUPPORTED: "discriminator-unsupported",
+  PROFILE_DISCRIMINATOR: "profile-discriminator",
   PATH_UNSUPPORTED: "path-unsupported",
   SLICE_UNCONSTRAINED: "slice-unconstrained",
   TYPE_UNDETERMINED: "type-undetermined",
   TARGET_UNRESOLVED: "target-unresolved",
-  TARGET_NOT_RESOURCE: "target-not-resource",
   PROFILE_UNAVAILABLE: "profile-unavailable",
-  PROFILE_UNDECIDED: "profile-undecided",
 } as const;
 
 /** One of the {@link SLICE_UNCHECKED_REASONS}. */

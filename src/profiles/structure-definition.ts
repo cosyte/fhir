@@ -137,14 +137,6 @@ export interface ElementDefinition {
   readonly binding?: ElementBinding;
   /** The element's invariant constraints (FHIRPath), when the definition states any. */
   readonly constraint?: readonly ElementConstraint[];
-  /**
-   * What the definition states that this model does not read and that is not documentation, one
-   * entry per statement, when there is any: a property's name (`maxLength`, `minValueInteger`,
-   * `contentReference`), an extension's url (`extension:<url>`), or a part of a binding or a type
-   * (`binding.extension:<url>`, `type.aggregation`). Each may ask something of an instance that no
-   * validation layer checks, so a check that must not affirm what it did not evaluate reads it.
-   */
-  readonly unmodeled?: readonly string[];
 }
 
 /** The modeled slice of a FHIR `StructureDefinition`. */
@@ -167,120 +159,6 @@ export interface StructureDefinition {
   readonly differential?: readonly ElementDefinition[];
   /** The fully-resolved snapshot element list, when the definition carries one. */
   readonly snapshot?: readonly ElementDefinition[];
-}
-
-// Stryker disable all: module-level constants, evaluated once when the module loads, which the
-// mutation runner does not reload per mutant; test/slicing-profile-conformance.test.ts pins them by
-// behaviour.
-/**
- * The `ElementDefinition` members this model reads, and the members that only document an element
- * and ask nothing of an instance (elementdefinition.html): names, descriptions, mappings, the
- * summary and modifier flags a profile cannot change, the base it derives from. Any other member is
- * recorded as {@link ElementDefinition.unmodeled}.
- */
-const ELEMENT_MEMBERS_READ_OR_DOCUMENTARY: readonly string[] = [
-  "id",
-  "path",
-  "sliceName",
-  "min",
-  "max",
-  "mustSupport",
-  "slicing",
-  "type",
-  "binding",
-  "constraint",
-  "extension",
-  "representation",
-  "sliceIsConstraining",
-  "label",
-  "code",
-  "short",
-  "definition",
-  "comment",
-  "requirements",
-  "alias",
-  "base",
-  "meaningWhenMissing",
-  "orderMeaning",
-  "example",
-  "condition",
-  "isModifier",
-  "isModifierReason",
-  "isSummary",
-  "mapping",
-];
-
-/** The members of a `binding` read or documentary: `extension` is read url by url. */
-const BINDING_MEMBERS_READ_OR_DOCUMENTARY: readonly string[] = [
-  "strength",
-  "valueSet",
-  "description",
-  "extension",
-];
-
-/** The members of a `type` read: `extension` is read url by url. */
-const TYPE_MEMBERS_READ: readonly string[] = ["code", "profile", "targetProfile", "extension"];
-
-/**
- * The extensions on an element, a binding or a type that only document it: a name, a display or
- * translation hint, a status, a requirement note, the type's own FHIR type, an obligation on a
- * system. Any other extension is recorded as {@link ElementDefinition.unmodeled}.
- */
-const DOCUMENTARY_EXTENSIONS: readonly string[] = [
-  "http://hl7.org/fhir/StructureDefinition/elementdefinition-translatable",
-  "http://hl7.org/fhir/StructureDefinition/structuredefinition-display-hint",
-  "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
-  "http://hl7.org/fhir/StructureDefinition/structuredefinition-explicit-type-name",
-  "http://hl7.org/fhir/us/core/StructureDefinition/uscdi-requirement",
-  "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
-  "http://hl7.org/fhir/StructureDefinition/elementdefinition-isCommonBinding",
-  "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
-  "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
-  "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy",
-];
-// Stryker restore all
-
-/**
- * What one definition node states beyond `known` members and documentary extensions, as
- * {@link ElementDefinition.unmodeled} spells it, each entry under `prefix`. A `fixed[x]` or
- * `pattern[x]` member is read, so it is never recorded.
- */
-function unmodeledOf(node: FhirComplex, known: readonly string[], prefix: string): string[] {
-  const out: string[] = [];
-  for (const property of node.properties) {
-    const { name } = property;
-    if (name === "extension") {
-      for (const ext of isList(property.value) ? property.value.items : [property.value]) {
-        const url = isComplex(ext) ? primitiveString(getProperty(ext, "url")) : undefined;
-        if (!DOCUMENTARY_EXTENSIONS.some((documentary) => documentary === url))
-          out.push(`${prefix}extension:${url ?? ""}`);
-      }
-    } else if (!known.includes(name) && !(prefix === "" && /^(fixed|pattern)[A-Z]/u.test(name))) {
-      out.push(`${prefix}${name}`);
-    }
-  }
-  return out;
-}
-
-/** How many members a repeating (or single) node holds: none when it is absent. */
-function countOf(node: FhirNode | undefined): number {
-  if (node === undefined) return 0;
-  return isList(node) ? node.items.length : 1;
-}
-
-/** Everything an element definition node states that {@link unmodeledOf} records, its parts included. */
-function unmodeledIn(node: FhirComplex): string[] {
-  const out = unmodeledOf(node, ELEMENT_MEMBERS_READ_OR_DOCUMENTARY, "");
-  const binding = getProperty(node, "binding");
-  if (binding !== undefined && isComplex(binding))
-    out.push(...unmodeledOf(binding, BINDING_MEMBERS_READ_OR_DOCUMENTARY, "binding."));
-  const type = getProperty(node, "type");
-  if (type !== undefined) {
-    for (const item of isList(type) ? type.items : [type]) {
-      if (isComplex(item)) out.push(...unmodeledOf(item, TYPE_MEMBERS_READ, "type."));
-    }
-  }
-  return [...new Set(out)];
 }
 
 /** Parse a FHIR `max` string (`"*"` → {@link UNBOUNDED}, a numeric string → its integer) or `undefined`. */
@@ -472,12 +350,6 @@ function readElementDefinition(node: FhirNode): ElementDefinition | undefined {
   const pattern = readTypedValue(node, "pattern");
   const binding = readBinding(getProperty(node, "binding"));
   const constraint = readConstraints(getProperty(node, "constraint"));
-  const unmodeled = unmodeledIn(node);
-  // A binding with no strength, or an invariant with no key or expression, is stated and not read.
-  if (getProperty(node, "binding") !== undefined && binding === undefined)
-    unmodeled.push("binding:unread");
-  if (countOf(getProperty(node, "constraint")) !== (constraint?.length ?? 0))
-    unmodeled.push("constraint:unread");
 
   const el: {
     -readonly [K in keyof ElementDefinition]: ElementDefinition[K];
@@ -492,7 +364,6 @@ function readElementDefinition(node: FhirNode): ElementDefinition | undefined {
   if (pattern !== undefined) el.pattern = pattern;
   if (binding !== undefined) el.binding = binding;
   if (constraint !== undefined) el.constraint = constraint;
-  if (unmodeled.length > 0) el.unmodeled = unmodeled;
   return el;
 }
 
