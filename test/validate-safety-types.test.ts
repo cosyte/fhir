@@ -233,13 +233,13 @@ describe("the built-in schema registry over the safety-critical resource types",
     // NO unknown-element finding for its own elements, which is strictly better than a table that
     // names some of them.
     const registry = buildRegistry();
-    for (const type of ["Procedure", "ServiceRequest", "Encounter", "Device"]) {
+    for (const type of ["ServiceRequest", "EpisodeOfCare", "Device", "Location"]) {
       expect(registry(type), `${type} is unexpectedly registered`).toBeUndefined();
     }
     const result = validateResource(
       parseResource(
-        '{"resourceType":"Procedure","status":"completed","code":{"text":"synthetic"},' +
-          '"subject":{"reference":"Patient/synthetic-1"}}',
+        '{"resourceType":"ServiceRequest","status":"active","intent":"order",' +
+          '"code":{"text":"synthetic"},"subject":{"reference":"Patient/synthetic-1"}}',
       ).resource,
       { mode: "strict" },
     );

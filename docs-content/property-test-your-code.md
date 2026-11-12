@@ -28,7 +28,7 @@ it; the main entry point never does, so code that only reads and writes FHIR doe
 
 ## Check that your code handles any resource
 
-`resource()` generates a parsed resource model: one of the eight types the library validates in
+`resource()` generates a parsed resource model: one of eight of the types the library validates in
 full (Patient, Observation, DiagnosticReport, Condition, AllergyIntolerance, MedicationRequest,
 MedicationStatement and Immunization), with every element its type requires and statuses that keep
 the type's invariants, so it validates with no error. Its values lean toward what a codec gets

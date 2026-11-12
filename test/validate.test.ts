@@ -74,13 +74,13 @@ describe("validateResource: layer 1 (structure)", () => {
     //
     // `DiagnosticReport` used to be the middle row and is NOT one any more: it is one of the types
     // this library treats as safety-critical, and every one of those is modeled now, so it belongs
-    // to the arm above rather than to this one. `Procedure` replaces it because it is the near miss
-    // that matters -- a clinical event type with `status`, `code` and `subject`, sitting just
-    // outside the safety set, so a registry that resolved by resemblance rather than by name would
-    // show up here.
+    // to the arm above rather than to this one. `Encounter` and `Procedure` left this arm for the
+    // same reason when their tables arrived. `ServiceRequest` is the near miss that matters now -- a
+    // clinical request type with `status`, `code` and `subject`, sitting just outside the built-in
+    // set, so a registry that resolved by resemblance rather than by name would show up here.
     const unmodeled = [
-      '{"resourceType":"Encounter","status":"in-progress","class":{"code":"AMB"},"period":{"start":"2026-01-01"}}',
-      '{"resourceType":"Procedure","status":"completed","code":{"text":"synthetic"},"subject":{"reference":"Patient/synthetic-1"}}',
+      '{"resourceType":"EpisodeOfCare","status":"active","period":{"start":"2026-01-01"}}',
+      '{"resourceType":"ServiceRequest","status":"active","intent":"order","code":{"text":"synthetic"},"subject":{"reference":"Patient/synthetic-1"}}',
       '{"resourceType":"Specimen","status":"available","type":{"text":"serum"},"collection":{"method":{"text":"x"}}}',
     ];
     for (const json of unmodeled) {

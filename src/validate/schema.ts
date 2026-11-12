@@ -10,7 +10,8 @@
  * **What ships built-in here is a named, deliberately short list:** the base `Resource` /
  * `DomainResource` elements (which are the same on every resource), plus one element table per
  * modeled resource type. Read the enumeration off {@link BUILTIN_SCHEMAS} and never off a sentence
- * here: it is `Patient` plus the resource types this library treats as safety-critical, and a
+ * here: it is `Patient`, the resource types this library treats as safety-critical, and the
+ * encounter, procedure and document-reference types a US Core exchange carries beside them, and a
  * written-down list in prose is the thing that goes stale. Every other resource type is
  * "not modeled yet" and degrades safely (see {@link ./validate.js}) rather than emitting false
  * errors, which is why the set grows one fully-verified table at a time: a table missing a row R4
@@ -18,7 +19,7 @@
  * be worse than no entry at all. Cardinalities are cited from the R4 4.0.1 base definitions
  * (resource.html, domainresource.html, patient.html, observation.html, allergyintolerance.html,
  * condition.html, diagnosticreport.html, immunization.html, medicationrequest.html,
- * medicationstatement.html).
+ * medicationstatement.html, encounter.html, procedure.html, documentreference.html).
  *
  * **Only a `required`-strength binding on a `code`-typed element is carried here**, because that is
  * the only one this layer can decide from an enumeration alone. A `required` binding on a
@@ -555,9 +556,180 @@ const MEDICATION_STATEMENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
 };
 
 /**
+ * R4 `EncounterStatus`, the required binding on `Encounter.status`, in the order the published code
+ * system lists them. The value set includes the code system whole. *(valueset-encounter-status.html)*
+ */
+const ENCOUNTER_STATUS = [
+  "planned",
+  "arrived",
+  "triaged",
+  "in-progress",
+  "onleave",
+  "finished",
+  "cancelled",
+  "entered-in-error",
+  "unknown",
+] as const;
+
+/**
+ * `Encounter` direct elements, from the R4 4.0.1 base StructureDefinition (encounter.html).
+ * `status` and `class` are the two mandatory ones; `status` carries the one required-strength
+ * binding this layer enforces. `class` is a `Coding`, not a `CodeableConcept`, and its binding is
+ * `extensible`, so it is the terminology layer's. This type has no `choice[x]` element.
+ *
+ * `statusHistory`, `classHistory`, `participant`, `diagnosis`, `hospitalization` and `location` are
+ * backbone elements, modeled for cardinality and node shape only, so the required binding on
+ * `statusHistory.status` and `location.status` is not entered from this layer.
+ */
+const ENCOUNTER_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+  identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
+  status: {
+    min: 1,
+    max: 1,
+    types: ["code"],
+    binding: { strength: "required", codes: [...ENCOUNTER_STATUS] },
+  },
+  statusHistory: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+  class: { min: 1, max: 1, types: ["Coding"] },
+  classHistory: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+  type: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  serviceType: { min: 0, max: 1, types: ["CodeableConcept"] },
+  priority: { min: 0, max: 1, types: ["CodeableConcept"] },
+  subject: { min: 0, max: 1, types: ["Reference"] },
+  episodeOfCare: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  basedOn: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  participant: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+  appointment: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  period: { min: 0, max: 1, types: ["Period"] },
+  length: { min: 0, max: 1, types: ["Duration"] },
+  reasonCode: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  reasonReference: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  diagnosis: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+  account: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  hospitalization: { min: 0, max: 1, types: ["BackboneElement"] },
+  location: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+  serviceProvider: { min: 0, max: 1, types: ["Reference"] },
+  partOf: { min: 0, max: 1, types: ["Reference"] },
+};
+
+/**
+ * R4 `EventStatus`, the required binding on `Procedure.status`, in the order the published code
+ * system lists them. The value set includes the code system whole, unlike `Immunization.status`,
+ * whose value set enumerates three of these eight. `not-done` is one of the negations the safety
+ * layer reads, so a table that dropped it would turn a recorded "not performed" into a binding
+ * error. *(valueset-event-status.html)*
+ */
+const EVENT_STATUS = [
+  "preparation",
+  "in-progress",
+  "not-done",
+  "on-hold",
+  "stopped",
+  "completed",
+  "entered-in-error",
+  "unknown",
+] as const;
+
+/**
+ * `Procedure` direct elements, from the R4 4.0.1 base StructureDefinition (procedure.html).
+ * `status` and `subject` are the two mandatory ones; `status` carries the one required-strength
+ * binding. `performed[x]` is a five-variant choice. `performer` and `focalDevice` are backbone
+ * elements, modeled for cardinality and node shape only.
+ */
+const PROCEDURE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+  identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
+  instantiatesCanonical: { min: 0, max: UNBOUNDED, types: ["canonical"] },
+  instantiatesUri: { min: 0, max: UNBOUNDED, types: ["uri"] },
+  basedOn: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  partOf: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  status: {
+    min: 1,
+    max: 1,
+    types: ["code"],
+    binding: { strength: "required", codes: [...EVENT_STATUS] },
+  },
+  statusReason: { min: 0, max: 1, types: ["CodeableConcept"] },
+  category: { min: 0, max: 1, types: ["CodeableConcept"] },
+  code: { min: 0, max: 1, types: ["CodeableConcept"] },
+  subject: { min: 1, max: 1, types: ["Reference"] },
+  encounter: { min: 0, max: 1, types: ["Reference"] },
+  performed: { min: 0, max: 1, types: ["dateTime", "Period", "string", "Age", "Range"] },
+  recorder: { min: 0, max: 1, types: ["Reference"] },
+  asserter: { min: 0, max: 1, types: ["Reference"] },
+  performer: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+  location: { min: 0, max: 1, types: ["Reference"] },
+  reasonCode: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  reasonReference: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  bodySite: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  outcome: { min: 0, max: 1, types: ["CodeableConcept"] },
+  report: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  complication: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  complicationDetail: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  followUp: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  note: { min: 0, max: UNBOUNDED, types: ["Annotation"] },
+  focalDevice: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+  usedReference: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  usedCode: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+};
+
+/**
+ * R4 `DocumentReferenceStatus`, the required binding on `DocumentReference.status`.
+ * *(valueset-document-reference-status.html)*
+ */
+const DOCUMENT_REFERENCE_STATUS = ["current", "superseded", "entered-in-error"] as const;
+
+/**
+ * R4 `CompositionStatus`, the required binding on `DocumentReference.docStatus`, in the order the
+ * published code system lists them. *(valueset-composition-status.html)*
+ */
+const COMPOSITION_STATUS = ["preliminary", "final", "amended", "entered-in-error"] as const;
+
+/**
+ * `DocumentReference` direct elements, from the R4 4.0.1 base StructureDefinition
+ * (documentreference.html). `status` and `content` are the two mandatory ones, and `content` is
+ * `1..*`. `status` and `docStatus` are the two `code`-typed required bindings. This type has no
+ * `choice[x]` element.
+ *
+ * `status` is the modifier: it is the status of this reference, and `entered-in-error` there
+ * retracts the resource. `docStatus` is the status of the document it points at and is not a
+ * modifier in R4, so the safety layer does not read it.
+ *
+ * `relatesTo`, `content` and `context` are backbone elements, modeled for cardinality and node
+ * shape only, so `content.attachment` being `1..1` in R4 is not entered from this layer.
+ */
+const DOCUMENT_REFERENCE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
+  masterIdentifier: { min: 0, max: 1, types: ["Identifier"] },
+  identifier: { min: 0, max: UNBOUNDED, types: ["Identifier"] },
+  status: {
+    min: 1,
+    max: 1,
+    types: ["code"],
+    binding: { strength: "required", codes: [...DOCUMENT_REFERENCE_STATUS] },
+  },
+  docStatus: {
+    min: 0,
+    max: 1,
+    types: ["code"],
+    binding: { strength: "required", codes: [...COMPOSITION_STATUS] },
+  },
+  type: { min: 0, max: 1, types: ["CodeableConcept"] },
+  category: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  subject: { min: 0, max: 1, types: ["Reference"] },
+  date: { min: 0, max: 1, types: ["instant"] },
+  author: { min: 0, max: UNBOUNDED, types: ["Reference"] },
+  authenticator: { min: 0, max: 1, types: ["Reference"] },
+  custodian: { min: 0, max: 1, types: ["Reference"] },
+  relatesTo: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
+  description: { min: 0, max: 1, types: ["string"] },
+  securityLabel: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
+  content: { min: 1, max: UNBOUNDED, types: ["BackboneElement"] },
+  context: { min: 0, max: 1, types: ["BackboneElement"] },
+};
+
+/**
  * The built-in schemas (base elements are merged into each). This array IS the built-in set, and it
- * is the only place that enumeration exists: `Patient`, plus every resource type this library treats
- * as safety-critical. A type is added here only once its table names every direct element R4 defines
+ * is the only place that enumeration exists: `Patient`, every resource type this library treats as
+ * safety-critical, and `Encounter`, `Procedure` and `DocumentReference`. A type is added here only once its table names every direct element R4 defines
  * for it, because the registry treats a registered type as fully described.
  */
 const BUILTIN_SCHEMAS: readonly ResourceSchema[] = [
@@ -569,6 +741,9 @@ const BUILTIN_SCHEMAS: readonly ResourceSchema[] = [
   { type: "AllergyIntolerance", elements: ALLERGY_INTOLERANCE_ELEMENTS },
   { type: "Immunization", elements: IMMUNIZATION_ELEMENTS },
   { type: "MedicationStatement", elements: MEDICATION_STATEMENT_ELEMENTS },
+  { type: "Encounter", elements: ENCOUNTER_ELEMENTS },
+  { type: "Procedure", elements: PROCEDURE_ELEMENTS },
+  { type: "DocumentReference", elements: DOCUMENT_REFERENCE_ELEMENTS },
 ];
 
 /**

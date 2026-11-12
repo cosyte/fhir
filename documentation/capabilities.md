@@ -14,7 +14,7 @@ precision-preserving JSON codec and typed primitive model), the first three vali
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,
 fail-closed on unknown `modifierExtension`, the `ait`/`con`/`obs` invariants), the **R4 base
-constraints of the eight modeled resource types** (`pat-1`, `obs-3`, `con-1`, `con-2`, `imm-1`,
+constraints of the eleven modeled resource types** (`pat-1`, `obs-3`, `con-1`, `con-2`, `imm-1`,
 `dom-2` to `dom-5`, `ele-1`, `ext-1`), evaluated with no profile supplied, **Quantity / UCUM
 fidelity** (the 11-way `Observation.value[x]` discrimination, UCUM-`code` unit fidelity, vital-signs
 required-unit conformance, dose quantities), **strength-aware, content-free terminology binding
@@ -50,9 +50,12 @@ IG corpus. The `validator_cli.jar` **differential runs in CI** (a JVM oracle job
 the dev container) over **both** the synthetic spec-clean corpus **and** the real-world quirk corpus,
 and it is green: CI run 43120027962 (job 130857848284, commit 8b66923, the change that added the
 narrative checks) compared 214 documents (300 declared, 86 excluded) and agreed with the oracle
-within the documented deltas, and showed determinism over 31 documents. The built-in structural schema set has **eight** resource
+within the documented deltas, and showed determinism over 31 documents. The built-in structural schema set has **eleven** resource
 types, each with the base-resource elements merged in: `Patient`, `Observation`, `DiagnosticReport`,
-`Condition`, `MedicationRequest`, `AllergyIntolerance`, `Immunization` and `MedicationStatement`.
+`Condition`, `MedicationRequest`, `AllergyIntolerance`, `Immunization`, `MedicationStatement`,
+`Encounter`, `Procedure` and `DocumentReference`. A `status` of `entered-in-error` on an
+`Encounter`, `Procedure` or `DocumentReference` is reported `RETRACTED_RESOURCE` as it is on the
+safety-critical types; the safety readout still lists those three on `notAssessed`.
 Any other resource type validates its base elements only, with an informational
 `RESOURCE_NOT_MODELED`, unless a caller supplies a schema or profile for it. Without a supplied terminology service there is **no code-validity / value-set-membership**
 guarantee beyond `system` + strength (no terminology content is bundled: licensing). Its XML codec is
@@ -146,7 +149,7 @@ serializeResource(validateResource(resource).toOperationOutcome());
 - **Lenient vs strict:** an unknown element is a `warning` on read and an `error` under `mode: "strict"`.
 - **Fail-safe:** never a false error: a resource type with no schema degrades to one informational
   `RESOURCE_NOT_MODELED`, not a wall of false unknowns. Built-in schemas: base-resource elements +
-  `Patient` + `Observation`, and that list is the whole set; supply your own via
+  the eleven types named under Status above, and that list is the whole set; supply your own via
   `validateResource(resource, { schemas: [...] })`. The set grows one fully-verified element table at
   a time, because a table missing a row R4 defines would turn a conformant document into a wall of
   false unknowns, which is the failure the degrade above exists to avoid.
@@ -626,8 +629,9 @@ validateResource(quirky).issues.map((i) => i.code); // → ["UNHANDLED_MODIFIER_
   never reconciles contradictions or infers clinical meaning. Every **other** profile `constraint[]`
   invariant is evaluated by the FHIRPath engine (below).
 - **Base constraints, with no profile**: every other error-severity constraint R4 4.0.1 declares on
-  the eight modeled types (`AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`,
-  `MedicationRequest`, `MedicationStatement`, `Observation`, `Patient`) and on their
+  the eleven modeled types (`AllergyIntolerance`, `Condition`, `DiagnosticReport`,
+  `DocumentReference`, `Encounter`, `Immunization`, `MedicationRequest`, `MedicationStatement`,
+  `Observation`, `Patient`, `Procedure`) and on their
   `DomainResource`, `Element` and `Extension` base: `pat-1`, `obs-3`, `con-1`, `con-2`, `imm-1`,
   `dom-2` to `dom-5`, `ele-1` and `ext-1`, each transcribed verbatim and evaluated by the same
   FHIRPath engine. A violation is `INVARIANT_VIOLATED` at `error`, located at the violating
