@@ -242,17 +242,24 @@ function propertyMembers(
 /**
  * A Patient whose `extension` (a real repeating element) and `zz` (no element) hold one mixed array
  * each, either one maybe with a `_`-sibling. `text()` is the document; `written(names)` is every
- * faithful write of it when the read discarded the siblings of `names` and said so.
+ * faithful write of it when the read discarded the siblings of `names` and said so. The writer
+ * decides per property whether a `null`-only value array goes back, so each property may come back
+ * bare or not on its own: `{"extension":[null],"_extension":[{...}],"zz":[null,null],...}` is
+ * written with `extension` bare and `zz` kept, as the `null` in `zz` it marked as written is kept.
  */
 const documentArbitrary = fc.tuple(propertyText, propertyText).map(([extension, zz]) => {
-  const render = (dropped: ReadonlySet<string>, bare: boolean): string =>
-    `{"resourceType":"Patient",${propertyMembers("extension", extension, !dropped.has("extension"), bare)},${propertyMembers("zz", zz, !dropped.has("zz"), bare)}}`;
+  const render = (dropped: ReadonlySet<string>, bare: ReadonlySet<string>): string =>
+    `{"resourceType":"Patient",${propertyMembers("extension", extension, !dropped.has("extension"), bare.has("extension"))},${propertyMembers("zz", zz, !dropped.has("zz"), bare.has("zz"))}}`;
+  const bareChoices: readonly ReadonlySet<string>[] = [
+    new Set(),
+    new Set(["extension"]),
+    new Set(["zz"]),
+    new Set(["extension", "zz"]),
+  ];
   return {
-    text: () => render(new Set(), false),
-    written: (dropped: ReadonlySet<string>) => [
-      canonical(render(dropped, false)),
-      canonical(render(dropped, true)),
-    ],
+    text: () => render(new Set(), new Set()),
+    written: (dropped: ReadonlySet<string>) =>
+      bareChoices.map((bare) => canonical(render(dropped, bare))),
   };
 });
 
