@@ -32,20 +32,47 @@ import { parseReference } from "../model/reference.js";
  */
 export const MAX_REFERENCE_DEPTH = 512;
 
-/** A resolvable index of a Bundle's entries, keyed the two ways a reference can name an entry. */
+/**
+ * A resolvable index of a Bundle's entries, keyed the two ways a reference can name an entry.
+ *
+ * A key two entries claim names neither: it is left out of its map and listed in the matching
+ * `repeated` set, so a reference to it reads as unresolved rather than reaching whichever entry came
+ * first.
+ */
 export interface BundleIndex {
   /** Entries keyed by their exact `fullUrl` (matches an absolute or `urn:` reference). */
   readonly byFullUrl: ReadonlyMap<string, FhirComplex>;
   /** Entries keyed by `Type/id` (matches a relative reference, or an absolute one's RESTful tail). */
   readonly byTypeId: ReadonlyMap<string, FhirComplex>;
+  /**
+   * The `fullUrl`s more than one entry carries, kept out of {@link BundleIndex.byFullUrl}. Absent on
+   * an index built by hand, which then names no repeat.
+   */
+  readonly repeatedFullUrls?: ReadonlySet<string>;
+  /**
+   * The `Type/id` keys more than one entry claims, kept out of {@link BundleIndex.byTypeId}. Absent
+   * on an index built by hand, which then names no repeat.
+   */
+  readonly repeatedTypeIds?: ReadonlySet<string>;
 }
 
-/** A resolvable index of one resource's `contained` resources, for `#fragment` resolution. */
+/**
+ * A resolvable index of one resource's `contained` resources, for `#fragment` resolution.
+ *
+ * An id two contained resources carry names neither: it is left out of
+ * {@link ContainedIndex.byId} and listed in {@link ContainedIndex.repeatedIds}, so `#id` reads as
+ * unresolved rather than reaching whichever came first.
+ */
 export interface ContainedIndex {
   /** The containing resource itself, the target of a bare `#` fragment. */
   readonly root: FhirComplex;
-  /** Contained resources keyed by their logical `id` (matches `#id`). */
+  /** Contained resources keyed by their logical `id` (matches `#id`), each id carried once. */
   readonly byId: ReadonlyMap<string, FhirComplex>;
+  /**
+   * The ids more than one contained resource carries, kept out of {@link ContainedIndex.byId}.
+   * Absent on an index built by hand, which then names no repeat.
+   */
+  readonly repeatedIds?: ReadonlySet<string>;
 }
 
 /** The outcome of resolving a single reference against a closure. */
@@ -68,6 +95,27 @@ function typeOf(node: FhirComplex): string | undefined {
   return stringOf(getProperty(node, "resourceType"));
 }
 
+/**
+ * Key `node` under `key`, unless another node holds it already: then the key names neither, and
+ * moves from `map` to `repeated`. The same node keyed twice (an entry's fullUrl tail and its own
+ * `Type/id`) is one claim, not a repeat.
+ */
+function claim(
+  map: Map<string, FhirComplex>,
+  repeated: Set<string>,
+  key: string,
+  node: FhirComplex,
+): void {
+  if (repeated.has(key)) return;
+  const held = map.get(key);
+  if (held === undefined) {
+    map.set(key, node);
+  } else if (held !== node) {
+    map.delete(key);
+    repeated.add(key);
+  }
+}
+
 /** The list of `contained` resources on a resource (a single object or a list, both tolerated). */
 function containedResources(resource: FhirComplex): readonly FhirComplex[] {
   const node = getProperty(resource, "contained");
@@ -78,6 +126,8 @@ function containedResources(resource: FhirComplex): readonly FhirComplex[] {
 
 /**
  * Build a {@link ContainedIndex} for `#fragment` resolution against a resource's `contained` set.
+ * An id more than one contained resource carries is resolved to none of them: it is listed in
+ * `repeatedIds` instead of `byId`.
  *
  * @param resource - The containing resource model.
  * @example
@@ -93,16 +143,19 @@ function containedResources(resource: FhirComplex): readonly FhirComplex[] {
  */
 export function containedIndex(resource: FhirComplex): ContainedIndex {
   const byId = new Map<string, FhirComplex>();
+  const repeatedIds = new Set<string>();
   for (const contained of containedResources(resource)) {
     const id = stringOf(getProperty(contained, "id"));
-    if (id !== undefined && !byId.has(id)) byId.set(id, contained);
+    if (id !== undefined) claim(byId, repeatedIds, id, contained);
   }
-  return { root: resource, byId };
+  return { root: resource, byId, repeatedIds };
 }
 
 /**
  * Build a {@link BundleIndex} from a `Bundle`, keying every entry resource by both its `fullUrl` and,
- * where derivable, a `Type/id`, so a relative, absolute, or logical reference can each find it.
+ * where derivable, a `Type/id`, so a relative, absolute, or logical reference can each find it. A
+ * `fullUrl` or a `Type/id` more than one entry claims is resolved to none of them: it is listed in
+ * `repeatedFullUrls` or `repeatedTypeIds` instead.
  *
  * @param bundle - A `Bundle` resource model.
  * @example
@@ -119,6 +172,8 @@ export function containedIndex(resource: FhirComplex): ContainedIndex {
 export function buildBundleIndex(bundle: FhirComplex): BundleIndex {
   const byFullUrl = new Map<string, FhirComplex>();
   const byTypeId = new Map<string, FhirComplex>();
+  const repeatedFullUrls = new Set<string>();
+  const repeatedTypeIds = new Set<string>();
   const entryNode = getProperty(bundle, "entry");
   const entries = entryNode !== undefined && isList(entryNode) ? entryNode.items : [];
   for (const entry of entries) {
@@ -126,24 +181,22 @@ export function buildBundleIndex(bundle: FhirComplex): BundleIndex {
     const resourceNode = getProperty(entry, "resource");
     if (resourceNode === undefined || !isComplex(resourceNode)) continue;
     const fullUrl = stringOf(getProperty(entry, "fullUrl"));
-    if (fullUrl !== undefined && !byFullUrl.has(fullUrl)) byFullUrl.set(fullUrl, resourceNode);
-    // Key by the fullUrl's RESTful tail (Type/id), when it has one.
+    // Key by the fullUrl, and by its RESTful tail (Type/id) when it has one.
     if (fullUrl !== undefined) {
+      claim(byFullUrl, repeatedFullUrls, fullUrl, resourceNode);
       const parsed = parseReference(fullUrl);
       if (parsed.type !== undefined && parsed.id !== undefined) {
-        const key = `${parsed.type}/${parsed.id}`;
-        if (!byTypeId.has(key)) byTypeId.set(key, resourceNode);
+        claim(byTypeId, repeatedTypeIds, `${parsed.type}/${parsed.id}`, resourceNode);
       }
     }
     // Also key by the wrapped resource's own Type/id, filling any gap the fullUrl did not.
     const rt = typeOf(resourceNode);
     const rid = stringOf(getProperty(resourceNode, "id"));
     if (rt !== undefined && rid !== undefined) {
-      const key = `${rt}/${rid}`;
-      if (!byTypeId.has(key)) byTypeId.set(key, resourceNode);
+      claim(byTypeId, repeatedTypeIds, `${rt}/${rid}`, resourceNode);
     }
   }
-  return { byFullUrl, byTypeId };
+  return { byFullUrl, byTypeId, repeatedFullUrls, repeatedTypeIds };
 }
 
 /**
@@ -154,6 +207,9 @@ export function buildBundleIndex(bundle: FhirComplex): BundleIndex {
  * `REFERENCE_UNRESOLVED`, and preserves the reference). An absolute or logical reference that is not
  * in the Bundle is `"external"`, it points somewhere this library was never given, which is **not** a
  * defect, so it draws no finding.
+ *
+ * A reference to an id, `fullUrl` or `Type/id` the closure holds more than once is `"unresolved"`
+ * too: it names no one resource, and the first is never picked for it.
  *
  * @param reference - The `Reference.reference` string.
  * @param options - The closure: a {@link BundleIndex} and/or a {@link ContainedIndex}.
@@ -197,13 +253,18 @@ export function resolveReference(
     return target === undefined ? { status: "unresolved" } : { status: "resolved", target };
   }
 
-  // Absolute or logical: match the whole URL, then its RESTful tail; otherwise it is external.
+  // Absolute or logical: match the whole URL, then its RESTful tail; otherwise it is external. A
+  // URL or tail the Bundle holds more than once is in the Bundle, so it is never external, and
+  // names no one entry, so it is unresolved.
   if (bundle !== undefined) {
     const byUrl = bundle.byFullUrl.get(reference);
     if (byUrl !== undefined) return { status: "resolved", target: byUrl };
+    if (bundle.repeatedFullUrls?.has(reference) === true) return { status: "unresolved" };
     if (parsed.type !== undefined && parsed.id !== undefined) {
-      const byTail = bundle.byTypeId.get(`${parsed.type}/${parsed.id}`);
+      const tail = `${parsed.type}/${parsed.id}`;
+      const byTail = bundle.byTypeId.get(tail);
       if (byTail !== undefined) return { status: "resolved", target: byTail };
+      if (bundle.repeatedTypeIds?.has(tail) === true) return { status: "unresolved" };
     }
   }
   return { status: "external" };

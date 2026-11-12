@@ -770,6 +770,10 @@ The wrapped resource's `resourceType`, when it has one.
 
 A resolvable index of a Bundle's entries, keyed the two ways a reference can name an entry.
 
+A key two entries claim names neither: it is left out of its map and listed in the matching
+`repeated` set, so a reference to it reads as unresolved rather than reaching whichever entry came
+first.
+
 #### Properties
 
 ##### byFullUrl
@@ -783,6 +787,20 @@ Entries keyed by their exact `fullUrl` (matches an absolute or `urn:` reference)
 > `readonly` **byTypeId**: `ReadonlyMap`\<`string`, [`FhirComplex`](#fhircomplex)\>
 
 Entries keyed by `Type/id` (matches a relative reference, or an absolute one's RESTful tail).
+
+##### repeatedFullUrls?
+
+> `readonly` `optional` **repeatedFullUrls?**: `ReadonlySet`\<`string`\>
+
+The `fullUrl`s more than one entry carries, kept out of [BundleIndex.byFullUrl](#byfullurl). Absent on
+an index built by hand, which then names no repeat.
+
+##### repeatedTypeIds?
+
+> `readonly` `optional` **repeatedTypeIds?**: `ReadonlySet`\<`string`\>
+
+The `Type/id` keys more than one entry claims, kept out of [BundleIndex.byTypeId](#bytypeid). Absent
+on an index built by hand, which then names no repeat.
 
 ***
 
@@ -916,13 +934,24 @@ value-free.
 
 A resolvable index of one resource's `contained` resources, for `#fragment` resolution.
 
+An id two contained resources carry names neither: it is left out of
+[ContainedIndex.byId](#byid) and listed in [ContainedIndex.repeatedIds](#repeatedids), so `#id` reads as
+unresolved rather than reaching whichever came first.
+
 #### Properties
 
 ##### byId
 
 > `readonly` **byId**: `ReadonlyMap`\<`string`, [`FhirComplex`](#fhircomplex)\>
 
-Contained resources keyed by their logical `id` (matches `#id`).
+Contained resources keyed by their logical `id` (matches `#id`), each id carried once.
+
+##### repeatedIds?
+
+> `readonly` `optional` **repeatedIds?**: `ReadonlySet`\<`string`\>
+
+The ids more than one contained resource carries, kept out of [ContainedIndex.byId](#byid).
+Absent on an index built by hand, which then names no repeat.
 
 ##### root
 
@@ -5549,6 +5578,18 @@ malformed and, to a naive transitive resolver, a denial-of-service (an unbounded
 blow-up). The bounded, iterative cycle guard detects it and reports it here rather than looping,
 DoS-safe by construction. Value-free, the location of the `contained` element, never a value.
 
+##### CONTAINED\_ID\_DUPLICATE
+
+> `readonly` **CONTAINED\_ID\_DUPLICATE**: `"CONTAINED_ID_DUPLICATE"` = `"CONTAINED_ID_DUPLICATE"`
+
+References, two or more of a resource's `contained` resources carry the same `id`, so a
+`#id` reference names no one of them. An `error` (`structure`): a contained id is the only name a
+fragment reference has for its target, and nothing ranks the resources that share it. A
+reference to the id is read as unresolved, never as the first of them, so a check that depends
+on it is reported unchecked rather than passing. Reported at every repeat after the first, in
+the resource validated and in each Bundle entry's resource. Value-free, the location of the
+repeated `id`, never the id.
+
 ##### DROPPED\_ELEMENT\_TEXT
 
 > `readonly` **DROPPED\_ELEMENT\_TEXT**: `"DROPPED_ELEMENT_TEXT"` = `"DROPPED_ELEMENT_TEXT"`
@@ -5574,6 +5615,17 @@ and nothing says which the sender meant. FHIR JSON requires unique property name
 "Property names SHALL be unique") and expresses repetition with an array, so this is a violated
 `SHALL` and an `error`. The reader keeps every value (see ../model/node.js `duplicates`),
 so this reports an ambiguity, never a loss.
+
+##### FULLURL\_DUPLICATE
+
+> `readonly` **FULLURL\_DUPLICATE**: `"FULLURL_DUPLICATE"` = `"FULLURL_DUPLICATE"`
+
+Bundle, two or more entries carry the same `fullUrl` and the same `meta.versionId` (or none),
+outside a `history` Bundle: R4's `bdl-7` ("FullUrl must be unique in a bundle, or else entries
+with the same fullUrl must have different meta.versionId (except in history bundles)"). An
+`error` (`invariant`). Whether reported or not, a reference to a `fullUrl` more than one entry
+carries names no one entry and is read as unresolved. Reported at every repeat after the first.
+Value-free, the location of the repeated `fullUrl`, never the URL.
 
 ##### FULLURL\_ID\_MISMATCH
 
@@ -6234,7 +6286,9 @@ registry("Patient.gender");                    // undefined, not a terminology b
 > **buildBundleIndex**(`bundle`): [`BundleIndex`](#bundleindex)
 
 Build a [BundleIndex](#bundleindex) from a `Bundle`, keying every entry resource by both its `fullUrl` and,
-where derivable, a `Type/id`, so a relative, absolute, or logical reference can each find it.
+where derivable, a `Type/id`, so a relative, absolute, or logical reference can each find it. A
+`fullUrl` or a `Type/id` more than one entry claims is resolved to none of them: it is listed in
+`repeatedFullUrls` or `repeatedTypeIds` instead.
 
 #### Parameters
 
@@ -6778,6 +6832,8 @@ conflictingAbsenceMarkers(resource, "Observation"); // ["Observation.status"]
 > **containedIndex**(`resource`): [`ContainedIndex`](#containedindex)
 
 Build a [ContainedIndex](#containedindex) for `#fragment` resolution against a resource's `contained` set.
+An id more than one contained resource carries is resolved to none of them: it is listed in
+`repeatedIds` instead of `byId`.
 
 #### Parameters
 
@@ -9240,6 +9296,9 @@ Resolution is honest about its closure: a `#fragment` resolves only within `cont
 `REFERENCE_UNRESOLVED`, and preserves the reference). An absolute or logical reference that is not
 in the Bundle is `"external"`, it points somewhere this library was never given, which is **not** a
 defect, so it draws no finding.
+
+A reference to an id, `fullUrl` or `Type/id` the closure holds more than once is `"unresolved"`
+too: it names no one resource, and the first is never picked for it.
 
 #### Parameters
 

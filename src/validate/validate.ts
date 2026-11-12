@@ -63,7 +63,7 @@ import {
 } from "../model/index.js";
 import { toOperationOutcome } from "./operation-outcome.js";
 import { isPrimitiveType, validatePrimitiveValue } from "./primitives.js";
-import { collectBundleIssues } from "./bundle.js";
+import { collectBundleIssues, collectContainedIdIssues } from "./bundle.js";
 import { collectNarrativeIssues } from "./narrative.js";
 import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
@@ -390,6 +390,10 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   if (rt === "Bundle") {
     for (const issue of collectBundleIssues(resource)) ctx.issues.push(issue);
   }
+
+  // A contained id the resource repeats: a `#id` reference to it names no one resource, and is read
+  // as unresolved. The Bundle layer above reports the same inside each entry's resource.
+  for (const issue of collectContainedIdIssues(resource, root)) ctx.issues.push(issue);
 
   // Narrative layer: every `Narrative.div` in the resource and in the resources it carries, read as
   // XHTML and checked against the R4 narrative rules. Reads a copy of the string's parse and never

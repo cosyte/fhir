@@ -759,8 +759,11 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   resource's `resourceType`, at the discriminator path or through a trailing `resolve()` over the
   resource's `contained` set or, for a Bundle, its entries; there a slice's `targetProfile` names a
   type through the base R4 definitions or the supplied `profiles`. A discriminator path that selects
-  more than one node in an occurrence decides nothing. A `profile` discriminator is not decided yet:
-  a slicing with one among its discriminators is left undecided. A slicing that cannot be decided is
+  more than one node in an occurrence decides nothing, and a reference to an id or `fullUrl` the
+  closure holds more than once resolves to nothing. Each occurrence takes the earliest slice in
+  snapshot order whose discriminators it matches; later slices are not tried for it. A `profile`
+  discriminator is not decided yet: a slicing with one among its discriminators is left undecided.
+  A slicing that cannot be decided is
   reported `PROFILE_SLICE_UNCHECKED` (`information`) with a `sliceReason`
   (`SLICE_UNCHECKED_REASONS`: a `profile` discriminator, the `position` discriminator, a reference
   that leaves the closure, a target profile not supplied, a type the document does not state, and
@@ -1161,7 +1164,10 @@ executed** (there is no server here).
   everything else → `"none"`. `Bundle.total` is a lexical string, never a JS `number`.
 - **`resolveReference` / `buildBundleIndex` / `containedIndex`**: resolve relative / absolute /
   logical / `#fragment` references against a Bundle + `contained` closure. A local miss is
-  `"unresolved"` (flagged, preserved); an external target is `"external"` (never false-flagged).
+  `"unresolved"` (flagged, preserved); an external target is `"external"` (never false-flagged). A
+  contained id, `fullUrl` or `Type/id` the closure holds more than once names no one resource: a
+  reference to it is `"unresolved"`, never the first of them, and the index lists it on
+  `repeatedIds`, `repeatedFullUrls` or `repeatedTypeIds`.
 - **`hasContainedCycle` / `MAX_REFERENCE_DEPTH`**, a bounded, iterative (heap-based) cycle guard: a
   `contained` reference cycle is **detected and reported, never followed**: no infinite loop, no stack
   blow-up, no false positive on a legitimate DAG.
@@ -1170,8 +1176,10 @@ executed** (there is no server here).
   through a `number`). A malformed line is isolated (reported by **line number, never content**), the
   stream continues, and memory stays bounded (`LINE_TOO_LONG`).
 - **New findings** (in `validateResource` for a `Bundle`): `REFERENCE_UNRESOLVED` (warning, preserved),
-  `CONTAINED_CYCLE` (error), `FULLURL_ID_MISMATCH` (error: a `urn:uuid` fullUrl is exempt). All
-  value-free (a FHIRPath location, never a value, reference, or id).
+  `CONTAINED_CYCLE` (error), `FULLURL_ID_MISMATCH` (error: a `urn:uuid` fullUrl is exempt),
+  `FULLURL_DUPLICATE` (error, R4's `bdl-7`: a `fullUrl` repeated at the same `meta.versionId`
+  outside a `history` Bundle), and `CONTAINED_ID_DUPLICATE` (error, also on any resource validated:
+  a contained id repeated). All value-free (a FHIRPath location, never a value, reference, or id).
 
 ```ts
 import { parseResource, readBundle, validateResource, streamNdjson } from "@cosyte/fhir";

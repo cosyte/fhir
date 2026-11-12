@@ -99,6 +99,30 @@ resolveReference("#p1", { contained }).status; // => "resolved"
 resolveReference("#p2", { contained }).status; // => "unresolved"
 ```
 
+## A repeated id resolves to nothing
+
+A reference names one resource. When two contained resources carry the same `id`, or two Bundle
+entries the same `fullUrl`, a reference to it names neither, so it reads `unresolved` rather than
+reaching whichever came first, and the index lists the repeat:
+
+```ts runnable
+import { containedIndex, parseResource, resolveReference } from "@cosyte/fhir";
+
+const { resource } = parseResource(
+  '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},"contained":[{"resourceType":"Practitioner","id":"syn-pr"},{"resourceType":"Organization","id":"syn-pr"}],"performer":[{"reference":"#syn-pr"}]}',
+);
+
+const contained = containedIndex(resource);
+
+resolveReference("#syn-pr", { contained }).status; // => "unresolved"
+[...(contained.repeatedIds ?? [])]; // => ["syn-pr"]
+```
+
+`validateResource` reports the repeat as an error, `CONTAINED_ID_DUPLICATE` at each contained
+resource after the first, and a Bundle's repeated `fullUrl` as `FULLURL_DUPLICATE` where R4's
+`bdl-7` forbids it: at the same `meta.versionId`, outside a `history` Bundle. A slicing that reads the
+type of what the reference names reports itself unchecked, never matched.
+
 ## Reference
 
 - [`readBundle`](./api/@cosyte/fhir.md#readbundle), [`BundleReadout`](./api/@cosyte/fhir.md#bundlereadout) and
