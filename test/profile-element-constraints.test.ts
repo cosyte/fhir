@@ -1354,6 +1354,14 @@ describe("a list of profiles is met by any one of them", () => {
     expect(profileFindings(collectProfileIssues(withLow(comparator), twoProfiles))).toEqual([
       ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.referenceRange.low", "type-profile"],
     ]);
+    // Two entries each left unchecked for the same kind report it once.
+    const twoUnread = lowTyped([
+      { code: "Quantity", profile: [`${BASE}fake-quantity-a`] },
+      { code: "Quantity", profile: [`${BASE}fake-quantity-b`] },
+    ]);
+    expect(profileFindings(collectProfileIssues(withLow({ value: 1 }), twoUnread))).toEqual([
+      ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.referenceRange.low", "type-profile"],
+    ]);
     const bothSimple = lowTyped([
       { code: "Quantity", profile: [`${CORE}SimpleQuantity`] },
       { code: "Quantity", profile: [`${CORE}SimpleQuantity|4.0.1`] },
