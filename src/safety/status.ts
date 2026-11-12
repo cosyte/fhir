@@ -2466,7 +2466,15 @@ function descend(node: FhirNode, trail: Trail, scope: RootScope, out: SafetyWalk
     return;
   }
   const foreign = scope.model.length > 0 && recordForeign(node, trail, out);
-  walkComplex(node, trail, out, foreign ? { ...scope, model: NO_MODEL } : scope);
+  const inner = foreign ? { ...scope, model: NO_MODEL } : scope;
+  // A scalar or `null` the JSON reader found in an array beside objects is held as an empty element
+  // carrying the text it was written as (`nonObjectSource`). Nothing in it is the element the
+  // definitions put here, and a caller that reads the text would read it as though it were, so its
+  // location is not assessed, as a value at a complex position is in `checkPrimitive`.
+  if (inner.model.length > 0 && node.nonObjectSource !== undefined) {
+    out.notAssessed.push(trail.text());
+  }
+  walkComplex(node, trail, out, inner);
 }
 
 /**

@@ -25,6 +25,21 @@ serializeResource(resource) === source; // => true
 `UNKNOWN_ELEMENT` is a warning on a lenient read and an error in strict mode, which is the mode to
 use when you are the one emitting a document rather than the one receiving it.
 
+An array that mixes objects with strings, numbers or `null`s is kept the same way, whichever member
+comes first. Each object is read as an element with all its members, each member the element cannot
+hold is reported at its own position and kept as written, and the write hands every member back:
+
+```ts runnable
+import { parseResource, serializeResource } from "@cosyte/fhir";
+
+const mixed =
+  '{"resourceType":"Patient","extension":["x",{"url":"http://example.com/syn-ext","valueString":"syn"}]}';
+const { resource, issues } = parseResource(mixed);
+
+issues.map((issue) => issue.expression); // => ["Patient.extension[0]"]
+serializeResource(resource) === mixed; // => true
+```
+
 If the write cannot be done without inventing or losing content, it is refused with a coded reason
 instead. [Troubleshooting](./troubleshooting.md) lists the refusals and what each one means.
 
