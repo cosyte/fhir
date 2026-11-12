@@ -189,14 +189,6 @@
       "note": "quirk tier: US Core race + birthsex on a base Patient"
     },
     {
-      "id": "cosyte-fhir-fixtures/synth/documentreference.json",
-      "corpus": "cosyte-fhir-fixtures",
-      "path": "synth/documentreference.json",
-      "bytes": 971,
-      "sha256": "e76d1566aed9ae3e2559ed580b9157baba63a3fc7ed841892e14db95c5baa10f",
-      "note": "spec-clean tier: a synthetic DocumentReference in the @cosyte/synth conventions (HTEST security label, syn- ids), shaped on the R4 documentreference-example; @cosyte/synth has no DocumentReference generator"
-    },
-    {
       "id": "cosyte-fhir-fixtures/synth/encounter.json",
       "corpus": "cosyte-fhir-fixtures",
       "path": "synth/encounter.json",

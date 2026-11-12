@@ -108,8 +108,8 @@ if it were R4:
   ([a resource type the readout does not model](./check-safety-before-summarizing.md#a-resource-type-the-readout-does-not-model));
 - a resource of one of the eleven types we model (`Patient`, `Observation`, `DiagnosticReport`,
   `Condition`, `MedicationRequest`, `AllergyIntolerance`, `Immunization`, `MedicationStatement`,
-  `Encounter`, `Procedure` and `DocumentReference`) is validated against R4's definition of that type, so an element R4B
-  changed is judged by R4's rule;
+  `Encounter`, `Procedure` and `DocumentReference`) is validated against R4's definition of that
+  type, so an element R4B changed is judged by R4's rule;
 - a resource of any other type, including one R4B added, gets the information finding
   `RESOURCE_NOT_MODELED`: only the elements every resource has are checked, and none of the type's
   own;
