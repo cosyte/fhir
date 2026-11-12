@@ -194,14 +194,13 @@ function pushWrapped(node: FhirNode, out: FpItem[]): void {
  * Append the items member `name` selects from a single node item to `out` (lists flattened). Every
  * selection appends to the one list its caller builds, so a step of a path makes no list per item.
  */
-function pushNavigated(node: FhirNode, name: string, out: FpItem[], only = false): void {
+function pushNavigated(node: FhirNode, name: string, out: FpItem[]): void {
   if (isComplex(node)) {
     const exact = getProperty(node, name);
     if (exact !== undefined) {
       pushWrapped(exact, out);
       return;
     }
-    if (only) return;
     // No literal property: try a `[x]` choice variant (`value` selects `valueQuantity`, …).
     const properties = node.properties;
     for (let i = 0; i < properties.length; i++) {
@@ -231,15 +230,33 @@ function navigateItem(node: FhirNode, name: string): FpItem[] {
   return out;
 }
 
-/**
- * Navigate `name` from every node item in a collection (computed items have no members); `only`
- * selects the property of exactly that name and never a choice variant.
- */
-function navigate(focus: FpColl, name: string, only = false): FpItem[] {
+/** Navigate `name` from every node item in a collection (computed items have no members). */
+function navigate(focus: FpColl, name: string): FpItem[] {
   const out: FpItem[] = [];
   for (let i = 0; i < focus.length; i++) {
     const item = focus[i] as FpItem;
-    if (item.t === "node") pushNavigated(item.node, name, out, only);
+    if (item.t === "node") pushNavigated(item.node, name, out);
+  }
+  return out;
+}
+
+/**
+ * Navigate `name` as an element of its own, never as the stem of a choice: from a complex node, only
+ * the property of exactly that name, so `period` over a node holding only `periodMax` selects
+ * nothing. From a primitive node it navigates as {@link navigate} does; a computed item has no
+ * members.
+ */
+function navigateExact(focus: FpColl, name: string): FpItem[] {
+  const out: FpItem[] = [];
+  for (let i = 0; i < focus.length; i++) {
+    const item = focus[i] as FpItem;
+    if (item.t !== "node") continue;
+    if (!isComplex(item.node)) {
+      pushNavigated(item.node, name, out);
+      continue;
+    }
+    const exact = getProperty(item.node, name);
+    if (exact !== undefined) pushWrapped(exact, out);
   }
   return out;
 }
@@ -1057,15 +1074,15 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
     case "variable":
       if (expr.name === "this") return focus;
       throw new UnsupportedFhirPathError(`unsupported variable $${expr.name}`);
-    case "member":
+    case "member": {
       if (expr.target === null && isTypeQualifier(expr.name)) {
         return resolveTypeQualifier(expr.name, focus);
       }
-      return navigate(
-        expr.target === null ? focus : evaluate(expr.target, focus, ctx),
-        expr.name,
-        ctx.exact?.(expr.name) === true,
-      );
+      const input = expr.target === null ? focus : evaluate(expr.target, focus, ctx);
+      return ctx.exact?.(expr.name) === true
+        ? navigateExact(input, expr.name)
+        : navigate(input, expr.name);
+    }
     case "call": {
       const input = expr.target === null ? focus : evaluate(expr.target, focus, ctx);
       return applyFunction(expr.name, input, expr.args, focus, ctx);

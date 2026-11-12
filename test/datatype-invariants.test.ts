@@ -24,6 +24,10 @@ import {
   validateResource,
   type ValidateOptions,
 } from "../src/index.js";
+import { evaluate, type FpColl } from "../src/fhirpath/evaluate.js";
+import { parseFhirPath } from "../src/fhirpath/parser.js";
+import { FhirDecimal } from "../src/model/decimal.js";
+import { complex, primitive } from "../src/model/node.js";
 import {
   DATATYPE_CONSTRAINTS,
   DATATYPE_CONSTRAINTS_ELSEWHERE,
@@ -353,14 +357,43 @@ describe("rng-2 and ref-1, decided by code written for them", () => {
     ]);
   });
 
-  it("leaves a bound read from XML, whose value carries no number, unchecked", () => {
+  it("reads a bound from XML as it reads one from JSON", () => {
     const xml =
       '<Observation xmlns="http://hl7.org/fhir"><status value="final"/><code><text value="x"/></code>' +
       '<valueRange><low><value value="2"/></low><high><value value="1"/></high></valueRange></Observation>';
     const issues = validateResource(parseResourceXml(xml).resource).issues;
     expect(issues.filter((i) => i.constraint === "rng-2").map((i) => i.code)).toEqual([
-      "INVARIANT_UNCHECKED",
+      "INVARIANT_VIOLATED",
     ]);
+  });
+
+  it("holds over a range with one bound, and leaves a bound that is no quantity unchecked", () => {
+    expect(invariants({ ...OBS, valueRange: { high: { value: 1 } } })).toEqual([]);
+    expect(invariants({ ...OBS, valueRange: { low: "fake", high: { value: 1 } } })).toEqual([
+      "INVARIANT_UNCHECKED rng-2 at Observation.valueRange",
+    ]);
+  });
+
+  it("leaves a value that is no decimal literal unchecked", () => {
+    const bound = (raw: string) =>
+      complex([{ name: "value", value: primitive(new FhirDecimal(raw)) }]);
+    const observation = complex([
+      { name: "resourceType", value: primitive("Observation") },
+      { name: "status", value: primitive("final") },
+      { name: "code", value: complex([{ name: "text", value: primitive("x") }]) },
+      {
+        name: "valueRange",
+        value: complex([
+          { name: "low", value: bound("fake") },
+          { name: "high", value: bound("1") },
+        ]),
+      },
+    ]);
+    expect(
+      validateResource(observation)
+        .issues.filter((i) => i.constraint === "rng-2")
+        .map((i) => i.code),
+    ).toEqual(["INVARIANT_UNCHECKED"]);
   });
 
   it("resolves a #id against the root resource's contained ids", () => {
@@ -385,6 +418,9 @@ describe("rng-2 and ref-1, decided by code written for them", () => {
         subject: { reference: "#p1" },
       }),
     ).not.toContain("INVARIANT_VIOLATED ref-1 at Observation.subject");
+    expect(invariants({ ...OBS, contained: ["p1"], subject: { reference: "#p1" } })).toContain(
+      "INVARIANT_VIOLATED ref-1 at Observation.subject",
+    );
   });
 
   it("leaves a bare # and an unreadable reference unchecked, and passes a non-local one", () => {
@@ -487,6 +523,12 @@ describe("where the layer walks", () => {
         extension: [{ url: "http://example.org/e", valueQuantity: bad }],
       }),
     ).toEqual([]);
+    expect(
+      invariants({
+        resourceType: "Patient",
+        contained: [{ id: "c1", telecom: [{ value: "x" }] }],
+      }).filter((f) => f.includes("cpt-2")),
+    ).toEqual([]);
   });
 
   it("walks no member the definitions do not define, and no value of the wrong shape", () => {
@@ -517,5 +559,32 @@ describe("where the layer walks", () => {
     expect(
       invariants({ ...OBS, valueQuantity: { value: 1, code: "mg" } }, { profiles: [profile] }),
     ).toEqual(["INVARIANT_VIOLATED qty-3 at Observation.valueQuantity"]);
+  });
+});
+
+describe("names a context defines are navigated exactly", () => {
+  const evalExact = (expression: string, node: Doc): FpColl => {
+    const focus = parseResource(JSON.stringify({ resourceType: "Basic", ...node })).resource;
+    const at: FpColl = [{ t: "node", node: focus }];
+    return evaluate(parseFhirPath(expression), at, {
+      resource: focus,
+      context: at,
+      exact: () => true,
+    });
+  };
+
+  it("selects only the property of exactly that name from a complex node", () => {
+    expect(evalExact("period.exists()", { periodMax: 2 })).toEqual([{ t: "bool", value: false }]);
+    expect(evalExact("period.exists()", { period: 2 })).toEqual([{ t: "bool", value: true }]);
+  });
+
+  it("navigates a primitive's extensions as ever, and nothing from a computed value", () => {
+    expect(
+      evalExact("period.extension.exists()", {
+        period: 2,
+        _period: { extension: [{ url: "http://example.org/e", valueString: "x" }] },
+      }),
+    ).toEqual([{ t: "bool", value: true }]);
+    expect(evalExact("('x').period.exists()", {})).toEqual([{ t: "bool", value: false }]);
   });
 });

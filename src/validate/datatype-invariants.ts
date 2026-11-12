@@ -43,26 +43,23 @@
  * @packageDocumentation
  */
 
-import { UnsupportedFhirPathError } from "../fhirpath/errors.js";
 import { convertToBoolean, evaluate, type FpColl } from "../fhirpath/evaluate.js";
 import { parseFhirPath, type Expr } from "../fhirpath/parser.js";
-import { compareDecimals, FhirDecimal } from "../model/decimal.js";
+import { compareDecimals, type FhirDecimal } from "../model/decimal.js";
 import {
   getProperty,
   isComplex,
   isList,
-  isPrimitive,
   resourceType,
   type FhirComplex,
   type FhirNode,
+  type FhirPrimitive,
   type FhirProperty,
 } from "../model/index.js";
 import { Trail } from "../model/path.js";
-import {
-  elementTargets,
-  PRIMITIVE_TARGET,
-  RESOURCE_TARGET,
-} from "../safety/element-definitions.js";
+import { readQuantity } from "../quantity/ucum.js";
+import { primitiveString } from "../safety/codes.js";
+import { elementTargets, RESOURCE_TARGET } from "../safety/element-definitions.js";
 import { ASSESSED_RESOURCE_TYPES } from "../safety/status.js";
 import type { BaseInvariantFinding, Outcome } from "./base-invariants.js";
 import { ISSUE_SEVERITIES, validationIssue } from "./issues.js";
@@ -185,7 +182,7 @@ interface Compiled {
   readonly decide: (focus: FhirComplex, root: FhirComplex, context: string) => Outcome;
 }
 
-/** The compiled constraints by context, made on first use and kept once every row has compiled. */
+/** The compiled constraints by context, made on first use and kept. */
 let compiledTable: ReadonlyMap<string, readonly Compiled[]> | undefined;
 
 /** The profile of each profiled position, made on first use and kept. */
@@ -193,17 +190,11 @@ let profileTable: Readonly<Record<string, string>> | undefined;
 
 /**
  * Evaluate a parsed expression against one focus read as `context`. A name the definitions give
- * `context` as an element of its own is navigated exactly, never as the stem of a choice: `Timing.repeat`
- * defines `period` and `periodMax` both, and `period.exists()` over a repeat holding only `periodMax`
- * is `false`. Any failure is `unchecked`, never `satisfied`.
+ * `context` as an element of its own is navigated exactly, never as the stem of a choice:
+ * `Timing.repeat` defines `period` and `periodMax` both, and `period.exists()` over a repeat holding
+ * only `periodMax` is `false`. Any failure is `unchecked`, never `satisfied`.
  */
-function outcomeOf(
-  ast: Expr | undefined,
-  focus: FhirNode,
-  root: FhirComplex,
-  context: string,
-): Outcome {
-  if (ast === undefined) return "unchecked";
+function outcomeOf(ast: Expr, focus: FhirNode, root: FhirComplex, context: string): Outcome {
   try {
     const at: FpColl = [{ t: "node", node: focus }];
     const contexts = [context];
@@ -216,54 +207,44 @@ function outcomeOf(
   }
 }
 
-/** The string a primitive member holds, or `undefined` when it holds none. */
-function stringMember(node: FhirComplex, name: string): string | undefined {
-  const value = getProperty(node, name);
-  if (value === undefined || !isPrimitive(value) || typeof value.value !== "string") {
-    return undefined;
-  }
-  return value.value;
-}
-
 /**
  * `ref-1`, `reference.startsWith('#').not() or (reference.substring(1) in
  * %rootResource.contained.id)`, decided directly. A reference that is not a local `#id` satisfies
  * it; `#id` satisfies it when the root resource contains a resource with that id. A bare `#`
  * names the container itself in R4, which the expression as written does not allow for, so it is
- * left unchecked rather than reported.
+ * left unchecked rather than reported, and so is a `reference` that holds no string.
  */
 function decideRef1(focus: FhirComplex, root: FhirComplex): Outcome {
   const reference = getProperty(focus, "reference");
   if (reference === undefined) return "satisfied";
-  if (!isPrimitive(reference) || typeof reference.value !== "string") return "unchecked";
-  const text = reference.value;
+  const text = primitiveString(reference);
+  if (text === undefined) return "unchecked";
   if (!text.startsWith("#")) return "satisfied";
   if (text === "#") return "unchecked";
-  const id = text.slice(1);
   const contained = getProperty(root, "contained");
   if (contained === undefined) return "violated";
+  const id = text.slice(1);
   const items = isList(contained) ? contained.items : [contained];
-  for (const item of items) {
-    if (isComplex(item) && stringMember(item, "id") === id) return "satisfied";
-  }
-  return "violated";
+  const named = (item: FhirNode): boolean =>
+    isComplex(item) && primitiveString(getProperty(item, "id")) === id;
+  return items.some(named) ? "satisfied" : "violated";
 }
 
-/** A quantity's value and the unit it is compared in, or `undefined` when either is unreadable. */
-function quantityOf(
+/**
+ * A Range bound's value and the unit it is compared in, or `undefined` when it carries no value it
+ * can be compared by. The unit is the `system` and `code` where a code is written, else the `unit`
+ * text.
+ */
+function boundOf(
   node: FhirNode,
 ): { readonly value: FhirDecimal; readonly unit: string } | undefined {
-  if (!isComplex(node)) return undefined;
-  const value = getProperty(node, "value");
-  if (value === undefined || !isPrimitive(value) || !(value.value instanceof FhirDecimal)) {
-    return undefined;
-  }
-  const code = stringMember(node, "code");
-  const unit =
-    code === undefined
-      ? `unit ${stringMember(node, "unit") ?? ""}`
-      : `code ${stringMember(node, "system") ?? ""} ${code}`;
-  return { value: value.value, unit };
+  const quantity = readQuantity(node);
+  const value = quantity?.value;
+  if (quantity === undefined || value === undefined) return undefined;
+  const unit = JSON.stringify(
+    quantity.code === undefined ? [quantity.unit] : [quantity.system, quantity.code],
+  );
+  return { value, unit };
 }
 
 /**
@@ -276,8 +257,8 @@ function decideRng2(focus: FhirComplex): Outcome {
   const low = getProperty(focus, "low");
   const high = getProperty(focus, "high");
   if (low === undefined || high === undefined) return "satisfied";
-  const a = quantityOf(low);
-  const b = quantityOf(high);
+  const a = boundOf(low);
+  const b = boundOf(high);
   if (a === undefined || b === undefined || a.unit !== b.unit) return "unchecked";
   const order = compareDecimals(a.value, b.value);
   if (order === undefined) return "unchecked";
@@ -293,24 +274,22 @@ function decidedDirectly(key: string): Compiled["decide"] | undefined {
 
 /**
  * One row's decision by the engine, its expression parsed the first time an occurrence asks for it
- * rather than when the table is built, so a validation parses only the rows it reaches. A parse the
- * grammar refuses is kept, and the row is unchecked wherever it applies; a parse that failed for any
- * other reason (the stack running out when the first validation happens deep in a caller's own
- * recursion) leaves the row unchecked at this occurrence and is tried again at the next.
+ * rather than when the table is built, so a validation parses only the rows it reaches. A parse that
+ * fails (the stack running out when the first validation happens deep in a caller's own recursion;
+ * the grammar refuses none of these expressions) leaves the row unchecked at this occurrence and is
+ * tried again at the next.
  */
 function byEngine(expression: string): Compiled["decide"] {
-  let parsed: { readonly ast: Expr | undefined } | undefined;
+  let ast: Expr | undefined;
   return (focus, root, context) => {
-    if (parsed === undefined) {
+    if (ast === undefined) {
       try {
-        parsed = { ast: parseFhirPath(expression) };
-      } catch (error) {
-        if (!(error instanceof UnsupportedFhirPathError)) return "unchecked";
-        /* v8 ignore next -- defensive: every expression in the table parses today */
-        parsed = { ast: undefined };
+        ast = parseFhirPath(expression);
+      } catch {
+        return "unchecked";
       }
     }
-    return outcomeOf(parsed.ast, focus, root, context);
+    return outcomeOf(ast, focus, root, context);
   };
 }
 
@@ -371,25 +350,26 @@ function check(
 /** Walk a primitive's own extensions, each an `Extension`. */
 function walkPrimitiveExtensions(
   walk: Walk,
-  node: FhirNode,
+  node: FhirPrimitive,
   root: FhirComplex,
   trail: Trail,
 ): void {
-  if (!isPrimitive(node)) return;
   const extensions = node.extension;
   if (extensions === undefined) return;
   trail.child("extension");
   for (let i = 0; i < extensions.length; i++) {
     trail.index(i);
-    walkValue(walk, extensions[i] as FhirNode, "Extension", undefined, root, trail);
+    walkValue(walk, extensions[i] as FhirNode, "Extension", undefined, root, trail, false);
     trail.pop();
   }
   trail.pop();
 }
 
 /**
- * Walk one value typed as `context` (a datatype or backbone element), or {@link RESOURCE_TARGET} for
- * a resource, or {@link PRIMITIVE_TARGET}; `profile` is the datatype profile R4 narrows it to.
+ * Walk one value typed as `context` (a datatype or backbone element; a position the definitions
+ * type as a primitive names no context, so nothing below it is walked), or {@link RESOURCE_TARGET}
+ * for a resource; `profile` is the datatype profile R4 narrows it to. A resource is read with
+ * `root` as its `%rootResource`, or with itself when `ownRoot`.
  */
 function walkValue(
   walk: Walk,
@@ -398,12 +378,13 @@ function walkValue(
   profile: string | undefined,
   root: FhirComplex,
   trail: Trail,
+  ownRoot: boolean,
 ): void {
   if (isList(value)) {
     const items = value.items;
     for (let i = 0; i < items.length; i++) {
       trail.index(i);
-      walkValue(walk, items[i] as FhirNode, context, profile, root, trail);
+      walkValue(walk, items[i] as FhirNode, context, profile, root, trail, ownRoot);
       trail.pop();
     }
     return;
@@ -412,11 +393,9 @@ function walkValue(
     walkPrimitiveExtensions(walk, value, root, trail);
     return;
   }
-  if (context === PRIMITIVE_TARGET) return;
   if (context === RESOURCE_TARGET) {
-    const type = resourceType(value);
-    if (type !== undefined && ASSESSED_RESOURCE_TYPES.has(type)) {
-      walkMembers(walk, value, type, root, trail);
+    if (ASSESSED_RESOURCE_TYPES.has(resourceType(value) as string)) {
+      walkMembers(walk, value, resourceType(value) as string, ownRoot ? value : root, trail);
     }
     return;
   }
@@ -424,7 +403,12 @@ function walkValue(
   walkMembers(walk, value, context, root, trail);
 }
 
-/** Walk the members of one complex node read against `context`. */
+/**
+ * Walk the members of one complex node read against `context`. A member the definitions do not
+ * define there is not walked, `resourceType` among them. A contained resource answers
+ * `%rootResource` with the resource that contains it; any other resource the document carries (a
+ * Bundle entry) is its own root.
+ */
 function walkMembers(
   walk: Walk,
   node: FhirComplex,
@@ -437,40 +421,21 @@ function walkMembers(
   for (let i = 0; i < properties.length; i++) {
     const property = properties[i] as FhirProperty;
     const name = property.name;
-    if (name === "resourceType") continue;
     const targets = elementTargets(contexts, name);
     if (targets === undefined) continue;
-    const target = targets[0] as string;
+    const profile = typeProfiles()[`${context}.${name}`];
     trail.child(name);
-    if (target === RESOURCE_TARGET) {
-      // A contained resource answers `%rootResource` with the resource that contains it; any other
-      // resource the document carries (a Bundle entry) is its own root.
-      walkResources(walk, property.value, name === "contained" ? root : undefined, trail);
-    } else {
-      walkValue(walk, property.value, target, typeProfiles()[`${context}.${name}`], root, trail);
-    }
+    walkValue(
+      walk,
+      property.value,
+      targets[0] as string,
+      profile,
+      root,
+      trail,
+      name !== "contained",
+    );
     trail.pop();
   }
-}
-
-/** Walk each resource at a resource position, with `root`, or each resource as its own root. */
-function walkResources(
-  walk: Walk,
-  value: FhirNode,
-  root: FhirComplex | undefined,
-  trail: Trail,
-): void {
-  if (isList(value)) {
-    const items = value.items;
-    for (let i = 0; i < items.length; i++) {
-      trail.index(i);
-      walkResources(walk, items[i] as FhirNode, root, trail);
-      trail.pop();
-    }
-    return;
-  }
-  if (!isComplex(value)) return;
-  walkValue(walk, value, RESOURCE_TARGET, undefined, root ?? value, trail);
 }
 
 /**
@@ -487,6 +452,6 @@ export function collectDatatypeInvariantFindings(
   root: string,
 ): readonly BaseInvariantFinding[] {
   const walk: Walk = { findings: [], table: compiledConstraints() };
-  walkValue(walk, resource, RESOURCE_TARGET, undefined, resource, new Trail(root));
+  walkValue(walk, resource, RESOURCE_TARGET, undefined, resource, new Trail(root), true);
   return walk.findings;
 }

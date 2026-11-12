@@ -16,6 +16,7 @@ import {
   type ValidateOptions,
   type ValidationResult,
 } from "../src/index.js";
+import { LEAVES_UNCHECKED } from "../src/validate/unchecked.js";
 
 type Doc = Readonly<Record<string, unknown>>;
 
@@ -226,5 +227,74 @@ describe("EXTENSION_UNCHECKED", () => {
     expect(result.issues.map((i) => i.code)).not.toContain("EXTENSION_UNCHECKED");
     expect(result.issues.map((i) => i.code)).toContain("UNHANDLED_MODIFIER_EXTENSION");
     expect(result.fullyChecked).toBe(false);
+  });
+});
+
+describe("what fullyChecked counts", () => {
+  it("counts exactly these codes as leaving something unchecked or unread", () => {
+    expect(
+      Object.entries(LEAVES_UNCHECKED())
+        .filter(([, leaves]) => leaves)
+        .map(([code]) => code)
+        .sort(),
+    ).toEqual([
+      "ABSENCE_MARKER_UNREADABLE",
+      "ARRAY_WRAPPED_CHOICE",
+      "CONTAINED_ID_DUPLICATE",
+      "DROPPED_ELEMENT_TEXT",
+      "DUPLICATE_PROPERTY",
+      "EXTENSION_UNCHECKED",
+      "INVARIANT_UNCHECKED",
+      "NARRATIVE_UNREADABLE",
+      "NESTED_ARRAY",
+      "PROFILE_CONSTRAINT_UNCHECKED",
+      "PROFILE_SLICE_NO_SLICING",
+      "PROFILE_SLICE_UNCHECKED",
+      "PROFILE_UNCHECKED",
+      "PROFILE_VERSION_MISMATCH",
+      "RESOURCE_NOT_MODELED",
+      "RESOURCE_TYPE_UNKNOWN",
+      "UNHANDLED_MODIFIER_EXTENSION",
+      "UNKNOWN_ELEMENT",
+    ]);
+  });
+
+  it("can read true for each of the eight types, and never for another modeled one", () => {
+    for (const resourceType of [
+      "AllergyIntolerance",
+      "Condition",
+      "DiagnosticReport",
+      "Immunization",
+      "MedicationRequest",
+      "MedicationStatement",
+      "Observation",
+      "Patient",
+    ]) {
+      expect(validate({ resourceType }).fullyChecked, resourceType).toBe(true);
+    }
+    for (const resourceType of ["Encounter", "Procedure", "DocumentReference"]) {
+      expect(validate({ resourceType }).fullyChecked, resourceType).toBe(false);
+    }
+  });
+});
+
+describe("PROFILE_UNCHECKED over the shapes meta can take", () => {
+  const claims = (meta: unknown) =>
+    findings(validate({ ...OBSERVATION, meta })).filter((f) => f.startsWith("PROFILE_UNCHECKED"));
+
+  it("reads a lone claim at index 0, and passes over a meta that holds no claim it can read", () => {
+    expect(claims({ profile: "http://example.org/fake" })).toEqual([
+      "PROFILE_UNCHECKED at Observation.meta.profile[0]",
+    ]);
+    expect(claims("fake")).toEqual([]);
+    expect(claims({ versionId: "1" })).toEqual([]);
+    expect(claims({ profile: [{ a: 1 }] })).toEqual([]);
+  });
+
+  it("reports an extension written as something other than an object, and reads past it", () => {
+    const result = validate({ resourceType: "Patient", extension: ["fake"] });
+    expect(
+      result.issues.filter((i) => i.code === "EXTENSION_UNCHECKED").map((i) => i.expression),
+    ).toEqual(["Patient.extension[0]"]);
   });
 });

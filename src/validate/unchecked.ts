@@ -21,6 +21,7 @@
 import { getProperty, isComplex, isList, isPrimitive, type FhirComplex } from "../model/index.js";
 import type { FhirNode, FhirProperty } from "../model/index.js";
 import { Trail } from "../model/path.js";
+import { primitiveString } from "../safety/codes.js";
 import type { StructureDefinition } from "../profiles/structure-definition.js";
 import {
   ISSUE_SEVERITIES,
@@ -221,11 +222,11 @@ function collectProfileClaims(
   const supplied = new Set(profiles.filter((p) => p.type === rt).map((p) => p.url));
   const items = isList(claims) ? claims.items : [claims];
   for (let i = 0; i < items.length; i++) {
-    const claim = items[i] as FhirNode;
-    // A claim with no readable canonical is a primitive the structure layer reports.
-    if (!isPrimitive(claim) || typeof claim.value !== "string") continue;
-    const bar = claim.value.indexOf("|");
-    const url = bar === -1 ? claim.value : claim.value.slice(0, bar);
+    // A claim with no readable canonical is one the structure layer reports.
+    const canonical = primitiveString(items[i]);
+    if (canonical === undefined) continue;
+    const bar = canonical.indexOf("|");
+    const url = bar === -1 ? canonical : canonical.slice(0, bar);
     if (supplied.has(url)) continue;
     out.push(
       validationIssue(

@@ -482,7 +482,7 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
         // `sqty-1` where the profile types an element SimpleQuantity: the datatype layer already
         // reported it there when R4 itself does. The profile layer leaves out a lone occurrence's
         // index, so the two locations are compared without indices.
-        if (issue.code === "INVARIANT_VIOLATED" && byDatatypes.has(withoutIndices(issue))) continue;
+        if (byDatatypes.has(withoutIndices(issue))) continue;
         ctx.issues.push(issue);
       }
       // Invariant layer (Phase 7): evaluate the profile's FHIRPath `constraint`s via the bounded
@@ -536,10 +536,12 @@ function alreadyReported(
   };
 }
 
-/** A finding's code, key and location with every array index taken out, to compare across layers. */
+/**
+ * A finding's code, key and location with every first index taken out, to compare the datatype
+ * layer's findings with the profile layer's, which leaves out the index of a lone occurrence.
+ */
 function withoutIndices(issue: ValidationIssue): string {
-  /* v8 ignore next -- the `?? ""` is unreachable: an invariant issue always names its constraint */
-  return `${issue.code} ${issue.constraint ?? ""} ${issue.expression.replace(/\[\d+\]/g, "")}`;
+  return `${issue.code} ${String(issue.constraint)} ${issue.expression.replaceAll("[0]", "")}`;
 }
 
 /**
