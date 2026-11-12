@@ -228,6 +228,36 @@ const SENTINEL_RESOURCES: readonly string[] = [
     code: { text: SENTINELS.freeText },
     modifierExtension: [{ url: `http://example.org/${SENTINELS.mrn}` }],
   }),
+  // A narrative that breaks every narrative rule, with a sentinel as its text, in an attribute
+  // value, in a script body and in a link: the narrative findings name the div, never what is in it.
+  JSON.stringify({
+    resourceType: "Patient",
+    text: {
+      status: "generated",
+      div:
+        `<div xmlns="http://www.w3.org/1999/xhtml"><p onclick="${SENTINELS.mrn}">` +
+        `${SENTINELS.familyName}<div>${SENTINELS.dob}</div></p>` +
+        `<script>${SENTINELS.freeText}</script><font title="${SENTINELS.phone}">x</font>` +
+        `<a href="javascript:${SENTINELS.givenName}">x</a></div>`,
+    },
+  }),
+  // The sentinel as an element name and an attribute name, and an unreadable narrative whose
+  // undefined entity is named by a sentinel: names are document content too.
+  JSON.stringify({
+    resourceType: "Patient",
+    text: {
+      status: "generated",
+      div:
+        `<div xmlns="http://www.w3.org/1999/xhtml"><${SENTINELS.familyName}>x</${SENTINELS.familyName}>` +
+        `<p ${SENTINELS.givenName}="${SENTINELS.sig}">x</p></div>`,
+    },
+    contained: [
+      {
+        resourceType: "Patient",
+        text: { status: "generated", div: `<div>&${SENTINELS.mrn};${SENTINELS.freeText}</div>` },
+      },
+    ],
+  }),
 ];
 
 describe("PHI-leak tier: sentinel battery, no sentinel value reaches any diagnostic", () => {

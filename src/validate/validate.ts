@@ -21,6 +21,12 @@
  * wrongly flagged), and complex datatype internals are left to the profile layer rather than
  * guessed at.
  *
+ * **The narrative is read too.** Every `Narrative.div`, in the resource and in each resource it
+ * carries (`contained`, Bundle entries, Parameters), is read as XHTML and checked against the R4
+ * narrative rules ({@link ./narrative.js}): a single XHTML `div` root, the allowed elements and
+ * attributes, no script or event handlers, no block inside a paragraph, and some content. The
+ * string itself is never changed.
+ *
  * **Not in this layer:** terminology binding beyond required-code enumeration, profile /
  * slicing / must-support, FHIRPath invariants. The built-in schema set is the base elements plus
  * the resource types {@link ./schema.js} enumerates; other resource types validate only when the
@@ -54,6 +60,7 @@ import {
 import { toOperationOutcome } from "./operation-outcome.js";
 import { isPrimitiveType, validatePrimitiveValue } from "./primitives.js";
 import { collectBundleIssues } from "./bundle.js";
+import { collectNarrativeIssues } from "./narrative.js";
 import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
 import { typesOf } from "../safety/codes.js";
@@ -358,6 +365,11 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   if (rt === "Bundle") {
     for (const issue of collectBundleIssues(resource)) ctx.issues.push(issue);
   }
+
+  // Narrative layer: every `Narrative.div` in the resource and in the resources it carries, read as
+  // XHTML and checked against the R4 narrative rules. Reads a copy of the string's parse and never
+  // changes the model.
+  for (const issue of collectNarrativeIssues(resource, root)) ctx.issues.push(issue);
 
   // Terminology binding layer (Phase 5): strength-aware, content-free system checks on bound codings,
   // plus value-set membership when a terminology service is supplied. Degrades to warnings (never a

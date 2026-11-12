@@ -42,7 +42,7 @@
  *     with that US Core version loaded (`scripts/differential/uscore.mjs`). The first three are
  *     validated with no profile supplied and asked with the argv they always were.
  *
- * **300 declared, 213 compared, 87 excluded**, 203 of the 213 third party. The third-party documents
+ * **300 declared, 214 compared, 86 excluded**, 204 of the 214 third party. The third-party documents
  * are **fetched, never committed** (`pnpm corpus:fetch`, materialised into the git-ignored
  * `corpus/documents/`), each verified against the SHA-256 the declaration records.
  * `scripts/differential/corpus.mjs` carries the reasoning; the short version is that committing
@@ -61,15 +61,15 @@
  * verdict. An oracle `error`/`fatal` outside that class, on a document this library reports clean,
  * is still a false valid and still fails the run.
  *
- * **THE EXCLUSION RATE IS PART OF THE RESULT, NOT A FOOTNOTE TO IT.** 87 of the 300 declared
+ * **THE EXCLUSION RATE IS PART OF THE RESULT, NOT A FOOTNOTE TO IT.** 86 of the 300 declared
  * documents are held out, each with the reason measured and recorded in `corpus/corpus.json` and
  * printed on every run, and the classes are almost entirely one thing: the reference validator
  * resolves canonical URLs (`identifier.system`, `url`, `instantiatesUri`, `library`,
  * `relatedArtifact.resource`, `Attachment.url`) and this library does neither and says so. The six
  * exclusions whose measured reason was ONLY a terminology finding are no longer exclusions: they are
  * compared, under the terminology class above, because a rule beats a snapshot of what a remote
- * service answered on one date. So the number is "213 documents on which the two were SHOWN to
- * agree", beside "87 on which they were shown not to". Reading only the first is reading half of it.
+ * service answered on one date. So the number is "214 documents on which the two were SHOWN to
+ * agree", beside "86 on which they were shown not to". Reading only the first is reading half of it.
  *
  * THE US CORE PASS PRINTS REACH, NOT ONLY AGREEMENT. For every constraint row the FHIRPath subset
  * newly evaluates, the run prints how many compared US Core documents reach it, or that none does

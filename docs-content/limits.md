@@ -186,6 +186,47 @@ const { resource } = parseResourceXml(
 serializeResource(resource); // => '{"resourceType":"Patient","id":"syn-0001","active":"true"}'
 ```
 
+## A narrative is checked, not sanitized
+
+`validateResource` reads each `Narrative.div` as XHTML and checks it against the R4 narrative
+rules: a single `div` root in the XHTML namespace, only the elements and attributes R4 allows, no
+script, embedding element, event handler or script URL, no block element inside a paragraph, and
+some content. Each broken rule is an error at the location of the `div`, and no finding names
+anything written inside it. The string itself is kept exactly as written, and the writers emit it
+unchanged.
+
+```ts runnable
+import { parseResource, validateResource } from "@cosyte/fhir";
+
+const { resource } = parseResource(
+  JSON.stringify({
+    resourceType: "Patient",
+    id: "syn-0003",
+    text: {
+      status: "generated",
+      div: '<div xmlns="http://www.w3.org/1999/xhtml"><p onclick="track()">Synthetic summary</p></div>',
+    },
+  }),
+);
+validateResource(resource).issues.map((issue) => `${issue.code} ${issue.expression}`); // => ["NARRATIVE_ACTIVE_CONTENT Patient.text.div"]
+```
+
+What it does not check:
+
+- where a table or list part may sit, such as a `tr` outside a `table` or an `li` outside a list;
+- a URL beyond its scheme, and whether an internal image reference such as `src="#a"` points at
+  anything. Only a `javascript:` or `vbscript:` scheme is reported, read the way a browser reads
+  it (a tab or line break inside the scheme does not hide it); a `data:` URL, including
+  `data:text/html`, is not reported;
+- the content of a `style` attribute, and duplicate `id` values, so a `url(...)` inside a `style`
+  value, `javascript:` included, is not reported;
+- an HTML named entity such as `&nbsp;` is not read at all: XHTML in FHIR has only the five XML
+  entities, so such a narrative is reported `NARRATIVE_UNREADABLE`, as the HL7 reference validator
+  reports it.
+
+A narrative with no finding has passed the rules R4 states, which is not the same as being safe to
+render. If you display narratives as HTML, run them through your renderer's own sanitizer as well.
+
 ## Reported, not repaired
 
 Several non-conformant shapes are read, reported, and deliberately not fixed. Character data written
