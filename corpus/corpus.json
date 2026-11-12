@@ -1409,7 +1409,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "documentreference-example.json",
       "bytes": 8433,
-      "sha256": "58db8dec47725753d9fe52252fd72a96caeccf92619e6a4e35de599370ccf4aa"
+      "sha256": "58db8dec47725753d9fe52252fd72a96caeccf92619e6a4e35de599370ccf4aa",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-11-12: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at DocumentReference.content[].attachment.url. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/effectevidencesynthesis-example.json",
@@ -1480,7 +1481,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "encounter-example-xcda.json",
       "bytes": 2240,
-      "sha256": "ac889fbc3c45a8de6ae5e0437a49939f5cf9164b1472a768fac17df4e9e56dab"
+      "sha256": "ac889fbc3c45a8de6ae5e0437a49939f5cf9164b1472a768fac17df4e9e56dab",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-11-12: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Encounter.identifier[].system. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/encounter-example.json",
@@ -2118,7 +2120,8 @@
       "corpus": "hl7-fhir-r4-examples",
       "path": "procedure-example-f201-tpf.json",
       "bytes": 3692,
-      "sha256": "32194f91d07bedf4a8803dad7bf71440e7971e86c589f1b7f285345162551658"
+      "sha256": "32194f91d07bedf4a8803dad7bf71440e7971e86c589f1b7f285345162551658",
+      "exclude": "measured against validator_cli 6.10.2 on 2026-11-12: the reference validator reports 1 error(s) this library does not - 1x invalid (a URL or canonical reference the reference validator resolves and this library does not); first at Procedure.instantiatesCanonical[]. This library vendors no terminology content and resolves no canonical URL, a declared and documented subset, so the disagreement is a real gap and is recorded here rather than closed by changing what this library reports."
     },
     {
       "id": "hl7-fhir-r4-examples/procedure-example-implant.json",
