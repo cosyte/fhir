@@ -338,13 +338,14 @@ function answer(kinds: readonly Kind[]): "conforms" | "undecided" | "other" {
 describe("property: the nested profile check affirms only the kinds a layer enforces", () => {
   it("names every allowed kind in the catalogue the property draws from", () => {
     const drawn = new Set(KINDS.map((k) => k.kind));
-    for (const kind of ENFORCED_CONSTRAINT_KINDS.keys()) expect(drawn.has(kind), kind).toBe(true);
+    for (const kind of Object.keys(ENFORCED_CONSTRAINT_KINDS))
+      expect(drawn.has(kind), kind).toBe(true);
   });
 
   it("answers each kind alone: conforms when it is allowed, undecided when it is not", () => {
     for (const kind of KINDS) {
       expect(answer([kind]), kind.kind).toBe(
-        ENFORCED_CONSTRAINT_KINDS.has(kind.kind) ? "conforms" : "undecided",
+        Object.hasOwn(ENFORCED_CONSTRAINT_KINDS, kind.kind) ? "conforms" : "undecided",
       );
     }
   });
@@ -356,7 +357,7 @@ describe("property: the nested profile check affirms only the kinds a layer enfo
         fc.property(
           fc.uniqueArray(fc.constantFrom(...KINDS), { minLength: 1, maxLength: 5 }),
           (kinds) => {
-            const allowed = kinds.every((k) => ENFORCED_CONSTRAINT_KINDS.has(k.kind));
+            const allowed = kinds.every((k) => Object.hasOwn(ENFORCED_CONSTRAINT_KINDS, k.kind));
             expect(answer(kinds)).toBe(allowed ? "conforms" : "undecided");
           },
         ),

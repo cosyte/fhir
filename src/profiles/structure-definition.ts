@@ -178,7 +178,7 @@ export interface StructureDefinition {
  * summary and modifier flags a profile cannot change, the base it derives from. Any other member is
  * recorded as {@link ElementDefinition.unmodeled}.
  */
-const ELEMENT_MEMBERS_READ_OR_DOCUMENTARY: ReadonlySet<string> = new Set([
+const ELEMENT_MEMBERS_READ_OR_DOCUMENTARY: readonly string[] = [
   "id",
   "path",
   "sliceName",
@@ -208,30 +208,25 @@ const ELEMENT_MEMBERS_READ_OR_DOCUMENTARY: ReadonlySet<string> = new Set([
   "isModifierReason",
   "isSummary",
   "mapping",
-]);
+];
 
 /** The members of a `binding` read or documentary: `extension` is read url by url. */
-const BINDING_MEMBERS_READ_OR_DOCUMENTARY: ReadonlySet<string> = new Set([
+const BINDING_MEMBERS_READ_OR_DOCUMENTARY: readonly string[] = [
   "strength",
   "valueSet",
   "description",
   "extension",
-]);
+];
 
 /** The members of a `type` read: `extension` is read url by url. */
-const TYPE_MEMBERS_READ: ReadonlySet<string> = new Set([
-  "code",
-  "profile",
-  "targetProfile",
-  "extension",
-]);
+const TYPE_MEMBERS_READ: readonly string[] = ["code", "profile", "targetProfile", "extension"];
 
 /**
  * The extensions on an element, a binding or a type that only document it: a name, a display or
  * translation hint, a status, a requirement note, the type's own FHIR type, an obligation on a
  * system. Any other extension is recorded as {@link ElementDefinition.unmodeled}.
  */
-const DOCUMENTARY_EXTENSIONS: ReadonlySet<string> = new Set([
+const DOCUMENTARY_EXTENSIONS: readonly string[] = [
   "http://hl7.org/fhir/StructureDefinition/elementdefinition-translatable",
   "http://hl7.org/fhir/StructureDefinition/structuredefinition-display-hint",
   "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
@@ -242,7 +237,7 @@ const DOCUMENTARY_EXTENSIONS: ReadonlySet<string> = new Set([
   "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
   "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
   "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy",
-]);
+];
 // Stryker restore all
 
 /**
@@ -250,17 +245,17 @@ const DOCUMENTARY_EXTENSIONS: ReadonlySet<string> = new Set([
  * {@link ElementDefinition.unmodeled} spells it, each entry under `prefix`. A `fixed[x]` or
  * `pattern[x]` member is read, so it is never recorded.
  */
-function unmodeledOf(node: FhirComplex, known: ReadonlySet<string>, prefix: string): string[] {
+function unmodeledOf(node: FhirComplex, known: readonly string[], prefix: string): string[] {
   const out: string[] = [];
   for (const property of node.properties) {
     const { name } = property;
     if (name === "extension") {
       for (const ext of isList(property.value) ? property.value.items : [property.value]) {
         const url = isComplex(ext) ? primitiveString(getProperty(ext, "url")) : undefined;
-        if (url === undefined || !DOCUMENTARY_EXTENSIONS.has(url))
+        if (url === undefined || !DOCUMENTARY_EXTENSIONS.includes(url))
           out.push(`${prefix}extension:${url ?? ""}`);
       }
-    } else if (!known.has(name) && !(prefix === "" && /^(fixed|pattern)[A-Z]/u.test(name))) {
+    } else if (!known.includes(name) && !(prefix === "" && /^(fixed|pattern)[A-Z]/u.test(name))) {
       out.push(`${prefix}${name}`);
     }
   }

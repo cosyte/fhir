@@ -263,27 +263,20 @@ function environmentIn(
  *
  * @internal
  */
-export const ENFORCED_CONSTRAINT_KINDS: ReadonlyMap<string, string> = new Map([
-  ["min", "the profile layer: cardinality, per parent occurrence"],
-  ["max", "the profile layer: cardinality, per parent occurrence"],
-  ["mustSupport", "nothing to enforce: an obligation on a system, never on an instance"],
-  ["fixed", "the profile layer: fixed[x]"],
-  ["pattern", "the profile layer: pattern[x]"],
-  [
-    "slicing",
-    "the profile layer; a slicing it cannot decide is reported and leaves this undecided",
-  ],
-  [
-    "constraint",
+export const ENFORCED_CONSTRAINT_KINDS: Readonly<Record<string, string>> = {
+  min: "the profile layer: cardinality, per parent occurrence",
+  max: "the profile layer: cardinality, per parent occurrence",
+  mustSupport: "nothing to enforce: an obligation on a system, never on an instance",
+  fixed: "the profile layer: fixed[x]",
+  pattern: "the profile layer: pattern[x]",
+  slicing: "the profile layer; a slicing it cannot decide is reported and leaves this undecided",
+  constraint:
     "the invariant layer; an invariant it cannot evaluate is reported and leaves this undecided",
-  ],
-  [
-    "binding:schema",
+  "binding:schema":
     "the structure layer: the schema's enumerated codes, bound to the very value set they enumerate",
-  ],
-  ["binding:advisory", "nothing to enforce: a preferred or example binding asks nothing"],
-  ["type:code", "this check: each present occurrence's own type is one the element allows"],
-]);
+  "binding:advisory": "nothing to enforce: a preferred or example binding asks nothing",
+  "type:code": "this check: each present occurrence's own type is one the element allows",
+};
 // Stryker restore all
 
 /** The canonical of the base `Resource` definition: as a `targetProfile`, it narrows nothing. */
@@ -313,7 +306,7 @@ function checksLeftOut(
     (el) =>
       scope.occurrences(el).length > 0 &&
       constraintKinds(el, profile.type, snapshot, schema, scope).some(
-        (kind) => !ENFORCED_CONSTRAINT_KINDS.has(kind),
+        (kind) => !Object.hasOwn(ENFORCED_CONSTRAINT_KINDS, kind),
       ),
   );
 }
