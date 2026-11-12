@@ -77,6 +77,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
     expect([...declared.keys()].sort()).toEqual([
       "FhirComplex.droppedText",
       "FhirComplex.duplicates",
+      "FhirComplex.foreignNamespace",
       "FhirComplex.foreignRoot",
       "FhirComplex.kind",
       "FhirComplex.nestedArray",
@@ -87,6 +88,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
       "FhirList.kind",
       "FhirPrimitive.droppedText",
       "FhirPrimitive.extension",
+      "FhirPrimitive.foreignNamespace",
       "FhirPrimitive.id",
       "FhirPrimitive.kind",
       "FhirPrimitive.nestedArray",

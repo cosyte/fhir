@@ -406,6 +406,17 @@ describe("an XML element in a namespace other than its parent's declines, howeve
     expect(readSafety(xml(`<Observation>${body}</Observation>`)).safeToSummarize).toBe(true);
   });
 
+  it("below a root the readout does not assess, only that root is listed", () => {
+    // The Encounter is declined as a whole; a vendor element inside it, or around a resource it
+    // contains, is not listed again.
+    const resource = xml(
+      `<Encounter${NS}><contained xmlns="urn:syn-vendor"><Patient${NS}><id value="syn-pt-0201"/>` +
+        `</Patient></contained><status xmlns="urn:syn-vendor" value="finished"/></Encounter>`,
+    );
+    expectDeclined(resource, ["Encounter"]);
+    expect(unknownIn(validateResource(resource))).toEqual([]);
+  });
+
   it("a prefixed foreign element is listed once, not once per occurrence", () => {
     const resource = xml(
       `<Observation${NS}><status value="final"/>${FINAL_CODE}` +
