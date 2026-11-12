@@ -1112,6 +1112,16 @@ The slicing declaration, when the element introduces slices.
 
 The allowed types, when the definition constrains them.
 
+##### unmodeled?
+
+> `readonly` `optional` **unmodeled?**: readonly `string`[]
+
+What the definition states that this model does not read and that is not documentation, one
+entry per statement, when there is any: a property's name (`maxLength`, `minValueInteger`,
+`contentReference`), an extension's url (`extension:<url>`), or a part of a binding or a type
+(`binding.extension:<url>`, `type.aggregation`). Each may ask something of an instance that no
+validation layer checks, so a check that must not affirm what it did not evaluate reads it.
+
 ***
 
 ### ElementSchema
@@ -2282,6 +2292,15 @@ The complete enumerated code set.
 > `readonly` **strength**: `"required"`
 
 Only `"required"` bindings are enforced here; weaker strengths are the terminology layer's.
+
+##### valueSet?
+
+> `readonly` `optional` **valueSet?**: `string`
+
+The canonical of the R4 value set whose codes [codes](#codes) enumerates, unversioned (the R4
+4.0.1 release). A profile binding to this value set asks nothing the enumeration does not check;
+a binding to any other value set, even one whose codes are all among these, asks more. Absent
+on a binding that does not say which value set it enumerates.
 
 ***
 

@@ -26,6 +26,10 @@
  * `resolve()`) by the caller's {@link SliceEnvironment}: an error there decides `no`, a clean and
  * complete check decides `yes`.
  *
+ * A discriminator path selects one element (profiling.html): a `type` or `profile` path that
+ * selects more than one node in an occurrence decides nothing, rather than matching when any one
+ * of them does.
+ *
  * Anything else is **not guessed**: an R5 `position`, an empty discriminator set, a path outside the
  * subset, a slice that declares nothing at a discriminator path, a type the document does not state,
  * a reference that resolves to nothing, or a profile that was not supplied. The whole slicing is
@@ -476,28 +480,29 @@ function typedHolds(
   // An occurrence with nothing at the path is of no type there and conforms to no profile.
   const targets = walkTyped(instance, selfType, split, context);
   if (typeof targets === "string") return undecided(targets);
+  // A discriminator path selects one element (profiling.html); the reference validator's type test
+  // on a collection of more than one does not hold. A path that selects several nodes in one
+  // occurrence decides nothing, rather than matching when any one of them does.
+  if (targets.length > 1) return undecided(SLICE_UNCHECKED_REASONS.PATH_UNSUPPORTED);
+  const target = targets[0];
 
   if (kind === "type") {
-    const allowed = new Set(names.map(asSuffix));
-    let held = false;
-    for (const target of targets) {
-      if (target.type === undefined) return undecided(SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED);
-      if (allowed.has(target.type)) held = true;
-    }
-    return held;
+    if (target === undefined) return false;
+    if (target.type === undefined) return undecided(SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED);
+    return names.some((name) => asSuffix(name) === target.type);
   }
 
-  // profile: each target must be a resource, checked against the profiles the slice names.
+  // profile: the target must be a resource, checked against the profiles the slice names.
+  if (target === undefined) return false;
+  const { node } = target;
+  const resource = isComplex(node) && resourceType(node) !== undefined ? node : undefined;
+  if (resource === undefined) return undecided(SLICE_UNCHECKED_REASONS.TARGET_NOT_RESOURCE);
   let pending: SliceUncheckedReason | undefined;
-  for (const { node } of targets) {
-    const resource = isComplex(node) && resourceType(node) !== undefined ? node : undefined;
-    if (resource === undefined) return undecided(SLICE_UNCHECKED_REASONS.TARGET_NOT_RESOURCE);
-    for (const canonical of names) {
-      const answer =
-        context.conforms?.(resource, canonical) ?? SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
-      if (answer === "yes") return true;
-      if (answer !== "no") pending ??= answer;
-    }
+  for (const canonical of names) {
+    const answer =
+      context.conforms?.(resource, canonical) ?? SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
+    if (answer === "yes") return true;
+    if (answer !== "no") pending ??= answer;
   }
   return pending === undefined ? false : undecided(pending);
 }

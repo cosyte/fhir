@@ -49,7 +49,7 @@ plus the eleven modeled resource types: `Patient`, `Observation`, `DiagnosticRep
 `MedicationRequest`, `AllergyIntolerance`, `Immunization`, `MedicationStatement`, `Encounter`,
 `Procedure` and `DocumentReference`), a `type` or `profile` slicing discriminator whose answer the
 document does not hold (a reference that leaves the resource and its Bundle, a profile you did not
-supply), and the R5 `position` discriminator (each reported `PROFILE_SLICE_UNCHECKED` with its
+supply, a profile constraint no layer here enforces), and the R5 `position` discriminator (each reported `PROFILE_SLICE_UNCHECKED` with its
 reason, and the slices' own constraints are then not checked), FHIRPath outside the supported subset (reported
 `INVARIANT_UNCHECKED`, never passed), bundled terminology or US Core content, validation of R4B
 (`4.3.0`), R5 and DSTU2 content against its own version's definitions (such a document is read, since

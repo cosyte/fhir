@@ -397,6 +397,13 @@ const SLICING_PROFILES: readonly StructureDefinition[] = [
           path: "Observation.interpretation",
           binding: { strength: "required", valueSet: "http://example.org/ValueSet/fuzz-interp" },
         },
+        // Constraints no layer enforces: a nested check over a target carrying these is undecided.
+        { id: "Observation.id", path: "Observation.id", maxLength: 1 },
+        {
+          id: "Observation.code",
+          path: "Observation.code",
+          extension: [{ url: "http://example.org/StructureDefinition/fuzz-rule" }],
+        },
         {
           id: "Observation.value[x]",
           path: "Observation.value[x]",
@@ -480,6 +487,36 @@ const SLICING_PROFILES: readonly StructureDefinition[] = [
           ],
         },
         { id: "Bundle.entry:obs.fullUrl", path: "Bundle.entry.fullUrl", min: 1 },
+      ],
+    },
+  },
+  {
+    // A discriminator path that may select several nodes in one occurrence: it decides nothing then.
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/fuzz-bundle-contained",
+    type: "Bundle",
+    snapshot: {
+      element: [
+        { id: "Bundle", path: "Bundle" },
+        {
+          id: "Bundle.entry",
+          path: "Bundle.entry",
+          slicing: {
+            discriminator: [{ type: "type", path: "resource.hasMember.resolve()" }],
+            rules: "open",
+          },
+        },
+        { id: "Bundle.entry:held", path: "Bundle.entry", sliceName: "held" },
+        {
+          id: "Bundle.entry:held.resource.hasMember",
+          path: "Bundle.entry.resource.hasMember",
+          type: [
+            {
+              code: "Reference",
+              targetProfile: ["http://hl7.org/fhir/StructureDefinition/Observation"],
+            },
+          ],
+        },
       ],
     },
   },

@@ -10,6 +10,9 @@ import {
   type StructureDefinition,
   type ValidationIssue,
 } from "../src/index.js";
+import { SliceScope } from "../src/profiles/scope.js";
+import { constraintKinds } from "../src/profiles/validate-profile.js";
+import { builtInSchema } from "../src/validate/validate.js";
 import { req } from "./_util.js";
 
 /**
@@ -391,7 +394,24 @@ describe("the other layers of a nested profile check", () => {
     ]);
   });
 
-  it("decides past a weaker binding, which never decides conformance", () => {
+  it("decides past a preferred or example binding, which asks nothing of an instance", () => {
+    for (const strength of ["preferred", "example"]) {
+      const bound = patientQ([
+        {
+          id: "Patient.maritalStatus",
+          path: "Patient.maritalStatus",
+          binding: { strength, valueSet: "http://example.org/ValueSet/fake-marital" },
+        },
+      ]);
+      const result = validateResource(
+        bundleOf({ id: "fake-1", maritalStatus: { text: "fake status" } }),
+        { profiles: [bundleByProfile, bound] },
+      );
+      expect(unchecked(result.issues)).toEqual([]);
+    }
+  });
+
+  it("leaves undecided an extensible binding no layer checks", () => {
     const bound = patientQ([
       {
         id: "Patient.maritalStatus",
@@ -403,7 +423,9 @@ describe("the other layers of a nested profile check", () => {
       bundleOf({ id: "fake-1", maritalStatus: { text: "fake status" } }),
       { profiles: [bundleByProfile, bound] },
     );
-    expect(unchecked(result.issues)).toEqual([]);
+    expect(unchecked(result.issues)).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
+    ]);
   });
 
   it("leaves undecided an extension whose definition no layer checks", () => {
@@ -641,5 +663,394 @@ describe("an invariant on a slice a profile discriminator decides", () => {
         .filter((i) => i.code === "INVARIANT_VIOLATED")
         .map((i) => [i.constraint, i.expression]),
     ).toEqual([["fake-4", "Bundle.entry.search"]]);
+  });
+});
+
+describe("what the nested check may call conforming", () => {
+  /** A closed Bundle slicing on `entry` by the profile of its `resource`: slice `x`, required. */
+  const bundleBy = (type: string, target: string) =>
+    loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}bundle-${type}`,
+      type: "Bundle",
+      snapshot: {
+        element: [
+          { id: "Bundle", path: "Bundle" },
+          {
+            id: "Bundle.entry",
+            path: "Bundle.entry",
+            slicing: { discriminator: [{ type: "profile", path: "resource" }], rules: "closed" },
+          },
+          { id: "Bundle.entry:x", path: "Bundle.entry", sliceName: "x", min: 1, max: "1" },
+          {
+            id: "Bundle.entry:x.resource",
+            path: "Bundle.entry.resource",
+            type: [{ code: type, profile: [target] }],
+          },
+        ],
+      },
+    });
+  const entry = (resource: Record<string, unknown>) =>
+    parse({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [{ fullUrl: "urn:uuid:fake-1", resource }],
+    });
+  const profileOf = (type: string, name: string, elements: unknown[]) =>
+    loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}${name}`,
+      type,
+      snapshot: { element: [{ id: type, path: type }, ...elements] },
+    });
+  const UNDECIDED: [string, string][] = [
+    ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
+  ];
+  const observation = (rest: Record<string, unknown>) => ({
+    resourceType: "Observation",
+    id: "fake-o",
+    status: "final",
+    code: { text: "Synthetic test" },
+    ...rest,
+  });
+
+  it("leaves undecided a required binding to a base value set other than the schema's", () => {
+    // Every observation-status code is a DiagnosticReport status, so the profile narrows the codes
+    // the schema enumerates there: `partial` passes the schema and breaks the profile.
+    const narrowed = profileOf("DiagnosticReport", "dr-q", [
+      {
+        id: "DiagnosticReport.status",
+        path: "DiagnosticReport.status",
+        min: 1,
+        max: "1",
+        type: [{ code: "code" }],
+        binding: {
+          strength: "required",
+          valueSet: "http://hl7.org/fhir/ValueSet/observation-status",
+        },
+      },
+    ]);
+    const report = (status: string) =>
+      entry({
+        resourceType: "DiagnosticReport",
+        id: "fake-dr",
+        status,
+        code: { text: "Synthetic panel" },
+      });
+    const profiles = [bundleBy("DiagnosticReport", `${BASE}dr-q`), narrowed];
+    for (const status of ["partial", "final"]) {
+      const result = validateResource(report(status), { profiles });
+      expect(unchecked(result.issues)).toEqual(UNDECIDED);
+      expect(errors(result.issues)).toEqual([]);
+    }
+  });
+
+  it("decides past a required binding to exactly the value set the schema enumerates", () => {
+    const same = profileOf("DiagnosticReport", "dr-q", [
+      {
+        id: "DiagnosticReport.status",
+        path: "DiagnosticReport.status",
+        binding: {
+          strength: "required",
+          valueSet: "http://hl7.org/fhir/ValueSet/diagnostic-report-status|4.0.1",
+        },
+      },
+    ]);
+    const result = validateResource(
+      entry({
+        resourceType: "DiagnosticReport",
+        id: "fake-dr",
+        status: "partial",
+        code: { text: "Synthetic panel" },
+      }),
+      { profiles: [bundleBy("DiagnosticReport", `${BASE}dr-q`), same] },
+    );
+    expect(unchecked(result.issues)).toEqual([]);
+    expect(errors(result.issues)).toEqual([]);
+  });
+
+  it("leaves undecided a choice narrowed to a type the target's value is not", () => {
+    const quantityOnly = profileOf("Observation", "obs-q", [
+      {
+        id: "Observation.value[x]",
+        path: "Observation.value[x]",
+        min: 1,
+        max: "1",
+        type: [{ code: "Quantity" }],
+      },
+    ]);
+    const profiles = [bundleBy("Observation", `${BASE}obs-q`), quantityOnly];
+    const wrong = validateResource(entry(observation({ valueString: "fake" })), { profiles });
+    expect(unchecked(wrong.issues)).toEqual(UNDECIDED);
+    expect(errors(wrong.issues)).toEqual([]);
+    // A value of the type the profile names is decided, and fills the slice.
+    const right = validateResource(
+      entry(observation({ valueQuantity: { value: 1, unit: "mg" } })),
+      { profiles },
+    );
+    expect(unchecked(right.issues)).toEqual([]);
+    expect(errors(right.issues)).toEqual([]);
+  });
+
+  it("leaves undecided a maxLength, which no layer checks", () => {
+    const short = profileOf("Patient", "pat-ml", [
+      { id: "Patient.id", path: "Patient.id", maxLength: 3, type: [{ code: "id" }] },
+    ]);
+    const result = validateResource(entry({ resourceType: "Patient", id: "fake-long-id" }), {
+      profiles: [bundleBy("Patient", `${BASE}pat-ml`), short],
+    });
+    expect(unchecked(result.issues)).toEqual(UNDECIDED);
+    // Absent, it asks nothing of the target.
+    const absent = validateResource(entry({ resourceType: "Patient", gender: "other" }), {
+      profiles: [bundleBy("Patient", `${BASE}pat-ml`), short],
+    });
+    expect(unchecked(absent.issues)).toEqual([]);
+  });
+
+  it("leaves undecided a minValue or a maxValue, which no layer checks", () => {
+    for (const bound of [{ minValueInteger: 2 }, { maxValueInteger: 1 }]) {
+      const limited = profileOf("Patient", "pat-mv", [
+        { id: "Patient.multipleBirth[x]", path: "Patient.multipleBirth[x]", ...bound },
+      ]);
+      const result = validateResource(
+        entry({ resourceType: "Patient", id: "fake-1", multipleBirthInteger: 3 }),
+        { profiles: [bundleBy("Patient", `${BASE}pat-mv`), limited] },
+      );
+      expect(unchecked(result.issues)).toEqual(UNDECIDED);
+    }
+  });
+
+  it("leaves undecided a reference narrowed to a target profile", () => {
+    const toPatient = profileOf("Observation", "obs-s", [
+      {
+        id: "Observation.subject",
+        path: "Observation.subject",
+        min: 1,
+        max: "1",
+        type: [
+          { code: "Reference", targetProfile: ["http://hl7.org/fhir/StructureDefinition/Patient"] },
+        ],
+      },
+    ]);
+    const result = validateResource(
+      entry(observation({ subject: { reference: "Group/fake-g" } })),
+      { profiles: [bundleBy("Observation", `${BASE}obs-s`), toPatient] },
+    );
+    expect(unchecked(result.issues)).toEqual(UNDECIDED);
+    expect(errors(result.issues)).toEqual([]);
+  });
+
+  it("leaves undecided an invariant on a slice itself, which no layer evaluates", () => {
+    const sliced = profileOf("Patient", "pat-slice-inv", [
+      {
+        id: "Patient.identifier",
+        path: "Patient.identifier",
+        slicing: { discriminator: [{ type: "value", path: "system" }], rules: "open" },
+      },
+      {
+        id: "Patient.identifier:fake",
+        path: "Patient.identifier",
+        sliceName: "fake",
+        constraint: [{ key: "fake-9", severity: "error", expression: "value.exists()" }],
+      },
+      {
+        id: "Patient.identifier:fake.system",
+        path: "Patient.identifier.system",
+        fixedUri: "http://example.org/fake-ids",
+      },
+    ]);
+    const result = validateResource(
+      entry({
+        resourceType: "Patient",
+        id: "fake-1",
+        identifier: [{ system: "http://example.org/fake-ids" }],
+      }),
+      { profiles: [bundleBy("Patient", `${BASE}pat-slice-inv`), sliced] },
+    );
+    expect(unchecked(result.issues)).toEqual(UNDECIDED);
+  });
+
+  it("leaves undecided an element extension the model does not recognise", () => {
+    const extended = profileOf("Patient", "pat-ext", [
+      {
+        id: "Patient.gender",
+        path: "Patient.gender",
+        extension: [{ url: "http://example.org/StructureDefinition/fake-rule", valueString: "x" }],
+      },
+    ]);
+    const result = validateResource(entry({ resourceType: "Patient", gender: "other" }), {
+      profiles: [bundleBy("Patient", `${BASE}pat-ext`), extended],
+    });
+    expect(unchecked(result.issues)).toEqual(UNDECIDED);
+  });
+});
+
+describe("the kinds of constraint one element places on a target", () => {
+  /** The kinds of the element with `id` in a snapshot of `type`, against `resource`. */
+  const kindsOf = (
+    type: string,
+    resource: Record<string, unknown>,
+    elements: unknown[],
+    id: string,
+  ): string[] => {
+    const profile = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}kinds`,
+      type,
+      snapshot: { element: [{ id: type, path: type }, ...elements] },
+    });
+    const snapshot = req(profile.snapshot);
+    const target = parse({ resourceType: type, ...resource });
+    const scope = new SliceScope(target, type, snapshot);
+    const el = req(snapshot.find((e) => e.id === id));
+    return constraintKinds(el, type, snapshot, builtInSchema(type), scope);
+  };
+
+  it("reads a resource occurrence's own type against the types an element allows", () => {
+    const contained = (code: string) =>
+      kindsOf(
+        "Observation",
+        { contained: [{ resourceType: "Patient", id: "p1" }] },
+        [{ id: "Observation.contained", path: "Observation.contained", type: [{ code }] }],
+        "Observation.contained",
+      );
+    expect(contained("Patient")).toEqual(["type:code"]);
+    expect(contained("Resource")).toEqual(["type:code"]);
+    expect(contained("DomainResource")).toEqual(["type:code"]);
+    expect(contained("Organization")).toEqual(["type:unchecked"]);
+  });
+
+  it("reads a choice suffix against the types, spelled as a suffix spells them", () => {
+    const value = (codes: string[]) =>
+      kindsOf(
+        "Observation",
+        { valueDateTime: "2020-01-01" },
+        [
+          {
+            id: "Observation.value[x]",
+            path: "Observation.value[x]",
+            type: codes.map((code) => ({ code })),
+          },
+        ],
+        "Observation.value[x]",
+      );
+    expect(value(["dateTime"])).toEqual(["type:code"]);
+    expect(value(["string", "dateTime"])).toEqual(["type:code"]);
+    expect(value(["string"])).toEqual(["type:unchecked"]);
+  });
+
+  it("takes one type on an element that is not a choice as the structure layer's", () => {
+    const gender = (codes: string[]) =>
+      kindsOf(
+        "Patient",
+        { gender: "other" },
+        [{ id: "Patient.gender", path: "Patient.gender", type: codes.map((code) => ({ code })) }],
+        "Patient.gender",
+      );
+    expect(gender(["code"])).toEqual(["type:code"]);
+    expect(gender(["code", "string"])).toEqual(["type:unchecked"]);
+  });
+
+  it("names no type kind on the root element", () => {
+    expect(
+      kindsOf("Patient", {}, [], "Patient").concat(
+        kindsOf(
+          "Patient",
+          {},
+          [{ id: "Patient", path: "Patient", type: [{ code: "Patient" }] }],
+          "Patient",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("takes a binding as the schema's only at that value set and the R4 release", () => {
+    const status = (binding: Record<string, unknown>) =>
+      kindsOf(
+        "Observation",
+        { status: "final" },
+        [{ id: "Observation.status", path: "Observation.status", binding }],
+        "Observation.status",
+      );
+    const vs = "http://hl7.org/fhir/ValueSet/observation-status";
+    expect(status({ strength: "required", valueSet: vs })).toEqual(["binding:schema"]);
+    expect(status({ strength: "required", valueSet: `${vs}|4.0.1` })).toEqual(["binding:schema"]);
+    expect(status({ strength: "extensible", valueSet: vs })).toEqual(["binding:schema"]);
+    expect(status({ strength: "required", valueSet: `${vs}|4.0.0` })).toEqual([
+      "binding:unenforced",
+    ]);
+    expect(status({ strength: "required", valueSet: `${vs}-fake` })).toEqual([
+      "binding:unenforced",
+    ]);
+    expect(status({ strength: "required" })).toEqual(["binding:unenforced"]);
+    expect(status({ strength: "fake-strength", valueSet: vs })).toEqual(["binding:unenforced"]);
+    expect(status({ strength: "preferred", valueSet: `${vs}-fake` })).toEqual(["binding:advisory"]);
+    expect(status({ strength: "example", valueSet: `${vs}-fake` })).toEqual(["binding:advisory"]);
+  });
+
+  it("takes a slice's profile as the slicing's when a profile discriminator decides it", () => {
+    const slice = (path: string, type: Record<string, unknown>) =>
+      kindsOf(
+        "Observation",
+        { hasMember: [{ reference: "Observation/fake-o" }] },
+        [
+          {
+            id: "Observation.hasMember",
+            path: "Observation.hasMember",
+            slicing: { discriminator: [{ type: "profile", path }], rules: "open" },
+          },
+          {
+            id: "Observation.hasMember:m",
+            path: "Observation.hasMember",
+            sliceName: "m",
+            type: [{ code: "Reference", ...type }],
+          },
+        ],
+        "Observation.hasMember:m",
+      );
+    const target = { targetProfile: [`${BASE}fake-member`] };
+    const own = { profile: [`${BASE}fake-reference`] };
+    expect(slice("resolve()", target)).toEqual(["slicing", "type:code"]);
+    expect(slice("$this.resolve()", target)).toEqual(["slicing", "type:code"]);
+    expect(slice("$this", target)).toEqual(["type:targetProfile", "type:code"]);
+    expect(slice("$this", own)).toEqual(["slicing", "type:code"]);
+    expect(slice("", own)).toEqual(["slicing", "type:code"]);
+    expect(slice("resolve()", own)).toEqual(["type:profile", "type:code"]);
+    // Any resource at all is no narrowing.
+    expect(
+      slice("$this", { targetProfile: ["http://hl7.org/fhir/StructureDefinition/Resource"] }),
+    ).toEqual(["type:code"]);
+  });
+
+  it("takes an invariant on a slice as evaluated only when the sliced element carries it too", () => {
+    const sliced = (shared: Record<string, unknown>) =>
+      kindsOf(
+        "Patient",
+        { identifier: [{ system: "urn:fake" }] },
+        [
+          {
+            id: "Patient.identifier",
+            path: "Patient.identifier",
+            slicing: { discriminator: [{ type: "value", path: "system" }], rules: "open" },
+            constraint: [shared],
+          },
+          {
+            id: "Patient.identifier:s",
+            path: "Patient.identifier",
+            sliceName: "s",
+            constraint: [{ key: "fake-5", severity: "error", expression: "value.exists()" }],
+          },
+        ],
+        "Patient.identifier:s",
+      );
+    expect(sliced({ key: "fake-5", severity: "error", expression: "value.exists()" })).toEqual([
+      "constraint",
+    ]);
+    expect(sliced({ key: "fake-5", severity: "error", expression: "system.exists()" })).toEqual([
+      "constraint:slice",
+    ]);
+    expect(sliced({ key: "fake-6", severity: "error", expression: "value.exists()" })).toEqual([
+      "constraint:slice",
+    ]);
   });
 });

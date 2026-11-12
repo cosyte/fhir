@@ -233,3 +233,40 @@ describe("snapshot generation at its edges", () => {
     ]);
   });
 });
+
+describe("generateSnapshot: what the model does not read", () => {
+  it("keeps the base's and the differential's, each once", () => {
+    const load = (obj: unknown) =>
+      req(loadStructureDefinition(parseResource(JSON.stringify(obj)).resource));
+    const base = load({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/fake-base",
+      type: "Patient",
+      snapshot: {
+        element: [
+          { id: "Patient", path: "Patient" },
+          { id: "Patient.id", path: "Patient.id", maxLength: 64 },
+          { id: "Patient.gender", path: "Patient.gender" },
+        ],
+      },
+    });
+    const profile = load({
+      resourceType: "StructureDefinition",
+      url: "http://example.org/StructureDefinition/fake-derived",
+      type: "Patient",
+      baseDefinition: base.url,
+      differential: {
+        element: [
+          { id: "Patient.id", path: "Patient.id", maxLength: 3, minValueInteger: 1 },
+          { id: "Patient.gender", path: "Patient.gender", min: 1 },
+        ],
+      },
+    });
+    const snapshot = generateSnapshot(profile, (url) => (url === base.url ? base : undefined));
+    expect(snapshot.find((e) => e.id === "Patient.id")?.unmodeled).toEqual([
+      "maxLength",
+      "minValueInteger",
+    ]);
+    expect(snapshot.find((e) => e.id === "Patient.gender")?.unmodeled).toBeUndefined();
+  });
+});

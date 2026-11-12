@@ -55,6 +55,13 @@ export interface ElementSchema {
 export interface RequiredBinding {
   /** Only `"required"` bindings are enforced here; weaker strengths are the terminology layer's. */
   readonly strength: "required";
+  /**
+   * The canonical of the R4 value set whose codes {@link codes} enumerates, unversioned (the R4
+   * 4.0.1 release). A profile binding to this value set asks nothing the enumeration does not check;
+   * a binding to any other value set, even one whose codes are all among these, asks more. Absent
+   * on a binding that does not say which value set it enumerates.
+   */
+  readonly valueSet?: string;
   /** The complete enumerated code set. */
   readonly codes: readonly string[];
 }
@@ -118,7 +125,11 @@ const PATIENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 0,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...ADMINISTRATIVE_GENDER] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/administrative-gender",
+      codes: [...ADMINISTRATIVE_GENDER],
+    },
   },
   birthDate: { min: 0, max: 1, types: ["date"] },
   deceased: { min: 0, max: 1, types: ["boolean", "dateTime"] },
@@ -175,7 +186,11 @@ const OBSERVATION_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 1,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...OBSERVATION_STATUS] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/observation-status",
+      codes: [...OBSERVATION_STATUS],
+    },
   },
   category: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
   code: { min: 1, max: 1, types: ["CodeableConcept"] },
@@ -250,7 +265,11 @@ const DIAGNOSTIC_REPORT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 1,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...DIAGNOSTIC_REPORT_STATUS] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/diagnostic-report-status",
+      codes: [...DIAGNOSTIC_REPORT_STATUS],
+    },
   },
   category: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
   code: { min: 1, max: 1, types: ["CodeableConcept"] },
@@ -351,21 +370,33 @@ const MEDICATION_REQUEST_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 1,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...MEDICATION_REQUEST_STATUS] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/medicationrequest-status",
+      codes: [...MEDICATION_REQUEST_STATUS],
+    },
   },
   statusReason: { min: 0, max: 1, types: ["CodeableConcept"] },
   intent: {
     min: 1,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...MEDICATION_REQUEST_INTENT] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/medicationrequest-intent",
+      codes: [...MEDICATION_REQUEST_INTENT],
+    },
   },
   category: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
   priority: {
     min: 0,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...REQUEST_PRIORITY] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/request-priority",
+      codes: [...REQUEST_PRIORITY],
+    },
   },
   doNotPerform: { min: 0, max: 1, types: ["boolean"] },
   reported: { min: 0, max: 1, types: ["boolean", "Reference"] },
@@ -423,19 +454,31 @@ const ALLERGY_INTOLERANCE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 0,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...ALLERGY_INTOLERANCE_TYPE] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/allergy-intolerance-type",
+      codes: [...ALLERGY_INTOLERANCE_TYPE],
+    },
   },
   category: {
     min: 0,
     max: UNBOUNDED,
     types: ["code"],
-    binding: { strength: "required", codes: [...ALLERGY_INTOLERANCE_CATEGORY] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/allergy-intolerance-category",
+      codes: [...ALLERGY_INTOLERANCE_CATEGORY],
+    },
   },
   criticality: {
     min: 0,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...ALLERGY_INTOLERANCE_CRITICALITY] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/allergy-intolerance-criticality",
+      codes: [...ALLERGY_INTOLERANCE_CRITICALITY],
+    },
   },
   code: { min: 0, max: 1, types: ["CodeableConcept"] },
   patient: { min: 1, max: 1, types: ["Reference"] },
@@ -473,7 +516,11 @@ const IMMUNIZATION_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 1,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...IMMUNIZATION_STATUS] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/immunization-status",
+      codes: [...IMMUNIZATION_STATUS],
+    },
   },
   statusReason: { min: 0, max: 1, types: ["CodeableConcept"] },
   vaccineCode: { min: 1, max: 1, types: ["CodeableConcept"] },
@@ -538,7 +585,11 @@ const MEDICATION_STATEMENT_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 1,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...MEDICATION_STATEMENT_STATUS] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/medication-statement-status",
+      codes: [...MEDICATION_STATEMENT_STATUS],
+    },
   },
   statusReason: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },
   category: { min: 0, max: 1, types: ["CodeableConcept"] },
@@ -587,7 +638,11 @@ const ENCOUNTER_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 1,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...ENCOUNTER_STATUS] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/encounter-status",
+      codes: [...ENCOUNTER_STATUS],
+    },
   },
   statusHistory: { min: 0, max: UNBOUNDED, types: ["BackboneElement"] },
   class: { min: 1, max: 1, types: ["Coding"] },
@@ -646,7 +701,11 @@ const PROCEDURE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 1,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...EVENT_STATUS] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/event-status",
+      codes: [...EVENT_STATUS],
+    },
   },
   statusReason: { min: 0, max: 1, types: ["CodeableConcept"] },
   category: { min: 0, max: 1, types: ["CodeableConcept"] },
@@ -704,13 +763,21 @@ const DOCUMENT_REFERENCE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
     min: 1,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...DOCUMENT_REFERENCE_STATUS] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/document-reference-status",
+      codes: [...DOCUMENT_REFERENCE_STATUS],
+    },
   },
   docStatus: {
     min: 0,
     max: 1,
     types: ["code"],
-    binding: { strength: "required", codes: [...COMPOSITION_STATUS] },
+    binding: {
+      strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/composition-status",
+      codes: [...COMPOSITION_STATUS],
+    },
   },
   type: { min: 0, max: 1, types: ["CodeableConcept"] },
   category: { min: 0, max: UNBOUNDED, types: ["CodeableConcept"] },

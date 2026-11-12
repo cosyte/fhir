@@ -180,7 +180,7 @@ common ones: a `position` discriminator, which is not part of the R4 discriminat
 `profiles` (`profile-unavailable`); a `resolve()` whose reference points outside the resource's
 `contained` set and, for a Bundle, its entries (`target-unresolved`); a resource whose check
 against the slice's profile left something unevaluated, such as an invariant outside the FHIRPath
-subset (`profile-undecided`). The diagnostic text says "an unsupported discriminator" whatever the
+subset or a `maxLength` no layer checks (`profile-undecided`). The diagnostic text says "an unsupported discriminator" whatever the
 reason, so read `sliceReason`. The
 [current limits](./limits.md#verdicts-that-say-not-checked-rather-than-passing) list every reason.
 

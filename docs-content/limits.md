@@ -86,7 +86,9 @@ you treat any non-error finding as a pass, you will misread them.
   - `slice-unconstrained`: a slice that states nothing at a discriminator path (no fixed or pattern
     value, no cardinality, no type, no profile);
   - `path-unsupported`: a `type` or `profile` discriminator path outside dotted element names, `[x]`
-    choices, `$this` and a trailing `resolve()`, such as `ofType(Quantity)`;
+    choices, `$this` and a trailing `resolve()`, such as `ofType(Quantity)`, or one that selects
+    more than one node in an occurrence (a discriminator path selects one element, so several
+    decide nothing rather than matching when any one of them does);
   - `type-undetermined`: an occurrence whose type the document does not state (a `type`
     discriminator is decided from a choice element's suffix, `valueQuantity`, or a resource's
     `resourceType`), or a slice naming an abstract type such as `Resource`;
@@ -103,19 +105,25 @@ you treat any non-error finding as a pass, you will misread them.
     a warning decides nothing, and it is incomplete when it reports a slicing undecided
     (`PROFILE_SLICE_UNCHECKED`, `PROFILE_SLICE_NO_SLICING`), an invariant it could not evaluate
     (`INVARIANT_UNCHECKED`, such as `dom-3` over a resource that holds a contained resource), a
-    resource type with no schema here (`RESOURCE_NOT_MODELED`), or when the profile asks of an
-    element present in the resource something no layer checks: a `required` binding (other than a
-    base value set on a `code` element whose codes the schema enumerates) or a type `profile`, such
-    as an extension's definition.
+    resource type with no schema here (`RESOURCE_NOT_MODELED`), or when the profile places on an
+    element present in the resource a constraint of a kind no layer that ran enforces. The check
+    says "conforms" only when every such constraint is one of: a cardinality, a fixed or pattern
+    value, a slicing, an invariant on an element that is not itself a slice, a `required` or
+    `extensible` binding to exactly the R4 value set whose codes the schema enumerates for that
+    element, a `preferred` or `example` binding, must-support, or a type list the occurrence's own
+    type (a choice suffix or a `resourceType`) is read against. Anything else leaves it undecided: a
+    type list narrower than the occurrence's type, a type `profile` (an extension's definition, say)
+    or `targetProfile` the slicing does not itself decide, a binding to any other value set (even
+    one whose codes are all among the enumerated ones), an invariant on a slice itself,
+    `maxLength`, `minValue[x]`, `maxValue[x]`, `contentReference`, and any member or extension of
+    the element definition this library does not read.
 
   Two warts to know about. The finding's diagnostic text still says the slicing used "an
   unsupported discriminator" whatever the reason; read `sliceReason` for the reason. And a
   `resolve()` takes an absolute reference to its `Type/id` tail when no entry has that full URL, as
   Bundle reference resolution does everywhere in this library, so a reference to another server,
   `https://other.example.org/fhir/Patient/1`, reaches the Bundle's `Patient/1` entry even when that
-  entry has a different base, and a `profile` discriminator checks that entry. Where a `type` or
-  `profile` discriminator's path selects several nodes in one occurrence, the occurrence matches a
-  slice when any one of them does.
+  entry has a different base, and a `profile` discriminator checks that entry.
 - `PROFILE_SLICE_NO_SLICING`: a profile naming a slice (`Observation.component:coded`) under an
   element that declares no `slicing`, or that is missing from the snapshot. Nothing in the profile
   says which occurrences belong to the slice, so none is assigned to it, and the slice's own

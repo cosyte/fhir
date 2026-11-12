@@ -262,3 +262,103 @@ describe("loadStructureDefinition: shapes it reads leniently and parts it leaves
     expect(sd.snapshot).toEqual([{ id: "Observation", path: "Observation" }]);
   });
 });
+
+describe("what an element definition states that the model does not read", () => {
+  const elementOf = (element: Record<string, unknown>) =>
+    req(
+      loadSd({
+        resourceType: "StructureDefinition",
+        url: "http://example.org/StructureDefinition/fake-unmodeled",
+        type: "Patient",
+        snapshot: { element: [{ id: "Patient.x", path: "Patient.x", ...element }] },
+      })?.snapshot?.[0],
+    );
+
+  it("records nothing for what it reads and what only documents an element", () => {
+    const el = elementOf({
+      short: "fake",
+      definition: "fake",
+      comment: "fake",
+      requirements: "fake",
+      alias: ["fake"],
+      base: { path: "Patient.x", min: 0, max: "1" },
+      mapping: [{ identity: "fake", map: "fake" }],
+      isModifier: false,
+      isSummary: true,
+      condition: ["fake-1"],
+      representation: ["xmlAttr"],
+      label: "fake",
+      code: [{ code: "fake" }],
+      sliceIsConstraining: false,
+      meaningWhenMissing: "fake",
+      orderMeaning: "fake",
+      isModifierReason: "fake",
+      example: [{ label: "fake", valueString: "fake" }],
+      min: 0,
+      max: "1",
+      mustSupport: true,
+      fixedString: "fake",
+      patternString: "fake",
+      constraint: [{ key: "fake-1", severity: "error", expression: "true" }],
+      extension: [
+        { url: "http://hl7.org/fhir/StructureDefinition/elementdefinition-translatable" },
+        { url: "http://hl7.org/fhir/us/core/StructureDefinition/uscdi-requirement" },
+      ],
+      binding: {
+        strength: "required",
+        valueSet: "http://example.org/ValueSet/fake",
+        description: "fake",
+        extension: [
+          { url: "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName" },
+        ],
+      },
+      type: [
+        {
+          code: "string",
+          profile: ["http://example.org/StructureDefinition/fake"],
+          extension: [
+            { url: "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type" },
+          ],
+        },
+      ],
+    });
+    expect(el.unmodeled).toBeUndefined();
+  });
+
+  it("records every other member, extension and part of a binding or a type, once", () => {
+    const el = elementOf({
+      maxLength: 3,
+      minValueInteger: 1,
+      contentReference: "#Patient.y",
+      extension: [
+        { url: "http://example.org/StructureDefinition/fake-rule" },
+        { url: "http://example.org/StructureDefinition/fake-rule" },
+        { valueString: "no url" },
+      ],
+      modifierExtension: [{ url: "http://example.org/StructureDefinition/fake-modifier" }],
+      binding: {
+        strength: "extensible",
+        extension: [
+          { url: "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet" },
+        ],
+        additional: true,
+      },
+      type: [
+        { code: "Reference", aggregation: ["contained"] },
+        { code: "Reference", versioning: "specific" },
+      ],
+    });
+    expect(el.unmodeled).toEqual([
+      "maxLength",
+      "minValueInteger",
+      "contentReference",
+      "extension:http://example.org/StructureDefinition/fake-rule",
+      "extension:",
+      "modifierExtension",
+      "binding.extension:http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet",
+      "binding.additional",
+      "type.aggregation",
+      "type.versioning",
+    ]);
+  });
+});

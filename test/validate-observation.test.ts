@@ -194,6 +194,7 @@ describe("the built-in Observation element table", () => {
     const elements = buildRegistry()("Observation")?.elements ?? {};
     expect(elements["status"]?.binding).toEqual({
       strength: "required",
+      valueSet: "http://hl7.org/fhir/ValueSet/observation-status",
       codes: [...OBSERVATION_STATUS],
     });
     const bound = Object.entries(elements)

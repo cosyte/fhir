@@ -1844,3 +1844,110 @@ describe("type and profile discriminators: each of several", () => {
     ).toEqual([["CARDINALITY_MIN", "Observation.performer:patient"]]);
   });
 });
+
+describe("a type or profile discriminator path that selects more than one node", () => {
+  /** A closed Bundle slicing on `entry` at `resource.contained`, slice `x` typed or profiled. */
+  const byContained = (kind: "type" | "profile", type: Record<string, unknown>) =>
+    loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}bundle-contained-${kind}`,
+      type: "Bundle",
+      snapshot: {
+        element: [
+          { id: "Bundle", path: "Bundle" },
+          {
+            id: "Bundle.entry",
+            path: "Bundle.entry",
+            slicing: {
+              discriminator: [{ type: kind, path: "resource.contained" }],
+              rules: "closed",
+            },
+          },
+          { id: "Bundle.entry:x", path: "Bundle.entry", sliceName: "x", min: 0, max: "1" },
+          {
+            id: "Bundle.entry:x.resource.contained",
+            path: "Bundle.entry.resource.contained",
+            type: [type],
+          },
+        ],
+      },
+    });
+  const bundleWith = (contained: Record<string, unknown>[]) =>
+    parse({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [
+        {
+          fullUrl: "urn:uuid:fake-1",
+          resource: {
+            resourceType: "Patient",
+            id: "fake-p",
+            contained,
+            managingOrganization: { reference: "#o1" },
+            ...(contained.length > 1 ? { generalPractitioner: [{ reference: "#p1" }] } : {}),
+          },
+        },
+      ],
+    });
+  const organization = { resourceType: "Organization", id: "o1", name: "Fake Org" };
+  const practitioner = { resourceType: "Practitioner", id: "p1" };
+
+  it("decides nothing by type, instead of matching when any one node does", () => {
+    const result = validateResource(bundleWith([organization, practitioner]), {
+      profiles: [byContained("type", { code: "Organization" })],
+    });
+    expect(unchecked(result.issues)).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PATH_UNSUPPORTED],
+    ]);
+  });
+
+  it("decides nothing by profile, instead of matching when any one node conforms", () => {
+    // Two contained Observations: the first keeps the profile's fixed status, the second breaks it.
+    const finalOnly = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}fake-final-obs`,
+      type: "Observation",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          { id: "Observation.status", path: "Observation.status", fixedCode: "final" },
+        ],
+      },
+    });
+    const bundle = parse({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [
+        {
+          fullUrl: "urn:uuid:fake-1",
+          resource: {
+            ...anObservation,
+            id: "fake-root",
+            contained: [
+              { ...anObservation, id: "o1" },
+              { ...anObservation, id: "o2", status: "preliminary" },
+            ],
+            hasMember: [{ reference: "#o1" }, { reference: "#o2" }],
+          },
+        },
+      ],
+    });
+    const result = validateResource(bundle, {
+      profiles: [
+        byContained("profile", { code: "Observation", profile: [finalOnly.url] }),
+        finalOnly,
+      ],
+    });
+    expect(unchecked(result.issues)).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PATH_UNSUPPORTED],
+    ]);
+  });
+
+  it("still decides a path that selects one node", () => {
+    const typed = validateResource(bundleWith([organization]), {
+      profiles: [byContained("type", { code: "Organization" })],
+    });
+    expect(unchecked(typed.issues)).toEqual([]);
+    expect(typed.issues.filter((i) => i.severity === "error")).toEqual([]);
+  });
+});

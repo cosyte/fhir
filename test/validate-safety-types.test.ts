@@ -391,8 +391,10 @@ describe("required-strength bindings are carried for code primitives and for not
       for (const element of onCode) {
         const codes = R4.valueSets[element.binding?.valueSet ?? ""]?.codes;
         expect(codes, `${type}.${element.name}: no resolved value set`).toBeDefined();
+        // The value set the codes enumerate is named, unversioned, exactly as R4 binds it.
         expect(table[element.name]?.binding, `${type}.${element.name}`).toEqual({
           strength: "required",
+          valueSet: element.binding?.valueSet.replace(/\|4\.0\.1$/u, ""),
           codes,
         });
       }

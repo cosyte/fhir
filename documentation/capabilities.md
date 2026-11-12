@@ -761,8 +761,12 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   entries: the resource is checked against the profile the slice names, taken from the supplied
   `profiles` or from `resolveBase`, with every layer `validateResource` runs (the profile's own
   invariants and the base constraints among them): an error there means it does not conform, and a
-  check that left something unevaluated (an invariant, a slicing, a required binding or type profile
-  no layer checks) decides nothing. A slicing that
+  check that left something unevaluated decides nothing: an invariant or a slicing it could not
+  decide, or a constraint on an element present in the resource of a kind no layer that ran
+  enforces (a narrowed type, a type `profile` or `targetProfile`, a binding to a value set other
+  than the one the schema enumerates there, `maxLength`, `minValue[x]`, `maxValue[x]`, an invariant
+  on a slice itself, anything the model does not read). A discriminator path that selects more
+  than one node in an occurrence decides nothing either. A slicing that
   cannot be decided is reported `PROFILE_SLICE_UNCHECKED` (`information`) with a `sliceReason`
   (`SLICE_UNCHECKED_REASONS`: the `position` discriminator, a reference that leaves the closure, a
   profile not supplied, a type the document does not state, and the rest): **never silently
