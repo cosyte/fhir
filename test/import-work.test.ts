@@ -74,11 +74,9 @@ const BUILT_AT_IMPORT: readonly string[] = [
   "safety/status.ts NO_MODEL",
   "safety/status.ts NO_NODES",
   "safety/status.ts NO_PROPERTIES",
-  "safety/status.ts POSITIONS_BY_NAME",
   "terminology/systems.ts KNOWN_SYSTEMS",
   "validate/base-invariants.ts BASE_CONSTRAINT_TYPES",
   "validate/base-invariants.ts DECIDED_DIRECTLY",
-  "validate/base-invariants.ts EXPRESSION_OF",
   "validate/narrative.ts ACTIVE_ELEMENTS",
   "validate/narrative.ts ALLOWED_ATTRIBUTES",
   "validate/narrative.ts ALLOWED_ELEMENT_ATTRIBUTES",
@@ -163,7 +161,7 @@ describe.skipIf(SOURCE_IS_INSTRUMENTED)("what importing the package builds", () 
     expect(modules).not.toContain("arbitraries/index.ts");
   });
 
-  it("builds only what it built before: the JSON reader and the safety walk build theirs on first use", () => {
+  it("builds only what it built before: the JSON reader, the safety walk and the base constraints build theirs on first use", () => {
     const built = [...loadedModules()].flatMap(([path, source]) => builtAtImport(path, source));
     expect(built.sort()).toEqual([...BUILT_AT_IMPORT].sort());
   });
@@ -189,5 +187,80 @@ describe.skipIf(SOURCE_IS_INSTRUMENTED)("what importing the package builds", () 
       "probe.ts B",
       "probe.ts <statement at line 8>",
     ]);
+  });
+});
+
+/**
+ * The large tables the modules write out at their top level. A literal there costs every import
+ * twice, even though it calls nothing: the engine compiles all of it, since a module's top level is
+ * compiled whole, and then builds every object and array in it. A table inside a function is only
+ * scanned until the function first runs. The tables below are exported, so a caller reads them as
+ * values; every other table is written inside a function, called the first time a caller needs it.
+ * Four of the six are public codes. The other two are read where they stand: the derived-name
+ * shapes give a type its members, and the element definitions are one line of text per context,
+ * which a walk reads into maps on first use.
+ */
+const TABLES_AT_IMPORT: readonly string[] = [
+  "codec/issues.ts ISSUE_CODES",
+  "codec/serialize-guard.ts SERIALIZE_ERROR_CODES",
+  "model/path.ts DERIVED_NAME_SHAPES",
+  "safety/element-definitions.ts ELEMENT_DEFINITIONS",
+  "validate/issues.ts ISSUE_TYPES",
+  "validate/issues.ts VALIDATION_CODES",
+];
+
+/** The size, in characters of source, from which a top-level literal counts as a table. */
+const TABLE_CHARACTERS = 1000;
+
+/** The initializer under any `as`, `satisfies` or parentheses around it. */
+function unwrapped(node: ts.Expression): ts.Expression {
+  if (
+    ts.isAsExpression(node) ||
+    ts.isSatisfiesExpression(node) ||
+    ts.isParenthesizedExpression(node)
+  ) {
+    return unwrapped(node.expression);
+  }
+  return node;
+}
+
+/** Every top-level object or array literal of `source` of the size of a table, as `module name`. */
+function tablesAtImport(path: string, source: ts.SourceFile): string[] {
+  const out: string[] = [];
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (declaration.initializer === undefined) continue;
+      const value = unwrapped(declaration.initializer);
+      if (!ts.isObjectLiteralExpression(value) && !ts.isArrayLiteralExpression(value)) continue;
+      if (value.getEnd() - value.getStart(source) < TABLE_CHARACTERS) continue;
+      out.push(`${path} ${declaration.name.getText(source)}`);
+    }
+  }
+  return out;
+}
+
+describe.skipIf(SOURCE_IS_INSTRUMENTED)("the tables importing the package writes out", () => {
+  it("are only the exported ones: the schema, constraint and issue tables are made on first use", () => {
+    const tables = [...loadedModules()].flatMap(([path, source]) => tablesAtImport(path, source));
+    expect(tables.sort()).toEqual([...TABLES_AT_IMPORT].sort());
+  });
+
+  it("counts a large literal at the top level, and none inside a function or under the size", () => {
+    const big = `{ ${Array.from({ length: 200 }, (_, i) => `k${String(i)}: ${String(i)}`).join(", ")} }`;
+    const source = ts.createSourceFile(
+      "probe.ts",
+      [
+        `const A = ${big};`,
+        `const B = ${big} as const;`,
+        `const C = [${big}];`,
+        `function d() { return ${big}; }`,
+        `const E = () => (${big});`,
+        "const F = { small: 1 };",
+      ].join("\n"),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    expect(tablesAtImport("probe.ts", source)).toEqual(["probe.ts A", "probe.ts B", "probe.ts C"]);
   });
 });

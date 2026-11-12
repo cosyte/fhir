@@ -80,9 +80,12 @@ export function isPrimitiveType(name: string): name is PrimitiveType {
  * than here. `integer64` shares the `integer` pattern (a 64-bit-range signed integer; the model
  * preserves the exact magnitude, so only the lexical shape is checked here).
  *
+ * Written inside a function and made the first time a value is checked ({@link patternOf}), so an
+ * import that never validates does not compile or build it.
+ *
  * @internal
  */
-const PATTERNS: Partial<Record<PrimitiveType, RegExp>> = {
+const PATTERNS = (): Partial<Record<PrimitiveType, RegExp>> => ({
   integer: /^([0]|[-+]?[1-9][0-9]*)$/u,
   integer64: /^([0]|[-+]?[1-9][0-9]*)$/u,
   unsignedInt: /^([0]|[1-9][0-9]*)$/u,
@@ -102,7 +105,16 @@ const PATTERNS: Partial<Record<PrimitiveType, RegExp>> = {
   dateTime:
     /^([0-9]([0-9]([0-9][1-9]|[1-9]0)|[1-9]00)|[1-9]000)(-(0[1-9]|1[0-2])(-(0[1-9]|[1-2][0-9]|3[0-1])(T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\.[0-9]+)?(Z|[+-]((0[0-9]|1[0-3]):[0-5][0-9]|14:00)))?)?)?$/u,
   time: /^([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\.[0-9]+)?$/u,
-};
+});
+
+/** The patterns, made on first use and kept. */
+let patternTable: Partial<Record<PrimitiveType, RegExp>> | undefined;
+
+/** The pattern of a primitive datatype, from the table made on first use. */
+function patternOf(datatype: PrimitiveType): RegExp | undefined {
+  patternTable ??= PATTERNS();
+  return patternTable[datatype];
+}
 
 /** The FHIR `string`/`markdown` constraint: 1..1048576 chars, only tab/CR/LF among controls. */
 const STRING_PATTERN = /^[ \r\n\t\S]+$/u;
@@ -173,7 +185,7 @@ export function validatePrimitiveValue(
     return text.length <= STRING_MAX_LENGTH && STRING_PATTERN.test(text) ? "ok" : "invalid";
   }
 
-  const pattern = PATTERNS[datatype];
+  const pattern = patternOf(datatype);
   /* v8 ignore next -- unreachable: PATTERNS covers every primitive not answered above */
   if (pattern === undefined) return "ok";
   return pattern.test(lexicalForm(value)) ? "ok" : "invalid";

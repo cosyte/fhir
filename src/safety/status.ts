@@ -2029,8 +2029,17 @@ interface ResourcePosition {
   readonly elements: string;
 }
 
+/** {@link RESOURCE_POSITIONS} keyed by the last element name, made on first use and kept. */
+let positionsByName: ReadonlyMap<string, readonly ResourcePosition[]> | undefined;
+
 /** {@link RESOURCE_POSITIONS}, keyed by the last element name, so a walk asks one map per member. */
-const POSITIONS_BY_NAME: ReadonlyMap<string, readonly ResourcePosition[]> = (() => {
+function positionsNamed(name: string): readonly ResourcePosition[] | undefined {
+  positionsByName ??= positionsByLastName();
+  return positionsByName.get(name);
+}
+
+/** Build the map {@link positionsNamed} reads. */
+function positionsByLastName(): ReadonlyMap<string, readonly ResourcePosition[]> {
   const byName = new Map<string, ResourcePosition[]>();
   for (const position of RESOURCE_POSITIONS) {
     const segments = position.split(".");
@@ -2040,7 +2049,7 @@ const POSITIONS_BY_NAME: ReadonlyMap<string, readonly ResourcePosition[]> = (() 
     byName.set(name, list);
   }
   return byName;
-})();
+}
 
 /**
  * The element path `elements` inside a `type` root, with every repeat of
@@ -2074,7 +2083,7 @@ function foldRepeats(type: string, elements: string): string {
  * positions of each.
  */
 function isResourcePosition(scope: RootScope, name: string): boolean {
-  const candidates = POSITIONS_BY_NAME.get(name);
+  const candidates = positionsNamed(name);
   if (candidates === undefined) return false;
   const { types, elements } = scope;
   for (const position of candidates) {

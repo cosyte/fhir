@@ -207,8 +207,17 @@ and the set of types with a resource position below their top level are made on 
 validation that needs them. `test/import-work.test.ts` lists every declaration at the top level of
 the modules the package loads that calls a function or makes an object, and fails on a new one: a
 table, buffer or derived set is made on first use instead, or the change that adds it to the list
-makes the case for it. Most of what is left of the import is the time Node.js takes to compile the
-file itself, which grows with the code in it.
+makes the case for it. The validator's tables are made on first use too: the element table of each
+resource type it models, the base constraints, the patterns of the primitive types, and the issue
+type and diagnostic line of each validation code are written inside functions, which Node.js scans
+at import but compiles and runs only on the first validation that needs them. The same test lists
+every large table still written out at the top level, and fails on a new one.
+
+Most of what is left of the import is the time Node.js takes to compile the file itself, which
+grows with the size of the file. The published files leave out whitespace for that reason, and
+nothing else: names and syntax stay as written, so a stack trace into the package still names its
+functions, at a column on a long line. [Troubleshooting](./troubleshooting.md#a-stack-trace-points-into-one-long-line)
+says how to read one.
 
 `pnpm check:cold-import` starts a new Node.js process twenty times, each timing one
 `await import()` of the built `dist/index.mjs` with `performance.now()`, interleaved with imports
