@@ -201,6 +201,15 @@ parsed on the first validation, once, and kept. If a parse fails for a reason ot
 expression itself, such as the stack running out, that validation reports the constraint
 `INVARIANT_UNCHECKED`, nothing is kept, and the next validation parses it again.
 
+The same holds for the tables the JSON reader and the safety walk keep: the reader's buffers for
+the member names of a small object, the walk's lists for the resource types documents write most,
+and the set of types with a resource position below their top level are made on the first read or
+validation that needs them. `test/import-work.test.ts` lists every declaration at the top level of
+the modules the package loads that calls a function or makes an object, and fails on a new one: a
+table, buffer or derived set is made on first use instead, or the change that adds it to the list
+makes the case for it. Most of what is left of the import is the time Node.js takes to compile the
+file itself, which grows with the code in it.
+
 `pnpm check:cold-import` starts a new Node.js process twenty times, each timing one
 `await import()` of the built `dist/index.mjs` with `performance.now()`, interleaved with imports
 of an empty module so a slow runner shows as a slow empty import, and fails when the median is over

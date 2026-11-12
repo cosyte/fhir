@@ -121,11 +121,16 @@ import {
   type FhirIssue,
 } from "./issues.js";
 import {
+  isPlainObjectAt,
   lazyAt,
   rawJsonText,
   readJsonTape,
   releaseJsonTape,
-  tapeReader,
+  stringAt,
+  tapeAfter,
+  tapeCount,
+  tapeIsTrue,
+  tapeType,
   type JsonTape,
   type RawArray,
   type RawJson,
@@ -750,7 +755,7 @@ function buildComplex(obj: RawObject, at: Trail, issues: FhirIssue[], root = fal
 
 /**
  * {@link buildComplex} for the object whose token is at `index` of a tape a read of text made,
- * built straight from the tape. A plain object (see {@link isPlain}) is read member by member with
+ * built straight from the tape. A plain object (see {@link isPlainObjectAt}) is read member by member with
  * no raw node made for it: a string or boolean member becomes its primitive, an object member is
  * built the same way, and an array of strings and booleans or of objects is read item by item.
  * Anything else, and an object that is not plain, is built from {@link lazyAt}'s tree by the same
@@ -763,31 +768,31 @@ function buildComplexAt(
   issues: FhirIssue[],
   root = false,
 ): FhirComplex {
-  if (!tapeReader.isPlainObject(tape, index)) {
+  if (!isPlainObjectAt(tape, index)) {
     return buildComplex(lazyAt(tape, index) as RawObject, at, issues, root);
   }
-  const count = tapeReader.count(tape, index);
+  const count = tapeCount(tape, index);
   let trail = at;
   if (root) {
     let key = index + 1;
     for (let m = 0; m < count; m++) {
       const value = key + 1;
-      if (tapeReader.key(tape, key) === "resourceType") {
-        if (tapeReader.type(tape, value) === "str") {
-          trail = new Trail(rootPath(tapeReader.string(tape, value)));
+      if (stringAt(tape, key) === "resourceType") {
+        if (tapeType(tape, value) === "str") {
+          trail = new Trail(rootPath(stringAt(tape, value)));
         }
         break;
       }
-      key = tapeReader.after(tape, value);
+      key = tapeAfter(tape, value);
     }
   }
   const properties = new Array<FhirProperty>(count);
   let key = index + 1;
   for (let m = 0; m < count; m++) {
-    const name = tapeReader.key(tape, key);
+    const name = stringAt(tape, key);
     const value = key + 1;
     properties[m] = { name, value: buildMemberAt(tape, value, name, trail, issues) };
-    key = tapeReader.after(tape, value);
+    key = tapeAfter(tape, value);
   }
   return complex(properties);
 }
@@ -800,9 +805,9 @@ function buildMemberAt(
   trail: Trail,
   issues: FhirIssue[],
 ): FhirNode {
-  const type = tapeReader.type(tape, index);
-  if (type === "str") return primitive(tapeReader.string(tape, index), NO_META);
-  if (type === "bool") return primitive(tapeReader.isTrue(tape, index), NO_META);
+  const type = tapeType(tape, index);
+  if (type === "str") return primitive(stringAt(tape, index), NO_META);
+  if (type === "bool") return primitive(tapeIsTrue(tape, index), NO_META);
   trail.child(name);
   let node: FhirNode;
   if (type === "obj") node = buildComplexAt(tape, index, trail, issues);
@@ -818,14 +823,14 @@ function buildMemberAt(
  * complex nodes, each read from the tape; any other array is built from {@link lazyAt}'s tree.
  */
 function buildArrayAt(tape: JsonTape, index: number, trail: Trail, issues: FhirIssue[]): FhirNode {
-  const count = tapeReader.count(tape, index);
-  const first = count === 0 ? undefined : tapeReader.type(tape, index + 1);
+  const count = tapeCount(tape, index);
+  const first = count === 0 ? undefined : tapeType(tape, index + 1);
   let plain = first === "str" || first === "bool" || first === "obj";
   let item = index + 1;
   for (let i = 0; plain && i < count; i++) {
-    const type = tapeReader.type(tape, item);
+    const type = tapeType(tape, item);
     plain = first === "obj" ? type === "obj" : type === "str" || type === "bool";
-    item = tapeReader.after(tape, item);
+    item = tapeAfter(tape, item);
   }
   if (!plain) return buildNode(lazyAt(tape, index), undefined, trail, issues);
   const items = new Array<FhirNode>(count);
@@ -835,12 +840,12 @@ function buildArrayAt(tape: JsonTape, index: number, trail: Trail, issues: FhirI
       trail.index(i);
       items[i] = buildComplexAt(tape, item, trail, issues);
       trail.pop();
-    } else if (tapeReader.type(tape, item) === "str") {
-      items[i] = primitive(tapeReader.string(tape, item), NO_META);
+    } else if (tapeType(tape, item) === "str") {
+      items[i] = primitive(stringAt(tape, item), NO_META);
     } else {
-      items[i] = primitive(tapeReader.isTrue(tape, item), NO_META);
+      items[i] = primitive(tapeIsTrue(tape, item), NO_META);
     }
-    item = tapeReader.after(tape, item);
+    item = tapeAfter(tape, item);
   }
   return list(items);
 }
@@ -870,7 +875,7 @@ export function parseResource(input: string | RawJson): ReadResult {
   // read (see buildComplexAt). Neither the tape nor such a tree outlives this call.
   const tape = typeof input === "string" ? readJsonTape(input, true) : undefined;
   try {
-    const type = tape === undefined ? (input as RawJson).t : tapeReader.type(tape, 0);
+    const type = tape === undefined ? (input as RawJson).t : tapeType(tape, 0);
     if (type !== "obj") {
       throw new FhirCodecError(
         FATAL_CODES.MALFORMED_JSON,
