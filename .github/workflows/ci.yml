@@ -160,64 +160,6 @@ jobs:
           (cd "${base}" && pnpm install --frozen-lockfile && pnpm build)
           pnpm check:cold-import --base "${base}/dist/index.mjs"
 
-  # Temporary, reverted before merge: ten more readings of the cold import on ten runners, each
-  # beside the build before the lazy reader (997d81d) and beside the pull request's base.
-  cold-import-repeat:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        attempt: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - name: Cold import, beside the build before the lazy reader and beside the base
-        env:
-          BEFORE_SHA: 997d81ddd1e060686e5964dfc482483f7737a106
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in BEFORE_SHA BASE_SHA; do
-            sha="${!name}"
-            tree="${RUNNER_TEMP}/${name}"
-            git fetch --no-tags --depth=1 origin "${sha}"
-            git worktree add --detach "${tree}" "${sha}"
-            (cd "${tree}" && pnpm install --frozen-lockfile && pnpm build)
-          done
-          # A measurement only: this tree bundled by esbuild as it is, and with its whitespace taken
-          # out, so the two differ in that alone.
-          esbuild_main="$(find node_modules/.pnpm -path '*/node_modules/esbuild/lib/main.js' | head -1)"
-          for variant in plain ws; do
-            node -e '
-              const [main, out, ws] = process.argv.slice(1);
-              import(main).then(({ build }) => build({
-                entryPoints: ["src/index.ts"], bundle: true, format: "esm", platform: "node",
-                target: "es2023", outfile: out, minifyWhitespace: ws === "ws",
-              }));
-            ' "${PWD}/${esbuild_main}" "${RUNNER_TEMP}/${variant}/index.mjs" "${variant}"
-          done
-          wc -c dist/index.mjs "${RUNNER_TEMP}/plain/index.mjs" "${RUNNER_TEMP}/ws/index.mjs"
-          status=0
-          echo "beside ${BEFORE_SHA}:"
-          pnpm check:cold-import --base "${RUNNER_TEMP}/BEFORE_SHA/dist/index.mjs" || status=1
-          echo "beside ${BASE_SHA}:"
-          pnpm check:cold-import --base "${RUNNER_TEMP}/BASE_SHA/dist/index.mjs" || status=1
-          echo "the plain esbuild bundle (read as dist/index.mjs) beside the same bundle without whitespace:"
-          cp "${RUNNER_TEMP}/plain/index.mjs" dist/index.mjs
-          node scripts/check-cold-import.mjs --base "${RUNNER_TEMP}/ws/index.mjs" || true
-          exit "${status}"
-
   # The house checks from @cosyte/script-utils (README, CLAUDE.md card, catalog), the
   # @cosyte/process wiring check (the five delegating scripts and cosyte-process.config.json), and
   # the two docs checks. `pnpm check:docs-content` (cosyte-docs-content, @cosyte/script-utils)
