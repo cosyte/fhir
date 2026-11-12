@@ -759,7 +759,10 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
   `profile` discriminator is decided for a resource held in place (`contained`, a Bundle entry's
   `resource`) or reached by `resolve()` through the resource's `contained` set or, for a Bundle, its
   entries: the resource is checked against the profile the slice names, taken from the supplied
-  `profiles` or from `resolveBase`, and an error there means it does not conform. A slicing that
+  `profiles` or from `resolveBase`, with every layer `validateResource` runs (the profile's own
+  invariants and the base constraints among them): an error there means it does not conform, and a
+  check that left something unevaluated (an invariant, a slicing, a required binding or type profile
+  no layer checks) decides nothing. A slicing that
   cannot be decided is reported `PROFILE_SLICE_UNCHECKED` (`information`) with a `sliceReason`
   (`SLICE_UNCHECKED_REASONS`: the `position` discriminator, a reference that leaves the closure, a
   profile not supplied, a type the document does not state, and the rest): **never silently

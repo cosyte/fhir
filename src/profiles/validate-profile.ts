@@ -34,9 +34,10 @@
  * resource held in place (`contained`, a Bundle entry) or reached by `resolve()` through the
  * resource's `contained` set or, for a Bundle, its entries: the resource is checked against the
  * profile the slice names, found in {@link ProfileOptions.profiles} or through
- * {@link ProfileOptions.resolve}, with this same layer. An error there means it does not conform; a
- * clean check with nothing unchecked inside means it does; anything else leaves the slicing
- * unchecked.
+ * {@link ProfileOptions.resolve}, with every layer `validateResource` runs (the profile's own
+ * invariants and the base constraints among them). An error there means it does not conform; a
+ * clean check with nothing unchecked inside, and nothing the profile asks that no layer checks (a
+ * required binding, a type profile), means it does; anything else leaves the slicing unchecked.
  *
  * Every finding is **value-free**, a code, a severity, and a FHIRPath location, never a value.
  * **Deferred:** binding enforcement from profile bindings (the terminology layer already covers
@@ -62,7 +63,8 @@ import {
   type ContainedIndex,
 } from "../bundle/references.js";
 import { primitiveString } from "../safety/codes.js";
-import { UNBOUNDED } from "../validate/schema.js";
+import { UNBOUNDED, type ResourceSchema } from "../validate/schema.js";
+import { builtInSchema, conformanceIssues } from "../validate/validate.js";
 import {
   ISSUE_SEVERITIES,
   SLICE_UNCHECKED_REASONS,
@@ -168,24 +170,38 @@ function environmentIn(
     const inner = [...closure.contained.byId.values()].includes(target)
       ? closure
       : { ...closure, contained: containedIndex(target) };
-    let issues: ValidationIssue[];
+    const environment = environmentIn(inner, options, depth + 1, state);
+    let issues: readonly ValidationIssue[];
+    let leftOut: boolean;
     try {
-      issues = profileIssues(
-        target,
-        profile,
-        options,
-        environmentIn(inner, options, depth + 1, state),
-      );
+      // Every layer validateResource runs, the profile's own invariants among them, so a target is
+      // judged against the slice's profile exactly as it would be validated against it alone.
+      issues = conformanceIssues(target, profile, options.resolve, environment);
+      leftOut = checksLeftOut(target, profile, options, environment);
     } catch (error) {
       // Any other throw (a caller's resolver failing, say) propagates exactly as it does unnested.
       if (!(error instanceof FhirProfileError)) throw error;
       // A profile whose snapshot cannot be generated was not available to check against.
       return SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
     }
-    if (issues.some((i) => i.severity === ISSUE_SEVERITIES.ERROR)) return "no";
-    const incomplete = issues.some(
-      (i) => i.code === "PROFILE_SLICE_UNCHECKED" || i.code === "PROFILE_SLICE_NO_SLICING",
-    );
+    if (
+      issues.some(
+        (i) => i.severity === ISSUE_SEVERITIES.ERROR || i.severity === ISSUE_SEVERITIES.FATAL,
+      )
+    ) {
+      return "no";
+    }
+    // Something the profile asks of the target that was not evaluated: a slicing, an invariant, a
+    // resource type with no schema, a binding or a type profile no layer checks.
+    const incomplete =
+      leftOut ||
+      issues.some(
+        (i) =>
+          i.code === "PROFILE_SLICE_UNCHECKED" ||
+          i.code === "PROFILE_SLICE_NO_SLICING" ||
+          i.code === "INVARIANT_UNCHECKED" ||
+          i.code === "RESOURCE_NOT_MODELED",
+      );
     return incomplete ? SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED : "yes";
   };
 
@@ -229,6 +245,55 @@ function environmentIn(
   };
 }
 
+/** The base FHIR value sets, the only ones the schema's enumerated `code` bindings stand for. */
+const CORE_VALUE_SETS = "http://hl7.org/fhir/ValueSet/";
+
+/**
+ * Whether the profile asks something of the target that no validation layer checks: a `required`
+ * binding the schema's enumerated codes do not stand for, or a type `profile` (an extension's
+ * definition, a datatype or resource profile) on an element present in the target. Either leaves
+ * conformance to the profile undecided: the official validator would check it, and a "yes" here
+ * would be asserted without it.
+ */
+function checksLeftOut(
+  target: FhirComplex,
+  profile: StructureDefinition,
+  options: ProfileOptions,
+  environment: SliceEnvironment,
+): boolean {
+  const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
+  const scope = new SliceScope(target, rootPath(profile.type), snapshot, environment);
+  const schema = builtInSchema(profile.type);
+  return snapshot.some(
+    (el) =>
+      el.path !== profile.type &&
+      (typeProfiled(el) || bindingLeftOut(el, profile.type, schema)) &&
+      scope.occurrences(el).length > 0,
+  );
+}
+
+/** Whether an element constrains one of its types to a profile (`type.profile`). */
+function typeProfiled(el: ElementDefinition): boolean {
+  return (el.type ?? []).some((t) => (t.profile ?? []).length > 0);
+}
+
+/**
+ * Whether an element carries a `required` binding no layer checks. The schema checks a resource's
+ * direct `code` element against the enumerated codes of its base binding; a profile binding there
+ * to a base value set is taken as that one. Any other required binding is left out.
+ */
+function bindingLeftOut(
+  el: ElementDefinition,
+  type: string,
+  schema: ResourceSchema | undefined,
+): boolean {
+  const binding = el.binding;
+  if (binding?.strength !== "required") return false;
+  const name = el.path.slice(type.length + 1);
+  const enumerated = el.path === `${type}.${name}` && schema?.elements[name]?.binding !== undefined;
+  return !(enumerated && (binding.valueSet ?? "").startsWith(CORE_VALUE_SETS));
+}
+
 /**
  * Collect every profile-conformance finding for a resource validated against one profile.
  *
@@ -251,11 +316,21 @@ export function collectProfileIssues(
   profile: StructureDefinition,
   options: ProfileOptions = {},
 ): ValidationIssue[] {
-  return profileIssues(resource, profile, options, sliceEnvironment(resource, options));
+  return profileIssuesIn(resource, profile, options, sliceEnvironment(resource, options));
 }
 
-/** {@link collectProfileIssues} in a given slice environment (a nested profile check reuses its closure). */
-function profileIssues(
+/**
+ * {@link collectProfileIssues} in a given slice environment (a nested profile check reuses its
+ * closure).
+ *
+ * @param resource - The resource model.
+ * @param profile - The profile to validate against.
+ * @param options - The supplied profile set and base resolver.
+ * @param environment - The slice environment the profile's slicings are decided in.
+ * @returns The value-free profile findings.
+ * @internal
+ */
+export function profileIssuesIn(
   resource: FhirComplex,
   profile: StructureDefinition,
   options: ProfileOptions,

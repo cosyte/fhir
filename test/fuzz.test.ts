@@ -377,7 +377,26 @@ const SLICING_PROFILES: readonly StructureDefinition[] = [
     type: "Observation",
     snapshot: {
       element: [
-        { id: "Observation", path: "Observation" },
+        {
+          id: "Observation",
+          path: "Observation",
+          // A nested profile check runs these too: an error one decides, a warning one does not,
+          // and an unevaluable one leaves the check undecided.
+          constraint: [
+            { key: "fuzz-1", severity: "error", expression: "code.exists()" },
+            { key: "fuzz-2", severity: "warning", expression: "note.exists()" },
+          ],
+        },
+        {
+          id: "Observation.derivedFrom",
+          path: "Observation.derivedFrom",
+          constraint: [{ key: "fuzz-3", severity: "error", expression: "resolve().exists()" }],
+        },
+        {
+          id: "Observation.interpretation",
+          path: "Observation.interpretation",
+          binding: { strength: "required", valueSet: "http://example.org/ValueSet/fuzz-interp" },
+        },
         {
           id: "Observation.value[x]",
           path: "Observation.value[x]",
@@ -496,6 +515,12 @@ function hostileObservation(id: string): fc.Arbitrary<Record<string, unknown>> {
       id: fc.constant(id),
       valueQuantity: fc.constantFrom({ system: "x" }, {}, [], "x", null),
       valueString: fc.constantFrom("x", 1, {}),
+      code: fc.constantFrom({ text: "fake" }, {}, "x"),
+      interpretation: fc.constantFrom([{ text: "fake" }], [], "x"),
+      derivedFrom: fc.array(
+        HOSTILE_REFERENCE.map((reference) => ({ reference })),
+        { maxLength: 1 },
+      ),
       hasMember: fc.array(
         fc.oneof(
           HOSTILE_REFERENCE.map((reference) => ({ reference })),

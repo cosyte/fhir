@@ -178,7 +178,10 @@ The slicing on that element could not be decided, and the finding's `sliceReason
 common ones: a `position` discriminator, which is not part of the R4 discriminator set
 (`discriminator-unsupported`); a `profile` discriminator naming a profile you did not pass in
 `profiles` (`profile-unavailable`); a `resolve()` whose reference points outside the resource's
-`contained` set and, for a Bundle, its entries (`target-unresolved`). The
+`contained` set and, for a Bundle, its entries (`target-unresolved`); a resource whose check
+against the slice's profile left something unevaluated, such as an invariant outside the FHIRPath
+subset (`profile-undecided`). The diagnostic text says "an unsupported discriminator" whatever the
+reason, so read `sliceReason`. The
 [current limits](./limits.md#verdicts-that-say-not-checked-rather-than-passing) list every reason.
 
 **What to do**: the same as the previous entry. It means the slice membership was not decided, not

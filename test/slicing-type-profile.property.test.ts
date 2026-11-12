@@ -8,6 +8,8 @@
  *   left undecided (an R5 `position` discriminator) is still drawn when the slicing is decided.
  * - A `profile` discriminator over any graph of references among contained resources terminates,
  *   and answers either a decision or `profile-undecided`, never a guess.
+ * - A target that breaks an error invariant of the slice's profile conforms to no slice; one whose
+ *   invariant could not be evaluated leaves the slicing `profile-undecided`; a warning decides nothing.
  */
 
 import fc from "fast-check";
@@ -208,6 +210,95 @@ describe("property: a profile discriminator over contained references", () => {
         // A root reference that resolves nowhere always leaves the slicing unchecked.
         if (roots.includes(n)) expect(reasons).not.toEqual([]);
       }),
+      RUN,
+    );
+  });
+});
+
+/** The invariants a generated slice profile carries on its Patient root. */
+const INVARIANTS = {
+  evaluable: "name.exists()",
+  unevaluable: "link.other.resolve().active.exists()",
+} as const;
+
+/** A Patient profile with one root invariant of the given severity and expression. */
+function patientInvariant(severity: string, expression: string): StructureDefinition {
+  return loadSd({
+    resourceType: "StructureDefinition",
+    url: `${BASE}generated-patient`,
+    type: "Patient",
+    snapshot: {
+      element: [
+        {
+          id: "Patient",
+          path: "Patient",
+          constraint: [{ key: "fake-gen-1", severity, expression }],
+        },
+      ],
+    },
+  });
+}
+
+/** A closed Bundle slicing on `entry` by the profile of its `resource`, one required slice. */
+const entryByGenerated = loadSd({
+  resourceType: "StructureDefinition",
+  url: `${BASE}generated-entry-by-profile`,
+  type: "Bundle",
+  snapshot: {
+    element: [
+      { id: "Bundle", path: "Bundle" },
+      {
+        id: "Bundle.entry",
+        path: "Bundle.entry",
+        slicing: { discriminator: [{ type: "profile", path: "resource" }], rules: "closed" },
+      },
+      { id: "Bundle.entry:pat", path: "Bundle.entry", sliceName: "pat", min: 1 },
+      {
+        id: "Bundle.entry:pat.resource",
+        path: "Bundle.entry.resource",
+        type: [{ code: "Patient", profile: [`${BASE}generated-patient`] }],
+      },
+    ],
+  },
+});
+
+describe("property: a slice profile's invariants decide a profile discriminator", () => {
+  it("never assigns a target that breaks an error invariant, nor one never evaluated", () => {
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.constantFrom("error", "warning"),
+        fc.constantFrom<keyof typeof INVARIANTS>("evaluable", "unevaluable"),
+        (named, severity, kind) => {
+          const bundle = parse({
+            resourceType: "Bundle",
+            type: "collection",
+            entry: [
+              {
+                fullUrl: "urn:uuid:fake-1",
+                resource: {
+                  resourceType: "Patient",
+                  id: "fake-1",
+                  ...(named ? { name: [{ family: "Synthfamily" }] } : {}),
+                },
+              },
+            ],
+          });
+          const profile = patientInvariant(severity, INVARIANTS[kind]);
+          const issues = collectProfileIssues(bundle, entryByGenerated, { profiles: [profile] });
+          const reasons = issues
+            .filter((i) => i.code === "PROFILE_SLICE_UNCHECKED")
+            .map((i) => i.sliceReason);
+          const unassigned = errors(issues).includes("PROFILE_SLICE_UNMATCHED Bundle.entry[0]");
+          // An invariant that cannot be evaluated is never decided either way, whatever its severity.
+          const undecided = kind === "unevaluable";
+          // An evaluable error invariant the target breaks decides that it conforms to no slice.
+          const broken = kind === "evaluable" && severity === "error" && !named;
+          expect(reasons).toEqual(undecided ? [SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED] : []);
+          expect(unassigned).toBe(broken);
+          if (broken) expect(errors(issues)).toContain("CARDINALITY_MIN Bundle.entry:pat");
+        },
+      ),
       RUN,
     );
   });

@@ -96,9 +96,26 @@ you treat any non-error finding as a pass, you will misread them.
   - `profile-unavailable`: a slice naming a profile that is not in the `profiles` you supplied and
     that your `resolveBase` does not return;
   - `profile-undecided`: the check of the resource against the slice's profile was itself
-    incomplete (a slicing inside it undecided), two supplied versions of an unpinned profile
-    disagreed, or the bound on nested checks was reached: eight profiles deep, which is also where
-    a reference cycle stops, or 4096 checks in one validation.
+    incomplete, two supplied versions of an unpinned profile disagreed, or the bound on nested
+    checks was reached: eight profiles deep, which is also where a reference cycle stops, or 4096
+    checks in one validation. That check runs every layer `validateResource` runs, the profile's own
+    invariants and the base constraints among them: any error means the resource does not conform,
+    a warning decides nothing, and it is incomplete when it reports a slicing undecided
+    (`PROFILE_SLICE_UNCHECKED`, `PROFILE_SLICE_NO_SLICING`), an invariant it could not evaluate
+    (`INVARIANT_UNCHECKED`, such as `dom-3` over a resource that holds a contained resource), a
+    resource type with no schema here (`RESOURCE_NOT_MODELED`), or when the profile asks of an
+    element present in the resource something no layer checks: a `required` binding (other than a
+    base value set on a `code` element whose codes the schema enumerates) or a type `profile`, such
+    as an extension's definition.
+
+  Two warts to know about. The finding's diagnostic text still says the slicing used "an
+  unsupported discriminator" whatever the reason; read `sliceReason` for the reason. And a
+  `resolve()` takes an absolute reference to its `Type/id` tail when no entry has that full URL, as
+  Bundle reference resolution does everywhere in this library, so a reference to another server,
+  `https://other.example.org/fhir/Patient/1`, reaches the Bundle's `Patient/1` entry even when that
+  entry has a different base, and a `profile` discriminator checks that entry. Where a `type` or
+  `profile` discriminator's path selects several nodes in one occurrence, the occurrence matches a
+  slice when any one of them does.
 - `PROFILE_SLICE_NO_SLICING`: a profile naming a slice (`Observation.component:coded`) under an
   element that declares no `slicing`, or that is missing from the snapshot. Nothing in the profile
   says which occurrences belong to the slice, so none is assigned to it, and the slice's own

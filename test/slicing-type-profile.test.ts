@@ -47,6 +47,12 @@ function unchecked(issues: readonly ValidationIssue[]): [string, string | undefi
 
 const BASE = "http://example.org/StructureDefinition/";
 
+/**
+ * The members every Observation needs (R4 `status` and `code`), so a nested profile check, which
+ * runs every layer, judges a target on the profile alone.
+ */
+const anObservation = { resourceType: "Observation", status: "final", code: { text: "fake code" } };
+
 /** An Observation profile slicing `value[x]` by type, as the US Core smoking-status profile does. */
 const valueByType = loadSd({
   resourceType: "StructureDefinition",
@@ -681,8 +687,8 @@ describe("a profile discriminator through resolve()", () => {
     const obs = parse({
       resourceType: "Observation",
       contained: [
-        { resourceType: "Observation", id: "a", hasMember: [{ reference: "#b" }] },
-        { resourceType: "Observation", id: "b", hasMember: [{ reference: "#a" }] },
+        { ...anObservation, id: "a", hasMember: [{ reference: "#b" }] },
+        { ...anObservation, id: "b", hasMember: [{ reference: "#a" }] },
       ],
       hasMember: [{ reference: "#a" }],
     });
@@ -850,6 +856,7 @@ function chain(length: number): FhirComplex {
       resourceType: "Observation",
       id: `c${String(i)}`,
       status: "final",
+      code: { text: "fake code" },
       ...(i + 1 < length ? { hasMember: [{ reference: `#c${String(i + 1)}` }] } : {}),
     })),
     hasMember: [{ reference: "#c0" }],
@@ -1174,7 +1181,11 @@ describe("type and profile discriminators: the edges", () => {
     const bundle = parse({
       resourceType: "Bundle",
       type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1", identifier: [{}] } }],
+      entry: [
+        {
+          resource: { resourceType: "Patient", id: "fake-1", identifier: [{ system: "urn:fake" }] },
+        },
+      ],
     });
     expect(
       unchecked(collectProfileIssues(bundle, entryByProfile, { profiles: [withLooseSlice] })),
@@ -1375,7 +1386,11 @@ describe("type and profile discriminators: the bounds of what is decided", () =>
     const bundle = parse({
       resourceType: "Bundle",
       type: "collection",
-      entry: [{ resource: { resourceType: "Patient", id: "fake-1", identifier: [{}] } }],
+      entry: [
+        {
+          resource: { resourceType: "Patient", id: "fake-1", identifier: [{ system: "urn:fake" }] },
+        },
+      ],
     });
     const options = { profiles: [loose] };
     expect(
@@ -1598,7 +1613,7 @@ describe("type and profile discriminators: the bounds of what is decided", () =>
     const obs = parse({
       resourceType: "Observation",
       contained: [
-        { resourceType: "Observation", id: "o1", performer: [{ reference: "#p1" }] },
+        { ...anObservation, id: "o1", performer: [{ reference: "#p1" }] },
         { resourceType: "Patient", id: "p1", gender: "other" },
       ],
       hasMember: [{ reference: "#o1" }],
@@ -1629,22 +1644,32 @@ describe("type and profile discriminators: the bounds of what is decided", () =>
         ],
       },
     });
-    const bundle = parse({
-      resourceType: "Bundle",
-      type: "collection",
-      entry: [
-        {
-          resource: {
-            resourceType: "Observation",
-            id: "fake-o",
-            contained: [{ resourceType: "Patient", id: "p1", gender: "other" }],
-            performer: [{ reference: "#p1" }],
+    const bundle = (gender?: string) =>
+      parse({
+        resourceType: "Bundle",
+        type: "collection",
+        entry: [
+          {
+            resource: {
+              ...anObservation,
+              id: "fake-o",
+              contained: [{ resourceType: "Patient", id: "p1", ...(gender ? { gender } : {}) }],
+              performer: [{ reference: "#p1" }],
+            },
           },
-        },
-      ],
-    });
+        ],
+      });
     const profiles = [withGenderedPerformer, genderedPatient];
-    expect(findings(collectProfileIssues(bundle, entries, { profiles }))).toEqual([]);
+    // The reference resolves to the entry's own contained Patient: one without a gender fails the
+    // performer slice, so the entry conforms to no slice. Unresolved, it would be undecided.
+    expect(findings(collectProfileIssues(bundle(), entries, { profiles }))).toEqual([
+      ["CARDINALITY_MIN", "Bundle.entry:obs"],
+    ]);
+    // A conforming one leaves only dom-3 over the entry's `contained`, which the subset cannot
+    // evaluate, so the entry's conformance is undecided rather than assumed.
+    expect(unchecked(collectProfileIssues(bundle("other"), entries, { profiles }))).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
+    ]);
   });
 
   it("keeps no undecided answer: a target too deep on one path is decided on another", () => {
