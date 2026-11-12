@@ -37,6 +37,7 @@ import {
   serializeResourceXml,
   validateResource,
 } from "../src/index.js";
+import { propertyRun } from "./_property-run.js";
 
 /** A realistic forged name: a patient identity, which is not shaped like an element name. */
 const FORGED = "Chalmers, Peter 1974-12-25";
@@ -180,7 +181,7 @@ describe("the shape test matches the published forms it claims to", () => {
         const expected = DERIVED_NAME_SHAPES[kind].test(value) ? value : WITHHELD;
         expect(safeDerivedName(value, kind)).toBe(expected);
       }),
-      { seed: 20261110, numRuns: 5_000 },
+      propertyRun({ seed: 20261110, numRuns: 5_000 }),
     );
   });
 

@@ -16,6 +16,7 @@ import {
   type FhirProperty,
   type PrimitiveValue,
 } from "../src/index.js";
+import { propertyRun } from "./_property-run.js";
 
 /** A pool of valid, non-`_`-prefixed, non-`resourceType` property names (kept unique per object). */
 const KEY_POOL = [
@@ -136,7 +137,7 @@ describe("property: wire round-trip is stable", () => {
         const twice = serializeResource(parseResource(once).resource);
         expect(twice).toBe(once);
       }),
-      { numRuns: 400 },
+      propertyRun({ numRuns: 400 }),
     );
   });
 
@@ -154,7 +155,7 @@ describe("property: wire round-trip is stable", () => {
         expect(value).toBeInstanceOf(FhirDecimal);
         expect((value as FhirDecimal).raw).toBe(raw);
       }),
-      { numRuns: 500 },
+      propertyRun({ numRuns: 500 }),
     );
   });
 });

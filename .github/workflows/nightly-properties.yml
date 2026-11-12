@@ -1,0 +1,32 @@
+name: Nightly properties
+
+# The property tests at depth: every property in the suite takes its run options from
+# test/_property-run.ts or the shared runner in @cosyte/test-utils, so with COSYTE_PROPERTY_RUNS set
+# to 10,000 here each runs 10,000 cases instead of its pull request count. test/property-depth.test.ts
+# fails when a property does not read that depth. The seed is this run's id, printed first, so each
+# night draws other cases than the fixed seeds a pull request runs, and a passing night is recorded
+# as well as a failing one: `COSYTE_PROPERTY_SEED=<run id> COSYTE_PROPERTY_RUNS=10000 pnpm test`
+# replays the whole night. A failure prints the seed and path that replay its one case, and the
+# shared job keeps each in its summary and in the `property-run` artifact. The shared job is
+# cosyte/.github's nightly-properties.yml.
+
+on:
+  schedule:
+    # 04:47 UTC. An odd minute: GitHub delays scheduled runs at the start of every hour.
+    - cron: "47 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    uses: cosyte/.github/.github/workflows/nightly-properties.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # workflows-2026-11-10-398cd4ded647
+    with:
+      # The whole suite, so no property can sit where the run misses it.
+      test-cmd: 'echo "properties: COSYTE_PROPERTY_SEED=${GITHUB_RUN_ID}" && COSYTE_PROPERTY_SEED="${GITHUB_RUN_ID}" pnpm test'
+      property-runs: "10000"

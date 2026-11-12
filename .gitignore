@@ -50,3 +50,7 @@ corpus/documents/
 .cache/
 .turbo/
 dist-artifacts/
+
+# Mutation testing (StrykerJS): the reports and the sandbox it runs in
+reports/
+.stryker-tmp/

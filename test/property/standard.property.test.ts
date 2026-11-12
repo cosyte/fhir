@@ -28,11 +28,12 @@
  *    throwing, and a writer either writes it or refuses with a `SERIALIZE_ERROR_CODES` code.
  *
  * Each runs 100 cases by default from a fresh seed; `COSYTE_PROPERTY_RUNS` sets the depth, and a
- * failure prints the seed and path that replay it (see `./_runner.ts`).
+ * failure prints the seed and path that replay it (the shared runner in `@cosyte/test-utils`).
  */
 
 import assert from "node:assert/strict";
 
+import { assertProperty } from "@cosyte/test-utils";
 import fc from "fast-check";
 import { describe, it } from "vitest";
 
@@ -66,7 +67,7 @@ import {
 } from "../../src/arbitraries/index.js";
 import { cleanBundleJson, cleanResourceJson } from "../../src/arbitraries/resource.js";
 
-import { assertProperty, propertyTimeout } from "./_runner.js";
+import { propertyTimeout } from "../_property-run.js";
 
 /** Each test's budget, scaled to the depth `COSYTE_PROPERTY_RUNS` sets. */
 const TIMEOUT = propertyTimeout();
@@ -153,6 +154,7 @@ describe("property: round trip", () => {
           assert.deepStrictEqual(back.resource, m);
           assert.equal(serializeResource(back.resource), once);
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -170,6 +172,7 @@ describe("property: round trip", () => {
           assert.deepStrictEqual(back.resource, m);
           assert.equal(serializeResource(back.resource), once);
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -187,6 +190,7 @@ describe("property: round trip", () => {
           assert.ok(nodesEquivalent(back.resource, m), "the XML read is not equivalent");
           assert.equal(serializeResourceXml(back.resource), once);
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -209,6 +213,7 @@ describe("property: round trip", () => {
           );
           assert.deepStrictEqual(errors, []);
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -235,6 +240,7 @@ describe("property: idempotent normalize", () => {
           assert.ok(once !== undefined, "messy JSON was refused");
           assert.equal(normalizeJson(once), once);
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -250,6 +256,7 @@ describe("property: idempotent normalize", () => {
           if (once === undefined) return;
           assert.equal(normalizeJson(once), once);
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -269,6 +276,7 @@ describe("property: idempotent normalize", () => {
             "the messy spelling reads differently from its normal form",
           );
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -289,6 +297,7 @@ describe("property: idempotent normalize", () => {
           if (carriesUnscopedNarrative(parseResourceXml(raw).resource)) return;
           assert.equal(normalizeXml(once), once);
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -307,6 +316,7 @@ describe("property: never throws in lenient mode", () => {
           const line = parseNdjsonLine(raw);
           if (line.error !== undefined) assert.ok(NDJSON.has(line.error.code));
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -321,6 +331,7 @@ describe("property: never throws in lenient mode", () => {
           const read = readXml(raw);
           if (read !== undefined) assertUsable(read);
         }),
+        {},
       );
     },
     TIMEOUT,
@@ -337,6 +348,7 @@ describe("property: never throws in lenient mode", () => {
           assert.deepStrictEqual(read.issues, []);
           assertUsable(read);
         }),
+        {},
       );
     },
     TIMEOUT,

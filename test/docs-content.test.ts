@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -18,6 +19,7 @@ import {
   resourceLiterals,
   section,
 } from "./_first-use.js";
+import { IS_WINDOWS } from "./_runtime.js";
 
 /**
  * Doc/code-agreement gate. Every TypeScript and JavaScript sample on a hand-written page of
@@ -43,15 +45,20 @@ const ENTRY = join(root, "dist", "index.mjs");
 const ARBITRARIES = join(root, "dist", "arbitraries.mjs");
 const README = join(root, "README.md");
 const DOCS_DIR = join(root, "docs-content");
+/**
+ * The built entry a sample's import resolves to, as a file URL: on Windows an absolute path is read
+ * by `import()` as a URL with the drive letter as its scheme.
+ */
 const resolveEntry = (specifier: string): string | undefined =>
   specifier === "@cosyte/fhir"
-    ? ENTRY
+    ? pathToFileURL(ENTRY).href
     : specifier === "@cosyte/fhir/arbitraries"
-      ? ARBITRARIES
+      ? pathToFileURL(ARBITRARIES).href
       : undefined;
 
 beforeAll(() => {
-  execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit" });
+  // On Windows `pnpm` is a `.cmd` file, which only a shell starts; the arguments are fixed.
+  execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit", shell: IS_WINDOWS });
 }, 180_000);
 
 /** The hand-written pages: every `.md` file at the top of `docs-content/`, not the generated `api/`. */

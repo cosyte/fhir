@@ -1,53 +1,102 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { DEFAULT_NUM_RUNS, resolvePropertyRun } from "@cosyte/test-utils";
 import { cosyteVitest } from "@cosyte/vitest-config";
 
-/** Every metric at 100. */
-const FULL = { lines: 100, branches: 100, functions: 100, statements: 100 };
+/** The coverage metrics `quality-floor.json` holds, each a percentage. */
+interface CoverageFloor {
+  readonly lines: number;
+  readonly branches: number;
+  readonly functions: number;
+  readonly statements: number;
+}
 
 /**
- * Vitest config for @cosyte/fhir from the shared @cosyte/vitest-config standard.
- *
- * The shared config gates the whole package and each listed `src/` directory at >= 90. We hold
- * ourselves to more: each threshold below is the coverage this package has reached, rounded down to
- * a whole percent, and a threshold only ever rises. A line that truly cannot be reached carries an
- * inline `v8 ignore` comment naming its reason rather than lowering a number. Barrels (`index.ts`)
- * are excluded by the shared config, so re-export files do not dilute the number.
+ * The coverage floor, read from `quality-floor.json`, the one place it is written. `cosyte-ratchet`
+ * holds the same file in CI, where a floor only rises: a pull request that lowers or removes one
+ * fails. A line that truly cannot be reached carries an inline `v8 ignore` comment naming its
+ * reason rather than lowering a number.
  */
+const FLOOR: CoverageFloor = (
+  JSON.parse(readFileSync(new URL("quality-floor.json", import.meta.url), "utf8")) as {
+    packages: { ".": { coverage: CoverageFloor } };
+  }
+).packages["."].coverage;
+
+/**
+ * The `src/` directories held to the floor each on its own, beside the whole package, so a
+ * well-covered directory cannot carry a poorly covered one. Barrels (`index.ts`) are excluded by
+ * the shared config, so re-export files do not dilute the number.
+ */
+const COVERAGE_DIRS = [
+  "model",
+  "codec",
+  "validate",
+  "safety",
+  "quantity",
+  "terminology",
+  "profiles",
+  "fhirpath",
+  "xml",
+  "bundle",
+  "arbitraries",
+];
+
+/**
+ * How many times deeper than a pull request this run takes every property: 1 by default, 100 when
+ * the nightly job sets `COSYTE_PROPERTY_RUNS` to 10,000. A value that is not a whole number of
+ * cases throws here, before any test runs.
+ */
+const propertyDepth = Math.max(1, resolvePropertyRun({}).numRuns / DEFAULT_NUM_RUNS);
+
+/**
+ * Tests skipped by name on Windows, each with its reason. Every other skip sits beside its test
+ * (`test/_runtime.ts`); this one cannot, because its file is the PHI scan's own test, which spells
+ * out the values the scan must catch, and a change to it is refused by the PHI check that runs
+ * before a push.
+ *
+ * - `test/scripts/phi-scan.test.ts`, the case that runs the scan under tsx: it starts
+ *   `node_modules/.bin/tsx`, a shell script, which Windows starts only through a shell. Every other
+ *   case in the file runs the scan under Node, on Windows too.
+ */
+const WINDOWS_SKIPS: readonly string[] = [
+  "the `tsx` entry point `pnpm phi-scan` uses agrees byte-for-byte with the `node` runner",
+];
+
+/** A name pattern that runs every test but those named, or undefined when none is named. */
+function skipByName(names: readonly string[]): RegExp | undefined {
+  if (names.length === 0) return undefined;
+  const escaped = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
+  return new RegExp(`^(?!.*(?:${escaped.join("|")})).*$`, "u");
+}
+
+const testNamePattern = process.platform === "win32" ? skipByName(WINDOWS_SKIPS) : undefined;
+
+/** Vitest config for @cosyte/fhir from the shared @cosyte/vitest-config standard. */
 const config = cosyteVitest({
   coverageThresholds: {
-    ...FULL,
-    "src/model/**": FULL,
-    "src/codec/**": FULL,
-    "src/validate/**": FULL,
-    "src/safety/**": FULL,
-    "src/quantity/**": FULL,
-    "src/terminology/**": FULL,
-    "src/profiles/**": FULL,
-    "src/fhirpath/**": FULL,
-    "src/xml/**": FULL,
-    "src/bundle/**": FULL,
-    "src/arbitraries/**": FULL,
+    ...FLOOR,
+    ...Object.fromEntries(COVERAGE_DIRS.map((dir) => [`src/${dir}/**`, { ...FLOOR }])),
   },
-  coverageDirs: [
-    "model",
-    "codec",
-    "validate",
-    "safety",
-    "quantity",
-    "terminology",
-    "profiles",
-    "fhirpath",
-    "xml",
-    "bundle",
-    "arbitraries",
-  ],
+  coverageDirs: COVERAGE_DIRS,
   test: {
     globals: false,
     environment: "node",
     include: ["test/**/*.test.ts", "src/**/*.test.ts"],
-    testTimeout: 10_000,
-    hookTimeout: 10_000,
+    // A deeper property run scales the budget with its depth, so the nightly run is not cut off by
+    // a budget set for a pull request's cases. This is the budget of every test, not only the
+    // properties, and that is intended: at the nightly 10,000 cases it is 1,000,000 ms, so a test
+    // that is not a property is not held to 10 s there. The nightly run looks for a property that
+    // fails at depth, not for a slow test; pull requests, where depth is 1, keep 10 s for every
+    // test.
+    testTimeout: 10_000 * propertyDepth,
+    // On Windows a hook gets 60 s. The PHI scan's test removes its temporary git repositories in an
+    // `afterAll`, and on a Windows runner that took longer than 10 s in 2 of the 22 Windows legs
+    // this suite first ran in; deleting many small files is slower there. No test's own budget
+    // changes, and Linux and macOS keep 10 s.
+    hookTimeout: process.platform === "win32" ? 60_000 : 10_000,
+    ...(testNamePattern === undefined ? {} : { testNamePattern }),
   },
 });
 

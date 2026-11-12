@@ -1,0 +1,14 @@
+{
+  "$comment": "The coverage floor is what CI measured before this file existed, 100 on every metric, then held by hand-set thresholds in vitest.config.ts, which now reads this file. The mutation floor stays 0 until the first full run on GitHub-hosted runners (weekly-mutation.yml) finishes with every shard; it is then raised to that run's score with cosyte-ratchet raise.",
+  "packages": {
+    ".": {
+      "coverage": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100,
+        "statements": 100
+      },
+      "mutation": 0
+    }
+  }
+}

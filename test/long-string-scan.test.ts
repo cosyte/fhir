@@ -10,6 +10,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import { FhirCodecError, readRawJson } from "../src/index.js";
+import { propertyRun } from "./_property-run.js";
 
 type Outcome = { readonly value: string } | { readonly message: string; readonly offset: number };
 
@@ -105,7 +106,7 @@ describe("the string scan", () => {
         const text = `"${body}${closed ? '"' : ""}`;
         expect(read(text)).toEqual(reference(text));
       }),
-      { seed: 20261111, numRuns: 3000 },
+      propertyRun({ seed: 20261111, numRuns: 3000 }),
     );
   });
 

@@ -1,11 +1,13 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { isList, list, parseResource, primitive } from "../src/index.js";
 import type { FhirNode } from "../src/index.js";
+import { SOURCE_IS_INSTRUMENTED } from "./_runtime.js";
 
 /**
  * The model's **edge set**, derived rather than described.
@@ -30,7 +32,7 @@ import type { FhirNode } from "../src/index.js";
  * flattening consumer is what these tests make impossible to do by accident.
  */
 
-const SRC = new URL("../src/", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("../src/", import.meta.url));
 const NODE_TS = join(SRC, "model/node.ts");
 
 /** Every `.ts` file under `src/`, so the reference census cannot miss a directory. */
@@ -65,163 +67,173 @@ function membersOf(name: string): Map<string, string> {
 /** The model's node types. A member whose type mentions one of these carries an edge. */
 const NODE_TYPES = ["FhirNode", "FhirComplex", "FhirList", "FhirPrimitive", "FhirProperty"];
 
-describe("the model's edge set is derived from the type, not from a search", () => {
-  it("enumerates every declared member of the three node kinds", () => {
-    // The union is closed, so this is the whole model surface. If a fourth node kind is ever added
-    // this assertion is where it has to be declared.
-    const kinds = ["FhirComplex", "FhirList", "FhirPrimitive"];
-    const declared = new Map<string, string>();
-    for (const kind of kinds) {
-      for (const [member, type] of membersOf(kind)) declared.set(`${kind}.${member}`, type);
-    }
-    expect([...declared.keys()].sort()).toEqual([
-      "FhirComplex.droppedText",
-      "FhirComplex.duplicates",
-      "FhirComplex.foreignNamespace",
-      "FhirComplex.foreignRoot",
-      "FhirComplex.kind",
-      "FhirComplex.nestedArray",
-      "FhirComplex.nestedArraySource",
-      "FhirComplex.nonObjectSource",
-      "FhirComplex.properties",
-      "FhirList.items",
-      "FhirList.kind",
-      "FhirPrimitive.droppedText",
-      "FhirPrimitive.extension",
-      "FhirPrimitive.foreignNamespace",
-      "FhirPrimitive.id",
-      "FhirPrimitive.kind",
-      "FhirPrimitive.nestedArray",
-      "FhirPrimitive.nestedArrayMetaSource",
-      "FhirPrimitive.nestedArraySource",
-      "FhirPrimitive.nonObjectMetaSource",
-      "FhirPrimitive.undefinedNull",
-      "FhirPrimitive.value",
-    ]);
-  });
+// Reads `src/` as text, so it stands aside in the mutation run, whose `src/` is rewritten
+// (`SOURCE_IS_INSTRUMENTED`).
+describe.skipIf(SOURCE_IS_INSTRUMENTED)(
+  "the model's edge set is derived from the type, not from a search",
+  () => {
+    it("enumerates every declared member of the three node kinds", () => {
+      // The union is closed, so this is the whole model surface. If a fourth node kind is ever added
+      // this assertion is where it has to be declared.
+      const kinds = ["FhirComplex", "FhirList", "FhirPrimitive"];
+      const declared = new Map<string, string>();
+      for (const kind of kinds) {
+        for (const [member, type] of membersOf(kind)) declared.set(`${kind}.${member}`, type);
+      }
+      expect([...declared.keys()].sort()).toEqual([
+        "FhirComplex.droppedText",
+        "FhirComplex.duplicates",
+        "FhirComplex.foreignNamespace",
+        "FhirComplex.foreignRoot",
+        "FhirComplex.kind",
+        "FhirComplex.nestedArray",
+        "FhirComplex.nestedArraySource",
+        "FhirComplex.nonObjectSource",
+        "FhirComplex.properties",
+        "FhirList.items",
+        "FhirList.kind",
+        "FhirPrimitive.droppedText",
+        "FhirPrimitive.extension",
+        "FhirPrimitive.foreignNamespace",
+        "FhirPrimitive.id",
+        "FhirPrimitive.kind",
+        "FhirPrimitive.nestedArray",
+        "FhirPrimitive.nestedArrayMetaSource",
+        "FhirPrimitive.nestedArraySource",
+        "FhirPrimitive.nonObjectMetaSource",
+        "FhirPrimitive.undefinedNull",
+        "FhirPrimitive.value",
+      ]);
+    });
 
-  it("finds exactly four node-valued members, so a walk can reach nothing else", () => {
-    const edges: string[] = [];
-    for (const kind of ["FhirComplex", "FhirList", "FhirPrimitive"]) {
-      for (const [member, type] of membersOf(kind)) {
-        if (NODE_TYPES.some((node) => new RegExp(`\\b${node}\\b`).test(type))) {
-          edges.push(`${kind}.${member}`);
+    it("finds exactly four node-valued members, so a walk can reach nothing else", () => {
+      const edges: string[] = [];
+      for (const kind of ["FhirComplex", "FhirList", "FhirPrimitive"]) {
+        for (const [member, type] of membersOf(kind)) {
+          if (NODE_TYPES.some((node) => new RegExp(`\\b${node}\\b`).test(type))) {
+            edges.push(`${kind}.${member}`);
+          }
         }
       }
+      // These four are the entire node graph. Every consumer in the package reaches a node through one
+      // of them, so auditing them audits every walk there is.
+      expect(edges.sort()).toEqual([
+        "FhirComplex.duplicates",
+        "FhirComplex.properties",
+        "FhirList.items",
+        "FhirPrimitive.extension",
+      ]);
+    });
+
+    it("types the preserved nested-array content as a string, which carries no edge", () => {
+      // This is the load-bearing property of the whole design. A string cannot be a list item, cannot
+      // be a property value, and cannot be an extension, so no walker can observe it however it
+      // recurses. Preservation therefore costs the walkers nothing.
+      expect(membersOf("FhirComplex").get("nestedArraySource")).toBe("string");
+      expect(membersOf("FhirPrimitive").get("nestedArraySource")).toBe("string");
+      expect(membersOf("FhirPrimitive").get("nestedArrayMetaSource")).toBe("string");
+    });
+
+    it("types the dropped-element-text marker as `true`, which carries no edge and no content", () => {
+      // The marker records that the reader dropped character data at this position. It is a literal
+      // `true`, not a string: unlike the nested-array text nothing is preserved, so there is no
+      // content here for a walker to reach and none for a diagnostic to leak.
+      expect(membersOf("FhirComplex").get("droppedText")).toBe("true");
+      expect(membersOf("FhirPrimitive").get("droppedText")).toBe("true");
+    });
+
+    it("types the undefined-`null` marker as `true`, which carries no edge and no content", () => {
+      // A `null` has nothing to preserve, so like the dropped-text marker this is a literal `true`
+      // rather than a source string. It changes what the writer emits at the position and nothing a
+      // walker can observe: the node is still the value-absent primitive it always was.
+      expect(membersOf("FhirPrimitive").get("undefinedNull")).toBe("true");
+      // It exists on the primitive only. A `null` written where FHIR JSON has an object is the
+      // neighbouring case and is handled by `FhirComplex.nonObjectSource`, unchanged.
+      expect(membersOf("FhirComplex").has("undefinedNull")).toBe(false);
+    });
+
+    it("can only set the undefined-`null` marker through the JSON reader's own helper", () => {
+      // Same closure as the two markers above: nothing else in the package marks a node, so the
+      // marker can only ever mean that a document wrote a `null` that padded nothing at that
+      // position, and the writer can never be made to emit a `null` no document carried.
+      expect(
+        sourceFiles(SRC)
+          .filter((file) => /markUndefinedNull/.test(readFileSync(file, "utf8")))
+          .map((file) => file.slice(SRC.length).split(sep).join("/"))
+          .sort(),
+      ).toEqual(["codec/read.ts", "model/node.ts"]);
+    });
+
+    it("types the foreign-root marker as `true`, which carries no edge and no content", () => {
+      // The marker records that the document's root named a vocabulary other than FHIR's. Like the
+      // two above it, a literal `true` and not the namespace: the namespace URI is document content,
+      // so preserving it would put a vendor URI on the model within reach of a diagnostic. Nothing is
+      // kept, so there is nothing here for a walker to reach and nothing for a diagnostic to leak.
+      expect(membersOf("FhirComplex").get("foreignRoot")).toBe("true");
+      // On the complex only. A root is an object element, and the primitive has no root position to
+      // read a vocabulary at.
+      expect(membersOf("FhirPrimitive").has("foreignRoot")).toBe(false);
+    });
+
+    it("can only set the foreign-root marker through the XML reader's own helper", () => {
+      // Same closure as the three markers above: nothing else in the package marks a node, so the
+      // marker can only ever mean that a document's own root resolved to another vocabulary, and the
+      // XML writer can never be made to refuse a document that did not carry that shape.
+      expect(
+        sourceFiles(SRC)
+          .filter((file) => /markForeignRoot/.test(readFileSync(file, "utf8")))
+          .map((file) => file.slice(SRC.length).split(sep).join("/"))
+          .sort(),
+      ).toEqual(["model/node.ts", "xml/read.ts"]);
+    });
+
+    it("can only set the dropped-element-text marker through the XML reader's own helper", () => {
+      // Same closure as `markNestedArray`: nothing else in the package marks a node, so the marker can
+      // only ever mean that a document carried character data at that position.
+      expect(
+        sourceFiles(SRC)
+          .filter((file) => /markDroppedText/.test(readFileSync(file, "utf8")))
+          .map((file) => file.slice(SRC.length).split(sep).join("/"))
+          .sort(),
+      ).toEqual(["model/node.ts", "xml/read.ts"]);
+    });
+  },
+);
+
+// Reads `src/` as text, so it stands aside in the mutation run, whose `src/` is rewritten
+// (`SOURCE_IS_INSTRUMENTED`).
+describe.skipIf(SOURCE_IS_INSTRUMENTED)(
+  "the preserved text has exactly the consumers it was audited with",
+  () => {
+    /** Which files under `src/` mention `pattern` at all. A census of everything, not a sample. */
+    function referencing(pattern: RegExp): string[] {
+      return sourceFiles(SRC)
+        .filter((file) => pattern.test(readFileSync(file, "utf8")))
+        .map((file) => file.slice(SRC.length).split(sep).join("/"))
+        .sort();
     }
-    // These four are the entire node graph. Every consumer in the package reaches a node through one
-    // of them, so auditing them audits every walk there is.
-    expect(edges.sort()).toEqual([
-      "FhirComplex.duplicates",
-      "FhirComplex.properties",
-      "FhirList.items",
-      "FhirPrimitive.extension",
-    ]);
-  });
 
-  it("types the preserved nested-array content as a string, which carries no edge", () => {
-    // This is the load-bearing property of the whole design. A string cannot be a list item, cannot
-    // be a property value, and cannot be an extension, so no walker can observe it however it
-    // recurses. Preservation therefore costs the walkers nothing.
-    expect(membersOf("FhirComplex").get("nestedArraySource")).toBe("string");
-    expect(membersOf("FhirPrimitive").get("nestedArraySource")).toBe("string");
-    expect(membersOf("FhirPrimitive").get("nestedArrayMetaSource")).toBe("string");
-  });
+    it("can only be set through the reader's own helper", () => {
+      // Nothing else in the package constructs a marked node, so the preserved text can only ever be
+      // what a document actually carried at that position.
+      expect(referencing(/markNestedArray/)).toEqual(["codec/read.ts", "model/node.ts"]);
+    });
 
-  it("types the dropped-element-text marker as `true`, which carries no edge and no content", () => {
-    // The marker records that the reader dropped character data at this position. It is a literal
-    // `true`, not a string: unlike the nested-array text nothing is preserved, so there is no
-    // content here for a walker to reach and none for a diagnostic to leak.
-    expect(membersOf("FhirComplex").get("droppedText")).toBe("true");
-    expect(membersOf("FhirPrimitive").get("droppedText")).toBe("true");
-  });
-
-  it("types the undefined-`null` marker as `true`, which carries no edge and no content", () => {
-    // A `null` has nothing to preserve, so like the dropped-text marker this is a literal `true`
-    // rather than a source string. It changes what the writer emits at the position and nothing a
-    // walker can observe: the node is still the value-absent primitive it always was.
-    expect(membersOf("FhirPrimitive").get("undefinedNull")).toBe("true");
-    // It exists on the primitive only. A `null` written where FHIR JSON has an object is the
-    // neighbouring case and is handled by `FhirComplex.nonObjectSource`, unchanged.
-    expect(membersOf("FhirComplex").has("undefinedNull")).toBe(false);
-  });
-
-  it("can only set the undefined-`null` marker through the JSON reader's own helper", () => {
-    // Same closure as the two markers above: nothing else in the package marks a node, so the
-    // marker can only ever mean that a document wrote a `null` that padded nothing at that
-    // position, and the writer can never be made to emit a `null` no document carried.
-    expect(
-      sourceFiles(SRC)
-        .filter((file) => /markUndefinedNull/.test(readFileSync(file, "utf8")))
-        .map((file) => file.slice(SRC.length))
-        .sort(),
-    ).toEqual(["codec/read.ts", "model/node.ts"]);
-  });
-
-  it("types the foreign-root marker as `true`, which carries no edge and no content", () => {
-    // The marker records that the document's root named a vocabulary other than FHIR's. Like the
-    // two above it, a literal `true` and not the namespace: the namespace URI is document content,
-    // so preserving it would put a vendor URI on the model within reach of a diagnostic. Nothing is
-    // kept, so there is nothing here for a walker to reach and nothing for a diagnostic to leak.
-    expect(membersOf("FhirComplex").get("foreignRoot")).toBe("true");
-    // On the complex only. A root is an object element, and the primitive has no root position to
-    // read a vocabulary at.
-    expect(membersOf("FhirPrimitive").has("foreignRoot")).toBe(false);
-  });
-
-  it("can only set the foreign-root marker through the XML reader's own helper", () => {
-    // Same closure as the three markers above: nothing else in the package marks a node, so the
-    // marker can only ever mean that a document's own root resolved to another vocabulary, and the
-    // XML writer can never be made to refuse a document that did not carry that shape.
-    expect(
-      sourceFiles(SRC)
-        .filter((file) => /markForeignRoot/.test(readFileSync(file, "utf8")))
-        .map((file) => file.slice(SRC.length))
-        .sort(),
-    ).toEqual(["model/node.ts", "xml/read.ts"]);
-  });
-
-  it("can only set the dropped-element-text marker through the XML reader's own helper", () => {
-    // Same closure as `markNestedArray`: nothing else in the package marks a node, so the marker can
-    // only ever mean that a document carried character data at that position.
-    expect(
-      sourceFiles(SRC)
-        .filter((file) => /markDroppedText/.test(readFileSync(file, "utf8")))
-        .map((file) => file.slice(SRC.length))
-        .sort(),
-    ).toEqual(["model/node.ts", "xml/read.ts"]);
-  });
-});
-
-describe("the preserved text has exactly the consumers it was audited with", () => {
-  /** Which files under `src/` mention `pattern` at all. A census of everything, not a sample. */
-  function referencing(pattern: RegExp): string[] {
-    return sourceFiles(SRC)
-      .filter((file) => pattern.test(readFileSync(file, "utf8")))
-      .map((file) => file.slice(SRC.length))
-      .sort();
-  }
-
-  it("can only be set through the reader's own helper", () => {
-    // Nothing else in the package constructs a marked node, so the preserved text can only ever be
-    // what a document actually carried at that position.
-    expect(referencing(/markNestedArray/)).toEqual(["codec/read.ts", "model/node.ts"]);
-  });
-
-  it("is read by name in exactly the places it was audited with, and no other", () => {
-    // The point is not that these files are correct, it is that no unaudited file has quietly
-    // started reading the field: a consumer that did would be interpreting content this package
-    // deliberately does not interpret. `codec/read.ts` is absent on purpose, it sets the text
-    // through the helper above and never reads it back. No count is asserted in this sentence,
-    // because the list below is the assertion and a count beside it is a second thing to keep true.
-    expect(referencing(/nestedArray(Meta)?Source/)).toEqual([
-      "codec/serialize-guard.ts", // tests for its PRESENCE and refuses; it never reads the text
-      "codec/write.ts", // emits it verbatim, so a round trip neither invents nor drops an element
-      "model/node.ts", // declares it and hands it back through `nestedArrayContent`
-      "xml/equivalence.ts", // compares it, so two documents nesting different content are not equal
-    ]);
-  });
-});
+    it("is read by name in exactly the places it was audited with, and no other", () => {
+      // The point is not that these files are correct, it is that no unaudited file has quietly
+      // started reading the field: a consumer that did would be interpreting content this package
+      // deliberately does not interpret. `codec/read.ts` is absent on purpose, it sets the text
+      // through the helper above and never reads it back. No count is asserted in this sentence,
+      // because the list below is the assertion and a count beside it is a second thing to keep true.
+      expect(referencing(/nestedArray(Meta)?Source/)).toEqual([
+        "codec/serialize-guard.ts", // tests for its PRESENCE and refuses; it never reads the text
+        "codec/write.ts", // emits it verbatim, so a round trip neither invents nor drops an element
+        "model/node.ts", // declares it and hands it back through `nestedArrayContent`
+        "xml/equivalence.ts", // compares it, so two documents nesting different content are not equal
+      ]);
+    });
+  },
+);
 
 describe("the reader never puts a list inside a list", () => {
   /** Every node in a tree, so the check is over the whole document rather than its root. */

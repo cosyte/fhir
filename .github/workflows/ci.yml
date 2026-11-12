@@ -19,24 +19,39 @@ permissions:
 
 jobs:
   # Universal gates from the shared pipeline (typecheck, lint, format, test, coverage, build, attw,
-  # dual ESM/CJS smoke, actionlint) on the standard Node matrix (22, 24, and 26), at the published
-  # reference every caller here names. The full test suite, including the P11 fuzz, PHI-leak, and
-  # type-level tiers, runs here at the default iteration count and gates.
+  # dual ESM/CJS smoke, actionlint) on Node 22, 24 and 26, on Linux, Windows and macOS. Node 22 stays
+  # in the matrix because `engines` promises it. The full test suite, including the fuzz, PHI-leak,
+  # and type-level tiers, runs here at the default iteration count and gates.
   # fhir ships a PHI scanner (scripts/phi-scan.ts), so the shared pipeline's optional PHI-scan step
   # is switched on.
   #
-  # The performance standard's two jobs run beside `verify`, never after it, so a pull request waits
-  # for the slowest job rather than their sum:
+  # The testing standard's jobs run beside `verify`, never after it, so a pull request waits for the
+  # slowest job rather than their sum:
+  # - `bun` and `deno`: the whole suite again under Bun and under Deno, each in its own job on
+  #   Linux. A test that cannot run there is skipped by name with its reason (test/_runtime.ts).
+  # - `coverage-ratchet`: coverage held to quality-floor.json, and on a pull request every changed
+  #   line that coverage counts must have run and no floor may be lowered or removed.
+  # - `mutation` (pull requests only): the changed source files mutated with stryker.config.mjs, on
+  #   the suite of vitest.mutation.config.ts, and every mutant in the changed lines killed. The full
+  #   run is weekly-mutation.yml's.
+  #
+  # The performance standard's two jobs run beside `verify` too:
   # - `scaling-gate`: `pnpm test:perf`, the scaling gates for parseResource, validateResource and
   #   serializeResource and their self-checks, never under coverage;
   # - `bench-compare` (pull requests only): bench/fhir.bench.mjs timed on the base build and the head
   #   build, interleaved on one runner. Advisory: it never fails, so never require it.
-  # A skipped job satisfies a required check, so require `scaling-gate` only while its input below
-  # stays on. The full reading and the profile are in bench-reading.yml.
+  # A skipped job satisfies a required check, so require `bun`, `deno`, `coverage-ratchet`,
+  # `mutation` or `scaling-gate` only while its input below stays on. The full reading and the
+  # profile are in bench-reading.yml.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@0be6757a773885cbd5165dbfa0f93772d907b3e8 # workflows-2026-11-10-0be6757a7738
+    uses: cosyte/.github/.github/workflows/ci.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # workflows-2026-11-10-398cd4ded647
     with:
+      os: '["ubuntu-latest", "windows-latest", "macos-latest"]'
       run-phi-scan: true
+      run-bun: true
+      run-deno: true
+      run-coverage-ratchet: true
+      run-mutation: true
       run-scaling-gate: true
       run-bench-compare: true
 
