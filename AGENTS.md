@@ -25,7 +25,8 @@ pnpm test
 
 ## The gate
 
-Run these from the repository root, in this order, before you push. CI runs them on Node.js 22, 24, and 26.
+Run these from the repository root, in this order, before you push. CI runs them on Node.js 22, 24,
+and 26, on Linux, Windows and macOS, and runs the suite again under Bun and Deno.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -35,6 +36,7 @@ pnpm format:check
 pnpm phi-scan
 pnpm test
 pnpm test:coverage
+pnpm quality:check --base origin/main
 pnpm build
 pnpm attw
 FUZZ_RUNS=20000 pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts \
@@ -67,6 +69,28 @@ CI also fetches the FHIR R4 and R4B definition files at a pinned commit and re-d
 `test/__data__/fhir-element-definitions.json` from them (`pnpm definitions:check`); the test suite
 holds the safety readout's element table and resource positions to that file. After a change to
 either, run `pnpm definitions:derive` (it fetches) and commit what it writes.
+
+## The testing standard
+
+`quality-floor.json` holds the coverage and the mutation score CI measures, and they only rise.
+`vitest.config.ts` reads its coverage floor from that file. `pnpm quality:check` holds coverage to
+it (after `pnpm test:coverage`); with `--base origin/main` every changed line coverage counts must
+also have run, and no floor may be lowered. On a pull request CI's `mutation` job mutates the
+changed source files with `stryker.config.mjs` (`pnpm mutate changed --base origin/main`, then
+`pnpm quality:mutation --base origin/main`) and every mutant in the changed lines must be killed.
+`.github/workflows/weekly-mutation.yml` runs the full run (`pnpm mutate:full`) twice a week, in
+sixteen shards, and holds its score to the floor. To raise a floor, run `pnpm quality:raise` after a
+full run and open a pull request. Mutation runs the suite of `vitest.mutation.config.ts`, which
+leaves out the tests of this repository's own tooling. StrykerJS rewrites `src/` before that suite
+runs, so a test that reads `src/` as text skips itself there through `SOURCE_IS_INSTRUMENTED` in
+`test/_runtime.ts`; `test/mutation-suite.test.ts` fails on one that does not.
+
+Every property takes its count and seed from `propertyRun` in `test/_property-run.ts`, or from
+`assertProperty` in `@cosyte/test-utils`, so `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED` reach
+it; `test/property-depth.test.ts` fails on one that does not, and on a `v8 ignore` comment with no
+reason. `.github/workflows/nightly-properties.yml` runs the suite each night at 10,000 cases a
+property from a seed it prints first. A test that cannot run on Windows, Bun or Deno is skipped
+there by name, with its reason, through the checks in `test/_runtime.ts`.
 
 ## Data
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.16
+
+### Patch Changes
+
+- 56938f8: Read and require the R4 `patient-animal` extension on a veterinary Patient. `readPatientAnimal(resource)` returns the extension's `species`, `breed` and `genderStatus` as the CodeableConcept model nodes the document wrote, each `undefined` when absent, or `undefined` overall for a resource that is not a Patient or carries no such extension. A missing `species` (`1..1`) is reported as `CARDINALITY_MIN` at `Patient.extension[n].extension:species`; a part written twice, written without a value or in another type is not read and is reported instead. `PATIENT_ANIMAL_EXTENSION_URL` names the extension, and the type `PatientAnimal` describes the result.
+
+  `VETERINARY_PATIENT_STARTER` is a new starter profile that requires the extension on a Patient: one `animal` slice fixed to its URL, `species` required, `breed` and `genderStatus` allowed once each, with the extension's example bindings. It is not in `STARTER_PROFILES`, which applies to every Patient, so the kit validates a human Patient as before; pass it on its own or find it with `starterProfile`. The extension is draft, at maturity level 1, and its bindings are examples only, so no code is checked.
+
+  What a caller must change: nothing. These are additions, and no existing export behaves differently.
+
+- 539ef89: We now test every change on Linux, Windows and macOS on Node.js 22, 24 and 26, and under Bun and Deno. `engines` stays `node >= 22.0.0`: Node.js 22 keeps its place in that matrix. Nothing a caller calls changes.
+- 36f6632: Both writers now refuse a model holding an element the XML reader read from another vocabulary, so a write and a re-read can no longer make it read safe. `readSafety` declines an XML element in a namespace other than its parent's (`<status xmlns="urn:vendor" value="final"/>` inside a FHIR resource), but `serializeResource` wrote it as `"status":"final"` and `serializeResourceXml` wrote it in the FHIR namespace, and either re-read had `safeToSummarize: true`. Both writers now throw `FhirSerializeError` with the new code `UNSERIALIZABLE_FOREIGN_NAMESPACE` at the element's location, the way they refuse dropped text. A root in a namespace other than FHIR's was refused only by `serializeResourceXml`; `serializeResource` now refuses it too, with `UNSERIALIZABLE_FOREIGN_ROOT`. The narrative `div` in the XHTML namespace is not affected, and a document whose elements are all in the FHIR namespace is written as before.
+
+  What a caller must change: a call to `serializeResource` on a model read from XML with a vendor namespace used to return JSON and now throws. Catch `FhirSerializeError` and check `code`, or decide what the vendor element means before writing the resource as FHIR. A `switch` over `SERIALIZE_ERROR_CODES` gains one case.
+
+  `FhirSafetyError.locations` from `assertSafeToSummarize` now lists each location once. A location named by two readout channels, such as an element with dropped text that is also undefined, was listed twice.
+
 ## 0.1.15
 
 ### Patch Changes

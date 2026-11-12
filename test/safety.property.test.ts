@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import { parseResource, readSafety, serializeResource, type NegationKind } from "../src/index.js";
+import { propertyRun } from "./_property-run.js";
 
 /**
  * The property the roadmap names for Phase 3: **a negation never collapses to its positive on a
@@ -91,7 +92,7 @@ describe("property: a negation survives a round-trip and never collapses to posi
         expect(after.negations.length).toBeGreaterThan(0);
         expect([...after.negations].sort()).toEqual([...before.negations].sort());
       }),
-      { numRuns: 60 },
+      propertyRun({ numRuns: 60 }),
     );
   });
 });

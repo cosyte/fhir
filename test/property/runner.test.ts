@@ -1,104 +1,64 @@
 /**
- * The property runner in `./_runner.ts`: the depth it reads from `COSYTE_PROPERTY_RUNS`, the
- * values it refuses, and a failure that prints the seed and path which replay it exactly.
+ * How a property here takes its depth and seed (`../_property-run.ts`): a property's own count and
+ * seed, with `COSYTE_PROPERTY_RUNS`, `COSYTE_PROPERTY_SEED` and `COSYTE_PROPERTY_PATH` over both,
+ * the values it refuses, and a budget that scales with the depth. The runner itself is the shared
+ * one in `@cosyte/test-utils`, tested there.
  */
 
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
-import {
-  DEFAULT_NUM_RUNS,
-  assertProperty,
-  propertyTimeout,
-  resolvePropertyRun,
-} from "./_runner.js";
+import { MS_PER_CASE, propertyRun, propertyTimeout } from "../_property-run.js";
 
-describe("resolvePropertyRun", () => {
-  it("runs 100 cases by default, a test's own numRuns otherwise, and the environment over both", () => {
-    expect(DEFAULT_NUM_RUNS).toBe(100);
-    expect(resolvePropertyRun({}, {})).toEqual({ numRuns: 100 });
-    expect(resolvePropertyRun({ numRuns: 7 }, {})).toEqual({ numRuns: 7 });
-    expect(resolvePropertyRun({ numRuns: 7 }, { COSYTE_PROPERTY_RUNS: "10000" })).toEqual({
-      numRuns: 10000,
-    });
-    expect(resolvePropertyRun({}, { COSYTE_PROPERTY_RUNS: "" })).toEqual({ numRuns: 100 });
-  });
-
-  it("takes a seed and a path from the environment or the options", () => {
+describe("propertyRun", () => {
+  it("runs a property's own count and seed, and the environment over both", () => {
+    expect(propertyRun({ numRuns: 7, seed: 3 }, {})).toEqual({ numRuns: 7, seed: 3 });
+    expect(propertyRun({}, {})).toEqual({ numRuns: 100 });
     expect(
-      resolvePropertyRun({}, { COSYTE_PROPERTY_SEED: "-42", COSYTE_PROPERTY_PATH: "3:0:1" }),
-    ).toEqual({ numRuns: 100, seed: -42, path: "3:0:1" });
-    expect(resolvePropertyRun({ seed: 5, path: "1" }, {})).toEqual({
-      numRuns: 100,
-      seed: 5,
-      path: "1",
-    });
+      propertyRun(
+        { numRuns: 7, seed: 3 },
+        { COSYTE_PROPERTY_RUNS: "10000", COSYTE_PROPERTY_SEED: "-9" },
+      ),
+    ).toEqual({ numRuns: 10000, seed: -9 });
   });
 
-  it("refuses a malformed value rather than running the default", () => {
-    expect(() => resolvePropertyRun({}, { COSYTE_PROPERTY_RUNS: "10k" })).toThrow(RangeError);
-    expect(() => resolvePropertyRun({}, { COSYTE_PROPERTY_RUNS: "0" })).toThrow(RangeError);
-    expect(() => resolvePropertyRun({}, { COSYTE_PROPERTY_SEED: "x" })).toThrow(RangeError);
-    expect(() => resolvePropertyRun({ seed: 1 }, { COSYTE_PROPERTY_PATH: "a:b" })).toThrow(
-      RangeError,
-    );
-    expect(() => resolvePropertyRun({ numRuns: 0 }, {})).toThrow(RangeError);
-    expect(() => resolvePropertyRun({}, { COSYTE_PROPERTY_PATH: "1:2" })).toThrow(
+  it("stops a replay at the case its path names", () => {
+    expect(
+      propertyRun({ numRuns: 7 }, { COSYTE_PROPERTY_SEED: "5", COSYTE_PROPERTY_PATH: "3:0:1" }),
+    ).toEqual({ numRuns: 7, seed: 5, path: "3:0:1", endOnFailure: true });
+  });
+
+  it("refuses a malformed value rather than running the property's own count", () => {
+    expect(() => propertyRun({ numRuns: 7 }, { COSYTE_PROPERTY_RUNS: "10k" })).toThrow(RangeError);
+    expect(() => propertyRun({ numRuns: 7 }, { COSYTE_PROPERTY_PATH: "1:2" })).toThrow(
       /needs its seed/u,
     );
   });
 
-  it("scales a test's budget with the depth", () => {
-    expect(propertyTimeout({})).toBe(10_000);
-    expect(propertyTimeout({ COSYTE_PROPERTY_RUNS: "10000" })).toBe(400_000);
-    expect(propertyTimeout({ COSYTE_PROPERTY_RUNS: "250" })).toBe(10_000);
+  it("replays through fc.assert the case a failure printed, already shrunk", () => {
+    const failing = fc.property(fc.nat(), (n) => n < 50);
+    const first = fc.check(failing, propertyRun({ numRuns: 100, seed: 1 }, {}));
+    expect(first.failed).toBe(true);
+    const replay = fc.check(
+      failing,
+      propertyRun(
+        {},
+        {
+          COSYTE_PROPERTY_SEED: String(first.seed),
+          COSYTE_PROPERTY_PATH: first.counterexamplePath ?? "",
+        },
+      ),
+    );
+    expect(replay.failed).toBe(true);
+    expect(replay.numRuns).toBe(1);
+    expect(replay.counterexample).toEqual([50]);
   });
 });
 
-describe("assertProperty", () => {
-  const failing = fc.property(fc.nat(), (n) => n < 50);
-
-  it("passes quietly when the property holds", () => {
-    expect(() =>
-      assertProperty(
-        "holds",
-        fc.property(fc.nat(), (n) => n >= 0),
-        {},
-        {},
-      ),
-    ).not.toThrow();
-  });
-
-  it("names the property and prints the seed and path that replay the failure", () => {
-    let message = "";
-    try {
-      assertProperty("below fifty", failing, { seed: 1 }, {});
-    } catch (err) {
-      message = (err as Error).message;
-    }
-    expect(message).toMatch(
-      /^below fifty: property failed after \d+ case\(s\), shrunk \d+ time\(s\)\./u,
-    );
-    const replay = /COSYTE_PROPERTY_SEED=(-?\d+) COSYTE_PROPERTY_PATH=([\d:]+)/u.exec(message);
-    expect(replay).not.toBeNull();
-    expect(message).toContain("Counterexample: [50]");
-
-    // Replaying from the printed seed and path runs the shrunk case straight away.
-    let replayed = "";
-    try {
-      assertProperty(
-        "below fifty",
-        failing,
-        {},
-        {
-          COSYTE_PROPERTY_SEED: replay?.[1],
-          COSYTE_PROPERTY_PATH: replay?.[2],
-        },
-      );
-    } catch (err) {
-      replayed = (err as Error).message;
-    }
-    expect(replayed).toMatch(/property failed after 1 case\(s\)/u);
-    expect(replayed).toContain("Counterexample: [50]");
+describe("propertyTimeout", () => {
+  it("scales a test's budget with the depth", () => {
+    expect(propertyTimeout({})).toBe(10_000);
+    expect(propertyTimeout({ COSYTE_PROPERTY_RUNS: "10000" })).toBe(10_000 * MS_PER_CASE);
+    expect(propertyTimeout({ COSYTE_PROPERTY_RUNS: "250" })).toBe(10_000);
   });
 });

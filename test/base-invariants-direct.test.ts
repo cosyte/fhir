@@ -29,6 +29,7 @@ import {
   baseConstraintOutcomes,
   collectBaseInvariantFindings,
 } from "../src/validate/base-invariants.js";
+import { propertyRun } from "./_property-run.js";
 
 /** Every node under `node`, itself first, including a primitive's extensions and shadowed members. */
 function nodesOf(node: FhirNode): FhirNode[] {
@@ -119,7 +120,10 @@ describe("ele-1 and ext-1, decided directly", () => {
   });
 
   it("agree with the engine at every node of generated resources", () => {
-    fc.assert(fc.property(resourceArbitrary(), expectAgreement), { seed: 7101, numRuns: 150 });
+    fc.assert(
+      fc.property(resourceArbitrary(), expectAgreement),
+      propertyRun({ seed: 7101, numRuns: 150 }),
+    );
   });
 
   it("agree with the engine at every node of messy JSON and of XML", () => {
@@ -127,13 +131,13 @@ describe("ele-1 and ext-1, decided directly", () => {
       fc.property(resourceJson(), (text) => {
         expectAgreement(parseResource(text).resource);
       }),
-      { seed: 7102, numRuns: 150 },
+      propertyRun({ seed: 7102, numRuns: 150 }),
     );
     fc.assert(
       fc.property(resourceXml(), (text) => {
         expectAgreement(parseResourceXml(text).resource);
       }),
-      { seed: 7103, numRuns: 100 },
+      propertyRun({ seed: 7103, numRuns: 100 }),
     );
   });
 

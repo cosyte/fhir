@@ -9,7 +9,9 @@ import {
   PATIENT_IDENTIFIER_STARTER,
   STARTER_PROFILE_BASE_URL,
   STARTER_PROFILES,
+  VETERINARY_PATIENT_STARTER,
   VITAL_SIGN_OBSERVATION_STARTER,
+  type ValidationIssue,
 } from "../src/index.js";
 
 /** A synthetic (non-PHI) spec-clean vital-sign Observation. */
@@ -173,5 +175,172 @@ describe("profile starter kit", () => {
     const { issues } = validateResource(resource, { profiles: [PATIENT_IDENTIFIER_STARTER] });
     expect(issues.some((i) => i.code === "MUST_SUPPORT_ABSENT")).toBe(false);
     expect(issues.some((i) => i.code === "CARDINALITY_MIN")).toBe(false);
+  });
+});
+
+const ANIMAL = "http://hl7.org/fhir/StructureDefinition/patient-animal";
+
+/** A synthetic sub-extension of patient-animal, with a made-up code. */
+function animalPart(url: string, code: string): Record<string, unknown> {
+  return {
+    url,
+    valueCodeableConcept: {
+      coding: [{ system: "http://example.org/fhir/CodeSystem/synthetic-animal", code }],
+    },
+  };
+}
+
+/** The issues the veterinary starter draws on a synthetic Patient with these extensions. */
+function veterinaryIssues(extension: unknown): [string, string, string][] {
+  const { resource } = parseResource(JSON.stringify({ resourceType: "Patient", extension }));
+  const { issues } = validateResource(resource, { profiles: [VETERINARY_PATIENT_STARTER] });
+  return issues.map((i: ValidationIssue) => [i.code, i.severity, i.expression]);
+}
+
+describe("veterinary Patient starter", () => {
+  it("is authored through defineProfile and looked up by url, but is not in the kit", () => {
+    expect(VETERINARY_PATIENT_STARTER.url).toBe(
+      `${STARTER_PROFILE_BASE_URL}/starter-veterinary-patient`,
+    );
+    expect(VETERINARY_PATIENT_STARTER.type).toBe("Patient");
+    const rebuilt = defineProfile({
+      url: VETERINARY_PATIENT_STARTER.url,
+      type: VETERINARY_PATIENT_STARTER.type,
+      name: "StarterVeterinaryPatient",
+      differential: VETERINARY_PATIENT_STARTER.differential ?? [],
+    });
+    expect(rebuilt).toEqual(VETERINARY_PATIENT_STARTER);
+    expect(starterProfile(VETERINARY_PATIENT_STARTER.url)).toBe(VETERINARY_PATIENT_STARTER);
+    // In the kit it would report every human Patient as missing the extension.
+    expect(STARTER_PROFILES).not.toContain(VETERINARY_PATIENT_STARTER);
+  });
+
+  it("pins the extension url and the three parts the extension defines", () => {
+    const byId = new Map(
+      (VETERINARY_PATIENT_STARTER.differential ?? []).map((e) => [e.id, e] as const),
+    );
+    const url = byId.get("Patient.extension:animal.url")?.fixed?.value;
+    expect(url?.kind === "primitive" ? url.value : undefined).toBe(ANIMAL);
+    expect(byId.get("Patient.extension:animal")).toMatchObject({ min: 1, max: 1 });
+    expect(byId.get("Patient.extension:animal.extension:species")).toMatchObject({
+      min: 1,
+      max: 1,
+    });
+    for (const [part, valueSet] of [
+      ["species", "http://hl7.org/fhir/ValueSet/animal-species"],
+      ["breed", "http://hl7.org/fhir/ValueSet/animal-breeds"],
+      ["genderStatus", "http://hl7.org/fhir/ValueSet/animal-genderstatus"],
+    ] as const) {
+      const value = byId.get(`Patient.extension:animal.extension:${part}.value[x]`);
+      expect(value?.binding).toEqual({ strength: "example", valueSet });
+      expect(value?.type).toEqual([{ code: "CodeableConcept" }]);
+      expect(value?.min).toBe(1);
+    }
+    for (const part of ["breed", "genderStatus"]) {
+      expect(byId.get(`Patient.extension:animal.extension:${part}`)).toMatchObject({
+        min: 0,
+        max: 1,
+      });
+    }
+  });
+
+  it("states every element of its differential", () => {
+    const byUrl = { discriminator: [{ type: "value", path: "url" }], rules: "open" };
+    const part = (name: string, min: number, valueSet: string): Record<string, unknown>[] => [
+      {
+        path: "Patient.extension.extension",
+        id: `Patient.extension:animal.extension:${name}`,
+        sliceName: name,
+        min,
+        max: 1,
+      },
+      {
+        path: "Patient.extension.extension.url",
+        id: `Patient.extension:animal.extension:${name}.url`,
+        fixed: { type: "Uri", value: { kind: "primitive", value: name } },
+      },
+      {
+        path: "Patient.extension.extension.value[x]",
+        id: `Patient.extension:animal.extension:${name}.value[x]`,
+        min: 1,
+        type: [{ code: "CodeableConcept" }],
+        binding: { strength: "example", valueSet },
+      },
+    ];
+    expect(VETERINARY_PATIENT_STARTER.differential).toEqual([
+      { path: "Patient.extension", id: "Patient.extension", slicing: byUrl },
+      {
+        path: "Patient.extension",
+        id: "Patient.extension:animal",
+        sliceName: "animal",
+        min: 1,
+        max: 1,
+        mustSupport: true,
+        type: [{ code: "Extension", profile: [ANIMAL] }],
+      },
+      {
+        path: "Patient.extension.extension",
+        id: "Patient.extension:animal.extension",
+        slicing: byUrl,
+      },
+      ...part("species", 1, "http://hl7.org/fhir/ValueSet/animal-species"),
+      ...part("breed", 0, "http://hl7.org/fhir/ValueSet/animal-breeds"),
+      ...part("genderStatus", 0, "http://hl7.org/fhir/ValueSet/animal-genderstatus"),
+      {
+        path: "Patient.extension.url",
+        id: "Patient.extension:animal.url",
+        fixed: { type: "Uri", value: { kind: "primitive", value: ANIMAL } },
+      },
+    ]);
+  });
+
+  it("passes a veterinary Patient carrying species, breed and gender status", () => {
+    expect(
+      veterinaryIssues([
+        {
+          url: ANIMAL,
+          extension: [
+            animalPart("species", "syn-species"),
+            animalPart("breed", "syn-breed"),
+            animalPart("genderStatus", "syn-gender-status"),
+          ],
+        },
+        { url: "http://example.org/fhir/StructureDefinition/synthetic", valueString: "syn" },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("requires the animal extension", () => {
+    expect(veterinaryIssues(undefined)).toEqual([
+      ["MUST_SUPPORT_ABSENT", "information", "Patient.extension:animal"],
+      ["CARDINALITY_MIN", "error", "Patient.extension:animal"],
+    ]);
+  });
+
+  it("requires species inside it", () => {
+    expect(
+      veterinaryIssues([{ url: ANIMAL, extension: [animalPart("breed", "syn-breed")] }]),
+    ).toContainEqual(["CARDINALITY_MIN", "error", "Patient.extension.extension:species"]);
+  });
+
+  it("allows the animal extension once, and breed once", () => {
+    const once = { url: ANIMAL, extension: [animalPart("species", "syn-species")] };
+    expect(veterinaryIssues([once, once])).toContainEqual([
+      "CARDINALITY_MAX",
+      "error",
+      "Patient.extension:animal",
+    ]);
+    expect(
+      veterinaryIssues([
+        {
+          url: ANIMAL,
+          extension: [
+            animalPart("species", "syn-species"),
+            animalPart("breed", "syn-breed"),
+            animalPart("breed", "syn-breed"),
+          ],
+        },
+      ]),
+    ).toContainEqual(["CARDINALITY_MAX", "error", "Patient.extension.extension:breed"]);
   });
 });

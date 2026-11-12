@@ -12,6 +12,7 @@ import { hostileInput, resourceJson } from "../src/arbitraries/text.js";
 import { readRawJsonLazily } from "../src/codec/raw-json.js";
 import { FhirCodecError, parseResource, readRawJson, type RawJson } from "../src/index.js";
 import { transactionBundle } from "../bench/shapes.mjs";
+import { propertyRun } from "./_property-run.js";
 
 /** The tree read in full, as plain data. */
 function plain(node: RawJson): unknown {
@@ -133,7 +134,7 @@ describe("readRawJsonLazily", () => {
           );
         }
       }),
-      { numRuns: 300, seed: 7011 },
+      propertyRun({ numRuns: 300, seed: 7011 }),
     );
   });
 

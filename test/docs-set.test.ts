@@ -24,10 +24,11 @@ import { describe, expect, it } from "vitest";
 import { ARMS, checkDocsSet, formatFinding } from "../scripts/docs-set-check.js";
 import type { ArmName, Finding } from "../scripts/docs-set-check.js";
 
+import { IS_DENO, tsx } from "./_runtime.js";
+
 const REPO_ROOT = process.cwd();
 const DOCS_DIR = join(REPO_ROOT, "docs-content");
 const CHECKER = join(REPO_ROOT, "scripts", "docs-set-check.ts");
-const TSX_BIN = join(REPO_ROOT, "node_modules", ".bin", "tsx");
 
 /** Compiling and running every sample dominates the runtime of a full grading pass. */
 const SAMPLE_TIMEOUT = 180_000;
@@ -122,8 +123,15 @@ function page(id: string, title: string, body: string): string {
   return `---\nid: ${id}\ntitle: ${title}\n---\n\n${body}\n`;
 }
 
+/**
+ * Skipped under Deno: the samples arm runs every sample in a child process under tsx, a Node
+ * command line, and the `deno` job takes Node off PATH. Run there, Deno strips no types from a
+ * file under `node_modules/`, where the samples are written. The Node jobs run these on every system.
+ */
+const SAMPLES_RUN_HERE = !IS_DENO;
+
 describe("the published documentation set", () => {
-  it(
+  it.runIf(SAMPLES_RUN_HERE)(
     "passes every arm of its own gate",
     () => {
       const findings = checkDocsSet(DOCS_DIR);
@@ -577,7 +585,7 @@ describe("every arm goes red on a seeded control", () => {
     expect(messages(findings)).toBe("");
   });
 
-  it(
+  it.runIf(SAMPLES_RUN_HERE)(
     "samples: one that does not compile, and one whose stated result is wrong",
     () => {
       const findings = graded(
@@ -876,7 +884,9 @@ describe("the generated reference and the anchors links name", () => {
 });
 
 describe("the gate's command-line entry point", () => {
-  it(
+  // Skipped under Deno: the command line runs under tsx, a Node command line, and the `deno` job
+  // takes Node off PATH. Deno running it finds no `../src/*.js` beside the `.ts` it imports.
+  it.skipIf(IS_DENO)(
     "exits non-zero and names the finding",
     () => {
       const dir = mkdtempSync(join(tmpdir(), "fhir-docs-cli-"));
@@ -885,7 +895,8 @@ describe("the gate's command-line entry point", () => {
           join(dir, "intro.md"),
           page("intro", "Getting started", "Braces like { this } break the site build."),
         );
-        const run = spawnSync(TSX_BIN, [CHECKER, dir], { encoding: "utf8", cwd: REPO_ROOT });
+        const [command, argv] = tsx([CHECKER, dir]);
+        const run = spawnSync(command, argv, { encoding: "utf8", cwd: REPO_ROOT });
         expect(run.status).toBe(1);
         expect(run.stderr).toContain("[mdx-braces]");
         expect(run.stderr).toContain("finding(s)");

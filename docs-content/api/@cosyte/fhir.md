@@ -1826,6 +1826,44 @@ The version id from a `/_history/{vid}` suffix, when present.
 
 ***
 
+### PatientAnimal
+
+What [readPatientAnimal](#readpatientanimal) read from a Patient's `patient-animal` extension. Each part is the
+`valueCodeableConcept` model node as written, or `undefined` when the extension does not carry it
+or carries it in a form that could not be read faithfully (an issue then says which).
+
+#### Properties
+
+##### breed
+
+> `readonly` **breed**: [`FhirComplex`](#fhircomplex) \| `undefined`
+
+The animal's breed (`0..1`), as a CodeableConcept.
+
+##### genderStatus
+
+> `readonly` **genderStatus**: [`FhirComplex`](#fhircomplex) \| `undefined`
+
+The state of the animal's reproductive organs (`0..1`), as a CodeableConcept.
+
+##### issues
+
+> `readonly` **issues**: readonly [`ValidationIssue`](#validationissue)[]
+
+Value-free findings about the extension: `CARDINALITY_MIN` when it lacks `species` (at
+`Patient.extension[n].extension:species`) or a sub-extension lacks its value, `CARDINALITY_MAX`
+when the extension or a sub-extension repeats, `TYPE_MISMATCH` or `CHOICE_AMBIGUOUS` for a value
+that is not one CodeableConcept, and `DUPLICATE_PROPERTY` for a property the JSON wrote twice.
+Empty when the extension was read whole.
+
+##### species
+
+> `readonly` **species**: [`FhirComplex`](#fhircomplex) \| `undefined`
+
+The animal's species (`1..1` in the extension), as a CodeableConcept.
+
+***
+
 ### PrimitiveMeta
 
 Optional `id` / `extension` metadata for [primitive](#primitive).
@@ -4712,6 +4750,14 @@ property name is `"value" + <suffix>` (e.g. `"Quantity"` → `valueQuantity`, `"
 
 ***
 
+### PATIENT\_ANIMAL\_EXTENSION\_URL
+
+> `const` **PATIENT\_ANIMAL\_EXTENSION\_URL**: `"http://hl7.org/fhir/StructureDefinition/patient-animal"` = `"http://hl7.org/fhir/StructureDefinition/patient-animal"`
+
+The canonical URL of the R4 `patient-animal` extension.
+
+***
+
 ### PATIENT\_IDENTIFIER\_STARTER
 
 > `const` **PATIENT\_IDENTIFIER\_STARTER**: [`StructureDefinition`](#structuredefinition)
@@ -5091,8 +5137,10 @@ The canonical URL prefix the starter-kit profiles are published under.
 
 > `const` **STARTER\_PROFILES**: readonly [`StructureDefinition`](#structuredefinition)[]
 
-Every starter-kit profile. Iterate this to register the whole kit as a validation profile set, or
-pick one by `url`, a starting point a consumer extends with their own site/vendor constraints.
+Every starter-kit profile that applies to any resource of its type. Iterate this to register the
+whole kit as a validation profile set, or pick one by `url`, a starting point a consumer extends
+with their own site/vendor constraints. [VETERINARY\_PATIENT\_STARTER](#veterinary_patient_starter) is left out, since it
+applies only to a Patient that is an animal.
 
 #### Example
 
@@ -5575,7 +5623,7 @@ profile violation, compared on the UCUM `code` (case- and bracket-sensitive), ne
 
 ### VERSION
 
-> `const` **VERSION**: `string` = `"0.1.15"`
+> `const` **VERSION**: `string` = `"0.1.16"`
 
 Library version string, synced with `package.json#version` at build time by
 `cosyte-process sync-version` (wired into the Changesets `version` script). Exported now so
@@ -5588,6 +5636,26 @@ consumers, and the type-check pipeline, have at least one symbol to resolve thro
 import { VERSION } from "@cosyte/fhir";
 console.log(VERSION);
 ```
+
+***
+
+### VETERINARY\_PATIENT\_STARTER
+
+> `const` **VETERINARY\_PATIENT\_STARTER**: [`StructureDefinition`](#structuredefinition)
+
+A **veterinary `Patient`** starter, grounded in the R4 `patient-animal` extension
+(extension-patient-animal.html). It slices `Patient.extension` by `url` and requires exactly one
+`animal` slice, pinned to [PATIENT\_ANIMAL\_EXTENSION\_URL](#patient_animal_extension_url), inside which `species` is required
+(`1..1`) and `breed` and `genderStatus` are allowed once each (`0..1`), every one carrying a
+`valueCodeableConcept`. The slicing stays **`open`**, so other extensions may sit beside it.
+
+The extension is **draft**, maturity level 1, and its three bindings (`AnimalSpecies`,
+`AnimalBreed`, `AnimalGenderStatus`) are **example** bindings: they are carried here as written,
+and no code is required of any of them. Read the parts with `readPatientAnimal`.
+
+It is not in [STARTER\_PROFILES](#starter_profiles): a profile there applies to every resource of its type, and
+this one would report every human Patient as missing the extension. Pass it on its own, for the
+Patients you know are animals, or look it up with [starterProfile](#starterprofile).
 
 ***
 
@@ -8575,6 +8643,58 @@ v?.quantity; // undefined
 
 ***
 
+### readPatientAnimal()
+
+> **readPatientAnimal**(`resource`): [`PatientAnimal`](#patientanimal) \| `undefined`
+
+Read species, breed and gender status from a Patient's `patient-animal` extension
+(`http://hl7.org/fhir/StructureDefinition/patient-animal`), each as the CodeableConcept model node
+the document wrote.
+
+Returns `undefined` when the resource is not a Patient or carries no such extension. Otherwise each
+part is its CodeableConcept, or `undefined` when absent; a missing `species` (`1..1`) is reported
+as `CARDINALITY_MIN` at `Patient.extension[n].extension:species`. A part the document gives more
+than one answer for, or gives in another type, is not read and is reported instead (see
+[PatientAnimal.issues](#issues-1)). The extension is draft (maturity level 1) and its bindings are
+examples only, so no code is checked.
+
+#### Parameters
+
+##### resource
+
+[`FhirComplex`](#fhircomplex)
+
+The resource model.
+
+#### Returns
+
+[`PatientAnimal`](#patientanimal) \| `undefined`
+
+The parts read, with their issues, or `undefined` when there is no animal extension.
+
+#### Example
+
+```ts
+import { parseResource, readPatientAnimal } from "@cosyte/fhir";
+const { resource } = parseResource(
+  JSON.stringify({
+    resourceType: "Patient",
+    extension: [
+      {
+        url: "http://hl7.org/fhir/StructureDefinition/patient-animal",
+        extension: [{ url: "species", valueCodeableConcept: { text: "Synthetic species" } }],
+      },
+    ],
+  }),
+);
+const animal = readPatientAnimal(resource);
+animal?.species; // the CodeableConcept node
+animal?.breed; // undefined
+animal?.issues; // []
+```
+
+***
+
 ### readQuantity()
 
 > **readQuantity**(`node`): [`Quantity`](#quantity-1) \| `undefined`
@@ -9453,7 +9573,7 @@ const elements = snapshotElements(usCoreProfile); // uses the IG-supplied snapsh
 
 > **starterProfile**(`url`): [`StructureDefinition`](#structuredefinition) \| `undefined`
 
-Look up a starter profile by its canonical `url`.
+Look up a starter profile by its canonical `url`, [VETERINARY\_PATIENT\_STARTER](#veterinary_patient_starter) included.
 
 #### Parameters
 

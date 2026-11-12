@@ -7,8 +7,8 @@
     "rule": "Every name the entry point re-exports, split by whether it survives to runtime (values) or is erased by the type system (types), plus the subpaths the exports map publishes. Sorted, so a diff is a set difference and never a reordering."
   },
   "counts": {
-    "values": 170,
-    "types": 106,
+    "values": 173,
+    "types": 107,
     "exportSubpaths": 3
   },
   "values": [
@@ -56,6 +56,7 @@
     "NO_KNOWN_ALLERGY",
     "OBSERVATION_CATEGORY_SYSTEM",
     "OBSERVATION_VALUE_TYPES",
+    "PATIENT_ANIMAL_EXTENSION_URL",
     "PATIENT_IDENTIFIER_STARTER",
     "PRIMITIVE_TYPES",
     "REFUTED",
@@ -71,6 +72,7 @@
     "UnsupportedFhirPathError",
     "VALIDATION_CODES",
     "VERSION",
+    "VETERINARY_PATIENT_STARTER",
     "VITAL_SIGNS_CATEGORY",
     "VITAL_SIGNS_PROFILE",
     "VITAL_SIGN_OBSERVATION_STARTER",
@@ -151,6 +153,7 @@
     "readInterpretations",
     "readMedicationDoses",
     "readObservationValue",
+    "readPatientAnimal",
     "readQuantity",
     "readRawJson",
     "readRawXml",
@@ -242,6 +245,7 @@
     "ObservationValue",
     "ObservationValueType",
     "ParsedReference",
+    "PatientAnimal",
     "PrimitiveMeta",
     "PrimitiveType",
     "PrimitiveValue",

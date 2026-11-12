@@ -9,6 +9,7 @@
       "items": [
         "accept-json-and-xml",
         "read-measured-values",
+        "read-veterinary-patients",
         "check-safety-before-summarizing",
         "validate-against-profiles",
         "validate-many-resources-with-one-registry",

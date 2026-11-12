@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 
 import ts from "typescript";
 
@@ -59,7 +59,13 @@ export function compileEachErrors(
   paths: Readonly<Record<string, string>>,
   codes: readonly string[],
 ): string[][] {
-  const files = codes.map((_, index) => join(root, `first-use-example-${String(index)}.mts`));
+  // Forward slashes, as the compiler writes every file name on every system: on Windows a name
+  // with backslashes is never the one the compiler asks the host for, so no example would be read.
+  const files = codes.map((_, index) =>
+    join(root, `first-use-example-${String(index)}.mts`)
+      .split(sep)
+      .join("/"),
+  );
   const sources = new Map(files.map((file, index) => [file, codes[index] ?? ""]));
   const options: ts.CompilerOptions = {
     ...READER_OPTIONS,

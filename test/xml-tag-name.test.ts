@@ -55,6 +55,7 @@ import {
   type FhirComplex,
 } from "../src/index.js";
 import { jsonOfModel } from "./_util.js";
+import { propertyRun } from "./_property-run.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
 
@@ -947,7 +948,7 @@ describe("a model name at an XML tag position", () => {
             ).toEqual(names);
           },
         ),
-        { numRuns: 3000 },
+        propertyRun({ numRuns: 3000 }),
       );
     });
 
@@ -982,7 +983,7 @@ describe("a model name at an XML tag position", () => {
             expect(refusal(node)?.code).not.toBe(SERIALIZE_ERROR_CODES.UNSERIALIZABLE_ELEMENT_NAME);
           },
         ),
-        { numRuns: 3000 },
+        propertyRun({ numRuns: 3000 }),
       );
     });
 
@@ -1285,7 +1286,7 @@ describe("a model name at an XML tag position", () => {
             expect(returned).not.toBe(div);
           },
         ),
-        { numRuns: 2000 },
+        propertyRun({ numRuns: 2000 }),
       );
     });
   });

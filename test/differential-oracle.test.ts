@@ -52,6 +52,7 @@ import {
   resolveTerminologyInputs,
   TERMINOLOGY_INPUTS,
 } from "../scripts/differential/terminology.mjs";
+import { IS_WINDOWS } from "./_runtime.js";
 import { observation, QUANTITY, recordingOracle, US_CORE, usCoreWorld } from "./_uscore-world.js";
 
 function scratch(): string {
@@ -197,7 +198,9 @@ describe("an oracle whose identity cannot be established is refused, never guess
     expect(() => oracleIdentity(jarWith(""))).toThrow(/is empty/);
   });
 
-  it("refuses a jar it cannot read", () => {
+  // Skipped on Windows: `chmod 000` does not take read access away there (Node maps the mode to
+  // the read-only attribute alone), so no unreadable jar can be made. The differential runs on Linux.
+  it.skipIf(IS_WINDOWS)("refuses a jar it cannot read", () => {
     const file = jarWith("bytes");
     chmodSync(file, 0o000);
     try {

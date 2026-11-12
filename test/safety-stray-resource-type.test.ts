@@ -27,6 +27,7 @@ import {
   readSafety,
   type FhirComplex,
 } from "../src/index.js";
+import { propertyRun } from "./_property-run.js";
 
 const NS = ' xmlns="http://hl7.org/fhir"';
 
@@ -151,12 +152,14 @@ describe("a stray resourceType never starts a resource or hides one", () => {
  */
 const FUZZ_RUNS = Number.parseInt(process.env["FUZZ_RUNS"] ?? "", 10);
 const RUNS = Number.isFinite(FUZZ_RUNS) && FUZZ_RUNS > 0 ? FUZZ_RUNS : 1000;
+/** The cases each property runs: {@link RUNS}, or the depth `COSYTE_PROPERTY_RUNS` sets. */
+const CASES = propertyRun({ numRuns: RUNS }).numRuns;
 /**
  * Each property's time limit, raised with its case count: at the fuzz depth one property takes
  * longer than the suite's default limit on a GitHub runner, and a case count that cannot finish is
  * no deeper check.
  */
-const TIMEOUT = Math.max(10_000, RUNS * 10);
+const TIMEOUT = Math.max(10_000, CASES * 10);
 
 /**
  * A container resource, named for the resource position it offers: `contained` on an Observation,
@@ -479,7 +482,7 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
   const steps = (strays: boolean) =>
     fc.array(stepArbitrary(strays), { minLength: 1, maxLength: 4 });
 
-  it(`JSON, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
+  it(`JSON, ${String(CASES)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(steps(true), PLANTED, (path, planted) => {
         const document = build(path, planted);
@@ -488,11 +491,11 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
         // The planted resource itself is listed, by its own location, whatever else is.
         expect(result.notAssessed).toContain(plantedPath(path, "json"));
       }),
-      { numRuns: RUNS, seed: 20261111 },
+      propertyRun({ numRuns: RUNS, seed: 20261111 }),
     );
   });
 
-  it(`XML, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
+  it(`XML, ${String(CASES)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(steps(true), PLANTED, (path, planted) => {
         const document = build(path, planted);
@@ -501,12 +504,12 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
         // The planted resource itself is listed, by its own location, whatever else is.
         expect(result.notAssessed).toContain(plantedPath(path, "xml"));
       }),
-      { numRuns: RUNS, seed: 20261111 },
+      propertyRun({ numRuns: RUNS, seed: 20261111 }),
     );
   });
 
   it(
-    `converse: only modeled resources at resource positions, no stray key, stays safe (${String(RUNS)} cases)`,
+    `converse: only modeled resources at resource positions, no stray key, stays safe (${String(CASES)} cases)`,
     { timeout: TIMEOUT },
     () => {
       fc.assert(
@@ -523,7 +526,7 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
           expect(safety.safeToSummarize).toBe(true);
           expect(() => assertSafeToSummarize(resource)).not.toThrow();
         }),
-        { numRuns: RUNS, seed: 20261111 },
+        propertyRun({ numRuns: RUNS, seed: 20261111 }),
       );
     },
   );

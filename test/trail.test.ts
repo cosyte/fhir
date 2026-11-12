@@ -12,6 +12,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import { Trail, WITHHELD, childPath } from "../src/model/path.js";
+import { propertyRun } from "./_property-run.js";
 
 /** A segment as a walk steps into it: an element name, or an array index. */
 type Segment = { readonly name: string } | { readonly index: number };
@@ -48,7 +49,7 @@ describe("Trail", () => {
           expect(trail.childText("code")).toBe(childPath(joined(root, segments), "code"));
         },
       ),
-      { seed: 20261111, numRuns: 2000 },
+      propertyRun({ seed: 20261111, numRuns: 2000 }),
     );
   });
 
