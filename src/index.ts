@@ -285,8 +285,14 @@ export {
   PATIENT_IDENTIFIER_STARTER,
   STARTER_PROFILE_BASE_URL,
   STARTER_PROFILES,
+  VETERINARY_PATIENT_STARTER,
   VITAL_SIGN_OBSERVATION_STARTER,
 } from "./profiles/starter-kit.js";
+
+// Helpers: read a useful field out of the model without reading the spec. The R4 patient-animal
+// extension (species, breed, gender status) on a veterinary Patient.
+export { PATIENT_ANIMAL_EXTENSION_URL, readPatientAnimal } from "./helpers/index.js";
+export type { PatientAnimal } from "./helpers/index.js";
 
 // Phase 7, invariants via a bounded, vendored FHIRPath subset (ADR 0002). A lexer → parser → evaluator
 // that evaluates `constraint[]` expressions; an expression outside the subset is reported UNCHECKED,
