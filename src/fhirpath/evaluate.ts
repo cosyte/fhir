@@ -6,7 +6,8 @@
  * AST over the generic {@link ../model/node.js} tree, implementing the subset of FHIRPath the R4 /
  * US Core invariant set actually uses:
  *
- * - **navigation** (`a.b.c`, choice access `value` → `valueQuantity`), `$this`, `%resource` / `%context`;
+ * - **navigation** (`a.b.c`, choice access `value` → `valueQuantity`), `$this`, `%resource` / `%context`,
+ *   and `%ucum`, the UCUM system URL;
  * - **existence / filtering**, `exists`, `empty`, `not`, `where`, `all`, `select`, `count`, `first`,
  *   `last`, `distinct`, `hasValue`, `children`, `extension`, `intersect`;
  * - **logic**, `and` / `or` / `xor` / `implies` with FHIRPath three-valued (empty-propagating) truth;
@@ -73,7 +74,17 @@ export type FpColl = readonly FpItem[];
 interface EvalCtx {
   readonly resource: FhirNode;
   readonly context: FpColl;
+  /**
+   * The member names the caller knows to be elements of their own, never the stem of a choice:
+   * such a name selects only a property of exactly that name, so `period` over a node holding only
+   * `periodMax` selects nothing rather than reading `periodMax` as a `period[x]` variant. Absent, every
+   * name falls back to its choice variants.
+   */
+  readonly exact?: (name: string) => boolean;
 }
+
+/** The value of `%ucum`, which FHIRPath defines as the UCUM code system's URL. */
+const UCUM_SYSTEM = "http://unitsofmeasure.org";
 
 /** Wrap a node into collection items, flattening a list into its (recursively flattened) members. */
 function wrap(node: FhirNode): FpItem[] {
@@ -183,13 +194,14 @@ function pushWrapped(node: FhirNode, out: FpItem[]): void {
  * Append the items member `name` selects from a single node item to `out` (lists flattened). Every
  * selection appends to the one list its caller builds, so a step of a path makes no list per item.
  */
-function pushNavigated(node: FhirNode, name: string, out: FpItem[]): void {
+function pushNavigated(node: FhirNode, name: string, out: FpItem[], only = false): void {
   if (isComplex(node)) {
     const exact = getProperty(node, name);
     if (exact !== undefined) {
       pushWrapped(exact, out);
       return;
     }
+    if (only) return;
     // No literal property: try a `[x]` choice variant (`value` selects `valueQuantity`, …).
     const properties = node.properties;
     for (let i = 0; i < properties.length; i++) {
@@ -219,12 +231,15 @@ function navigateItem(node: FhirNode, name: string): FpItem[] {
   return out;
 }
 
-/** Navigate `name` from every node item in a collection (computed items have no members). */
-function navigate(focus: FpColl, name: string): FpItem[] {
+/**
+ * Navigate `name` from every node item in a collection (computed items have no members); `only`
+ * selects the property of exactly that name and never a choice variant.
+ */
+function navigate(focus: FpColl, name: string, only = false): FpItem[] {
   const out: FpItem[] = [];
   for (let i = 0; i < focus.length; i++) {
     const item = focus[i] as FpItem;
-    if (item.t === "node") pushNavigated(item.node, name, out);
+    if (item.t === "node") pushNavigated(item.node, name, out, only);
   }
   return out;
 }
@@ -1037,6 +1052,7 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
     case "envvar":
       if (expr.name === "resource" || expr.name === "rootResource") return wrap(ctx.resource);
       if (expr.name === "context") return ctx.context;
+      if (expr.name === "ucum") return [{ t: "str", value: UCUM_SYSTEM }];
       throw new UnsupportedFhirPathError(`unsupported environment variable %${expr.name}`);
     case "variable":
       if (expr.name === "this") return focus;
@@ -1045,7 +1061,11 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
       if (expr.target === null && isTypeQualifier(expr.name)) {
         return resolveTypeQualifier(expr.name, focus);
       }
-      return navigate(expr.target === null ? focus : evaluate(expr.target, focus, ctx), expr.name);
+      return navigate(
+        expr.target === null ? focus : evaluate(expr.target, focus, ctx),
+        expr.name,
+        ctx.exact?.(expr.name) === true,
+      );
     case "call": {
       const input = expr.target === null ? focus : evaluate(expr.target, focus, ctx);
       return applyFunction(expr.name, input, expr.args, focus, ctx);

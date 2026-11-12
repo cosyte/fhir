@@ -849,7 +849,7 @@ function safetyPrefix(types: readonly string[]): string {
  * {@link SafetyReadout.notAssessed}: what its status codes mean is not known here, so a cancelled
  * or withdrawn record of that type could not be told from a current one.
  */
-const ASSESSED_RESOURCE_TYPES: ReadonlySet<string> = new Set([
+export const ASSESSED_RESOURCE_TYPES: ReadonlySet<string> = new Set([
   "AllergyIntolerance",
   "Bundle",
   "Condition",

@@ -392,9 +392,24 @@ function checkNarrative(narrative: FhirComplex, path: string, issues: Validation
   }
   const found = narrativeFindings(div.value);
   for (const code of REPORT_ORDER) {
-    if (found.has(code)) issues.push(validationIssue(code, ISSUE_SEVERITIES.ERROR, at));
+    if (found.has(code)) {
+      issues.push(validationIssue(code, ISSUE_SEVERITIES.ERROR, at, NARRATIVE_CONSTRAINT[code]));
+    }
   }
 }
+
+/**
+ * The R4 constraint on `Narrative.div` a finding is a breach of, carried on the finding as its
+ * `constraint`: `txt-1` (only the basic HTML formatting elements and attributes, no active content)
+ * and `txt-2` (some non-whitespace content). The root and paragraph findings are breaches of the
+ * XHTML the `xhtml` datatype requires, not of either constraint, and carry no key.
+ */
+const NARRATIVE_CONSTRAINT: Readonly<Partial<Record<ValidationCode, string>>> = {
+  NARRATIVE_ELEMENT_ILLEGAL: "txt-1",
+  NARRATIVE_ATTRIBUTE_ILLEGAL: "txt-1",
+  NARRATIVE_ACTIVE_CONTENT: "txt-1",
+  NARRATIVE_EMPTY: "txt-2",
+};
 
 /** One resource waiting to be visited, with the location of its root. */
 interface PendingResource {

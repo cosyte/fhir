@@ -463,6 +463,24 @@ export const VALIDATION_CODES = {
    * Value-free.
    */
   NARRATIVE_EMPTY: "NARRATIVE_EMPTY",
+  /**
+   * Extension, an `extension` was not checked against the definition its `url` names: no
+   * `StructureDefinition` for it was supplied, and this library does not apply an extension
+   * definition to an extension's content even when one is. Emitted as `information` at the
+   * extension: its value and its nested extensions are checked only as the base `Extension`
+   * (`ext-1`, `ele-1` and the datatype of its value), never as the definition constrains them. A
+   * result carrying it never reads `fullyChecked: true`. Value-free, the location of the
+   * extension, never its `url`.
+   */
+  EXTENSION_UNCHECKED: "EXTENSION_UNCHECKED",
+  /**
+   * Profile, the resource claims a profile in `meta.profile` that no supplied profile of its type
+   * carries at that canonical URL, so the resource was not checked against it. Emitted as
+   * `information` at the `meta.profile` entry: a claimed profile is reported **not checked**, never
+   * silently passed. A result carrying it never reads `fullyChecked: true`. Value-free,
+   * the location of the claim, never the URL.
+   */
+  PROFILE_UNCHECKED: "PROFILE_UNCHECKED",
 } as const;
 
 /** Discriminant union of every {@link VALIDATION_CODES} value. */
@@ -628,8 +646,9 @@ export interface ValidationIssue {
   readonly expression: string;
   /**
    * The spec constraint key when the finding is an invariant violation (e.g. `"ait-1"`, `"obs-6"`),
-   * a public FHIR identifier, never an instance value, so it is safe to surface. `undefined` for
-   * every non-invariant finding. It reaches the `OperationOutcome` as `issue.details.text`.
+   * a public FHIR identifier, never an instance value, so it is safe to surface: on an
+   * `INVARIANT_VIOLATED` or `INVARIANT_UNCHECKED` finding, and on a narrative finding that breaches
+   * `txt-1` or `txt-2`. `undefined` for every other finding. It reaches the `OperationOutcome` as `issue.details.text`.
    */
   readonly constraint?: string;
   /**
@@ -716,6 +735,8 @@ const ISSUE_TYPE_OF = (): Readonly<Record<ValidationCode, IssueType>> => ({
   NARRATIVE_ACTIVE_CONTENT: ISSUE_TYPES.SECURITY,
   NARRATIVE_BLOCK_IN_PARAGRAPH: ISSUE_TYPES.STRUCTURE,
   NARRATIVE_EMPTY: ISSUE_TYPES.INVARIANT,
+  EXTENSION_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
+  PROFILE_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
 });
 
 /** The `IssueType` table, made on first use and kept. */
@@ -849,6 +870,12 @@ const DIAGNOSTIC_OF = (): Readonly<Record<ValidationCode, string>> => ({
     "attribute, or a script URL), which FHIR forbids and a renderer must not run.",
   NARRATIVE_BLOCK_IN_PARAGRAPH: "Narrative contains a block element inside a paragraph.",
   NARRATIVE_EMPTY: "Narrative has no content other than whitespace.",
+  EXTENSION_UNCHECKED:
+    "Extension was not checked against the definition its url names; its content is checked only " +
+    "as a base Extension, and conformance to that definition is not asserted.",
+  PROFILE_UNCHECKED:
+    "Resource claims a profile that was not supplied, so it was not checked against that profile; " +
+    "conformance to it is not asserted.",
 });
 
 /** The diagnostic lines, made on first use and kept. */

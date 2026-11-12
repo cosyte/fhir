@@ -144,12 +144,55 @@ findings, and none of them can withdraw another's:
    whether or not you supply a profile. A contained resource is checked only through the
    constraints its container declares about it (`dom-2` to `dom-5`), and the narrative best-practice
    warning `dom-6` is not evaluated without a profile.
-8. **Profiles and invariants**: everything a caller-supplied `StructureDefinition` asserts, plus its
-   FHIRPath constraints. A base constraint a profile repeats is reported once per occurrence, not
-   twice.
+8. **Datatype constraints**: the error-severity constraints R4 declares on its datatypes, such as
+   `qty-3` on every Quantity, `per-1` on every Period, `rng-2` on every Range, `ref-1` on every
+   Reference, and `sqty-1` where R4 types an element `SimpleQuantity` (`Observation.referenceRange.low`,
+   `Range.low`, a dose). Evaluated at every occurrence at any depth, inside extensions, contained
+   resources and Bundle entries included, for the ten resource types the element model describes,
+   whether or not you supply a profile. The narrative's `txt-1` and `txt-2` are the narrative
+   checks' findings, which carry those keys.
+9. **Profiles and invariants**: everything a caller-supplied `StructureDefinition` asserts, plus its
+   FHIRPath constraints. A base or datatype constraint a profile repeats is reported once per
+   occurrence, not twice.
 
 The verdict is one boolean over the findings: `valid` is false when any finding is an error or
-worse. Warnings and informational findings leave it true.
+worse. Warnings and informational findings leave it true. `valid: true` says that no rule that was
+checked failed; it does not say that every rule was checked.
+
+`fullyChecked` beside it says that. It is `true` only when the resource is an
+`AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`, `MedicationRequest`,
+`MedicationStatement`, `Observation` or `Patient` the registry has a schema for, carries no
+`contained` resource, and drew no finding that says something was left unchecked or unread:
+`INVARIANT_UNCHECKED`, `EXTENSION_UNCHECKED` (every extension, since no extension definition is
+applied), `PROFILE_UNCHECKED` (a `meta.profile` claim with no matching profile supplied),
+`PROFILE_VERSION_MISMATCH`, `PROFILE_SLICE_UNCHECKED`, `PROFILE_SLICE_NO_SLICING`,
+`PROFILE_CONSTRAINT_UNCHECKED`, `UNKNOWN_ELEMENT`, `RESOURCE_NOT_MODELED`,
+`UNHANDLED_MODIFIER_EXTENSION`, `DUPLICATE_PROPERTY`, `NESTED_ARRAY`, `DROPPED_ELEMENT_TEXT`,
+`ARRAY_WRAPPED_CHOICE`, `ABSENCE_MARKER_UNREADABLE`, `CONTAINED_ID_DUPLICATE` or
+`NARRATIVE_UNREADABLE`.
+
+What `fullyChecked` cannot cover is value set membership without a terminology service. None is
+bundled; without one, a code is checked only against the required bindings this library enumerates
+and by the content-free code-system checks, and whether it is a member of any other bound value set
+is not decided. `fullyChecked` does not count that question, so pass a `terminology` service when
+membership matters.
+
+```ts runnable
+import { parseResource, validateResource } from "@cosyte/fhir";
+
+const { resource } = parseResource(
+  JSON.stringify({
+    resourceType: "Observation",
+    status: "final",
+    code: { text: "Synthetic test" },
+    valueQuantity: { value: 1, code: "mg" },
+  }),
+);
+const result = validateResource(resource);
+result.valid; // => false
+result.issues[0]?.constraint; // => "qty-3"
+result.fullyChecked; // => true
+```
 
 ## The value-free OperationOutcome contract
 

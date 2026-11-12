@@ -1286,6 +1286,35 @@ validateResource(resource).issues.map((i) => `${i.code} ${i.expression}`);
 // ["NARRATIVE_ACTIVE_CONTENT Patient.text.div"]
 ```
 
+A narrative finding that breaches `txt-1` (`NARRATIVE_ELEMENT_ILLEGAL`,
+`NARRATIVE_ATTRIBUTE_ILLEGAL`, `NARRATIVE_ACTIVE_CONTENT`) or `txt-2` (`NARRATIVE_EMPTY`) carries that
+key as its `constraint`.
+
+### Datatype constraints and fullyChecked
+
+- **What is evaluated**: every error-severity constraint R4 4.0.1 declares on a datatype the
+  element model reaches below the ten resource types it describes: `qty-3` (Quantity, Age, Count,
+  Distance, Duration, SimpleQuantity), `sqty-1` (where R4 types an element `SimpleQuantity`: a
+  reference range bound, a Range bound, a dose, a dispense quantity, `SampledData.origin`),
+  `age-1`, `cnt-3`, `dis-1`, `drt-1`, `att-1`, `cpt-2`, `per-1`, `rng-2`, `rat-1`, `ref-1`,
+  `exp-1`, `drq-1`, `drq-2`, `tim-1`, `tim-2`, `tim-4` to `tim-10`, and `trd-1` to `trd-3`, at every
+  occurrence at any depth: in backbone elements, extensions, a primitive's own extensions,
+  contained resources and Bundle entries. `txt-1` and `txt-2` are the narrative checks above.
+- **Where the list comes from**: `scripts/element-definitions.mjs` projects the constraints and the
+  `SimpleQuantity` positions from the R4 definition files pinned by digest into
+  `test/__data__/fhir-element-definitions.json`, CI re-derives it (`pnpm definitions:check`), and
+  `test/datatype-invariants.test.ts` holds the source table to it entry for entry and probes every
+  key.
+- **Unchecked, never passed**: `cnt-3` and `trd-3` call FHIRPath functions outside the subset;
+  `rng-2` compares two bounds only in the same unit; `ref-1` leaves a bare `#` unchecked. Each is
+  `INVARIANT_UNCHECKED` at `information` there.
+- **Claims not checked**: `EXTENSION_UNCHECKED` at every outermost `extension` (no extension
+  definition is applied), `PROFILE_UNCHECKED` at every `meta.profile` claim no supplied profile of
+  the resource's type carries. Both `information`.
+- **`fullyChecked`**: `true` only for the eight types the base and datatype constraints both cover,
+  with a schema, no `contained` resource, and no finding that leaves something unchecked or unread.
+  It does not count value set membership without a terminology service.
+
 ## What this will be
 
 FHIR is HL7's modern, resource-oriented interoperability standard, the format behind the US

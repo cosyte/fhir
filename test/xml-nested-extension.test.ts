@@ -11,6 +11,7 @@ import {
   serializeResourceXml,
   validateResource,
   type FhirComplex,
+  type ValidationIssue,
 } from "../src/index.js";
 
 /**
@@ -67,8 +68,13 @@ describe("an extension holding only nested extensions, read from XML", () => {
       const read = parseResourceXml(xml);
       expect(read.issues).toEqual([]);
       expect(nodesEquivalent(read.resource, fromJson)).toBe(true);
+      // The same findings, each at the same location but for the index of a lone item: XML spells
+      // a one-item repeat as one element, and the model holds it as one node, where JSON writes a
+      // one-item array.
+      const lone = (issues: readonly ValidationIssue[]) =>
+        issues.map((i) => ({ ...i, expression: i.expression.replaceAll("[0]", "") }));
       expect(validateResource(read.resource, { mode: "strict" }).issues).toEqual(
-        validateResource(fromJson, { mode: "strict" }).issues,
+        lone(validateResource(fromJson, { mode: "strict" }).issues),
       );
     });
 
@@ -99,6 +105,7 @@ describe("an extension holding only nested extensions, read from XML", () => {
     const issues = validateResource(read.resource).issues;
     expect(issues.map((i) => `${i.code} ${i.expression}`)).toEqual([
       "INVARIANT_VIOLATED Patient.extension",
+      "EXTENSION_UNCHECKED Patient.extension",
     ]);
     expect(serializeResourceXml(read.resource)).toBe(xml);
   });

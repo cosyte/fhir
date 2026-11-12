@@ -23,6 +23,13 @@
  * `safeToSummarize`, and every location channel byte-identical, `modifierElements`, `intents`,
  * `datatypeUses` and their unreadable twins included. This change touches no readout channel.
  *
+ * A SECOND CHANGE UNDER THE SAME PIN ADDS THREE KINDS OF FINDING, and only these: the
+ * error-severity constraints R4 4.0.1 declares on its datatypes (`DATATYPE_KEYS`, read off the
+ * definitions' projection), as `INVARIANT_VIOLATED` at `error` or `INVARIANT_UNCHECKED` at
+ * `information`; `EXTENSION_UNCHECKED` at `information` at an extension; and `PROFILE_UNCHECKED` at
+ * `information` at a `meta.profile` claim. `valid` may move true to false on a document that gained
+ * such a violation, as before.
+ *
  * TWO BARS RUN IN OPPOSITE DIRECTIONS AND BOTH ARE STILL HERE: a finding may never be withdrawn,
  * moved or made less severe, and `valid` may never move false to true, which is the fail-safe
  * direction. They grant nothing and no allowance relaxes them.
@@ -144,6 +151,24 @@ const KEY_SEVERITY: Readonly<Record<string, "error" | "warning">> = {
   "pat-1": "error",
 };
 
+/** The datatype constraint keys R4 4.0.1 declares, every one at `error`, from the projection. */
+const DATATYPE_KEYS: ReadonlySet<string> = new Set(
+  Object.values(
+    (
+      JSON.parse(
+        readFileSync(new URL("./__data__/fhir-element-definitions.json", import.meta.url), "utf8"),
+      ) as {
+        readonly datatypeConstraints: {
+          readonly r4: Readonly<Record<string, readonly (readonly [string, string])[]>>;
+        };
+      }
+    ).datatypeConstraints.r4,
+  ).flatMap((rows) => rows.map(([key]) => key)),
+);
+
+/** A claim reported not checked, `CODE/information at location`, the second change's other addition. */
+const UNCHECKED_CLAIM = /^(EXTENSION_UNCHECKED|PROFILE_UNCHECKED)\/information at \S+$/;
+
 /** The keys AC-3 and AC-6 name, each of which the corpus must reach with a violation. */
 const DECIDED_KEYS = [
   "pat-1",
@@ -164,13 +189,22 @@ const DECIDED_KEYS = [
  * fails too.
  */
 const ADDED_FINDINGS: readonly string[] = [
+  "fixture:extension-only-list.json: EXTENSION_UNCHECKED/information at Patient.name[0].given[0].extension[0]",
   "fixture:extension-only-list.json: INVARIANT_VIOLATED/error at Patient.name[0].given[1] for ele-1",
+  "fixture:patient.json: EXTENSION_UNCHECKED/information at Patient.birthDate.extension[0]",
+  "fixture:primitive-extensions.json: EXTENSION_UNCHECKED/information at Patient.name[0].given[1].extension[0]",
+  "fixture:quirk-uscore-extensions.json: EXTENSION_UNCHECKED/information at Patient.extension[0]",
+  "fixture:quirk-uscore-extensions.json: EXTENSION_UNCHECKED/information at Patient.extension[1]",
+  "fixture:value-absent.json: EXTENSION_UNCHECKED/information at Observation.valueQuantity.value.extension[0]",
+  "added:dose-comparator: INVARIANT_VIOLATED/error at MedicationRequest.dosageInstruction[0].doseAndRate[0].doseQuantity for sqty-1",
+  "added:patient-active-underscore-only: EXTENSION_UNCHECKED/information at Patient.active.extension[0]",
   "added:modifier-extension-only: INVARIANT_VIOLATED/error at Patient.modifierExtension[0] for ext-1",
   "added:patient-contained-practitioner-identifier-use: INVARIANT_UNCHECKED/information at Patient for dom-3",
   "added:patient-contained-organization-use: INVARIANT_UNCHECKED/information at Patient for dom-3",
   "added:base-pat-1-contact-without-contact-detail: INVARIANT_VIOLATED/error at Patient.contact[0] for pat-1",
   "added:base-obs-3-reference-range-without-bound: INVARIANT_VIOLATED/error at Observation.referenceRange[0] for obs-3",
   "added:base-con-1-stage-without-summary: INVARIANT_VIOLATED/error at Condition.stage[0] for con-1",
+  "added:base-con-2-evidence-without-code-or-detail: EXTENSION_UNCHECKED/information at Condition.evidence[0].extension[0]",
   "added:base-con-2-evidence-without-code-or-detail: INVARIANT_VIOLATED/error at Condition.evidence[0] for con-2",
   "added:base-imm-1-education-without-document: INVARIANT_VIOLATED/error at Immunization.education[0] for imm-1",
   "added:base-dom-2-nested-contained: INVARIANT_UNCHECKED/information at Patient for dom-3",
@@ -179,7 +213,9 @@ const ADDED_FINDINGS: readonly string[] = [
   "added:base-dom-4-contained-version: INVARIANT_VIOLATED/error at Patient for dom-4",
   "added:base-dom-5-contained-security: INVARIANT_UNCHECKED/information at Patient for dom-3",
   "added:base-dom-5-contained-security: INVARIANT_VIOLATED/error at Patient for dom-5",
+  "added:base-ext-1-extension-without-value: EXTENSION_UNCHECKED/information at Patient.extension[0]",
   "added:base-ext-1-extension-without-value: INVARIANT_VIOLATED/error at Patient.extension[0] for ext-1",
+  "added:base-ext-1-extension-with-value-and-extensions: EXTENSION_UNCHECKED/information at Patient.extension[0]",
   "added:base-ext-1-extension-with-value-and-extensions: INVARIANT_VIOLATED/error at Patient.extension[0] for ext-1",
   "added:base-ele-1-empty-datatype: INVARIANT_VIOLATED/error at Patient.maritalStatus for ele-1",
   "added:base-dom-3-referenced-contained: INVARIANT_UNCHECKED/information at Patient for dom-3",
@@ -190,14 +226,16 @@ const INVARIANT_FINDING =
   /^(INVARIANT_VIOLATED|INVARIANT_UNCHECKED)\/(\w+) at .+ for ([a-z]+-\d+)$/;
 
 /**
- * Whether one added finding is one this change may add: an invariant code, one of the 19 keys, at
- * that key's severity when violated and at `information` when unchecked.
+ * Whether one added finding is one these changes may add: an invariant code, one of the 19 keys or
+ * a datatype key, at that key's severity when violated and at `information` when unchecked; or a
+ * claim reported not checked, at `information`.
  */
 function allowedAddition(finding: string): boolean {
+  if (UNCHECKED_CLAIM.test(finding)) return true;
   const match = INVARIANT_FINDING.exec(finding);
   if (match === null) return false;
   const [, code, severity, key] = match;
-  const declared = KEY_SEVERITY[key ?? ""];
+  const declared = KEY_SEVERITY[key ?? ""] ?? (DATATYPE_KEYS.has(key ?? "") ? "error" : undefined);
   if (declared === undefined) return false;
   return code === "INVARIANT_VIOLATED" ? severity === declared : severity === "information";
 }
@@ -266,7 +304,7 @@ describe("AC-13: base versus head, the read differential over the JSON corpus", 
         expect(removed, "a finding was removed, re-severitied or relocated").toEqual([]);
       });
 
-      it("AC-13: adds only an invariant finding carrying one of the 19 keys at its severity", () => {
+      it("AC-13: adds only an invariant finding carrying one of the 19 keys or a datatype key at its severity, or a claim not checked", () => {
         const { added } = delta((base as Readout).findings, head.findings);
         expect(added.filter((finding) => !allowedAddition(finding))).toEqual([]);
       });
@@ -314,6 +352,13 @@ describe("AC-13: base versus head, the read differential over the JSON corpus", 
         ).toBe(true);
       });
     }
+
+    it("the corpus reaches a datatype constraint violation and an extension not checked", () => {
+      expect(added.some((line) => line.endsWith(" for sqty-1"))).toBe(true);
+      expect(added.some((line) => line.includes(": EXTENSION_UNCHECKED/information at "))).toBe(
+        true,
+      );
+    });
 
     it("AC-13: the corpus reaches dom-3 unchecked over a contained resource", () => {
       expect(

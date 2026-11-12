@@ -5416,5 +5416,197 @@
         ]
       }
     }
+  },
+  "datatypeConstraints": {
+    "r4": {
+      "Age": [
+        [
+          "age-1",
+          "(code.exists() or value.empty()) and (system.empty() or system = %ucum) and (value.empty() or value.hasValue().not() or value > 0)"
+        ],
+        [
+          "qty-3",
+          "code.empty() or system.exists()"
+        ]
+      ],
+      "Attachment": [
+        [
+          "att-1",
+          "data.empty() or contentType.exists()"
+        ]
+      ],
+      "ContactPoint": [
+        [
+          "cpt-2",
+          "value.empty() or system.exists()"
+        ]
+      ],
+      "Count": [
+        [
+          "cnt-3",
+          "(code.exists() or value.empty()) and (system.empty() or system = %ucum) and (code.empty() or code = '1') and (value.empty() or value.hasValue().not() or value.toString().contains('.').not())"
+        ],
+        [
+          "qty-3",
+          "code.empty() or system.exists()"
+        ]
+      ],
+      "DataRequirement.codeFilter": [
+        [
+          "drq-1",
+          "path.exists() xor searchParam.exists()"
+        ]
+      ],
+      "DataRequirement.dateFilter": [
+        [
+          "drq-2",
+          "path.exists() xor searchParam.exists()"
+        ]
+      ],
+      "Distance": [
+        [
+          "dis-1",
+          "(code.exists() or value.empty()) and (system.empty() or system = %ucum)"
+        ],
+        [
+          "qty-3",
+          "code.empty() or system.exists()"
+        ]
+      ],
+      "Duration": [
+        [
+          "drt-1",
+          "code.exists() implies ((system = %ucum) and value.exists())"
+        ],
+        [
+          "qty-3",
+          "code.empty() or system.exists()"
+        ]
+      ],
+      "Expression": [
+        [
+          "exp-1",
+          "expression.exists() or reference.exists()"
+        ]
+      ],
+      "Narrative.div": [
+        [
+          "txt-1",
+          "htmlChecks()"
+        ],
+        [
+          "txt-2",
+          "htmlChecks()"
+        ]
+      ],
+      "Period": [
+        [
+          "per-1",
+          "start.hasValue().not() or end.hasValue().not() or (start <= end)"
+        ]
+      ],
+      "Quantity": [
+        [
+          "qty-3",
+          "code.empty() or system.exists()"
+        ]
+      ],
+      "Range": [
+        [
+          "rng-2",
+          "low.empty() or high.empty() or (low <= high)"
+        ]
+      ],
+      "Ratio": [
+        [
+          "rat-1",
+          "(numerator.empty() xor denominator.exists()) and (numerator.exists() or extension.exists())"
+        ]
+      ],
+      "Reference": [
+        [
+          "ref-1",
+          "reference.startsWith('#').not() or (reference.substring(1).trace('url') in %rootResource.contained.id.trace('ids'))"
+        ]
+      ],
+      "SimpleQuantity": [
+        [
+          "qty-3",
+          "code.empty() or system.exists()"
+        ],
+        [
+          "sqty-1",
+          "comparator.empty()"
+        ]
+      ],
+      "Timing.repeat": [
+        [
+          "tim-1",
+          "duration.empty() or durationUnit.exists()"
+        ],
+        [
+          "tim-10",
+          "timeOfDay.empty() or when.empty()"
+        ],
+        [
+          "tim-2",
+          "period.empty() or periodUnit.exists()"
+        ],
+        [
+          "tim-4",
+          "duration.exists() implies duration >= 0"
+        ],
+        [
+          "tim-5",
+          "period.exists() implies period >= 0"
+        ],
+        [
+          "tim-6",
+          "periodMax.empty() or period.exists()"
+        ],
+        [
+          "tim-7",
+          "durationMax.empty() or duration.exists()"
+        ],
+        [
+          "tim-8",
+          "countMax.empty() or count.exists()"
+        ],
+        [
+          "tim-9",
+          "offset.empty() or (when.exists() and ((when in ('C' | 'CM' | 'CD' | 'CV')).not()))"
+        ]
+      ],
+      "TriggerDefinition": [
+        [
+          "trd-1",
+          "data.empty() or timing.empty()"
+        ],
+        [
+          "trd-2",
+          "condition.exists() implies data.exists()"
+        ],
+        [
+          "trd-3",
+          "(type = 'named-event' implies name.exists()) and (type = 'periodic' implies timing.exists()) and (type.startsWith('data-') implies data.exists())"
+        ]
+      ]
+    }
+  },
+  "typeProfiles": {
+    "r4": {
+      "Dosage.doseAndRate.doseQuantity": "SimpleQuantity",
+      "Dosage.doseAndRate.rateQuantity": "SimpleQuantity",
+      "Dosage.maxDosePerAdministration": "SimpleQuantity",
+      "Dosage.maxDosePerLifetime": "SimpleQuantity",
+      "Immunization.doseQuantity": "SimpleQuantity",
+      "MedicationRequest.dispenseRequest.initialFill.quantity": "SimpleQuantity",
+      "MedicationRequest.dispenseRequest.quantity": "SimpleQuantity",
+      "Observation.referenceRange.high": "SimpleQuantity",
+      "Observation.referenceRange.low": "SimpleQuantity",
+      "Range.high": "SimpleQuantity",
+      "Range.low": "SimpleQuantity",
+      "SampledData.origin": "SimpleQuantity"
+    }
   }
 }

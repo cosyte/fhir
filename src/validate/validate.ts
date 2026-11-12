@@ -42,7 +42,9 @@
  * on the eleven modeled types (AllergyIntolerance, Condition, DiagnosticReport, DocumentReference,
  * Encounter, Immunization, MedicationRequest, MedicationStatement, Observation, Patient, Procedure)
  * and on their `DomainResource`, `Element` and `Extension` base, `pat-1`, `ext-1` and `ele-1` among
- * them, with no profile supplied;
+ * them, with no profile supplied; the datatype-constraint layer ({@link ./datatype-invariants.js}),
+ * which evaluates the error-severity constraints R4 declares on its datatypes (`qty-3`, `per-1`,
+ * `sqty-1` and the rest) at every occurrence at any depth;
  * and, for each supplied profile whose `type` matches, that profile's own `constraint`s
  * ({@link ../profiles/invariants.js}). A violation both a profile and the base-constraint layer
  * find at one occurrence is reported once, and a base constraint the base-constraint layer decides
@@ -73,6 +75,8 @@ import { collectTerminologyIssues } from "./terminology.js";
 import { collectProfileIssues, collectProfileVersionIssues } from "../profiles/validate-profile.js";
 import { invariantFindings } from "../profiles/invariants.js";
 import { collectBaseInvariantFindings, type BaseInvariantFinding } from "./base-invariants.js";
+import { collectDatatypeInvariantFindings } from "./datatype-invariants.js";
+import { collectUncheckedClaims, fullyCheckedOver } from "./unchecked.js";
 import type { BaseResolver } from "../profiles/snapshot.js";
 import type { StructureDefinition } from "../profiles/structure-definition.js";
 import type { TerminologyBinding } from "../terminology/bindings.js";
@@ -124,7 +128,8 @@ export interface ValidateOptions {
    * Profiles (`StructureDefinition`s) to validate against. **None is bundled**, a caller
    * supplies the US Core (or vendor) profiles. Every supplied profile whose `type` matches the
    * resource type is applied (fixed/pattern, must-support, slicing, profile cardinality), and the
-   * resource's `meta.profile` version pins are checked against the supplied set.
+   * resource's `meta.profile` version pins are checked against the supplied set. A `meta.profile`
+   * claim that no supplied profile of the resource's type carries is reported `PROFILE_UNCHECKED`.
    */
   readonly profiles?: readonly StructureDefinition[];
   /**
@@ -138,8 +143,38 @@ export interface ValidateOptions {
 export interface ValidationResult {
   /** The value-free findings, in document order. Empty when the resource validated clean. */
   readonly issues: readonly ValidationIssue[];
-  /** Whether there were no `error`/`fatal` findings (warnings and information do not fail). */
+  /**
+   * Whether there were no `error`/`fatal` findings (warnings and information do not fail).
+   *
+   * `valid: true` says no rule that was checked failed. It does not say every rule was checked:
+   * read {@link fullyChecked} for that.
+   */
   readonly valid: boolean;
+  /**
+   * Whether every rule that applies to this resource was checked, so `valid` is a verdict over all
+   * of them rather than over the ones this library could check. `true` only when all of these hold:
+   *
+   * - the resource is an `AllergyIntolerance`, `Condition`, `DiagnosticReport`, `Immunization`,
+   *   `MedicationRequest`, `MedicationStatement`, `Observation` or `Patient`, the eight types whose
+   *   structure, own constraints and datatype constraints this library evaluates at every depth, and
+   *   the registry has a schema for it;
+   * - it has no `contained` resource, whose own constraints are not evaluated;
+   * - no finding says something was left unchecked or unread: no `INVARIANT_UNCHECKED`,
+   *   `EXTENSION_UNCHECKED` (every `extension`, since no extension definition is applied),
+   *   `PROFILE_UNCHECKED` (a `meta.profile` claim with no matching profile supplied),
+   *   `PROFILE_VERSION_MISMATCH`, `PROFILE_SLICE_UNCHECKED`, `PROFILE_SLICE_NO_SLICING`,
+   *   `PROFILE_CONSTRAINT_UNCHECKED`, `UNKNOWN_ELEMENT`, `RESOURCE_NOT_MODELED`,
+   *   `UNHANDLED_MODIFIER_EXTENSION`, `DUPLICATE_PROPERTY`, `NESTED_ARRAY`, `DROPPED_ELEMENT_TEXT`,
+   *   `ARRAY_WRAPPED_CHOICE`, `ABSENCE_MARKER_UNREADABLE`, `CONTAINED_ID_DUPLICATE` or
+   *   `NARRATIVE_UNREADABLE`.
+   *
+   * **What it cannot cover: value set membership without a terminology service.** None is bundled.
+   * Without one, a code is checked only against the required bindings this library enumerates and
+   * by the content-free code-system checks; whether a code is a member of any other bound value set
+   * is not decided, and `fullyChecked` does not count that question as unchecked. Supply a
+   * {@link ValidateOptions.terminology} service to have membership decided.
+   */
+  readonly fullyChecked: boolean;
   /** Render the findings as an `OperationOutcome` resource model (value-free, serializable). */
   toOperationOutcome: () => FhirComplex;
 }
@@ -415,7 +450,19 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   const withProfiles = options.profiles !== undefined && options.profiles.length > 0;
   const base = collectBaseInvariantFindings(resource, rt, { decides: withProfiles });
   for (const finding of base.findings) ctx.issues.push(finding.issue);
-  const reportedByBase = alreadyReported(base.findings);
+  // Datatype-constraint layer: the error-severity constraints R4 declares on each datatype
+  // (qty-3, per-1, sqty-1 and the rest), at every occurrence at any depth, for the resource types
+  // the element model describes.
+  const datatypes = collectDatatypeInvariantFindings(resource, root);
+  for (const finding of datatypes) ctx.issues.push(finding.issue);
+  const reportedByBase = alreadyReported([...base.findings, ...datatypes]);
+  const byDatatypes = new Set(datatypes.map(({ issue }) => withoutIndices(issue)));
+
+  // What the resource asks to be checked against that nothing here checks it against: each
+  // extension's definition, and each profile `meta.profile` claims that was not supplied.
+  for (const issue of collectUncheckedClaims(resource, rt, root, options.profiles ?? [])) {
+    ctx.issues.push(issue);
+  }
 
   // Profile layer (Phase 6): validate against each supplied StructureDefinition whose `type` matches
   // (fixed/pattern, must-support-as-obligation, profile cardinality, slicing), plus the resource's
@@ -432,6 +479,10 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
     for (const profile of options.profiles) {
       if (profile.type !== rt) continue;
       for (const issue of collectProfileIssues(resource, profile, profileOptions)) {
+        // `sqty-1` where the profile types an element SimpleQuantity: the datatype layer already
+        // reported it there when R4 itself does. The profile layer leaves out a lone occurrence's
+        // index, so the two locations are compared without indices.
+        if (issue.code === "INVARIANT_VIOLATED" && byDatatypes.has(withoutIndices(issue))) continue;
         ctx.issues.push(issue);
       }
       // Invariant layer (Phase 7): evaluate the profile's FHIRPath `constraint`s via the bounded
@@ -462,7 +513,7 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
     }
   }
 
-  return finalize(ctx);
+  return finalize(ctx, (issues) => fullyCheckedOver(resource, rt, modeled !== undefined, issues));
 }
 
 /**
@@ -485,11 +536,25 @@ function alreadyReported(
   };
 }
 
-/** Freeze the accumulator into an immutable {@link ValidationResult}. */
-function finalize(ctx: Ctx): ValidationResult {
+/** A finding's code, key and location with every array index taken out, to compare across layers. */
+function withoutIndices(issue: ValidationIssue): string {
+  /* v8 ignore next -- the `?? ""` is unreachable: an invariant issue always names its constraint */
+  return `${issue.code} ${issue.constraint ?? ""} ${issue.expression.replace(/\[\d+\]/g, "")}`;
+}
+
+/**
+ * Freeze the accumulator into an immutable {@link ValidationResult}. `fully` decides
+ * {@link ValidationResult.fullyChecked} over the findings; with none, a resource that could not be
+ * read as a type, it is `false`.
+ */
+function finalize(
+  ctx: Ctx,
+  fully?: (issues: readonly ValidationIssue[]) => boolean,
+): ValidationResult {
   const issues: readonly ValidationIssue[] = [...ctx.issues];
   const valid = !issues.some(
     (i) => i.severity === ISSUE_SEVERITIES.ERROR || i.severity === ISSUE_SEVERITIES.FATAL,
   );
-  return { issues, valid, toOperationOutcome: () => toOperationOutcome(issues) };
+  const fullyChecked = fully !== undefined && fully(issues);
+  return { issues, valid, fullyChecked, toOperationOutcome: () => toOperationOutcome(issues) };
 }

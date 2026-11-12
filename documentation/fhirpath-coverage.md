@@ -67,8 +67,8 @@ suite asserts all three numbers, so neither the byte count nor the live count ca
 
 | bucket | cases | what it means |
 |---|---|---|
-| evaluated | 210 | the engine produced an answer and it matches the corpus |
-| unsupported | 690 | the engine itself raised `UnsupportedFhirPathError` |
+| evaluated | 211 | the engine produced an answer and it matches the corpus |
+| unsupported | 689 | the engine itself raised `UnsupportedFhirPathError` |
 | wrongly answered | 0 | the engine produced an answer that disagrees, or one the harness cannot compare, **outside a declared mode difference** |
 | marked invalid by the corpus | 35 | the corpus expects a syntax / semantic / execution error, so the case gets no credit either way |
 | **total** | **935** | every live `<test>` element, each in exactly one bucket |
@@ -81,8 +81,8 @@ invalid *solely* under a strictness mode this engine does not implement. **The r
 answered count excludes those two declared mode differences**, which is why the count is qualified
 everywhere it appears rather than published bare.
 
-**The engine answers 22.5% of the whole corpus** (210 of 935), or **23.3%** of the cases it is
-expected to evaluate at all (210 of 900: the same numerator over a denominator with the 35 cases in
+**The engine answers 22.6% of the whole corpus** (211 of 935), or **23.4%** of the cases it is
+expected to evaluate at all (211 of 900: the same numerator over a denominator with the 35 cases in
 the invalid bucket removed). Both fractions are stated because they answer different questions, and
 quoting one as the other is how a coverage number drifts.
 
@@ -101,12 +101,12 @@ corpus_tag: 1.7.67
 raw_test_tag_occurrences: 937
 commented_out_cases: 2
 total_cases: 935
-evaluated: 210
-unsupported: 690
+evaluated: 211
+unsupported: 689
 wrong: 0
 invalid: 35
-answered_fraction: 22.5%
-answered_fraction_of_valid: 23.3%
+answered_fraction: 22.6%
+answered_fraction_of_valid: 23.4%
 type_qualified_head_cases: 154
 type_qualified_head_names: Appointment, Encounter, Observation, Parameters, Patient, Questionnaire, ValueSet
 ```
@@ -650,7 +650,7 @@ selects nothing, so it holds for every coding system, where 9.0.0's rewrite chec
 ### What moved in the shared corpus
 
 Twenty cases moved from `unsupported` to `evaluated`, and none to `wrong`, so the counts block
-above reads `210 / 690 / 0 / 35`, measured against the engine before the widening
+read `210 / 690 / 0 / 35`, measured against the engine before the widening
 (`190 / 710 / 0 / 35`) on the same vendored corpus:
 
 - R1 over `observation-example.xml`'s `valueQuantity`: `testPolymorphismIsA1`
@@ -664,6 +664,11 @@ above reads `210 / 690 / 0 / 35`, measured against the engine before the widenin
 - `matches()`: the eleven cases of the `testMatches` group (`testMatchesCaseSensitive1` and `2`,
   `testMatchesEmpty`, `2` and `3`, `testMatchesSingleLineMode1`, and `testMatchesWithinUrl1`, `2`,
   `3`, `1a` and `4`). `matchesFull()` is not in the subset, so its five cases stay unsupported.
+
+Then `%ucum`, the environment variable FHIRPath defines as the UCUM system URL, which R4's own
+datatype constraints use (`age-1`, `cnt-3`, `dis-1`, `drt-1`), moved one more case,
+`testVariables3` (`%ucum = 'http://unitsofmeasure.org'`), from `unsupported` to `evaluated`, so the
+counts block reads `211 / 689 / 0 / 35`.
 
 ### The findings it moves
 

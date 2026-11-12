@@ -146,7 +146,12 @@ describe("a marker beside a value on one element is reported, never resolved", (
   const CONFLICT = observation(`"status":"final","_status":{"extension":[${marker("unknown")}]},`);
 
   it("emits a finding rather than silently preferring one of the two", () => {
-    expect(findingsOf(CONFLICT)).toEqual(["ABSENCE_MARKER_CONFLICT at Observation.status"]);
+    // The marker is an extension, and no extension definition is applied: it is also reported
+    // not checked, at information.
+    expect(findingsOf(CONFLICT)).toEqual([
+      "ABSENCE_MARKER_CONFLICT at Observation.status",
+      "EXTENSION_UNCHECKED at Observation.status.extension[0]",
+    ]);
     expect(validateResource(parseResource(CONFLICT).resource).valid).toBe(false);
   });
 

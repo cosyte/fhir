@@ -40,8 +40,10 @@ valid can read invalid. The changelog sets out each change.
 
 What it covers, against FHIR R4 (`4.0.1`): reading and writing JSON and XML into one immutable
 model; validation in layers (structure, cardinality, value domains, R4's own constraints on the
-eleven modeled resource types, Quantity and UCUM, binding strength, and profiles you supply or author
-with `defineProfile`, including their FHIRPath invariants); the `readSafety` and
+eleven modeled resource types and on its datatypes, Quantity and UCUM, binding strength, and profiles
+you supply or author with `defineProfile`, including their FHIRPath invariants), with a
+`fullyChecked` verdict beside `valid` that says whether every rule that applies was checked; the
+`readSafety` and
 `assertSafeToSummarize` safety readout; and Bundles, references and streaming Bulk Data NDJSON.
 
 Not covered yet: typed per-resource models (the built-in structural schemas cover the base elements
