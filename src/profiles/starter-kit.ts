@@ -102,6 +102,7 @@ export const PATIENT_IDENTIFIER_STARTER: StructureDefinition = defineProfile({
   ],
 });
 
+// Stryker disable all: the veterinary starter is built once, when the module loads, which the mutation runner does not reload per mutant; test/starter-kit.test.ts pins its whole differential and validates instances against it
 /** A `value` discriminator on `url`, the way R4 slices an extension list. */
 const BY_URL = { discriminator: [{ type: "value", path: "url" }], rules: "open" } as const;
 
@@ -176,6 +177,7 @@ export const VETERINARY_PATIENT_STARTER: StructureDefinition = defineProfile({
     },
   ],
 });
+// Stryker restore all
 
 /**
  * Every starter-kit profile that applies to any resource of its type. Iterate this to register the

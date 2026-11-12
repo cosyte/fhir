@@ -225,6 +225,13 @@ describe("readPatientAnimal", () => {
     ]);
   });
 
+  it("says nothing of a repeated url on a sub-extension that names no part", () => {
+    const text = `{"resourceType":"Patient","extension":[{"url":"${ANIMAL_URL}","extension":[{"url":"http://example.org/a","url":"http://example.org/b","valueString":"syn"},${JSON.stringify(sub("species", "syn-a"))}]}]}`;
+    const animal = readPatientAnimal(parseResource(text).resource);
+    expect(textOf(animal?.species)).toBe("text-syn-a");
+    expect(animal?.issues).toEqual([]);
+  });
+
   it("refuses an animal extension whose url is repeated", () => {
     const text = `{"resourceType":"Patient","extension":[{"url":"${ANIMAL_URL}","url":"http://example.org/fhir/synthetic","extension":[${JSON.stringify(sub("species", "syn-a"))}]}]}`;
     const animal = readPatientAnimal(parseResource(text).resource);

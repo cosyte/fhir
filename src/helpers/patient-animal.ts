@@ -32,9 +32,11 @@ import {
 } from "../model/index.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "../validate/issues.js";
 
+// Stryker disable StringLiteral: a module-level constant, evaluated once when the module loads, which the mutation runner does not reload per mutant; test/patient-animal.test.ts pins its value
 /** The canonical URL of the R4 `patient-animal` extension. */
 export const PATIENT_ANIMAL_EXTENSION_URL =
   "http://hl7.org/fhir/StructureDefinition/patient-animal";
+// Stryker restore StringLiteral
 
 /**
  * What {@link readPatientAnimal} read from a Patient's `patient-animal` extension. Each part is the
@@ -201,9 +203,26 @@ export function readPatientAnimal(resource: FhirComplex): PatientAnimal | undefi
       validationIssue("DUPLICATE_PROPERTY", ISSUE_SEVERITIES.ERROR, `${base}.extension`),
     ]);
   }
-  const subs = subMembers[0] === undefined ? [] : asItems(subMembers[0]);
+  const subs = subMembers.flatMap(asItems);
 
   const issues: ValidationIssue[] = [];
+  // A sub-extension that wrote its url twice and names a part is reported once, however many
+  // parts it names, and no part it names is read.
+  subs.forEach((item, index) => {
+    if (
+      isComplex(item) &&
+      repeatsUrl(item) &&
+      PARTS.some((part) => claimant(item, part) !== undefined)
+    ) {
+      issues.push(
+        validationIssue(
+          "DUPLICATE_PROPERTY",
+          ISSUE_SEVERITIES.ERROR,
+          `${base}.extension[${String(index)}].url`,
+        ),
+      );
+    }
+  });
   const values: Record<Part, FhirComplex | undefined> = {
     species: undefined,
     breed: undefined,
@@ -215,16 +234,8 @@ export function readPatientAnimal(resource: FhirComplex): PatientAnimal | undefi
     subs.forEach((item, index) => {
       const node = claimant(item, part);
       if (node === undefined) return;
-      if (repeatsUrl(node)) {
-        ambiguous = true;
-        // One report per sub-extension, however many parts its repeated url names.
-        const path = `${base}.extension[${String(index)}].url`;
-        if (!issues.some((i) => i.expression === path)) {
-          issues.push(validationIssue("DUPLICATE_PROPERTY", ISSUE_SEVERITIES.ERROR, path));
-        }
-        return;
-      }
-      claimed.push({ node, index });
+      if (repeatsUrl(node)) ambiguous = true;
+      else claimed.push({ node, index });
     });
     if (ambiguous) continue;
     const one = claimed[0];
