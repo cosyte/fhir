@@ -1238,26 +1238,33 @@ describe("the kinds of constraint one element places on a target", () => {
     expect(slice("$this", own)).toEqual(["slicing", "type:code"]);
     expect(slice("", own)).toEqual(["slicing", "type:code"]);
     expect(slice("resolve()", own)).toEqual(["type:profile", "type:code"]);
-    // Only a profile discriminator decides a profile.
-    const byType = kindsOf(
-      "Observation",
-      { hasMember: [{ reference: "Observation/fake-o" }] },
-      [
-        {
-          id: "Observation.hasMember",
-          path: "Observation.hasMember",
-          slicing: { discriminator: [{ type: "type", path: "$this" }], rules: "open" },
-        },
-        {
-          id: "Observation.hasMember:m",
-          path: "Observation.hasMember",
-          sliceName: "m",
-          type: [{ code: "Reference", ...own }],
-        },
-      ],
-      "Observation.hasMember:m",
-    );
-    expect(byType).toEqual(["type:profile", "type:code"]);
+    // Only a profile discriminator decides a profile, and one among several is enough.
+    const by = (discriminator: unknown[]) =>
+      kindsOf(
+        "Observation",
+        { hasMember: [{ reference: "Observation/fake-o" }] },
+        [
+          {
+            id: "Observation.hasMember",
+            path: "Observation.hasMember",
+            slicing: { discriminator, rules: "open" },
+          },
+          {
+            id: "Observation.hasMember:m",
+            path: "Observation.hasMember",
+            sliceName: "m",
+            type: [{ code: "Reference", ...own }],
+          },
+        ],
+        "Observation.hasMember:m",
+      );
+    expect(by([{ type: "type", path: "$this" }])).toEqual(["type:profile", "type:code"]);
+    expect(
+      by([
+        { type: "type", path: "$this" },
+        { type: "profile", path: "$this" },
+      ]),
+    ).toEqual(["slicing", "type:code"]);
     // Any one target profile other than any resource narrows.
     expect(
       slice("$this", {
