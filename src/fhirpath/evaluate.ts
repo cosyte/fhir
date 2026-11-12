@@ -83,14 +83,8 @@ interface EvalCtx {
   readonly exact?: (name: string) => boolean;
 }
 
-/**
- * The value of `%ucum`, which FHIRPath defines as the UCUM code system's URL. Joined from its parts
- * when asked for: a whole URL written as one literal here would reach `matches()` as a pattern
- * (`%ucum` can be one), and static analysis reads such a literal as an unanchored URL regex.
- */
-function ucumSystem(): string {
-  return ["http:", "", "unitsofmeasure.org"].join("/");
-}
+/** The value of `%ucum`, which FHIRPath defines as the UCUM code system's URL. */
+const UCUM_SYSTEM = "http://unitsofmeasure.org";
 
 /** Wrap a node into collection items, flattening a list into its (recursively flattened) members. */
 function wrap(node: FhirNode): FpItem[] {
@@ -1075,7 +1069,7 @@ export function evaluate(expr: Expr, focus: FpColl, ctx: EvalCtx): FpColl {
     case "envvar":
       if (expr.name === "resource" || expr.name === "rootResource") return wrap(ctx.resource);
       if (expr.name === "context") return ctx.context;
-      if (expr.name === "ucum") return [{ t: "str", value: ucumSystem() }];
+      if (expr.name === "ucum") return [{ t: "str", value: UCUM_SYSTEM }];
       throw new UnsupportedFhirPathError(`unsupported environment variable %${expr.name}`);
     case "variable":
       if (expr.name === "this") return focus;
