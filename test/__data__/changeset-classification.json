@@ -11,6 +11,12 @@
       "level": "patch",
       "breakCandidate": false,
       "reason": "it changes reader-facing text only: README.md (a one-line tagline, the Node badge the README gate derives from engines, the Node.js line naming 22, 24, and 26, and new Support and Security sections), docs-content/installation.md (the same Node.js line), and in-repo notes and comments. README.md ships in the tarball as text, and no code under `src/` changed (one `//` comment's pointer, which the build does not emit). Every public observable of the API is identical, which is the classification rule's `patch` arm"
+    },
+    "writers-refuse-foreign-namespace.md": {
+      "level": "patch",
+      "breakCandidate": true,
+      "observable": "`serializeResource` and `serializeResourceXml` throw `FhirSerializeError` (`UNSERIALIZABLE_FOREIGN_NAMESPACE`) on a model read from XML that holds an element in a namespace other than its parent's, where they used to return a document, and `serializeResource` throws `UNSERIALIZABLE_FOREIGN_ROOT` on a root in a namespace other than FHIR's, where it used to return JSON",
+      "reason": "a write that used to succeed now throws, which narrows previously working public behaviour, so it is a break. It ships as a patch under the maintainers' decision that every release below 1.0 is a patch, and its changeset states the break and, in its `What a caller must change:` paragraph, what a caller must do"
     }
   }
 }
