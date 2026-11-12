@@ -578,6 +578,7 @@ export interface ValidationIssue {
 }
 
 /** The fixed R4 `IssueType` each validation code maps to. */
+// Stryker disable next-line ObjectLiteral: a module-level table, built once when the module loads, which the mutation runner does not reload per mutant; test/validation-codes.test.ts reads it
 const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   UNKNOWN_ELEMENT: ISSUE_TYPES.STRUCTURE,
   RESOURCE_TYPE_UNKNOWN: ISSUE_TYPES.STRUCTURE,
@@ -631,6 +632,7 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
  * is keyed only by the code, so no instance value can ever reach `diagnostics`. Every string here is
  * a description of the *kind* of problem, never a rendering of the offending data.
  */
+// Stryker disable next-line ObjectLiteral: a module-level table, built once when the module loads, which the mutation runner does not reload per mutant; test/validation-codes.test.ts reads it
 const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   UNKNOWN_ELEMENT: "Element is not defined at this location in the resource structure.",
   RESOURCE_TYPE_UNKNOWN: "Resource is missing a resourceType and cannot be structurally validated.",
@@ -714,12 +716,14 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
     "was reported by the bounded cycle guard rather than followed into an unbounded loop.",
   FULLURL_ID_MISMATCH:
     "Bundle entry fullUrl is a RESTful URL whose id disagrees with the wrapped resource's id.",
+  // Stryker disable StringLiteral: a module-level table, built once when the module loads, which the mutation runner does not reload per mutant; test/validation-codes.test.ts reads it
   CONTAINED_ID_DUPLICATE:
     "Contained resource carries an id another contained resource of the same resource carries; a " +
     "reference to that id names no one of them and is not resolved.",
   FULLURL_DUPLICATE:
     "Bundle entry carries a fullUrl another entry carries, with the same version; a reference to " +
     "that fullUrl names no one entry and is not resolved.",
+  // Stryker restore StringLiteral
   NARRATIVE_UNREADABLE:
     "Narrative could not be read as XHTML: it is not well-formed, or it uses a DTD, an entity, a " +
     "CDATA section or a nesting depth the reader refuses. It is kept exactly as written.",

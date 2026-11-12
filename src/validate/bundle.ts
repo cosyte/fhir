@@ -30,8 +30,8 @@
  * @packageDocumentation
  */
 
-import { getProperty, isComplex, isList, isPrimitive } from "../model/index.js";
-import type { FhirComplex, FhirNode } from "../model/index.js";
+import { getProperty, isComplex, isList } from "../model/index.js";
+import type { FhirComplex } from "../model/index.js";
 import { Trail } from "../model/path.js";
 import { parseReference } from "../model/reference.js";
 import {
@@ -42,6 +42,7 @@ import {
   resolveReference,
 } from "../bundle/references.js";
 import { readBundle } from "../bundle/types.js";
+import { primitiveString } from "../safety/codes.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issues.js";
 
 /**
@@ -127,18 +128,11 @@ export function collectBundleIssues(resource: FhirComplex): ValidationIssue[] {
   return issues;
 }
 
-/** A primitive node's string value, when it holds one. */
-function stringOf(node: FhirNode | undefined): string | undefined {
-  return node !== undefined && isPrimitive(node) && typeof node.value === "string"
-    ? node.value
-    : undefined;
-}
-
 /** A resource's `meta.versionId`, when it states one. */
 function versionIdOf(resource: FhirComplex): string | undefined {
   const meta = getProperty(resource, "meta");
   return meta !== undefined && isComplex(meta)
-    ? stringOf(getProperty(meta, "versionId"))
+    ? primitiveString(getProperty(meta, "versionId"))
     : undefined;
 }
 
@@ -159,7 +153,7 @@ export function collectContainedIdIssues(resource: FhirComplex, path: string): V
   const issues: ValidationIssue[] = [];
   const seen = new Set<string>();
   node.items.forEach((item, i) => {
-    const id = isComplex(item) ? stringOf(getProperty(item, "id")) : undefined;
+    const id = isComplex(item) ? primitiveString(getProperty(item, "id")) : undefined;
     if (id === undefined) return;
     if (seen.has(id)) {
       issues.push(

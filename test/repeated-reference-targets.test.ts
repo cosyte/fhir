@@ -312,3 +312,53 @@ describe("a reference to a Bundle fullUrl that repeats", () => {
     expect(resolveReference("urn:uuid:fake-b", { bundle: history }).status).toBe("unresolved");
   });
 });
+
+describe("the edges of a repeat", () => {
+  it("reads contained resources with no id as no repeat", () => {
+    const resource = observation([
+      { resourceType: "Practitioner" },
+      { resourceType: "Organization" },
+    ]);
+    const contained = containedIndex(resource);
+    expect(contained.byId.size).toBe(0);
+    expect([...(contained.repeatedIds ?? [])]).toEqual([]);
+    expect(
+      validateResource(resource).issues.filter((i) => i.code === "CONTAINED_ID_DUPLICATE"),
+    ).toEqual([]);
+  });
+
+  it("keys an entry by its fullUrl's Type/id when the resource states no id", () => {
+    const index = buildBundleIndex(
+      bundleOf([
+        {
+          fullUrl: "https://fhir.example.org/Patient/fake-7",
+          resource: { resourceType: "Patient" },
+        },
+      ]),
+    );
+    expect(resolveReference("Patient/fake-7", { bundle: index }).status).toBe("resolved");
+  });
+
+  it("resolves against an index built by hand, with no repeat sets, as before", () => {
+    const bundle = { byFullUrl: new Map(), byTypeId: new Map() };
+    expect(resolveReference("https://fhir.example.org/Patient/fake-7", { bundle }).status).toBe(
+      "external",
+    );
+    expect(resolveReference("urn:uuid:fake-7", { bundle }).status).toBe("external");
+    const contained = { root: observation([]), byId: new Map() };
+    expect(resolveReference("#fake-7", { contained }).status).toBe("unresolved");
+  });
+
+  it("keeps a fullUrl and a versionId apart, so no two pairs read alike", () => {
+    // `urn:uuid:fake-1` at version `2` and `urn:uuid:fake-12` at none spell the same text run
+    // together, and are two different entries.
+    const bundle = bundleOf([
+      {
+        fullUrl: "urn:uuid:fake-1",
+        resource: { resourceType: "Patient", id: "fake-1", meta: { versionId: "2" } },
+      },
+      { fullUrl: "urn:uuid:fake-12", resource: { resourceType: "Patient", id: "fake-12" } },
+    ]);
+    expect(collectBundleIssues(bundle).map((i) => i.code)).toEqual([]);
+  });
+});
