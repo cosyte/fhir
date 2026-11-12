@@ -209,6 +209,8 @@ describe("FhirSafetyError lists each location once", () => {
  * each format reads safe.
  */
 const RUNS = Number(process.env["FUZZ_RUNS"] ?? 200);
+/** The cases each property runs: {@link RUNS}, or the depth `COSYTE_PROPERTY_RUNS` sets. */
+const CASES = propertyRun({ numRuns: RUNS }).numRuns;
 
 /** Elements of an Observation, each one FHIR XML element, in R4 order. */
 const OBSERVATION_MEMBERS: readonly string[] = [
@@ -236,7 +238,7 @@ const DOCUMENT = fc.record({
 });
 
 describe("property: no write of a marked model re-reads safe", () => {
-  it(`${String(RUNS)} cases`, () => {
+  it(`${String(CASES)} cases`, () => {
     fc.assert(
       fc.property(DOCUMENT, ({ members, pick, namespace, inBundle }) => {
         const chosen = members.map((i) => OBSERVATION_MEMBERS[i] as string);
@@ -271,7 +273,7 @@ describe("property: no write of a marked model re-reads safe", () => {
     );
   });
 
-  it(`every refusal re-reads nothing safe: a write that succeeds re-reads as the read (${String(RUNS)} cases)`, () => {
+  it(`every refusal re-reads nothing safe: a write that succeeds re-reads as the read (${String(CASES)} cases)`, () => {
     fc.assert(
       fc.property(DOCUMENT, fc.boolean(), ({ members, pick, namespace, inBundle }, asJson) => {
         const chosen = members.map((i) => OBSERVATION_MEMBERS[i] as string);

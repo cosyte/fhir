@@ -516,12 +516,14 @@ describe("a conformant document is unaffected", () => {
  */
 const FUZZ_RUNS = Number.parseInt(process.env["FUZZ_RUNS"] ?? "", 10);
 const RUNS = Number.isFinite(FUZZ_RUNS) && FUZZ_RUNS > 0 ? FUZZ_RUNS : 1000;
+/** The cases each property runs: {@link RUNS}, or the depth `COSYTE_PROPERTY_RUNS` sets. */
+const CASES = propertyRun({ numRuns: RUNS }).numRuns;
 /**
  * Each property's time limit, raised with its case count: at the fuzz depth one property takes
  * longer than the suite's default limit on a GitHub runner, and a case count that cannot finish is
  * no deeper check.
  */
-const TIMEOUT = Math.max(10_000, RUNS * 10);
+const TIMEOUT = Math.max(10_000, CASES * 10);
 
 type Json = string | number | boolean | JsonObject | Json[];
 interface JsonObject {
@@ -802,7 +804,7 @@ describe("property: an undefined element planted at random depth always declines
       expect(defined.has(name), name).toBe(false);
   });
 
-  it(`JSON, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
+  it(`JSON, ${String(CASES)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(
         DOCUMENT,
@@ -818,7 +820,7 @@ describe("property: an undefined element planted at random depth always declines
     );
   });
 
-  it(`XML, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
+  it(`XML, ${String(CASES)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(
         DOCUMENT,
@@ -835,7 +837,7 @@ describe("property: an undefined element planted at random depth always declines
   });
 
   it(
-    `XML, an element moved to another namespace by default declaration, ${String(RUNS)} cases`,
+    `XML, an element moved to another namespace by default declaration, ${String(CASES)} cases`,
     {
       timeout: TIMEOUT,
     },
@@ -870,7 +872,7 @@ describe("property: an undefined element planted at random depth always declines
   );
 
   it(
-    `converse: the same documents with nothing planted read safe (${String(RUNS)} cases)`,
+    `converse: the same documents with nothing planted read safe (${String(CASES)} cases)`,
     { timeout: TIMEOUT },
     () => {
       fc.assert(
