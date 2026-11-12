@@ -62,7 +62,7 @@ import { primitiveString } from "../safety/codes.js";
 import { elementTargets, RESOURCE_TARGET } from "../safety/element-definitions.js";
 import { ASSESSED_RESOURCE_TYPES } from "../safety/status.js";
 import type { BaseInvariantFinding, Outcome } from "./base-invariants.js";
-import { ISSUE_SEVERITIES, validationIssue } from "./issues.js";
+import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issues.js";
 
 /**
  * The error-severity constraints R4 4.0.1 declares on each datatype (or datatype backbone element,
@@ -286,12 +286,13 @@ function byEngine(expression: string): Compiled["decide"] {
   let ast: Expr | undefined;
   return (focus, root, context) => {
     if (ast === undefined) {
+      // Stryker disable BlockStatement: equivalent: with the catch emptied the unparsed row reaches outcomeOf, whose own catch answers unchecked
       try {
         ast = parseFhirPath(expression);
-        // Stryker disable next-line BlockStatement: equivalent: with this catch emptied the unparsed row reaches outcomeOf, whose own catch answers unchecked
       } catch {
         return "unchecked";
       }
+      // Stryker restore BlockStatement
     }
     return outcomeOf(ast, focus, root, context);
   };
@@ -341,27 +342,25 @@ function check(
   const rows = walk.table.get(constrained);
   if (rows === undefined) return;
   for (const { key, decide } of rows) {
-    // Each outcome is named: one that is neither of the two below draws nothing, so a decision that
-    // forgot to say `unchecked` shows in the findings rather than passing as one.
     const outcome = decide(focus, root, context);
-    if (outcome === "violated") {
-      const issue = validationIssue(
-        "INVARIANT_VIOLATED",
-        ISSUE_SEVERITIES.ERROR,
-        trail.text(),
-        key,
-      );
-      walk.findings.push({ issue, focus });
-    } else if (outcome === "unchecked") {
-      const issue = validationIssue(
-        "INVARIANT_UNCHECKED",
-        ISSUE_SEVERITIES.INFORMATION,
-        trail.text(),
-        key,
-      );
-      walk.findings.push({ issue, focus });
-    }
+    if (outcome === "satisfied") continue;
+    walk.findings.push({ issue: issueOf(outcome, trail.text(), key), focus });
   }
+}
+
+/**
+ * The finding for a constraint that did not hold, or was not decided. Each outcome is named, so a
+ * decision that answered anything else fails loudly rather than reading as one of the two.
+ */
+function issueOf(outcome: Outcome, at: string, key: string): ValidationIssue {
+  if (outcome === "violated") {
+    return validationIssue("INVARIANT_VIOLATED", ISSUE_SEVERITIES.ERROR, at, key);
+  }
+  if (outcome === "unchecked") {
+    return validationIssue("INVARIANT_UNCHECKED", ISSUE_SEVERITIES.INFORMATION, at, key);
+  }
+  /* v8 ignore next -- unreachable: check() never passes a satisfied outcome, and there is no other */
+  throw new TypeError();
 }
 
 /** Walk a primitive's own extensions, each an `Extension`. */
