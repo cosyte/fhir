@@ -460,7 +460,7 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
 
   // What the resource asks to be checked against that nothing here checks it against: each
   // extension's definition, and each profile `meta.profile` claims that was not supplied.
-  for (const issue of collectUncheckedClaims(resource, rt, root, options.profiles ?? [])) {
+  for (const issue of collectUncheckedClaims(resource, rt, root, options.profiles)) {
     ctx.issues.push(issue);
   }
 
@@ -513,7 +513,7 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
     }
   }
 
-  return finalize(ctx, (issues) => fullyCheckedOver(resource, rt, modeled !== undefined, issues));
+  return finalize(ctx, (issues) => fullyCheckedOver(resource, rt, issues));
 }
 
 /**

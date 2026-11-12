@@ -16,7 +16,7 @@ import {
   type ValidateOptions,
   type ValidationResult,
 } from "../src/index.js";
-import { LEAVES_UNCHECKED } from "../src/validate/unchecked.js";
+import { fullyCheckedOver, LEAVES_UNCHECKED } from "../src/validate/unchecked.js";
 
 type Doc = Readonly<Record<string, unknown>>;
 
@@ -146,6 +146,17 @@ describe("fullyChecked", () => {
       generalPractitioner: [{ reference: "#c1" }],
     });
     expect(contained.fullyChecked).toBe(false);
+    // A contained entry reads false by itself, not only through the dom-3 it also leaves unchecked.
+    const withContained = parseResource(
+      JSON.stringify({
+        ...OBSERVATION,
+        contained: [{ resourceType: "Patient", id: "p1", active: true }],
+        subject: { reference: "#p1" },
+      }),
+    ).resource;
+    expect(fullyCheckedOver(withContained, "Observation", [])).toBe(false);
+    const without = parseResource(JSON.stringify(OBSERVATION)).resource;
+    expect(fullyCheckedOver(without, "Observation", [])).toBe(true);
     expect(validate({ resourceType: "Patient", active: true }).fullyChecked).toBe(true);
   });
 

@@ -537,6 +537,33 @@ describe("where the layer walks", () => {
     expect(invariants({ ...OBS, status: { value: 1, code: "mg" } })).toEqual([]);
   });
 
+  it("reads a resource whose resourceType names a datatype as no walked type", () => {
+    expect(
+      invariants({
+        resourceType: "Patient",
+        contained: [
+          { resourceType: "Address", id: "a1", period: { start: "2020-02-01", end: "2020-01-01" } },
+        ],
+      }).filter((f) => f.includes("per-1")),
+    ).toEqual([]);
+  });
+
+  it("names each of a primitive's extensions, and the members after it, at their own location", () => {
+    const ext = (value: number) => ({ url: "http://example.org/e", valueCount: { value } });
+    expect(
+      invariants({
+        resourceType: "Patient",
+        _birthDate: { extension: [ext(1), ext(2)] },
+        birthDate: "1970-01-01",
+        extension: [ext(3)],
+      }),
+    ).toEqual([
+      "INVARIANT_UNCHECKED cnt-3 at Patient.birthDate.extension[0].valueCount",
+      "INVARIANT_UNCHECKED cnt-3 at Patient.birthDate.extension[1].valueCount",
+      "INVARIANT_UNCHECKED cnt-3 at Patient.extension[0].valueCount",
+    ]);
+  });
+
   it("reports a violation a supplied profile repeats at the same node once", () => {
     const profile = defineProfile({
       url: "http://example.org/fhir/StructureDefinition/fake-qty",

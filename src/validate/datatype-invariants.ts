@@ -171,10 +171,12 @@ export const TYPE_PROFILES = (): Readonly<Record<string, string>> => ({
  *
  * @internal
  */
+// Stryker disable ObjectLiteral,StringLiteral: a module-level constant, evaluated once when the module loads, which the mutation runner does not reload per mutant; test/datatype-invariants.test.ts pins its keys
 export const DATATYPE_CONSTRAINTS_ELSEWHERE: Readonly<Record<string, string>> = {
   "txt-1": "narrative",
   "txt-2": "narrative",
 };
+// Stryker restore ObjectLiteral,StringLiteral
 
 /** One constraint ready to evaluate: its key, and its tree or the code that decides it. */
 interface Compiled {
@@ -239,8 +241,9 @@ function boundOf(
   node: FhirNode,
 ): { readonly value: FhirDecimal; readonly unit: string } | undefined {
   const quantity = readQuantity(node);
-  const value = quantity?.value;
-  if (quantity === undefined || value === undefined) return undefined;
+  if (quantity === undefined) return undefined;
+  const value = quantity.value;
+  if (value === undefined) return undefined;
   const unit = JSON.stringify(
     quantity.code === undefined ? [quantity.unit] : [quantity.system, quantity.code],
   );
@@ -285,6 +288,7 @@ function byEngine(expression: string): Compiled["decide"] {
     if (ast === undefined) {
       try {
         ast = parseFhirPath(expression);
+        // Stryker disable next-line BlockStatement: equivalent: with this catch emptied the unparsed row reaches outcomeOf, whose own catch answers unchecked
       } catch {
         return "unchecked";
       }
@@ -337,13 +341,26 @@ function check(
   const rows = walk.table.get(constrained);
   if (rows === undefined) return;
   for (const { key, decide } of rows) {
+    // Each outcome is named: one that is neither of the two below draws nothing, so a decision that
+    // forgot to say `unchecked` shows in the findings rather than passing as one.
     const outcome = decide(focus, root, context);
-    if (outcome === "satisfied") continue;
-    const issue =
-      outcome === "violated"
-        ? validationIssue("INVARIANT_VIOLATED", ISSUE_SEVERITIES.ERROR, trail.text(), key)
-        : validationIssue("INVARIANT_UNCHECKED", ISSUE_SEVERITIES.INFORMATION, trail.text(), key);
-    walk.findings.push({ issue, focus });
+    if (outcome === "violated") {
+      const issue = validationIssue(
+        "INVARIANT_VIOLATED",
+        ISSUE_SEVERITIES.ERROR,
+        trail.text(),
+        key,
+      );
+      walk.findings.push({ issue, focus });
+    } else if (outcome === "unchecked") {
+      const issue = validationIssue(
+        "INVARIANT_UNCHECKED",
+        ISSUE_SEVERITIES.INFORMATION,
+        trail.text(),
+        key,
+      );
+      walk.findings.push({ issue, focus });
+    }
   }
 }
 
@@ -359,6 +376,7 @@ function walkPrimitiveExtensions(
   trail.child("extension");
   for (let i = 0; i < extensions.length; i++) {
     trail.index(i);
+    // Stryker disable next-line BooleanLiteral: equivalent: an Extension is never a resource, so the flag is not read below it
     walkValue(walk, extensions[i] as FhirNode, "Extension", undefined, root, trail, false);
     trail.pop();
   }
@@ -452,6 +470,7 @@ export function collectDatatypeInvariantFindings(
   root: string,
 ): readonly BaseInvariantFinding[] {
   const walk: Walk = { findings: [], table: compiledConstraints() };
+  // Stryker disable next-line BooleanLiteral: equivalent: at the top the root passed is the resource itself, so either flag reads the same root
   walkValue(walk, resource, RESOURCE_TARGET, undefined, resource, new Trail(root), true);
   return walk.findings;
 }

@@ -404,12 +404,14 @@ function checkNarrative(narrative: FhirComplex, path: string, issues: Validation
  * and `txt-2` (some non-whitespace content). The root and paragraph findings are breaches of the
  * XHTML the `xhtml` datatype requires, not of either constraint, and carry no key.
  */
+// Stryker disable ObjectLiteral,StringLiteral: a module-level table, built once when the module loads, which the mutation runner does not reload per mutant; test/datatype-invariants.test.ts pins each key on its finding
 const NARRATIVE_CONSTRAINT: Readonly<Partial<Record<ValidationCode, string>>> = {
   NARRATIVE_ELEMENT_ILLEGAL: "txt-1",
   NARRATIVE_ATTRIBUTE_ILLEGAL: "txt-1",
   NARRATIVE_ACTIVE_CONTENT: "txt-1",
   NARRATIVE_EMPTY: "txt-2",
 };
+// Stryker restore ObjectLiteral,StringLiteral
 
 /** One resource waiting to be visited, with the location of its root. */
 interface PendingResource {

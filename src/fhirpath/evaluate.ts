@@ -84,6 +84,7 @@ interface EvalCtx {
 }
 
 /** The value of `%ucum`, which FHIRPath defines as the UCUM code system's URL. */
+// Stryker disable next-line StringLiteral: a module-level constant, evaluated once when the module loads, which the mutation runner does not reload per mutant; test/fhirpath.test.ts pins its value
 const UCUM_SYSTEM = "http://unitsofmeasure.org";
 
 /** Wrap a node into collection items, flattening a list into its (recursively flattened) members. */

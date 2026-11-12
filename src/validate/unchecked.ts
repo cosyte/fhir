@@ -112,12 +112,12 @@ export const LEAVES_UNCHECKED = (): Readonly<Record<ValidationCode, boolean>> =>
 
 /**
  * Whether a validation of `resource` checked every rule that applies: the resource is of one of the
- * {@link fullyCheckableTypes}, the registry models it, it carries no `contained` resource, and no
- * finding is of a code that {@link LEAVES_UNCHECKED}.
+ * {@link fullyCheckableTypes}, it carries no `contained` resource, and no finding is of a code that
+ * {@link LEAVES_UNCHECKED}. A type the registry has no schema for draws `RESOURCE_NOT_MODELED`,
+ * which is one of those codes.
  *
  * @param resource - The resource validated.
  * @param rt - Its `resourceType`.
- * @param modeled - Whether the registry had a schema for that type.
  * @param issues - Every finding of the validation.
  * @returns The value of `fullyChecked`.
  * @internal
@@ -125,10 +125,9 @@ export const LEAVES_UNCHECKED = (): Readonly<Record<ValidationCode, boolean>> =>
 export function fullyCheckedOver(
   resource: FhirComplex,
   rt: string,
-  modeled: boolean,
   issues: readonly ValidationIssue[],
 ): boolean {
-  if (!modeled || !fullyCheckableTypes().has(rt)) return false;
+  if (!fullyCheckableTypes().has(rt)) return false;
   if (getProperty(resource, "contained") !== undefined) return false;
   const leaves = LEAVES_UNCHECKED();
   return !issues.some((issue) => leaves[issue.code]);
@@ -212,18 +211,18 @@ function collectProfileClaims(
   resource: FhirComplex,
   rt: string,
   root: string,
-  profiles: readonly StructureDefinition[],
+  profiles: readonly StructureDefinition[] | undefined,
   out: ValidationIssue[],
 ): void {
   const meta = getProperty(resource, "meta");
   if (meta === undefined || !isComplex(meta)) return;
   const claims = getProperty(meta, "profile");
   if (claims === undefined) return;
-  const supplied = new Set(profiles.filter((p) => p.type === rt).map((p) => p.url));
+  const supplied = new Set(profiles?.filter((p) => p.type === rt).map((p) => p.url));
   const items = isList(claims) ? claims.items : [claims];
-  for (let i = 0; i < items.length; i++) {
+  for (const [i, item] of items.entries()) {
     // A claim with no readable canonical is one the structure layer reports.
-    const canonical = primitiveString(items[i]);
+    const canonical = primitiveString(item);
     if (canonical === undefined) continue;
     const bar = canonical.indexOf("|");
     const url = bar === -1 ? canonical : canonical.slice(0, bar);
@@ -246,7 +245,7 @@ function collectProfileClaims(
  * @param resource - The resource model.
  * @param rt - Its `resourceType`.
  * @param root - The location of the resource root, already bounded.
- * @param profiles - The supplied profiles.
+ * @param profiles - The supplied profiles, or `undefined` when none were.
  * @returns The findings, value-free, in that order.
  * @internal
  */
@@ -254,7 +253,7 @@ export function collectUncheckedClaims(
   resource: FhirComplex,
   rt: string,
   root: string,
-  profiles: readonly StructureDefinition[],
+  profiles: readonly StructureDefinition[] | undefined,
 ): ValidationIssue[] {
   const out: ValidationIssue[] = [];
   collectExtensions(resource, new Trail(root), out);
