@@ -1347,6 +1347,14 @@ describe("a list of profiles is met by any one of them", () => {
       { code: "Quantity" },
     ]);
     expect(profileFindings(collectProfileIssues(withLow(comparator), twoEntries))).toEqual([]);
+    // An entry with no profile is met in full, so another entry's unchecked profile asks nothing.
+    const plainOrProfiled = lowTyped([
+      { code: "Quantity" },
+      { code: "Quantity", profile: [`${BASE}fake-quantity`] },
+    ]);
+    expect(profileFindings(collectProfileIssues(withLow({ value: 1 }), plainOrProfiled))).toEqual(
+      [],
+    );
     const twoProfiles = lowTyped([
       { code: "Quantity", profile: [`${CORE}SimpleQuantity`] },
       { code: "Quantity", profile: [`${BASE}fake-quantity`] },
