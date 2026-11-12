@@ -39,14 +39,15 @@
  * then the others in turn: the safety layer ({@link ./safety.js}), whose seven named invariants
  * fire for every AllergyIntolerance, Condition and Observation; the base-constraint layer
  * ({@link ./base-invariants.js}), which evaluates every other error-severity constraint R4 declares
- * on the eight modeled types (AllergyIntolerance, Condition, DiagnosticReport, Immunization,
- * MedicationRequest, MedicationStatement, Observation, Patient) and on their `DomainResource`,
- * `Element` and `Extension` base, `pat-1`, `ext-1` and `ele-1` among them, with no profile supplied;
+ * on the eleven modeled types (AllergyIntolerance, Condition, DiagnosticReport, DocumentReference,
+ * Encounter, Immunization, MedicationRequest, MedicationStatement, Observation, Patient, Procedure)
+ * and on their `DomainResource`, `Element` and `Extension` base, `pat-1`, `ext-1` and `ele-1` among
+ * them, with no profile supplied;
  * and, for each supplied profile whose `type` matches, that profile's own `constraint`s
  * ({@link ../profiles/invariants.js}). A violation both a profile and the base-constraint layer
  * find at one occurrence is reported once, and a base constraint the base-constraint layer decides
  * at an occurrence is never also reported unevaluated there because a profile's verbatim copy of
- * it lies outside the subset. A resource type outside the eight draws no base-constraint finding.
+ * it lies outside the subset. A resource type outside the eleven draws no base-constraint finding.
  *
  * @packageDocumentation
  */
@@ -402,9 +403,9 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   // the layer's contract directly, avoids re-spreading optional fields under exactOptionalPropertyTypes.
   for (const issue of collectTerminologyIssues(resource, rt, options)) ctx.issues.push(issue);
 
-  // Base-constraint layer: the error-severity constraints R4 declares on the eight modeled types and
+  // Base-constraint layer: the error-severity constraints R4 declares on the eleven modeled types and
   // on their DomainResource / Element / Extension base, whether or not a profile is supplied. A type
-  // outside the eight draws nothing here. The seven named safety invariants stay with the safety
+  // outside the eleven draws nothing here. The seven named safety invariants stay with the safety
   // layer above, so each is reported once.
   // Which constraints were decided where is asked only by the profile layer below.
   const withProfiles = options.profiles !== undefined && options.profiles.length > 0;

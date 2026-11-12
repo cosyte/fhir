@@ -1,5 +1,5 @@
 /**
- * The base-constraint layer: the error-severity constraints R4 4.0.1 declares on the eight modeled
+ * The base-constraint layer: the error-severity constraints R4 4.0.1 declares on the eleven modeled
  * resource types and on the `DomainResource`, `Element` and `Extension` definitions they inherit,
  * evaluated by {@link ./validate.js validateResource} whether or not a profile is supplied.
  *
@@ -9,9 +9,10 @@
  * `address` or `organization` (`pat-1`), an extension that carries both a value and nested
  * extensions (`ext-1`), or an element with no value and no children (`ele-1`).
  *
- * The table below is transcribed from the R4 4.0.1 StructureDefinitions of the eight types
- * (AllergyIntolerance, Condition, DiagnosticReport, Immunization, MedicationRequest,
- * MedicationStatement, Observation, Patient) and of `DomainResource`, `Element` and `Extension`.
+ * The table below is transcribed from the R4 4.0.1 StructureDefinitions of the eleven types
+ * (AllergyIntolerance, Condition, DiagnosticReport, DocumentReference, Encounter, Immunization,
+ * MedicationRequest, MedicationStatement, Observation, Patient, Procedure) and of `DomainResource`,
+ * `Element` and `Extension`.
  * Every expression is copied verbatim and evaluated by the bounded FHIRPath engine
  * ({@link ../fhirpath/index.js}); no StructureDefinition document is bundled. Each outcome maps
  * exactly as the profile layer maps it:
@@ -67,22 +68,25 @@ import {
 import { Trail } from "../model/path.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issues.js";
 
-/** The eight resource types whose base constraints this layer evaluates. */
+/** The eleven resource types whose base constraints this layer evaluates. */
 const BASE_CONSTRAINT_TYPES: ReadonlySet<string> = new Set([
   "AllergyIntolerance",
   "Condition",
   "DiagnosticReport",
+  "DocumentReference",
+  "Encounter",
   "Immunization",
   "MedicationRequest",
   "MedicationStatement",
   "Observation",
   "Patient",
+  "Procedure",
 ]);
 
 /**
  * Where a constraint is evaluated.
  *
- * - `root`: once, against the resource itself (`DomainResource`, so every one of the eight types).
+ * - `root`: once, against the resource itself (`DomainResource`, so every one of the eleven types).
  * - `element`: once per occurrence of a direct element of one resource type.
  * - `every-element`: once per element at any depth outside `contained` (`Element`).
  * - `every-extension`: once per `extension` / `modifierExtension` at any depth outside `contained`,
@@ -104,8 +108,9 @@ interface BaseConstraint {
 
 /**
  * The base constraints this layer evaluates, verbatim from R4 4.0.1. `DiagnosticReport`,
- * `MedicationRequest` and `MedicationStatement` declare no constraint of their own, so they are
- * reached by the `DomainResource`, `Element` and `Extension` rows alone.
+ * `DocumentReference`, `Encounter`, `MedicationRequest`, `MedicationStatement` and `Procedure`
+ * declare no constraint of their own, so they are reached by the `DomainResource`, `Element` and
+ * `Extension` rows alone.
  */
 const BASE_CONSTRAINTS: readonly BaseConstraint[] = [
   {
@@ -481,10 +486,10 @@ function walkChildren(node: FhirComplex, trail: Trail, isExtension: boolean, vis
 }
 
 /**
- * Evaluate the base constraints of one of the eight modeled types against a resource.
+ * Evaluate the base constraints of one of the eleven modeled types against a resource.
  *
  * @param resource - The resource model.
- * @param rt - Its `resourceType`, exactly as the document wrote it. Any type outside the eight
+ * @param rt - Its `resourceType`, exactly as the document wrote it. Any type outside the eleven
  *   yields no finding and decides nothing.
  * @returns The findings, and which constraints were decided at which node.
  * @internal

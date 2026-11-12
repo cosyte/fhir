@@ -96,9 +96,22 @@ import {
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "./issues.js";
 
 /**
+ * The modeled types outside `SAFETY_RESOURCE_TYPES` whose `status` R4 flags as a modifier with an
+ * `entered-in-error` code, so a retraction on one is reported here as it is on the safety types.
+ * They carry none of the named invariants. *(encounter.html, procedure.html,
+ * documentreference.html)*
+ */
+const RETRACTION_REPORTED_TYPES: ReadonlySet<string> = new Set([
+  "DocumentReference",
+  "Encounter",
+  "Procedure",
+]);
+
+/**
  * Collect every safety finding for a resource: fail-closed modifier extensions and repeated property
- * names (both universal), the `entered-in-error` retraction note, and the named invariants (for the
- * types `SAFETY_RESOURCE_TYPES` names).
+ * names (both universal), the `entered-in-error` retraction note (for the types
+ * `SAFETY_RESOURCE_TYPES` names, and `Encounter`, `Procedure` and `DocumentReference`), and the named
+ * invariants (for the types `SAFETY_RESOURCE_TYPES` names).
  *
  * @param resource - The resource model.
  * @param rt - Its resolved `resourceType` (the caller has already established it is present).
@@ -176,7 +189,7 @@ export function collectSafetyIssues(resource: FhirComplex, rt: string): Validati
     issues.push(validationIssue("ABSENCE_MARKER_UNREADABLE", ISSUE_SEVERITIES.ERROR, location));
   }
 
-  if (!SAFETY_RESOURCE_TYPES.has(rt)) return issues;
+  if (!SAFETY_RESOURCE_TYPES.has(rt) && !RETRACTION_REPORTED_TYPES.has(rt)) return issues;
 
   // 3. Surface a retracted (entered-in-error) resource, not a defect, but never to be missed. The
   // location read matches `isRetracted`'s own fail-safe read over every value written for `status`,

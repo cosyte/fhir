@@ -1563,7 +1563,7 @@ describe("the observables the audit names as break candidates are real", () => {
     // The control: a type still outside the registry keeps the old, permissive reading, so the
     // change above is the registry widening and not a global tightening.
     const control = entryPoint.validateResource(
-      entryPoint.parseResource('{"resourceType":"Procedure","id":"synthetic-1"}').resource,
+      entryPoint.parseResource('{"resourceType":"ServiceRequest","id":"synthetic-1"}').resource,
     );
     expect(control.valid).toBe(true);
     expect(control.issues.map((issue) => issue.code)).toEqual(["RESOURCE_NOT_MODELED"]);

@@ -318,7 +318,7 @@ fc.assert(
 
 > **resource**(`options?`): `Arbitrary`\<[`FhirComplex`](../fhir.md#fhircomplex)\>
 
-Generate a spec-clean resource, parsed: one of the eight types the library validates in full,
+Generate a spec-clean resource, parsed: one of eight of the types the library validates in full,
 with every element it requires, codes from its required bindings, and statuses that keep the
 invariants (`con-3` to `con-5`, `ait-1` and `ait-2`, `obs-6` and `obs-7`, `pat-1`, `ext-1`), so
 it validates with no error, strict mode included. Values are biased toward what a codec gets

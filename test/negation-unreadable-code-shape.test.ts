@@ -458,18 +458,36 @@ describe("content where a code belongs is disclosed, not read through", () => {
       expect(safety.safeToSummarize).toBe(false);
     });
 
-    it("5. leaves `validateResource` reporting valid, which is this slice's declared boundary", () => {
-      // The safety readout refuses; the validator is untouched. Raising a new issue code here needs
-      // a window decision of its own (which types, and what the validator knows about a datatype
-      // with no caller-supplied profile), so it is filed rather than absorbed.
+    it("5. leaves `validateResource` reporting valid on a type it does not model, which is this slice's declared boundary", () => {
+      // The safety readout refuses; the validator raises no new issue code for the shape itself.
+      // On a type with no built-in schema nothing tells the validator that `status` is a `code`, so
+      // the document still reads valid there. `MedicationAdministration` carries `not-done` in R4
+      // and is not modeled.
       const { resource } = parseResource(
-        '{"resourceType":"Procedure","status":{"value":"not-done"}}',
+        '{"resourceType":"MedicationAdministration","status":{"value":"not-done"}}',
       );
 
       // ONLY the validator is asserted here, and that is deliberate: the head-side refusal is
       // asserted in the first case of this file, and folding it in would make this case red at base
       // and stop it being a both-states pin at all.
       expect(validateResource(resource).valid).toBe(true);
+    });
+
+    it("5b. reports the shape as a type mismatch on a type the validator models", () => {
+      // The boundary above closed for `Procedure` when its built-in schema arrived: `status` is a
+      // `code` there, so an object at it is a shape the schema contradicts and the document is not
+      // valid. The readout's refusal is unchanged.
+      const { resource } = parseResource(
+        '{"resourceType":"Procedure","status":{"value":"not-done"}}',
+      );
+      const result = validateResource(resource);
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.issues
+          .filter((issue) => issue.expression === "Procedure.status")
+          .map((issue) => issue.code),
+      ).toEqual(["TYPE_MISMATCH"]);
     });
 
     it("6. leaves an empty array at status alone", () => {
