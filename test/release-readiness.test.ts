@@ -1523,15 +1523,17 @@ describe("the certified public surface matches the package entry point", () => {
 
   it("counts what it certifies, so a dropped ROW reds even if every name still matches", () => {
     // Three runtime names and one type added with the patient-animal reader and the veterinary
-    // Patient starter profile.
-    expect(INVENTORY.values).toHaveLength(174);
+    // Patient starter profile. One more with the profile element checks:
+    // PROFILE_UNCHECKED_CONSTRAINTS.
+    expect(INVENTORY.values).toHaveLength(175);
     // S0364-fhir-safety-modifier-3: two type-only exports added (IntentReport,
     // MedicationRequestIntent), the types of the two safety readout fields that change adds.
     // S0369-fhir-safety-modifier-4: two more (DatatypeUseCode, DatatypeUseReport), the types of
     // the `use` channel on Identifier, HumanName, Address and ContactPoint.
     // One runtime name and three types added with the type slicing discriminator:
-    // SLICE_UNCHECKED_REASONS, SliceUncheckedReason, SliceContext and SliceEnvironment.
-    expect(INVENTORY.types).toHaveLength(110);
+    // SLICE_UNCHECKED_REASONS, SliceUncheckedReason, SliceContext and SliceEnvironment. One type
+    // with the profile element checks: ProfileUncheckedConstraint.
+    expect(INVENTORY.types).toHaveLength(111);
     expect(INVENTORY.exportSubpaths).toHaveLength(3);
   });
 

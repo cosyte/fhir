@@ -195,6 +195,12 @@ describe("a reference's target profiles", () => {
       expect(findings(subjectProfile([any]), { subject: { reference: "Group/fake-1" } })).toEqual(
         [],
       );
+      // Beside a narrower one, it still allows any target.
+      expect(
+        findings(subjectProfile([`${CORE}Patient`, any]), {
+          subject: { reference: "Group/fake-1" },
+        }),
+      ).toEqual([]);
     }
   });
 
@@ -667,6 +673,30 @@ describe("constraints reported as not checked", () => {
       "fakeMember",
     ]);
     expect(unmodeledOf(derived({ contentReference: "#y" }))).toEqual(["contentReference"]);
+    // A base that states nothing unread takes the differential's alone.
+    const plain = sd(
+      "Observation",
+      [{ id: "Observation.status", path: "Observation.status" }],
+      "fake-plain",
+    );
+    const fromPlain = req(
+      loadStructureDefinition(
+        parse({
+          resourceType: "StructureDefinition",
+          url: `${BASE}fake-from-plain`,
+          type: "Observation",
+          baseDefinition: `${BASE}fake-plain`,
+          differential: {
+            element: [{ id: "Observation.status", path: "Observation.status", fakeMember: true }],
+          },
+        }),
+      ),
+    );
+    expect(
+      generateSnapshot(fromPlain, (url) => (url === `${BASE}fake-plain` ? plain : undefined)).find(
+        (e) => e.path === "Observation.status",
+      )?.unmodeled,
+    ).toEqual(["fakeMember"]);
     expect(
       collectProfileIssues(parse(OBS), derived({ short: "fake" }), { resolve }).map(
         (i) => i.uncheckedConstraint,
@@ -760,6 +790,24 @@ describe("constraints reported as not checked", () => {
     expect(findings(differs, { ...OBS, category: [{ text: "fake-a" }] }, false)).toEqual([
       ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.category:fake", "slice-invariant"],
     ]);
+    // A sliced element with no invariant of its own shares none.
+    const bare = sd("Observation", [
+      {
+        id: "Observation.category",
+        path: "Observation.category",
+        slicing: { discriminator: [{ type: "pattern", path: "$this" }], rules: "open" },
+      },
+      {
+        id: "Observation.category:fake",
+        path: "Observation.category",
+        sliceName: "fake",
+        patternCodeableConcept: { text: "fake-a" },
+        constraint: [{ key: "fake-1", severity: "error", expression: "text.exists()" }],
+      },
+    ]);
+    expect(findings(bare, { ...OBS, category: [{ text: "fake-a" }] }, false)).toEqual([
+      ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.category:fake", "slice-invariant"],
+    ]);
   });
 
   it("reports an invariant on an element present as a primitive, other than ele-1", () => {
@@ -845,6 +893,7 @@ describe("what the model records it does not read", () => {
         ],
       }),
     ).toEqual(["type.aggregation", `type.extension:${BASE}fake-ext`]);
+    expect(element({ type: ["fake"] })).toBeUndefined();
     expect(element({ type: { code: "code", versioning: "specific" } })).toEqual([
       "type.versioning",
     ]);
@@ -1151,6 +1200,10 @@ describe("compareDecimals", () => {
     expect(cmp("-1e9999999", "-2")).toBeLessThan(0);
     expect(cmp("2.5e1", "25.000")).toBe(0);
     expect(cmp("100", "99")).toBeGreaterThan(0);
+    expect(cmp("0", "0.5")).toBeLessThan(0);
+    expect(cmp("0.5", "0")).toBeGreaterThan(0);
+    expect(cmp("0", "-0.5")).toBeGreaterThan(0);
+    expect(cmp("-0.5", "0")).toBeLessThan(0);
   });
 
   it("orders nothing that is not a decimal literal", () => {

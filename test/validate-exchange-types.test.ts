@@ -240,9 +240,11 @@ describe("each exchange table names exactly the direct elements R4 defines", () 
       for (const element of onCode) {
         const codes = R4.valueSets[element.binding?.valueSet ?? ""]?.codes;
         expect(codes, `${type}.${element.name}: no resolved value set`).toBeDefined();
+        // The value set is named as R4 names it, without the `|4.0.1` version pin.
         expect(table[element.name]?.binding, `${type}.${element.name}`).toEqual({
           strength: "required",
           codes,
+          valueSet: element.binding?.valueSet?.split("|")[0],
         });
       }
     });

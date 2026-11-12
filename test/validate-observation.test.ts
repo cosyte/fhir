@@ -195,6 +195,7 @@ describe("the built-in Observation element table", () => {
     expect(elements["status"]?.binding).toEqual({
       strength: "required",
       codes: [...OBSERVATION_STATUS],
+      valueSet: "http://hl7.org/fhir/ValueSet/observation-status",
     });
     const bound = Object.entries(elements)
       .filter(([, element]) => element.binding !== undefined)

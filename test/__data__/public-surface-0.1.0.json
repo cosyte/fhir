@@ -7,8 +7,8 @@
     "rule": "Every name the entry point re-exports, split by whether it survives to runtime (values) or is erased by the type system (types), plus the subpaths the exports map publishes. Sorted, so a diff is a set difference and never a reordering."
   },
   "counts": {
-    "values": 174,
-    "types": 110,
+    "values": 175,
+    "types": 111,
     "exportSubpaths": 3
   },
   "values": [
@@ -59,6 +59,7 @@
     "PATIENT_ANIMAL_EXTENSION_URL",
     "PATIENT_IDENTIFIER_STARTER",
     "PRIMITIVE_TYPES",
+    "PROFILE_UNCHECKED_CONSTRAINTS",
     "REFUTED",
     "RXNORM_SYSTEM",
     "SAFETY_RESOURCE_TYPES",
@@ -254,6 +255,7 @@
     "ProfileElementSpec",
     "ProfileOptions",
     "ProfileSpec",
+    "ProfileUncheckedConstraint",
     "Quantity",
     "RawArray",
     "RawBool",

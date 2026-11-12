@@ -778,6 +778,18 @@ issues.map((i) => `${i.code}/${i.severity}`); // → ["MUST_SUPPORT_ABSENT/infor
 - **`fixed[x]` vs `pattern[x]`** (`matchesFixed` / `matchesPattern`): `fixed` is exact equality
   (nothing extra), `pattern` is a subset (extras allowed); decimals compared precision-exactly, never
   via a float. A mismatch is `PROFILE_FIXED_MISMATCH` / `PROFILE_PATTERN_MISMATCH` (error).
+- **Types, targets, lengths and ranges**: a `choice[x]` occurrence of a type the profile does not
+  list is `PROFILE_TYPE_MISMATCH`; a `Reference` whose target (resolved in the closure, else read
+  from its `Type/id`) is of a type no `targetProfile` names is `PROFILE_REFERENCE_TARGET_MISMATCH`;
+  a string over `maxLength` (UTF-16 code units) is `PROFILE_MAX_LENGTH`; a number outside an integer
+  or decimal `minValue[x]` / `maxValue[x]`, compared exactly, is `PROFILE_MIN_VALUE` /
+  `PROFILE_MAX_VALUE`; a `SimpleQuantity` with a `comparator` is `INVARIANT_VIOLATED` `sqty-1` (all
+  errors). Any other constraint on a present element that no layer checks is
+  `PROFILE_CONSTRAINT_UNCHECKED` (`information`) with its kind in `uncheckedConstraint`
+  (`PROFILE_UNCHECKED_CONSTRAINTS`: a type profile, a constraining or unreadable target profile, a
+  `maxLength` on a non-string, a non-numeric range, a binding beyond the structure layer's, slice
+  order, a slice's own invariant, an invariant on a primitive, a definition member the model does
+  not read): **never silently passed**.
 - **Must-support is a system obligation, not instance-presence**: an absent must-support element is
   `MUST_SUPPORT_ABSENT` at **`information`, never an error**. A strict client that rejects an absent
   must-support element is the classic interop bug this rule exists to prevent.

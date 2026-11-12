@@ -298,15 +298,17 @@ export function compareDecimals(a: FhirDecimal, b: FhirDecimal): number | undefi
   const cb = canonical(pb);
   const sa = signOf(ca.coefficient);
   const sb = signOf(cb.coefficient);
-  if (sa !== sb || sa === 0) return sa - sb;
-  const da = (sa < 0 ? -ca.coefficient : ca.coefficient).toString();
-  const db = (sb < 0 ? -cb.coefficient : cb.coefficient).toString();
+  if (sa !== sb) return sa - sb;
+  // One sign from here on, so a minus sign leads both digit strings alike and moves neither.
+  const da = ca.coefficient.toString();
+  const db = cb.coefficient.toString();
   // The position of the leading digit: the larger magnitude has it further left.
   const ea = da.length - ca.scale;
   const eb = db.length - cb.scale;
   if (ea !== eb) return ea > eb ? sa : -sa;
   // Same leading position: the digits, read left to right, order the magnitudes. Neither ends in a
-  // zero, so equal values spell the same digits and a shorter prefix is the smaller value.
+  // zero (a zero is the one digit "0"), so equal values spell the same digits and a shorter prefix
+  // is the smaller value.
   if (da === db) return 0;
   return da > db ? sa : -sa;
 }
