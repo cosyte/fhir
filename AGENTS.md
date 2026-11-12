@@ -81,7 +81,9 @@ changed source files with `stryker.config.mjs` (`pnpm mutate changed --base orig
 `.github/workflows/weekly-mutation.yml` runs the full run (`pnpm mutate:full`) twice a week, in
 sixteen shards, and holds its score to the floor. To raise a floor, run `pnpm quality:raise` after a
 full run and open a pull request. Mutation runs the suite of `vitest.mutation.config.ts`, which
-leaves out the tests of this repository's own tooling.
+leaves out the tests of this repository's own tooling. StrykerJS rewrites `src/` before that suite
+runs, so a test that reads `src/` as text skips itself there through `SOURCE_IS_INSTRUMENTED` in
+`test/_runtime.ts`; `test/mutation-suite.test.ts` fails on one that does not.
 
 Every property takes its count and seed from `propertyRun` in `test/_property-run.ts`, or from
 `assertProperty` in `@cosyte/test-utils`, so `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED` reach

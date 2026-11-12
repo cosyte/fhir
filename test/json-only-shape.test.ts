@@ -17,6 +17,7 @@ import {
   validateResource,
   type FhirComplex,
 } from "../src/index.js";
+import { SOURCE_IS_INSTRUMENTED } from "./_runtime.js";
 
 /**
  * `JSON -> XML -> JSON` laundered, because XML has no `null`.
@@ -286,31 +287,36 @@ describe("nothing that works is withdrawn, asserted in both polarities", () => {
     expect(refused).toBeUndefined();
   });
 
-  it("is marked by the JSON reader alone, which is why no XML document can reach the refusal", () => {
-    // The corpus sweep below is 7 fixtures; this is the mechanical half, and it is the one that
-    // generalises. A census over every file under `src/`: the markers are set through the reader's
-    // own helpers, and nothing in the XML path sets one. A new setter anywhere else reds this.
-    const src = fileURLToPath(new URL("../src/", import.meta.url)).replaceAll("\\", "/");
-    const files = (dir: string): string[] =>
-      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-        entry.isDirectory()
-          ? files(`${dir}${entry.name}/`)
-          : entry.name.endsWith(".ts")
-            ? [`${dir}${entry.name}`.slice(src.length)]
-            : [],
-      );
-    const referencing = (pattern: RegExp): string[] =>
-      files(src)
-        .filter((name) => pattern.test(readFileSync(`${src}${name}`, "utf8")))
-        .sort();
-    expect(referencing(/markUndefinedNull|markNonObjectMeta|markNestedArray/)).toEqual([
-      "codec/read.ts", // calls them
-      "model/node.ts", // declares them
-    ]);
-    // `nonObjectSource` is set by a literal rather than a helper, so the census is over the
-    // assignment. Reads of it (`node.nonObjectSource !== undefined`) do not match.
-    expect(referencing(/nonObjectSource\s*:/)).toEqual(["codec/read.ts"]);
-  });
+  // Reads `src/` as text, so it stands aside in the mutation run, whose `src/` is rewritten
+  // (`SOURCE_IS_INSTRUMENTED`).
+  it.skipIf(SOURCE_IS_INSTRUMENTED)(
+    "is marked by the JSON reader alone, which is why no XML document can reach the refusal",
+    () => {
+      // The corpus sweep below is 7 fixtures; this is the mechanical half, and it is the one that
+      // generalises. A census over every file under `src/`: the markers are set through the reader's
+      // own helpers, and nothing in the XML path sets one. A new setter anywhere else reds this.
+      const src = fileURLToPath(new URL("../src/", import.meta.url)).replaceAll("\\", "/");
+      const files = (dir: string): string[] =>
+        readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+          entry.isDirectory()
+            ? files(`${dir}${entry.name}/`)
+            : entry.name.endsWith(".ts")
+              ? [`${dir}${entry.name}`.slice(src.length)]
+              : [],
+        );
+      const referencing = (pattern: RegExp): string[] =>
+        files(src)
+          .filter((name) => pattern.test(readFileSync(`${src}${name}`, "utf8")))
+          .sort();
+      expect(referencing(/markUndefinedNull|markNonObjectMeta|markNestedArray/)).toEqual([
+        "codec/read.ts", // calls them
+        "model/node.ts", // declares them
+      ]);
+      // `nonObjectSource` is set by a literal rather than a helper, so the census is over the
+      // assignment. Reads of it (`node.nonObjectSource !== undefined`) do not match.
+      expect(referencing(/nonObjectSource\s*:/)).toEqual(["codec/read.ts"]);
+    },
+  );
 
   it("never refuses a document read from XML, over the whole XML fixture corpus", () => {
     // The markers are set by the JSON reader alone: XML cannot write any of these shapes, so no

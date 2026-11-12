@@ -85,7 +85,11 @@ const config = cosyteVitest({
     environment: "node",
     include: ["test/**/*.test.ts", "src/**/*.test.ts"],
     // A deeper property run scales the budget with its depth, so the nightly run is not cut off by
-    // a budget set for a pull request's cases.
+    // a budget set for a pull request's cases. This is the budget of every test, not only the
+    // properties, and that is intended: at the nightly 10,000 cases it is 1,000,000 ms, so a test
+    // that is not a property is not held to 10 s there. The nightly run looks for a property that
+    // fails at depth, not for a slow test; pull requests, where depth is 1, keep 10 s for every
+    // test.
     testTimeout: 10_000 * propertyDepth,
     // On Windows a hook gets 60 s. The PHI scan's test removes its temporary git repositories in an
     // `afterAll`, and on a Windows runner that took longer than 10 s in 2 of the 22 Windows legs

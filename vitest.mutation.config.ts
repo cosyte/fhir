@@ -12,8 +12,15 @@ import config from "./vitest.config.js";
  *   release readiness report), not the library, so no mutant of `src/` is ever killed there.
  * - `test/docs-content.test.ts`: it builds the package and runs every docs sample against the
  *   built `dist/`. Code a build or a child process runs is not the instrumented source.
- * - `test/property/runner.test.ts` and `test/property-depth.test.ts`: they test the suite's own
- *   property helper and hold the test files to reading the shared depth, not the library.
+ * - `test/property/runner.test.ts`, `test/property-depth.test.ts` and
+ *   `test/mutation-suite.test.ts`: they test the suite's own property helper and hold the test
+ *   files to reading the shared depth and to the rule below, not the library.
+ *
+ * StrykerJS runs this suite against a `src/` it has rewritten into its mutant switches, so a test
+ * that reads `src/` as text would read the rewrite: `COSYTE_SOURCE_INSTRUMENTED` tells the tests
+ * that do (the censuses of where a name appears, the model's declared members, the fast-check
+ * import rule) to stand aside through `SOURCE_IS_INSTRUMENTED` in `test/_runtime.ts`. The rest of
+ * their files runs.
  *
  * The instrumented code runs several times slower than the plain build, so a test's budget here is
  * 60 s rather than 10 s. StrykerJS sets each mutant's own timeout from the time the test took in
@@ -35,7 +42,9 @@ export default {
       "test/docs-content.test.ts",
       "test/property/runner.test.ts",
       "test/property-depth.test.ts",
+      "test/mutation-suite.test.ts",
     ],
+    env: { ...config.test?.env, COSYTE_SOURCE_INSTRUMENTED: "1" },
     testTimeout: 60_000,
   },
 };

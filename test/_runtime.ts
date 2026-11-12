@@ -23,6 +23,17 @@ export const IS_BUN = "Bun" in globalThis;
  */
 export const IS_DENO = "Deno" in globalThis;
 
+/**
+ * True in the mutation run. StrykerJS runs `vitest.mutation.config.ts`, which sets
+ * `COSYTE_SOURCE_INSTRUMENTED`, in a sandbox whose `src/` it has rewritten into its mutant switches,
+ * so a test that reads `src/` as text there reads the rewrite, not the source: a census of where a
+ * name appears finds it in new places (`a.x === b.x` becomes text holding `x :`). Such a test
+ * cannot kill a mutant either, since every mutant shares the one rewritten text, so it is skipped
+ * there. `test/mutation-suite.test.ts` holds every test file of that suite that reads `src/` from
+ * disk to this flag.
+ */
+export const SOURCE_IS_INSTRUMENTED = process.env["COSYTE_SOURCE_INSTRUMENTED"] === "1";
+
 const require = createRequire(import.meta.url);
 
 /**

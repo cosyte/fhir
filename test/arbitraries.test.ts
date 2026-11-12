@@ -53,6 +53,7 @@ import {
   type XmlStyle,
 } from "../src/arbitraries/text.js";
 import { carriesExtension } from "../src/arbitraries/values.js";
+import { SOURCE_IS_INSTRUMENTED } from "./_runtime.js";
 
 const root = join(import.meta.dirname, "..");
 
@@ -424,24 +425,29 @@ describe("packaging", () => {
     expect(pkg.dependencies?.["fast-check"]).toBeUndefined();
   });
 
-  it("imports fast-check only under src/arbitraries, and nothing the main entry reaches imports that folder", () => {
-    const walk = (dir: string): string[] =>
-      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-        e.isDirectory()
-          ? walk(join(dir, e.name))
-          : e.name.endsWith(".ts")
-            ? [join(dir, e.name)]
-            : [],
-      );
-    const offenders: string[] = [];
-    for (const file of walk(join(root, "src"))) {
-      const rel = relative(join(root, "src"), file);
-      if (rel.startsWith("arbitraries")) continue;
-      const text = readFileSync(file, "utf8");
-      if (/from\s+["']fast-check["']/u.test(text) || /from\s+["'][./]*arbitraries/u.test(text)) {
-        offenders.push(rel);
+  // Reads `src/` as text, so it stands aside in the mutation run, whose `src/` is rewritten
+  // (`SOURCE_IS_INSTRUMENTED`).
+  it.skipIf(SOURCE_IS_INSTRUMENTED)(
+    "imports fast-check only under src/arbitraries, and nothing the main entry reaches imports that folder",
+    () => {
+      const walk = (dir: string): string[] =>
+        readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+          e.isDirectory()
+            ? walk(join(dir, e.name))
+            : e.name.endsWith(".ts")
+              ? [join(dir, e.name)]
+              : [],
+        );
+      const offenders: string[] = [];
+      for (const file of walk(join(root, "src"))) {
+        const rel = relative(join(root, "src"), file);
+        if (rel.startsWith("arbitraries")) continue;
+        const text = readFileSync(file, "utf8");
+        if (/from\s+["']fast-check["']/u.test(text) || /from\s+["'][./]*arbitraries/u.test(text)) {
+          offenders.push(rel);
+        }
       }
-    }
-    expect(offenders).toEqual([]);
-  });
+      expect(offenders).toEqual([]);
+    },
+  );
 });
