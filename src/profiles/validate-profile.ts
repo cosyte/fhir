@@ -252,7 +252,7 @@ function checksLeftOut(
   options: ProfileOptions,
   environment: SliceEnvironment,
 ): boolean {
-  const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
+  const snapshot = snapshotElements(profile, options.resolve ?? noBase);
   const scope = new SliceScope(target, rootPath(profile.type), snapshot, environment);
   const schema = builtInSchema(profile.type);
   return snapshot.some(
@@ -260,6 +260,11 @@ function checksLeftOut(
       (typeProfiled(el) || bindingLeftOut(el, profile.type, schema)) &&
       scope.occurrences(el).length > 0,
   );
+}
+
+/** The base resolver when none is supplied: it knows no definition. */
+function noBase(): undefined {
+  return undefined;
 }
 
 /** Whether an element constrains one of its types to a profile (`type.profile`). */
@@ -332,7 +337,7 @@ export function profileIssuesIn(
   // The profile only applies when the two agree, so the location is bounded once, here.
   const root = rootPath(rt);
 
-  const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
+  const snapshot = snapshotElements(profile, options.resolve ?? noBase);
   const scope = new SliceScope(resource, root, snapshot, environment);
   const issues: ValidationIssue[] = [];
 
