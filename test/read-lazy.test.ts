@@ -168,6 +168,46 @@ describe("readRawJsonLazily", () => {
     expect(parsed).toEqual([larger, large, larger].map((text) => parseResource(readRawJson(text))));
   });
 
+  it.each(
+    [
+      // Plain objects, built straight from the tape, with the names it shares and ones it does not.
+      '{"resourceType":"Observation","status":"final","synthUnlisted":true,"code":{"text":"x"}}',
+      // `resourceType` after other members, not a string, or written twice.
+      '{"id":"a","resourceType":"Patient","active":false,"gender":"other"}',
+      '{"id":"a","meta":{"versionId":"1"}}',
+      '{"resourceType":7,"id":"a"}',
+      '{"resourceType":["Observation"],"status":["entered-in-error"]}',
+      '{"resourceType":"Observation","resourceType":"Patient"}',
+      // A `_`-sibling, a repeated name and an escaped name: not plain, so read from the raw tree.
+      '{"resourceType":"Patient","birthDate":"1970-01-01","_birthDate":{"id":"b1"}}',
+      '{"resourceType":"Observation","status":"final","status":"entered-in-error"}',
+      '{"resourceType":"Patient","g\\u0065nder":"other","name":[{"family":"Roe"}]}',
+      '{"resourceType":"Observation","status":"final","st\\u0061tus":"entered-in-error"}',
+      '{"resourceType":"Patient","\\u005fbirthDate":{"id":"b1"},"birthDate":"1970-01-01"}',
+      '{"resourceType":"Patient","_":"x","_a":1}',
+      // Arrays of every kind: strings and booleans, objects, mixed, empty, nulls, numbers, nested.
+      '{"resourceType":"Patient","name":[{"given":["A","B"],"use":"official"},{"family":"C"}]}',
+      '{"resourceType":"Patient","x":[true,"a",false],"y":[{"a":1},"b"],"z":[],"w":[null,"a"]}',
+      '{"resourceType":"Patient","n":[1,0.010,"a"],"m":[[{"a":"b"}]],"o":[{"p":[["q"]]}]}',
+      '{"resourceType":"Observation","valueQuantity":{"value":0.010,"unit":"mg"},"v":null}',
+      `{"resourceType":"Patient",${Array.from({ length: 20 }, (_v, i) => `"m${String(i)}":"v"`).join(",")}}`,
+      '{"resourceType":"Patient","contained":[{"resourceType":"Patient","id":"c1","name":[{}]}]}',
+    ].map((text, i) => [i, text] as const),
+  )("builds document %i from text as it does from readRawJson's tree", (_i, text) => {
+    expect(outcome(() => parseResource(text))).toEqual(
+      outcome(() => parseResource(readRawJson(text))),
+    );
+  });
+
+  it("reads a member name exactly, whatever its first character or length", () => {
+    const names = ["é", "éd", "ũse", "", "i", "idx", "Id", "codes", "cod"];
+    const members = names.map((name) => `${JSON.stringify(name)}:"v"`).join(",");
+    const text = `{"resourceType":"Patient",${members}}`;
+    const read = parseResource(text).resource.properties.map((p) => p.name);
+    expect(read).toEqual(["resourceType", ...names]);
+    expect(parseResource(readRawJson(text)).resource.properties.map((p) => p.name)).toEqual(read);
+  });
+
   it("is what parseResource reads text through: the same model and issues as from readRawJson", () => {
     const text = transactionBundle(5, 30);
     expect(parseResource(text)).toEqual(parseResource(readRawJson(text)));

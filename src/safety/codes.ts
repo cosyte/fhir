@@ -918,7 +918,29 @@ export function choicePresent(resource: FhirComplex, base: string): boolean {
  * @internal
  */
 export function statusSpells(resource: FhirComplex, code: string): boolean {
-  return membersNamed(resource, "status").some((node) => primitiveStrings(node).includes(code));
+  // `membersNamed(resource, "status").some((node) => primitiveStrings(node).includes(code))`, read
+  // without a list: the walk asks it at every resource root, several times over.
+  const properties = resource.properties;
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
+    if (property.name === "status" && holdsString(property.value, code)) return true;
+  }
+  const duplicates = resource.duplicates;
+  if (duplicates === undefined) return false;
+  for (let i = 0; i < duplicates.length; i++) {
+    const property = duplicates[i] as FhirProperty;
+    if (property.name === "status" && holdsString(property.value, code)) return true;
+  }
+  return false;
+}
+
+/** Whether {@link primitiveStrings} of `node` would include `value`, building no list. */
+function holdsString(node: FhirNode, value: string): boolean {
+  if (isPrimitive(node)) return node.value === value;
+  if (!isList(node)) return false;
+  const items = node.items;
+  for (let i = 0; i < items.length; i++) if (holdsString(items[i] as FhirNode, value)) return true;
+  return false;
 }
 
 /**
@@ -1123,10 +1145,62 @@ export function typesOf(resource: FhirComplex): readonly string[] {
   // Most nodes a walk asks about are not resource roots and write no type: answer those without
   // building a list. The answer is the same empty list either way, and every caller only reads it.
   if (!writesProperty(resource, "resourceType")) return NO_TYPES;
+  const one = singleCommonType(resource);
+  if (one !== undefined) return one;
   const types: string[] = [];
   const written = membersNamed(resource, "resourceType");
   for (let i = 0; i < written.length; i++) pushStrings(written[i] as FhirNode, types);
   return types;
+}
+
+/**
+ * The resource types a document writes most, each with the one list {@link typesOf} answers for a
+ * root naming it once. A walk asks a root's types many times, and every caller only reads the
+ * list, so a root that names one of these, once, as a string, costs no list at all. Only these
+ * names are kept: a name a document wrote is never held past the call that read it.
+ */
+const COMMON_TYPES: ReadonlyMap<string, readonly string[]> = new Map(
+  [
+    "AllergyIntolerance",
+    "Binary",
+    "Bundle",
+    "Condition",
+    "DiagnosticReport",
+    "DocumentReference",
+    "Encounter",
+    "Immunization",
+    "MedicationRequest",
+    "MedicationStatement",
+    "Observation",
+    "OperationOutcome",
+    "Organization",
+    "Parameters",
+    "Patient",
+    "Practitioner",
+    "Procedure",
+    // Not frozen: a frozen list is held in another form, and a walk's reads of it would then take
+    // a slower path than they take on every other list they read.
+  ].map((type) => [type, [type]]),
+);
+
+/**
+ * {@link typesOf}'s list from {@link COMMON_TYPES} for a node that writes `resourceType` once, as a
+ * string that is one of them; `undefined` for any other node, which `typesOf` reads in full.
+ */
+function singleCommonType(resource: FhirComplex): readonly string[] | undefined {
+  if (resource.duplicates !== undefined && resource.duplicates.length > 0) return undefined;
+  let found: readonly string[] | undefined;
+  const properties = resource.properties;
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
+    if (property.name !== "resourceType") continue;
+    if (found !== undefined) return undefined;
+    const value = property.value;
+    if (!isPrimitive(value) || typeof value.value !== "string") return undefined;
+    found = COMMON_TYPES.get(value.value);
+    if (found === undefined) return undefined;
+  }
+  return found;
 }
 
 /** {@link primitiveStrings} of `node`, appended to `out` in the same order. */

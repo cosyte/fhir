@@ -169,6 +169,29 @@ read these ratios, against the band of 1.5 to 8:
 The cold import gate in the same two CI runs read medians of 8.77 and 5.77 ms, each over twenty
 fresh processes, within its 10 ms budget.
 
+### A small resource, read and validated with less memory
+
+Since those readings, a read of JSON text builds the model straight from the tokens of the text for
+an object with no `_`-sibling, no repeated name and at most 16 members, and validation makes fewer
+lists, sets and scope objects on its walks. These are the peak memory budget's readings of the
+vital-signs Observation (1.3 KiB), above the empty call's floor, in the `Bench reading` runs on
+a GitHub-hosted runner with Node.js 22.23.4: of `main` at commit `36f6632`, just before the change,
+and of the change on its pull request at commits `f7786cf`, `9d6d139`, `005acb6`, `cd1fc7b`, `a8c5905` and `3bb3499`, which read
+the same code. Where the six runs of the change differ, the
+table gives the range:
+
+| Benchmark                                         | Before | After  | Budget |
+| ------------------------------------------------- | ------ | ------ | ------ |
+| `parseResource`                                   | 25.3x  | 11.2x to 13.3x | 20x    |
+| `validateResource`                                | 42.1x  | 24.3x to 24.4x | 20x    |
+| `validateResource`, caller schemas on each call   | 44.6x  | 26.8x to 27.1x | 20x    |
+| `validateResource`, a registry built once         | 42.1x  | 24.2x to 24.5x | 20x    |
+| `serializeResource`                               | 17.9x  | 17.9x  | 20x    |
+
+The read is now within its budget. Validation is not yet: the walks of its layers still make a
+list or an object at most of the elements they pass. `test/perf/small-resource-heap.perf.ts` holds
+the read under 20 times in CI's `scaling-gate` job, measured the way the reading measures it.
+
 ## The cold import
 
 Importing the package costs a process time before it reads anything, which matters most to a

@@ -51,6 +51,7 @@ import {
   resourceType,
   type FhirComplex,
   type FhirNode,
+  type FhirProperty,
   type PrimitiveValue,
 } from "../model/node.js";
 import { UnsupportedFhirPathError } from "./errors.js";
@@ -168,30 +169,64 @@ function isChoiceVariant(propertyName: string, base: string): boolean {
   return suffix >= "A" && suffix <= "Z";
 }
 
-/** Navigate one member `name` from a single node item; returns the selected items (lists flattened). */
-function navigateItem(node: FhirNode, name: string): FpItem[] {
+/** Append `node` to `out` as collection items, a list flattened into its items, as {@link wrap} does. */
+function pushWrapped(node: FhirNode, out: FpItem[]): void {
+  if (!isList(node)) {
+    out.push({ t: "node", node });
+    return;
+  }
+  const items = node.items;
+  for (let i = 0; i < items.length; i++) pushWrapped(items[i] as FhirNode, out);
+}
+
+/**
+ * Append the items member `name` selects from a single node item to `out` (lists flattened). Every
+ * selection appends to the one list its caller builds, so a step of a path makes no list per item.
+ */
+function pushNavigated(node: FhirNode, name: string, out: FpItem[]): void {
   if (isComplex(node)) {
     const exact = getProperty(node, name);
-    if (exact !== undefined) return wrap(exact);
+    if (exact !== undefined) {
+      pushWrapped(exact, out);
+      return;
+    }
     // No literal property: try a `[x]` choice variant (`value` selects `valueQuantity`, …).
-    return node.properties
-      .filter((p) => isChoiceVariant(p.name, name))
-      .flatMap((p) => wrap(p.value));
+    const properties = node.properties;
+    for (let i = 0; i < properties.length; i++) {
+      const property = properties[i] as FhirProperty;
+      if (isChoiceVariant(property.name, name)) pushWrapped(property.value, out);
+    }
+    return;
   }
   // A primitive's only navigable children are its `_`-sibling metadata (id + extensions). Any other
   // member, or a member on a non-primitive leaf, selects nothing.
   if (isPrimitive(node) && name === "extension") {
-    return (node.extension ?? []).map((ext) => ({ t: "node", node: ext }));
+    const extensions = node.extension ?? [];
+    for (let i = 0; i < extensions.length; i++) {
+      out.push({ t: "node", node: extensions[i] as FhirComplex });
+    }
+    return;
   }
   if (isPrimitive(node) && name === "id" && node.id !== undefined) {
-    return [{ t: "str", value: node.id }];
+    out.push({ t: "str", value: node.id });
   }
-  return [];
+}
+
+/** Navigate one member `name` from a single node item; returns the selected items (lists flattened). */
+function navigateItem(node: FhirNode, name: string): FpItem[] {
+  const out: FpItem[] = [];
+  pushNavigated(node, name, out);
+  return out;
 }
 
 /** Navigate `name` from every node item in a collection (computed items have no members). */
 function navigate(focus: FpColl, name: string): FpItem[] {
-  return focus.flatMap((item) => (item.t === "node" ? navigateItem(item.node, name) : []));
+  const out: FpItem[] = [];
+  for (let i = 0; i < focus.length; i++) {
+    const item = focus[i] as FpItem;
+    if (item.t === "node") pushNavigated(item.node, name, out);
+  }
+  return out;
 }
 
 /**

@@ -1591,24 +1591,36 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
   // `_` sibling left there. Collapsed once, here, so every caller of the walk sees the same list.
   // The intent channels collapse by the same rule: a member a repeated name shadowed is walked at
   // the same path, and saying the same thing twice at one location says nothing new.
-  const intentKeys = new Set<string>();
+  // A list of fewer than two entries holds no repeat, so it is kept as it is and no set is made for
+  // it, which is every list of almost every walk.
   return {
     ...out,
-    modifierElements: dedupeModifierElements(out.modifierElements),
-    intents: out.intents.filter((read) => {
-      const key = `${read.code} ${read.location}`;
-      if (intentKeys.has(key)) return false;
-      intentKeys.add(key);
-      return true;
-    }),
-    unreadableIntent: [...new Set(out.unreadableIntent)],
+    modifierElements:
+      out.modifierElements.length < 2
+        ? out.modifierElements
+        : dedupeModifierElements(out.modifierElements),
+    intents: out.intents.length < 2 ? out.intents : dedupeIntents(out.intents),
+    unreadableIntent:
+      out.unreadableIntent.length < 2 ? out.unreadableIntent : [...new Set(out.unreadableIntent)],
     // A resource a repeated property name shadowed is walked at the same path as the one it
     // shadowed: one root, one location.
-    notAssessed: [...new Set(out.notAssessed)],
-    unknownElements: dedupeUnknown(out.unknownElements),
+    notAssessed: out.notAssessed.length < 2 ? out.notAssessed : [...new Set(out.notAssessed)],
+    unknownElements:
+      out.unknownElements.length < 2 ? out.unknownElements : dedupeUnknown(out.unknownElements),
     datatypeUses: uses.uses,
     unreadableDatatypeUse: uses.unreadable,
   };
+}
+
+/** One intent read per code and location, the first kept. */
+function dedupeIntents(found: readonly IntentReport[]): IntentReport[] {
+  const keys = new Set<string>();
+  return found.filter((read) => {
+    const key = `${read.code} ${read.location}`;
+    if (keys.has(key)) return false;
+    keys.add(key);
+    return true;
+  });
 }
 
 /** One report per location, the first kept, as {@link SafetyWalk.notAssessed} is collapsed. */
@@ -1729,22 +1741,21 @@ function checkCodingWrapping(
         const coding = codings[index] as FhirNode;
         if (!isComplex(coding)) continue;
         for (const name of CODING_SCALAR_ELEMENTS) {
-          const members = membersNamed(coding, name);
-          if (members.some((scalar) => isList(scalar))) {
-            // An element that is itself array-wrapped holds several CodeableConcepts, and each needs
-            // its own address or the second one's wrapper has no location at all. A bare element is
-            // not indexed, since there is no array there to index into. Built only for a report.
-            const base = wrapped ? `${path}[${String(conceptIndex)}]` : path;
-            const at = isList(member) ? `${base}.coding[${String(index)}]` : `${base}.coding`;
-            // Per WRITTEN MEMBER, not per location: a `Coding` whose `system` is a singleton and
-            // whose `code` holds two entries loses the `system` wrapper on the way through XML even
-            // though the `code` wrapper keeps the location reported. The member that vanishes is
-            // what this answers, so `some` is the right quantifier.
-            report(
-              `${at}.${name}`,
-              members.some((scalar) => unspellableInXml(name, scalar)),
-            );
-          }
+          // Asked of every `Coding` and almost never true, so it is asked without building a list.
+          if (!writesListNamed(coding, name)) continue;
+          // An element that is itself array-wrapped holds several CodeableConcepts, and each needs
+          // its own address or the second one's wrapper has no location at all. A bare element is
+          // not indexed, since there is no array there to index into. Built only for a report.
+          const base = wrapped ? `${path}[${String(conceptIndex)}]` : path;
+          const at = isList(member) ? `${base}.coding[${String(index)}]` : `${base}.coding`;
+          // Per WRITTEN MEMBER, not per location: a `Coding` whose `system` is a singleton and
+          // whose `code` holds two entries loses the `system` wrapper on the way through XML even
+          // though the `code` wrapper keeps the location reported. The member that vanishes is
+          // what this answers, so `some` is the right quantifier.
+          report(
+            `${at}.${name}`,
+            membersNamed(coding, name).some((scalar) => unspellableInXml(name, scalar)),
+          );
         }
       }
     }
@@ -1962,7 +1973,9 @@ function checkResourceRoot(node: FhirComplex, path: string, out: SafetyWalk): vo
 /**
  * Where the walk is relative to the resource root it is inside: the types that root names, and the
  * element names from the root down to here, joined by `.` and without array indices. It is what
- * {@link isResourcePosition} reads to tell a position the definitions type as `Resource`.
+ * {@link isResourcePosition} reads to tell a position the definitions type as `Resource`. Below a
+ * root whose type has no such position past its top level, the path is only ever asked whether it
+ * is empty, so there it is not built in full (see {@link childElements}).
  */
 interface RootScope {
   readonly types: readonly string[];
@@ -1978,6 +1991,9 @@ interface RootScope {
 
 /** The scope before the walk reaches its first resource root. */
 const NO_SCOPE: RootScope = { types: [], elements: "", model: [] };
+
+/** The model of a node nothing is checked against: one shared empty list, read and never written. */
+const NO_MODEL: readonly string[] = Object.freeze([]);
 
 /**
  * Every element the R4 and R4B definitions type as `Resource`, as `Type.element.path`.
@@ -2099,12 +2115,15 @@ function memberModel(
   trail: Trail,
   out: SafetyWalk,
 ): readonly string[] {
-  if (scope.model.length === 0 || name === "resourceType") return [];
+  if (scope.model.length === 0 || name === "resourceType") return NO_MODEL;
   const targets = elementTargets(scope.model, name);
   if (targets === undefined) {
     recordUnknown(trail.childText(name), trail.depth === 0, out);
-    return [];
+    return NO_MODEL;
   }
+  // Almost every member is typed by a datatype or a backbone element, never as a `Resource`, so the
+  // definitions' own list is handed on as it is and no list is made for it.
+  if (!targets.includes(RESOURCE_TARGET)) return targets;
   return targets.filter((target) => target !== RESOURCE_TARGET);
 }
 
@@ -2273,6 +2292,22 @@ function walkComplex(
   }
 }
 
+/** Whether `node` wrote a member named `name` whose value is a list, a repeated name's included. */
+function writesListNamed(node: FhirComplex, name: string): boolean {
+  const properties = node.properties;
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
+    if (property.name === name && isList(property.value)) return true;
+  }
+  const duplicates = node.duplicates;
+  if (duplicates === undefined) return false;
+  for (let i = 0; i < duplicates.length; i++) {
+    const property = duplicates[i] as FhirProperty;
+    if (property.name === name && isList(property.value)) return true;
+  }
+  return false;
+}
+
 /**
  * Whether the safety walk would record a shadowed member anywhere: the traversal
  * {@link walkComplex} and {@link descend} make (complex nodes and list items, not a primitive's
@@ -2334,13 +2369,43 @@ function visitProperty(
   }
   const model = memberModel(scope, name, trail, out);
   trail.child(name);
+  const value = property.value;
   if (isResourcePosition(scope, name)) {
-    descendResource(property.value, trail, out, scope.model.length > 0);
+    descendResource(value, trail, out, scope.model.length > 0);
+  } else if (isPrimitive(value)) {
+    // Most members are primitives, and nothing below a primitive reads a scope, so none is made.
+    checkPrimitiveAt(value, model, trail, out);
   } else {
-    const elements = scope.elements === "" ? name : `${scope.elements}.${name}`;
-    descend(property.value, trail, { types: scope.types, elements, model }, out);
+    descend(value, trail, { types: scope.types, elements: childElements(scope, name), model }, out);
   }
   trail.pop();
+}
+
+/**
+ * The root types with a resource position below their own top level (`Bundle.entry.resource`,
+ * `Parameters.parameter.resource`): only below a root of one of these does
+ * {@link isResourcePosition} read {@link RootScope.elements} past whether it is empty.
+ */
+const TYPES_WITH_DEEP_POSITIONS: ReadonlySet<string> = new Set(
+  RESOURCE_POSITIONS.map((position) => position.slice(0, position.indexOf("."))).filter(
+    (type) => type !== "DomainResource",
+  ),
+);
+
+/**
+ * {@link RootScope.elements} one member down, at `name`. Below a root of a type with no resource
+ * position past its top level, only whether the path is empty is ever read
+ * (`DomainResource.contained`), so the path is not built there: the one below the top is `name`
+ * itself, and every one deeper keeps its parent's, which is not empty either.
+ */
+function childElements(scope: RootScope, name: string): string {
+  const elements = scope.elements;
+  if (elements === "") return name;
+  const types = scope.types;
+  for (let i = 0; i < types.length; i++) {
+    if (TYPES_WITH_DEEP_POSITIONS.has(types[i] as string)) return `${elements}.${name}`;
+  }
+  return elements;
 }
 
 /**
@@ -2390,13 +2455,26 @@ function descend(node: FhirNode, trail: Trail, scope: RootScope, out: SafetyWalk
   }
   // An element from another namespace is not the element its name spells, so nothing below it is
   // checked against the definitions; the other reads still run there.
-  const foreign = scope.model.length > 0 && recordForeign(node, trail, out);
-  const inner = foreign ? { ...scope, model: [] } : scope;
-  if (isComplex(node)) walkComplex(node, trail, out, inner);
-  else if (inner.model.length > 0) {
-    // A primitive: its value against the position, and what it carries beside it.
-    checkPrimitive(node, inner.model, trail, out);
+  if (!isComplex(node)) {
+    checkPrimitiveAt(node, scope.model, trail, out);
+    return;
   }
+  const foreign = scope.model.length > 0 && recordForeign(node, trail, out);
+  walkComplex(node, trail, out, foreign ? { ...scope, model: NO_MODEL } : scope);
+}
+
+/**
+ * A primitive at a position {@link descend} reached: its value against the position, and what it
+ * carries beside it, unless the definitions put nothing there or it is from another namespace.
+ */
+function checkPrimitiveAt(
+  node: FhirPrimitive,
+  model: readonly string[],
+  trail: Trail,
+  out: SafetyWalk,
+): void {
+  if (model.length === 0 || recordForeign(node, trail, out)) return;
+  checkPrimitive(node, model, trail, out);
 }
 
 /**

@@ -706,7 +706,14 @@ export function list(items: readonly FhirNode[]): FhirList {
  * ```
  */
 export function getProperty(node: FhirComplex, name: string): FhirNode | undefined {
-  return node.properties.find((property) => property.name === name)?.value;
+  // A loop rather than `find`, which makes a closure on every call: validation asks this thousands
+  // of times a resource.
+  const properties = node.properties;
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i] as FhirProperty;
+    if (property.name === name) return property.value;
+  }
+  return undefined;
 }
 
 /**
