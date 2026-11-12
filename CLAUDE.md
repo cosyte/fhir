@@ -9,9 +9,9 @@ writes FHIR back or refuses to, and validates beside the fail-closed `readSafety
 ## Gate
 
 Required checks: `ci / verify` on Node 22 and 24, `ci / actionlint`, `no-emdash / tracked-files`,
-and `no-internal-refs / public-surface`. CI also runs Node 26, `standards`, fuzz, examples, CodeQL,
-the differential and `pnpm definitions:check`. Put pnpm 10.34.5 first on PATH: pnpm 12 refuses
-the frozen install, and a test runs bare `pnpm`. From the repo root, in this order:
+and `no-internal-refs / public-surface`. CI also runs Node 26, Windows, macOS, Bun, Deno, the
+ratchet, mutation, `standards`, fuzz, examples, CodeQL, the differential and `definitions:check`.
+Put pnpm 10.34.5 first on PATH: pnpm 12 refuses the frozen install, and a test runs bare `pnpm`.
 
 ```sh
 pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm format:check
@@ -19,7 +19,7 @@ pnpm phi-scan && pnpm test && pnpm test:coverage && pnpm build && pnpm attw
 FUZZ_RUNS=20000 pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts test/safety-*.test.ts
 pnpm typecheck:examples && pnpm lint:examples && pnpm examples && pnpm phi-scan:examples
 pnpm check:readme && pnpm check:claude-card && pnpm check:catalog && pnpm check:process
-pnpm check:docs-content && pnpm check:docs-reference
+pnpm quality:check --base origin/main && pnpm check:docs-content && pnpm check:docs-reference
 pnpm check:no-emdash && pnpm check:no-internal-refs
 ```
 

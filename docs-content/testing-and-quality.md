@@ -29,19 +29,26 @@ checks values and verdicts, not only that nothing threw.
 | Property-based tests | a whole class of input breaking a stated rule: a model survives writing and reading back in JSON and in XML, writing what was read a second time changes nothing the first pass did not, a reader never throws on hostile input except with a documented fatal error, a negation is never lost on a round trip, a model name at an XML tag position is written as a well-formed tag | a rule nobody stated; a case outside the cases run; a gap in what the generators produce |
 | Fuzzing | a crash, a hang or an untyped throw on hostile input: truncation, deep nesting, `_element` games, huge and scientific numbers, `resourceType` games, for XML a DTD, entity expansion and undefined entities, and narrative XHTML carrying script, entities and deep nesting; each must end in a typed error or a bounded rejection | a wrong but plausible result, unless a property states what right is |
 | PHI-leak tests | a diagnostic that carries a value: every fixture and a battery of resources seeded with distinctive values in every identifying position run through reading, validation and the `OperationOutcome`, and no seeded value may appear in any finding or error | a value in a position the battery does not seed |
-| Coverage gate | code no test runs: lines, branches, functions and statements, held at a floor of 100 on the package and on each source directory, with each line that cannot be reached marked with its reason | a test that runs code without checking what it returns |
-| Mutation testing | a test that runs code but would not notice it changing | not yet run on this package; the numbers below say "not measured" until it is |
+| Coverage gate | code no test runs: lines, branches, functions and statements, held at the floor in `quality-floor.json` (100 on each) on the package and on each source directory, with each line that cannot be reached marked with its reason; a pull request must also run every changed line coverage counts | a test that runs code without checking what it returns |
+| Mutation testing | a test that runs code but would not notice it changing: StrykerJS changes the source one small way at a time and counts the changes no test noticed, and the score is held to the floor in `quality-floor.json` | a change that behaves the same as the original (an equivalent mutant); code that runs once when a module loads (a table of patterns, a frozen map), whose mutants are left out of the score because each would need the whole suite again |
 | Doc samples | a documentation sample that no longer matches the code: every TypeScript sample on these pages is compiled against the package's types and run against the built package, and its `// =>` values are checked | prose that is wrong beside a sample that is right |
 | PHI scan | a realistic patient identifier in a fixture, an example or a staged file, checked against a declared allow-list of synthetic values; the docs pages are checked the same way, element by element | anything outside the elements and formats it knows; it detects after a write, it does not prevent one |
 
 ## How each one runs
 
 - **Unit tests, the corpus, the FHIRPath suite, properties, fuzzing, the PHI-leak tests and the doc
-  samples** run in one Vitest suite on every pull request and on `main`, on Node.js 22, 24 and 26.
+  samples** run in one Vitest suite on every pull request and on `main`, on Node.js 22, 24 and 26
+  on Linux, Windows and macOS, and again under Bun and under Deno. A test that cannot run on one of
+  them is skipped there by name, with its reason beside the skip.
   The 18 fuzz properties share one fixed seed, so a failure replays exactly; 15 of them run 1,000
-  cases by default, which a separate CI job raises to 20,000, and three run 50 or 100. The six other
-  property tests run 60 to 3,000 cases each with no fixed seed, so fast-check seeds each run afresh
-  and prints the seed when one fails.
+  cases by default, which a separate CI job raises to 20,000, and three run 50 or 100, each with
+  the reason beside it. The other property tests run 60 to 5,000 cases each, some from a fixed seed
+  and some from a fresh one, and fast-check prints the seed when one fails.
+- **Every property at depth, nightly.** Every property takes its count and seed through one helper
+  that reads `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`, and a test fails when a property
+  does not. Each night a CI job runs the whole suite with every property at 10,000 cases, from a
+  seed it prints first, so the night draws other cases than a pull request does and can be
+  replayed; a failure also prints the seed and path that replay its one case.
 - **The safety readout's properties** plant what the readout must never call safe at random depth
   in random synthetic documents, in JSON and XML: a resource of no type or of a type it does not
   assess, a stray `resourceType`, and an element the FHIR definitions do not define. Each runs 1,000
@@ -61,7 +68,13 @@ checks values and verdicts, not only that nothing threw.
   100 cases from a fresh seed, `COSYTE_PROPERTY_RUNS` sets a deeper run, and a failure prints the
   seed and path that replay it. [Property-test your code](./property-test-your-code.md) shows those
   generators on code of your own.
-- **The coverage gate** runs with the suite. A floor that is not met fails the pull request.
+- **The coverage gate** runs with the suite, and `cosyte-ratchet` holds it to `quality-floor.json`
+  in its own CI job. A floor that is not met fails the pull request, and so does a change that
+  lowers or removes one: a floor only rises.
+- **Mutation testing** runs on every pull request over the source files it changes, and every
+  mutant in the changed lines must be killed or carry a comment naming why it cannot be. Twice a
+  week a CI job mutates every source file, split across sixteen runners, and fails if the score is
+  below its floor.
 - **Differential testing** runs as its own CI job on every pull request and on `main`. It pins the
   reference validator to one release and fetches the third-party corpora with a checksum for each
   document, so a run is repeatable; a second step compares a declared subset twice and fails unless
@@ -77,7 +90,13 @@ pnpm install --frozen-lockfile
 pnpm test               # unit tests, corpus, FHIRPath suite, properties, fuzzing and doc samples
 pnpm test:coverage      # the same suite with the coverage gate
 pnpm phi-scan           # the PHI scan over the repository
+pnpm quality:check      # coverage against quality-floor.json, after test:coverage
+pnpm mutate changed --base origin/main   # mutate the source files a change touched
+pnpm quality:mutation --base origin/main # and judge their mutants
+COSYTE_PROPERTY_RUNS=10000 pnpm test     # every property at the nightly depth
 ```
+
+`pnpm mutate:full` mutates every source file, the run CI splits across sixteen runners twice a week.
 
 The differential needs Java and the reference validator's jar, which it finds through an environment
 variable; `pnpm corpus:fetch` fetches the third-party corpora, and the `differential` job in the
