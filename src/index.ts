@@ -98,12 +98,14 @@ export {
   CODE_SYSTEM_VERSION_RECORD_SYSTEM,
   ISSUE_SEVERITIES,
   ISSUE_TYPES,
+  SLICE_UNCHECKED_REASONS,
   VALIDATION_CODES,
 } from "./validate/issues.js";
 export type {
   CodeSystemVersionRecord,
   CodeSystemVersionRecordCode,
   IssueType,
+  SliceUncheckedReason,
   ValidationCode,
   ValidationIssue,
   ValidationSeverity,
@@ -264,7 +266,13 @@ export type { BaseResolver } from "./profiles/snapshot.js";
 export { matchesFixed, matchesPattern } from "./profiles/fixed-pattern.js";
 export { pathExists, resolvePath } from "./profiles/navigate.js";
 export { matchSlices, resolveSlices } from "./profiles/slicing.js";
-export type { SliceConstraint, SliceDefinition, SliceMatchResult } from "./profiles/slicing.js";
+export type {
+  SliceConstraint,
+  SliceContext,
+  SliceDefinition,
+  SliceEnvironment,
+  SliceMatchResult,
+} from "./profiles/slicing.js";
 export { collectProfileIssues, collectProfileVersionIssues } from "./profiles/validate-profile.js";
 export type { ProfileOptions } from "./profiles/validate-profile.js";
 export { collectInvariantIssues } from "./profiles/invariants.js";

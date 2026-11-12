@@ -47,9 +47,10 @@ with `defineProfile`, including their FHIRPath invariants); the `readSafety` and
 Not covered yet: typed per-resource models (the built-in structural schemas cover the base elements
 plus the eleven modeled resource types: `Patient`, `Observation`, `DiagnosticReport`, `Condition`,
 `MedicationRequest`, `AllergyIntolerance`, `Immunization`, `MedicationStatement`, `Encounter`,
-`Procedure` and `DocumentReference`), `type` and `profile` slicing discriminators (reported
-`PROFILE_SLICE_UNCHECKED`, and the slices' own constraints are then not checked, since no occurrence
-is assigned to them), FHIRPath outside the supported subset (reported
+`Procedure` and `DocumentReference`), a `type` or `profile` slicing discriminator whose answer the
+document does not hold (a reference that leaves the resource and its Bundle, a profile you did not
+supply), and the R5 `position` discriminator (each reported `PROFILE_SLICE_UNCHECKED` with its
+reason, and the slices' own constraints are then not checked), FHIRPath outside the supported subset (reported
 `INVARIANT_UNCHECKED`, never passed), bundled terminology or US Core content, validation of R4B
 (`4.3.0`), R5 and DSTU2 content against its own version's definitions (such a document is read, since
 the model is schema-free, and validated as R4), spec-clean JSON written from a model read out of XML,

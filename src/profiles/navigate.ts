@@ -82,3 +82,28 @@ function step(node: FhirNode, name: string): FhirNode[] {
 export function pathExists(node: FhirNode, path: string): boolean {
   return resolvePath(node, path).length > 0;
 }
+
+/**
+ * The concrete type of each occurrence one path step selects, aligned with
+ * `resolvePath(node, name)` flattened to its members: a `[x]` step's choice suffix
+ * (`valueQuantity` → `"Quantity"`), `undefined` for any other step. A `type` slicing discriminator
+ * on a choice element reads it, since the occurrence node itself does not carry its name.
+ *
+ * @param node - The parent node.
+ * @param name - One element name, `[x]` choices included.
+ * @returns One entry per selected occurrence, in document order.
+ * @internal
+ */
+export function stepTypes(node: FhirNode, name: string): (string | undefined)[] {
+  if (isList(node)) return node.items.flatMap((item) => stepTypes(item, name));
+  if (!isComplex(node)) return [];
+  const count = (value: FhirNode): number => (isList(value) ? value.items.length : 1);
+  if (!name.endsWith("[x]")) {
+    const found = getProperty(node, name);
+    return found === undefined ? [] : Array.from({ length: count(found) }, () => undefined);
+  }
+  const base = name.slice(0, -3);
+  return node.properties
+    .filter((p) => p.name.startsWith(base) && CHOICE_SUFFIX.test(p.name.slice(base.length)))
+    .flatMap((p) => Array.from({ length: count(p.value) }, () => p.name.slice(base.length)));
+}

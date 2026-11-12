@@ -29,6 +29,7 @@ import {
   FATAL_CODES,
   FhirCodecError,
   FhirXmlError,
+  loadStructureDefinition,
   NDJSON_ERROR_CODES,
   XML_FATAL_CODES,
   parseNdjsonLine,
@@ -37,8 +38,10 @@ import {
   readRawJson,
   readRawXml,
   serializeResource,
+  SLICE_UNCHECKED_REASONS,
   validateResource,
   VALIDATION_CODES,
+  type StructureDefinition,
 } from "../src/index.js";
 
 import { propertyRun } from "./_property-run.js";
@@ -355,6 +358,204 @@ describe("fuzz: JSON, validateResource never throws over any resource that parse
         const result = assertJsonSafe(raw);
         if (result === undefined) return; // typed fatal on parse, nothing to validate
         expect(() => validateResource(result.resource)).not.toThrow();
+      }),
+      RUN_CONFIG,
+    );
+  });
+});
+
+/**
+ * Synthetic profiles that slice by `type` and `profile` discriminators, every path form this library
+ * walks: a choice element's `$this`, a resource held in place (`resource`), and `resolve()` through
+ * `contained` and Bundle entries. Each profile's slices name another of these profiles, so a
+ * profile check nests and can meet itself.
+ */
+const SLICING_PROFILES: readonly StructureDefinition[] = [
+  {
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/fuzz-observation",
+    type: "Observation",
+    snapshot: {
+      element: [
+        { id: "Observation", path: "Observation" },
+        {
+          id: "Observation.value[x]",
+          path: "Observation.value[x]",
+          slicing: { discriminator: [{ type: "type", path: "$this" }], rules: "closed" },
+        },
+        {
+          id: "Observation.value[x]:valueQuantity",
+          path: "Observation.value[x]",
+          sliceName: "valueQuantity",
+          min: 1,
+          type: [{ code: "Quantity" }],
+        },
+        {
+          id: "Observation.value[x]:valueQuantity.system",
+          path: "Observation.value[x].system",
+          min: 1,
+        },
+        {
+          id: "Observation.hasMember",
+          path: "Observation.hasMember",
+          slicing: { discriminator: [{ type: "profile", path: "resolve()" }], rules: "closed" },
+        },
+        {
+          id: "Observation.hasMember:member",
+          path: "Observation.hasMember",
+          sliceName: "member",
+          type: [
+            {
+              code: "Reference",
+              targetProfile: ["http://example.org/StructureDefinition/fuzz-observation"],
+            },
+          ],
+        },
+        {
+          id: "Observation.performer",
+          path: "Observation.performer",
+          slicing: { discriminator: [{ type: "type", path: "resolve()" }], rules: "open" },
+        },
+        {
+          id: "Observation.performer:patient",
+          path: "Observation.performer",
+          sliceName: "patient",
+          min: 1,
+          type: [
+            {
+              code: "Reference",
+              targetProfile: ["http://hl7.org/fhir/StructureDefinition/Patient"],
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    resourceType: "StructureDefinition",
+    url: "http://example.org/StructureDefinition/fuzz-bundle",
+    type: "Bundle",
+    snapshot: {
+      element: [
+        { id: "Bundle", path: "Bundle" },
+        {
+          id: "Bundle.entry",
+          path: "Bundle.entry",
+          slicing: {
+            discriminator: [
+              { type: "type", path: "resource" },
+              { type: "profile", path: "resource" },
+            ],
+            rules: "closed",
+          },
+        },
+        { id: "Bundle.entry:obs", path: "Bundle.entry", sliceName: "obs", min: 1 },
+        {
+          id: "Bundle.entry:obs.resource",
+          path: "Bundle.entry.resource",
+          type: [
+            {
+              code: "Observation",
+              profile: ["http://example.org/StructureDefinition/fuzz-observation"],
+            },
+          ],
+        },
+        { id: "Bundle.entry:obs.fullUrl", path: "Bundle.entry.fullUrl", min: 1 },
+      ],
+    },
+  },
+].map((sd) => {
+  const loaded = loadStructureDefinition(parseResource(JSON.stringify(sd)).resource);
+  if (loaded === undefined) throw new Error("a fuzz profile did not load");
+  return loaded;
+});
+
+const VALIDATION_CODE_SET: ReadonlySet<string> = new Set(Object.values(VALIDATION_CODES));
+const SLICE_REASON_SET: ReadonlySet<string> = new Set(Object.values(SLICE_UNCHECKED_REASONS));
+
+/** Reference strings a hostile document points at: fragments, prototype names, URLs, nothing. */
+const HOSTILE_REFERENCE = fc.constantFrom(
+  "#",
+  "#a",
+  "#b",
+  "#__proto__",
+  "#constructor",
+  "Observation/a",
+  "urn:uuid:a",
+  "urn:uuid:b",
+  "https://example.org/fhir/Observation/a",
+  "",
+  "resolve()",
+);
+
+/** A contained or entry Observation that references others, possibly itself, with a choice value. */
+function hostileObservation(id: string): fc.Arbitrary<Record<string, unknown>> {
+  return fc.record(
+    {
+      resourceType: fc.constantFrom("Observation", "Patient", "", "__proto__"),
+      id: fc.constant(id),
+      valueQuantity: fc.constantFrom({ system: "x" }, {}, [], "x", null),
+      valueString: fc.constantFrom("x", 1, {}),
+      hasMember: fc.array(
+        fc.oneof(
+          HOSTILE_REFERENCE.map((reference) => ({ reference })),
+          fc.constantFrom({}, "x", [], { reference: 1 }),
+        ),
+        { maxLength: 4 },
+      ),
+      performer: fc.array(
+        HOSTILE_REFERENCE.map((reference) => ({ reference })),
+        { maxLength: 2 },
+      ),
+    },
+    { requiredKeys: ["id"] },
+  );
+}
+
+/** A hostile Observation or Bundle built around the slicing profiles' paths. */
+const hostileSlicingDocument: fc.Arbitrary<string> = fc.oneof(
+  fc
+    .tuple(hostileObservation("root"), fc.array(fc.constantFrom("a", "b"), { maxLength: 3 }))
+    .chain(([root, ids]) =>
+      fc
+        .tuple(...ids.map((id) => hostileObservation(id)))
+        .map((contained) => ({ ...root, resourceType: "Observation", contained })),
+    )
+    .map((doc) => JSON.stringify(doc)),
+  fc
+    .array(
+      fc.oneof(
+        fc.record({
+          fullUrl: fc.constantFrom("urn:uuid:a", "urn:uuid:b", "Observation/a", ""),
+          resource: fc.oneof(hostileObservation("a"), hostileObservation("b"), fc.constant("x")),
+        }),
+        fc.constantFrom<unknown>("x", 1, null, []),
+      ),
+      { maxLength: 4 },
+    )
+    .map((entry) => JSON.stringify({ resourceType: "Bundle", type: "collection", entry })),
+);
+
+describe("fuzz: JSON, type and profile slicing discriminators never throw and stay value-free", () => {
+  it("validation against slicing profiles is total, and every unchecked slicing names a reason", () => {
+    const anyJson = fc.oneof(
+      { weight: 3, arbitrary: hostileSlicingDocument },
+      { weight: 2, arbitrary: mutatedJsonFixture() },
+      { weight: 1, arbitrary: truncatedFixture(JSON_FIXTURES) },
+    );
+    fc.assert(
+      fc.property(anyJson, (raw) => {
+        const result = assertJsonSafe(raw);
+        if (result === undefined) return;
+        const { issues } = validateResource(result.resource, { profiles: SLICING_PROFILES });
+        for (const issue of issues) {
+          expect(VALIDATION_CODE_SET.has(issue.code)).toBe(true);
+          if (issue.code === "PROFILE_SLICE_UNCHECKED") {
+            expect(SLICE_REASON_SET.has(String(issue.sliceReason))).toBe(true);
+          } else {
+            expect(issue.sliceReason).toBeUndefined();
+          }
+        }
       }),
       RUN_CONFIG,
     );

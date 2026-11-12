@@ -26,11 +26,21 @@
  * parent slice's membership (the R4 blood-pressure shape, where
  * `component:SystolicBP.code.coding:SBPCode.code` fixes the code the component slicing
  * discriminates on). A slicing reported `PROFILE_SLICE_UNCHECKED` assigns no occurrence, so its
- * slices' own constraints are not checked either: membership is never assumed.
+ * slices' own constraints are not checked either: membership is never assumed. The finding carries
+ * its `sliceReason`.
+ *
+ * **`type` and `profile` discriminators.** A `type` discriminator is decided from the occurrence's
+ * concrete type (a choice suffix or a `resourceType`). A `profile` discriminator is decided for a
+ * resource held in place (`contained`, a Bundle entry) or reached by `resolve()` through the
+ * resource's `contained` set or, for a Bundle, its entries: the resource is checked against the
+ * profile the slice names, found in {@link ProfileOptions.profiles} or through
+ * {@link ProfileOptions.resolve}, with this same layer. An error there means it does not conform; a
+ * clean check with nothing unchecked inside means it does; anything else leaves the slicing
+ * unchecked.
  *
  * Every finding is **value-free**, a code, a severity, and a FHIRPath location, never a value.
  * **Deferred:** binding enforcement from profile bindings (the terminology layer already covers
- * bindings), the `profile`/`type` discriminators (need FHIRPath), and invariant `constraint`s.
+ * bindings), and invariant `constraint`s (the invariant layer, {@link ./invariants.js}).
  *
  * @packageDocumentation
  */
@@ -44,19 +54,175 @@ import {
   type FhirComplex,
   type FhirNode,
 } from "../model/index.js";
+import {
+  buildBundleIndex,
+  containedIndex,
+  resolveReference,
+  type BundleIndex,
+  type ContainedIndex,
+} from "../bundle/references.js";
 import { primitiveString } from "../safety/codes.js";
 import { UNBOUNDED } from "../validate/schema.js";
-import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "../validate/issues.js";
+import {
+  ISSUE_SEVERITIES,
+  SLICE_UNCHECKED_REASONS,
+  validationIssue,
+  type SliceUncheckedReason,
+  type ValidationIssue,
+} from "../validate/issues.js";
 import { matchesFixed, matchesPattern } from "./fixed-pattern.js";
 import { SliceScope } from "./scope.js";
-import { isSliceOf, matchSlices, resolveSlices } from "./slicing.js";
-import { snapshotElements, type BaseResolver } from "./snapshot.js";
+import { isSliceOf, matchSlices, resolveSlices, type SliceEnvironment } from "./slicing.js";
+import { FhirProfileError, snapshotElements, type BaseResolver } from "./snapshot.js";
 import type { ElementDefinition, StructureDefinition } from "./structure-definition.js";
 
 /** Options for {@link collectProfileIssues}. */
 export interface ProfileOptions {
-  /** Base resolver for snapshot generation, needed only when the profile carries no snapshot. */
+  /**
+   * Base resolver for snapshot generation, needed only when the profile carries no snapshot. A
+   * `profile` slicing discriminator also asks it for a profile the supplied set does not carry.
+   */
   readonly resolve?: BaseResolver;
+  /**
+   * The supplied profile set. A `profile` slicing discriminator checks a resource against the
+   * profile a slice names, looked up here by canonical (and version, when the canonical pins one);
+   * a profile neither here nor returned by {@link resolve} leaves the slicing unchecked.
+   */
+  readonly profiles?: readonly StructureDefinition[];
+}
+
+/**
+ * How many profiles deep a `profile` discriminator may check a resource against a slice's profile,
+ * which may itself slice by profile. Deeper than this, the slicing is reported unchecked: that is
+ * also where a reference cycle stops, since a cycle only ever deepens.
+ */
+const MAX_PROFILE_DEPTH = 8;
+
+/**
+ * How many resource-against-profile checks one validation may run for its `profile`
+ * discriminators. A decided answer is checked once and reused; past this budget the rest are
+ * reported unchecked, so a document with many references cannot make validation run without bound.
+ */
+const MAX_PROFILE_CHECKS = 4096;
+
+/** The resources a `resolve()` can reach: the `contained` set and, for a Bundle, its entries. */
+interface Closure {
+  readonly contained: ContainedIndex;
+  readonly bundle?: BundleIndex;
+}
+
+/** One answer to "does this resource conform to that profile", or why it cannot be given. */
+type Conformance = "yes" | "no" | SliceUncheckedReason;
+
+/** What one validation's nested profile checks share: the answers decided, and the budget spent. */
+interface CheckState {
+  readonly decided: WeakMap<FhirComplex, Map<string, "yes" | "no">>;
+  checks: number;
+}
+
+/**
+ * The {@link SliceEnvironment} for a resource validated against a profile: reference resolution
+ * over its closure, and profile conformance through this layer, bounded in depth and in count.
+ *
+ * @param resource - The resource model being validated.
+ * @param options - The supplied profile set and base resolver.
+ * @returns The environment the slicing of this resource is decided in.
+ * @internal
+ */
+export function sliceEnvironment(
+  resource: FhirComplex,
+  options: ProfileOptions = {},
+): SliceEnvironment {
+  const contained = containedIndex(resource);
+  const closure: Closure =
+    resourceType(resource) === "Bundle"
+      ? { contained, bundle: buildBundleIndex(resource) }
+      : { contained };
+  return environmentIn(closure, options, 0, { decided: new WeakMap(), checks: 0 });
+}
+
+/** The profiles a canonical names: the supplied ones at that url (and version), else the resolver's. */
+function profilesNamed(canonical: string, options: ProfileOptions): StructureDefinition[] {
+  const bar = canonical.indexOf("|");
+  const url = bar === -1 ? canonical : canonical.slice(0, bar);
+  const version = bar === -1 ? undefined : canonical.slice(bar + 1);
+  const fits = (p: StructureDefinition): boolean =>
+    p.url === url && (version === undefined || p.version === version);
+  const supplied = (options.profiles ?? []).filter(fits);
+  if (supplied.length > 0) return supplied;
+  const resolved = options.resolve?.(url);
+  return resolved !== undefined && fits(resolved) ? [resolved] : [];
+}
+
+/** The environment at one depth of profile checking. */
+function environmentIn(
+  closure: Closure,
+  options: ProfileOptions,
+  depth: number,
+  state: CheckState,
+): SliceEnvironment {
+  const check = (target: FhirComplex, profile: StructureDefinition): Conformance => {
+    if (resourceType(target) !== profile.type) return "no";
+    // A contained resource contains nothing (dom-2), so its references resolve among its
+    // container's; any other target's `#` references resolve among its own `contained`.
+    const inner = [...closure.contained.byId.values()].includes(target)
+      ? closure
+      : { ...closure, contained: containedIndex(target) };
+    let issues: ValidationIssue[];
+    try {
+      issues = profileIssues(
+        target,
+        profile,
+        options,
+        environmentIn(inner, options, depth + 1, state),
+      );
+    } catch (error) {
+      /* v8 ignore next -- any other throw is a defect, and propagates exactly as it did unnested */
+      if (!(error instanceof FhirProfileError)) throw error;
+      // A profile whose snapshot cannot be generated was not available to check against.
+      return SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
+    }
+    if (issues.some((i) => i.severity === ISSUE_SEVERITIES.ERROR)) return "no";
+    const incomplete = issues.some(
+      (i) => i.code === "PROFILE_SLICE_UNCHECKED" || i.code === "PROFILE_SLICE_NO_SLICING",
+    );
+    return incomplete ? SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED : "yes";
+  };
+
+  const decide = (target: FhirComplex, canonical: string): Conformance => {
+    const profiles = profilesNamed(canonical, options);
+    if (profiles.length === 0) return SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
+    if (depth >= MAX_PROFILE_DEPTH || state.checks >= MAX_PROFILE_CHECKS)
+      return SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED;
+    state.checks += 1;
+    // Every version supplied under an unpinned canonical must agree, or nothing is asserted.
+    return profiles
+      .map((p) => check(target, p))
+      .reduce((a, b) => (a === b ? a : SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED));
+  };
+
+  return {
+    resolve: (reference) => {
+      const answer = resolveReference(reference, closure);
+      return answer.status === "resolved" ? answer.target : undefined;
+    },
+    profileType: (canonical) => {
+      const types = new Set(profilesNamed(canonical, options).map((p) => p.type));
+      return types.size === 1 ? [...types][0] : undefined;
+    },
+    conforms: (target, canonical) => {
+      const known = state.decided.get(target)?.get(canonical);
+      if (known !== undefined) return known;
+      const answer = decide(target, canonical);
+      // Only a decision is kept: an undecided answer may come from the depth or the budget alone.
+      if (answer === "yes" || answer === "no") {
+        const byCanonical = state.decided.get(target) ?? new Map<string, "yes" | "no">();
+        byCanonical.set(canonical, answer);
+        state.decided.set(target, byCanonical);
+      }
+      return answer;
+    },
+  };
 }
 
 /**
@@ -81,13 +247,23 @@ export function collectProfileIssues(
   profile: StructureDefinition,
   options: ProfileOptions = {},
 ): ValidationIssue[] {
+  return profileIssues(resource, profile, options, sliceEnvironment(resource, options));
+}
+
+/** {@link collectProfileIssues} in a given slice environment (a nested profile check reuses its closure). */
+function profileIssues(
+  resource: FhirComplex,
+  profile: StructureDefinition,
+  options: ProfileOptions,
+  environment: SliceEnvironment,
+): ValidationIssue[] {
   const rt = resourceType(resource);
   if (rt === undefined || rt !== profile.type) return [];
   // The profile only applies when the two agree, so the location is bounded once, here.
   const root = rootPath(rt);
 
   const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
-  const scope = new SliceScope(resource, root, snapshot);
+  const scope = new SliceScope(resource, root, snapshot, environment);
   const issues: ValidationIssue[] = [];
 
   for (const el of snapshot) {
@@ -140,7 +316,7 @@ export function collectProfileIssues(
 
       // slicing, evaluated within this parent occurrence.
       if (el.slicing !== undefined) {
-        collectSlicingIssues(group.children, here, snapshot, el, issues);
+        collectSlicingIssues(group.children, group.types, here, snapshot, el, environment, issues);
       }
     }
   }
@@ -186,19 +362,28 @@ function collectNoSlicingIssues(
 /** Emit the slice findings for one sliced element's occurrences within a single parent context. */
 function collectSlicingIssues(
   occ: readonly FhirNode[],
+  occurrenceTypes: readonly (string | undefined)[],
   slicedPath: string,
   snapshot: readonly ElementDefinition[],
   slicedElement: ElementDefinition,
+  environment: SliceEnvironment,
   issues: ValidationIssue[],
 ): void {
   const slices = resolveSlices(snapshot, slicedElement);
   /* v8 ignore next -- the `?? []` is unreachable: called only for an element that declares slicing */
   const discriminators = slicedElement.slicing?.discriminator ?? [];
-  const result = matchSlices(occ, slices, discriminators);
+  const result = matchSlices(occ, slices, discriminators, { ...environment, occurrenceTypes });
 
   if (result.unchecked) {
     issues.push(
-      validationIssue("PROFILE_SLICE_UNCHECKED", ISSUE_SEVERITIES.INFORMATION, slicedPath),
+      validationIssue(
+        "PROFILE_SLICE_UNCHECKED",
+        ISSUE_SEVERITIES.INFORMATION,
+        slicedPath,
+        undefined,
+        undefined,
+        result.reason,
+      ),
     );
     return;
   }

@@ -40,11 +40,17 @@ import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "../vali
 import { SliceScope } from "./scope.js";
 import { snapshotElements, type BaseResolver } from "./snapshot.js";
 import type { ElementDefinition, StructureDefinition } from "./structure-definition.js";
+import { sliceEnvironment } from "./validate-profile.js";
 
 /** Options for {@link collectInvariantIssues}. */
 export interface InvariantOptions {
   /** Base resolver for snapshot generation, needed only when the profile carries no snapshot. */
   readonly resolve?: BaseResolver;
+  /**
+   * The supplied profile set, so a slicing discriminated by `profile` decides which occurrences a
+   * slice's invariants apply to, exactly as the profile layer decides it.
+   */
+  readonly profiles?: readonly StructureDefinition[];
 }
 
 /**
@@ -139,7 +145,7 @@ export function invariantFindings(
   const root = rootPath(rt);
 
   const snapshot = snapshotElements(profile, options.resolve ?? (() => undefined));
-  const scope = new SliceScope(resource, root, snapshot);
+  const scope = new SliceScope(resource, root, snapshot, sliceEnvironment(resource, options));
   const findings: InvariantFinding[] = [];
 
   for (const el of snapshot) {

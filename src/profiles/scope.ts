@@ -24,8 +24,8 @@
  */
 
 import { isList, type FhirNode } from "../model/index.js";
-import { resolvePath } from "./navigate.js";
-import { matchSlices, resolveSlices } from "./slicing.js";
+import { resolvePath, stepTypes } from "./navigate.js";
+import { matchSlices, resolveSlices, type SliceEnvironment } from "./slicing.js";
 import type { ElementDefinition } from "./structure-definition.js";
 
 /** One instance occurrence and its FHIRPath location. */
@@ -44,6 +44,8 @@ export interface ParentGroup {
   readonly path: string;
   /** This element's occurrences within that parent. */
   readonly children: FhirNode[];
+  /** Per child, its choice suffix when the element is a `[x]` choice, else `undefined`. */
+  readonly types: (string | undefined)[];
 }
 
 /** Flatten a resolved path result into individual occurrences (a list becomes its items). */
@@ -89,14 +91,22 @@ export class SliceScope {
   readonly #snapshot: readonly ElementDefinition[];
   readonly #byId = new Map<string, ElementDefinition>();
   readonly #assignments = new Map<string, WeakMap<FhirNode, readonly (string | undefined)[]>>();
+  readonly #environment: SliceEnvironment;
 
   /**
    * @param resource - The resource model.
    * @param root - The resource's bounded FHIRPath root (its type).
    * @param snapshot - The profile's snapshot elements.
+   * @param environment - What a `type` or `profile` discriminator needs to be decided.
    */
-  constructor(resource: FhirNode, root: string, snapshot: readonly ElementDefinition[]) {
+  constructor(
+    resource: FhirNode,
+    root: string,
+    snapshot: readonly ElementDefinition[],
+    environment: SliceEnvironment = {},
+  ) {
     this.#resource = resource;
+    this.#environment = environment;
     this.#root = root;
     this.#snapshot = snapshot;
     for (const el of snapshot) if (!this.#byId.has(el.id)) this.#byId.set(el.id, el);
@@ -114,6 +124,7 @@ export class SliceScope {
     return this.#walk(el, names.length - 1).map((parent) => ({
       path: parent.path,
       children: occurrencesOf(resolvePath(parent.node, leaf)),
+      types: stepTypes(parent.node, leaf),
     }));
   }
 
@@ -147,7 +158,7 @@ export class SliceScope {
         const members =
           step?.sliceName === undefined
             ? undefined
-            : this.#members(parent.node, occ, step.slicedId, step.sliceName);
+            : this.#members(parent.node, name, occ, step.slicedId, step.sliceName);
         occ.forEach((node, i) => {
           if (members !== undefined && members[i] !== true) return;
           next.push({ node, path: located(parent.path, name, i, occ.length) });
@@ -161,6 +172,7 @@ export class SliceScope {
   /** Per occurrence, whether the slicing on `slicedId` assigned it to `sliceName`. */
   #members(
     parent: FhirNode,
+    name: string,
     occ: readonly FhirNode[],
     slicedId: string,
     sliceName: string,
@@ -175,7 +187,10 @@ export class SliceScope {
     let assignments = byParent.get(parent);
     if (assignments === undefined) {
       const slices = resolveSlices(this.#snapshot, sliced);
-      const result = matchSlices(occ, slices, sliced.slicing.discriminator);
+      const result = matchSlices(occ, slices, sliced.slicing.discriminator, {
+        ...this.#environment,
+        occurrenceTypes: stepTypes(parent, name),
+      });
       assignments = result.unchecked ? occ.map(() => undefined) : result.assignments;
       byParent.set(parent, assignments);
     }

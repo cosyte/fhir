@@ -6,6 +6,7 @@ import {
   CODE_SYSTEM_VERSION_RECORD_SYSTEM,
   ISSUE_SEVERITIES,
   ISSUE_TYPES,
+  SLICE_UNCHECKED_REASONS,
   VALIDATION_CODES,
   validationIssue,
   type ValidationCode,
@@ -147,6 +148,33 @@ describe("validation code / severity / issue-type registries (stable public cont
   it("carries the constraint key only on an invariant finding, never elsewhere", () => {
     expect(validationIssue("INVARIANT_VIOLATED", "error", "X", "obs-6").constraint).toBe("obs-6");
     expect(validationIssue("CODE_INVALID", "error", "X.y").constraint).toBeUndefined();
+  });
+
+  it("pins the reasons a slicing is reported unchecked", () => {
+    expect(SLICE_UNCHECKED_REASONS).toEqual({
+      NO_DISCRIMINATOR: "no-discriminator",
+      DISCRIMINATOR_UNSUPPORTED: "discriminator-unsupported",
+      PATH_UNSUPPORTED: "path-unsupported",
+      SLICE_UNCONSTRAINED: "slice-unconstrained",
+      TYPE_UNDETERMINED: "type-undetermined",
+      TARGET_UNRESOLVED: "target-unresolved",
+      TARGET_NOT_RESOURCE: "target-not-resource",
+      PROFILE_UNAVAILABLE: "profile-unavailable",
+      PROFILE_UNDECIDED: "profile-undecided",
+    });
+    expect(validationIssue("PROFILE_SLICE_UNCHECKED", "information", "X").sliceReason).toBe(
+      undefined,
+    );
+    expect(
+      validationIssue(
+        "PROFILE_SLICE_UNCHECKED",
+        "information",
+        "X",
+        undefined,
+        undefined,
+        "no-discriminator",
+      ).sliceReason,
+    ).toBe("no-discriminator");
   });
 
   it("pins the code-system release record vocabulary and its canonical system", () => {

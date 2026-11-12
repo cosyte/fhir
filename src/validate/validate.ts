@@ -419,7 +419,9 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   // supplies US Core (or vendor) profiles, exactly as the terminology layer takes a service.
   if (options.profiles !== undefined && options.profiles.length > 0) {
     const profileOptions =
-      options.resolveBase === undefined ? {} : { resolve: options.resolveBase };
+      options.resolveBase === undefined
+        ? { profiles: options.profiles }
+        : { profiles: options.profiles, resolve: options.resolveBase };
     for (const profile of options.profiles) {
       if (profile.type !== rt) continue;
       for (const issue of collectProfileIssues(resource, profile, profileOptions)) {

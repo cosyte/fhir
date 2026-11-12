@@ -14,8 +14,9 @@ production is not.
 The gaps, in the order the README lists them under "Not covered yet":
 
 - [typed per-resource models](#no-typed-per-resource-models);
-- `type` and `profile` slicing discriminators, reported `PROFILE_SLICE_UNCHECKED`, and FHIRPath
-  outside the subset we evaluate, reported `INVARIANT_UNCHECKED`
+- `type` and `profile` slicing discriminators the document holds no answer to, and the R5
+  `position` discriminator, reported `PROFILE_SLICE_UNCHECKED`, and FHIRPath outside the subset we
+  evaluate, reported `INVARIANT_UNCHECKED`
   ([verdicts that say "not checked"](#verdicts-that-say-not-checked-rather-than-passing));
 - bundled [terminology](#no-terminology-content-is-bundled) or [US Core](#no-profile-content-is-bundled)
   content;
@@ -76,11 +77,28 @@ you treat any non-error finding as a pass, you will misread them.
   terms and nothing is reported, also when a supplied profile carries R4's `dom-3` as written. A
   profile's constraint under that key written any other way is its own expression, and is reported
   unchecked like any other the subset cannot evaluate.
-- `PROFILE_SLICE_UNCHECKED`: a slice whose discriminator this library cannot apply: a `type` or
-  `profile` discriminator, or the `position` discriminator, which is not part of the R4 discriminator
-  set. Again, it means the slice membership was not decided, not that it matched. A slice's own
-  constraints apply only to the occurrences assigned to it, so under an undecided slicing they are
-  not checked either.
+- `PROFILE_SLICE_UNCHECKED`: a slicing whose membership this library could not decide. Again, it
+  means the slice membership was not decided, not that it matched. A slice's own constraints apply
+  only to the occurrences assigned to it, so under an undecided slicing they are not checked either.
+  The finding's `sliceReason` says which part could not be decided:
+  - `discriminator-unsupported`: the `position` discriminator, which is not part of the R4
+    discriminator set, or a kind outside it; `no-discriminator`: a slicing that declares none;
+  - `slice-unconstrained`: a slice that states nothing at a discriminator path (no fixed or pattern
+    value, no cardinality, no type, no profile);
+  - `path-unsupported`: a `type` or `profile` discriminator path outside dotted element names, `[x]`
+    choices, `$this` and a trailing `resolve()`, such as `ofType(Quantity)`;
+  - `type-undetermined`: an occurrence whose type the document does not state (a `type`
+    discriminator is decided from a choice element's suffix, `valueQuantity`, or a resource's
+    `resourceType`), or a slice naming an abstract type such as `Resource`;
+  - `target-unresolved`: a `resolve()` whose reference names nothing in the resource's `contained`
+    set or, when the resource is a Bundle, its entries; a reference to a server is never fetched;
+  - `target-not-resource`: a `profile` discriminator that selects a datatype rather than a resource;
+  - `profile-unavailable`: a slice naming a profile that is not in the `profiles` you supplied and
+    that your `resolveBase` does not return;
+  - `profile-undecided`: the check of the resource against the slice's profile was itself
+    incomplete (a slicing inside it undecided), two supplied versions of an unpinned profile
+    disagreed, or the bound on nested checks was reached: eight profiles deep, which is also where
+    a reference cycle stops, or 4096 checks in one validation.
 - `PROFILE_SLICE_NO_SLICING`: a profile naming a slice (`Observation.component:coded`) under an
   element that declares no `slicing`, or that is missing from the snapshot. Nothing in the profile
   says which occurrences belong to the slice, so none is assigned to it, and the slice's own
