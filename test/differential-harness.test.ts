@@ -7,7 +7,7 @@
  */
 
 import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -638,9 +638,7 @@ describe("AC-15: a US Core document is validated with exactly the profiles it de
       args.filter((a) => a.endsWith(".json") && !a.endsWith("outcome.json"));
     const nine = oracle.calls.filter((args) => igOf(args) === "hl7.fhir.us.core#9.0.0");
     expect(nine).toHaveLength(1);
-    expect(staged(nine[0] ?? []).map((f) => f.slice(f.lastIndexOf("/") + 1))).toEqual([
-      "0001-lab.json",
-    ]);
+    expect(staged(nine[0] ?? []).map((f) => basename(f))).toEqual(["0001-lab.json"]);
     const six = oracle.calls.filter(
       (args) =>
         igOf(args) === "hl7.fhir.us.core#6.1.0" &&

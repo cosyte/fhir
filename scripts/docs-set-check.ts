@@ -69,7 +69,8 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { PROPERTY_ENV } from "@cosyte/test-utils";
@@ -83,6 +84,13 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Where a sample importing `@cosyte/fhir/arbitraries` is pointed: the subpath's source. */
 const ARBITRARIES_INDEX = join(REPO_ROOT, "src", "arbitraries", "index.js");
+
+/** tsx's own command-line entry file, which this Node starts on every system. */
+const TSX_CLI = join(
+  dirname(createRequire(import.meta.url).resolve("tsx/package.json")),
+  "dist",
+  "cli.mjs",
+);
 
 /** The directory the samples are written under while they are graded. */
 const SAMPLE_PARENT = join(REPO_ROOT, "node_modules", ".cache");
@@ -120,7 +128,7 @@ export interface CheckOptions {
   readonly allowListPath?: string;
   /** The package entry point samples are compiled and run against. */
   readonly sourceIndexPath?: string;
-  /** The `tsx` binary that runs the samples. */
+  /** The `tsx` binary that runs the samples. On Windows the default is tsx's entry under this Node. */
   readonly tsxPath?: string;
 }
 
@@ -1458,7 +1466,18 @@ function collectSamples(pages: readonly DocPage[]): Sample[] {
  * the semicolon cannot be swallowed into it, and the `//` is still found by backtracking from the
  * END of the line, so a `//` inside a URL in the expression is not mistaken for the marker.
  */
-function rewriteSample(sample: Sample, sourceIndexPath: string): string {
+/**
+ * The specifier a sample written in `dir` imports `target` by: a relative path with forward
+ * slashes, which the compiler and Node both resolve on every system. An absolute Windows path
+ * written into a string literal is read with its backslashes as escapes, and `D:/...` is read by
+ * Node as a URL scheme.
+ */
+function importSpecifier(dir: string, target: string): string {
+  const path = relative(dir, target).split(sep).join("/");
+  return path.startsWith(".") ? path : `./${path}`;
+}
+
+function rewriteSample(sample: Sample, sourceIndexPath: string, dir: string): string {
   const lines = sample.body.map((line, index) => {
     const docLine = sample.fenceLine + index + 1;
     const expectation = /^(\s*)(.*[^;\s])\s*;?\s*\/\/\s*=>\s*(.+)$/.exec(line);
@@ -1469,8 +1488,11 @@ function rewriteSample(sample: Sample, sourceIndexPath: string): string {
       return `${indent}__expect(${expression}, (${expected}), ${String(docLine)});`;
     }
     return line
-      .replace(/(["'])@cosyte\/fhir\/arbitraries\1/g, `"${ARBITRARIES_INDEX}"`)
-      .replace(/(["'])@cosyte\/fhir\1/g, `"${sourceIndexPath}"`);
+      .replace(
+        /(["'])@cosyte\/fhir\/arbitraries\1/g,
+        `"${importSpecifier(dir, ARBITRARIES_INDEX)}"`,
+      )
+      .replace(/(["'])@cosyte\/fhir\1/g, `"${importSpecifier(dir, sourceIndexPath)}"`);
   });
   return [...SAMPLE_PREAMBLE, ...lines].join("\n");
 }
@@ -1528,7 +1550,7 @@ const SAMPLE_IMPORTS: ReadonlySet<string> = new Set([
 function checkSamples(
   pages: readonly DocPage[],
   sourceIndexPath: string,
-  tsxPath: string,
+  tsxPath: string | undefined,
 ): Finding[] {
   const findings: Finding[] = [];
   for (const page of pages) {
@@ -1570,7 +1592,7 @@ function checkSamples(
     // as CommonJS, and the samples a consumer copies are ESM.
     const files = samples.map((sample, index) => {
       const path = join(dir, `sample-${String(index)}.mts`);
-      writeFileSync(path, rewriteSample(sample, sourceIndexPath));
+      writeFileSync(path, rewriteSample(sample, sourceIndexPath, dir));
       return path;
     });
     findings.push(...compileSamples(samples, files));
@@ -1641,7 +1663,7 @@ function runSamples(
   samples: readonly Sample[],
   files: readonly string[],
   dir: string,
-  tsxPath: string,
+  tsxPath: string | undefined,
 ): Finding[] {
   const runner = join(dir, "run-samples.mts");
   const body = [
@@ -1668,7 +1690,11 @@ function runSamples(
     ");",
   ].join("\n");
   writeFileSync(runner, body);
-  const run = spawnSync(tsxPath, [runner], { encoding: "utf8", cwd: REPO_ROOT });
+  // On Windows `node_modules/.bin/tsx` is a `.cmd` file, which only a shell starts, so the default
+  // there is this Node running tsx's own entry file.
+  const [command, args] =
+    tsxPath === undefined ? [process.execPath, [TSX_CLI, runner]] : [tsxPath, [runner]];
+  const run = spawnSync(command, args, { encoding: "utf8", cwd: REPO_ROOT });
   if (run.status !== 0) {
     return [
       {
@@ -1729,7 +1755,9 @@ export function checkDocsSet(dir: string, options: CheckOptions = {}): Finding[]
   const packageJsonPath = options.packageJsonPath ?? join(REPO_ROOT, "package.json");
   const allowListPath = options.allowListPath ?? join(REPO_ROOT, "scripts", "phi-allow-list.txt");
   const sourceIndexPath = options.sourceIndexPath ?? join(REPO_ROOT, "src", "index.js");
-  const tsxPath = options.tsxPath ?? join(REPO_ROOT, "node_modules", ".bin", "tsx");
+  const tsxPath =
+    options.tsxPath ??
+    (process.platform === "win32" ? undefined : join(REPO_ROOT, "node_modules", ".bin", "tsx"));
   const pages = loadPages(dir);
   const findings: Finding[] = [];
   if (arms.has("mdx-braces")) findings.push(...checkBraces(pages));

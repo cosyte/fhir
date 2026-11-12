@@ -18,6 +18,7 @@ import {
   resourceLiterals,
   section,
 } from "./_first-use.js";
+import { IS_WINDOWS } from "./_runtime.js";
 
 /**
  * Doc/code-agreement gate. Every TypeScript and JavaScript sample on a hand-written page of
@@ -51,7 +52,8 @@ const resolveEntry = (specifier: string): string | undefined =>
       : undefined;
 
 beforeAll(() => {
-  execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit" });
+  // On Windows `pnpm` is a `.cmd` file, which only a shell starts; the arguments are fixed.
+  execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit", shell: IS_WINDOWS });
 }, 180_000);
 
 /** The hand-written pages: every `.md` file at the top of `docs-content/`, not the generated `api/`. */

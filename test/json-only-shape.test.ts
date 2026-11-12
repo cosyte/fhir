@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -289,7 +290,7 @@ describe("nothing that works is withdrawn, asserted in both polarities", () => {
     // The corpus sweep below is 7 fixtures; this is the mechanical half, and it is the one that
     // generalises. A census over every file under `src/`: the markers are set through the reader's
     // own helpers, and nothing in the XML path sets one. A new setter anywhere else reds this.
-    const src = new URL("../src/", import.meta.url).pathname;
+    const src = fileURLToPath(new URL("../src/", import.meta.url)).replaceAll("\\", "/");
     const files = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
         entry.isDirectory()

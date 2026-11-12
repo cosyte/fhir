@@ -4,6 +4,10 @@
  * the reason beside the skip, through the checks below.
  */
 
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 /** True on Windows. */
 export const IS_WINDOWS = process.platform === "win32";
 
@@ -18,3 +22,29 @@ export const IS_BUN = "Bun" in globalThis;
  * test that starts Node, `tsx` or a Node-only command line cannot run there.
  */
 export const IS_DENO = "Deno" in globalThis;
+
+const require = createRequire(import.meta.url);
+
+/**
+ * tsx's own command-line entry file. `node_modules/.bin/tsx` is a shell script on Linux and macOS
+ * and a `.cmd` file on Windows, which Node cannot start without a shell; the entry file is
+ * JavaScript, which this Node starts on every system.
+ */
+export const TSX_CLI = join(dirname(require.resolve("tsx/package.json")), "dist", "cli.mjs");
+
+/**
+ * The command and arguments that run `args` under tsx, to pass to `spawnSync` as they are, with
+ * no shell. On Windows that is this Node, tsx's entry file, then `args`; elsewhere it is the
+ * `node_modules/.bin/tsx` shim, as before, which Bun and Deno run through their own `node`.
+ *
+ * @example
+ * const [command, argv] = tsx(["scripts/phi-scan.ts"]);
+ * spawnSync(command, argv, { encoding: "utf8" });
+ */
+export function tsx(args: readonly string[]): [string, string[]] {
+  if (IS_WINDOWS) return [process.execPath, [TSX_CLI, ...args]];
+  return [
+    join(fileURLToPath(new URL("..", import.meta.url)), "node_modules", ".bin", "tsx"),
+    [...args],
+  ];
+}

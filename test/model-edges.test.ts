@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -30,7 +31,7 @@ import type { FhirNode } from "../src/index.js";
  * flattening consumer is what these tests make impossible to do by accident.
  */
 
-const SRC = new URL("../src/", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("../src/", import.meta.url));
 const NODE_TS = join(SRC, "model/node.ts");
 
 /** Every `.ts` file under `src/`, so the reference census cannot miss a directory. */
@@ -153,7 +154,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
     expect(
       sourceFiles(SRC)
         .filter((file) => /markUndefinedNull/.test(readFileSync(file, "utf8")))
-        .map((file) => file.slice(SRC.length))
+        .map((file) => file.slice(SRC.length).split(sep).join("/"))
         .sort(),
     ).toEqual(["codec/read.ts", "model/node.ts"]);
   });
@@ -176,7 +177,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
     expect(
       sourceFiles(SRC)
         .filter((file) => /markForeignRoot/.test(readFileSync(file, "utf8")))
-        .map((file) => file.slice(SRC.length))
+        .map((file) => file.slice(SRC.length).split(sep).join("/"))
         .sort(),
     ).toEqual(["model/node.ts", "xml/read.ts"]);
   });
@@ -187,7 +188,7 @@ describe("the model's edge set is derived from the type, not from a search", () 
     expect(
       sourceFiles(SRC)
         .filter((file) => /markDroppedText/.test(readFileSync(file, "utf8")))
-        .map((file) => file.slice(SRC.length))
+        .map((file) => file.slice(SRC.length).split(sep).join("/"))
         .sort(),
     ).toEqual(["model/node.ts", "xml/read.ts"]);
   });
@@ -198,7 +199,7 @@ describe("the preserved text has exactly the consumers it was audited with", () 
   function referencing(pattern: RegExp): string[] {
     return sourceFiles(SRC)
       .filter((file) => pattern.test(readFileSync(file, "utf8")))
-      .map((file) => file.slice(SRC.length))
+      .map((file) => file.slice(SRC.length).split(sep).join("/"))
       .sort();
   }
 

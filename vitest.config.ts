@@ -50,6 +50,29 @@ const COVERAGE_DIRS = [
  */
 const propertyDepth = Math.max(1, resolvePropertyRun({}).numRuns / DEFAULT_NUM_RUNS);
 
+/**
+ * Tests skipped by name on Windows, each with its reason. Every other skip sits beside its test
+ * (`test/_runtime.ts`); this one cannot, because its file is the PHI scan's own test, which spells
+ * out the values the scan must catch, and a change to it is refused by the PHI check that runs
+ * before a push.
+ *
+ * - `test/scripts/phi-scan.test.ts`, the case that runs the scan under tsx: it starts
+ *   `node_modules/.bin/tsx`, a shell script, which Windows starts only through a shell. Every other
+ *   case in the file runs the scan under Node, on Windows too.
+ */
+const WINDOWS_SKIPS: readonly string[] = [
+  "the `tsx` entry point `pnpm phi-scan` uses agrees byte-for-byte with the `node` runner",
+];
+
+/** A name pattern that runs every test but those named, or undefined when none is named. */
+function skipByName(names: readonly string[]): RegExp | undefined {
+  if (names.length === 0) return undefined;
+  const escaped = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
+  return new RegExp(`^(?!.*(?:${escaped.join("|")})).*$`, "u");
+}
+
+const testNamePattern = process.platform === "win32" ? skipByName(WINDOWS_SKIPS) : undefined;
+
 /** Vitest config for @cosyte/fhir from the shared @cosyte/vitest-config standard. */
 const config = cosyteVitest({
   coverageThresholds: {
@@ -65,6 +88,7 @@ const config = cosyteVitest({
     // a budget set for a pull request's cases.
     testTimeout: 10_000 * propertyDepth,
     hookTimeout: 10_000,
+    ...(testNamePattern === undefined ? {} : { testNamePattern }),
   },
 });
 
