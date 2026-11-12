@@ -177,7 +177,7 @@ lists, sets and scope objects on its walks. These are the peak memory budget's r
 vital-signs Observation (1.3 KiB), above the empty call's floor, in the `Bench reading` runs on
 a GitHub-hosted runner with Node.js 22.23.4: of `main` at commit `36f6632`, just before the change,
 and of the change on its pull request at commits `f7786cf`, `9d6d139` and `005acb6`, which read the same
-code (runs 43168663384, 43170535828 and 43171945171). Where the three runs of the change differ, the
+code. Where the three runs of the change differ, the
 table gives the range:
 
 | Benchmark                                         | Before | After  | Budget |
