@@ -12,7 +12,7 @@
 
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -82,7 +82,8 @@ const SOURCE = [
   "", // 12
 ].join("\n");
 
-const FILE = join("/synthetic", "src", "grade.ts");
+// Absolute on every platform: on Windows `resolve` adds the drive, as Stryker's file names have.
+const FILE = resolve("/synthetic", "src", "grade.ts");
 
 async function instrument(ignorers: unknown[]): Promise<ApiMutant[]> {
   const { Instrumenter } = await loadInstrumenter();
@@ -178,7 +179,7 @@ describe("the changed-lines ignorer on Stryker's instrumenter", () => {
   it("stops the run on a file the change does not name", async () => {
     const ignorer = createChangedLinesIgnorer({
       base: "origin/main",
-      changes: () => new Map([[join("/synthetic", "src", "other.ts"), new Set([1])]]),
+      changes: () => new Map([[resolve("/synthetic", "src", "other.ts"), new Set([1])]]),
     });
     await expect(instrument([ignorer])).rejects.toThrow(/did not change against origin\/main/);
   });
