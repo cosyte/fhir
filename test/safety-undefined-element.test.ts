@@ -3,7 +3,8 @@
  *
  * A document can carry an element its resource does not define: `entry` on a Patient, a key in the
  * wrong case (`Entry`, `Contained`), an extra key on a Bundle entry or a Coding, a member of an
- * object written where a primitive belongs, a foreign element in XML. No valid document carries
+ * object written where a primitive belongs, an XML element in a namespace other than its parent's
+ * however declared. No valid document carries
  * one, but the reader keeps it in the model, and a caller that flattens the whole tree would
  * summarize what sits there, a retraction included. So `readSafety` lists it on `notAssessed`, by
  * location, and declines; `validateResource` reports it as `UNKNOWN_ELEMENT` at every depth.
@@ -314,6 +315,165 @@ describe("the reported cases decline, in XML", () => {
   });
 });
 
+describe("an XML element in a namespace other than its parent's declines, however declared", () => {
+  // A default declaration keeps the tag spelled as the FHIR element, so the model holds it under
+  // that name; the reader marks it, and the readout and the validator read the marker.
+  const FINAL_CODE = `<code><text value="syn"/></code>`;
+
+  it("a status in a vendor namespace by default declaration", () => {
+    const resource = xml(
+      `<Observation${NS}><status xmlns="urn:syn-vendor" value="final"/>${FINAL_CODE}</Observation>`,
+    );
+    expectDeclined(resource, ["Observation.status"]);
+    expect(unknownIn(validateResource(resource))).toEqual([["Observation.status", "warning"]]);
+    expect(unknownIn(validateResource(resource, { mode: "strict" }))).toEqual([
+      ["Observation.status", "error"],
+    ]);
+  });
+
+  it('a status in no namespace at all (xmlns="")', () => {
+    const resource = xml(
+      `<Observation${NS}><status xmlns="" value="final"/>${FINAL_CODE}</Observation>`,
+    );
+    expectDeclined(resource, ["Observation.status"]);
+    expect(unknownIn(validateResource(resource))).toEqual([["Observation.status", "warning"]]);
+  });
+
+  it("a gender in a vendor namespace on a Patient", () => {
+    const resource = xml(
+      `<Patient${NS}><id value="syn-pt-0200"/><gender xmlns="urn:syn-vendor" value="female"/>` +
+        `</Patient>`,
+    );
+    expectDeclined(resource, ["Patient.gender"]);
+    expect(unknownIn(validateResource(resource))).toEqual([["Patient.gender", "warning"]]);
+  });
+
+  it("a Bundle entry's resource wrapper in a vendor namespace, around a FHIR resource", () => {
+    const resource = xml(
+      `<Bundle${NS}><type value="collection"/><entry><resource xmlns="urn:syn-vendor">` +
+        `<Observation${NS}><status value="final"/>${FINAL_CODE}</Observation>` +
+        `</resource></entry></Bundle>`,
+    );
+    expectDeclined(resource, ["Bundle.entry.resource"]);
+    expect(unknownIn(validateResource(resource))).toEqual([["Bundle.entry.resource", "warning"]]);
+  });
+
+  it("a contained resource, a primitive's extension and a repeat beside a FHIR one", () => {
+    const resource = xml(
+      `<Observation${NS}><contained><Practitioner xmlns="urn:syn-vendor"><id value="syn-pr-3"/>` +
+        `</Practitioner></contained><status value="final">` +
+        `<extension xmlns="urn:syn-vendor" url="http://example.org/syn"><valueString value="x"/>` +
+        `</extension></status>${FINAL_CODE}` +
+        `<category><text value="syn-a"/></category><category xmlns=""><text value="syn-b"/>` +
+        `</category></Observation>`,
+    );
+    expectDeclined(resource, [
+      "Observation.contained",
+      "Observation.status.extension[0]",
+      "Observation.category[1]",
+    ]);
+  });
+
+  it("a narrative div in a vendor namespace, while the XHTML one reads safe", () => {
+    const vendor = xml(
+      `<Observation${NS}><text><status value="generated"/>` +
+        `<div xmlns="urn:syn-vendor">syn</div></text><status value="final"/>${FINAL_CODE}` +
+        `</Observation>`,
+    );
+    expectDeclined(vendor, ["Observation.text.div"]);
+    const xhtml = xml(
+      `<Observation${NS}><text><status value="generated"/>` +
+        `<div xmlns="http://www.w3.org/1999/xhtml">syn</div></text><status value="final"/>` +
+        `${FINAL_CODE}</Observation>`,
+    );
+    expect(readSafety(xhtml).notAssessed).toEqual([]);
+    expect(readSafety(xhtml).safeToSummarize).toBe(true);
+  });
+
+  it("a root in a vendor namespace, by default declaration or by prefix", () => {
+    const body = `<status value="final"/><code><text value="syn"/></code>`;
+    expectDeclined(xml(`<Observation xmlns="urn:syn-vendor">${body}</Observation>`), [
+      "Observation",
+    ]);
+    expectDeclined(
+      xml(
+        `<v:Observation xmlns:v="urn:syn-vendor"><v:status value="final"/>` +
+          `<v:code><v:text value="syn"/></v:code></v:Observation>`,
+      ),
+      ["Observation"],
+    );
+    // A root in no namespace at all is read as FHIR, as it always has been.
+    expect(readSafety(xml(`<Observation>${body}</Observation>`)).safeToSummarize).toBe(true);
+  });
+
+  it("a prefixed foreign element is listed once, not once per occurrence", () => {
+    const resource = xml(
+      `<Observation${NS}><status value="final"/>${FINAL_CODE}` +
+        `<v:status xmlns:v="urn:syn-vendor" value="a"/><v:status xmlns:v="urn:syn-vendor" value="b"/>` +
+        `</Observation>`,
+    );
+    expectDeclined(resource, ["Observation.<withheld>"]);
+  });
+});
+
+describe("a value written where the definitions put a complex type declines", () => {
+  it("a string at a CodeableConcept and at a Coding, in JSON", () => {
+    expectDeclined(json({ resourceType: "Observation", status: "final", code: "syn-code" }), [
+      "Observation.code",
+    ]);
+    expectDeclined(
+      json({
+        resourceType: "Observation",
+        status: "final",
+        code: { coding: ["syn-code"] },
+        category: ["syn-category"],
+      }),
+      ["Observation.code.coding[0]", "Observation.category[0]"],
+    );
+  });
+
+  it("a value attribute at a CodeableConcept, in XML", () => {
+    expectDeclined(
+      xml(`<Observation${NS}><status value="final"/><code value="syn-code"/></Observation>`),
+      ["Observation.code"],
+    );
+  });
+
+  it("an element holding only an extension carries no value, and reads safe", () => {
+    // The XML reader reads a complex element holding only `<extension>` as a value-absent
+    // primitive; there is no string there for a flatten to read.
+    const resource = xml(
+      `<Observation${NS}><status value="final"/><code><extension url="http://example.org/syn">` +
+        `<valueString value="x"/></extension></code></Observation>`,
+    );
+    expect(readSafety(resource).notAssessed).toEqual([]);
+    expect(readSafety(resource).safeToSummarize).toBe(true);
+  });
+});
+
+describe("the validator reports a resource tag placed directly under entry", () => {
+  it("as an element of the entry the definitions do not define", () => {
+    const bundle = xml(
+      `<Bundle${NS}><type value="collection"/><entry><Basic><id value="syn-b"/></Basic>` +
+        `</entry></Bundle>`,
+    );
+    expectDeclined(bundle, ["Bundle.entry"]);
+    expect(unknownIn(validateResource(bundle))).toEqual([["Bundle.entry.resourceType", "warning"]]);
+  });
+
+  it("and a resourceType key on a JSON entry the same way", () => {
+    const bundle = json({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [{ resourceType: "Basic", id: "syn-b" }],
+    });
+    expectDeclined(bundle, ["Bundle.entry[0]"]);
+    expect(unknownIn(validateResource(bundle))).toEqual([
+      ["Bundle.entry[0].resourceType", "warning"],
+    ]);
+  });
+});
+
 describe("a conformant document is unaffected", () => {
   it("a Bundle of every assessed type, with backbones, datatypes and extensions, reads safe", () => {
     for (const document of RESOURCES.map((build) => build(0))) {
@@ -514,37 +674,49 @@ function spots(root: JsonObject): Spot[] {
 /** The elements FHIR XML writes as a resource wrapped in its type's tag. */
 const RESOURCE_POSITION_NAMES = new Set(["contained", "resource", "outcome"]);
 
+/** A member whose every element is written in another namespace, by default declaration. */
+interface ForeignTarget {
+  readonly node: JsonObject;
+  readonly name: string;
+  readonly namespace: string;
+}
+
 /** FHIR XML for a JSON document of the shapes {@link RESOURCES} builds. */
-function toXml(root: JsonObject): string {
+function toXml(root: JsonObject, foreign?: ForeignTarget): string {
   const type = root["resourceType"] as string;
-  return `<${type}${NS}>${content(root)}</${type}>`;
+  return `<${type}${NS}>${content(root, foreign)}</${type}>`;
 }
 
 function escape(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 }
 
-function content(node: JsonObject): string {
+/** `source` is the builder's node `node` was copied from, which a {@link ForeignTarget} names. */
+function content(node: JsonObject, foreign?: ForeignTarget, source: JsonObject = node): string {
   let out = "";
   for (const [name, value] of Object.entries(node)) {
     if (name === "resourceType") continue;
+    const ns =
+      foreign !== undefined && foreign.node === source && foreign.name === name
+        ? ` xmlns="${foreign.namespace}"`
+        : "";
     for (const item of Array.isArray(value) ? value : [value]) {
       if (Array.isArray(item)) throw new Error("the builders write no array inside an array");
       if (typeof item !== "object") {
-        out += `<${name} value="${escape(String(item))}"/>`;
+        out += `<${name}${ns} value="${escape(String(item))}"/>`;
         continue;
       }
       const url = item["url"];
       if (RESOURCE_POSITION_NAMES.has(name) && typeof item["resourceType"] === "string") {
-        out += `<${name}>${toXml(item).replace(NS, "")}</${name}>`;
+        out += `<${name}${ns}>${toXml(item, foreign).replace(NS, "")}</${name}>`;
       } else if (
         typeof url === "string" &&
         (name === "extension" || name === "modifierExtension")
       ) {
         const rest = Object.fromEntries(Object.entries(item).filter(([key]) => key !== "url"));
-        out += `<${name} url="${escape(url)}">${content(rest)}</${name}>`;
+        out += `<${name}${ns} url="${escape(url)}">${content(rest, foreign, item)}</${name}>`;
       } else {
-        out += `<${name}>${content(item)}</${name}>`;
+        out += `<${name}${ns}>${content(item, foreign)}</${name}>`;
       }
     }
   }
@@ -649,6 +821,41 @@ describe("property: an undefined element planted at random depth always declines
       { numRuns: RUNS, seed: 20261111 },
     );
   });
+
+  it(
+    `XML, an element moved to another namespace by default declaration, ${String(RUNS)} cases`,
+    {
+      timeout: TIMEOUT,
+    },
+    () => {
+      fc.assert(
+        fc.property(
+          DOCUMENT,
+          fc.nat(),
+          fc.nat(),
+          fc.constantFrom("urn:syn-vendor", ""),
+          (document, pick, member, namespace) => {
+            const all = spots(document);
+            const spot = all[pick % all.length] as Spot;
+            // An extension's `url` is an attribute in XML, not an element, so it has no namespace.
+            const isExtension = /\.(?:modifierE|e)xtension(?:\[\d+\])?$/.test(spot.xml);
+            const names = Object.keys(spot.node).filter(
+              (name) => name !== "resourceType" && !(isExtension && name === "url"),
+            );
+            const name = names[member % names.length] as string;
+            const value = spot.node[name] as Json;
+            const count = Array.isArray(value) ? value.length : 1;
+            const at = childPath(spot.xml, name);
+            const locations =
+              count > 1 ? Array.from({ length: count }, (_, i) => `${at}[${String(i)}]`) : [at];
+            const resource = xml(toXml(document, { node: spot.node, name, namespace }));
+            for (const location of locations) expectPlanted(resource, location);
+          },
+        ),
+        { numRuns: RUNS, seed: 20261111 },
+      );
+    },
+  );
 
   it(
     `converse: the same documents with nothing planted read safe (${String(RUNS)} cases)`,

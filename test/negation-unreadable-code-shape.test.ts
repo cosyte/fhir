@@ -399,14 +399,19 @@ describe("content where a code belongs is disclosed, not read through", () => {
      *
      * 1. `verificationStatus` written as a bare string draws nothing. Its shape complement is a
      *    *primitive*, and `Condition.verificationStatus` IS a `code` in DSTU2 (ADR 0004 read
-     *    tolerance), so the same predicate would report a conformant DSTU2 document.
+     *    tolerance), so the same predicate would report a conformant DSTU2 document. The readout
+     *    still declines it, since: a value where the R4 and R4B definitions put a complex type is
+     *    not the element they define there, so it is on `notAssessed` and `safeToSummarize` is
+     *    `false`. That is not this channel, and nothing is read as a negation.
      * 2. `AllergyIntolerance.code` written as a bare string draws nothing. That is the boundary keeping
-     *    `no-known-allergy` root- and type-scoped: absence there reads as UNKNOWN, not NONE.
+     *    `no-known-allergy` root- and type-scoped: absence there reads as UNKNOWN, not NONE. Declined
+     *    on `notAssessed` as in 1.
      * 3. `doNotPerform` written as an object draws nothing on `unreadableBooleans`, which asks about
      *    a written value and is not widened. The readout still declines it, since: a member of an
      *    object at a `boolean` is an element the definitions do not define, so it is on
      *    `notAssessed` and `safeToSummarize` is `false`.
      * 4. `clinicalStatus` written as a bare string draws nothing. It is not a negation element.
+     *    Declined on `notAssessed` as in 1.
      * 5. `validateResource` still reports `valid: true`. The safety layer is this slice's window
      *    and no new `ValidationIssue` is raised.
      * 6. An empty array at `status` draws nothing: no position, so no content.
@@ -422,7 +427,8 @@ describe("content where a code belongs is disclosed, not read through", () => {
 
       expect(disclosed(safety)).toEqual([]);
       expect(safety.negations).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      expect(safety.notAssessed).toEqual(["Condition.verificationStatus"]);
+      expect(safety.safeToSummarize).toBe(false);
     });
 
     it("2. leaves a bare-string AllergyIntolerance.code alone", () => {
@@ -430,7 +436,8 @@ describe("content where a code belongs is disclosed, not read through", () => {
 
       expect(disclosed(safety)).toEqual([]);
       expect(safety.noKnownAllergy).toBe(false);
-      expect(safety.safeToSummarize).toBe(true);
+      expect(safety.notAssessed).toEqual(["AllergyIntolerance.code"]);
+      expect(safety.safeToSummarize).toBe(false);
     });
 
     it("3. leaves an object at doNotPerform off unreadableBooleans, and declines it as undefined", () => {
@@ -447,7 +454,8 @@ describe("content where a code belongs is disclosed, not read through", () => {
       const safety = safetyOf('{"resourceType":"Condition","clinicalStatus":"active"}');
 
       expect(disclosed(safety)).toEqual([]);
-      expect(safety.safeToSummarize).toBe(true);
+      expect(safety.notAssessed).toEqual(["Condition.clinicalStatus"]);
+      expect(safety.safeToSummarize).toBe(false);
     });
 
     it("5. leaves `validateResource` reporting valid, which is this slice's declared boundary", () => {

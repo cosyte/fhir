@@ -150,7 +150,11 @@ describe("the base-constraint walk past a type marker", () => {
       status: "final",
       code: { text: "synthetic", _resourceType: { id: "r1" } },
     });
-    expect(validateResource(marker).issues).toEqual([]);
+    // No ele-1 finding. `resourceType` is no element of a CodeableConcept either, so it is reported
+    // as one the definitions do not define, as `other` is below.
+    expect(
+      validateResource(marker).issues.map((i) => [i.code, i.expression, i.constraint]),
+    ).toEqual([["UNKNOWN_ELEMENT", "Observation.code.resourceType", undefined]]);
 
     const other = parse({
       resourceType: "Observation",

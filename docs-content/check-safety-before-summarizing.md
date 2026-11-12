@@ -142,11 +142,18 @@ A resource of a type the readout assesses is read element by element against wha
 R4B definitions say may be written there, at every depth: its own members, its backbone elements,
 its datatypes, its extensions and the extensions on its primitive values. An element neither release
 defines (`entry` on a `Patient`, `Entry` or `Contained` in the wrong case, an extra key on a Bundle
-entry or a coding, a member of an object written where a primitive value belongs, a foreign element
-in XML) is listed on `notAssessed` by its own location, and the resource is never safe to summarize.
-No valid document carries one, but the reader keeps it, and a summary that walked the whole model
-would read whatever sits under it, a retraction included. `validateResource` reports the same
+entry or a coding, a member of an object written where a primitive value belongs, a `resourceType`
+on a Bundle entry) is listed on `notAssessed` by its own location, and the resource is never safe to
+summarize. So is an XML element in a namespace other than its parent's, however the namespace is
+declared: `<status xmlns="urn:vendor" value="final"/>` is spelled like the FHIR `status` and is not
+one, and neither is an element under `xmlns=""`. Only the narrative `div` in the XHTML namespace is
+exempt. No valid document carries one, but the reader keeps it, and a summary that walked the whole
+model would read whatever sits under it, a retraction included. `validateResource` reports the same
 elements as `UNKNOWN_ELEMENT`, a warning when lenient and an error when strict.
+
+A value written where the definitions put a complex type (`"code": "x"` on an `Observation`, or
+`<code value="x"/>`) is listed on `notAssessed` too, since a summary would read the string as the
+element. `validateResource` does not report it as `UNKNOWN_ELEMENT`: the element name is defined.
 
 ```ts runnable
 import { parseResource, readSafety, validateResource } from "@cosyte/fhir";

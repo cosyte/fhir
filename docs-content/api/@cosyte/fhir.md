@@ -1204,6 +1204,19 @@ it was written under. Present only on a non-conformant document. Read them with
 [getAllProperties](#getallproperties); a consumer that ignores this field is reading one arbitrary value out
 of several the sender wrote.
 
+##### foreignNamespace?
+
+> `readonly` `optional` **foreignNamespace?**: `true`
+
+Set when the XML document wrote this element in a **namespace other than its parent's**, under
+any spelling: a bound prefix (`<v:status xmlns:v="urn:vendor">`), a default declaration
+(`<status xmlns="urn:vendor">`), an undeclared default (`<status xmlns="">`), or a prefix bound
+to nothing. The narrative `<div>` in the XHTML namespace is the one element FHIR puts there and
+is never marked. A default declaration leaves the tag spelled exactly as the FHIR element, so
+the model holds it under that name; the marker is what says the format does not define it, and
+the safety readout and the validator read it. Absent on every conformant document and on every
+document read from JSON.
+
 ##### foreignRoot?
 
 > `readonly` `optional` **foreignRoot?**: `true`
@@ -1361,6 +1374,19 @@ every document read from JSON. See [isDroppedText](#isdroppedtext).
 ##### extension?
 
 > `readonly` `optional` **extension?**: readonly [`FhirComplex`](#fhircomplex)[]
+
+##### foreignNamespace?
+
+> `readonly` `optional` **foreignNamespace?**: `true`
+
+Set when the XML document wrote this element in a **namespace other than its parent's**, under
+any spelling: a bound prefix (`<v:status xmlns:v="urn:vendor">`), a default declaration
+(`<status xmlns="urn:vendor">`), an undeclared default (`<status xmlns="">`), or a prefix bound
+to nothing. The narrative `<div>` in the XHTML namespace is the one element FHIR puts there and
+is never marked. A default declaration leaves the tag spelled exactly as the FHIR element, so
+the model holds it under that name; the marker is what says the format does not define it, and
+the safety readout and the validator read it. Absent on every conformant document and on every
+document read from JSON.
 
 ##### id?
 
@@ -2568,12 +2594,17 @@ resource of one of the types above, every element at every depth (a backbone ele
 datatype, an extension, a primitive's extension) is checked against what the R4 and R4B
 definitions say may be written there: `entry` on a Patient, `Entry` or `Contained` in the wrong
 case, an extra key on a Bundle entry or a Coding, a member of an object written where a
-primitive belongs, a foreign element in XML. No valid document carries one, but the reader keeps
+primitive belongs, a `resourceType` on a Bundle entry, an XML element in a namespace other than
+its parent's under any declaration (a prefix, a default `xmlns`, or `xmlns=""`; the narrative
+`div` in XHTML excepted). No valid document carries one, but the reader keeps
 it in the model, where a caller that flattens the whole tree would summarize what sits under it,
 a retraction included. Nothing below such an element is checked against the definitions in
 turn. A name defined by
 either release is defined, so a document of either reads as it is written. `validateResource`
-reports the same elements as `UNKNOWN_ELEMENT`.
+reports the same elements as `UNKNOWN_ELEMENT`. A value written where the definitions put only
+a complex type (`"code": "x"` on an Observation) is listed here as well, by its location, since
+a caller that flattens the tree would read the string as that element; the validator does not
+report it as `UNKNOWN_ELEMENT`, since its name is defined.
 
 The status codes that withdraw or cancel a record differ by type (`revoked` on a
 ServiceRequest, `cancelled` on an Encounter, `inactive` on an R4B NutritionProduct), and this

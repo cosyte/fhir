@@ -142,9 +142,9 @@ import {
   type ModifierElementReport,
 } from "./modifier-elements.js";
 import { collectAbsence, type AbsenceMarker, type AbsenceReport } from "./absence.js";
-import { membersNamed, writesProperty } from "../model/node.js";
+import { isForeignNamespace, isForeignRoot, membersNamed, writesProperty } from "../model/node.js";
 import { Trail } from "../model/path.js";
-import { elementTargets, RESOURCE_TARGET } from "./element-definitions.js";
+import { elementTargets, PRIMITIVE_TARGET, RESOURCE_TARGET } from "./element-definitions.js";
 
 /**
  * `doNotPerform` on **this** node, read across every value the document wrote for it and through an
@@ -723,12 +723,17 @@ export interface SafetyReadout {
    * datatype, an extension, a primitive's extension) is checked against what the R4 and R4B
    * definitions say may be written there: `entry` on a Patient, `Entry` or `Contained` in the wrong
    * case, an extra key on a Bundle entry or a Coding, a member of an object written where a
-   * primitive belongs, a foreign element in XML. No valid document carries one, but the reader keeps
+   * primitive belongs, a `resourceType` on a Bundle entry, an XML element in a namespace other than
+   * its parent's under any declaration (a prefix, a default `xmlns`, or `xmlns=""`; the narrative
+   * `div` in XHTML excepted). No valid document carries one, but the reader keeps
    * it in the model, where a caller that flattens the whole tree would summarize what sits under it,
    * a retraction included. Nothing below such an element is checked against the definitions in
    * turn. A name defined by
    * either release is defined, so a document of either reads as it is written. `validateResource`
-   * reports the same elements as `UNKNOWN_ELEMENT`.
+   * reports the same elements as `UNKNOWN_ELEMENT`. A value written where the definitions put only
+   * a complex type (`"code": "x"` on an Observation) is listed here as well, by its location, since
+   * a caller that flattens the tree would read the string as that element; the validator does not
+   * report it as `UNKNOWN_ELEMENT`, since its name is defined.
    *
    * The status codes that withdraw or cancel a record differ by type (`revoked` on a
    * ServiceRequest, `cancelled` on an Encounter, `inactive` on an R4B NutritionProduct), and this
@@ -1575,6 +1580,9 @@ function walkSafety(resource: FhirComplex, path: string): SafetyWalk {
     notAssessed: [],
     unknownElements: [],
   };
+  // An XML root that named a vocabulary other than FHIR's is no FHIR resource, whatever its local
+  // name spells: the reader models it under that name and marks it, and it is not assessed.
+  if (isForeignRoot(resource)) out.notAssessed.push(path);
   walkComplex(resource, new Trail(path), out, NO_SCOPE, true);
   // A location reached by more than one reading (a repeated property name, two withheld segments)
   // is resolved once, here, into exactly one of the two `use` channels.
@@ -2107,6 +2115,44 @@ function recordUnknown(location: string, top: boolean, out: SafetyWalk): void {
 }
 
 /**
+ * Check a primitive against `model`, the contexts the definitions put at its position. A value
+ * written where the definitions put only a complex type (`"code": "x"` on an Observation, a
+ * `<code value="x"/>`) is not the element they define there, and a caller that flattens the tree
+ * would read the string as if it were, so its location is listed on {@link SafetyReadout.notAssessed}.
+ * A value-absent primitive carries no such string and is not listed: the XML reader reads an
+ * element holding only `<extension>` children that way, and those extensions are checked below.
+ * Then {@link checkPrimitiveExtensions}.
+ */
+function checkPrimitive(
+  node: FhirPrimitive,
+  model: readonly string[],
+  trail: Trail,
+  out: SafetyWalk,
+): void {
+  if (node.value !== undefined && !model.includes(PRIMITIVE_TARGET)) {
+    out.notAssessed.push(trail.text());
+  }
+  checkPrimitiveExtensions(node, trail, out);
+}
+
+/**
+ * List a node the XML reader read from an element in a namespace other than its parent's (see
+ * `foreignNamespace` on the model): the format defines no such element there, whatever its name
+ * spells. Listed on {@link SafetyReadout.notAssessed} and reported by the validator, never as `top`,
+ * because the name is one the schema pass reads as defined. Returns whether it was listed.
+ *
+ * Asked only where the definitions describe the position, as every other member check is: below a
+ * root of a type the readout does not assess, or below an element already listed, the document is
+ * declined at that ancestor, and listing each node under it again would add nothing a caller can
+ * act on.
+ */
+function recordForeign(node: FhirNode, trail: Trail, out: SafetyWalk): boolean {
+  if (!isForeignNamespace(node)) return false;
+  recordUnknown(trail.text(), false, out);
+  return true;
+}
+
+/**
  * Check what a primitive carries beside its value: its `extension`s, each an `Extension` as the
  * definitions define it, for members they do not define. The rest of the walk does not reach into a
  * primitive, so this is the one read made there.
@@ -2134,8 +2180,9 @@ function checkDefined(
   trail: Trail,
   out: SafetyWalk,
 ): void {
+  if (recordForeign(node, trail, out)) return;
   if (isPrimitive(node)) {
-    checkPrimitiveExtensions(node, trail, out);
+    checkPrimitive(node, model, trail, out);
     return;
   }
   if (isList(node)) {
@@ -2190,6 +2237,11 @@ function walkComplex(
     inner = { types, elements: "", model: rootModel(types) };
   } else if (writesProperty(node, "resourceType")) {
     out.notAssessed.push(trail.text());
+    // Where the definitions describe this node, `resourceType` is one of its members they do not
+    // define, so the validator reports it (an XML resource tag directly under `<entry>` included).
+    if (scope.model.length > 0) {
+      out.unknownElements.push({ location: trail.childText("resourceType"), top: false });
+    }
   }
   // Every node, not only a resource root: `comparator` modifies the value beside it wherever that
   // value sits, and the two type-gated rules decide their own gate off this node's `resourceType`.
@@ -2283,7 +2335,7 @@ function visitProperty(
   const model = memberModel(scope, name, trail, out);
   trail.child(name);
   if (isResourcePosition(scope, name)) {
-    descendResource(property.value, trail, out);
+    descendResource(property.value, trail, out, scope.model.length > 0);
   } else {
     const elements = scope.elements === "" ? name : `${scope.elements}.${name}`;
     descend(property.value, trail, { types: scope.types, elements, model }, out);
@@ -2295,14 +2347,17 @@ function visitProperty(
  * Descend into the value at a position the definitions type as `Resource`: each node there is a
  * resource root, an object that names no type included. A value that is not an object (a string, a
  * value-absent XML element) is no resource this layer can read, so its location is not assessed.
+ * `checked` says the definitions describe the position, so a node from another XML namespace there
+ * is listed ({@link recordForeign}).
  */
-function descendResource(node: FhirNode, trail: Trail, out: SafetyWalk): void {
+function descendResource(node: FhirNode, trail: Trail, out: SafetyWalk, checked: boolean): void {
+  if (checked) recordForeign(node, trail, out);
   if (isComplex(node)) walkComplex(node, trail, out, NO_SCOPE, true);
   else if (isList(node)) {
     const items = node.items;
     for (let index = 0; index < items.length; index++) {
       trail.index(index);
-      descendResource(items[index] as FhirNode, trail, out);
+      descendResource(items[index] as FhirNode, trail, out, checked);
       trail.pop();
     }
   } else out.notAssessed.push(trail.text());
@@ -2324,17 +2379,23 @@ function checkModifierExtension(value: FhirNode, path: string, out: string[]): v
 
 /** Descend into a node's children (complex → walk; list → each item) to catch nested findings. */
 function descend(node: FhirNode, trail: Trail, scope: RootScope, out: SafetyWalk): void {
-  if (isComplex(node)) walkComplex(node, trail, out, scope);
-  else if (isList(node)) {
+  if (isList(node)) {
     const items = node.items;
     for (let index = 0; index < items.length; index++) {
       trail.index(index);
       descend(items[index] as FhirNode, trail, scope, out);
       trail.pop();
     }
-  } else if (scope.model.length > 0) {
-    // A primitive: what it carries beside its value is the one thing below it to check.
-    checkPrimitiveExtensions(node, trail, out);
+    return;
+  }
+  // An element from another namespace is not the element its name spells, so nothing below it is
+  // checked against the definitions; the other reads still run there.
+  const foreign = scope.model.length > 0 && recordForeign(node, trail, out);
+  const inner = foreign ? { ...scope, model: [] } : scope;
+  if (isComplex(node)) walkComplex(node, trail, out, inner);
+  else if (inner.model.length > 0) {
+    // A primitive: its value against the position, and what it carries beside it.
+    checkPrimitive(node, inner.model, trail, out);
   }
 }
 
