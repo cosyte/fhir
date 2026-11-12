@@ -75,9 +75,14 @@ either, run `pnpm definitions:derive` (it fetches) and commit what it writes.
 `quality-floor.json` holds the coverage and the mutation score CI measures, and they only rise.
 `vitest.config.ts` reads its coverage floor from that file. `pnpm quality:check` holds coverage to
 it (after `pnpm test:coverage`); with `--base origin/main` every changed line coverage counts must
-also have run, and no floor may be lowered. On a pull request CI's `mutation` job mutates the
-changed source files with `stryker.config.mjs` (`pnpm mutate changed --base origin/main`, then
-`pnpm quality:mutation --base origin/main`) and every mutant in the changed lines must be killed.
+also have run, and no floor may be lowered. On a pull request CI's `mutation` job (this
+repository's own, in `ci.yml`) tests the mutants in the changed lines with `stryker.config.mjs`
+(`MUTATE_CHANGED_LINES_BASE=origin/main pnpm mutate changed --base origin/main`, then
+`pnpm quality:mutation --base origin/main`) and every one of them must be killed. With that
+variable set, the `changed-lines` ignorer in `scripts/stryker-changed-lines.mjs` ignores every
+mutant of the changed files whose lines touch no changed line, so a small change to a large file
+tests only its own mutants; a run that does not finish inside the job's limit fails the check and
+says how far it got.
 `.github/workflows/weekly-mutation.yml` runs the full run (`pnpm mutate:full`) twice a week, in
 sixteen shards, and holds its score to the floor. To raise a floor, run `pnpm quality:raise` after a
 full run and open a pull request. Mutation runs the suite of `vitest.mutation.config.ts`, which
