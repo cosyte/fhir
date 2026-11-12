@@ -23,11 +23,13 @@ export {
   validationIssue,
   ISSUE_SEVERITIES,
   ISSUE_TYPES,
+  PROFILE_UNCHECKED_CONSTRAINTS,
   SLICE_UNCHECKED_REASONS,
   VALIDATION_CODES,
 } from "./issues.js";
 export type {
   IssueType,
+  ProfileUncheckedConstraint,
   SliceUncheckedReason,
   ValidationCode,
   ValidationIssue,

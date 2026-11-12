@@ -34,6 +34,7 @@ export interface OwnIssueLike {
   readonly code?: string;
   readonly constraint?: string;
   readonly sliceReason?: string;
+  readonly uncheckedConstraint?: string;
   readonly location: string;
   readonly severity: string;
 }
@@ -162,6 +163,7 @@ export declare function ucumExercised(report: ReachReport): string[];
 export declare function ucumShortfall(report: ReachReport): string | null;
 export declare function formatReachReport(report: ReachReport): string[];
 export declare function formatSliceUnchecked(documents: readonly UsCoreDocument[]): string[];
+export declare function formatConstraintUnchecked(documents: readonly UsCoreDocument[]): string[];
 export declare function formatUsCoreDocuments(
   records: readonly Record_[],
   ids: readonly string[],

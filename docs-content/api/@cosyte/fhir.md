@@ -1099,11 +1099,29 @@ The element id, carries slice names as `:sliceName` segments. Defaults to `path`
 
 Maximum cardinality ([UNBOUNDED](#unbounded) for `*`), when the definition states one.
 
+##### maxLength?
+
+> `readonly` `optional` **maxLength?**: `number`
+
+The most characters a string-valued occurrence may hold (`maxLength`), when stated.
+
+##### maxValue?
+
+> `readonly` `optional` **maxValue?**: [`TypedValue`](#typedvalue)
+
+The highest value an occurrence may hold (`maxValue[x]`), when stated.
+
 ##### min?
 
 > `readonly` `optional` **min?**: `number`
 
 Minimum cardinality, when the definition states one.
+
+##### minValue?
+
+> `readonly` `optional` **minValue?**: [`TypedValue`](#typedvalue)
+
+The lowest value an occurrence may hold (`minValue[x]`), when stated.
 
 ##### mustSupport?
 
@@ -1140,6 +1158,17 @@ The slicing declaration, when the element introduces slices.
 > `readonly` `optional` **type?**: readonly [`ElementType`](#elementtype)[]
 
 The allowed types, when the definition constrains them.
+
+##### unmodeled?
+
+> `readonly` `optional` **unmodeled?**: readonly `string`[]
+
+What the definition states that this model does not read and that is not documentation, one
+entry per statement, when there is any: a member's name (`contentReference`,
+`defaultValueString`), an extension's url (`extension:<url>`), or a member or extension of a
+binding or a type (`binding.extension:<url>`, `type.aggregation`). Each may ask something of an
+instance that no validation layer checks, so profile validation reports an element that carries
+any as not checked wherever the element is present.
 
 ***
 
@@ -2055,6 +2084,14 @@ Base resolver for snapshot generation, needed only when the profile carries no s
 `type` slicing discriminator through `resolve()` also asks it for a slice's `targetProfile`
 the supplied set does not carry, to read the type that profile constrains.
 
+##### schema?
+
+> `readonly` `optional` **schema?**: [`ResourceSchema`](#resourceschema)
+
+The schema the structure layer checked the resource with, as `validateResource` passes it. A
+profile's `required` or `extensible` binding to the very R4 value set this schema enumerates
+for the element was checked there; without it every such binding is reported not checked.
+
 ***
 
 ### ProfileSpec
@@ -2313,6 +2350,14 @@ The complete enumerated code set.
 > `readonly` **strength**: `"required"`
 
 Only `"required"` bindings are enforced here; weaker strengths are the terminology layer's.
+
+##### valueSet?
+
+> `readonly` `optional` **valueSet?**: `string`
+
+The canonical of the R4 value set the codes enumerate, when known. Profile validation counts a
+profile's `required` or `extensible` binding to exactly this value set as checked here; a binding
+with no `valueSet` named is never counted so.
 
 ***
 
@@ -3519,6 +3564,14 @@ instance value. `undefined` on every other finding.
 
 The R4 `OperationOutcome.issue.code` this finding maps to.
 
+##### uncheckedConstraint?
+
+> `readonly` `optional` **uncheckedConstraint?**: [`ProfileUncheckedConstraint`](#profileuncheckedconstraint)
+
+Which kind of profile constraint was not checked, on a `PROFILE_CONSTRAINT_UNCHECKED` finding
+and only there ([PROFILE\_UNCHECKED\_CONSTRAINTS](#profile_unchecked_constraints)). A fixed name, never an instance value.
+It reaches the `OperationOutcome` as `issue.details.text`. `undefined` on every other finding.
+
 ***
 
 ### ValidationResult
@@ -3994,6 +4047,14 @@ The scalar value a [FhirPrimitive](#fhirprimitive) can hold. `decimal` is a [Fhi
 other primitive (`string`, `code`, `uri`, `date`, `boolean`, `integer`, …) reduces to one of
 these three at the structural level. `undefined` means the value is absent but metadata is
 present (the `_`-sibling-only case, e.g. an extension on a primitive that carries no value).
+
+***
+
+### ProfileUncheckedConstraint
+
+> **ProfileUncheckedConstraint** = *typeof* [`PROFILE_UNCHECKED_CONSTRAINTS`](#profile_unchecked_constraints)\[keyof *typeof* [`PROFILE_UNCHECKED_CONSTRAINTS`](#profile_unchecked_constraints)\]
+
+One of the [PROFILE\_UNCHECKED\_CONSTRAINTS](#profile_unchecked_constraints).
 
 ***
 
@@ -4966,6 +5027,74 @@ as ../model/decimal.js. Frozen so the union is exact.
 
 ***
 
+### PROFILE\_UNCHECKED\_CONSTRAINTS
+
+> `const` **PROFILE\_UNCHECKED\_CONSTRAINTS**: `object`
+
+Which kind of profile constraint a `PROFILE_CONSTRAINT_UNCHECKED` finding says was not checked.
+Each is a fixed name for a kind of constraint, never instance content, so it rides on the finding
+as [ValidationIssue.uncheckedConstraint](#uncheckedconstraint).
+
+- `type-profile`: a `type.profile` the occurrence must conform to (a datatype or extension
+  profile, a profile on a contained resource). The R4 `SimpleQuantity` profile is checked
+  (`sqty-1`), so it is never reported this way.
+- `target-profile`: a `targetProfile` on a `Reference` whose target's type could not be read (no
+  `Type/id` form and no target in the closure), or whose target is of the type a constraining
+  profile names (its conformance to that profile is not checked), or names a profile whose type
+  is unknown; and any `targetProfile` on a `canonical`.
+- `max-length`: a `maxLength` on an occurrence that holds no string (a complex value, a number).
+- `value-range`: a `minValue[x]` or `maxValue[x]` that is not a number (a date, a time, a
+  `Quantity`), or one whose type differs from the occurrence's.
+- `binding`: a `required` or `extensible` binding other than the R4 value set the structure layer
+  enumerates for that very element.
+- `slice-order`: an `ordered` slicing, or `openAtEnd` rules, over more than one occurrence.
+- `slice-invariant`: a slice's own invariant that the element it slices does not carry too.
+- `primitive-invariant`: an invariant on an element present as a primitive value, other than
+  `ele-1`, which the base-constraint layer decides.
+- `unread`: a member or extension of the element definition, its binding or its types that this
+  library does not read and that is not documentation (`contentReference`, `type.aggregation`,
+  an extension it does not know).
+
+#### Type Declaration
+
+##### BINDING
+
+> `readonly` **BINDING**: `"binding"` = `"binding"`
+
+##### MAX\_LENGTH
+
+> `readonly` **MAX\_LENGTH**: `"max-length"` = `"max-length"`
+
+##### PRIMITIVE\_INVARIANT
+
+> `readonly` **PRIMITIVE\_INVARIANT**: `"primitive-invariant"` = `"primitive-invariant"`
+
+##### SLICE\_INVARIANT
+
+> `readonly` **SLICE\_INVARIANT**: `"slice-invariant"` = `"slice-invariant"`
+
+##### SLICE\_ORDER
+
+> `readonly` **SLICE\_ORDER**: `"slice-order"` = `"slice-order"`
+
+##### TARGET\_PROFILE
+
+> `readonly` **TARGET\_PROFILE**: `"target-profile"` = `"target-profile"`
+
+##### TYPE\_PROFILE
+
+> `readonly` **TYPE\_PROFILE**: `"type-profile"` = `"type-profile"`
+
+##### UNREAD
+
+> `readonly` **UNREAD**: `"unread"` = `"unread"`
+
+##### VALUE\_RANGE
+
+> `readonly` **VALUE\_RANGE**: `"value-range"` = `"value-range"`
+
+***
+
 ### REFUTED
 
 > `const` **REFUTED**: `"refuted"` = `"refuted"`
@@ -5758,6 +5887,15 @@ a clean document. Value-free, the position the inner array occupied, never its c
 
 Layer 3, a primitive value does not match its datatype's lexical form.
 
+##### PROFILE\_CONSTRAINT\_UNCHECKED
+
+> `readonly` **PROFILE\_CONSTRAINT\_UNCHECKED**: `"PROFILE_CONSTRAINT_UNCHECKED"` = `"PROFILE_CONSTRAINT_UNCHECKED"`
+
+Profile, the profile places a constraint on a present element that this library does not
+check, so the element is reported **not checked, never silently passed**. Emitted as
+`information` at the element (or the occurrence), and the finding's `uncheckedConstraint` names
+the kind of constraint, one of [PROFILE\_UNCHECKED\_CONSTRAINTS](#profile_unchecked_constraints).
+
 ##### PROFILE\_FIXED\_MISMATCH
 
 > `readonly` **PROFILE\_FIXED\_MISMATCH**: `"PROFILE_FIXED_MISMATCH"` = `"PROFILE_FIXED_MISMATCH"`
@@ -5767,6 +5905,27 @@ A `value` `error`: `fixed[x]` is an equality constraint (the element SHALL match
 exactly, including every nested property). Compared structurally and precision-exactly (decimals
 via ../model/decimal.js), never by echoing the value.
 
+##### PROFILE\_MAX\_LENGTH
+
+> `readonly` **PROFILE\_MAX\_LENGTH**: `"PROFILE_MAX_LENGTH"` = `"PROFILE_MAX_LENGTH"`
+
+Profile, a string value is longer than the profile's `maxLength` for the element. A `value`
+`error`. Value-free, never the value or its length.
+
+##### PROFILE\_MAX\_VALUE
+
+> `readonly` **PROFILE\_MAX\_VALUE**: `"PROFILE_MAX_VALUE"` = `"PROFILE_MAX_VALUE"`
+
+Profile, a number is above the profile's `maxValue[x]` for the element. A `value` `error`.
+Compared exactly, as decimals, never through a floating-point number.
+
+##### PROFILE\_MIN\_VALUE
+
+> `readonly` **PROFILE\_MIN\_VALUE**: `"PROFILE_MIN_VALUE"` = `"PROFILE_MIN_VALUE"`
+
+Profile, a number is below the profile's `minValue[x]` for the element. A `value` `error`.
+Compared exactly, as decimals, never through a floating-point number.
+
 ##### PROFILE\_PATTERN\_MISMATCH
 
 > `readonly` **PROFILE\_PATTERN\_MISMATCH**: `"PROFILE_PATTERN_MISMATCH"` = `"PROFILE_PATTERN_MISMATCH"`
@@ -5774,6 +5933,15 @@ via ../model/decimal.js), never by echoing the value.
 Profile, an element does not match the profile's `pattern[x]`. A `value` `error`:
 `pattern[x]` is a **subset** constraint (the element SHALL contain *at least* the pattern's
 properties and values, but may carry more), the weaker sibling of `fixed[x]`. Value-free.
+
+##### PROFILE\_REFERENCE\_TARGET\_MISMATCH
+
+> `readonly` **PROFILE\_REFERENCE\_TARGET\_MISMATCH**: `"PROFILE_REFERENCE_TARGET_MISMATCH"` = `"PROFILE_REFERENCE_TARGET_MISMATCH"`
+
+Profile, a `Reference` names a resource of a type none of the element's `targetProfile`s
+allows. The type is read from the target when it resolves in the resource's `contained` set or,
+for a Bundle, its entries, and otherwise from the reference's own `Type/id` form. A `structure`
+`error`. Value-free, the location of the reference, never the reference.
 
 ##### PROFILE\_SLICE\_NO\_SLICING
 
@@ -5804,6 +5972,14 @@ matched none of the profile's defined slices. A `structure` `error`: `closed` sl
 content outside the named slices. (Under `open` slicing an unmatched element is allowed and draws
 nothing; under `openAtEnd` it is allowed only in the trailing position, this library flags a
 closed-slicing miss and leaves the ordering nuance unenforced.)
+
+##### PROFILE\_TYPE\_MISMATCH
+
+> `readonly` **PROFILE\_TYPE\_MISMATCH**: `"PROFILE_TYPE_MISMATCH"` = `"PROFILE_TYPE_MISMATCH"`
+
+Profile, an occurrence of a `choice[x]` element is of a type the profile does not allow there
+(`valueString` where the profile narrows `value[x]` to `Quantity`). A `structure` `error`.
+Decided from the occurrence's own name, never its value.
 
 ##### PROFILE\_VERSION\_MISMATCH
 
@@ -10440,7 +10616,7 @@ validateUcumShape("[lb_av"); // "invalid", unbalanced bracket
 
 ### validationIssue()
 
-> **validationIssue**(`code`, `severity`, `expression`, `constraint?`, `codeSystemVersion?`, `sliceReason?`): [`ValidationIssue`](#validationissue)
+> **validationIssue**(`code`, `severity`, `expression`, `constraint?`, `codeSystemVersion?`, `sliceReason?`, `uncheckedConstraint?`): [`ValidationIssue`](#validationissue)
 
 Construct a value-free [ValidationIssue](#validationissue). The `IssueType` is fixed by the code; only the
 `severity` is caller-chosen (it varies with lenient vs strict mode for some codes).
@@ -10485,6 +10661,13 @@ The code-system release record, for a finding a terminology service
 
 Why slice membership was not decided, for a `PROFILE_SLICE_UNCHECKED`
   finding only.
+
+##### uncheckedConstraint?
+
+[`ProfileUncheckedConstraint`](#profileuncheckedconstraint)
+
+Which kind of profile constraint was not checked, for a
+  `PROFILE_CONSTRAINT_UNCHECKED` finding only.
 
 #### Returns
 

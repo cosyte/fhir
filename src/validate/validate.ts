@@ -422,7 +422,13 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   // `meta.profile` version pins against the supplied set. No profile content is bundled, a caller
   // supplies US Core (or vendor) profiles, exactly as the terminology layer takes a service.
   if (options.profiles !== undefined && options.profiles.length > 0) {
-    const profileOptions = { profiles: options.profiles, resolve: options.resolveBase };
+    // The schema the structure layer checked the resource with: a profile binding to the very value
+    // set it enumerates was checked there, and is not reported unchecked by the profile layer.
+    const profileOptions = {
+      profiles: options.profiles,
+      resolve: options.resolveBase,
+      schema: modeled,
+    };
     for (const profile of options.profiles) {
       if (profile.type !== rt) continue;
       for (const issue of collectProfileIssues(resource, profile, profileOptions)) {

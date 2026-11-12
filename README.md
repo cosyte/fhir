@@ -52,7 +52,9 @@ answer the document does not hold (a reference that leaves the resource and its 
 profile you did not supply), and the R5 `position` discriminator (each reported
 `PROFILE_SLICE_UNCHECKED` with its reason, and the slices' own constraints are then not checked),
 FHIRPath outside the supported subset (reported
-`INVARIANT_UNCHECKED`, never passed), bundled terminology or US Core content, validation of R4B
+`INVARIANT_UNCHECKED`, never passed), a profile's type profiles, constraining target profiles,
+non-numeric value ranges, bindings beyond the structural schema's and what the profile model does
+not read (each reported `PROFILE_CONSTRAINT_UNCHECKED` with its kind, never passed), bundled terminology or US Core content, validation of R4B
 (`4.3.0`), R5 and DSTU2 content against its own version's definitions (such a document is read, since
 the model is schema-free, and validated as R4), spec-clean JSON written from a model read out of XML,
 unit conversion, and executing a transaction Bundle. The current limits page on

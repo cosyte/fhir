@@ -31,6 +31,7 @@ import { CorpusError } from "../scripts/differential/corpus.mjs";
 import { runComparison } from "../scripts/differential/run.mjs";
 import type { OwnAnswer, OwnOptions } from "../scripts/differential/run.mjs";
 import {
+  formatConstraintUnchecked,
   formatReachReport,
   formatSliceUnchecked,
   loadNewlyEvaluatedRows,
@@ -1077,6 +1078,37 @@ describe("US Core pass: the count of undecided slicings", () => {
   it("says so when there is none", () => {
     expect(formatSliceUnchecked([doc({ ok: true, issues: [] })])).toEqual([
       "US Core pass: 0 PROFILE_SLICE_UNCHECKED finding(s) in 0 of 1 validated document(s).",
+    ]);
+  });
+});
+
+describe("US Core pass: the count of unchecked profile constraints", () => {
+  const doc = (ours: UsCoreDocument["ours"]): UsCoreDocument =>
+    ({ id: "x", version: "9.0.0", text: "", ours }) as unknown as UsCoreDocument;
+  const unchecked = (uncheckedConstraint?: string) => ({
+    code: "PROFILE_CONSTRAINT_UNCHECKED",
+    location: "Observation.value[x]",
+    severity: "information",
+    ...(uncheckedConstraint === undefined ? {} : { uncheckedConstraint }),
+  });
+
+  it("counts the findings, the documents carrying one, and each kind", () => {
+    const lines = formatConstraintUnchecked([
+      doc({ ok: true, issues: [unchecked("binding"), unchecked("binding"), unchecked()] }),
+      doc({ ok: true, issues: [unchecked("type-profile")] }),
+      doc({ ok: true, issues: [{ code: "CARDINALITY_MIN", location: "X", severity: "error" }] }),
+      doc({ ok: true, issues: [unchecked("binding")], parseRefused: true }),
+      doc({ ok: false, reason: "not validated" }),
+    ]);
+    expect(lines).toEqual([
+      "US Core pass: 4 PROFILE_CONSTRAINT_UNCHECKED finding(s) in 2 of 3 validated document(s) " +
+        "(by kind: binding 2, type-profile 1, unstated 1).",
+    ]);
+  });
+
+  it("says so when there is none", () => {
+    expect(formatConstraintUnchecked([doc({ ok: true, issues: [] })])).toEqual([
+      "US Core pass: 0 PROFILE_CONSTRAINT_UNCHECKED finding(s) in 0 of 1 validated document(s).",
     ]);
   });
 });

@@ -36,9 +36,16 @@
  * discriminator is not decided yet: a slicing that uses one is reported `PROFILE_SLICE_UNCHECKED`
  * with the `profile-discriminator` reason.
  *
+ * **Types, targets, lengths and ranges.** Each element's narrowed `choice[x]` types, `Reference`
+ * `targetProfile`s, `maxLength` and numeric `minValue[x]` / `maxValue[x]` are checked on its
+ * occurrences, a slice's on its members, and any constraint on a present element that no layer
+ * checks is reported `PROFILE_CONSTRAINT_UNCHECKED` with its kind ({@link ./element-constraints.js}),
+ * so a clean result never stands over a constraint nothing looked at.
+ *
  * Every finding is **value-free**, a code, a severity, and a FHIRPath location, never a value.
- * **Deferred:** binding enforcement from profile bindings (the terminology layer already covers
- * bindings), and invariant `constraint`s (the invariant layer, {@link ./invariants.js}).
+ * **Deferred:** binding enforcement from profile bindings (a binding the structure layer does not
+ * enumerate is reported not checked), and invariant `constraint`s (the invariant layer,
+ * {@link ./invariants.js}).
  *
  * @packageDocumentation
  */
@@ -54,9 +61,10 @@ import {
 } from "../model/index.js";
 import { buildBundleIndex, containedIndex, resolveReference } from "../bundle/references.js";
 import { primitiveString } from "../safety/codes.js";
-import { UNBOUNDED } from "../validate/schema.js";
+import { UNBOUNDED, type ResourceSchema } from "../validate/schema.js";
 import { ISSUE_SEVERITIES, validationIssue, type ValidationIssue } from "../validate/issues.js";
 import { matchesFixed, matchesPattern } from "./fixed-pattern.js";
+import { collectElementConstraintIssues, type ElementCheckContext } from "./element-constraints.js";
 import { SliceScope } from "./scope.js";
 import { isSliceOf, matchSlices, resolveSlices, type SliceEnvironment } from "./slicing.js";
 import { snapshotElements, type BaseResolver } from "./snapshot.js";
@@ -77,6 +85,12 @@ export interface ProfileOptions {
    * the slicing unchecked.
    */
   readonly profiles?: readonly StructureDefinition[] | undefined;
+  /**
+   * The schema the structure layer checked the resource with, as `validateResource` passes it. A
+   * profile's `required` or `extensible` binding to the very R4 value set this schema enumerates
+   * for the element was checked there; without it every such binding is reported not checked.
+   */
+  readonly schema?: ResourceSchema | undefined;
 }
 
 /**
@@ -92,7 +106,7 @@ export interface ProfileOptions {
 export function sliceEnvironment(
   resource: FhirComplex,
   options: ProfileOptions = {},
-): SliceEnvironment {
+): Required<SliceEnvironment> {
   const contained = containedIndex(resource);
   const closure =
     resourceType(resource) === "Bundle"
@@ -165,6 +179,12 @@ export function collectProfileIssues(
   const environment = sliceEnvironment(resource, options);
   const scope = new SliceScope(resource, root, snapshot, environment);
   const issues: ValidationIssue[] = [];
+  const context: ProfileContext = {
+    resourceType: rt,
+    snapshot,
+    environment,
+    schema: options.schema,
+  };
 
   for (const el of snapshot) {
     if (el.path === profile.type) continue; // the root element, nothing to check on the resource itself.
@@ -204,6 +224,14 @@ export function collectProfileIssues(
       // fixed[x] / pattern[x] on each present occurrence within this parent.
       const fixed = el.fixed;
       const pattern = el.pattern;
+      // the element's other constraints: types, targets, length, range, and what is not checked.
+      const occurrences = group.children.map((node, i) => ({
+        node,
+        type: group.types[i],
+        path: count > 1 ? `${here}[${String(i)}]` : here,
+      }));
+      collectElementConstraintIssues(el, occurrences, here, context, issues);
+
       group.children.forEach((node, i) => {
         const loc = count > 1 ? `${here}[${String(i)}]` : here;
         if (fixed !== undefined && !matchesFixed(node, fixed.value)) {
@@ -216,7 +244,7 @@ export function collectProfileIssues(
 
       // slicing, evaluated within this parent occurrence.
       if (el.slicing !== undefined) {
-        collectSlicingIssues(group.children, group.types, here, snapshot, el, environment, issues);
+        collectSlicingIssues(group.children, group.types, here, el, context, issues);
       }
     }
   }
@@ -259,16 +287,21 @@ function collectNoSlicingIssues(
   }
 }
 
+/** What the profile layer checks an element in: the element checks' context and the snapshot. */
+interface ProfileContext extends ElementCheckContext {
+  readonly snapshot: readonly ElementDefinition[];
+}
+
 /** Emit the slice findings for one sliced element's occurrences within a single parent context. */
 function collectSlicingIssues(
   occ: readonly FhirNode[],
   occurrenceTypes: readonly (string | undefined)[],
   slicedPath: string,
-  snapshot: readonly ElementDefinition[],
   slicedElement: ElementDefinition,
-  environment: SliceEnvironment,
+  context: ProfileContext,
   issues: ValidationIssue[],
 ): void {
+  const { snapshot, environment } = context;
   const slices = resolveSlices(snapshot, slicedElement);
   /* v8 ignore next -- the `?? []` is unreachable: called only for an element that declares slicing */
   const discriminators = slicedElement.slicing?.discriminator ?? [];
@@ -319,7 +352,21 @@ function collectSlicingIssues(
     if (slice.max !== undefined && slice.max !== UNBOUNDED && count > slice.max) {
       issues.push(validationIssue("CARDINALITY_MAX", ISSUE_SEVERITIES.ERROR, slicePath));
     }
+    // The slice's own types, targets, length, range, and what is not checked, on its members.
+    /* v8 ignore next -- the `?? slicedElement` is unreachable: `resolveSlices` reads every slice from this snapshot */
+    const own = sliceElement ?? slicedElement;
+    const members = occ.flatMap((node, i) =>
+      result.assignments[i] === slice.sliceName
+        ? [{ node, type: occurrenceTypes[i], path: located(slicedPath, i, occ.length) }]
+        : [],
+    );
+    collectElementConstraintIssues(own, members, slicePath, context, issues, slicedElement);
   }
+}
+
+/** The location of the `i`th of `count` occurrences at `path` (indexed when repeated). */
+function located(path: string, i: number, count: number): string {
+  return count > 1 ? `${path}[${String(i)}]` : path;
 }
 
 /**

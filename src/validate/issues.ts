@@ -341,6 +341,41 @@ export const VALIDATION_CODES = {
    */
   PROFILE_PATTERN_MISMATCH: "PROFILE_PATTERN_MISMATCH",
   /**
+   * Profile, an occurrence of a `choice[x]` element is of a type the profile does not allow there
+   * (`valueString` where the profile narrows `value[x]` to `Quantity`). A `structure` `error`.
+   * Decided from the occurrence's own name, never its value.
+   */
+  PROFILE_TYPE_MISMATCH: "PROFILE_TYPE_MISMATCH",
+  /**
+   * Profile, a `Reference` names a resource of a type none of the element's `targetProfile`s
+   * allows. The type is read from the target when it resolves in the resource's `contained` set or,
+   * for a Bundle, its entries, and otherwise from the reference's own `Type/id` form. A `structure`
+   * `error`. Value-free, the location of the reference, never the reference.
+   */
+  PROFILE_REFERENCE_TARGET_MISMATCH: "PROFILE_REFERENCE_TARGET_MISMATCH",
+  /**
+   * Profile, a string value is longer than the profile's `maxLength` for the element. A `value`
+   * `error`. Value-free, never the value or its length.
+   */
+  PROFILE_MAX_LENGTH: "PROFILE_MAX_LENGTH",
+  /**
+   * Profile, a number is below the profile's `minValue[x]` for the element. A `value` `error`.
+   * Compared exactly, as decimals, never through a floating-point number.
+   */
+  PROFILE_MIN_VALUE: "PROFILE_MIN_VALUE",
+  /**
+   * Profile, a number is above the profile's `maxValue[x]` for the element. A `value` `error`.
+   * Compared exactly, as decimals, never through a floating-point number.
+   */
+  PROFILE_MAX_VALUE: "PROFILE_MAX_VALUE",
+  /**
+   * Profile, the profile places a constraint on a present element that this library does not
+   * check, so the element is reported **not checked, never silently passed**. Emitted as
+   * `information` at the element (or the occurrence), and the finding's `uncheckedConstraint` names
+   * the kind of constraint, one of {@link PROFILE_UNCHECKED_CONSTRAINTS}.
+   */
+  PROFILE_CONSTRAINT_UNCHECKED: "PROFILE_CONSTRAINT_UNCHECKED",
+  /**
    * Bundle, a `Reference` inside a Bundle entry (or a `#fragment` inside a resource's
    * `contained`) that could not be resolved within the resolution closure: a fragment whose target
    * contained resource is absent, or a relative `Type/id` reference naming no entry in the Bundle. A
@@ -528,6 +563,47 @@ export type SliceUncheckedReason =
   (typeof SLICE_UNCHECKED_REASONS)[keyof typeof SLICE_UNCHECKED_REASONS];
 
 /**
+ * Which kind of profile constraint a `PROFILE_CONSTRAINT_UNCHECKED` finding says was not checked.
+ * Each is a fixed name for a kind of constraint, never instance content, so it rides on the finding
+ * as {@link ValidationIssue.uncheckedConstraint}.
+ *
+ * - `type-profile`: a `type.profile` the occurrence must conform to (a datatype or extension
+ *   profile, a profile on a contained resource). The R4 `SimpleQuantity` profile is checked
+ *   (`sqty-1`), so it is never reported this way.
+ * - `target-profile`: a `targetProfile` on a `Reference` whose target's type could not be read (no
+ *   `Type/id` form and no target in the closure), or whose target is of the type a constraining
+ *   profile names (its conformance to that profile is not checked), or names a profile whose type
+ *   is unknown; and any `targetProfile` on a `canonical`.
+ * - `max-length`: a `maxLength` on an occurrence that holds no string (a complex value, a number).
+ * - `value-range`: a `minValue[x]` or `maxValue[x]` that is not a number (a date, a time, a
+ *   `Quantity`), or one whose type differs from the occurrence's.
+ * - `binding`: a `required` or `extensible` binding other than the R4 value set the structure layer
+ *   enumerates for that very element.
+ * - `slice-order`: an `ordered` slicing, or `openAtEnd` rules, over more than one occurrence.
+ * - `slice-invariant`: a slice's own invariant that the element it slices does not carry too.
+ * - `primitive-invariant`: an invariant on an element present as a primitive value, other than
+ *   `ele-1`, which the base-constraint layer decides.
+ * - `unread`: a member or extension of the element definition, its binding or its types that this
+ *   library does not read and that is not documentation (`contentReference`, `type.aggregation`,
+ *   an extension it does not know).
+ */
+export const PROFILE_UNCHECKED_CONSTRAINTS = {
+  TYPE_PROFILE: "type-profile",
+  TARGET_PROFILE: "target-profile",
+  MAX_LENGTH: "max-length",
+  VALUE_RANGE: "value-range",
+  BINDING: "binding",
+  SLICE_ORDER: "slice-order",
+  SLICE_INVARIANT: "slice-invariant",
+  PRIMITIVE_INVARIANT: "primitive-invariant",
+  UNREAD: "unread",
+} as const;
+
+/** One of the {@link PROFILE_UNCHECKED_CONSTRAINTS}. */
+export type ProfileUncheckedConstraint =
+  (typeof PROFILE_UNCHECKED_CONSTRAINTS)[keyof typeof PROFILE_UNCHECKED_CONSTRAINTS];
+
+/**
  * A single value-free validation finding.
  *
  * `expression` is a FHIRPath location into the document (e.g. `Patient.gender`,
@@ -575,6 +651,12 @@ export interface ValidationIssue {
    * instance value. `undefined` on every other finding.
    */
   readonly sliceReason?: SliceUncheckedReason;
+  /**
+   * Which kind of profile constraint was not checked, on a `PROFILE_CONSTRAINT_UNCHECKED` finding
+   * and only there ({@link PROFILE_UNCHECKED_CONSTRAINTS}). A fixed name, never an instance value.
+   * It reaches the `OperationOutcome` as `issue.details.text`. `undefined` on every other finding.
+   */
+  readonly uncheckedConstraint?: ProfileUncheckedConstraint;
 }
 
 /** The fixed R4 `IssueType` each validation code maps to. */
@@ -613,6 +695,12 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   PROFILE_VERSION_MISMATCH: ISSUE_TYPES.BUSINESS_RULE,
   PROFILE_FIXED_MISMATCH: ISSUE_TYPES.VALUE,
   PROFILE_PATTERN_MISMATCH: ISSUE_TYPES.VALUE,
+  PROFILE_TYPE_MISMATCH: ISSUE_TYPES.STRUCTURE,
+  PROFILE_REFERENCE_TARGET_MISMATCH: ISSUE_TYPES.STRUCTURE,
+  PROFILE_MAX_LENGTH: ISSUE_TYPES.VALUE,
+  PROFILE_MIN_VALUE: ISSUE_TYPES.VALUE,
+  PROFILE_MAX_VALUE: ISSUE_TYPES.VALUE,
+  PROFILE_CONSTRAINT_UNCHECKED: ISSUE_TYPES.INFORMATIONAL,
   REFERENCE_UNRESOLVED: ISSUE_TYPES.NOT_FOUND,
   CONTAINED_CYCLE: ISSUE_TYPES.STRUCTURE,
   FULLURL_ID_MISMATCH: ISSUE_TYPES.BUSINESS_RULE,
@@ -708,6 +796,16 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   PROFILE_FIXED_MISMATCH:
     "Element value does not exactly match the value the profile fixes for it.",
   PROFILE_PATTERN_MISMATCH: "Element does not match the pattern the profile requires for it.",
+  // Stryker disable StringLiteral: a module-level table, built once when the module loads, which the mutation runner does not reload per mutant; test/validation-codes.test.ts reads it
+  PROFILE_TYPE_MISMATCH: "Element is of a type the profile does not allow for it.",
+  PROFILE_REFERENCE_TARGET_MISMATCH:
+    "Reference names a resource of a type none of the profile's target profiles allows.",
+  PROFILE_MAX_LENGTH: "Element value is longer than the maximum length the profile sets for it.",
+  PROFILE_MIN_VALUE: "Element value is below the minimum value the profile sets for it.",
+  PROFILE_MAX_VALUE: "Element value is above the maximum value the profile sets for it.",
+  PROFILE_CONSTRAINT_UNCHECKED:
+    "Profile constraint on this element was not checked; conformance to it is not asserted.",
+  // Stryker restore StringLiteral
   REFERENCE_UNRESOLVED:
     "Reference could not be resolved within the supplied closure; it is preserved and flagged, " +
     "never dropped (the target may live outside this Bundle).",
@@ -768,6 +866,8 @@ export function diagnosticFor(code: ValidationCode): string {
  *   `{ declared: false }` is the distinct claim that a service answered and named no release.
  * @param sliceReason - Why slice membership was not decided, for a `PROFILE_SLICE_UNCHECKED`
  *   finding only.
+ * @param uncheckedConstraint - Which kind of profile constraint was not checked, for a
+ *   `PROFILE_CONSTRAINT_UNCHECKED` finding only.
  * @example
  * ```ts
  * import { validationIssue } from "@cosyte/fhir";
@@ -781,10 +881,12 @@ export function validationIssue(
   constraint?: string,
   codeSystemVersion?: CodeSystemVersionRecord,
   sliceReason?: SliceUncheckedReason,
+  uncheckedConstraint?: ProfileUncheckedConstraint,
 ): ValidationIssue {
   const issue: ValidationIssue = { code, severity, type: ISSUE_TYPE_OF[code], expression };
   const withConstraint = constraint === undefined ? issue : { ...issue, constraint };
   const withVersion =
     codeSystemVersion === undefined ? withConstraint : { ...withConstraint, codeSystemVersion };
-  return sliceReason === undefined ? withVersion : { ...withVersion, sliceReason };
+  const withReason = sliceReason === undefined ? withVersion : { ...withVersion, sliceReason };
+  return uncheckedConstraint === undefined ? withReason : { ...withReason, uncheckedConstraint };
 }

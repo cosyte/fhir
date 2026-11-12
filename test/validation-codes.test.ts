@@ -6,6 +6,7 @@ import {
   CODE_SYSTEM_VERSION_RECORD_SYSTEM,
   ISSUE_SEVERITIES,
   ISSUE_TYPES,
+  PROFILE_UNCHECKED_CONSTRAINTS,
   SLICE_UNCHECKED_REASONS,
   VALIDATION_CODES,
   validationIssue,
@@ -79,6 +80,12 @@ describe("validation code / severity / issue-type registries (stable public cont
       PROFILE_VERSION_MISMATCH: "PROFILE_VERSION_MISMATCH",
       PROFILE_FIXED_MISMATCH: "PROFILE_FIXED_MISMATCH",
       PROFILE_PATTERN_MISMATCH: "PROFILE_PATTERN_MISMATCH",
+      PROFILE_TYPE_MISMATCH: "PROFILE_TYPE_MISMATCH",
+      PROFILE_REFERENCE_TARGET_MISMATCH: "PROFILE_REFERENCE_TARGET_MISMATCH",
+      PROFILE_MAX_LENGTH: "PROFILE_MAX_LENGTH",
+      PROFILE_MIN_VALUE: "PROFILE_MIN_VALUE",
+      PROFILE_MAX_VALUE: "PROFILE_MAX_VALUE",
+      PROFILE_CONSTRAINT_UNCHECKED: "PROFILE_CONSTRAINT_UNCHECKED",
       REFERENCE_UNRESOLVED: "REFERENCE_UNRESOLVED",
       CONTAINED_CYCLE: "CONTAINED_CYCLE",
       FULLURL_ID_MISMATCH: "FULLURL_ID_MISMATCH",
@@ -137,6 +144,16 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(validationIssue("PROFILE_VERSION_MISMATCH", "warning", "X").type).toBe("business-rule");
     expect(validationIssue("PROFILE_FIXED_MISMATCH", "error", "X").type).toBe("value");
     expect(validationIssue("PROFILE_PATTERN_MISMATCH", "error", "X").type).toBe("value");
+    expect(validationIssue("PROFILE_TYPE_MISMATCH", "error", "X").type).toBe("structure");
+    expect(validationIssue("PROFILE_REFERENCE_TARGET_MISMATCH", "error", "X").type).toBe(
+      "structure",
+    );
+    expect(validationIssue("PROFILE_MAX_LENGTH", "error", "X").type).toBe("value");
+    expect(validationIssue("PROFILE_MIN_VALUE", "error", "X").type).toBe("value");
+    expect(validationIssue("PROFILE_MAX_VALUE", "error", "X").type).toBe("value");
+    expect(validationIssue("PROFILE_CONSTRAINT_UNCHECKED", "information", "X").type).toBe(
+      "informational",
+    );
     expect(validationIssue("REFERENCE_UNRESOLVED", "warning", "X").type).toBe("not-found");
     expect(validationIssue("CONTAINED_CYCLE", "error", "X").type).toBe("structure");
     expect(validationIssue("CONTAINED_ID_DUPLICATE", "error", "X").type).toBe("structure");
@@ -178,6 +195,47 @@ describe("validation code / severity / issue-type registries (stable public cont
         "no-discriminator",
       ).sliceReason,
     ).toBe("no-discriminator");
+  });
+
+  it("pins the kinds of profile constraint reported unchecked", () => {
+    expect(PROFILE_UNCHECKED_CONSTRAINTS).toEqual({
+      TYPE_PROFILE: "type-profile",
+      TARGET_PROFILE: "target-profile",
+      MAX_LENGTH: "max-length",
+      VALUE_RANGE: "value-range",
+      BINDING: "binding",
+      SLICE_ORDER: "slice-order",
+      SLICE_INVARIANT: "slice-invariant",
+      PRIMITIVE_INVARIANT: "primitive-invariant",
+      UNREAD: "unread",
+    });
+    const bare = validationIssue("PROFILE_CONSTRAINT_UNCHECKED", "information", "X");
+    expect(bare).toEqual({
+      code: "PROFILE_CONSTRAINT_UNCHECKED",
+      severity: "information",
+      type: "informational",
+      expression: "X",
+    });
+    const kinded = validationIssue(
+      "PROFILE_CONSTRAINT_UNCHECKED",
+      "information",
+      "X",
+      undefined,
+      undefined,
+      undefined,
+      "binding",
+    );
+    expect(kinded).toEqual({ ...bare, uncheckedConstraint: "binding" });
+    expect(
+      validationIssue(
+        "PROFILE_SLICE_UNCHECKED",
+        "information",
+        "X",
+        undefined,
+        undefined,
+        "no-discriminator",
+      ),
+    ).not.toHaveProperty("uncheckedConstraint");
   });
 
   it("pins the code-system release record vocabulary and its canonical system", () => {
