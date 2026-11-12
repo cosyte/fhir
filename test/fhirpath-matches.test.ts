@@ -164,9 +164,10 @@ describe("matches() compiles the pattern the expression supplies, as FHIRPath N1
   const UCUM = "http://unitsofmeasure.org";
 
   it("compiles the pattern exactly as written: not escaped, not anchored", () => {
-    const compiled = compileMatchesPattern(UCUM);
-    expect(compiled.source).toBe(UCUM.replaceAll("/", "\\/"));
+    const compiled = compileMatchesPattern("a.b");
+    expect(compiled.source).toBe("a.b");
     expect(compiled.flags).toBe("su");
+    expect(compiled.test("xxaXbxx")).toBe(true);
   });
 
   it("takes an environment variable's value as the pattern, so a URL with unescaped dots matches more than the URL", () => {
