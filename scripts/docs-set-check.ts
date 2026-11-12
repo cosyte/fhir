@@ -1607,7 +1607,8 @@ function checkSamples(
 function compileSamples(samples: readonly Sample[], files: readonly string[]): Finding[] {
   const program = ts.createProgram([...files], sampleCompilerOptions());
   const findings: Finding[] = [];
-  const byPath = new Map(files.map((path, index) => [path, samples[index]]));
+  // Keyed by forward slashes, as the compiler writes every file name on every system.
+  const byPath = new Map(files.map((path, index) => [path.split(sep).join("/"), samples[index]]));
   for (const diagnostic of [
     ...program.getSemanticDiagnostics(),
     ...program.getSyntacticDiagnostics(),
