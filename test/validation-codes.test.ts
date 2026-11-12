@@ -82,6 +82,8 @@ describe("validation code / severity / issue-type registries (stable public cont
       REFERENCE_UNRESOLVED: "REFERENCE_UNRESOLVED",
       CONTAINED_CYCLE: "CONTAINED_CYCLE",
       FULLURL_ID_MISMATCH: "FULLURL_ID_MISMATCH",
+      CONTAINED_ID_DUPLICATE: "CONTAINED_ID_DUPLICATE",
+      FULLURL_DUPLICATE: "FULLURL_DUPLICATE",
       NARRATIVE_UNREADABLE: "NARRATIVE_UNREADABLE",
       NARRATIVE_ROOT_INVALID: "NARRATIVE_ROOT_INVALID",
       NARRATIVE_ELEMENT_ILLEGAL: "NARRATIVE_ELEMENT_ILLEGAL",
@@ -137,6 +139,8 @@ describe("validation code / severity / issue-type registries (stable public cont
     expect(validationIssue("PROFILE_PATTERN_MISMATCH", "error", "X").type).toBe("value");
     expect(validationIssue("REFERENCE_UNRESOLVED", "warning", "X").type).toBe("not-found");
     expect(validationIssue("CONTAINED_CYCLE", "error", "X").type).toBe("structure");
+    expect(validationIssue("CONTAINED_ID_DUPLICATE", "error", "X").type).toBe("structure");
+    expect(validationIssue("FULLURL_DUPLICATE", "error", "X").type).toBe("invariant");
     expect(validationIssue("NESTED_ARRAY", "error", "X.y[0]").type).toBe("structure");
     expect(validationIssue("FULLURL_ID_MISMATCH", "error", "X").type).toBe("business-rule");
     // A declared absence beside a value is a structural contradiction; a reason outside the

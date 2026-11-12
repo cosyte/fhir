@@ -95,10 +95,19 @@ you treat any non-error finding as a pass, you will misread them.
     discriminator is decided from a choice element's suffix, `valueQuantity`, or a resource's
     `resourceType`), or a slice naming an abstract type such as `Resource`;
   - `target-unresolved`: a `resolve()` whose reference names nothing in the resource's `contained`
-    set or, when the resource is a Bundle, its entries; a reference to a server is never fetched;
+    set or, when the resource is a Bundle, its entries; a reference to a server is never fetched. A
+    reference to a contained id, or a Bundle `fullUrl`, that more than one resource carries names
+    none of them, never the first, so it reads here too, and the repeat itself is reported:
+    `CONTAINED_ID_DUPLICATE`, or `FULLURL_DUPLICATE` where R4's `bdl-7` forbids it;
   - `profile-unavailable`: after `resolve()`, a slice's `targetProfile` that is neither a base R4
     type, nor in the `profiles` you supplied, nor returned by your `resolveBase`, or whose supplied
     versions constrain different types, so the type it asks for is unknown.
+
+  An occurrence is assigned to the earliest slice in the profile's snapshot order whose
+  discriminators it matches, whatever their kind: `value`, `pattern`, `exists` or `type`. Once it
+  matches one, later slices are not tried for it, so an occurrence that would also match a later
+  slice is checked against the earlier one's constraints only, and counts toward its cardinality
+  alone.
 
   Two warts to know about. The finding's diagnostic text still says the slicing used "an
   unsupported discriminator" whatever the reason; read `sliceReason` for the reason. And a

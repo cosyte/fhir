@@ -368,6 +368,25 @@ export const VALIDATION_CODES = {
    */
   FULLURL_ID_MISMATCH: "FULLURL_ID_MISMATCH",
   /**
+   * References, two or more of a resource's `contained` resources carry the same `id`, so a
+   * `#id` reference names no one of them. An `error` (`structure`): a contained id is the only name a
+   * fragment reference has for its target, and nothing ranks the resources that share it. A
+   * reference to the id is read as unresolved, never as the first of them, so a check that depends
+   * on it is reported unchecked rather than passing. Reported at every repeat after the first, in
+   * the resource validated and in each Bundle entry's resource. Value-free, the location of the
+   * repeated `id`, never the id.
+   */
+  CONTAINED_ID_DUPLICATE: "CONTAINED_ID_DUPLICATE",
+  /**
+   * Bundle, two or more entries carry the same `fullUrl` and the same `meta.versionId` (or none),
+   * outside a `history` Bundle: R4's `bdl-7` ("FullUrl must be unique in a bundle, or else entries
+   * with the same fullUrl must have different meta.versionId (except in history bundles)"). An
+   * `error` (`invariant`). Whether reported or not, a reference to a `fullUrl` more than one entry
+   * carries names no one entry and is read as unresolved. Reported at every repeat after the first.
+   * Value-free, the location of the repeated `fullUrl`, never the URL.
+   */
+  FULLURL_DUPLICATE: "FULLURL_DUPLICATE",
+  /**
    * Narrative, `Narrative.div` could not be read as XHTML: it is not a string, not well-formed XML,
    * or it uses what the XML reader refuses (a DTD, an entity other than the five XML predefines, a
    * CDATA section, nesting past the depth bound). An `error` (`structure`); nothing else is checked
@@ -596,6 +615,8 @@ const ISSUE_TYPE_OF: Readonly<Record<ValidationCode, IssueType>> = {
   REFERENCE_UNRESOLVED: ISSUE_TYPES.NOT_FOUND,
   CONTAINED_CYCLE: ISSUE_TYPES.STRUCTURE,
   FULLURL_ID_MISMATCH: ISSUE_TYPES.BUSINESS_RULE,
+  CONTAINED_ID_DUPLICATE: ISSUE_TYPES.STRUCTURE,
+  FULLURL_DUPLICATE: ISSUE_TYPES.INVARIANT,
   NARRATIVE_UNREADABLE: ISSUE_TYPES.STRUCTURE,
   NARRATIVE_ROOT_INVALID: ISSUE_TYPES.STRUCTURE,
   NARRATIVE_ELEMENT_ILLEGAL: ISSUE_TYPES.STRUCTURE,
@@ -693,6 +714,12 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
     "was reported by the bounded cycle guard rather than followed into an unbounded loop.",
   FULLURL_ID_MISMATCH:
     "Bundle entry fullUrl is a RESTful URL whose id disagrees with the wrapped resource's id.",
+  CONTAINED_ID_DUPLICATE:
+    "Contained resource carries an id another contained resource of the same resource carries; a " +
+    "reference to that id names no one of them and is not resolved.",
+  FULLURL_DUPLICATE:
+    "Bundle entry carries a fullUrl another entry carries, with the same version; a reference to " +
+    "that fullUrl names no one entry and is not resolved.",
   NARRATIVE_UNREADABLE:
     "Narrative could not be read as XHTML: it is not well-formed, or it uses a DTD, an entity, a " +
     "CDATA section or a nesting depth the reader refuses. It is kept exactly as written.",

@@ -333,7 +333,8 @@ export { nodesEquivalent } from "./xml/equivalence.js";
 // independent, modeled, never executed), reference resolution (relative/absolute/logical/#fragment)
 // with a DoS-safe, bounded cycle guard, fullUrl↔id agreement, and a streaming NDJSON reader with
 // per-line error isolation and no whole-file load. Findings: REFERENCE_UNRESOLVED (warn, preserve),
-// CONTAINED_CYCLE (error), FULLURL_ID_MISMATCH (error).
+// CONTAINED_CYCLE (error), FULLURL_ID_MISMATCH (error), FULLURL_DUPLICATE (error),
+// CONTAINED_ID_DUPLICATE (error).
 export { BUNDLE_TYPES, entryProcessing, isAtomicBundle, readBundle } from "./bundle/types.js";
 export type { BundleEntry, BundleReadout, BundleType, EntryProcessing } from "./bundle/types.js";
 export {

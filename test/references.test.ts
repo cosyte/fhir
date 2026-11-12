@@ -161,7 +161,7 @@ describe("hasContainedCycle: the DoS-safe cycle guard", () => {
 });
 
 describe("reference indexing and the cycle guard at their edges", () => {
-  it("reads a single contained object as well as a contained array, first id winning", () => {
+  it("reads a single contained object as well as a contained array, a repeated id resolving to none", () => {
     const { resource } = parseResource(
       '{"resourceType":"Observation","id":"root",' +
         '"contained":{"resourceType":"Patient","id":"p1"},"subject":{"reference":"#p1"}}',
@@ -174,14 +174,14 @@ describe("reference indexing and the cycle guard at their edges", () => {
         '{"resourceType":"Patient","id":"dup","gender":"female"},' +
         '{"resourceType":"Group","id":"dup","type":"person","actual":true}]}',
     );
-    const res = resolveReference("#dup", { contained: containedIndex(twice) });
-    expect(res.status).toBe("resolved");
-    expect(res.status === "resolved" ? res.target.properties[0]?.value : undefined).toEqual(
-      expect.objectContaining({ value: "Patient" }),
-    );
+    // Two contained resources under one id: `#dup` names neither, never the first.
+    const index = containedIndex(twice);
+    expect(resolveReference("#dup", { contained: index }).status).toBe("unresolved");
+    expect(index.byId.size).toBe(0);
+    expect([...(index.repeatedIds ?? [])]).toEqual(["dup"]);
   });
 
-  it("skips an entry that is not an object, and keeps the first entry for a repeated Type/id", () => {
+  it("skips an entry that is not an object, and resolves a repeated Type/id to no entry", () => {
     const entry = (fullUrl: string, gender: string) =>
       parseResource(
         `{"resourceType":"Bundle","type":"collection","entry":[{"fullUrl":"${fullUrl}",` +
@@ -196,12 +196,13 @@ describe("reference indexing and the cycle guard at their edges", () => {
     ]);
     const index = buildBundleIndex(bundle);
     expect(index.byFullUrl.size).toBe(2);
-    expect(index.byTypeId.size).toBe(1);
-    const res = resolveReference("Patient/7", { bundle: index });
-    expect(res.status).toBe("resolved");
-    expect(res.status === "resolved" ? res.target : undefined).toBe(
-      index.byFullUrl.get("https://a.example/fhir/Patient/7"),
-    );
+    // Two entries claim Patient/7: the key names neither, never the first.
+    expect(index.byTypeId.size).toBe(0);
+    expect(resolveReference("Patient/7", { bundle: index }).status).toBe("unresolved");
+    expect(resolveReference("https://a.example/fhir/Patient/7", { bundle: index })).toEqual({
+      status: "resolved",
+      target: index.byFullUrl.get("https://a.example/fhir/Patient/7"),
+    });
   });
 
   it("walks a diamond without calling the shared target a cycle", () => {
@@ -216,7 +217,7 @@ describe("reference indexing and the cycle guard at their edges", () => {
     expect(hasContainedCycle(resource)).toBe(false);
   });
 
-  it("reads a repeated contained id once in the cycle graph, the first one, as #a resolves", () => {
+  it("reads a repeated contained id once in the cycle graph, the first one", () => {
     const { resource } = parseResource(
       '{"resourceType":"Observation","id":"root","contained":[' +
         '{"resourceType":"Observation","id":"a"},' +

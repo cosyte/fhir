@@ -1,10 +1,11 @@
 /**
  * The Bundle-integrity validation layer, the findings a `Bundle` earns beyond
- * per-resource validation: unresolved references, `contained` reference cycles, and `fullUrl`↔`id`
- * disagreement. Keys off the resource being a `Bundle`, exactly as the safety / quantity / terminology
- * layers key off the resource type, and is wired into {@link ./validate.js validateResource}.
+ * per-resource validation: unresolved references, `contained` reference cycles, `fullUrl`↔`id`
+ * disagreement, and a `fullUrl` or a contained id that repeats. Keys off the resource being a
+ * `Bundle`, exactly as the safety / quantity / terminology layers key off the resource type, and is
+ * wired into {@link ./validate.js validateResource}.
  *
- * Three value-free findings (all consistent with the diagnostic model):
+ * Five value-free findings (all consistent with the diagnostic model):
  *
  * - **`FULLURL_ID_MISMATCH`** (error), an entry whose `fullUrl` is a RESTful URL (`Type/id`) that
  *   disagrees with the wrapped `resource.id`. A `urn:uuid:` fullUrl constrains nothing, so it is
@@ -15,6 +16,13 @@
  *   nothing.
  * - **`CONTAINED_CYCLE`** (error), a resource whose `contained` resources reference each other in a
  *   cycle, caught by the bounded, iterative cycle guard rather than an unbounded resolver loop.
+ * - **`FULLURL_DUPLICATE`** (error), an entry whose `fullUrl` and `meta.versionId` an earlier entry
+ *   carries too, outside a `history` Bundle (R4's `bdl-7`).
+ * - **`CONTAINED_ID_DUPLICATE`** (error), an entry resource's contained resource whose `id` an
+ *   earlier contained resource of it carries too.
+ *
+ * A reference to a `fullUrl` or contained id that repeats is never resolved to the first: it draws
+ * `REFERENCE_UNRESOLVED`, reported or not as a duplicate.
  *
  * Every finding is a FHIRPath *location*, never a value, a resource id, a reference string, and a
  * fullUrl are all kept out of the emitted issue.
@@ -22,7 +30,8 @@
  * @packageDocumentation
  */
 
-import type { FhirComplex } from "../model/index.js";
+import { getProperty, isComplex, isList, isPrimitive } from "../model/index.js";
+import type { FhirComplex, FhirNode } from "../model/index.js";
 import { Trail } from "../model/path.js";
 import { parseReference } from "../model/reference.js";
 import {
@@ -55,9 +64,24 @@ export function collectBundleIssues(resource: FhirComplex): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const bundle = readBundle(resource);
   const index = buildBundleIndex(resource);
+  // bdl-7: a history Bundle may carry a fullUrl once per version of the resource, and so may any
+  // Bundle whose entries under it differ in meta.versionId.
+  const versionsSeen = bundle.type === "history" ? undefined : new Set<string>();
 
   for (const entry of bundle.entries) {
     const entryPath = `Bundle.entry[${String(entry.index)}]`;
+
+    if (versionsSeen !== undefined && entry.fullUrl !== undefined) {
+      const version = entry.resource === undefined ? undefined : versionIdOf(entry.resource);
+      // The fullUrl and the version joined by a NUL, which a valid uri never holds.
+      const key = `${entry.fullUrl}\u0000${version ?? ""}`;
+      if (versionsSeen.has(key)) {
+        issues.push(
+          validationIssue("FULLURL_DUPLICATE", ISSUE_SEVERITIES.ERROR, `${entryPath}.fullUrl`),
+        );
+      }
+      versionsSeen.add(key);
+    }
 
     // fullUrl ↔ id agreement: only a RESTful (relative/absolute Type/id) fullUrl constrains the id.
     if (entry.fullUrl !== undefined && entry.resourceId !== undefined) {
@@ -74,6 +98,8 @@ export function collectBundleIssues(resource: FhirComplex): ValidationIssue[] {
     }
 
     if (entry.resource === undefined) continue;
+
+    issues.push(...collectContainedIdIssues(entry.resource, `${entryPath}.resource`));
 
     // Contained reference cycle (DoS-safe, bounded) → error.
     if (hasContainedCycle(entry.resource)) {
@@ -98,5 +124,53 @@ export function collectBundleIssues(resource: FhirComplex): ValidationIssue[] {
     });
   }
 
+  return issues;
+}
+
+/** A primitive node's string value, when it holds one. */
+function stringOf(node: FhirNode | undefined): string | undefined {
+  return node !== undefined && isPrimitive(node) && typeof node.value === "string"
+    ? node.value
+    : undefined;
+}
+
+/** A resource's `meta.versionId`, when it states one. */
+function versionIdOf(resource: FhirComplex): string | undefined {
+  const meta = getProperty(resource, "meta");
+  return meta !== undefined && isComplex(meta)
+    ? stringOf(getProperty(meta, "versionId"))
+    : undefined;
+}
+
+/**
+ * The `CONTAINED_ID_DUPLICATE` findings for one resource: one at each contained resource whose `id`
+ * an earlier contained resource of it carries. A `#id` reference to such an id names no one of them,
+ * and reference resolution reads it as unresolved.
+ *
+ * @param resource - The resource whose `contained` set to read.
+ * @param path - The FHIRPath location of `resource`, the prefix of each finding.
+ * @returns The value-free findings, in document order.
+ * @internal
+ */
+export function collectContainedIdIssues(resource: FhirComplex, path: string): ValidationIssue[] {
+  const node = getProperty(resource, "contained");
+  // A single contained object carries one id, which repeats nothing.
+  if (node === undefined || !isList(node)) return [];
+  const issues: ValidationIssue[] = [];
+  const seen = new Set<string>();
+  node.items.forEach((item, i) => {
+    const id = isComplex(item) ? stringOf(getProperty(item, "id")) : undefined;
+    if (id === undefined) return;
+    if (seen.has(id)) {
+      issues.push(
+        validationIssue(
+          "CONTAINED_ID_DUPLICATE",
+          ISSUE_SEVERITIES.ERROR,
+          `${path}.contained[${String(i)}].id`,
+        ),
+      );
+    }
+    seen.add(id);
+  });
   return issues;
 }
