@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -44,11 +45,15 @@ const ENTRY = join(root, "dist", "index.mjs");
 const ARBITRARIES = join(root, "dist", "arbitraries.mjs");
 const README = join(root, "README.md");
 const DOCS_DIR = join(root, "docs-content");
+/**
+ * The built entry a sample's import resolves to, as a file URL: on Windows an absolute path is read
+ * by `import()` as a URL with the drive letter as its scheme.
+ */
 const resolveEntry = (specifier: string): string | undefined =>
   specifier === "@cosyte/fhir"
-    ? ENTRY
+    ? pathToFileURL(ENTRY).href
     : specifier === "@cosyte/fhir/arbitraries"
-      ? ARBITRARIES
+      ? pathToFileURL(ARBITRARIES).href
       : undefined;
 
 beforeAll(() => {
