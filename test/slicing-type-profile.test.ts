@@ -875,6 +875,38 @@ describe("type and profile discriminators: the edges", () => {
     expect(result).toEqual({ assignments: ["valueQuantity"], unchecked: false });
   });
 
+  it("matches a slice that names several types when any one is the occurrence's", () => {
+    const either = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}value-either`,
+      type: "Observation",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          {
+            id: "Observation.value[x]",
+            path: "Observation.value[x]",
+            slicing: { discriminator: [{ type: "type", path: "$this" }], rules: "open" },
+          },
+          {
+            id: "Observation.value[x]:either",
+            path: "Observation.value[x]",
+            sliceName: "either",
+            type: [{ code: "CodeableConcept" }, { code: "Quantity" }, { code: "string" }],
+          },
+        ],
+      },
+    });
+    const slices = resolveSlices(
+      req(either.snapshot),
+      req(either.snapshot?.find((e) => e.id === "Observation.value[x]")),
+    );
+    const result = matchSlices([complex([])], slices, [{ type: "type", path: "" }], {
+      occurrenceTypes: ["Quantity"],
+    });
+    expect(result).toEqual({ assignments: ["either"], unchecked: false });
+  });
+
   it("walks a choice step below the sliced element", () => {
     const componentByType = loadSd({
       resourceType: "StructureDefinition",

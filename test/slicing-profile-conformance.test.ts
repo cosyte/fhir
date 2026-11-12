@@ -906,6 +906,186 @@ describe("the kinds of constraint one element places on a target", () => {
     return constraintKinds(el, type, snapshot, builtInSchema(type), scope);
   };
 
+  /** The kinds of the element at `index` of a snapshot of `type` written out whole, root included. */
+  const kindsAt = (
+    type: string,
+    resource: Record<string, unknown>,
+    elements: unknown[],
+    index: number,
+  ): string[] => {
+    const profile = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}kinds-at`,
+      type,
+      snapshot: { element: elements },
+    });
+    const snapshot = req(profile.snapshot);
+    const scope = new SliceScope(parse({ resourceType: type, ...resource }), type, snapshot);
+    return constraintKinds(req(snapshot[index]), type, snapshot, builtInSchema(type), scope);
+  };
+
+  it("names each cardinality, must-support, fixed and pattern constraint", () => {
+    expect(
+      kindsOf(
+        "Patient",
+        { gender: "other" },
+        [
+          {
+            id: "Patient.gender",
+            path: "Patient.gender",
+            min: 0,
+            max: "1",
+            mustSupport: false,
+            fixedCode: "other",
+            patternCode: "other",
+          },
+        ],
+        "Patient.gender",
+      ),
+    ).toEqual(["min", "max", "mustSupport", "fixed", "pattern"]);
+  });
+
+  it("names a type list on the root element, which is the resource's own, as no kind", () => {
+    const root = { id: "Patient", path: "Patient", type: [{ code: "Patient" }] };
+    expect(kindsAt("Patient", {}, [root], 0)).toEqual([]);
+  });
+
+  it("takes a type profile as unenforced on an element no slicing decides", () => {
+    const own = { profile: [`${BASE}fake-reference`] };
+    const elements = (sliced: Record<string, unknown>) => [
+      { id: "Observation", path: "Observation" },
+      { id: "Observation.hasMember", path: "Observation.hasMember", ...sliced },
+      {
+        id: "Observation.hasMember:m",
+        path: "Observation.hasMember",
+        sliceName: "m",
+        type: [{ code: "Reference", ...own }],
+        constraint: [{ key: "fake-7", severity: "error", expression: "true" }],
+      },
+    ];
+    const hasMember = { hasMember: [{ reference: "Observation/fake-o" }] };
+    // Not a slice.
+    expect(
+      kindsAt(
+        "Observation",
+        hasMember,
+        [
+          { id: "Observation", path: "Observation" },
+          {
+            id: "Observation.hasMember",
+            path: "Observation.hasMember",
+            type: [{ code: "Reference", ...own }],
+          },
+        ],
+        1,
+      ),
+    ).toEqual(["type:profile", "type:code"]);
+    // A slice whose sliced element carries no slicing.
+    expect(kindsAt("Observation", hasMember, elements({}), 2)).toEqual([
+      "constraint:slice",
+      "type:profile",
+      "type:code",
+    ]);
+    // A slice whose sliced element the snapshot does not carry.
+    const orphan = elements({}).filter((_, i) => i !== 1);
+    expect(kindsAt("Observation", hasMember, orphan, 1)).toEqual([
+      "constraint:slice",
+      "type:profile",
+      "type:code",
+    ]);
+  });
+
+  it("finds a slice's sliced element among its siblings, not at the first element of its path", () => {
+    // A slice whose id is its bare path matches every element of that path; the sliced element is
+    // the one that names no slice, wherever the other slices stand.
+    const shared = { key: "fake-8", severity: "error", expression: "true" };
+    const elements = [
+      { id: "Observation", path: "Observation" },
+      { id: "Observation.hasMember", path: "Observation.hasMember", sliceName: "a" },
+      {
+        id: "Observation.hasMember",
+        path: "Observation.hasMember",
+        slicing: { discriminator: [{ type: "profile", path: "$this" }], rules: "open" },
+        constraint: [shared],
+      },
+      {
+        id: "Observation.hasMember",
+        path: "Observation.hasMember",
+        sliceName: "b",
+        type: [{ code: "Reference", profile: [`${BASE}fake-reference`] }],
+        constraint: [shared],
+      },
+    ];
+    expect(
+      kindsAt("Observation", { hasMember: [{ reference: "Observation/fake-o" }] }, elements, 3),
+    ).toEqual(["constraint", "slicing", "type:code"]);
+  });
+
+  it("takes a slice's invariant as evaluated when any one of the sliced element's is the same", () => {
+    const sliced = (constraint: unknown[]) =>
+      kindsOf(
+        "Patient",
+        { identifier: [{ system: "urn:fake" }] },
+        [
+          {
+            id: "Patient.identifier",
+            path: "Patient.identifier",
+            slicing: { discriminator: [{ type: "value", path: "system" }], rules: "open" },
+            constraint,
+          },
+          {
+            id: "Patient.identifier:s",
+            path: "Patient.identifier",
+            sliceName: "s",
+            constraint: [{ key: "fake-5", severity: "error", expression: "value.exists()" }],
+          },
+        ],
+        "Patient.identifier:s",
+      );
+    const same = { key: "fake-5", severity: "error", expression: "value.exists()" };
+    const other = { key: "fake-9", severity: "error", expression: "system.exists()" };
+    expect(sliced([other, same])).toEqual(["constraint"]);
+    expect(sliced([])).toEqual(["constraint:slice"]);
+  });
+
+  it("takes a binding on a type with no built-in table as unenforced", () => {
+    expect(
+      kindsOf(
+        "Basic",
+        { code: { text: "fake" } },
+        [
+          {
+            id: "Basic.code",
+            path: "Basic.code",
+            binding: {
+              strength: "required",
+              valueSet: "http://hl7.org/fhir/ValueSet/observation-status",
+            },
+          },
+        ],
+        "Basic.code",
+      ),
+    ).toEqual(["binding:unenforced"]);
+  });
+
+  it("reads a resource occurrence as allowed when any one of several types names it", () => {
+    const contained = (codes: string[]) =>
+      kindsOf(
+        "Observation",
+        { contained: [{ resourceType: "Patient", id: "p1" }] },
+        [
+          {
+            id: "Observation.contained",
+            path: "Observation.contained",
+            type: codes.map((code) => ({ code })),
+          },
+        ],
+        "Observation.contained",
+      );
+    expect(contained(["Patient", "Organization"])).toEqual(["type:code"]);
+    expect(contained(["Organization", "Patient"])).toEqual(["type:code"]);
+  });
+
   it("reads a resource occurrence's own type against the types an element allows", () => {
     const contained = (code: string) =>
       kindsOf(

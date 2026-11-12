@@ -361,14 +361,16 @@ export function constraintKinds(
   return kinds;
 }
 
-/** The discriminators of the slicing a slice element belongs to; none for any other element. */
+/**
+ * The discriminators of the slicing a slice element belongs to; `undefined` for any other element,
+ * which `isSliceOf` matches to nothing, and for a slice whose sliced element carries no slicing.
+ */
 function sliceDiscriminators(
   el: ElementDefinition,
   snapshot: readonly ElementDefinition[],
-): readonly { readonly type: string; readonly path: string }[] {
-  if (el.sliceName === undefined) return [];
+): readonly { readonly type: string; readonly path: string }[] | undefined {
   const sliced = snapshot.find((e) => e.sliceName === undefined && isSliceOf(el, e));
-  return sliced?.slicing?.discriminator ?? [];
+  return sliced?.slicing?.discriminator;
 }
 
 /**
@@ -377,11 +379,11 @@ function sliceDiscriminators(
  * slicing enforces what the slice names there.
  */
 function decidesProfile(
-  discriminators: readonly { readonly type: string; readonly path: string }[],
+  discriminators: readonly { readonly type: string; readonly path: string }[] | undefined,
   resolves: boolean,
 ): boolean {
   const at = resolves ? ["resolve()", "$this.resolve()"] : ["$this", ""];
-  return discriminators.some((d) => d.type === "profile" && at.includes(d.path));
+  return discriminators?.some((d) => d.type === "profile" && at.includes(d.path)) === true;
 }
 
 /**

@@ -386,6 +386,23 @@ describe("what an element definition states that the model does not read", () =>
     ).toBeUndefined();
   });
 
+  it("reads a type written bare, not in a list, member by member", () => {
+    expect(elementOf({ type: { code: "string", fakeMember: 1 } }).unmodeled).toEqual([
+      "type.fakeMember",
+    ]);
+  });
+
+  it("takes a documentary extension wherever it stands in the list", () => {
+    expect(
+      elementOf({
+        extension: [
+          { url: "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy" },
+          { url: "http://hl7.org/fhir/StructureDefinition/elementdefinition-isCommonBinding" },
+        ],
+      }).unmodeled,
+    ).toBeUndefined();
+  });
+
   it("reads past a binding or a type that is not an object", () => {
     expect(elementOf({ type: ["fake"] }).unmodeled).toBeUndefined();
     // A binding that is not an object is stated, and not read.

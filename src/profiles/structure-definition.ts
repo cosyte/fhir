@@ -252,7 +252,7 @@ function unmodeledOf(node: FhirComplex, known: readonly string[], prefix: string
     if (name === "extension") {
       for (const ext of isList(property.value) ? property.value.items : [property.value]) {
         const url = isComplex(ext) ? primitiveString(getProperty(ext, "url")) : undefined;
-        if (url === undefined || !DOCUMENTARY_EXTENSIONS.includes(url))
+        if (!DOCUMENTARY_EXTENSIONS.some((documentary) => documentary === url))
           out.push(`${prefix}extension:${url ?? ""}`);
       }
     } else if (!known.includes(name) && !(prefix === "" && /^(fixed|pattern)[A-Z]/u.test(name))) {
@@ -275,8 +275,10 @@ function unmodeledIn(node: FhirComplex): string[] {
   if (binding !== undefined && isComplex(binding))
     out.push(...unmodeledOf(binding, BINDING_MEMBERS_READ_OR_DOCUMENTARY, "binding."));
   const type = getProperty(node, "type");
-  for (const item of type === undefined ? [] : isList(type) ? type.items : [type]) {
-    if (isComplex(item)) out.push(...unmodeledOf(item, TYPE_MEMBERS_READ, "type."));
+  if (type !== undefined) {
+    for (const item of isList(type) ? type.items : [type]) {
+      if (isComplex(item)) out.push(...unmodeledOf(item, TYPE_MEMBERS_READ, "type."));
+    }
   }
   return [...new Set(out)];
 }

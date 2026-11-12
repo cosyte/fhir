@@ -110,6 +110,11 @@ const BASE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
 /** R4 `AdministrativeGender`, the required binding on `Patient.gender`. *(patient.html)* */
 const ADMINISTRATIVE_GENDER = ["male", "female", "other", "unknown"] as const;
 
+// Stryker disable all: the element tables are module-level constants, evaluated once when the
+// module loads, which the mutation runner does not reload per mutant, so no test can kill an edit
+// to them there. test/schema-value-sets.test.ts pins the value set every required binding names
+// against the vendored R4 definitions; test/validate-safety-types.test.ts and
+// test/validate-exchange-types.test.ts pin the nine tables those definitions project, row by row.
 /**
  * `Patient` direct elements, from the R4 base StructureDefinition (patient.html). All are optional in
  * base R4 (Patient has no mandatory direct element). `gender` carries the one required binding.
@@ -792,6 +797,7 @@ const DOCUMENT_REFERENCE_ELEMENTS: Readonly<Record<string, ElementSchema>> = {
   content: { min: 1, max: UNBOUNDED, types: ["BackboneElement"] },
   context: { min: 0, max: 1, types: ["BackboneElement"] },
 };
+// Stryker restore all
 
 /**
  * The built-in schemas (base elements are merged into each). This array IS the built-in set, and it
