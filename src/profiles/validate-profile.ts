@@ -108,23 +108,30 @@ export function sliceEnvironment(
       return answer.target;
     },
     profileType: (canonical) => {
-      const types = new Set(profilesNamed(canonical, options).map((p) => p.type));
+      const types = profileTypes(canonical, options);
       return types.size === 1 ? [...types][0] : undefined;
     },
   };
 }
 
-/** The profiles a canonical names: the supplied ones at that url (and version), else the resolver's. */
-function profilesNamed(canonical: string, options: ProfileOptions): StructureDefinition[] {
+/**
+ * The types the profiles a canonical names constrain: the supplied ones at that url (and version,
+ * when the canonical pins one), else the one the resolver returns there.
+ */
+function profileTypes(canonical: string, options: ProfileOptions): Set<string> {
   const bar = canonical.indexOf("|");
   const url = bar === -1 ? canonical : canonical.slice(0, bar);
   const version = bar === -1 ? undefined : canonical.slice(bar + 1);
   const fits = (p: StructureDefinition): boolean =>
     p.url === url && (version === undefined || p.version === version);
-  const supplied = options.profiles?.filter(fits) ?? [];
-  if (supplied.length > 0) return supplied;
+  const types = new Set<string>();
+  options.profiles?.forEach((p) => {
+    if (fits(p)) types.add(p.type);
+  });
+  if (types.size > 0) return types;
   const resolved = options.resolve?.(url);
-  return resolved !== undefined && fits(resolved) ? [resolved] : [];
+  if (resolved !== undefined && fits(resolved)) types.add(resolved.type);
+  return types;
 }
 
 /**

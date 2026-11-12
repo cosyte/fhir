@@ -391,6 +391,19 @@ describe("a type discriminator through resolve()", () => {
     expect(unchecked(collectProfileIssues(obs, named))).toEqual([
       ["Observation.hasMember", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE],
     ]);
+    // A profile supplied or resolved at another url names no type for this one.
+    const elsewhere = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}fake-elsewhere`,
+      type: "Observation",
+      snapshot: { element: [{ id: "Observation", path: "Observation" }] },
+    });
+    expect(unchecked(collectProfileIssues(obs, named, { profiles: [elsewhere] }))).toEqual([
+      ["Observation.hasMember", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE],
+    ]);
+    expect(unchecked(collectProfileIssues(obs, named, { resolve: () => elsewhere }))).toEqual([
+      ["Observation.hasMember", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE],
+    ]);
   });
 });
 
