@@ -531,6 +531,22 @@ describe("the other layers of a nested profile check", () => {
     ]);
   });
 
+  it("leaves undecided an element any one of whose types names a profile", () => {
+    const choice = patientQ([
+      {
+        id: "Patient.deceased[x]",
+        path: "Patient.deceased[x]",
+        type: [{ code: "boolean" }, { code: "dateTime", profile: [`${BASE}fake-datetime`] }],
+      },
+    ]);
+    const result = validateResource(bundleOf({ id: "fake-1", deceasedBoolean: false }), {
+      profiles: [bundleByProfile, choice],
+    });
+    expect(unchecked(result.issues)).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
+    ]);
+  });
+
   it("decides past a type that names no profile", () => {
     const typed = patientQ([
       { id: "Patient.gender", path: "Patient.gender", type: [{ code: "code" }] },
