@@ -32,13 +32,14 @@ import { runComparison } from "../scripts/differential/run.mjs";
 import type { OwnAnswer, OwnOptions } from "../scripts/differential/run.mjs";
 import {
   formatReachReport,
+  formatSliceUnchecked,
   loadNewlyEvaluatedRows,
   NOT_REACHED,
   ROW_ANSWER,
   ucumExercised,
   ucumShortfall,
 } from "../scripts/differential/uscore.mjs";
-import type { UsCoreRow } from "../scripts/differential/uscore.mjs";
+import type { UsCoreDocument, UsCoreRow } from "../scripts/differential/uscore.mjs";
 import {
   CONCEPT,
   CORPUS,
@@ -1047,4 +1048,35 @@ describe("AC-5 / AC-7: a document this library refused to read reaches its rows 
       );
     });
   }
+});
+
+describe("US Core pass: the count of undecided slicings", () => {
+  const doc = (ours: UsCoreDocument["ours"]): UsCoreDocument =>
+    ({ id: "x", version: "9.0.0", text: "", ours }) as unknown as UsCoreDocument;
+  const unchecked = (sliceReason?: string) => ({
+    code: "PROFILE_SLICE_UNCHECKED",
+    location: "Observation.value[x]",
+    severity: "information",
+    ...(sliceReason === undefined ? {} : { sliceReason }),
+  });
+
+  it("counts the findings, the documents carrying one, and each reason", () => {
+    const lines = formatSliceUnchecked([
+      doc({ ok: true, issues: [unchecked("target-unresolved"), unchecked()] }),
+      doc({ ok: true, issues: [unchecked("profile-unavailable")] }),
+      doc({ ok: true, issues: [{ code: "CARDINALITY_MIN", location: "X", severity: "error" }] }),
+      doc({ ok: true, issues: [unchecked("target-unresolved")], parseRefused: true }),
+      doc({ ok: false, reason: "not validated" }),
+    ]);
+    expect(lines).toEqual([
+      "US Core pass: 3 PROFILE_SLICE_UNCHECKED finding(s) in 2 of 3 validated document(s) " +
+        "(by reason: profile-unavailable 1, target-unresolved 1, unstated 1).",
+    ]);
+  });
+
+  it("says so when there is none", () => {
+    expect(formatSliceUnchecked([doc({ ok: true, issues: [] })])).toEqual([
+      "US Core pass: 0 PROFILE_SLICE_UNCHECKED finding(s) in 0 of 1 validated document(s).",
+    ]);
+  });
 });

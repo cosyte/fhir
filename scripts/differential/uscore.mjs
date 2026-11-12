@@ -730,3 +730,38 @@ export function formatUsCoreDocuments(records, ids) {
       `error.`,
   ];
 }
+
+/**
+ * How often this library left a slicing undecided across the US Core pass: the count of
+ * `PROFILE_SLICE_UNCHECKED` findings in the documents it validated, the documents carrying one, and
+ * the count per reason the finding names (`unstated` for a finding that names none). Printed every
+ * run, so a change to which slicings are decided shows up as a number rather than a claim.
+ *
+ * @param documents - the US Core documents, each with this library's answer on it
+ * @returns the printed lines
+ */
+export function formatSliceUnchecked(documents) {
+  let findings = 0;
+  let carrying = 0;
+  let validated = 0;
+  const byReason = new Map();
+  for (const document of documents) {
+    if (!wasValidated(document.ours)) continue;
+    validated += 1;
+    const unchecked = document.ours.issues.filter((i) => i.code === "PROFILE_SLICE_UNCHECKED");
+    if (unchecked.length > 0) carrying += 1;
+    findings += unchecked.length;
+    for (const issue of unchecked) {
+      const reason = issue.sliceReason ?? "unstated";
+      byReason.set(reason, (byReason.get(reason) ?? 0) + 1);
+    }
+  }
+  const reasons = [...byReason.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([reason, count]) => `${reason} ${String(count)}`);
+  return [
+    `US Core pass: ${String(findings)} PROFILE_SLICE_UNCHECKED finding(s) in ${String(carrying)} of ` +
+      `${String(validated)} validated document(s)` +
+      (reasons.length === 0 ? "." : ` (by reason: ${reasons.join(", ")}).`),
+  ];
+}
