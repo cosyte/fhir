@@ -29,7 +29,7 @@ import {
   XML_FATAL_CODES,
   type FhirComplex,
 } from "../src/index.js";
-import { req } from "./_util.js";
+import { req, withoutForeignMarks } from "./_util.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
 
@@ -616,7 +616,12 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       const { resource } = parseResourceXml(
         `<Bundle ${FHIR_NS} ${VENDOR}><entry><resource><v:Patient><v:id value="p"/></v:Patient></resource></entry></Bundle>`,
       );
-      expect(serializeResource(resource)).not.toContain('"resourceType":"Patient"');
+      // The model, read with the foreign mark taken off: no resource was unwrapped. The writers
+      // refuse the marked model itself.
+      expect(serializeResource(withoutForeignMarks(resource))).not.toContain(
+        '"resourceType":"Patient"',
+      );
+      expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
     });
 
     it("flags the foreign element rather than reading it silently", () => {
@@ -1091,8 +1096,10 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       const { resource, issues } = parseResourceXml(
         `<Patient ${FHIR_NS}><birthDate value="1980-01-01"><extension xmlns="urn:vendor" url="urn:x"><valueBoolean value="true"/></extension></birthDate></Patient>`,
       );
-      // It IS modeled as a FHIR extension: unprefixed, so there is no tag to keep it apart.
-      expect(serializeResource(resource)).toContain('"extension"');
+      // It IS modeled as a FHIR extension: unprefixed, so there is no tag to keep it apart. The
+      // model is read with its mark taken off, because both writers refuse the marked model.
+      expect(serializeResource(withoutForeignMarks(resource))).toContain('"extension"');
+      expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
       // And it is reported at exactly the position it was promoted into.
       expect(at(issues, ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toContain(
         "Patient.birthDate.extension[0]",
@@ -1103,7 +1110,10 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       const { resource, issues } = parseResourceXml(
         `<Patient ${FHIR_NS}><contained><Patient xmlns="urn:vendor"><active value="true"/></Patient></contained></Patient>`,
       );
-      expect(serializeResource(resource)).toContain('"resourceType":"Patient"');
+      expect(serializeResource(withoutForeignMarks(resource))).toContain(
+        '"resourceType":"Patient"',
+      );
+      expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
       expect(at(issues, ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toContain("Patient.contained");
     });
 
@@ -1111,9 +1121,10 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       const { resource, issues } = parseResourceXml(
         `<Patient ${FHIR_NS}><name><given value="Peter"/></name><name xmlns="urn:vendor"><given value="Jane"/></name></Patient>`,
       );
-      expect(serializeResource(resource)).toBe(
+      expect(serializeResource(withoutForeignMarks(resource))).toBe(
         '{"resourceType":"Patient","name":[{"given":"Peter"},{"given":"Jane"}]}',
       );
+      expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
       expect(at(issues, ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toContain("Patient.name[1]");
     });
 
@@ -1121,7 +1132,8 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       const { resource, issues } = parseResourceXml(
         `<Patient ${FHIR_NS}><text><status value="generated"/><div xmlns="urn:vendor">Hi</div></text></Patient>`,
       );
-      expect(serializeResource(resource)).toContain('"div"');
+      expect(serializeResource(withoutForeignMarks(resource))).toContain('"div"');
+      expect(() => serializeResource(resource)).toThrow(FhirSerializeError);
       expect(at(issues, ISSUE_CODES.UNEXPECTED_XML_CONTENT)).toContain("Patient.text.div");
     });
   });
@@ -1336,7 +1348,7 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         const merged = req(resource.properties.find((p) => p.name === "p:x")).value;
         expect(isList(merged) && merged.items.length).toBe(2);
         // The model, and therefore every consumer of it, cannot tell the two namespaces apart.
-        expect(serializeResource(resource)).toBe(
+        expect(serializeResource(withoutForeignMarks(resource))).toBe(
           '{"resourceType":"Observation","status":"final","p:x":["1","2"]}',
         );
       });
@@ -1351,7 +1363,8 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
        * Re-reading that, the two occurrences shared one expanded name, so `MIXED_XML_SPELLING` was
        * gone. The binding is still not modeled; what closed is the write of a name whose prefix the
        * output cannot declare, which is refused at the tag site on its own code. The read above and
-       * the report beside it are untouched, and `serializeResource` still writes the model.
+       * the report beside it are untouched. `serializeResource` used to write the model; it now
+       * refuses it too, because both occurrences carry the reader's foreign-namespace mark.
        */
       it("AC-1, AC-3: refuses the XML write rather than lose that report, because the bindings are not modeled", () => {
         const { resource } = parseResourceXml(REBOUND);
@@ -1369,10 +1382,21 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
           "Observation.<withheld>[0]",
           "Observation.<withheld>[1]",
         ]);
-        // The route that stays open, with the merge it cannot undo still visible in it.
-        expect(serializeResource(resource)).toBe(
-          '{"resourceType":"Observation","status":"final","p:x":["1","2"]}',
+        // The JSON writer refuses it as well, on the foreign-namespace code.
+        let viaJson: unknown;
+        try {
+          serializeResource(resource);
+        } catch (err) {
+          viaJson = err;
+        }
+        expect(viaJson).toBeInstanceOf(FhirSerializeError);
+        expect((viaJson as FhirSerializeError).code).toBe(
+          SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_NAMESPACE,
         );
+        expect((viaJson as FhirSerializeError).locations).toEqual([
+          "Observation.<withheld>[0]",
+          "Observation.<withheld>[1]",
+        ]);
       });
 
       it("reports the merge, because that report keys on the namespace as well as the tag", () => {
@@ -1566,16 +1590,23 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
         expect(refusalOf(resource)?.code).toBe(SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT);
       });
 
-      it("still emits it through the JSON writer, exactly as at the base pin", () => {
-        // The refusal is XML-only. `serializeResource` is byte-for-byte what it was at `2ac2d72`,
-        // measured there and pinned here.
+      it("refuses it in the JSON writer as well, on the same code", () => {
+        // This was a pinned gap: `serializeResource` emitted
+        // '{"resourceType":"Observation","id":"o1","status":"entered-in-error",...}', whose re-read
+        // carried an empty issue list and read safe. JSON has no namespace to keep the vocabulary
+        // in, so that writer now refuses the marked root too.
         const { resource } = parseResourceXml(VENDOR_ROOT);
-        expect(serializeResource(resource)).toBe(
-          '{"resourceType":"Observation","id":"o1","status":"entered-in-error","code":{"text":"synthetic"}}',
+        let refused: unknown;
+        try {
+          serializeResource(resource);
+        } catch (err) {
+          refused = err;
+        }
+        expect(refused).toBeInstanceOf(FhirSerializeError);
+        expect((refused as FhirSerializeError).code).toBe(
+          SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_ROOT,
         );
-        // Which is a statement about this writer and NOT a claim that the JSON channel keeps the
-        // flag: it does not, and that half is declared open rather than closed here.
-        expect(parseResource(serializeResource(resource)).issues).toEqual([]);
+        expect((refused as FhirSerializeError).locations).toEqual(["Observation"]);
       });
 
       it("still round-trips a document that is not of the refused class", () => {

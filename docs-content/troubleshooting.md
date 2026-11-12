@@ -229,7 +229,9 @@ You get a thrown error whose code is one of `SERIALIZE_ERROR_CODES`.
 The writers author no value of their own. When a model carries something the target format cannot
 spell back, the choice is to invent content, drop content, or refuse, and the library refuses. The
 duplicate property above is one such case, and so is a resource type that cannot be written as an
-XML tag.
+XML tag. An element or a root the XML reader read from a namespace other than FHIR's is another:
+neither format can spell that namespace, so both writers refuse it with
+`UNSERIALIZABLE_FOREIGN_NAMESPACE` or `UNSERIALIZABLE_FOREIGN_ROOT`.
 
 **What to do**: read the code to find out which shape stopped it, and fix the model rather than the
 writer. In almost every case the underlying document was already non-conformant on the read, and the

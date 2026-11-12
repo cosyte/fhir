@@ -419,7 +419,8 @@ The FHIRPath locations that forced the refusal (value-free).
 
 > `readonly` **locations**: readonly `string`[]
 
-FHIRPath locations that forced the refusal (value-free).
+FHIRPath locations that forced the refusal (value-free). From [assertSafeToSummarize](#assertsafetosummarize),
+each location is listed once, in the order the readout's channels first name it.
 
 ***
 
@@ -1214,8 +1215,9 @@ any spelling: a bound prefix (`<v:status xmlns:v="urn:vendor">`), a default decl
 to nothing. The narrative `<div>` in the XHTML namespace is the one element FHIR puts there and
 is never marked. A default declaration leaves the tag spelled exactly as the FHIR element, so
 the model holds it under that name; the marker is what says the format does not define it, and
-the safety readout and the validator read it. Absent on every conformant document and on every
-document read from JSON.
+the safety readout and the validator read it. Both writers refuse a model carrying it, since
+neither format can spell it and the re-read would read safe. Absent on every conformant document
+and on every document read from JSON.
 
 ##### foreignRoot?
 
@@ -1231,7 +1233,8 @@ handed the model alone could not tell a vendor-rooted resource from one authored
 the namespace URI is document content and is deliberately not kept, so nothing here can be
 echoed into a diagnostic and no walker gains a position. What it buys is that
 ../xml/write.js serializeResourceXml refuses rather than emitting a FHIR-namespaced
-document whose re-read carries an empty issue list.
+document whose re-read carries an empty issue list, and ../codec/write.js serializeResource
+refuses rather than emitting it as an ordinary FHIR resource.
 
 **Set at a document root and nowhere else.** An element that merely inherits a foreign namespace
 from its parent is flagged where the document leaves the vocabulary and is not marked here, and
@@ -1385,8 +1388,9 @@ any spelling: a bound prefix (`<v:status xmlns:v="urn:vendor">`), a default decl
 to nothing. The narrative `<div>` in the XHTML namespace is the one element FHIR puts there and
 is never marked. A default declaration leaves the tag spelled exactly as the FHIR element, so
 the model holds it under that name; the marker is what says the format does not define it, and
-the safety readout and the validator read it. Absent on every conformant document and on every
-document read from JSON.
+the safety readout and the validator read it. Both writers refuse a model carrying it, since
+neither format can spell it and the re-read would read safe. Absent on every conformant document
+and on every document read from JSON.
 
 ##### id?
 
@@ -4884,23 +4888,42 @@ refused here can carry one of `serializeResource`'s own declared exceptions and 
 
 See breaksTag for the exact predicate and for what is deliberately NOT refused.
 
+##### UNSERIALIZABLE\_FOREIGN\_NAMESPACE
+
+> `readonly` **UNSERIALIZABLE\_FOREIGN\_NAMESPACE**: `"UNSERIALIZABLE_FOREIGN_NAMESPACE"` = `"UNSERIALIZABLE_FOREIGN_NAMESPACE"`
+
+The model carries, at one or more locations, an element the XML reader read from a namespace
+other than its parent's (`<status xmlns="urn:vendor" value="final"/>` inside a FHIR resource,
+a prefix bound to another vocabulary, or `xmlns=""`). **Both writers**, the way
+[SERIALIZE\_ERROR\_CODES.DROPPED\_ELEMENT\_TEXT](#dropped_element_text) is: the mark has no spelling in either format.
+
+The reader models such an element under its local name, and `readSafety` declines it on
+`notAssessed`. The JSON writer emitted it as the FHIR member of that name and the XML writer
+emitted it in the FHIR namespace, so the re-read carried no mark and `safeToSummarize` read
+`true` for a status the sender wrote in another vocabulary.
+
+See assertNoForeignNamespace for the window and what it leaves.
+
 ##### UNSERIALIZABLE\_FOREIGN\_ROOT
 
 > `readonly` **UNSERIALIZABLE\_FOREIGN\_ROOT**: `"UNSERIALIZABLE_FOREIGN_ROOT"` = `"UNSERIALIZABLE_FOREIGN_ROOT"`
 
 The model carries, at one or more elements, a root the XML reader read out of a vocabulary that
-resolved to something other than FHIR's. **XML only**: `serializeResource` spells a member name
-and never a namespace, so it emits the model exactly as it did before this refusal existed and
-that route stays open -- which is a statement about that writer's output, **not** a claim that
-the JSON channel keeps the flag. It does not, and that half is declared open.
+resolved to something other than FHIR's. **Both writers**: FHIR XML puts the resource in the
+FHIR namespace and FHIR JSON has no namespace at all, so neither has a spelling for the
+sender's vocabulary.
 
-FHIR XML puts the resource in the FHIR namespace, and the writer has no vendor binding to write
-instead, so it emitted a document in the FHIR namespace with no trace of the one the sender
-wrote. That output re-reads with an **empty** issue list, so the one warning that said the
-document came from another vocabulary is gone after a single trip and the vendor document is
-indistinguishable from FHIR.
+The XML writer emitted a document in the FHIR namespace with no trace of the one the sender
+wrote, and the JSON writer emitted the same members as an ordinary FHIR resource. Either output
+re-reads with an **empty** issue list and `safeToSummarize: true`, so the one warning that said
+the document came from another vocabulary, and the safety readout's refusal with it, is gone
+after a single trip and the vendor document is indistinguishable from FHIR.
 
-See assertXmlForeignRoot for the window, the two routes weighed, and what it costs.
+**Changed in a patch: `serializeResource` used to emit this model and now refuses it.** A caller
+that converted such a document to JSON must now decide what the vendor vocabulary means before
+writing it as FHIR.
+
+See assertNoForeignRoot for the window, the two routes weighed, and what it costs.
 
 ##### UNSERIALIZABLE\_JSON\_ONLY\_SHAPE
 
@@ -7268,7 +7291,8 @@ because it is schema-free and lenient and the local name is the only thing it ha
 report is a warning in the issue list and the model carries no issue list, so before this marker
 existed a caller could write the model back to XML and get a document in the FHIR namespace whose
 re-read said nothing at all: one round trip and a vendor document was indistinguishable from FHIR.
-../xml/write.js serializeResourceXml refuses a marked model rather than emit that.
+../xml/write.js serializeResourceXml refuses a marked model rather than emit that, and
+../codec/write.js serializeResource refuses it too, since JSON has no namespace either.
 
 **The namespace itself is NOT kept**, which is the difference between this and recovering the
 vocabulary. The document's own namespace URI is content, and a marker cannot leak content.
@@ -9012,6 +9036,21 @@ With `UNSERIALIZABLE_SHADOWED_PROPERTY` if the model carries a member
   modeled, and one inside a complex in a primitive's `extension` is outside the window; see
   `assertNoShadowedProperty` for both.
 
+#### Throws
+
+With `UNSERIALIZABLE_FOREIGN_ROOT` if the model holds a resource whose
+  root the XML reader read out of a vocabulary other than FHIR's. JSON has no namespace, so the
+  resource was written as FHIR and the re-read read `safeToSummarize: true` where the XML read
+  declined. **Changed in a patch**: this writer used to emit such a model. `serializeResourceXml`
+  refuses it on the same code.
+
+#### Throws
+
+With `UNSERIALIZABLE_FOREIGN_NAMESPACE` if the model carries an
+  element the XML reader read from a namespace other than its parent's, which `readSafety`
+  declines. `<status xmlns="urn:vendor" value="final"/>` inside a FHIR resource used to come back
+  as `"status":"final"` and re-read safe. `serializeResourceXml` refuses it on the same code.
+
 #### Example
 
 ```ts
@@ -9194,9 +9233,8 @@ With `UNSERIALIZABLE_FOREIGN_ROOT` if the model holds a resource whose
   document that reads `valid: true`**, because the root flag is a warning; the cost is bounded to
   this class. A root declaring no namespace at all is untouched, and one carrying a prefix bound to
   nothing is outside it too, refused on `UNSERIALIZABLE_PREFIXED_NAME` below rather than on this
-  code. `serializeResource` emits the model exactly as it always did, so this refusal does not
-  reach it -- a statement about that writer's output, not a claim that the JSON channel keeps the
-  flag. See `assertXmlForeignRoot` for the window and for the route not taken.
+  code. `serializeResource` refuses the same model on the same code, so neither format carries
+  it. See `assertNoForeignRoot` for the window and for the route not taken.
 
 #### Throws
 
@@ -9295,6 +9333,16 @@ With `UNSERIALIZABLE_XML_CHARACTER` if a value this writer emits as an
   reported and a model carrying both a name that is not a `Name` and a character that is not a
   `Char` draws the name code. [serializeResource](#serializeresource) writes these values as JSON strings, so
   this refusal does not reach it and that route stays open.
+
+#### Throws
+
+With `UNSERIALIZABLE_FOREIGN_NAMESPACE` if the model carries an
+  element the XML reader read from a namespace other than its parent's, which `readSafety`
+  declines. This writer would emit it in the FHIR namespace, so
+  `<status xmlns="urn:vendor" value="final"/>` came back as `<status value="final"/>` and the
+  re-read read `safeToSummarize: true`. The narrative `div` in the XHTML namespace is never marked
+  and is written as before. Raised last of all, so a model that trips any refusal above keeps the
+  code it already reported. `serializeResource` refuses the same model on the same code.
 
 #### Example
 

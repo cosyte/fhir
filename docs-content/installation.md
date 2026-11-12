@@ -25,8 +25,10 @@ pnpm add @cosyte/fhir
 ```
 
 npm and yarn work the same way: `npm install @cosyte/fhir` or `yarn add @cosyte/fhir`. While the
-package is below 1.0, a breaking change ships in a minor version and is called out in the changelog,
-so a caret range such as `^0.1.0` takes fixes and never a break.
+package is below 1.0, every release is a patch version, a breaking change included, and the
+changelog entry for a breaking change says what changed and what a caller must do. A caret or
+tilde range such as `^0.1.0` or `~0.1.0` can therefore take a breaking change: pin an exact version
+and read the changelog before you move it.
 
 To build it from source instead, clone the repository and depend on the checkout:
 

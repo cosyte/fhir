@@ -119,11 +119,13 @@ if it were R4:
   against the union of what R4 and R4B define there, so an element either release defines is read
   as written, and one neither defines is listed on `notAssessed` and reported as `UNKNOWN_ELEMENT`
   ([an element the format does not define](./check-safety-before-summarizing.md#an-element-the-format-does-not-define));
-- an XML element in a namespace other than its parent's is declined and reported the same way, but
-  the reader still models it under its local name, and the XML writer writes it back in the FHIR
-  namespace. A document whose root is in a namespace other than FHIR's is listed on `notAssessed`
-  by its root's location and refused by the XML writer; a root in no namespace at all is read as
-  FHIR.
+- an XML element in a namespace other than its parent's is declined and reported the same way, and
+  the reader still models it under its local name. Neither writer can spell the namespace, so both
+  refuse the model (`UNSERIALIZABLE_FOREIGN_NAMESPACE`) rather than write the element as FHIR. A
+  document whose root is in a namespace other than FHIR's is listed on `notAssessed` by its root's
+  location and refused by both writers (`UNSERIALIZABLE_FOREIGN_ROOT`); a root in no namespace at
+  all is read as FHIR. So a write and a re-read, in either format, cannot turn a declined element
+  into one that reads safe.
 
 Here a synthetic `NutritionProduct`, a type R4B added, carries a status outside any code list and an
 element no version defines. Validation reports neither, and the safety readout does not assess the

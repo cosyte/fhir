@@ -330,13 +330,12 @@ describe("the refusal surface", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(FhirSafetyError);
       const { locations, message } = error as FhirSafetyError;
-      // `category` is listed twice: its text was dropped, and the value read from that text sits
-      // where the definitions put a CodeableConcept, so it is on `notAssessed` too.
-      expect(locations).toEqual([
-        "Observation.status",
-        "Observation.category",
-        "Observation.category",
-      ]);
+      // `category` is on two channels: its text was dropped, and the value read from that text sits
+      // where the definitions put a CodeableConcept, so it is on `notAssessed` too. The refusal
+      // lists it once.
+      expect(readSafety(resource).droppedText).toContain("Observation.category");
+      expect(readSafety(resource).notAssessed).toContain("Observation.category");
+      expect(locations).toEqual(["Observation.status", "Observation.category"]);
       // Value-free by contract: the codes the document wrote must not reach the message.
       expect(message).not.toContain("entered-in-error");
       expect(message).not.toContain("vital-signs");

@@ -8,8 +8,8 @@ troubleshooting.
 
 ## Status
 
-**Status: 0.1.** While the package is below 1.0, a breaking change ships in a minor version and is
-called out in the changelog. What is built: the no-data-loss core (a
+**Status: 0.1.** While the package is below 1.0, every release is a patch version, a breaking
+change included, and the changelog entry for a breaking change says what a caller must do. What is built: the no-data-loss core (a
 precision-preserving JSON codec and typed primitive model), the first three validation layers
 (structure, cardinality, and primitive/enumerated-`code` value-domain) with value-free
 `OperationOutcome` output, the **safety-critical status & negation model** (`readSafety`,

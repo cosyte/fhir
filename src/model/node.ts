@@ -121,8 +121,9 @@ export interface FhirPrimitive {
    * to nothing. The narrative `<div>` in the XHTML namespace is the one element FHIR puts there and
    * is never marked. A default declaration leaves the tag spelled exactly as the FHIR element, so
    * the model holds it under that name; the marker is what says the format does not define it, and
-   * the safety readout and the validator read it. Absent on every conformant document and on every
-   * document read from JSON.
+   * the safety readout and the validator read it. Both writers refuse a model carrying it, since
+   * neither format can spell it and the re-read would read safe. Absent on every conformant document
+   * and on every document read from JSON.
    */
   readonly foreignNamespace?: true;
 }
@@ -210,7 +211,8 @@ export interface FhirComplex {
    * the namespace URI is document content and is deliberately not kept, so nothing here can be
    * echoed into a diagnostic and no walker gains a position. What it buys is that
    * {@link ../xml/write.js serializeResourceXml} refuses rather than emitting a FHIR-namespaced
-   * document whose re-read carries an empty issue list.
+   * document whose re-read carries an empty issue list, and {@link ../codec/write.js serializeResource}
+   * refuses rather than emitting it as an ordinary FHIR resource.
    *
    * **Set at a document root and nowhere else.** An element that merely inherits a foreign namespace
    * from its parent is flagged where the document leaves the vocabulary and is not marked here, and
@@ -228,8 +230,9 @@ export interface FhirComplex {
    * to nothing. The narrative `<div>` in the XHTML namespace is the one element FHIR puts there and
    * is never marked. A default declaration leaves the tag spelled exactly as the FHIR element, so
    * the model holds it under that name; the marker is what says the format does not define it, and
-   * the safety readout and the validator read it. Absent on every conformant document and on every
-   * document read from JSON.
+   * the safety readout and the validator read it. Both writers refuse a model carrying it, since
+   * neither format can spell it and the re-read would read safe. Absent on every conformant document
+   * and on every document read from JSON.
    */
   readonly foreignNamespace?: true;
 }
@@ -543,7 +546,8 @@ export function markDroppedText(node: FhirComplex | FhirPrimitive): FhirComplex 
  * report is a warning in the issue list and the model carries no issue list, so before this marker
  * existed a caller could write the model back to XML and get a document in the FHIR namespace whose
  * re-read said nothing at all: one round trip and a vendor document was indistinguishable from FHIR.
- * {@link ../xml/write.js serializeResourceXml} refuses a marked model rather than emit that.
+ * {@link ../xml/write.js serializeResourceXml} refuses a marked model rather than emit that, and
+ * {@link ../codec/write.js serializeResource} refuses it too, since JSON has no namespace either.
  *
  * **The namespace itself is NOT kept**, which is the difference between this and recovering the
  * vocabulary. The document's own namespace URI is content, and a marker cannot leak content.
@@ -569,7 +573,7 @@ export function isForeignRoot(node: FhirNode): boolean {
 /**
  * Mark a resource as having been read from a root in another vocabulary. The XML reader's own
  * helper, **not part of the package's public surface**, for the same reason {@link markDroppedText}
- * is not: this marker decides whether the XML writer refuses, so a consumer setting it would
+ * is not: this marker decides whether the writers refuse, so a consumer setting it would
  * withdraw serialization from a document that never carried the shape. Read the marker with
  * {@link isForeignRoot}, which is public.
  *
@@ -585,7 +589,8 @@ export function markForeignRoot(node: FhirComplex): FhirComplex {
 /**
  * Whether the XML reader read this node from an element in a namespace other than its parent's
  * (see {@link FhirComplex.foreignNamespace}). Internal: the safety readout and the validator read
- * it, and a consumer reads the result there, on `notAssessed` and as `UNKNOWN_ELEMENT`.
+ * it, and a consumer reads the result there, on `notAssessed` and as `UNKNOWN_ELEMENT`. Both
+ * writers read it too, and refuse a model that carries it.
  *
  * @param node - Any model node.
  * @returns `true` for a complex or primitive node so marked; `false` for a list and every other node.

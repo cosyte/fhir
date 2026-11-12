@@ -149,7 +149,9 @@ declared: `<status xmlns="urn:vendor" value="final"/>` is spelled like the FHIR 
 one, and neither is an element under `xmlns=""`. Only the narrative `div` in the XHTML namespace is
 exempt. No valid document carries one, but the reader keeps it, and a summary that walked the whole
 model would read whatever sits under it, a retraction included. `validateResource` reports the same
-elements as `UNKNOWN_ELEMENT`, a warning when lenient and an error when strict.
+elements as `UNKNOWN_ELEMENT`, a warning when lenient and an error when strict. Both writers refuse a
+model holding an element read from another namespace, so the decline cannot be lost by writing the
+model out and reading it back.
 
 A value written where the definitions put a complex type (`"code": "x"` on an `Observation`, or
 `<code value="x"/>`) is listed on `notAssessed` too, since a summary would read the string as the
@@ -192,7 +194,8 @@ same rule: it throws a `FhirSafetyError` for an unhandled modifier, a value the 
 ambiguous, a resource the readout does not assess, an element the definitions do not define, and
 the other shapes that make an affirmative
 summary unsafe. The error carries the
-locations that forced the refusal and never a value:
+locations that forced the refusal and never a value, each location once even when more than one
+shape sits there:
 
 ```ts runnable
 import { assertSafeToSummarize, FhirSafetyError, parseResource } from "@cosyte/fhir";

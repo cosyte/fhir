@@ -375,3 +375,20 @@ Recorded so the next reader does not have to re-derive it. This is a sequence, n
 4. Re-run the precondition chain and `pnpm pack:docs`.
 5. Re-certify the public surface inventory if any export moved in the meantime; the test reds if it
    did.
+
+## Below 1.0, a break ships as a patch with its caller statement
+
+The maintainers decided that while the package is below 1.0 every release is a patch, a breaking
+change included. The classification rule in `test/release-readiness.test.ts` follows that decision
+with one condition it holds strictly: a break candidate may declare `patch` below 1.0 only when its
+changeset states the break and carries a paragraph opening `What a caller must change:` that says
+what a caller must do. The rule still names the change a break candidate, so the release notes and
+this register say a break shipped. A break at `patch` without that paragraph is refused as before,
+and at 1.0 or above a break at `patch` is refused whatever its changeset says. The paragraph is read
+from the changeset itself, so a register entry cannot supply it.
+
+The first break recorded under this rule is `writers-refuse-foreign-namespace.md`, registered as a
+break candidate at `patch` in `test/__data__/changeset-classification.json`: `serializeResource` and
+`serializeResourceXml` now throw `FhirSerializeError` on a model read from XML that holds an element
+in a foreign namespace, where they used to return a document, and `serializeResource` now refuses a
+root in a namespace other than FHIR's.

@@ -18,7 +18,8 @@
  *     THE TWO CHANNELS below.
  *  2. THE BREAK CANDIDATES. A changeset whose own text describes a withdrawal or a narrowing of
  *     previously working public behaviour, or which the audit's committed classification register
- *     names as one, is named with the observable a consumer would see, and may not sit at `patch`.
+ *     names as one, is named with the observable a consumer would see. It may sit at `patch` only
+ *     below 1.0, and only when its changeset states what a caller must do (see the rule below).
  *  3. THE DERIVED VERSION. What Changesets would produce from the classified set, and whether that
  *     is the version the release is asking for.
  *  4. THE CERTIFIED SURFACE. The entry point's exported names and their kinds, and the `exports`
@@ -37,8 +38,14 @@
  *     removed or renamed, a widened finding set that can turn a `valid` document invalid).
  *   - `patch` only for a fix leaving every public observable identical, or a change with no effect
  *     on the published artifact at all (tests, harnesses, CI, in-repo documentation).
- *   - A withdrawal is `minor` AT MINIMUM precisely because `major` is unavailable: on a `0.x`
- *     package the minor position is the only place a break can be signalled.
+ *   - A withdrawal reads as `minor` because `major` is unavailable: on a `0.x` package the minor
+ *     position is the only place the version number itself can signal a break.
+ *   - BELOW 1.0 A BREAK MAY SHIP AS A PATCH, by the maintainers' decision that every release below
+ *     1.0 is a patch, on one condition the check holds strictly: its changeset states the break and
+ *     what a caller must do, in a paragraph opening `What a caller must change:` followed by the
+ *     instruction itself. The observable names the break; that paragraph names the caller's action.
+ *     A break declared `patch` without it is refused exactly as before, and at 1.0 or above a break
+ *     at `patch` is refused whatever the changeset says.
  *
  * THE TWO CHANNELS a level can be established through, and the refusal when neither speaks:
  *
@@ -82,6 +89,11 @@ const CHANGESET_DIR = join(REPO_ROOT, ".changeset");
 
 /** The package these changesets may name, and nothing else. */
 const PACKAGE_NAME = "@cosyte/fhir";
+
+/** The version this tree carries, which decides whether a stated break may sit at `patch`. */
+const PACKAGE_VERSION = (
+  JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { readonly version: string }
+).version;
 
 /** The two files in `.changeset/` that are not changesets. */
 const NON_CHANGESET_FILES = new Set(["README.md", "config.json"]);
@@ -237,6 +249,32 @@ const NO_SHIP_PHRASES: readonly string[] = [
   "nothing here ships in the published artifact",
   "no library code changed",
 ];
+
+/**
+ * The statement a break must carry to ship as a patch below 1.0: a paragraph that opens with
+ * `What a caller must change:` (or `What a caller must do:`) and goes on to say it. The label alone,
+ * with nothing after it, is not a statement and does not count.
+ */
+const CALLER_STATEMENT = /(?:^|\n)[ \t]*what a caller must (?:change|do)[ \t]*:[ \t]*\S/i;
+
+/** Whether a changeset's prose states what a caller must do about the change it describes. */
+function statesCallerAction(body: string): boolean {
+  return CALLER_STATEMENT.test(body);
+}
+
+/** Whether `version` is on the `0.x` line, where a stated break may ship as a patch. */
+function belowOne(version: string): boolean {
+  return /^0\.\d+\.\d+$/.test(version);
+}
+
+/**
+ * Whether a break candidate declared at `declared` is acceptable as declared: at `minor`, always;
+ * at `patch`, only below 1.0 and only when its changeset states what a caller must do.
+ */
+function breakLevelAccepted(changeset: PendingChangeset, currentVersion: string): boolean {
+  if (changeset.declared !== "patch") return true;
+  return belowOne(currentVersion) && statesCallerAction(changeset.body);
+}
 
 interface Classification {
   readonly level: BumpLevel;
@@ -550,15 +588,23 @@ function releaseReadiness(options: ReadinessOptions): ReadinessReport {
     }
 
     const classification = verdict.ok;
+    // A break declared `patch` below 1.0 with its caller statement is the one place the declared
+    // level may sit under the rule's: the maintainers' decision puts every release below 1.0 at a
+    // patch, and the statement is what carries the signal the version number does not.
+    let patchBreakStated = false;
     if (classification.breakCandidate) {
       breakCandidates.push(changeset.file);
       if (changeset.declared === "patch") {
-        problems.push(
-          `.changeset/${changeset.file} is a break candidate and declares \`patch\`: ${classification.reason}. The observable a consumer sees change: ${classification.observable} A withdrawal shipped as a patch reaches a consumer on a caret range with no signal.`,
-        );
+        if (breakLevelAccepted(changeset, options.currentVersion)) {
+          patchBreakStated = true;
+        } else {
+          problems.push(
+            `.changeset/${changeset.file} is a break candidate and declares \`patch\`: ${classification.reason}. The observable a consumer sees change: ${classification.observable} ${patchBreakRefusal(options.currentVersion)}`,
+          );
+        }
       }
     }
-    if (changeset.declared !== classification.level) {
+    if (!patchBreakStated && changeset.declared !== classification.level) {
       problems.push(
         `.changeset/${changeset.file} declares \`${changeset.declared}\` and the classification rule yields \`${classification.level}\`: ${classification.reason}.`,
       );
@@ -616,6 +662,14 @@ function releaseReadiness(options: ReadinessOptions): ReadinessReport {
     unclassified: [],
     pendingFiles: files,
   };
+}
+
+/** Why a break at `patch` was refused, in the words that say how to fix it. */
+function patchBreakRefusal(currentVersion: string): string {
+  if (!belowOne(currentVersion)) {
+    return `At \`${currentVersion}\` the package is at 1.0 or above, where a break may not ship as a patch whatever its changeset says.`;
+  }
+  return "Below 1.0 a break ships as a patch only when its changeset states the change and what a caller must do, in a paragraph opening `What a caller must change:`, and this one does not.";
 }
 
 // ---------------------------------------------------------------------------
@@ -696,7 +750,7 @@ describe("the pending changeset set, re-measured on this tree", () => {
     ).toEqual(pendingOnThisTree());
   });
 
-  it("reports zero pending, or names no break candidate sitting at `patch`: never neither", () => {
+  it("reports zero pending, or names no break candidate sitting at `patch` unstated: never neither", () => {
     // THE LIVE INVARIANT, scoped to the property AC3 and AC4 actually name.
     //
     // WHAT THIS DELIBERATELY DOES NOT ASSERT, and why. An earlier form required
@@ -712,9 +766,10 @@ describe("the pending changeset set, re-measured on this tree", () => {
     // fixtures below, where AC4 is graded and the input is controlled rather than inherited.
     //
     // What survives here is the one property the criteria name over the real tree: a withdrawal or
-    // narrowing of previously working public behaviour may not sit at `patch`. That fires on the
-    // defect this whole file exists to prevent and on nothing else, and it cannot be quieted by a
-    // register entry, because the register resolves upward only.
+    // narrowing of previously working public behaviour may not sit at `patch` unless, below 1.0,
+    // its changeset states what a caller must do. That fires on the defect this whole file exists
+    // to prevent and on nothing else, and it cannot be quieted by a register entry, because the
+    // register resolves upward only and the statement is read from the changeset itself.
     const pending = pendingOnThisTree();
     const report = releaseReadiness({
       ...CONTROL_OPTIONS,
@@ -740,7 +795,7 @@ describe("the pending changeset set, re-measured on this tree", () => {
       if ("bad" in read) continue;
       const verdict = classify(read.ok, REGISTER);
       if ("unclassifiable" in verdict) continue;
-      if (verdict.ok.breakCandidate && read.ok.declared === "patch") {
+      if (verdict.ok.breakCandidate && !breakLevelAccepted(read.ok, PACKAGE_VERSION)) {
         misdeclared.push(`.changeset/${file}: ${verdict.ok.observable}`);
       }
     }
@@ -749,7 +804,7 @@ describe("the pending changeset set, re-measured on this tree", () => {
       report.unclassified.length === 0 ? "none" : [...report.unclassified].sort().join(", ");
     expect(
       misdeclared,
-      `these pending changesets withdraw or narrow previously working public behaviour and declare \`patch\`; raise each to \`minor\` and name it a break candidate in ${REGISTER.certifiedBy}. Pending files neither channel classified, which the audit owes a reading and which do not fail this test: ${unread}`,
+      `these pending changesets withdraw or narrow previously working public behaviour and declare \`patch\` without stating what a caller must do; below 1.0 add a paragraph opening \`What a caller must change:\` that says it, and name each a break candidate in ${REGISTER.certifiedBy}. Pending files neither channel classified, which the audit owes a reading and which do not fail this test: ${unread}`,
     ).toEqual([]);
   });
 
@@ -1009,6 +1064,124 @@ describe("a break candidate is named and may not sit at patch", () => {
     });
     expect(report.exitCode).toBe(0);
     expect(report.problems).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// Below 1.0 a break ships as a patch, and only with the statement of what a caller must do.
+// ===========================================================================
+
+describe("below 1.0 a break may declare patch only when its changeset says what a caller must do", () => {
+  /** A withdrawal in this repository's idiom, followed by the statement the rule asks for. */
+  const STATED_WITHDRAWAL = `${WITHDRAWAL_PROSE}\n\nWhat a caller must change: catch \`FhirSerializeError\` around the XML write and check its \`code\`.`;
+
+  it("accepts a stated break at patch below 1.0, names it a break candidate, and derives the patch", () => {
+    const report = releaseReadiness({
+      currentVersion: "0.1.15",
+      targetVersion: "0.1.16",
+      register: EMPTY_REGISTER,
+      changesetDir: fixtureDir({
+        "takes-something-away.md": changeset("patch", STATED_WITHDRAWAL),
+      }),
+    });
+    expect(report.problems).toEqual([]);
+    expect(report.exitCode).toBe(0);
+    expect(report.breakCandidates).toEqual(["takes-something-away.md"]);
+    expect(report.derivedVersion).toBe("0.1.16");
+  });
+
+  it("refuses the same break at patch when the statement is missing, and says what is missing", () => {
+    const report = releaseReadiness({
+      currentVersion: "0.1.15",
+      targetVersion: "0.1.16",
+      register: EMPTY_REGISTER,
+      changesetDir: fixtureDir({ "takes-something-away.md": changeset("patch", WITHDRAWAL_PROSE) }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.breakCandidates).toEqual(["takes-something-away.md"]);
+    const named = report.problems.filter((problem) => problem.includes("break candidate"));
+    expect(named).toHaveLength(1);
+    expect(named[0]).toContain("takes-something-away.md");
+    expect(named[0]).toContain("What a caller must change:");
+    expect(report.output).toContain("NOT RELEASABLE");
+  });
+
+  it("refuses a break whose statement is a bare label with nothing after it", () => {
+    const report = releaseReadiness({
+      currentVersion: "0.1.15",
+      targetVersion: "0.1.16",
+      register: EMPTY_REGISTER,
+      changesetDir: fixtureDir({
+        "takes-something-away.md": changeset(
+          "patch",
+          `${WITHDRAWAL_PROSE}\n\nWhat a caller must change:\n`,
+        ),
+      }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.problems.some((problem) => problem.includes("break candidate"))).toBe(true);
+  });
+
+  it("refuses a break whose caller statement sits mid-sentence rather than opening a paragraph", () => {
+    const report = releaseReadiness({
+      currentVersion: "0.1.15",
+      targetVersion: "0.1.16",
+      register: EMPTY_REGISTER,
+      changesetDir: fixtureDir({
+        "takes-something-away.md": changeset(
+          "patch",
+          `${WITHDRAWAL_PROSE} Nobody has said what a caller must change: that is left open.`,
+        ),
+      }),
+    });
+    expect(report.exitCode).toBe(1);
+    expect(report.problems.some((problem) => problem.includes("break candidate"))).toBe(true);
+  });
+
+  it("refuses a stated break at patch at 1.0 or above, where a break may not ship as a patch", () => {
+    const report = releaseReadiness({
+      currentVersion: "1.2.3",
+      targetVersion: "1.2.4",
+      register: EMPTY_REGISTER,
+      changesetDir: fixtureDir({
+        "takes-something-away.md": changeset("patch", STATED_WITHDRAWAL),
+      }),
+    });
+    expect(report.exitCode).toBe(1);
+    const named = report.problems.filter((problem) => problem.includes("break candidate"));
+    expect(named).toHaveLength(1);
+    expect(named[0]).toContain("1.0 or above");
+  });
+
+  it("accepts a break the register names at patch when the changeset states the caller's action", () => {
+    // The register can name a break the recogniser cannot read; the statement still comes from the
+    // changeset itself, so an entry cannot supply it.
+    const prose =
+      "The `readRawJson` entry point is gone.\n\nWhat a caller must change: call `parseResource` instead.";
+    const entry: RegisterEntry = {
+      level: "patch",
+      breakCandidate: true,
+      observable: "`import { readRawJson }` no longer resolves",
+      reason: "an export a consumer may already import was removed",
+    };
+    const stated = releaseReadiness({
+      currentVersion: "0.1.15",
+      targetVersion: "0.1.16",
+      register: registerOf({ "drops-an-export.md": entry }),
+      changesetDir: fixtureDir({ "drops-an-export.md": changeset("patch", prose) }),
+    });
+    const unstated = releaseReadiness({
+      currentVersion: "0.1.15",
+      targetVersion: "0.1.16",
+      register: registerOf({ "drops-an-export.md": entry }),
+      changesetDir: fixtureDir({
+        "drops-an-export.md": changeset("patch", "The `readRawJson` entry point is gone."),
+      }),
+    });
+    expect(stated.exitCode).toBe(0);
+    expect(stated.breakCandidates).toEqual(["drops-an-export.md"]);
+    expect(unstated.exitCode).toBe(1);
+    expect(unstated.problems[0]).toContain("readRawJson");
   });
 });
 

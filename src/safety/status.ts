@@ -2596,7 +2596,10 @@ export function readSafety(resource: FhirComplex): SafetyReadout {
  * ```
  */
 export class FhirSafetyError extends Error {
-  /** FHIRPath locations that forced the refusal (value-free). */
+  /**
+   * FHIRPath locations that forced the refusal (value-free). From {@link assertSafeToSummarize},
+   * each location is listed once, in the order the readout's channels first name it.
+   */
   readonly locations: readonly string[];
   /**
    * @param locations - The FHIRPath locations that forced the refusal (value-free).
@@ -2673,5 +2676,7 @@ export function assertSafeToSummarize(resource: FhirComplex | SafetyReadout): vo
     // define: nothing above was assessed for it.
     ...readout.notAssessed,
   ];
-  if (locations.length > 0) throw new FhirSafetyError(locations);
+  // Two channels can name one location (an element both in another namespace and carrying dropped
+  // text is on `droppedText` and on `notAssessed`), so each is listed once, where it first appears.
+  if (locations.length > 0) throw new FhirSafetyError([...new Set(locations)]);
 }

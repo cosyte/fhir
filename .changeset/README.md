@@ -13,10 +13,12 @@ Add a changeset for every meaningful change:
 pnpm changeset
 ```
 
-The package is on the 0.1 line. While the version is below 1.0, pick **minor** for new public
-capability or for any change that withdraws or narrows working behavior (a breaking change), and
-call the break out in the changeset. Pick **patch** only for a fix that leaves every public
-observable identical, or for a change that does not reach the published package at all.
+The package is on the 0.1 line. While the version is below 1.0, every release is a **patch**,
+including one that withdraws or narrows working behavior (a breaking change). A breaking change
+must say so in its changeset: state what changed, and add a paragraph that opens with
+`What a caller must change:` and says what a caller must do. The release readiness check in
+`test/release-readiness.test.ts` refuses a breaking change declared `patch` without that paragraph,
+and at 1.0 or above it refuses a breaking change at `patch` whatever the changeset says.
 
 Keep the summary's first sentence short: it becomes the bullet in the public GitHub release notes,
 and the release refuses a body it cannot publish rather than trimming it. Keep internal item

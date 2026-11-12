@@ -13,7 +13,8 @@
  * - a model the base wrote, all of whose names are Names and all of whose characters are Chars, is
  *   written byte-identically: every document of the readout corpus and 1,000 generated models (AC-7);
  * - `serializeResource` returns the base's string, or the base's refusal, for every model the new
- *   refusals are graded over, and never either new code (AC-8).
+ *   refusals are graded over, and never either new code (AC-8). A model the XML reader marked as
+ *   read from another vocabulary is refused by that writer now, and is compared with the mark off.
  *
  * All names, values and namespace URIs here are synthetic.
  */
@@ -28,11 +29,11 @@ import {
   parseResource,
   parseResourceXml,
   primitive,
-  serializeResource,
   serializeResourceXml,
   type FhirComplex,
   type FhirNode,
 } from "../src/index.js";
+import { jsonOfModel } from "./_util.js";
 import { corpus } from "./_readout-corpus.js";
 import {
   BOTH_NEW_MODELS,
@@ -53,6 +54,8 @@ import {
 
 const XML_NAME = "UNSERIALIZABLE_XML_NAME";
 const XML_CHARACTER = "UNSERIALIZABLE_XML_CHARACTER";
+/** Added after the record, for an element read from another namespace; no graded model reaches it. */
+const FOREIGN_NAMESPACE = "UNSERIALIZABLE_FOREIGN_NAMESPACE";
 
 /** The pin the record was captured at. */
 const BASE_PIN = "18567b969c5fc34bd70dc8b7a5321027ea52dc87";
@@ -122,9 +125,13 @@ function headXml(recipe: Recipe): Outcome {
   return outcome(() => serializeResourceXml(buildComplex(recipe, HEAD)));
 }
 
-/** Head's JSON writer over a recipe, as an outcome. */
+/**
+ * Head's JSON writer over a recipe, as an outcome. A model the XML reader marked as read from
+ * another vocabulary is refused by that writer now, which `jsonOfModel` asserts; the outcome is
+ * what it writes with the mark taken off, which is what the base wrote.
+ */
 function headJson(recipe: Recipe): Outcome {
-  return outcome(() => serializeResource(buildComplex(recipe, HEAD)));
+  return outcome(() => jsonOfModel(buildComplex(recipe, HEAD)));
 }
 
 /**
@@ -177,9 +184,10 @@ describe("a model the base refused", () => {
       }),
     );
     expect([...reached].sort()).toEqual([...CODES_AT_PIN].sort());
-    // And the pin's list is complete: head publishes exactly those plus the two new codes.
+    // And the pin's list is complete: head publishes exactly those plus the two new codes, and the
+    // foreign-namespace code added after the record.
     expect(Object.values(SERIALIZE_ERROR_CODES).sort()).toEqual(
-      [...CODES_AT_PIN, XML_NAME, XML_CHARACTER].sort(),
+      [...CODES_AT_PIN, XML_NAME, XML_CHARACTER, FOREIGN_NAMESPACE].sort(),
     );
   });
 
