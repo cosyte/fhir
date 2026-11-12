@@ -63,7 +63,7 @@ import type { ElementDefinition, ElementType } from "./structure-definition.js";
 
 // Stryker disable all: module-level constants, evaluated once when the module loads, which the
 // mutation runner does not reload per mutant; test/slicing-type-profile.test.ts pins each one by
-// behaviour (every discriminator kind, every abstract type, each pattern's anchors and classes).
+// behaviour (every discriminator kind, each pattern's anchors and classes).
 /** The discriminator kinds this module can evaluate. */
 const SUPPORTED_DISCRIMINATORS: ReadonlySet<string> = new Set([
   "value",
@@ -71,17 +71,6 @@ const SUPPORTED_DISCRIMINATORS: ReadonlySet<string> = new Set([
   "exists",
   "type",
   "profile",
-]);
-
-/**
- * Types a slice may name that many concrete types satisfy. A `type` discriminator compares names, so
- * a slice naming one of these cannot be decided by a name and is reported unchecked instead.
- */
-const ABSTRACT_TYPES: ReadonlySet<string> = new Set([
-  "Resource",
-  "DomainResource",
-  "Element",
-  "BackboneElement",
 ]);
 
 /** The canonical prefix of a base R4 definition: its tail is the type it defines. */
@@ -453,6 +442,20 @@ function sliceDemands(
   return names;
 }
 
+/**
+ * Whether a slice names a type that many concrete types satisfy. A `type` discriminator compares
+ * names, so a slice naming one of these cannot be decided by a name and is reported unchecked
+ * instead. A function rather than a set built at import, which every caller's import would pay for.
+ */
+function isAbstractType(name: string): boolean {
+  return (
+    name === "Resource" ||
+    name === "DomainResource" ||
+    name === "Element" ||
+    name === "BackboneElement"
+  );
+}
+
 /** A `type` or `profile` discriminator's verdict for one occurrence and one slice. */
 function typedHolds(
   instance: FhirNode,
@@ -467,7 +470,7 @@ function typedHolds(
   const names = sliceDemands(kind, split, slice, context);
   if (typeof names === "string") return undecided(names);
   if (names.length === 0) return undecided(SLICE_UNCHECKED_REASONS.SLICE_UNCONSTRAINED);
-  if (kind === "type" && names.some((n) => ABSTRACT_TYPES.has(n) || !TYPE_NAME.test(n)))
+  if (kind === "type" && names.some((n) => isAbstractType(n) || !TYPE_NAME.test(n)))
     return undecided(SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED);
 
   // An occurrence with nothing at the path is of no type there and conforms to no profile.
