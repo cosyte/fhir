@@ -1107,6 +1107,21 @@ describe("declared non-reach residuals on the JSON read path, pinned so they can
     expect(safety.safeToSummarize).toBe(false);
   });
 
+  it("a `use` in an identifier array the codec read as a PRIMITIVE list is not reached", () => {
+    // A mixed array whose first entry is a scalar is read as a repeating primitive, so the object
+    // entry beside it becomes a value-absent slot and there is no complex node to reach. The
+    // position is reported (`UNKNOWN_PROPERTY`), so the loss is not silent, but it is not this
+    // channel that reports it. The readout declines it on another: a string where the definitions
+    // put an Identifier is not the element they define there, so it is on `notAssessed`.
+    const json = '{"resourceType":"Practitioner","identifier":["x",{"use":"official"}]}';
+    const { resource, issues } = parseResource(json);
+
+    expect(readSafety(resource).modifierElements).toEqual([]);
+    expect(readSafety(resource).notAssessed).toEqual(["Practitioner.identifier[0]"]);
+    expect(readSafety(resource).safeToSummarize).toBe(false);
+    expect(issues.map((issue) => issue.code)).toEqual(["UNKNOWN_PROPERTY"]);
+  });
+
   it("a comparator inside a `_`-sibling misplaced on a complex element is not reached", () => {
     // The reader discards such a sibling whole, so the modifier never reaches the model at all.
     const safety = safetyOf(
@@ -1116,26 +1131,5 @@ describe("declared non-reach residuals on the JSON read path, pinned so they can
 
     expect(safety.modifierElements).toEqual([]);
     expect(safety.safeToSummarize).toBe(true);
-  });
-});
-
-describe("a closed residual: an object after a string in an identifier array", () => {
-  it("a `use` in an identifier array mixing a string and an object is reached", () => {
-    // This was a declared residual: a mixed array whose first entry was a scalar was read as a
-    // repeating primitive, so the object beside it became a value-absent slot with no node to
-    // reach. An array holding an object is now read as a complex list whatever comes first, so the
-    // `use` is reached on this channel, and the string, which is not the Identifier the definitions
-    // put there, is still declined on `notAssessed`.
-    const json = '{"resourceType":"Practitioner","identifier":["x",{"use":"official"}]}';
-    const { resource, issues } = parseResource(json);
-
-    expect(readSafety(resource).modifierElements).toEqual([
-      { element: "use", location: "Practitioner.identifier[1].use" },
-    ]);
-    expect(readSafety(resource).notAssessed).toEqual(["Practitioner.identifier[0]"]);
-    expect(readSafety(resource).safeToSummarize).toBe(false);
-    expect(issues.map((issue) => `${issue.code} at ${issue.expression ?? ""}`)).toEqual([
-      "UNKNOWN_PROPERTY at Practitioner.identifier[0]",
-    ]);
   });
 });

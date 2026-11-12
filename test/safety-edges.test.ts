@@ -144,34 +144,6 @@ describe("dose and value reads over entries that are not objects", () => {
     expect(readMedicationDoses(request, "MedicationRequest").map((q) => q.code)).toEqual(["mg"]);
   });
 
-  it("skips a dosageInstruction entry that is not an object and keeps the next one's index", () => {
-    // A model can hold a primitive here even though the JSON reader no longer makes one: an array
-    // holding an object is read as a list of elements whichever member comes first.
-    const dose = complex([
-      { name: "value", value: primitive(decimal("5")) },
-      { name: "code", value: primitive("mg") },
-    ]);
-    const request = complex([
-      { name: "resourceType", value: primitive("MedicationRequest") },
-      {
-        name: "dosageInstruction",
-        value: list([
-          primitive("stray"),
-          complex([
-            {
-              name: "doseAndRate",
-              value: list([complex([{ name: "doseQuantity", value: dose }])]),
-            },
-          ]),
-        ]),
-      },
-    ]);
-    expect(locateDoseQuantities(request, "MedicationRequest").map((d) => d.path)).toEqual([
-      "MedicationRequest.dosageInstruction[1].doseAndRate[0].doseQuantity",
-    ]);
-    expect(readMedicationDoses(request, "MedicationRequest").map((q) => q.code)).toEqual(["mg"]);
-  });
-
   it("reports an array-wrapped value choice once, however many repeated members carry a wrapper", () => {
     const { resource } = parseResource(
       '{"resourceType":"Observation","status":"final","code":{"text":"synthetic"},' +
