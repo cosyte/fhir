@@ -18,6 +18,9 @@ on:
     - cron: "53 6 * * 0"
     - cron: "53 6 * * 3"
   workflow_dispatch:
+  # Temporary: measure this run on the pull request branch. Removed before merge.
+  push:
+    branches: [test/testing-standard]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
