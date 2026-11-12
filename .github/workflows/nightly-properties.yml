@@ -15,9 +15,6 @@ on:
     # 04:47 UTC. An odd minute: GitHub delays scheduled runs at the start of every hour.
     - cron: "47 4 * * *"
   workflow_dispatch:
-  # Temporary: measure this run on the pull request branch. Removed before merge.
-  push:
-    branches: [test/testing-standard]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
