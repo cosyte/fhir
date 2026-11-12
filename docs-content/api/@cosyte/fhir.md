@@ -5552,7 +5552,7 @@ profile violation, compared on the UCUM `code` (case- and bracket-sensitive), ne
 
 ### VERSION
 
-> `const` **VERSION**: `string` = `"0.1.14"`
+> `const` **VERSION**: `string` = `"0.1.15"`
 
 Library version string, synced with `package.json#version` at build time by
 `cosyte-process sync-version` (wired into the Changesets `version` script). Exported now so
