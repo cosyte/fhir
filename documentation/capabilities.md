@@ -48,9 +48,10 @@ on any unsupported expression); it does **not** yet do `type`·`profile` slicing
 validation (still `PROFILE_SLICE_UNCHECKED`), and it bundles **no** US Core
 IG corpus. The `validator_cli.jar` **differential runs in CI** (a JVM oracle job; there is no Java in
 the dev container) over **both** the synthetic spec-clean corpus **and** the real-world quirk corpus,
-and it is green: CI run 43120027962 (job 130857848284, commit 8b66923, the change that added the
-narrative checks) compared 214 documents (300 declared, 86 excluded) and agreed with the oracle
-within the documented deltas, and showed determinism over 31 documents. The built-in structural schema set has **eleven** resource
+and it is green: CI run 43127042663 (job 130881655806, commit 6dbcac6, the change that added the
+`Encounter`, `Procedure` and `DocumentReference` schemas) compared 237 documents (326 declared, 89
+excluded) and agreed with the oracle within the documented deltas, and showed determinism over 31
+documents. The built-in structural schema set has **eleven** resource
 types, each with the base-resource elements merged in: `Patient`, `Observation`, `DiagnosticReport`,
 `Condition`, `MedicationRequest`, `AllergyIntolerance`, `Immunization`, `MedicationStatement`,
 `Encounter`, `Procedure` and `DocumentReference`. A `status` of `entered-in-error` on an
