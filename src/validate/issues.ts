@@ -674,8 +674,8 @@ const DIAGNOSTIC_OF: Readonly<Record<ValidationCode, string>> = {
   PROFILE_SLICE_UNMATCHED:
     "Element is present under closed slicing but matches none of the profile's defined slices.",
   PROFILE_SLICE_UNCHECKED:
-    "Slice membership could not be evaluated (a discriminator, its path, or the data it needs is " +
-    "outside what this library can decide); it is reported unchecked rather than assumed to pass.",
+    "Slice membership could not be evaluated (an unsupported discriminator); it is reported " +
+    "unchecked rather than assumed to pass.",
   PROFILE_SLICE_NO_SLICING:
     "Profile defines a slice under an element that declares no slicing, so no occurrence can be " +
     "assigned to it; the slice and the elements under it were not checked.",

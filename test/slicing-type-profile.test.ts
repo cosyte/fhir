@@ -1707,3 +1707,115 @@ describe("type and profile discriminators: what a walk meets that is not an elem
     ]);
   });
 });
+
+describe("type and profile discriminators: each of several", () => {
+  it("reports unchecked when any one of several discriminators is unsupported", () => {
+    const result = matchSlices(
+      [complex([])],
+      [],
+      [
+        { type: "value", path: "code" },
+        { type: "position", path: "$this" },
+      ],
+    );
+    expect(result.reason).toBe(SLICE_UNCHECKED_REASONS.DISCRIMINATOR_UNSUPPORTED);
+  });
+
+  it("refuses a slice naming an abstract type beside a concrete one", () => {
+    const mixed = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}mixed-types`,
+      type: "Bundle",
+      snapshot: {
+        element: [
+          { id: "Bundle", path: "Bundle" },
+          {
+            id: "Bundle.entry",
+            path: "Bundle.entry",
+            slicing: { discriminator: [{ type: "type", path: "resource" }], rules: "closed" },
+          },
+          { id: "Bundle.entry:any", path: "Bundle.entry", sliceName: "any" },
+          {
+            id: "Bundle.entry:any.resource",
+            path: "Bundle.entry.resource",
+            type: [{ code: "Patient" }, { code: "Resource" }],
+          },
+        ],
+      },
+    });
+    const bundle = parse({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [{ resource: { resourceType: "Patient", id: "fake-1" } }],
+    });
+    expect(unchecked(collectProfileIssues(bundle, mixed))).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED],
+    ]);
+  });
+
+  it("matches a value discriminator on any one of several values at its path", () => {
+    const byCode = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}by-code`,
+      type: "Observation",
+      snapshot: {
+        element: [
+          { id: "Observation", path: "Observation" },
+          {
+            id: "Observation.category",
+            path: "Observation.category",
+            slicing: { discriminator: [{ type: "value", path: "coding.code" }], rules: "closed" },
+          },
+          { id: "Observation.category:fake", path: "Observation.category", sliceName: "fake" },
+          {
+            id: "Observation.category:fake.coding.code",
+            path: "Observation.category.coding.code",
+            fixedCode: "fake-b",
+          },
+        ],
+      },
+    });
+    const obs = parse({
+      resourceType: "Observation",
+      category: [{ coding: [{ code: "fake-a" }, { code: "fake-b" }] }],
+    });
+    // A member, so not unmatched; and as a member, its other coding breaks the slice's fixed code.
+    expect(findings(collectProfileIssues(obs, byCode))).toEqual([
+      ["PROFILE_FIXED_MISMATCH", "Observation.category.coding[0].code"],
+    ]);
+  });
+
+  it("decides yes for a resource whose check draws only information", () => {
+    const supportive = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}gendered-patient`,
+      type: "Patient",
+      snapshot: {
+        element: [
+          { id: "Patient", path: "Patient" },
+          { id: "Patient.gender", path: "Patient.gender", min: 1 },
+          { id: "Patient.birthDate", path: "Patient.birthDate", mustSupport: true },
+        ],
+      },
+    });
+    const bundle = parse({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [{ resource: { resourceType: "Patient", id: "fake-1", gender: "other" } }],
+    });
+    expect(
+      findings(collectProfileIssues(bundle, entryByProfile, { profiles: [supportive] })),
+    ).toEqual([["CARDINALITY_MIN", "Bundle.entry.fullUrl"]]);
+  });
+
+  it("checks a non-conforming resource once, however many references reach it", () => {
+    const obs = parse({
+      resourceType: "Observation",
+      contained: [{ resourceType: "Patient", id: "p0" }],
+      performer: Array.from({ length: 5000 }, () => ({ reference: "#p0" })),
+    });
+    expect(
+      findings(collectProfileIssues(obs, performerByProfile, { profiles: [genderedPatient] })),
+    ).toEqual([["CARDINALITY_MIN", "Observation.performer:patient"]]);
+  });
+});

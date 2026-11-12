@@ -82,13 +82,13 @@ export interface ProfileOptions {
    * Base resolver for snapshot generation, needed only when the profile carries no snapshot. A
    * `profile` slicing discriminator also asks it for a profile the supplied set does not carry.
    */
-  readonly resolve?: BaseResolver;
+  readonly resolve?: BaseResolver | undefined;
   /**
    * The supplied profile set. A `profile` slicing discriminator checks a resource against the
    * profile a slice names, looked up here by canonical (and version, when the canonical pins one);
    * a profile neither here nor returned by {@link resolve} leaves the slicing unchecked.
    */
-  readonly profiles?: readonly StructureDefinition[];
+  readonly profiles?: readonly StructureDefinition[] | undefined;
 }
 
 /**
@@ -148,7 +148,7 @@ function profilesNamed(canonical: string, options: ProfileOptions): StructureDef
   const version = bar === -1 ? undefined : canonical.slice(bar + 1);
   const fits = (p: StructureDefinition): boolean =>
     p.url === url && (version === undefined || p.version === version);
-  const supplied = (options.profiles ?? []).filter(fits);
+  const supplied = options.profiles?.filter(fits) ?? [];
   if (supplied.length > 0) return supplied;
   const resolved = options.resolve?.(url);
   return resolved !== undefined && fits(resolved) ? [resolved] : [];
@@ -203,8 +203,12 @@ function environmentIn(
 
   return {
     resolve: (reference) => {
-      const answer = resolveReference(reference, closure);
-      return answer.status === "resolved" ? answer.target : undefined;
+      // Only a resolved answer carries a target.
+      const answer: { readonly status: string; readonly target?: FhirComplex } = resolveReference(
+        reference,
+        closure,
+      );
+      return answer.target;
     },
     profileType: (canonical) => {
       const types = new Set(profilesNamed(canonical, options).map((p) => p.type));

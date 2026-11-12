@@ -45,12 +45,12 @@ import { sliceEnvironment } from "./validate-profile.js";
 /** Options for {@link collectInvariantIssues}. */
 export interface InvariantOptions {
   /** Base resolver for snapshot generation, needed only when the profile carries no snapshot. */
-  readonly resolve?: BaseResolver;
+  readonly resolve?: BaseResolver | undefined;
   /**
    * The supplied profile set, so a slicing discriminated by `profile` decides which occurrences a
    * slice's invariants apply to, exactly as the profile layer decides it.
    */
-  readonly profiles?: readonly StructureDefinition[];
+  readonly profiles?: readonly StructureDefinition[] | undefined;
 }
 
 /**

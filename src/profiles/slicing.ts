@@ -61,6 +61,9 @@ import { matchesFixed, matchesPattern } from "./fixed-pattern.js";
 import { pathExists, resolvePath } from "./navigate.js";
 import type { ElementDefinition, ElementType } from "./structure-definition.js";
 
+// Stryker disable all: module-level constants, evaluated once when the module loads, which the
+// mutation runner does not reload per mutant; test/slicing-type-profile.test.ts pins each one by
+// behaviour (every discriminator kind, every abstract type, each pattern's anchors and classes).
 /** The discriminator kinds this module can evaluate. */
 const SUPPORTED_DISCRIMINATORS: ReadonlySet<string> = new Set([
   "value",
@@ -95,6 +98,7 @@ const CORE_TYPE_NAME = /^[A-Z][A-Za-z0-9]*$/u;
 
 /** A choice suffix starts with an upper-case letter (`valueQuantity`, `effectiveDateTime`). */
 const CHOICE_SUFFIX = /^[A-Z]/u;
+// Stryker restore all
 
 /** One `fixed[x]` / `pattern[x]` constraint a slice imposes, at a path relative to the slice element. */
 export interface SliceConstraint {
@@ -282,7 +286,7 @@ export function resolveSlices(
 }
 
 /** One discriminator's answer for one occurrence and one slice: held, not held, or why undecidable. */
-type Verdict = "yes" | "no" | { readonly reason: SliceUncheckedReason };
+type Verdict = boolean | { readonly reason: SliceUncheckedReason };
 
 /** An undecidable verdict, with its reason. */
 function undecided(reason: SliceUncheckedReason): Verdict {
@@ -310,17 +314,17 @@ function discriminatorHolds(
     // later slices in the match loop, so a finding that existed only because of the wrongful
     // admission goes. That is pinned rather than claimed away, in
     // `test/profile-slice-contradiction.test.ts`, "the bound on what the change can retire".
-    if (slice.unsatisfiableExists.has(path)) return "no";
+    if (slice.unsatisfiableExists.has(path)) return false;
     const expected = slice.existsExpectations.get(path);
     if (expected === undefined) return undecided(SLICE_UNCHECKED_REASONS.SLICE_UNCONSTRAINED);
-    return pathExists(instance, path) === expected ? "yes" : "no";
+    return pathExists(instance, path) === expected;
   }
   // value | pattern: the slice must pin a value at the discriminator path.
   const constraint = slice.constraints.find((c) => c.path === path);
   if (constraint === undefined) return undecided(SLICE_UNCHECKED_REASONS.SLICE_UNCONSTRAINED);
   const targets = resolvePath(instance, path);
   const matcher = constraint.kind === "fixed" ? matchesFixed : matchesPattern;
-  return targets.some((t) => matcher(t, constraint.value)) ? "yes" : "no";
+  return targets.some((t) => matcher(t, constraint.value));
 }
 
 /** A node a discriminator path selected, with its concrete type where the document states it. */
@@ -339,7 +343,7 @@ interface SplitPath {
 
 /** Split a discriminator path at a trailing `resolve()`, or `undefined` when its steps are outside the subset. */
 function splitPath(path: string): SplitPath | undefined {
-  const steps = path === "" ? ["$this"] : path.split(".");
+  const steps = path === "" ? [] : path.split(".");
   const resolves = steps[steps.length - 1] === "resolve()";
   const named = resolves ? steps.slice(0, -1) : steps;
   const rest = named[0] === "$this" ? named.slice(1) : named;
@@ -477,7 +481,7 @@ function typedHolds(
       if (target.type === undefined) return undecided(SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED);
       if (allowed.has(target.type)) held = true;
     }
-    return held ? "yes" : "no";
+    return held;
   }
 
   // profile: each target must be a resource, checked against the profiles the slice names.
@@ -488,11 +492,11 @@ function typedHolds(
     for (const canonical of names) {
       const answer =
         context.conforms?.(resource, canonical) ?? SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
-      if (answer === "yes") return "yes";
+      if (answer === "yes") return true;
       if (answer !== "no") pending ??= answer;
     }
   }
-  return pending === undefined ? "no" : undecided(pending);
+  return pending === undefined ? false : undecided(pending);
 }
 
 /**
@@ -550,7 +554,7 @@ export function matchSlices(
         (v): v is { reason: SliceUncheckedReason } => typeof v === "object",
       );
       if (blocked !== undefined) return unchecked(blocked.reason);
-      if (verdicts.every((v) => v === "yes")) {
+      if (verdicts.every((v) => v === true)) {
         matched = slice.sliceName;
         break;
       }
