@@ -52,8 +52,8 @@ jobs:
       run-bun: true
       run-deno: true
       run-coverage-ratchet: true
-      # Off: the `mutation` job below replaces the shared one.
-      run-mutation: false
+      # Temporary, for the reading: the shared whole-file job beside this file's own.
+      run-mutation: true
       run-scaling-gate: true
       run-bench-compare: true
 

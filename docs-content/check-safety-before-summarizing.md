@@ -155,7 +155,10 @@ model out and reading it back.
 
 A value written where the definitions put a complex type (`"code": "x"` on an `Observation`, or
 `<code value="x"/>`) is listed on `notAssessed` too, since a summary would read the string as the
-element. `validateResource` does not report it as `UNKNOWN_ELEMENT`: the element name is defined.
+element. So is a string, number, boolean or `null` written beside objects in one array, such as
+a string before an `Identifier` in `identifier`, at its own position, whichever member comes first;
+the objects beside it are read as elements. `validateResource` does not report either as
+`UNKNOWN_ELEMENT`: the element name is defined.
 
 ```ts runnable
 import { parseResource, readSafety, validateResource } from "@cosyte/fhir";
