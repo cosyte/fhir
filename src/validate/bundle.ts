@@ -67,21 +67,23 @@ export function collectBundleIssues(resource: FhirComplex): ValidationIssue[] {
   const index = buildBundleIndex(resource);
   // bdl-7: a history Bundle may carry a fullUrl once per version of the resource, and so may any
   // Bundle whose entries under it differ in meta.versionId.
-  const versionsSeen = bundle.type === "history" ? undefined : new Set<string>();
+  // Each fullUrl, with the versions seen under it (`undefined` for an entry that states none).
+  const versionsSeen =
+    bundle.type === "history" ? undefined : new Map<string, Set<string | undefined>>();
 
   for (const entry of bundle.entries) {
     const entryPath = `Bundle.entry[${String(entry.index)}]`;
 
     if (versionsSeen !== undefined && entry.fullUrl !== undefined) {
       const version = entry.resource === undefined ? undefined : versionIdOf(entry.resource);
-      // The fullUrl and the version joined by a NUL, which a valid uri never holds.
-      const key = `${entry.fullUrl}\u0000${version ?? ""}`;
-      if (versionsSeen.has(key)) {
+      const versions = versionsSeen.get(entry.fullUrl) ?? new Set<string | undefined>();
+      if (versions.has(version)) {
         issues.push(
           validationIssue("FULLURL_DUPLICATE", ISSUE_SEVERITIES.ERROR, `${entryPath}.fullUrl`),
         );
       }
-      versionsSeen.add(key);
+      versions.add(version);
+      versionsSeen.set(entry.fullUrl, versions);
     }
 
     // fullUrl ↔ id agreement: only a RESTful (relative/absolute Type/id) fullUrl constrains the id.
