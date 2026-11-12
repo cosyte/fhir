@@ -75,12 +75,16 @@ describe("parseResource: the read path", () => {
     expect(isComplex(nth(name.items, 0))).toBe(true);
   });
 
-  it("tolerates an object item inside a primitive array (malformed) as value-absent", () => {
+  it("reads an array holding an object after a scalar (malformed) as complex, keeping the object", () => {
+    // An object has no place in a primitive slot, so an array holding one is read as a complex list
+    // whatever comes first: the object keeps its members, and the scalar keeps its own text.
     const { resource } = parseResource('{"resourceType":"P","a":["x",{"k":1}],"_a":[null,null]}');
     const a = getProperty(resource, "a") as FhirList;
-    const items = a.items as readonly FhirPrimitive[];
-    expect(nth(items, 0).value).toBe("x");
-    expect(nth(items, 1).value).toBeUndefined();
+    expect(isComplex(nth(a.items, 0))).toBe(true);
+    expect(nth(a.items, 0)).toMatchObject({ nonObjectSource: '"x"' });
+    const second = nth(a.items, 1);
+    expect(isComplex(second) && second.properties.map((p) => p.name)).toEqual(["k"]);
+    expect(serializeResource(resource)).toBe('{"resourceType":"P","a":["x",{"k":1}]}');
   });
 
   it("tolerates a non-object item inside a complex array (malformed) and flags it", () => {
@@ -110,8 +114,16 @@ describe("parseResource: the read path", () => {
     expect(misplaced[0]?.expression).toBe("Patient.contact");
   });
 
-  it("flags a non-scalar item embedded in a primitive array instead of dropping it silently", () => {
+  it("flags the scalar and the sibling it cannot place in an array holding an object", () => {
     const { issues } = parseResource('{"resourceType":"P","a":["x",{"k":1}],"_a":[null,null]}');
+    expect(issues.map((i) => `${i.code} at ${i.expression ?? ""}`)).toEqual([
+      `${ISSUE_CODES.MISPLACED_PRIMITIVE_EXTENSION} at P.a`,
+      `${ISSUE_CODES.UNKNOWN_PROPERTY} at P.a[0]`,
+    ]);
+  });
+
+  it("flags an array embedded in a primitive array instead of dropping it silently", () => {
+    const { issues } = parseResource('{"resourceType":"P","a":["x",["k"]]}');
     expect(
       issues.some((i) => i.code === ISSUE_CODES.UNKNOWN_PROPERTY && i.expression === "P.a[1]"),
     ).toBe(true);

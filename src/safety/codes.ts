@@ -1157,34 +1157,43 @@ export function typesOf(resource: FhirComplex): readonly string[] {
  * The resource types a document writes most, each with the one list {@link typesOf} answers for a
  * root naming it once. A walk asks a root's types many times, and every caller only reads the
  * list, so a root that names one of these, once, as a string, costs no list at all. Only these
- * names are kept: a name a document wrote is never held past the call that read it.
+ * names are kept: a name a document wrote is never held past the call that read it. The map is
+ * made by {@link commonTypes} on the first walk that asks, not at import.
  */
-const COMMON_TYPES: ReadonlyMap<string, readonly string[]> = new Map(
-  [
-    "AllergyIntolerance",
-    "Binary",
-    "Bundle",
-    "Condition",
-    "DiagnosticReport",
-    "DocumentReference",
-    "Encounter",
-    "Immunization",
-    "MedicationRequest",
-    "MedicationStatement",
-    "Observation",
-    "OperationOutcome",
-    "Organization",
-    "Parameters",
-    "Patient",
-    "Practitioner",
-    "Procedure",
+const COMMON_TYPE_NAMES: readonly string[] = [
+  "AllergyIntolerance",
+  "Binary",
+  "Bundle",
+  "Condition",
+  "DiagnosticReport",
+  "DocumentReference",
+  "Encounter",
+  "Immunization",
+  "MedicationRequest",
+  "MedicationStatement",
+  "Observation",
+  "OperationOutcome",
+  "Organization",
+  "Parameters",
+  "Patient",
+  "Practitioner",
+  "Procedure",
+];
+
+/** {@link COMMON_TYPE_NAMES}, each keyed to its own list, once made. */
+let commonTypesMap: ReadonlyMap<string, readonly string[]> | undefined;
+
+/** {@link COMMON_TYPE_NAMES}, each keyed to its own list: made on the first call, then kept. */
+function commonTypes(): ReadonlyMap<string, readonly string[]> {
+  return (commonTypesMap ??= new Map(
     // Not frozen: a frozen list is held in another form, and a walk's reads of it would then take
     // a slower path than they take on every other list they read.
-  ].map((type) => [type, [type]]),
-);
+    COMMON_TYPE_NAMES.map((type) => [type, [type]]),
+  ));
+}
 
 /**
- * {@link typesOf}'s list from {@link COMMON_TYPES} for a node that writes `resourceType` once, as a
+ * {@link typesOf}'s list from {@link commonTypes} for a node that writes `resourceType` once, as a
  * string that is one of them; `undefined` for any other node, which `typesOf` reads in full.
  */
 function singleCommonType(resource: FhirComplex): readonly string[] | undefined {
@@ -1197,7 +1206,7 @@ function singleCommonType(resource: FhirComplex): readonly string[] | undefined 
     if (found !== undefined) return undefined;
     const value = property.value;
     if (!isPrimitive(value) || typeof value.value !== "string") return undefined;
-    found = COMMON_TYPES.get(value.value);
+    found = commonTypes().get(value.value);
     if (found === undefined) return undefined;
   }
   return found;

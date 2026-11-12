@@ -31,17 +31,18 @@ jobs:
   #   Linux. A test that cannot run there is skipped by name with its reason (test/_runtime.ts).
   # - `coverage-ratchet`: coverage held to quality-floor.json, and on a pull request every changed
   #   line that coverage counts must have run and no floor may be lowered or removed.
-  # - `mutation` (pull requests only): the changed source files mutated with stryker.config.mjs, on
-  #   the suite of vitest.mutation.config.ts, and every mutant in the changed lines killed. The full
-  #   run is weekly-mutation.yml's.
+  # - `mutation` (pull requests only, this file's own job below, not the shared one): the mutants
+  #   in the changed lines tested with stryker.config.mjs, on the suite of
+  #   vitest.mutation.config.ts, and every one of them killed. The full run is weekly-mutation.yml's.
   #
   # The performance standard's two jobs run beside `verify` too:
   # - `scaling-gate`: `pnpm test:perf`, the scaling gates for parseResource, validateResource and
   #   serializeResource and their self-checks, never under coverage;
   # - `bench-compare` (pull requests only): bench/fhir.bench.mjs timed on the base build and the head
   #   build, interleaved on one runner. Advisory: it never fails, so never require it.
-  # A skipped job satisfies a required check, so require `bun`, `deno`, `coverage-ratchet`,
-  # `mutation` or `scaling-gate` only while its input below stays on. The full reading and the
+  # A skipped job satisfies a required check, so require `bun`, `deno`, `coverage-ratchet` or
+  # `scaling-gate` only while its input below stays on, and `mutation` knowing it is skipped on
+  # every event but a pull request. The full reading and the
   # profile are in bench-reading.yml.
   ci:
     uses: cosyte/.github/.github/workflows/ci.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # workflows-2026-11-10-398cd4ded647
@@ -51,9 +52,101 @@ jobs:
       run-bun: true
       run-deno: true
       run-coverage-ratchet: true
-      run-mutation: true
+      # Off: the `mutation` job below replaces the shared one.
+      run-mutation: false
       run-scaling-gate: true
       run-bench-compare: true
+
+  # The mutation job on a pull request, here rather than in the shared pipeline (whose
+  # `run-mutation` is off above): the shared job mutates each changed source file whole, and a
+  # change to src/codec/read.ts and src/safety/status.ts hit its 60-minute limit with 663 of 1,369
+  # mutants tested, so the check said nothing. This job sets MUTATE_CHANGED_LINES_BASE, so
+  # stryker.config.mjs loads the `changed-lines` ignorer (scripts/stryker-changed-lines.mjs):
+  # Stryker tests only the mutants whose lines touch a changed line, which are the mutants the
+  # ratchet judges, and lists every other mutant of the changed files as ignored. The ratchet, its
+  # floor and its rule (every mutant in the changed lines killed) are the shared job's, unchanged.
+  #
+  # A run that does not finish fails the check and says so: the mutation step stops Stryker at
+  # MUTATION_LIMIT_MINUTES, inside the job's own limit, and prints how far it got. MUTATION_BASE is
+  # the ref both the run and the ratchet read the change against.
+  mutation:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MUTATION_BASE: origin/${{ github.base_ref }}
+      MUTATION_LIMIT_MINUTES: "50"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A change with no changed source file starts no mutation run: `cosyte-mutate` writes an empty
+      # report and exits 0. An empty base is refused rather than read as "nothing changed".
+      - name: Mutate the changed lines
+        shell: bash
+        env:
+          MUTATE_CHANGED_LINES_BASE: ${{ env.MUTATION_BASE }}
+        run: |
+          set -euo pipefail
+          if [ "${MUTATION_BASE}" = "origin/" ] || [ -z "${MUTATION_BASE}" ]; then
+            echo "::error::the mutation job judges a pull request's changed lines, and this run has no base branch"
+            exit 1
+          fi
+          log="${RUNNER_TEMP}/mutate.log"
+          set +e
+          timeout --kill-after=60s "${MUTATION_LIMIT_MINUTES}m" \
+            pnpm exec cosyte-mutate changed --base "${MUTATION_BASE}" 2>&1 | tee "${log}"
+          status="${PIPESTATUS[0]}"
+          set -e
+          if [ "${status}" = 124 ] || [ "${status}" = 137 ]; then
+            progress="$(grep -Eo '[0-9]+/[0-9]+ tested[^)]*\)' "${log}" | tail -n 1 || true)"
+            message="the mutation run did not finish inside its ${MUTATION_LIMIT_MINUTES}-minute limit (${progress:-no mutant tested}), so the mutants in the changed lines were not all tested and this check fails"
+            echo "::error title=Mutation run unfinished::${message}"
+            {
+              echo "### Mutation run unfinished"
+              echo
+              echo "${message}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          if [ "${status}" != 0 ]; then
+            echo "::error title=Mutation run failed::cosyte-mutate exited ${status}; the run stopped before every mutant in the changed lines was tested"
+            exit 1
+          fi
+      # `--skip coverage`: coverage is judged in the shared pipeline's `coverage-ratchet` job.
+      - name: The mutation ratchet over the changed code
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="${RUNNER_TEMP}/mutation-ratchet.txt"
+          status=0
+          pnpm exec cosyte-ratchet check --skip coverage --base "${MUTATION_BASE}" > "${report}" 2>&1 || status=$?
+          cat "${report}"
+          {
+            echo "### Mutants in the changed code"
+            echo
+            echo '```text'
+            cat "${report}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+          exit "${status}"
+      # The JSON and HTML reports, so a reviewer can read each surviving mutant, kept when a step
+      # above failed too.
+      - name: Keep the mutation report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-changed
+          path: reports/mutation/
+          if-no-files-found: warn
+          retention-days: 14
 
   # P11 fuzz tier at fuzz-scale (FHIR-P11): the JSON + XML adversarial harness (XXE, billion-laughs,
   # deep nesting, `_element` games, huge/scientific numbers, prototype-chain keys) run at a raised

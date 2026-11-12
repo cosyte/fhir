@@ -13,7 +13,10 @@ import type * as Parser from "../src/fhirpath/parser.js";
  * - a parse that fails for a reason other than the grammar keeps nothing, reports the constraint
  *   unchecked for that call, and the next call parses again;
  * - the first validation may happen anywhere, inside a stream's loop included, and answers as a
- *   warm one does.
+ *   warm one does;
+ * - the first read and validation, which make the JSON reader's and the safety walk's tables on
+ *   first use rather than at import, answer as later ones do (`test/import-work.test.ts` holds
+ *   what the modules build at import).
  *
  * Every case imports a fresh copy of `src/index.ts`, so nothing an earlier case loaded counts. Every
  * document is synthetic.
@@ -142,5 +145,48 @@ describe("a first validation inside a stream", () => {
       .validateResource(resource)
       .issues.map((i) => `${i.code} ${i.constraint ?? ""} ${i.expression}`);
     expect(inside).toEqual([warm, warm]);
+  });
+});
+
+/**
+ * A synthetic Bundle whose entry is a plain Observation, so a read takes the tape path and its
+ * plain-object check, and a validation asks the common resource types and the types with a
+ * resource position below their top level: each a table made on first use rather than at import.
+ */
+const BUNDLE = JSON.stringify({
+  resourceType: "Bundle",
+  type: "collection",
+  entry: [
+    {
+      resource: {
+        resourceType: "Observation",
+        status: "final",
+        code: { coding: [{ system: "http://example.org/fake-codes", code: "fake-1" }] },
+        valueString: "example",
+      },
+    },
+  ],
+});
+
+/** Everything a read and a validation of `json` answer, as one comparable value. */
+function readAndValidate(fhir: typeof Fhir, json: string): unknown {
+  const { resource, issues } = fhir.parseResource(json);
+  const validation = fhir.validateResource(resource);
+  return {
+    model: fhir.serializeResource(resource),
+    read: issues.map((i) => `${i.code} ${i.expression}`),
+    validation: validation.issues.map((i) => `${i.code} ${i.expression}`),
+    safety: fhir.readSafety(resource),
+  };
+}
+
+describe("the first read and validation after import", () => {
+  it("answer as later ones do, the tables made on first use included", async () => {
+    const fhir = await importFresh();
+    const first = readAndValidate(fhir, BUNDLE);
+    const second = readAndValidate(fhir, BUNDLE);
+    expect(first).toEqual(second);
+    const warm = readAndValidate(await importFresh(), BUNDLE);
+    expect(readAndValidate(fhir, BUNDLE)).toEqual(warm);
   });
 });
