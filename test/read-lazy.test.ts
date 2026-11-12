@@ -180,7 +180,9 @@ describe("readRawJsonLazily", () => {
       // A `_`-sibling, a repeated name and an escaped name: not plain, so read from the raw tree.
       '{"resourceType":"Patient","birthDate":"1970-01-01","_birthDate":{"id":"b1"}}',
       '{"resourceType":"Observation","status":"final","status":"entered-in-error"}',
-      '{"resourceType":"Patient","g\u0065nder":"other","name":[{"family":"Roe"}]}',
+      '{"resourceType":"Patient","g\\u0065nder":"other","name":[{"family":"Roe"}]}',
+      '{"resourceType":"Observation","status":"final","st\\u0061tus":"entered-in-error"}',
+      '{"resourceType":"Patient","\\u005fbirthDate":{"id":"b1"},"birthDate":"1970-01-01"}',
       '{"resourceType":"Patient","_":"x","_a":1}',
       // Arrays of every kind: strings and booleans, objects, mixed, empty, nulls, numbers, nested.
       '{"resourceType":"Patient","name":[{"given":["A","B"],"use":"official"},{"family":"C"}]}',
