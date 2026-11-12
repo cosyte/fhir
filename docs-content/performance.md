@@ -174,9 +174,9 @@ fresh processes, within its 10 ms budget.
 Since those readings, a read of JSON text builds the model straight from the tokens of the text for
 an object with no `_`-sibling, no repeated name and at most 16 members, and validation makes fewer
 lists, sets and scope objects on its walks. These are the peak memory budget's readings of the
-vital-signs Observation (1.3 KiB), above the empty call's floor, in the `Bench reading` run of
-`main` at commit `36f6632` just before the change (run 43136596065) and in the runs of the change on
-its pull request (run 43168663384, commit `f7786cf`):
+vital-signs Observation (1.3 KiB), above the empty call's floor, in the `Bench reading` runs on
+a GitHub-hosted runner with Node.js 22.23.4: of `main` at commit `36f6632`, just before the change,
+and of the change on its pull request at commit `f7786cf`:
 
 | Benchmark                                         | Before | After  | Budget |
 | ------------------------------------------------- | ------ | ------ | ------ |
