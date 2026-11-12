@@ -1082,6 +1082,28 @@ describe("type and profile discriminators: the edges", () => {
     ).toEqual([["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE]]);
   });
 
+  it("lets any other failure of a nested check propagate, as it does unnested", () => {
+    const differentialOnly = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}gendered-patient`,
+      type: "Patient",
+      baseDefinition: `${BASE}failing-base`,
+      differential: { element: [{ id: "Patient.gender", path: "Patient.gender", min: 1 }] },
+    });
+    const resolve = (url: string) => {
+      if (url === differentialOnly.url) return differentialOnly;
+      throw new Error("fake resolver failure");
+    };
+    const bundle = parse({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [{ resource: { resourceType: "Patient", id: "fake-1" } }],
+    });
+    expect(() => collectProfileIssues(bundle, entryByProfile, { resolve })).toThrow(
+      "fake resolver failure",
+    );
+  });
+
   it("asserts nothing when two supplied versions of an unpinned profile disagree", () => {
     const strict = loadSd({
       resourceType: "StructureDefinition",

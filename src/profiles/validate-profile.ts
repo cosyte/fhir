@@ -177,7 +177,7 @@ function environmentIn(
         environmentIn(inner, options, depth + 1, state),
       );
     } catch (error) {
-      /* v8 ignore next -- any other throw is a defect, and propagates exactly as it did unnested */
+      // Any other throw (a caller's resolver failing, say) propagates exactly as it does unnested.
       if (!(error instanceof FhirProfileError)) throw error;
       // A profile whose snapshot cannot be generated was not available to check against.
       return SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
