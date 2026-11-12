@@ -204,7 +204,11 @@ export function readPatientAnimal(resource: FhirComplex): PatientAnimal | undefi
   const subs = subMembers[0] === undefined ? [] : asItems(subMembers[0]);
 
   const issues: ValidationIssue[] = [];
-  const values: Partial<Record<Part, FhirComplex>> = {};
+  const values: Record<Part, FhirComplex | undefined> = {
+    species: undefined,
+    breed: undefined,
+    genderStatus: undefined,
+  };
   for (const part of PARTS) {
     const claimed: { readonly node: FhirComplex; readonly index: number }[] = [];
     let ambiguous = false;
@@ -244,14 +248,8 @@ export function readPatientAnimal(resource: FhirComplex): PatientAnimal | undefi
       }
       continue;
     }
-    const value = readValue(one.node, `${base}.extension[${String(one.index)}]`, issues);
-    if (value !== undefined) values[part] = value;
+    values[part] = readValue(one.node, `${base}.extension[${String(one.index)}]`, issues);
   }
 
-  return {
-    species: values.species,
-    breed: values.breed,
-    genderStatus: values.genderStatus,
-    issues,
-  };
+  return { ...values, issues };
 }

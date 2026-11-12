@@ -244,6 +244,56 @@ describe("veterinary Patient starter", () => {
     }
   });
 
+  it("states every element of its differential", () => {
+    const byUrl = { discriminator: [{ type: "value", path: "url" }], rules: "open" };
+    const part = (name: string, min: number, valueSet: string): Record<string, unknown>[] => [
+      {
+        path: "Patient.extension.extension",
+        id: `Patient.extension:animal.extension:${name}`,
+        sliceName: name,
+        min,
+        max: 1,
+      },
+      {
+        path: "Patient.extension.extension.url",
+        id: `Patient.extension:animal.extension:${name}.url`,
+        fixed: { type: "Uri", value: { kind: "primitive", value: name } },
+      },
+      {
+        path: "Patient.extension.extension.value[x]",
+        id: `Patient.extension:animal.extension:${name}.value[x]`,
+        min: 1,
+        type: [{ code: "CodeableConcept" }],
+        binding: { strength: "example", valueSet },
+      },
+    ];
+    expect(VETERINARY_PATIENT_STARTER.differential).toEqual([
+      { path: "Patient.extension", id: "Patient.extension", slicing: byUrl },
+      {
+        path: "Patient.extension",
+        id: "Patient.extension:animal",
+        sliceName: "animal",
+        min: 1,
+        max: 1,
+        mustSupport: true,
+        type: [{ code: "Extension", profile: [ANIMAL] }],
+      },
+      {
+        path: "Patient.extension.extension",
+        id: "Patient.extension:animal.extension",
+        slicing: byUrl,
+      },
+      ...part("species", 1, "http://hl7.org/fhir/ValueSet/animal-species"),
+      ...part("breed", 0, "http://hl7.org/fhir/ValueSet/animal-breeds"),
+      ...part("genderStatus", 0, "http://hl7.org/fhir/ValueSet/animal-genderstatus"),
+      {
+        path: "Patient.extension.url",
+        id: "Patient.extension:animal.url",
+        fixed: { type: "Uri", value: { kind: "primitive", value: ANIMAL } },
+      },
+    ]);
+  });
+
   it("passes a veterinary Patient carrying species, breed and gender status", () => {
     expect(
       veterinaryIssues([
