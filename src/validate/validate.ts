@@ -4,8 +4,10 @@
  * Given a resource model (from `parseResource`) and a schema ({@link ./schema.js}), the validator
  * walks the resource once and produces value-free {@link ValidationIssue}s across three layers:
  *
- * 1. **Structure**, an element the resource's schema does not define is `UNKNOWN_ELEMENT`; a resource
- *    with no `resourceType` is `RESOURCE_TYPE_UNKNOWN`; a `choice[x]` with more than one variant is
+ * 1. **Structure**, an element the resource's schema does not define is `UNKNOWN_ELEMENT`, and so is
+ *    one at any depth below it (a backbone element, a datatype, an extension, a contained resource or
+ *    a Bundle entry) that the R4 and R4B definitions do not define there, for the ten resource types
+ *    the safety readout assesses; a resource with no `resourceType` is `RESOURCE_TYPE_UNKNOWN`; a `choice[x]` with more than one variant is
  *    `CHOICE_AMBIGUOUS`; a node whose shape does not match its datatype is `TYPE_MISMATCH`.
  * 2. **Cardinality**, a required element (min ≥ 1) that is absent is `CARDINALITY_MIN`; an element
  *    appearing more than its max is `CARDINALITY_MAX`.
@@ -18,8 +20,9 @@
  * regardless of mode. **Fail-safe:** the validator never rejects a whole resource for one recoverable
  * field, and it **never emits a false error**, a resource type it has no schema for degrades to a
  * single informational `RESOURCE_NOT_MODELED` (its own elements are left unchecked rather than
- * wrongly flagged), and complex datatype internals are left to the profile layer rather than
- * guessed at.
+ * wrongly flagged, unless it is a `Bundle` or a `Practitioner`, whose elements the definitions
+ * check), and complex datatype internals beyond which elements they define are left to the profile
+ * layer rather than guessed at.
  *
  * **The narrative is read too.** Every `Narrative.div`, in the resource and in each resource it
  * carries (`contained`, Bundle entries, Parameters), is read as XHTML and checked against the R4
@@ -65,7 +68,7 @@ import { collectNarrativeIssues } from "./narrative.js";
 import { collectQuantityIssues } from "./quantity.js";
 import { collectSafetyIssues } from "./safety.js";
 import { typesOf } from "../safety/codes.js";
-import { nestedArrays, shareSafetyWalks } from "../safety/status.js";
+import { nestedArrays, shareSafetyWalks, undefinedElements } from "../safety/status.js";
 import { collectTerminologyIssues } from "./terminology.js";
 import { collectProfileIssues, collectProfileVersionIssues } from "../profiles/validate-profile.js";
 import { invariantFindings } from "../profiles/invariants.js";
@@ -233,6 +236,15 @@ function checkLeaf(
 /**
  * Validate a FHIR resource model against structural, cardinality, and value-domain rules.
  *
+ * An element the FHIR R4 and R4B definitions do not define is reported as `UNKNOWN_ELEMENT` at
+ * every depth, not only among the resource's own members: inside a backbone element, a datatype,
+ * an extension, a contained resource and a Bundle entry, for the resource types `readSafety`
+ * assesses (`AllergyIntolerance`, `Bundle`, `Condition`, `DiagnosticReport`, `Immunization`,
+ * `MedicationRequest`, `MedicationStatement`, `Observation`, `Patient`, `Practitioner`). These are
+ * exactly the elements `readSafety` lists on `notAssessed` for the same reason. A resource of
+ * another type is not checked below its root. The resource's own members are checked against its
+ * schema, a caller's included, where the registry has one.
+ *
  * @param resource - A resource model (typically from `parseResource`).
  * @param options - Mode and extra schemas.
  * @returns The value-free {@link ValidationResult}.
@@ -348,6 +360,18 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
       const suffix = isChoice(element) ? `${name}[x]` : name;
       emit(ctx, "CARDINALITY_MIN", `${root}.${suffix}`);
     }
+  }
+
+  // Layer 1 at every depth: an element the R4 and R4B definitions do not define, inside a backbone
+  // element, a datatype, a contained resource or a Bundle entry, read off the safety walk so this
+  // finding and the readout's `notAssessed` cannot disagree. Its model covers the ten resource types
+  // the readout assesses and everything below them; a resource of another type is not checked. A
+  // member of the resource itself is the schema pass's above when the registry models the type, so
+  // a caller's own schema still decides there; otherwise (a Bundle, a Practitioner) it is reported
+  // here.
+  for (const unknown of undefinedElements(resource, root)) {
+    if (unknown.top && modeled !== undefined) continue;
+    emit(ctx, "UNKNOWN_ELEMENT", unknown.location);
   }
 
   // Safety layer (Phase 3): fail-closed modifier extensions (every type), retraction, and the named

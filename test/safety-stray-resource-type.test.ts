@@ -146,10 +146,17 @@ describe("a stray resourceType never starts a resource or hides one", () => {
 
 /**
  * Cases per property. The default keeps the ordinary suite quick; the fuzz depth (`FUZZ_RUNS`, 20000
- * in the CI fuzz job and the nightly run) is the one to judge the design at.
+ * in the CI fuzz job, `.github/workflows/ci.yml`, which the nightly run runs too) is the one to
+ * judge the design at.
  */
 const FUZZ_RUNS = Number.parseInt(process.env["FUZZ_RUNS"] ?? "", 10);
 const RUNS = Number.isFinite(FUZZ_RUNS) && FUZZ_RUNS > 0 ? FUZZ_RUNS : 1000;
+/**
+ * Each property's time limit, raised with its case count: at the fuzz depth one property takes
+ * longer than the suite's default limit on a GitHub runner, and a case count that cannot finish is
+ * no deeper check.
+ */
+const TIMEOUT = Math.max(10_000, RUNS * 10);
 
 /**
  * A container resource, named for the resource position it offers: `contained` on an Observation,
@@ -409,7 +416,11 @@ const PLANTED = fc.tuple(PLANTED_TYPE, PLANTED_STATUS).map(([type, status]): Res
   children: [],
 }));
 
-function check(resource: FhirComplex): { safe: boolean; notAssessed: number; threw: boolean } {
+function check(resource: FhirComplex): {
+  safe: boolean;
+  notAssessed: readonly string[];
+  threw: boolean;
+} {
   const safety = readSafety(resource);
   let threw = false;
   try {
@@ -417,53 +428,103 @@ function check(resource: FhirComplex): { safe: boolean; notAssessed: number; thr
   } catch (error) {
     threw = error instanceof FhirSafetyError;
   }
-  return { safe: safety.safeToSummarize, notAssessed: safety.notAssessed.length, threw };
+  return { safe: safety.safeToSummarize, notAssessed: safety.notAssessed, threw };
+}
+
+/** The root type of the document a container step builds. */
+function rootTypeOf(container: Container): string {
+  switch (container) {
+    case "Observation":
+      return "Observation";
+    case "Bundle":
+    case "BundleResponse":
+      return "Bundle";
+    case "Parameters":
+    case "ParametersPart":
+      return "Parameters";
+  }
+}
+
+/**
+ * The location of the planted resource: the root's type, then each container's way down to its
+ * position. Every element on the way holds one item, which JSON writes in an array (`[0]`) for the
+ * repeating ones and XML writes as a single element (no index).
+ */
+function plantedPath(steps: readonly Step[], format: "json" | "xml"): string {
+  const one = format === "json" ? "[0]" : "";
+  let path = rootTypeOf((steps[0] as Step).container);
+  for (const step of steps) {
+    switch (step.container) {
+      case "Observation":
+        path += `.contained${one}`;
+        break;
+      case "Bundle":
+        path += `.entry${one}.resource`;
+        break;
+      case "BundleResponse":
+        path += `.entry${one}.response.outcome`;
+        break;
+      case "Parameters":
+        path += `.parameter${one}.resource`;
+        break;
+      case "ParametersPart":
+        path += `.parameter${one}.part${one}.resource`;
+        break;
+    }
+  }
+  return path;
 }
 
 describe("property: a planted retracted resource of no or an unmodeled type always declines", () => {
   const steps = (strays: boolean) =>
     fc.array(stepArbitrary(strays), { minLength: 1, maxLength: 4 });
 
-  it(`JSON, ${String(RUNS)} cases`, () => {
+  it(`JSON, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(steps(true), PLANTED, (path, planted) => {
         const document = build(path, planted);
         const result = check(json(resourceJson(document)));
         expect(result).toEqual({ safe: false, notAssessed: result.notAssessed, threw: true });
-        expect(result.notAssessed).toBeGreaterThan(0);
+        // The planted resource itself is listed, by its own location, whatever else is.
+        expect(result.notAssessed).toContain(plantedPath(path, "json"));
       }),
       { numRuns: RUNS, seed: 20261111 },
     );
   });
 
-  it(`XML, ${String(RUNS)} cases`, () => {
+  it(`XML, ${String(RUNS)} cases`, { timeout: TIMEOUT }, () => {
     fc.assert(
       fc.property(steps(true), PLANTED, (path, planted) => {
         const document = build(path, planted);
         const result = check(xml(xmlResource(document, NS)));
         expect(result).toEqual({ safe: false, notAssessed: result.notAssessed, threw: true });
-        expect(result.notAssessed).toBeGreaterThan(0);
+        // The planted resource itself is listed, by its own location, whatever else is.
+        expect(result.notAssessed).toContain(plantedPath(path, "xml"));
       }),
       { numRuns: RUNS, seed: 20261111 },
     );
   });
 
-  it(`converse: only modeled resources at resource positions, no stray key, stays safe (${String(RUNS)} cases)`, () => {
-    fc.assert(
-      fc.property(steps(false), fc.boolean(), (path, asXml) => {
-        // Only the modeled containers: Parameters is a type this layer does not model.
-        const modeled = path.filter(
-          (step) => step.container !== "Parameters" && step.container !== "ParametersPart",
-        );
-        fc.pre(modeled.length > 0);
-        const document = build(modeled, MODELED_LEAF);
-        const resource = asXml ? xml(xmlResource(document, NS)) : json(resourceJson(document));
-        const safety = readSafety(resource);
-        expect(safety.notAssessed).toEqual([]);
-        expect(safety.safeToSummarize).toBe(true);
-        expect(() => assertSafeToSummarize(resource)).not.toThrow();
-      }),
-      { numRuns: RUNS, seed: 20261111 },
-    );
-  });
+  it(
+    `converse: only modeled resources at resource positions, no stray key, stays safe (${String(RUNS)} cases)`,
+    { timeout: TIMEOUT },
+    () => {
+      fc.assert(
+        fc.property(steps(false), fc.boolean(), (path, asXml) => {
+          // Only the modeled containers: Parameters is a type this layer does not model.
+          const modeled = path.filter(
+            (step) => step.container !== "Parameters" && step.container !== "ParametersPart",
+          );
+          fc.pre(modeled.length > 0);
+          const document = build(modeled, MODELED_LEAF);
+          const resource = asXml ? xml(xmlResource(document, NS)) : json(resourceJson(document));
+          const safety = readSafety(resource);
+          expect(safety.notAssessed).toEqual([]);
+          expect(safety.safeToSummarize).toBe(true);
+          expect(() => assertSafeToSummarize(resource)).not.toThrow();
+        }),
+        { numRuns: RUNS, seed: 20261111 },
+      );
+    },
+  );
 });

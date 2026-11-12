@@ -570,7 +570,13 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
       // A weight in `lb` where R4 vital signs requires kg/g stays an error: the vendor element is
       // not a second FHIR `code`.
       expect(withForeign.valid).toBe(false);
-      expect(withForeign.issues.map((i) => i.code)).toEqual(clean.issues.map((i) => i.code));
+      // The vendor element is reported where it sits, as an element R4 does not define there;
+      // every other finding is the clean document's.
+      const unknown = withForeign.issues.filter((i) => i.code === "UNKNOWN_ELEMENT");
+      expect(unknown.map((i) => i.expression)).toEqual(["Observation.category.coding.<withheld>"]);
+      expect(
+        withForeign.issues.filter((i) => i.code !== "UNKNOWN_ELEMENT").map((i) => i.code),
+      ).toEqual(clean.issues.map((i) => i.code));
     });
 
     it("does not manufacture a no-known-allergy assertion from a foreign coding", () => {
@@ -1622,6 +1628,11 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
  * verdict and the full `readSafety` readout) is asserted at the value measured at the pin before any
  * source changed, so a change that moved a read to make the refusal look better would show here.
  * All documents here are synthetic.
+ *
+ * One reading has moved since, in the fail-closed direction only and for a reason of its own: the
+ * readout now lists an element the definitions do not define on `notAssessed`, so D1, D3 and the
+ * M1 documents, each holding a foreign element at a modeled root, decline (`FOREIGN_MEMBER`). The
+ * issues and the validator's findings are as the pin measured them.
  */
 describe("AC-8: reading every document the prefix refusal is measured on is unchanged", () => {
   const D1 =
@@ -1662,6 +1673,15 @@ describe("AC-8: reading every document the prefix refusal is measured on is unch
     notAssessed: [],
     safeToSummarize: true,
   };
+  /**
+   * The readout of a modeled document holding one prefixed foreign element at its top level. Since
+   * the readout lists an element the definitions do not define on `notAssessed`, that element is
+   * listed there and the readout declines; at the pin it was affirmed.
+   */
+  const FOREIGN_MEMBER = (type: string) => ({
+    notAssessed: [`${type}.<withheld>`],
+    safeToSummarize: false,
+  });
   const OBSERVATION_FINDINGS = [
     {
       code: "UNKNOWN_ELEMENT",
@@ -1687,7 +1707,7 @@ describe("AC-8: reading every document the prefix refusal is measured on is unch
         expression: "Patient.<withheld>",
       },
     ],
-    safety: { ...QUIET, resourceType: "Patient" },
+    safety: { ...QUIET, resourceType: "Patient", ...FOREIGN_MEMBER("Patient") },
   };
 
   const READS = [
@@ -1714,7 +1734,12 @@ describe("AC-8: reading every document the prefix refusal is measured on is unch
         ],
         valid: false,
         findings: OBSERVATION_FINDINGS,
-        safety: { ...QUIET, resourceType: "Observation", status: "final" },
+        safety: {
+          ...QUIET,
+          resourceType: "Observation",
+          status: "final",
+          ...FOREIGN_MEMBER("Observation"),
+        },
       },
     ],
     [
@@ -1765,7 +1790,12 @@ describe("AC-8: reading every document the prefix refusal is measured on is unch
         ],
         valid: false,
         findings: OBSERVATION_FINDINGS,
-        safety: { ...QUIET, resourceType: "Observation", status: "final" },
+        safety: {
+          ...QUIET,
+          resourceType: "Observation",
+          status: "final",
+          ...FOREIGN_MEMBER("Observation"),
+        },
       },
     ],
     ["M1 p:x", () => parseResource('{"resourceType":"Patient","p:x":"v"}'), PATIENT_READ],

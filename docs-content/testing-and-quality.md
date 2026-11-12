@@ -42,6 +42,13 @@ checks values and verdicts, not only that nothing threw.
   cases by default, which a separate CI job raises to 20,000, and three run 50 or 100. The six other
   property tests run 60 to 3,000 cases each with no fixed seed, so fast-check seeds each run afresh
   and prints the seed when one fails.
+- **The safety readout's properties** plant what the readout must never call safe at random depth
+  in random synthetic documents, in JSON and XML: a resource of no type or of a type it does not
+  assess, a stray `resourceType`, and an element the FHIR definitions do not define. Each runs 1,000
+  cases with a fixed seed in the suite, and the same CI job that raises the fuzz properties runs
+  them at 20,000, on every pull request and nightly. A separate CI job fetches the R4 and R4B
+  definition files at a pinned commit, checks their SHA-256, and re-derives the element table the
+  readout is held to.
 - **The three properties every Cosyte parser proves** run on the generators we publish at
   `@cosyte/fhir/arbitraries`, in ten checks. Round trip: in JSON, a resource read back from
   what the writer wrote is the same model, every decimal by its exact text, and writing it again

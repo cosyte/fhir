@@ -90,6 +90,12 @@ NAME DICTE
 # this file admits.
 NAME SOME
 NAME NAME
+# test/__data__/fhir-element-definitions.json is a projection of the FHIR R4 and
+# R4B definitions, not a document: it maps each element name to what the
+# definitions type it as, and a primitive element maps to the word "primitive".
+# Its `HumanName` context therefore reads to the scanner as a name whose family
+# and given are "primitive". No person carries that token here.
+NAME PRIMITIVE
 
 # --- Synthetic dates of birth (birthDate) ---
 DOB 1974-12-25

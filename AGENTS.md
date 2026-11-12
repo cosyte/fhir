@@ -37,7 +37,9 @@ pnpm test
 pnpm test:coverage
 pnpm build
 pnpm attw
-FUZZ_RUNS=20000 pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts
+FUZZ_RUNS=20000 pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts \
+  test/safety-not-assessed.test.ts test/safety-resource-slots.test.ts \
+  test/safety-stray-resource-type.test.ts test/safety-undefined-element.test.ts
 pnpm typecheck:examples
 pnpm lint:examples
 pnpm examples
@@ -60,6 +62,11 @@ TSDoc summary. The `version` script regenerates the pages, so a release carries 
 CI also runs the differential against the HL7 reference validator (`pnpm corpus:fetch`, then
 `pnpm differential` and `pnpm differential:determinism`), which needs `java` and the pinned
 `validator_cli.jar` at `VALIDATOR_CLI_JAR`.
+
+CI also fetches the FHIR R4 and R4B definition files at a pinned commit and re-derives
+`test/__data__/fhir-element-definitions.json` from them (`pnpm definitions:check`); the test suite
+holds the safety readout's element table and resource positions to that file. After a change to
+either, run `pnpm definitions:derive` (it fetches) and commit what it writes.
 
 ## Data
 

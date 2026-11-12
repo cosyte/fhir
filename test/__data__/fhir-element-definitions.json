@@ -1,0 +1,5420 @@
+{
+  "note": "Committed expectation data: a projection of the FHIR R4 and R4B StructureDefinitions named under sources. Do not hand-edit: re-derive it with `pnpm definitions:derive`, and `pnpm definitions:check` (CI) re-derives it from the pinned files and compares. The rule is the docblock of scripts/element-definitions.mjs.",
+  "licence": "CC0-1.0, as the FHIR specification is; see fhir-element-definitions.NOTICE.txt beside this file.",
+  "sources": {
+    "r4": {
+      "version": "4.0.1",
+      "files": {
+        "profiles-resources.xml": {
+          "url": "https://raw.githubusercontent.com/hapifhir/hapi-fhir/3f77c0353b0bf07f0b06eaaa56df43e501447bff/hapi-fhir-validation-resources-r4/src/main/resources/org/hl7/fhir/r4/model/profile/profiles-resources.xml",
+          "sha256": "f3005bd427a60a3552be16d59e66b4546d0e9d58decd97b87f5943fbef94a1b7"
+        },
+        "profiles-types.xml": {
+          "url": "https://raw.githubusercontent.com/hapifhir/hapi-fhir/3f77c0353b0bf07f0b06eaaa56df43e501447bff/hapi-fhir-validation-resources-r4/src/main/resources/org/hl7/fhir/r4/model/profile/profiles-types.xml",
+          "sha256": "4edb5f32c4977153a70a5db4b733c56308f94fe85f0278d11df87b589f53b097"
+        }
+      }
+    },
+    "r4b": {
+      "version": "4.3.0",
+      "files": {
+        "profiles-resources.xml": {
+          "url": "https://raw.githubusercontent.com/hapifhir/hapi-fhir/3f77c0353b0bf07f0b06eaaa56df43e501447bff/hapi-fhir-validation-resources-r4b/src/main/resources/org/hl7/fhir/r4b/model/profile/profiles-resources.xml",
+          "sha256": "d564774a387cee996f9f29c9ea7a13b930780434ef62b28f5c35c0045177f0ff"
+        },
+        "profiles-types.xml": {
+          "url": "https://raw.githubusercontent.com/hapifhir/hapi-fhir/3f77c0353b0bf07f0b06eaaa56df43e501447bff/hapi-fhir-validation-resources-r4b/src/main/resources/org/hl7/fhir/r4b/model/profile/profiles-types.xml",
+          "sha256": "89a784af23844c305f8a8a567569ecb97a279a059596efab99b994ec4ed03c99"
+        }
+      }
+    }
+  },
+  "assessedTypes": [
+    "AllergyIntolerance",
+    "Bundle",
+    "Condition",
+    "DiagnosticReport",
+    "Immunization",
+    "MedicationRequest",
+    "MedicationStatement",
+    "Observation",
+    "Patient",
+    "Practitioner"
+  ],
+  "resourcePositions": {
+    "r4": [
+      "Account.contained",
+      "ActivityDefinition.contained",
+      "AdverseEvent.contained",
+      "AllergyIntolerance.contained",
+      "Appointment.contained",
+      "AppointmentResponse.contained",
+      "AuditEvent.contained",
+      "Basic.contained",
+      "BiologicallyDerivedProduct.contained",
+      "BodyStructure.contained",
+      "Bundle.entry.resource",
+      "Bundle.entry.response.outcome",
+      "CapabilityStatement.contained",
+      "CarePlan.contained",
+      "CareTeam.contained",
+      "CatalogEntry.contained",
+      "ChargeItem.contained",
+      "ChargeItemDefinition.contained",
+      "Claim.contained",
+      "ClaimResponse.contained",
+      "ClinicalImpression.contained",
+      "CodeSystem.contained",
+      "Communication.contained",
+      "CommunicationRequest.contained",
+      "CompartmentDefinition.contained",
+      "Composition.contained",
+      "ConceptMap.contained",
+      "Condition.contained",
+      "Consent.contained",
+      "Contract.contained",
+      "Coverage.contained",
+      "CoverageEligibilityRequest.contained",
+      "CoverageEligibilityResponse.contained",
+      "DetectedIssue.contained",
+      "Device.contained",
+      "DeviceDefinition.contained",
+      "DeviceMetric.contained",
+      "DeviceRequest.contained",
+      "DeviceUseStatement.contained",
+      "DiagnosticReport.contained",
+      "DocumentManifest.contained",
+      "DocumentReference.contained",
+      "DomainResource.contained",
+      "EffectEvidenceSynthesis.contained",
+      "Encounter.contained",
+      "Endpoint.contained",
+      "EnrollmentRequest.contained",
+      "EnrollmentResponse.contained",
+      "EpisodeOfCare.contained",
+      "EventDefinition.contained",
+      "Evidence.contained",
+      "EvidenceVariable.contained",
+      "ExampleScenario.contained",
+      "ExplanationOfBenefit.contained",
+      "FamilyMemberHistory.contained",
+      "Flag.contained",
+      "Goal.contained",
+      "GraphDefinition.contained",
+      "Group.contained",
+      "GuidanceResponse.contained",
+      "HealthcareService.contained",
+      "ImagingStudy.contained",
+      "Immunization.contained",
+      "ImmunizationEvaluation.contained",
+      "ImmunizationRecommendation.contained",
+      "ImplementationGuide.contained",
+      "InsurancePlan.contained",
+      "Invoice.contained",
+      "Library.contained",
+      "Linkage.contained",
+      "List.contained",
+      "Location.contained",
+      "Measure.contained",
+      "MeasureReport.contained",
+      "Media.contained",
+      "Medication.contained",
+      "MedicationAdministration.contained",
+      "MedicationDispense.contained",
+      "MedicationKnowledge.contained",
+      "MedicationRequest.contained",
+      "MedicationStatement.contained",
+      "MedicinalProduct.contained",
+      "MedicinalProductAuthorization.contained",
+      "MedicinalProductContraindication.contained",
+      "MedicinalProductIndication.contained",
+      "MedicinalProductIngredient.contained",
+      "MedicinalProductInteraction.contained",
+      "MedicinalProductManufactured.contained",
+      "MedicinalProductPackaged.contained",
+      "MedicinalProductPharmaceutical.contained",
+      "MedicinalProductUndesirableEffect.contained",
+      "MessageDefinition.contained",
+      "MessageHeader.contained",
+      "MetadataResource.contained",
+      "MolecularSequence.contained",
+      "NamingSystem.contained",
+      "NutritionOrder.contained",
+      "Observation.contained",
+      "ObservationDefinition.contained",
+      "OperationDefinition.contained",
+      "OperationOutcome.contained",
+      "Organization.contained",
+      "OrganizationAffiliation.contained",
+      "Parameters.parameter.resource",
+      "Patient.contained",
+      "PaymentNotice.contained",
+      "PaymentReconciliation.contained",
+      "Person.contained",
+      "PlanDefinition.contained",
+      "Practitioner.contained",
+      "PractitionerRole.contained",
+      "Procedure.contained",
+      "Provenance.contained",
+      "Questionnaire.contained",
+      "QuestionnaireResponse.contained",
+      "RelatedPerson.contained",
+      "RequestGroup.contained",
+      "ResearchDefinition.contained",
+      "ResearchElementDefinition.contained",
+      "ResearchStudy.contained",
+      "ResearchSubject.contained",
+      "RiskAssessment.contained",
+      "RiskEvidenceSynthesis.contained",
+      "Schedule.contained",
+      "SearchParameter.contained",
+      "ServiceRequest.contained",
+      "Slot.contained",
+      "Specimen.contained",
+      "SpecimenDefinition.contained",
+      "StructureDefinition.contained",
+      "StructureMap.contained",
+      "Subscription.contained",
+      "Substance.contained",
+      "SubstanceNucleicAcid.contained",
+      "SubstancePolymer.contained",
+      "SubstanceProtein.contained",
+      "SubstanceReferenceInformation.contained",
+      "SubstanceSourceMaterial.contained",
+      "SubstanceSpecification.contained",
+      "SupplyDelivery.contained",
+      "SupplyRequest.contained",
+      "Task.contained",
+      "TerminologyCapabilities.contained",
+      "TestReport.contained",
+      "TestScript.contained",
+      "ValueSet.contained",
+      "VerificationResult.contained",
+      "VisionPrescription.contained"
+    ],
+    "r4b": [
+      "Account.contained",
+      "ActivityDefinition.contained",
+      "AdministrableProductDefinition.contained",
+      "AdverseEvent.contained",
+      "AllergyIntolerance.contained",
+      "Appointment.contained",
+      "AppointmentResponse.contained",
+      "AuditEvent.contained",
+      "Basic.contained",
+      "BiologicallyDerivedProduct.contained",
+      "BodyStructure.contained",
+      "Bundle.entry.resource",
+      "Bundle.entry.response.outcome",
+      "CapabilityStatement.contained",
+      "CarePlan.contained",
+      "CareTeam.contained",
+      "CatalogEntry.contained",
+      "ChargeItem.contained",
+      "ChargeItemDefinition.contained",
+      "Citation.contained",
+      "Claim.contained",
+      "ClaimResponse.contained",
+      "ClinicalImpression.contained",
+      "ClinicalUseDefinition.contained",
+      "CodeSystem.contained",
+      "Communication.contained",
+      "CommunicationRequest.contained",
+      "CompartmentDefinition.contained",
+      "Composition.contained",
+      "ConceptMap.contained",
+      "Condition.contained",
+      "Consent.contained",
+      "Contract.contained",
+      "Coverage.contained",
+      "CoverageEligibilityRequest.contained",
+      "CoverageEligibilityResponse.contained",
+      "DetectedIssue.contained",
+      "Device.contained",
+      "DeviceDefinition.contained",
+      "DeviceMetric.contained",
+      "DeviceRequest.contained",
+      "DeviceUseStatement.contained",
+      "DiagnosticReport.contained",
+      "DocumentManifest.contained",
+      "DocumentReference.contained",
+      "DomainResource.contained",
+      "Encounter.contained",
+      "Endpoint.contained",
+      "EnrollmentRequest.contained",
+      "EnrollmentResponse.contained",
+      "EpisodeOfCare.contained",
+      "EventDefinition.contained",
+      "Evidence.contained",
+      "EvidenceReport.contained",
+      "EvidenceVariable.contained",
+      "ExampleScenario.contained",
+      "ExplanationOfBenefit.contained",
+      "FamilyMemberHistory.contained",
+      "Flag.contained",
+      "Goal.contained",
+      "GraphDefinition.contained",
+      "Group.contained",
+      "GuidanceResponse.contained",
+      "HealthcareService.contained",
+      "ImagingStudy.contained",
+      "Immunization.contained",
+      "ImmunizationEvaluation.contained",
+      "ImmunizationRecommendation.contained",
+      "ImplementationGuide.contained",
+      "Ingredient.contained",
+      "InsurancePlan.contained",
+      "Invoice.contained",
+      "Library.contained",
+      "Linkage.contained",
+      "List.contained",
+      "Location.contained",
+      "ManufacturedItemDefinition.contained",
+      "Measure.contained",
+      "MeasureReport.contained",
+      "Media.contained",
+      "Medication.contained",
+      "MedicationAdministration.contained",
+      "MedicationDispense.contained",
+      "MedicationKnowledge.contained",
+      "MedicationRequest.contained",
+      "MedicationStatement.contained",
+      "MedicinalProductDefinition.contained",
+      "MessageDefinition.contained",
+      "MessageHeader.contained",
+      "MolecularSequence.contained",
+      "NamingSystem.contained",
+      "NutritionOrder.contained",
+      "NutritionProduct.contained",
+      "Observation.contained",
+      "ObservationDefinition.contained",
+      "OperationDefinition.contained",
+      "OperationOutcome.contained",
+      "Organization.contained",
+      "OrganizationAffiliation.contained",
+      "PackagedProductDefinition.contained",
+      "Parameters.parameter.resource",
+      "Patient.contained",
+      "PaymentNotice.contained",
+      "PaymentReconciliation.contained",
+      "Person.contained",
+      "PlanDefinition.contained",
+      "Practitioner.contained",
+      "PractitionerRole.contained",
+      "Procedure.contained",
+      "Provenance.contained",
+      "Questionnaire.contained",
+      "QuestionnaireResponse.contained",
+      "RegulatedAuthorization.contained",
+      "RelatedPerson.contained",
+      "RequestGroup.contained",
+      "ResearchDefinition.contained",
+      "ResearchElementDefinition.contained",
+      "ResearchStudy.contained",
+      "ResearchSubject.contained",
+      "RiskAssessment.contained",
+      "Schedule.contained",
+      "SearchParameter.contained",
+      "ServiceRequest.contained",
+      "Slot.contained",
+      "Specimen.contained",
+      "SpecimenDefinition.contained",
+      "StructureDefinition.contained",
+      "StructureMap.contained",
+      "Subscription.contained",
+      "SubscriptionStatus.contained",
+      "SubscriptionTopic.contained",
+      "Substance.contained",
+      "SubstanceDefinition.contained",
+      "SupplyDelivery.contained",
+      "SupplyRequest.contained",
+      "Task.contained",
+      "TerminologyCapabilities.contained",
+      "TestReport.contained",
+      "TestScript.contained",
+      "ValueSet.contained",
+      "VerificationResult.contained",
+      "VisionPrescription.contained"
+    ]
+  },
+  "contentReferences": {
+    "r4": [
+      [
+        "Parameters.parameter.part",
+        "Parameters.parameter"
+      ]
+    ],
+    "r4b": [
+      [
+        "Parameters.parameter.part",
+        "Parameters.parameter"
+      ]
+    ]
+  },
+  "elements": {
+    "r4": {
+      "Address": {
+        "city": [
+          "primitive"
+        ],
+        "country": [
+          "primitive"
+        ],
+        "district": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "line": [
+          "primitive"
+        ],
+        "period": [
+          "Period"
+        ],
+        "postalCode": [
+          "primitive"
+        ],
+        "state": [
+          "primitive"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ],
+        "use": [
+          "primitive"
+        ]
+      },
+      "Age": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "AllergyIntolerance": {
+        "asserter": [
+          "Reference"
+        ],
+        "category": [
+          "primitive"
+        ],
+        "clinicalStatus": [
+          "CodeableConcept"
+        ],
+        "code": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "criticality": [
+          "primitive"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "lastOccurrence": [
+          "primitive"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "onsetAge": [
+          "Age"
+        ],
+        "onsetDateTime": [
+          "primitive"
+        ],
+        "onsetPeriod": [
+          "Period"
+        ],
+        "onsetRange": [
+          "Range"
+        ],
+        "onsetString": [
+          "primitive"
+        ],
+        "patient": [
+          "Reference"
+        ],
+        "reaction": [
+          "AllergyIntolerance.reaction"
+        ],
+        "recordedDate": [
+          "primitive"
+        ],
+        "recorder": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ],
+        "type": [
+          "primitive"
+        ],
+        "verificationStatus": [
+          "CodeableConcept"
+        ]
+      },
+      "AllergyIntolerance.reaction": {
+        "description": [
+          "primitive"
+        ],
+        "exposureRoute": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "manifestation": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "onset": [
+          "primitive"
+        ],
+        "severity": [
+          "primitive"
+        ],
+        "substance": [
+          "CodeableConcept"
+        ]
+      },
+      "Annotation": {
+        "authorReference": [
+          "Reference"
+        ],
+        "authorString": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "time": [
+          "primitive"
+        ]
+      },
+      "Attachment": {
+        "contentType": [
+          "primitive"
+        ],
+        "creation": [
+          "primitive"
+        ],
+        "data": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "hash": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "size": [
+          "primitive"
+        ],
+        "title": [
+          "primitive"
+        ],
+        "url": [
+          "primitive"
+        ]
+      },
+      "Bundle": {
+        "entry": [
+          "Bundle.entry"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "link": [
+          "Bundle.link"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "signature": [
+          "Signature"
+        ],
+        "timestamp": [
+          "primitive"
+        ],
+        "total": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "Bundle.entry": {
+        "extension": [
+          "Extension"
+        ],
+        "fullUrl": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "link": [
+          "Bundle.link"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "request": [
+          "Bundle.entry.request"
+        ],
+        "resource": [
+          "Resource"
+        ],
+        "response": [
+          "Bundle.entry.response"
+        ],
+        "search": [
+          "Bundle.entry.search"
+        ]
+      },
+      "Bundle.entry.request": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "ifMatch": [
+          "primitive"
+        ],
+        "ifModifiedSince": [
+          "primitive"
+        ],
+        "ifNoneExist": [
+          "primitive"
+        ],
+        "ifNoneMatch": [
+          "primitive"
+        ],
+        "method": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "url": [
+          "primitive"
+        ]
+      },
+      "Bundle.entry.response": {
+        "etag": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "lastModified": [
+          "primitive"
+        ],
+        "location": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "outcome": [
+          "Resource"
+        ],
+        "status": [
+          "primitive"
+        ]
+      },
+      "Bundle.entry.search": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "mode": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "score": [
+          "primitive"
+        ]
+      },
+      "Bundle.link": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "relation": [
+          "primitive"
+        ],
+        "url": [
+          "primitive"
+        ]
+      },
+      "CodeableConcept": {
+        "coding": [
+          "Coding"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "text": [
+          "primitive"
+        ]
+      },
+      "Coding": {
+        "code": [
+          "primitive"
+        ],
+        "display": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "userSelected": [
+          "primitive"
+        ],
+        "version": [
+          "primitive"
+        ]
+      },
+      "Condition": {
+        "abatementAge": [
+          "Age"
+        ],
+        "abatementDateTime": [
+          "primitive"
+        ],
+        "abatementPeriod": [
+          "Period"
+        ],
+        "abatementRange": [
+          "Range"
+        ],
+        "abatementString": [
+          "primitive"
+        ],
+        "asserter": [
+          "Reference"
+        ],
+        "bodySite": [
+          "CodeableConcept"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "clinicalStatus": [
+          "CodeableConcept"
+        ],
+        "code": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "evidence": [
+          "Condition.evidence"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "onsetAge": [
+          "Age"
+        ],
+        "onsetDateTime": [
+          "primitive"
+        ],
+        "onsetPeriod": [
+          "Period"
+        ],
+        "onsetRange": [
+          "Range"
+        ],
+        "onsetString": [
+          "primitive"
+        ],
+        "recordedDate": [
+          "primitive"
+        ],
+        "recorder": [
+          "Reference"
+        ],
+        "severity": [
+          "CodeableConcept"
+        ],
+        "stage": [
+          "Condition.stage"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ],
+        "verificationStatus": [
+          "CodeableConcept"
+        ]
+      },
+      "Condition.evidence": {
+        "code": [
+          "CodeableConcept"
+        ],
+        "detail": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ]
+      },
+      "Condition.stage": {
+        "assessment": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "summary": [
+          "CodeableConcept"
+        ],
+        "type": [
+          "CodeableConcept"
+        ]
+      },
+      "ContactDetail": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "telecom": [
+          "ContactPoint"
+        ]
+      },
+      "ContactPoint": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "period": [
+          "Period"
+        ],
+        "rank": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "use": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Contributor": {
+        "contact": [
+          "ContactDetail"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "Count": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "DataRequirement": {
+        "codeFilter": [
+          "DataRequirement.codeFilter"
+        ],
+        "dateFilter": [
+          "DataRequirement.dateFilter"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "limit": [
+          "primitive"
+        ],
+        "mustSupport": [
+          "primitive"
+        ],
+        "profile": [
+          "primitive"
+        ],
+        "sort": [
+          "DataRequirement.sort"
+        ],
+        "subjectCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "subjectReference": [
+          "Reference"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "DataRequirement.codeFilter": {
+        "code": [
+          "Coding"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "path": [
+          "primitive"
+        ],
+        "searchParam": [
+          "primitive"
+        ],
+        "valueSet": [
+          "primitive"
+        ]
+      },
+      "DataRequirement.dateFilter": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "path": [
+          "primitive"
+        ],
+        "searchParam": [
+          "primitive"
+        ],
+        "valueDateTime": [
+          "primitive"
+        ],
+        "valueDuration": [
+          "Duration"
+        ],
+        "valuePeriod": [
+          "Period"
+        ]
+      },
+      "DataRequirement.sort": {
+        "direction": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "path": [
+          "primitive"
+        ]
+      },
+      "DiagnosticReport": {
+        "basedOn": [
+          "Reference"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "code": [
+          "CodeableConcept"
+        ],
+        "conclusion": [
+          "primitive"
+        ],
+        "conclusionCode": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "effectiveDateTime": [
+          "primitive"
+        ],
+        "effectivePeriod": [
+          "Period"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "imagingStudy": [
+          "Reference"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "issued": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "media": [
+          "DiagnosticReport.media"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "performer": [
+          "Reference"
+        ],
+        "presentedForm": [
+          "Attachment"
+        ],
+        "result": [
+          "Reference"
+        ],
+        "resultsInterpreter": [
+          "Reference"
+        ],
+        "specimen": [
+          "Reference"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "DiagnosticReport.media": {
+        "comment": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "link": [
+          "Reference"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ]
+      },
+      "Distance": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Dosage": {
+        "additionalInstruction": [
+          "CodeableConcept"
+        ],
+        "asNeededBoolean": [
+          "primitive"
+        ],
+        "asNeededCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "doseAndRate": [
+          "Dosage.doseAndRate"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "maxDosePerAdministration": [
+          "Quantity"
+        ],
+        "maxDosePerLifetime": [
+          "Quantity"
+        ],
+        "maxDosePerPeriod": [
+          "Ratio"
+        ],
+        "method": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "patientInstruction": [
+          "primitive"
+        ],
+        "route": [
+          "CodeableConcept"
+        ],
+        "sequence": [
+          "primitive"
+        ],
+        "site": [
+          "CodeableConcept"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "timing": [
+          "Timing"
+        ]
+      },
+      "Dosage.doseAndRate": {
+        "doseQuantity": [
+          "Quantity"
+        ],
+        "doseRange": [
+          "Range"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "rateQuantity": [
+          "Quantity"
+        ],
+        "rateRange": [
+          "Range"
+        ],
+        "rateRatio": [
+          "Ratio"
+        ],
+        "type": [
+          "CodeableConcept"
+        ]
+      },
+      "Duration": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Expression": {
+        "description": [
+          "primitive"
+        ],
+        "expression": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "reference": [
+          "primitive"
+        ]
+      },
+      "Extension": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "url": [
+          "primitive"
+        ],
+        "valueAddress": [
+          "Address"
+        ],
+        "valueAge": [
+          "Age"
+        ],
+        "valueAnnotation": [
+          "Annotation"
+        ],
+        "valueAttachment": [
+          "Attachment"
+        ],
+        "valueBase64Binary": [
+          "primitive"
+        ],
+        "valueBoolean": [
+          "primitive"
+        ],
+        "valueCanonical": [
+          "primitive"
+        ],
+        "valueCode": [
+          "primitive"
+        ],
+        "valueCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "valueCoding": [
+          "Coding"
+        ],
+        "valueContactDetail": [
+          "ContactDetail"
+        ],
+        "valueContactPoint": [
+          "ContactPoint"
+        ],
+        "valueContributor": [
+          "Contributor"
+        ],
+        "valueCount": [
+          "Count"
+        ],
+        "valueDataRequirement": [
+          "DataRequirement"
+        ],
+        "valueDate": [
+          "primitive"
+        ],
+        "valueDateTime": [
+          "primitive"
+        ],
+        "valueDecimal": [
+          "primitive"
+        ],
+        "valueDistance": [
+          "Distance"
+        ],
+        "valueDosage": [
+          "Dosage"
+        ],
+        "valueDuration": [
+          "Duration"
+        ],
+        "valueExpression": [
+          "Expression"
+        ],
+        "valueHumanName": [
+          "HumanName"
+        ],
+        "valueId": [
+          "primitive"
+        ],
+        "valueIdentifier": [
+          "Identifier"
+        ],
+        "valueInstant": [
+          "primitive"
+        ],
+        "valueInteger": [
+          "primitive"
+        ],
+        "valueMarkdown": [
+          "primitive"
+        ],
+        "valueMeta": [
+          "Meta"
+        ],
+        "valueMoney": [
+          "Money"
+        ],
+        "valueOid": [
+          "primitive"
+        ],
+        "valueParameterDefinition": [
+          "ParameterDefinition"
+        ],
+        "valuePeriod": [
+          "Period"
+        ],
+        "valuePositiveInt": [
+          "primitive"
+        ],
+        "valueQuantity": [
+          "Quantity"
+        ],
+        "valueRange": [
+          "Range"
+        ],
+        "valueRatio": [
+          "Ratio"
+        ],
+        "valueReference": [
+          "Reference"
+        ],
+        "valueRelatedArtifact": [
+          "RelatedArtifact"
+        ],
+        "valueSampledData": [
+          "SampledData"
+        ],
+        "valueSignature": [
+          "Signature"
+        ],
+        "valueString": [
+          "primitive"
+        ],
+        "valueTime": [
+          "primitive"
+        ],
+        "valueTiming": [
+          "Timing"
+        ],
+        "valueTriggerDefinition": [
+          "TriggerDefinition"
+        ],
+        "valueUnsignedInt": [
+          "primitive"
+        ],
+        "valueUri": [
+          "primitive"
+        ],
+        "valueUrl": [
+          "primitive"
+        ],
+        "valueUsageContext": [
+          "UsageContext"
+        ],
+        "valueUuid": [
+          "primitive"
+        ]
+      },
+      "HumanName": {
+        "extension": [
+          "Extension"
+        ],
+        "family": [
+          "primitive"
+        ],
+        "given": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "period": [
+          "Period"
+        ],
+        "prefix": [
+          "primitive"
+        ],
+        "suffix": [
+          "primitive"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "use": [
+          "primitive"
+        ]
+      },
+      "Identifier": {
+        "assigner": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "period": [
+          "Period"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "type": [
+          "CodeableConcept"
+        ],
+        "use": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Immunization": {
+        "contained": [
+          "Resource"
+        ],
+        "doseQuantity": [
+          "Quantity"
+        ],
+        "education": [
+          "Immunization.education"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "expirationDate": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "fundingSource": [
+          "CodeableConcept"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "isSubpotent": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "location": [
+          "Reference"
+        ],
+        "lotNumber": [
+          "primitive"
+        ],
+        "manufacturer": [
+          "Reference"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "occurrenceDateTime": [
+          "primitive"
+        ],
+        "occurrenceString": [
+          "primitive"
+        ],
+        "patient": [
+          "Reference"
+        ],
+        "performer": [
+          "Immunization.performer"
+        ],
+        "primarySource": [
+          "primitive"
+        ],
+        "programEligibility": [
+          "CodeableConcept"
+        ],
+        "protocolApplied": [
+          "Immunization.protocolApplied"
+        ],
+        "reaction": [
+          "Immunization.reaction"
+        ],
+        "reasonCode": [
+          "CodeableConcept"
+        ],
+        "reasonReference": [
+          "Reference"
+        ],
+        "recorded": [
+          "primitive"
+        ],
+        "reportOrigin": [
+          "CodeableConcept"
+        ],
+        "route": [
+          "CodeableConcept"
+        ],
+        "site": [
+          "CodeableConcept"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "statusReason": [
+          "CodeableConcept"
+        ],
+        "subpotentReason": [
+          "CodeableConcept"
+        ],
+        "text": [
+          "Narrative"
+        ],
+        "vaccineCode": [
+          "CodeableConcept"
+        ]
+      },
+      "Immunization.education": {
+        "documentType": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "presentationDate": [
+          "primitive"
+        ],
+        "publicationDate": [
+          "primitive"
+        ],
+        "reference": [
+          "primitive"
+        ]
+      },
+      "Immunization.performer": {
+        "actor": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "function": [
+          "CodeableConcept"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ]
+      },
+      "Immunization.protocolApplied": {
+        "authority": [
+          "Reference"
+        ],
+        "doseNumberPositiveInt": [
+          "primitive"
+        ],
+        "doseNumberString": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "series": [
+          "primitive"
+        ],
+        "seriesDosesPositiveInt": [
+          "primitive"
+        ],
+        "seriesDosesString": [
+          "primitive"
+        ],
+        "targetDisease": [
+          "CodeableConcept"
+        ]
+      },
+      "Immunization.reaction": {
+        "date": [
+          "primitive"
+        ],
+        "detail": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "reported": [
+          "primitive"
+        ]
+      },
+      "MedicationRequest": {
+        "authoredOn": [
+          "primitive"
+        ],
+        "basedOn": [
+          "Reference"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "courseOfTherapyType": [
+          "CodeableConcept"
+        ],
+        "detectedIssue": [
+          "Reference"
+        ],
+        "dispenseRequest": [
+          "MedicationRequest.dispenseRequest"
+        ],
+        "doNotPerform": [
+          "primitive"
+        ],
+        "dosageInstruction": [
+          "Dosage"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "eventHistory": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "groupIdentifier": [
+          "Identifier"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "instantiatesCanonical": [
+          "primitive"
+        ],
+        "instantiatesUri": [
+          "primitive"
+        ],
+        "insurance": [
+          "Reference"
+        ],
+        "intent": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "medicationCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "medicationReference": [
+          "Reference"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "performer": [
+          "Reference"
+        ],
+        "performerType": [
+          "CodeableConcept"
+        ],
+        "priorPrescription": [
+          "Reference"
+        ],
+        "priority": [
+          "primitive"
+        ],
+        "reasonCode": [
+          "CodeableConcept"
+        ],
+        "reasonReference": [
+          "Reference"
+        ],
+        "recorder": [
+          "Reference"
+        ],
+        "reportedBoolean": [
+          "primitive"
+        ],
+        "reportedReference": [
+          "Reference"
+        ],
+        "requester": [
+          "Reference"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "statusReason": [
+          "CodeableConcept"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "substitution": [
+          "MedicationRequest.substitution"
+        ],
+        "supportingInformation": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "MedicationRequest.dispenseRequest": {
+        "dispenseInterval": [
+          "Duration"
+        ],
+        "expectedSupplyDuration": [
+          "Duration"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "initialFill": [
+          "MedicationRequest.dispenseRequest.initialFill"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "numberOfRepeatsAllowed": [
+          "primitive"
+        ],
+        "performer": [
+          "Reference"
+        ],
+        "quantity": [
+          "Quantity"
+        ],
+        "validityPeriod": [
+          "Period"
+        ]
+      },
+      "MedicationRequest.dispenseRequest.initialFill": {
+        "duration": [
+          "Duration"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "quantity": [
+          "Quantity"
+        ]
+      },
+      "MedicationRequest.substitution": {
+        "allowedBoolean": [
+          "primitive"
+        ],
+        "allowedCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "reason": [
+          "CodeableConcept"
+        ]
+      },
+      "MedicationStatement": {
+        "basedOn": [
+          "Reference"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "context": [
+          "Reference"
+        ],
+        "dateAsserted": [
+          "primitive"
+        ],
+        "derivedFrom": [
+          "Reference"
+        ],
+        "dosage": [
+          "Dosage"
+        ],
+        "effectiveDateTime": [
+          "primitive"
+        ],
+        "effectivePeriod": [
+          "Period"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "informationSource": [
+          "Reference"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "medicationCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "medicationReference": [
+          "Reference"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "partOf": [
+          "Reference"
+        ],
+        "reasonCode": [
+          "CodeableConcept"
+        ],
+        "reasonReference": [
+          "Reference"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "statusReason": [
+          "CodeableConcept"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "Meta": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "lastUpdated": [
+          "primitive"
+        ],
+        "profile": [
+          "primitive"
+        ],
+        "security": [
+          "Coding"
+        ],
+        "source": [
+          "primitive"
+        ],
+        "tag": [
+          "Coding"
+        ],
+        "versionId": [
+          "primitive"
+        ]
+      },
+      "Money": {
+        "currency": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Narrative": {
+        "div": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "status": [
+          "primitive"
+        ]
+      },
+      "Observation": {
+        "basedOn": [
+          "Reference"
+        ],
+        "bodySite": [
+          "CodeableConcept"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "code": [
+          "CodeableConcept"
+        ],
+        "component": [
+          "Observation.component"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "dataAbsentReason": [
+          "CodeableConcept"
+        ],
+        "derivedFrom": [
+          "Reference"
+        ],
+        "device": [
+          "Reference"
+        ],
+        "effectiveDateTime": [
+          "primitive"
+        ],
+        "effectiveInstant": [
+          "primitive"
+        ],
+        "effectivePeriod": [
+          "Period"
+        ],
+        "effectiveTiming": [
+          "Timing"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "focus": [
+          "Reference"
+        ],
+        "hasMember": [
+          "Reference"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "interpretation": [
+          "CodeableConcept"
+        ],
+        "issued": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "method": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "partOf": [
+          "Reference"
+        ],
+        "performer": [
+          "Reference"
+        ],
+        "referenceRange": [
+          "Observation.referenceRange"
+        ],
+        "specimen": [
+          "Reference"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ],
+        "valueBoolean": [
+          "primitive"
+        ],
+        "valueCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "valueDateTime": [
+          "primitive"
+        ],
+        "valueInteger": [
+          "primitive"
+        ],
+        "valuePeriod": [
+          "Period"
+        ],
+        "valueQuantity": [
+          "Quantity"
+        ],
+        "valueRange": [
+          "Range"
+        ],
+        "valueRatio": [
+          "Ratio"
+        ],
+        "valueSampledData": [
+          "SampledData"
+        ],
+        "valueString": [
+          "primitive"
+        ],
+        "valueTime": [
+          "primitive"
+        ]
+      },
+      "Observation.component": {
+        "code": [
+          "CodeableConcept"
+        ],
+        "dataAbsentReason": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "interpretation": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "referenceRange": [
+          "Observation.referenceRange"
+        ],
+        "valueBoolean": [
+          "primitive"
+        ],
+        "valueCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "valueDateTime": [
+          "primitive"
+        ],
+        "valueInteger": [
+          "primitive"
+        ],
+        "valuePeriod": [
+          "Period"
+        ],
+        "valueQuantity": [
+          "Quantity"
+        ],
+        "valueRange": [
+          "Range"
+        ],
+        "valueRatio": [
+          "Ratio"
+        ],
+        "valueSampledData": [
+          "SampledData"
+        ],
+        "valueString": [
+          "primitive"
+        ],
+        "valueTime": [
+          "primitive"
+        ]
+      },
+      "Observation.referenceRange": {
+        "age": [
+          "Range"
+        ],
+        "appliesTo": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "high": [
+          "Quantity"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "low": [
+          "Quantity"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "type": [
+          "CodeableConcept"
+        ]
+      },
+      "ParameterDefinition": {
+        "documentation": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "max": [
+          "primitive"
+        ],
+        "min": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "profile": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ],
+        "use": [
+          "primitive"
+        ]
+      },
+      "Patient": {
+        "active": [
+          "primitive"
+        ],
+        "address": [
+          "Address"
+        ],
+        "birthDate": [
+          "primitive"
+        ],
+        "communication": [
+          "Patient.communication"
+        ],
+        "contact": [
+          "Patient.contact"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "deceasedBoolean": [
+          "primitive"
+        ],
+        "deceasedDateTime": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "gender": [
+          "primitive"
+        ],
+        "generalPractitioner": [
+          "Reference"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "link": [
+          "Patient.link"
+        ],
+        "managingOrganization": [
+          "Reference"
+        ],
+        "maritalStatus": [
+          "CodeableConcept"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "multipleBirthBoolean": [
+          "primitive"
+        ],
+        "multipleBirthInteger": [
+          "primitive"
+        ],
+        "name": [
+          "HumanName"
+        ],
+        "photo": [
+          "Attachment"
+        ],
+        "telecom": [
+          "ContactPoint"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "Patient.communication": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "language": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "preferred": [
+          "primitive"
+        ]
+      },
+      "Patient.contact": {
+        "address": [
+          "Address"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "gender": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "name": [
+          "HumanName"
+        ],
+        "organization": [
+          "Reference"
+        ],
+        "period": [
+          "Period"
+        ],
+        "relationship": [
+          "CodeableConcept"
+        ],
+        "telecom": [
+          "ContactPoint"
+        ]
+      },
+      "Patient.link": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "other": [
+          "Reference"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "Period": {
+        "end": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "start": [
+          "primitive"
+        ]
+      },
+      "Practitioner": {
+        "active": [
+          "primitive"
+        ],
+        "address": [
+          "Address"
+        ],
+        "birthDate": [
+          "primitive"
+        ],
+        "communication": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "gender": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "name": [
+          "HumanName"
+        ],
+        "photo": [
+          "Attachment"
+        ],
+        "qualification": [
+          "Practitioner.qualification"
+        ],
+        "telecom": [
+          "ContactPoint"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "Practitioner.qualification": {
+        "code": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "issuer": [
+          "Reference"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "period": [
+          "Period"
+        ]
+      },
+      "Quantity": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Range": {
+        "extension": [
+          "Extension"
+        ],
+        "high": [
+          "Quantity"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "low": [
+          "Quantity"
+        ]
+      },
+      "Ratio": {
+        "denominator": [
+          "Quantity"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "numerator": [
+          "Quantity"
+        ]
+      },
+      "Reference": {
+        "display": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "reference": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "RelatedArtifact": {
+        "citation": [
+          "primitive"
+        ],
+        "display": [
+          "primitive"
+        ],
+        "document": [
+          "Attachment"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "label": [
+          "primitive"
+        ],
+        "resource": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ],
+        "url": [
+          "primitive"
+        ]
+      },
+      "SampledData": {
+        "data": [
+          "primitive"
+        ],
+        "dimensions": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "factor": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "lowerLimit": [
+          "primitive"
+        ],
+        "origin": [
+          "Quantity"
+        ],
+        "period": [
+          "primitive"
+        ],
+        "upperLimit": [
+          "primitive"
+        ]
+      },
+      "Signature": {
+        "data": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "onBehalfOf": [
+          "Reference"
+        ],
+        "sigFormat": [
+          "primitive"
+        ],
+        "targetFormat": [
+          "primitive"
+        ],
+        "type": [
+          "Coding"
+        ],
+        "when": [
+          "primitive"
+        ],
+        "who": [
+          "Reference"
+        ]
+      },
+      "Timing": {
+        "code": [
+          "CodeableConcept"
+        ],
+        "event": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "repeat": [
+          "Timing.repeat"
+        ]
+      },
+      "Timing.repeat": {
+        "boundsDuration": [
+          "Duration"
+        ],
+        "boundsPeriod": [
+          "Period"
+        ],
+        "boundsRange": [
+          "Range"
+        ],
+        "count": [
+          "primitive"
+        ],
+        "countMax": [
+          "primitive"
+        ],
+        "dayOfWeek": [
+          "primitive"
+        ],
+        "duration": [
+          "primitive"
+        ],
+        "durationMax": [
+          "primitive"
+        ],
+        "durationUnit": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "frequency": [
+          "primitive"
+        ],
+        "frequencyMax": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "offset": [
+          "primitive"
+        ],
+        "period": [
+          "primitive"
+        ],
+        "periodMax": [
+          "primitive"
+        ],
+        "periodUnit": [
+          "primitive"
+        ],
+        "timeOfDay": [
+          "primitive"
+        ],
+        "when": [
+          "primitive"
+        ]
+      },
+      "TriggerDefinition": {
+        "condition": [
+          "Expression"
+        ],
+        "data": [
+          "DataRequirement"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "timingDate": [
+          "primitive"
+        ],
+        "timingDateTime": [
+          "primitive"
+        ],
+        "timingReference": [
+          "Reference"
+        ],
+        "timingTiming": [
+          "Timing"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "UsageContext": {
+        "code": [
+          "Coding"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "valueCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "valueQuantity": [
+          "Quantity"
+        ],
+        "valueRange": [
+          "Range"
+        ],
+        "valueReference": [
+          "Reference"
+        ]
+      }
+    },
+    "r4b": {
+      "Address": {
+        "city": [
+          "primitive"
+        ],
+        "country": [
+          "primitive"
+        ],
+        "district": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "line": [
+          "primitive"
+        ],
+        "period": [
+          "Period"
+        ],
+        "postalCode": [
+          "primitive"
+        ],
+        "state": [
+          "primitive"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ],
+        "use": [
+          "primitive"
+        ]
+      },
+      "Age": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "AllergyIntolerance": {
+        "asserter": [
+          "Reference"
+        ],
+        "category": [
+          "primitive"
+        ],
+        "clinicalStatus": [
+          "CodeableConcept"
+        ],
+        "code": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "criticality": [
+          "primitive"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "lastOccurrence": [
+          "primitive"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "onsetAge": [
+          "Age"
+        ],
+        "onsetDateTime": [
+          "primitive"
+        ],
+        "onsetPeriod": [
+          "Period"
+        ],
+        "onsetRange": [
+          "Range"
+        ],
+        "onsetString": [
+          "primitive"
+        ],
+        "patient": [
+          "Reference"
+        ],
+        "reaction": [
+          "AllergyIntolerance.reaction"
+        ],
+        "recordedDate": [
+          "primitive"
+        ],
+        "recorder": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ],
+        "type": [
+          "primitive"
+        ],
+        "verificationStatus": [
+          "CodeableConcept"
+        ]
+      },
+      "AllergyIntolerance.reaction": {
+        "description": [
+          "primitive"
+        ],
+        "exposureRoute": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "manifestation": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "onset": [
+          "primitive"
+        ],
+        "severity": [
+          "primitive"
+        ],
+        "substance": [
+          "CodeableConcept"
+        ]
+      },
+      "Annotation": {
+        "authorReference": [
+          "Reference"
+        ],
+        "authorString": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "time": [
+          "primitive"
+        ]
+      },
+      "Attachment": {
+        "contentType": [
+          "primitive"
+        ],
+        "creation": [
+          "primitive"
+        ],
+        "data": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "hash": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "size": [
+          "primitive"
+        ],
+        "title": [
+          "primitive"
+        ],
+        "url": [
+          "primitive"
+        ]
+      },
+      "Bundle": {
+        "entry": [
+          "Bundle.entry"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "link": [
+          "Bundle.link"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "signature": [
+          "Signature"
+        ],
+        "timestamp": [
+          "primitive"
+        ],
+        "total": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "Bundle.entry": {
+        "extension": [
+          "Extension"
+        ],
+        "fullUrl": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "link": [
+          "Bundle.link"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "request": [
+          "Bundle.entry.request"
+        ],
+        "resource": [
+          "Resource"
+        ],
+        "response": [
+          "Bundle.entry.response"
+        ],
+        "search": [
+          "Bundle.entry.search"
+        ]
+      },
+      "Bundle.entry.request": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "ifMatch": [
+          "primitive"
+        ],
+        "ifModifiedSince": [
+          "primitive"
+        ],
+        "ifNoneExist": [
+          "primitive"
+        ],
+        "ifNoneMatch": [
+          "primitive"
+        ],
+        "method": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "url": [
+          "primitive"
+        ]
+      },
+      "Bundle.entry.response": {
+        "etag": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "lastModified": [
+          "primitive"
+        ],
+        "location": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "outcome": [
+          "Resource"
+        ],
+        "status": [
+          "primitive"
+        ]
+      },
+      "Bundle.entry.search": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "mode": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "score": [
+          "primitive"
+        ]
+      },
+      "Bundle.link": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "relation": [
+          "primitive"
+        ],
+        "url": [
+          "primitive"
+        ]
+      },
+      "CodeableConcept": {
+        "coding": [
+          "Coding"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "text": [
+          "primitive"
+        ]
+      },
+      "CodeableReference": {
+        "concept": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "reference": [
+          "Reference"
+        ]
+      },
+      "Coding": {
+        "code": [
+          "primitive"
+        ],
+        "display": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "userSelected": [
+          "primitive"
+        ],
+        "version": [
+          "primitive"
+        ]
+      },
+      "Condition": {
+        "abatementAge": [
+          "Age"
+        ],
+        "abatementDateTime": [
+          "primitive"
+        ],
+        "abatementPeriod": [
+          "Period"
+        ],
+        "abatementRange": [
+          "Range"
+        ],
+        "abatementString": [
+          "primitive"
+        ],
+        "asserter": [
+          "Reference"
+        ],
+        "bodySite": [
+          "CodeableConcept"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "clinicalStatus": [
+          "CodeableConcept"
+        ],
+        "code": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "evidence": [
+          "Condition.evidence"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "onsetAge": [
+          "Age"
+        ],
+        "onsetDateTime": [
+          "primitive"
+        ],
+        "onsetPeriod": [
+          "Period"
+        ],
+        "onsetRange": [
+          "Range"
+        ],
+        "onsetString": [
+          "primitive"
+        ],
+        "recordedDate": [
+          "primitive"
+        ],
+        "recorder": [
+          "Reference"
+        ],
+        "severity": [
+          "CodeableConcept"
+        ],
+        "stage": [
+          "Condition.stage"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ],
+        "verificationStatus": [
+          "CodeableConcept"
+        ]
+      },
+      "Condition.evidence": {
+        "code": [
+          "CodeableConcept"
+        ],
+        "detail": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ]
+      },
+      "Condition.stage": {
+        "assessment": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "summary": [
+          "CodeableConcept"
+        ],
+        "type": [
+          "CodeableConcept"
+        ]
+      },
+      "ContactDetail": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "telecom": [
+          "ContactPoint"
+        ]
+      },
+      "ContactPoint": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "period": [
+          "Period"
+        ],
+        "rank": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "use": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Contributor": {
+        "contact": [
+          "ContactDetail"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "Count": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "DataRequirement": {
+        "codeFilter": [
+          "DataRequirement.codeFilter"
+        ],
+        "dateFilter": [
+          "DataRequirement.dateFilter"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "limit": [
+          "primitive"
+        ],
+        "mustSupport": [
+          "primitive"
+        ],
+        "profile": [
+          "primitive"
+        ],
+        "sort": [
+          "DataRequirement.sort"
+        ],
+        "subjectCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "subjectReference": [
+          "Reference"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "DataRequirement.codeFilter": {
+        "code": [
+          "Coding"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "path": [
+          "primitive"
+        ],
+        "searchParam": [
+          "primitive"
+        ],
+        "valueSet": [
+          "primitive"
+        ]
+      },
+      "DataRequirement.dateFilter": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "path": [
+          "primitive"
+        ],
+        "searchParam": [
+          "primitive"
+        ],
+        "valueDateTime": [
+          "primitive"
+        ],
+        "valueDuration": [
+          "Duration"
+        ],
+        "valuePeriod": [
+          "Period"
+        ]
+      },
+      "DataRequirement.sort": {
+        "direction": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "path": [
+          "primitive"
+        ]
+      },
+      "DiagnosticReport": {
+        "basedOn": [
+          "Reference"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "code": [
+          "CodeableConcept"
+        ],
+        "conclusion": [
+          "primitive"
+        ],
+        "conclusionCode": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "effectiveDateTime": [
+          "primitive"
+        ],
+        "effectivePeriod": [
+          "Period"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "imagingStudy": [
+          "Reference"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "issued": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "media": [
+          "DiagnosticReport.media"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "performer": [
+          "Reference"
+        ],
+        "presentedForm": [
+          "Attachment"
+        ],
+        "result": [
+          "Reference"
+        ],
+        "resultsInterpreter": [
+          "Reference"
+        ],
+        "specimen": [
+          "Reference"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "DiagnosticReport.media": {
+        "comment": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "link": [
+          "Reference"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ]
+      },
+      "Distance": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Dosage": {
+        "additionalInstruction": [
+          "CodeableConcept"
+        ],
+        "asNeededBoolean": [
+          "primitive"
+        ],
+        "asNeededCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "doseAndRate": [
+          "Dosage.doseAndRate"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "maxDosePerAdministration": [
+          "Quantity"
+        ],
+        "maxDosePerLifetime": [
+          "Quantity"
+        ],
+        "maxDosePerPeriod": [
+          "Ratio"
+        ],
+        "method": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "patientInstruction": [
+          "primitive"
+        ],
+        "route": [
+          "CodeableConcept"
+        ],
+        "sequence": [
+          "primitive"
+        ],
+        "site": [
+          "CodeableConcept"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "timing": [
+          "Timing"
+        ]
+      },
+      "Dosage.doseAndRate": {
+        "doseQuantity": [
+          "Quantity"
+        ],
+        "doseRange": [
+          "Range"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "rateQuantity": [
+          "Quantity"
+        ],
+        "rateRange": [
+          "Range"
+        ],
+        "rateRatio": [
+          "Ratio"
+        ],
+        "type": [
+          "CodeableConcept"
+        ]
+      },
+      "Duration": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Expression": {
+        "description": [
+          "primitive"
+        ],
+        "expression": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "reference": [
+          "primitive"
+        ]
+      },
+      "Extension": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "url": [
+          "primitive"
+        ],
+        "valueAddress": [
+          "Address"
+        ],
+        "valueAge": [
+          "Age"
+        ],
+        "valueAnnotation": [
+          "Annotation"
+        ],
+        "valueAttachment": [
+          "Attachment"
+        ],
+        "valueBase64Binary": [
+          "primitive"
+        ],
+        "valueBoolean": [
+          "primitive"
+        ],
+        "valueCanonical": [
+          "primitive"
+        ],
+        "valueCode": [
+          "primitive"
+        ],
+        "valueCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "valueCodeableReference": [
+          "CodeableReference"
+        ],
+        "valueCoding": [
+          "Coding"
+        ],
+        "valueContactDetail": [
+          "ContactDetail"
+        ],
+        "valueContactPoint": [
+          "ContactPoint"
+        ],
+        "valueContributor": [
+          "Contributor"
+        ],
+        "valueCount": [
+          "Count"
+        ],
+        "valueDataRequirement": [
+          "DataRequirement"
+        ],
+        "valueDate": [
+          "primitive"
+        ],
+        "valueDateTime": [
+          "primitive"
+        ],
+        "valueDecimal": [
+          "primitive"
+        ],
+        "valueDistance": [
+          "Distance"
+        ],
+        "valueDosage": [
+          "Dosage"
+        ],
+        "valueDuration": [
+          "Duration"
+        ],
+        "valueExpression": [
+          "Expression"
+        ],
+        "valueHumanName": [
+          "HumanName"
+        ],
+        "valueId": [
+          "primitive"
+        ],
+        "valueIdentifier": [
+          "Identifier"
+        ],
+        "valueInstant": [
+          "primitive"
+        ],
+        "valueInteger": [
+          "primitive"
+        ],
+        "valueMarkdown": [
+          "primitive"
+        ],
+        "valueMoney": [
+          "Money"
+        ],
+        "valueOid": [
+          "primitive"
+        ],
+        "valueParameterDefinition": [
+          "ParameterDefinition"
+        ],
+        "valuePeriod": [
+          "Period"
+        ],
+        "valuePositiveInt": [
+          "primitive"
+        ],
+        "valueQuantity": [
+          "Quantity"
+        ],
+        "valueRange": [
+          "Range"
+        ],
+        "valueRatio": [
+          "Ratio"
+        ],
+        "valueRatioRange": [
+          "RatioRange"
+        ],
+        "valueReference": [
+          "Reference"
+        ],
+        "valueRelatedArtifact": [
+          "RelatedArtifact"
+        ],
+        "valueSampledData": [
+          "SampledData"
+        ],
+        "valueSignature": [
+          "Signature"
+        ],
+        "valueString": [
+          "primitive"
+        ],
+        "valueTime": [
+          "primitive"
+        ],
+        "valueTiming": [
+          "Timing"
+        ],
+        "valueTriggerDefinition": [
+          "TriggerDefinition"
+        ],
+        "valueUnsignedInt": [
+          "primitive"
+        ],
+        "valueUri": [
+          "primitive"
+        ],
+        "valueUrl": [
+          "primitive"
+        ],
+        "valueUsageContext": [
+          "UsageContext"
+        ],
+        "valueUuid": [
+          "primitive"
+        ]
+      },
+      "HumanName": {
+        "extension": [
+          "Extension"
+        ],
+        "family": [
+          "primitive"
+        ],
+        "given": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "period": [
+          "Period"
+        ],
+        "prefix": [
+          "primitive"
+        ],
+        "suffix": [
+          "primitive"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "use": [
+          "primitive"
+        ]
+      },
+      "Identifier": {
+        "assigner": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "period": [
+          "Period"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "type": [
+          "CodeableConcept"
+        ],
+        "use": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Immunization": {
+        "contained": [
+          "Resource"
+        ],
+        "doseQuantity": [
+          "Quantity"
+        ],
+        "education": [
+          "Immunization.education"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "expirationDate": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "fundingSource": [
+          "CodeableConcept"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "isSubpotent": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "location": [
+          "Reference"
+        ],
+        "lotNumber": [
+          "primitive"
+        ],
+        "manufacturer": [
+          "Reference"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "occurrenceDateTime": [
+          "primitive"
+        ],
+        "occurrenceString": [
+          "primitive"
+        ],
+        "patient": [
+          "Reference"
+        ],
+        "performer": [
+          "Immunization.performer"
+        ],
+        "primarySource": [
+          "primitive"
+        ],
+        "programEligibility": [
+          "CodeableConcept"
+        ],
+        "protocolApplied": [
+          "Immunization.protocolApplied"
+        ],
+        "reaction": [
+          "Immunization.reaction"
+        ],
+        "reasonCode": [
+          "CodeableConcept"
+        ],
+        "reasonReference": [
+          "Reference"
+        ],
+        "recorded": [
+          "primitive"
+        ],
+        "reportOrigin": [
+          "CodeableConcept"
+        ],
+        "route": [
+          "CodeableConcept"
+        ],
+        "site": [
+          "CodeableConcept"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "statusReason": [
+          "CodeableConcept"
+        ],
+        "subpotentReason": [
+          "CodeableConcept"
+        ],
+        "text": [
+          "Narrative"
+        ],
+        "vaccineCode": [
+          "CodeableConcept"
+        ]
+      },
+      "Immunization.education": {
+        "documentType": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "presentationDate": [
+          "primitive"
+        ],
+        "publicationDate": [
+          "primitive"
+        ],
+        "reference": [
+          "primitive"
+        ]
+      },
+      "Immunization.performer": {
+        "actor": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "function": [
+          "CodeableConcept"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ]
+      },
+      "Immunization.protocolApplied": {
+        "authority": [
+          "Reference"
+        ],
+        "doseNumberPositiveInt": [
+          "primitive"
+        ],
+        "doseNumberString": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "series": [
+          "primitive"
+        ],
+        "seriesDosesPositiveInt": [
+          "primitive"
+        ],
+        "seriesDosesString": [
+          "primitive"
+        ],
+        "targetDisease": [
+          "CodeableConcept"
+        ]
+      },
+      "Immunization.reaction": {
+        "date": [
+          "primitive"
+        ],
+        "detail": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "reported": [
+          "primitive"
+        ]
+      },
+      "MedicationRequest": {
+        "authoredOn": [
+          "primitive"
+        ],
+        "basedOn": [
+          "Reference"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "courseOfTherapyType": [
+          "CodeableConcept"
+        ],
+        "detectedIssue": [
+          "Reference"
+        ],
+        "dispenseRequest": [
+          "MedicationRequest.dispenseRequest"
+        ],
+        "doNotPerform": [
+          "primitive"
+        ],
+        "dosageInstruction": [
+          "Dosage"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "eventHistory": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "groupIdentifier": [
+          "Identifier"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "instantiatesCanonical": [
+          "primitive"
+        ],
+        "instantiatesUri": [
+          "primitive"
+        ],
+        "insurance": [
+          "Reference"
+        ],
+        "intent": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "medicationCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "medicationReference": [
+          "Reference"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "performer": [
+          "Reference"
+        ],
+        "performerType": [
+          "CodeableConcept"
+        ],
+        "priorPrescription": [
+          "Reference"
+        ],
+        "priority": [
+          "primitive"
+        ],
+        "reasonCode": [
+          "CodeableConcept"
+        ],
+        "reasonReference": [
+          "Reference"
+        ],
+        "recorder": [
+          "Reference"
+        ],
+        "reportedBoolean": [
+          "primitive"
+        ],
+        "reportedReference": [
+          "Reference"
+        ],
+        "requester": [
+          "Reference"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "statusReason": [
+          "CodeableConcept"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "substitution": [
+          "MedicationRequest.substitution"
+        ],
+        "supportingInformation": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "MedicationRequest.dispenseRequest": {
+        "dispenseInterval": [
+          "Duration"
+        ],
+        "expectedSupplyDuration": [
+          "Duration"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "initialFill": [
+          "MedicationRequest.dispenseRequest.initialFill"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "numberOfRepeatsAllowed": [
+          "primitive"
+        ],
+        "performer": [
+          "Reference"
+        ],
+        "quantity": [
+          "Quantity"
+        ],
+        "validityPeriod": [
+          "Period"
+        ]
+      },
+      "MedicationRequest.dispenseRequest.initialFill": {
+        "duration": [
+          "Duration"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "quantity": [
+          "Quantity"
+        ]
+      },
+      "MedicationRequest.substitution": {
+        "allowedBoolean": [
+          "primitive"
+        ],
+        "allowedCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "reason": [
+          "CodeableConcept"
+        ]
+      },
+      "MedicationStatement": {
+        "basedOn": [
+          "Reference"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "context": [
+          "Reference"
+        ],
+        "dateAsserted": [
+          "primitive"
+        ],
+        "derivedFrom": [
+          "Reference"
+        ],
+        "dosage": [
+          "Dosage"
+        ],
+        "effectiveDateTime": [
+          "primitive"
+        ],
+        "effectivePeriod": [
+          "Period"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "informationSource": [
+          "Reference"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "medicationCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "medicationReference": [
+          "Reference"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "partOf": [
+          "Reference"
+        ],
+        "reasonCode": [
+          "CodeableConcept"
+        ],
+        "reasonReference": [
+          "Reference"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "statusReason": [
+          "CodeableConcept"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "Meta": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "lastUpdated": [
+          "primitive"
+        ],
+        "profile": [
+          "primitive"
+        ],
+        "security": [
+          "Coding"
+        ],
+        "source": [
+          "primitive"
+        ],
+        "tag": [
+          "Coding"
+        ],
+        "versionId": [
+          "primitive"
+        ]
+      },
+      "Money": {
+        "currency": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Narrative": {
+        "div": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "status": [
+          "primitive"
+        ]
+      },
+      "Observation": {
+        "basedOn": [
+          "Reference"
+        ],
+        "bodySite": [
+          "CodeableConcept"
+        ],
+        "category": [
+          "CodeableConcept"
+        ],
+        "code": [
+          "CodeableConcept"
+        ],
+        "component": [
+          "Observation.component"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "dataAbsentReason": [
+          "CodeableConcept"
+        ],
+        "derivedFrom": [
+          "Reference"
+        ],
+        "device": [
+          "Reference"
+        ],
+        "effectiveDateTime": [
+          "primitive"
+        ],
+        "effectiveInstant": [
+          "primitive"
+        ],
+        "effectivePeriod": [
+          "Period"
+        ],
+        "effectiveTiming": [
+          "Timing"
+        ],
+        "encounter": [
+          "Reference"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "focus": [
+          "Reference"
+        ],
+        "hasMember": [
+          "Reference"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "interpretation": [
+          "CodeableConcept"
+        ],
+        "issued": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "method": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "note": [
+          "Annotation"
+        ],
+        "partOf": [
+          "Reference"
+        ],
+        "performer": [
+          "Reference"
+        ],
+        "referenceRange": [
+          "Observation.referenceRange"
+        ],
+        "specimen": [
+          "Reference"
+        ],
+        "status": [
+          "primitive"
+        ],
+        "subject": [
+          "Reference"
+        ],
+        "text": [
+          "Narrative"
+        ],
+        "valueBoolean": [
+          "primitive"
+        ],
+        "valueCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "valueDateTime": [
+          "primitive"
+        ],
+        "valueInteger": [
+          "primitive"
+        ],
+        "valuePeriod": [
+          "Period"
+        ],
+        "valueQuantity": [
+          "Quantity"
+        ],
+        "valueRange": [
+          "Range"
+        ],
+        "valueRatio": [
+          "Ratio"
+        ],
+        "valueSampledData": [
+          "SampledData"
+        ],
+        "valueString": [
+          "primitive"
+        ],
+        "valueTime": [
+          "primitive"
+        ]
+      },
+      "Observation.component": {
+        "code": [
+          "CodeableConcept"
+        ],
+        "dataAbsentReason": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "interpretation": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "referenceRange": [
+          "Observation.referenceRange"
+        ],
+        "valueBoolean": [
+          "primitive"
+        ],
+        "valueCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "valueDateTime": [
+          "primitive"
+        ],
+        "valueInteger": [
+          "primitive"
+        ],
+        "valuePeriod": [
+          "Period"
+        ],
+        "valueQuantity": [
+          "Quantity"
+        ],
+        "valueRange": [
+          "Range"
+        ],
+        "valueRatio": [
+          "Ratio"
+        ],
+        "valueSampledData": [
+          "SampledData"
+        ],
+        "valueString": [
+          "primitive"
+        ],
+        "valueTime": [
+          "primitive"
+        ]
+      },
+      "Observation.referenceRange": {
+        "age": [
+          "Range"
+        ],
+        "appliesTo": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "high": [
+          "Quantity"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "low": [
+          "Quantity"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "text": [
+          "primitive"
+        ],
+        "type": [
+          "CodeableConcept"
+        ]
+      },
+      "ParameterDefinition": {
+        "documentation": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "max": [
+          "primitive"
+        ],
+        "min": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "profile": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ],
+        "use": [
+          "primitive"
+        ]
+      },
+      "Patient": {
+        "active": [
+          "primitive"
+        ],
+        "address": [
+          "Address"
+        ],
+        "birthDate": [
+          "primitive"
+        ],
+        "communication": [
+          "Patient.communication"
+        ],
+        "contact": [
+          "Patient.contact"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "deceasedBoolean": [
+          "primitive"
+        ],
+        "deceasedDateTime": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "gender": [
+          "primitive"
+        ],
+        "generalPractitioner": [
+          "Reference"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "link": [
+          "Patient.link"
+        ],
+        "managingOrganization": [
+          "Reference"
+        ],
+        "maritalStatus": [
+          "CodeableConcept"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "multipleBirthBoolean": [
+          "primitive"
+        ],
+        "multipleBirthInteger": [
+          "primitive"
+        ],
+        "name": [
+          "HumanName"
+        ],
+        "photo": [
+          "Attachment"
+        ],
+        "telecom": [
+          "ContactPoint"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "Patient.communication": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "language": [
+          "CodeableConcept"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "preferred": [
+          "primitive"
+        ]
+      },
+      "Patient.contact": {
+        "address": [
+          "Address"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "gender": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "name": [
+          "HumanName"
+        ],
+        "organization": [
+          "Reference"
+        ],
+        "period": [
+          "Period"
+        ],
+        "relationship": [
+          "CodeableConcept"
+        ],
+        "telecom": [
+          "ContactPoint"
+        ]
+      },
+      "Patient.link": {
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "other": [
+          "Reference"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "Period": {
+        "end": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "start": [
+          "primitive"
+        ]
+      },
+      "Practitioner": {
+        "active": [
+          "primitive"
+        ],
+        "address": [
+          "Address"
+        ],
+        "birthDate": [
+          "primitive"
+        ],
+        "communication": [
+          "CodeableConcept"
+        ],
+        "contained": [
+          "Resource"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "gender": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "implicitRules": [
+          "primitive"
+        ],
+        "language": [
+          "primitive"
+        ],
+        "meta": [
+          "Meta"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "name": [
+          "HumanName"
+        ],
+        "photo": [
+          "Attachment"
+        ],
+        "qualification": [
+          "Practitioner.qualification"
+        ],
+        "telecom": [
+          "ContactPoint"
+        ],
+        "text": [
+          "Narrative"
+        ]
+      },
+      "Practitioner.qualification": {
+        "code": [
+          "CodeableConcept"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "issuer": [
+          "Reference"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "period": [
+          "Period"
+        ]
+      },
+      "Quantity": {
+        "code": [
+          "primitive"
+        ],
+        "comparator": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "system": [
+          "primitive"
+        ],
+        "unit": [
+          "primitive"
+        ],
+        "value": [
+          "primitive"
+        ]
+      },
+      "Range": {
+        "extension": [
+          "Extension"
+        ],
+        "high": [
+          "Quantity"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "low": [
+          "Quantity"
+        ]
+      },
+      "Ratio": {
+        "denominator": [
+          "Quantity"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "numerator": [
+          "Quantity"
+        ]
+      },
+      "RatioRange": {
+        "denominator": [
+          "Quantity"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "highNumerator": [
+          "Quantity"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "lowNumerator": [
+          "Quantity"
+        ]
+      },
+      "Reference": {
+        "display": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "identifier": [
+          "Identifier"
+        ],
+        "reference": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "RelatedArtifact": {
+        "citation": [
+          "primitive"
+        ],
+        "display": [
+          "primitive"
+        ],
+        "document": [
+          "Attachment"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "label": [
+          "primitive"
+        ],
+        "resource": [
+          "primitive"
+        ],
+        "type": [
+          "primitive"
+        ],
+        "url": [
+          "primitive"
+        ]
+      },
+      "SampledData": {
+        "data": [
+          "primitive"
+        ],
+        "dimensions": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "factor": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "lowerLimit": [
+          "primitive"
+        ],
+        "origin": [
+          "Quantity"
+        ],
+        "period": [
+          "primitive"
+        ],
+        "upperLimit": [
+          "primitive"
+        ]
+      },
+      "Signature": {
+        "data": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "onBehalfOf": [
+          "Reference"
+        ],
+        "sigFormat": [
+          "primitive"
+        ],
+        "targetFormat": [
+          "primitive"
+        ],
+        "type": [
+          "Coding"
+        ],
+        "when": [
+          "primitive"
+        ],
+        "who": [
+          "Reference"
+        ]
+      },
+      "Timing": {
+        "code": [
+          "CodeableConcept"
+        ],
+        "event": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "modifierExtension": [
+          "Extension"
+        ],
+        "repeat": [
+          "Timing.repeat"
+        ]
+      },
+      "Timing.repeat": {
+        "boundsDuration": [
+          "Duration"
+        ],
+        "boundsPeriod": [
+          "Period"
+        ],
+        "boundsRange": [
+          "Range"
+        ],
+        "count": [
+          "primitive"
+        ],
+        "countMax": [
+          "primitive"
+        ],
+        "dayOfWeek": [
+          "primitive"
+        ],
+        "duration": [
+          "primitive"
+        ],
+        "durationMax": [
+          "primitive"
+        ],
+        "durationUnit": [
+          "primitive"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "frequency": [
+          "primitive"
+        ],
+        "frequencyMax": [
+          "primitive"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "offset": [
+          "primitive"
+        ],
+        "period": [
+          "primitive"
+        ],
+        "periodMax": [
+          "primitive"
+        ],
+        "periodUnit": [
+          "primitive"
+        ],
+        "timeOfDay": [
+          "primitive"
+        ],
+        "when": [
+          "primitive"
+        ]
+      },
+      "TriggerDefinition": {
+        "condition": [
+          "Expression"
+        ],
+        "data": [
+          "DataRequirement"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "name": [
+          "primitive"
+        ],
+        "timingDate": [
+          "primitive"
+        ],
+        "timingDateTime": [
+          "primitive"
+        ],
+        "timingReference": [
+          "Reference"
+        ],
+        "timingTiming": [
+          "Timing"
+        ],
+        "type": [
+          "primitive"
+        ]
+      },
+      "UsageContext": {
+        "code": [
+          "Coding"
+        ],
+        "extension": [
+          "Extension"
+        ],
+        "id": [
+          "primitive"
+        ],
+        "valueCodeableConcept": [
+          "CodeableConcept"
+        ],
+        "valueQuantity": [
+          "Quantity"
+        ],
+        "valueRange": [
+          "Range"
+        ],
+        "valueReference": [
+          "Reference"
+        ]
+      }
+    }
+  }
+}
