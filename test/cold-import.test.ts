@@ -16,7 +16,9 @@ import type * as Parser from "../src/fhirpath/parser.js";
  *   warm one does;
  * - the first read and validation, which make the JSON reader's and the safety walk's tables on
  *   first use rather than at import, answer as later ones do (`test/import-work.test.ts` holds
- *   what the modules build at import).
+ *   what the modules build at import);
+ * - the validator's tables, made on first use too, answer from a fresh import as from a warm one,
+ *   each asked first on a copy of its own.
  *
  * Every case imports a fresh copy of `src/index.ts`, so nothing an earlier case loaded counts. Every
  * document is synthetic.
@@ -188,5 +190,45 @@ describe("the first read and validation after import", () => {
     expect(first).toEqual(second);
     const warm = readAndValidate(await importFresh(), BUNDLE);
     expect(readAndValidate(fhir, BUNDLE)).toEqual(warm);
+  });
+});
+
+/** Every validation code's diagnostic line and issue type, and a few primitive checks, as one value. */
+function tablesRead(fhir: typeof Fhir): unknown {
+  return {
+    codes: Object.values(fhir.VALIDATION_CODES).map((code) => [
+      code,
+      fhir.diagnosticFor(code),
+      fhir.validationIssue(code, "error", "Patient").type,
+    ]),
+    primitives: [
+      fhir.validatePrimitiveValue("2013-06-08", "date"),
+      fhir.validatePrimitiveValue("2013-13-40", "date"),
+      fhir.validatePrimitiveValue("fake id!", "id"),
+    ],
+    patient: Object.keys(fhir.buildRegistry()("Patient")?.elements ?? {}),
+  };
+}
+
+describe("the validator's tables after import", () => {
+  it("answer from a fresh import, each asked first, as a warm import does", async () => {
+    // Each table is made on its first use: ask each one first, on its own fresh copy.
+    const diagnostic = await importFresh();
+    const firstLine = diagnostic.diagnosticFor("CARDINALITY_MIN");
+    const issueType = await importFresh();
+    const firstType = issueType.validationIssue("CARDINALITY_MIN", "error", "Patient").type;
+    const primitive = await importFresh();
+    const firstCheck = primitive.validatePrimitiveValue("2013-13-40", "date");
+    const registry = await importFresh();
+    const firstSchema = registry.buildRegistry()("Patient");
+
+    const warm = await importFresh();
+    tablesRead(warm);
+    expect(firstLine).toBe(warm.diagnosticFor("CARDINALITY_MIN"));
+    expect(firstLine).toBe("Required element is missing.");
+    expect(firstType).toBe(warm.validationIssue("CARDINALITY_MIN", "error", "Patient").type);
+    expect(firstCheck).toBe("invalid");
+    expect(Object.keys(firstSchema?.elements ?? {})).toContain("gender");
+    expect(tablesRead(diagnostic)).toEqual(tablesRead(warm));
   });
 });
