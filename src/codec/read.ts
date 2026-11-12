@@ -216,12 +216,23 @@ function isScalar(node: RawJson): boolean {
 }
 
 /**
+ * A raw node in a primitive's value channel: anything but an object. A single object element is read
+ * as complex by {@link buildNode}, and an array holding an object is read as a complex list
+ * ({@link isPrimitiveArray}), so no object reaches a primitive.
+ */
+type RawNonObject = Exclude<RawJson, RawObject>;
+
+/**
  * Convert a scalar raw node to a {@link PrimitiveValue} (or `undefined` for JSON null), raising a
  * precision issue for a number that a double would have corrupted.
  *
  * @internal
  */
-function scalarValue(node: RawJson, trail: Trail, issues: FhirIssue[]): PrimitiveValue | undefined {
+function scalarValue(
+  node: RawNonObject,
+  trail: Trail,
+  issues: FhirIssue[],
+): PrimitiveValue | undefined {
   switch (node.t) {
     case "str":
       return node.value;
@@ -233,11 +244,9 @@ function scalarValue(node: RawJson, trail: Trail, issues: FhirIssue[]): Primitiv
     }
     case "null":
       return undefined;
-    case "obj":
     case "arr":
       // An array reaches here only from a primitive list that nests one, which keeps its text
-      // (`markNestedArray`); an object never does, since an array holding one is read as complex
-      // (`isPrimitiveArray`). Either way the slot holds no primitive value.
+      // (`markNestedArray`); the slot holds no primitive value.
       return undefined;
   }
 }
@@ -523,7 +532,8 @@ function buildPrimitiveList(
   trail: Trail,
   issues: FhirIssue[],
 ): FhirNode {
-  const valueItems = value?.items ?? [];
+  // `isPrimitiveArray` read this array as primitive only because it holds no object.
+  const valueItems = (value?.items ?? []) as readonly RawNonObject[];
   const metaItems = meta?.items ?? [];
   if (value !== undefined && meta !== undefined && valueItems.length !== metaItems.length) {
     throw new FhirCodecError(
