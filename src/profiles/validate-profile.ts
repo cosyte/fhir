@@ -78,6 +78,9 @@ import { isSliceOf, matchSlices, resolveSlices, type SliceEnvironment } from "./
 import { FhirProfileError, snapshotElements, type BaseResolver } from "./snapshot.js";
 import type { ElementDefinition, StructureDefinition } from "./structure-definition.js";
 
+/** The base resolver when none is supplied: it knows no definition. */
+const noBase: BaseResolver = () => undefined;
+
 /** Options for {@link collectProfileIssues}. */
 export interface ProfileOptions {
   /**
@@ -262,14 +265,9 @@ function checksLeftOut(
   );
 }
 
-/** The base resolver when none is supplied: it knows no definition. */
-function noBase(): undefined {
-  return undefined;
-}
-
 /** Whether an element constrains one of its types to a profile (`type.profile`). */
 function typeProfiled(el: ElementDefinition): boolean {
-  return (el.type ?? []).some((t) => (t.profile ?? []).length > 0);
+  return el.type?.some((t) => (t.profile ?? []).length > 0) === true;
 }
 
 /**

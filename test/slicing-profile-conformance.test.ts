@@ -487,11 +487,34 @@ describe("the other layers of a nested profile check", () => {
       entry: [
         {
           fullUrl: "urn:uuid:fake-1",
-          resource: { resourceType: "Group", id: "g", type: "person", actual: true },
+          // No `type`, so the profile's binding on it asks nothing: only the type is left unchecked.
+          resource: { resourceType: "Group", id: "g", actual: true },
         },
       ],
     });
     expect(unchecked(collectProfileIssues(bundle, byGroup, { profiles: [groupQ] }))).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
+    ]);
+  });
+
+  it("leaves undecided a required binding below the resource's own elements", () => {
+    // The schema enumerates `Patient.gender`, never `Patient.contact.gender`: a base value set there
+    // is a binding no layer checks.
+    const bound = patientQ([
+      {
+        id: "Patient.contact.gender",
+        path: "Patient.contact.gender",
+        binding: {
+          strength: "required",
+          valueSet: "http://hl7.org/fhir/ValueSet/administrative-gender|4.0.1",
+        },
+      },
+    ]);
+    const result = validateResource(
+      bundleOf({ id: "fake-1", contact: [{ gender: "other", name: { family: "Synthfamily" } }] }),
+      { profiles: [bundleByProfile, bound] },
+    );
+    expect(unchecked(result.issues)).toEqual([
       ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
     ]);
   });
