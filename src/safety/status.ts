@@ -2386,11 +2386,16 @@ function visitProperty(
  * `Parameters.parameter.resource`): only below a root of one of these does
  * {@link isResourcePosition} read {@link RootScope.elements} past whether it is empty.
  */
-const TYPES_WITH_DEEP_POSITIONS: ReadonlySet<string> = new Set(
-  RESOURCE_POSITIONS.map((position) => position.slice(0, position.indexOf("."))).filter(
-    (type) => type !== "DomainResource",
-  ),
-);
+let typesWithDeepPositions: ReadonlySet<string> | undefined;
+
+/** {@link typesWithDeepPositions}: made on the first call, then kept, so importing makes no set. */
+function deepPositionTypes(): ReadonlySet<string> {
+  return (typesWithDeepPositions ??= new Set(
+    RESOURCE_POSITIONS.map((position) => position.slice(0, position.indexOf("."))).filter(
+      (type) => type !== "DomainResource",
+    ),
+  ));
+}
 
 /**
  * {@link RootScope.elements} one member down, at `name`. Below a root of a type with no resource
@@ -2402,8 +2407,9 @@ function childElements(scope: RootScope, name: string): string {
   const elements = scope.elements;
   if (elements === "") return name;
   const types = scope.types;
+  const deep = deepPositionTypes();
   for (let i = 0; i < types.length; i++) {
-    if (TYPES_WITH_DEEP_POSITIONS.has(types[i] as string)) return `${elements}.${name}`;
+    if (deep.has(types[i] as string)) return `${elements}.${name}`;
   }
   return elements;
 }

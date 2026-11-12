@@ -611,8 +611,13 @@ function decodeString(src: string, start: number, end: number): string {
   return runStart === end ? out : out + src.slice(runStart, end);
 }
 
-/** The string a string token stands for. */
-function stringAt(tape: JsonTape, index: number): string {
+/**
+ * The string a string token stands for: a member's name at its key token, or a string value. A
+ * reader that builds straight from a tape reads both with it.
+ *
+ * @internal
+ */
+export function stringAt(tape: JsonTape, index: number): string {
   const { src, tokens } = tape;
   const start = firstAt(tokens, index);
   const end = secondAt(tokens, index);
@@ -681,70 +686,96 @@ const TYPE_OF_KIND: readonly RawJson["t"][] = [
   "bool",
 ];
 
-/**
+/*
  * What a reader that builds straight from a tape reads of it, without a {@link RawJson} node for
  * every value: a token's type, its count of members or items, the token after it, and a member's
  * name and a scalar's value. An object's members are its key token and value token in turn; an
  * array's items follow one another. A builder hands any part it does not read this way to
- * {@link lazyAt}, which makes the same tree the rest of the reader takes.
+ * {@link lazyAt}, which makes the same tree the rest of the reader takes. A member's name and a
+ * string's value are read with {@link stringAt}. These are plain functions, not the members of an
+ * object, so importing the package builds nothing for them.
+ */
+
+/**
+ * The type of the value whose token is at `index`.
  *
  * @internal
  */
-export const tapeReader = {
-  /** The type of the value whose token is at `index`. */
-  type: (tape: JsonTape, index: number): RawJson["t"] =>
-    TYPE_OF_KIND[kindAt(tape.tokens, index)] as RawJson["t"],
-  /** How many members an object, or items an array, at `index` has. */
-  count: (tape: JsonTape, index: number): number => firstAt(tape.tokens, index),
-  /** The index of the token after the value at `index`. */
-  after: (tape: JsonTape, index: number): number => after(tape.tokens, index),
-  /** The member name of the key token at `index`. */
-  key: stringAt,
-  /** The string a string token at `index` stands for. */
-  string: stringAt,
-  /** The value of a boolean token at `index`. */
-  isTrue: (tape: JsonTape, index: number): boolean => kindAt(tape.tokens, index) === Tok.True,
-  /**
-   * Whether the object at `index` writes its members one for one: at most
-   * {@link PLAIN_MEMBERS} of them, none named with a leading `_` (and more), and no name twice.
-   * Decided on the source text, making no string; a name written with an escape is not decided
-   * here, and the object is not plain.
-   */
-  isPlainObject: (tape: JsonTape, index: number): boolean => {
-    const { src, tokens } = tape;
-    const count = firstAt(tokens, index);
-    if (count > PLAIN_MEMBERS) return false;
-    let at = index + 1;
-    for (let m = 0; m < count; m++) {
-      if (kindAt(tokens, at) !== Tok.Str) return false;
-      const start = firstAt(tokens, at);
-      const length = secondAt(tokens, at) - start;
-      if (length > 1 && src.charCodeAt(start) === Code.Underscore) return false;
-      for (let e = 0; e < m; e++) {
-        if (nameLengths[e] === length && sameText(src, nameStarts[e] as number, start, length)) {
-          return false;
-        }
-      }
-      nameStarts[m] = start;
-      nameLengths[m] = length;
-      at = after(tokens, at + 1);
-    }
-    return true;
-  },
-} as const;
+export function tapeType(tape: JsonTape, index: number): RawJson["t"] {
+  return TYPE_OF_KIND[kindAt(tape.tokens, index)] as RawJson["t"];
+}
 
 /**
- * The most members an object `tapeReader.isPlainObject` decides can have: an object with more is
- * not plain, and is read from the raw tree, which builds the same model.
+ * How many members an object, or items an array, at `index` has.
+ *
+ * @internal
+ */
+export function tapeCount(tape: JsonTape, index: number): number {
+  return firstAt(tape.tokens, index);
+}
+
+/**
+ * The index of the token after the value at `index`.
+ *
+ * @internal
+ */
+export function tapeAfter(tape: JsonTape, index: number): number {
+  return after(tape.tokens, index);
+}
+
+/**
+ * The value of a boolean token at `index`.
+ *
+ * @internal
+ */
+export function tapeIsTrue(tape: JsonTape, index: number): boolean {
+  return kindAt(tape.tokens, index) === Tok.True;
+}
+
+/**
+ * The most members an object {@link isPlainObjectAt} decides can have: an object with more is not
+ * plain, and is read from the raw tree, which builds the same model.
  */
 const PLAIN_MEMBERS = 16;
 
 /**
- * Where each member name of the object `tapeReader.isPlainObject` is reading starts, and how long
- * it is: kept from call to call, since the check never runs inside another one.
+ * Where each member name of the object {@link isPlainObjectAt} is reading starts, and how long it
+ * is: made on the first check rather than at import, then kept from call to call, since the check
+ * never runs inside another one.
  */
-const nameStarts = new Int32Array(PLAIN_MEMBERS);
-const nameLengths = new Int32Array(PLAIN_MEMBERS);
+let nameStarts: Int32Array | undefined;
+let nameLengths: Int32Array | undefined;
+
+/**
+ * Whether the object at `index` writes its members one for one: at most {@link PLAIN_MEMBERS} of
+ * them, none named with a leading `_` (and more), and no name twice. Decided on the source text,
+ * making no string; a name written with an escape is not decided here, and the object is not plain.
+ *
+ * @internal
+ */
+export function isPlainObjectAt(tape: JsonTape, index: number): boolean {
+  const { src, tokens } = tape;
+  const count = firstAt(tokens, index);
+  if (count > PLAIN_MEMBERS) return false;
+  const starts = (nameStarts ??= new Int32Array(PLAIN_MEMBERS));
+  const lengths = (nameLengths ??= new Int32Array(PLAIN_MEMBERS));
+  let at = index + 1;
+  for (let m = 0; m < count; m++) {
+    if (kindAt(tokens, at) !== Tok.Str) return false;
+    const start = firstAt(tokens, at);
+    const length = secondAt(tokens, at) - start;
+    if (length > 1 && src.charCodeAt(start) === Code.Underscore) return false;
+    for (let e = 0; e < m; e++) {
+      if (lengths[e] === length && sameText(src, starts[e] as number, start, length)) {
+        return false;
+      }
+    }
+    starts[m] = start;
+    lengths[m] = length;
+    at = after(tokens, at + 1);
+  }
+  return true;
+}
 
 /** Whether the `length` characters of `src` at `a` are those at `b`. */
 function sameText(src: string, a: number, b: number, length: number): boolean {
