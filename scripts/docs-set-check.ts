@@ -71,7 +71,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { PROPERTY_ENV } from "@cosyte/test-utils";
 import ts from "typescript";
@@ -1668,7 +1668,9 @@ function runSamples(
   const runner = join(dir, "run-samples.mts");
   const body = [
     "const modules = [",
-    ...files.map((path) => `  ${JSON.stringify(path)},`),
+    // File URLs: on Windows an absolute path is read by `import()` as a URL with the drive letter
+    // as its scheme.
+    ...files.map((path) => `  ${JSON.stringify(pathToFileURL(path).href)},`),
     "];",
     "const run = async (): Promise<void> => {",
     "  for (const [index, path] of modules.entries()) {",
