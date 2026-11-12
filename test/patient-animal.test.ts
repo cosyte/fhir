@@ -102,6 +102,8 @@ describe("readPatientAnimal", () => {
     expect(animal?.breed).toBeUndefined();
     expect(animal?.genderStatus).toBeUndefined();
     expect(animal?.issues).toEqual([]);
+    // Every part is a property of the readout, present even when it holds nothing.
+    expect(Object.keys(animal ?? {})).toEqual(["species", "breed", "genderStatus", "issues"]);
   });
 
   it("reports a coded issue when the extension lacks species (1..1)", () => {
