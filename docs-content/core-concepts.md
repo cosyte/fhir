@@ -138,9 +138,9 @@ findings, and none of them can withdraw another's:
    references, and a bounded guard against contained-resource cycles.
 6. **Terminology bindings**: strength-aware and content-free. Without a terminology service the
    checks degrade to the system level and never produce a false error.
-7. **Base constraints**: the error-severity constraints R4 itself declares on the eight modeled
+7. **Base constraints**: the error-severity constraints R4 itself declares on the eleven modeled
    resource types and on the definitions they inherit, such as `pat-1` on a patient contact,
-   `ext-1` on every extension, and `ele-1` on every element. Always on for those eight types,
+   `ext-1` on every extension, and `ele-1` on every element. Always on for those eleven types,
    whether or not you supply a profile. A contained resource is checked only through the
    constraints its container declares about it (`dom-2` to `dom-5`), and the narrative best-practice
    warning `dom-6` is not evaluated without a profile.

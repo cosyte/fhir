@@ -39,12 +39,14 @@ valid can read invalid. The changelog sets out each change.
 
 What it covers, against FHIR R4 (`4.0.1`): reading and writing JSON and XML into one immutable
 model; validation in layers (structure, cardinality, value domains, R4's own constraints on the
-eight modeled resource types, Quantity and UCUM, binding strength, and profiles you supply or author
+eleven modeled resource types, Quantity and UCUM, binding strength, and profiles you supply or author
 with `defineProfile`, including their FHIRPath invariants); the `readSafety` and
 `assertSafeToSummarize` safety readout; and Bundles, references and streaming Bulk Data NDJSON.
 
 Not covered yet: typed per-resource models (the built-in structural schemas cover the base elements
-plus the eight modeled resource types), `type` and `profile` slicing discriminators (reported
+plus the eleven modeled resource types: `Patient`, `Observation`, `DiagnosticReport`, `Condition`,
+`MedicationRequest`, `AllergyIntolerance`, `Immunization`, `MedicationStatement`, `Encounter`,
+`Procedure` and `DocumentReference`), `type` and `profile` slicing discriminators (reported
 `PROFILE_SLICE_UNCHECKED`, and the slices' own constraints are then not checked, since no occurrence
 is assigned to them), FHIRPath outside the supported subset (reported
 `INVARIANT_UNCHECKED`, never passed), bundled terminology or US Core content, validation of R4B

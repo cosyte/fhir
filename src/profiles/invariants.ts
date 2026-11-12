@@ -24,7 +24,7 @@
  * **What {@link collectInvariantIssues} returns does not depend on the base-constraint layer.**
  * Called directly it reports every constraint the profile carries, the R4 base ones (`pat-1`,
  * `ext-1`, `ele-1`, `dom-2` and the rest) included. Under `validateResource` the base-constraint
- * layer ({@link ../validate/base-invariants.js}) evaluates those base constraints on the eight
+ * layer ({@link ../validate/base-invariants.js}) evaluates those base constraints on the eleven
  * modeled types whether or not a profile is supplied, and a finding this layer makes at the same
  * occurrence, for the same key and code, is reported once rather than twice. Where that layer
  * decided a base constraint at an occurrence and this layer could not evaluate the profile's

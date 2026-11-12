@@ -1,0 +1,1637 @@
+{
+  "note": "Committed expectation data: a field-subset projection of the R4 4.0.1 StructureDefinitions named below, carrying every `snapshot.element` unfiltered. Do not hand-edit. See the docblock of test/validate-exchange-types.test.ts for the projection rule and how to re-derive it.",
+  "fhirVersion": "4.0.1",
+  "provenance": {
+    "Encounter": "https://hl7.org/fhir/R4/encounter.profile.json",
+    "Procedure": "https://hl7.org/fhir/R4/procedure.profile.json",
+    "DocumentReference": "https://hl7.org/fhir/R4/documentreference.profile.json"
+  },
+  "valueSetProvenance": "https://hl7.org/fhir/R4/valuesets.json",
+  "types": {
+    "Encounter": {
+      "url": "http://hl7.org/fhir/StructureDefinition/Encounter",
+      "version": "4.0.1",
+      "kind": "resource",
+      "derivation": "specialization",
+      "elements": [
+        {
+          "path": "Encounter",
+          "min": 0,
+          "max": "*"
+        },
+        {
+          "path": "Encounter.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Encounter.meta",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Meta"
+          ]
+        },
+        {
+          "path": "Encounter.implicitRules",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "Encounter.language",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+          }
+        },
+        {
+          "path": "Encounter.text",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Narrative"
+          ]
+        },
+        {
+          "path": "Encounter.contained",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Resource"
+          ]
+        },
+        {
+          "path": "Encounter.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.identifier",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "Encounter.status",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-status|4.0.1"
+          }
+        },
+        {
+          "path": "Encounter.statusHistory",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Encounter.statusHistory.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Encounter.statusHistory.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.statusHistory.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.statusHistory.status",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-status|4.0.1"
+          }
+        },
+        {
+          "path": "Encounter.statusHistory.period",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Period"
+          ]
+        },
+        {
+          "path": "Encounter.class",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Coding"
+          ],
+          "binding": {
+            "strength": "extensible",
+            "valueSet": "http://terminology.hl7.org/ValueSet/v3-ActEncounterCode"
+          }
+        },
+        {
+          "path": "Encounter.classHistory",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Encounter.classHistory.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Encounter.classHistory.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.classHistory.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.classHistory.class",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Coding"
+          ],
+          "binding": {
+            "strength": "extensible",
+            "valueSet": "http://terminology.hl7.org/ValueSet/v3-ActEncounterCode"
+          }
+        },
+        {
+          "path": "Encounter.classHistory.period",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Period"
+          ]
+        },
+        {
+          "path": "Encounter.type",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-type"
+          }
+        },
+        {
+          "path": "Encounter.serviceType",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/service-type"
+          }
+        },
+        {
+          "path": "Encounter.priority",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://terminology.hl7.org/ValueSet/v3-ActPriority"
+          }
+        },
+        {
+          "path": "Encounter.subject",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.episodeOfCare",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.basedOn",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.participant",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Encounter.participant.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Encounter.participant.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.participant.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.participant.type",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "extensible",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-participant-type"
+          }
+        },
+        {
+          "path": "Encounter.participant.period",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Period"
+          ]
+        },
+        {
+          "path": "Encounter.participant.individual",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.appointment",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.period",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Period"
+          ]
+        },
+        {
+          "path": "Encounter.length",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Duration"
+          ]
+        },
+        {
+          "path": "Encounter.reasonCode",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-reason"
+          }
+        },
+        {
+          "path": "Encounter.reasonReference",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.diagnosis",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Encounter.diagnosis.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Encounter.diagnosis.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.diagnosis.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.diagnosis.condition",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.diagnosis.use",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/diagnosis-role"
+          }
+        },
+        {
+          "path": "Encounter.diagnosis.rank",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "positiveInt"
+          ]
+        },
+        {
+          "path": "Encounter.account",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.hospitalization",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Encounter.hospitalization.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Encounter.hospitalization.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.hospitalization.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.hospitalization.preAdmissionIdentifier",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "Encounter.hospitalization.origin",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.hospitalization.admitSource",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-admit-source"
+          }
+        },
+        {
+          "path": "Encounter.hospitalization.reAdmission",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://terminology.hl7.org/ValueSet/v2-0092"
+          }
+        },
+        {
+          "path": "Encounter.hospitalization.dietPreference",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-diet"
+          }
+        },
+        {
+          "path": "Encounter.hospitalization.specialCourtesy",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-special-courtesy"
+          }
+        },
+        {
+          "path": "Encounter.hospitalization.specialArrangement",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-special-arrangements"
+          }
+        },
+        {
+          "path": "Encounter.hospitalization.destination",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.hospitalization.dischargeDisposition",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-discharge-disposition"
+          }
+        },
+        {
+          "path": "Encounter.location",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Encounter.location.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Encounter.location.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.location.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Encounter.location.location",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.location.status",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/encounter-location-status|4.0.1"
+          }
+        },
+        {
+          "path": "Encounter.location.physicalType",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/location-physical-type"
+          }
+        },
+        {
+          "path": "Encounter.location.period",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Period"
+          ]
+        },
+        {
+          "path": "Encounter.serviceProvider",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Encounter.partOf",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        }
+      ]
+    },
+    "Procedure": {
+      "url": "http://hl7.org/fhir/StructureDefinition/Procedure",
+      "version": "4.0.1",
+      "kind": "resource",
+      "derivation": "specialization",
+      "elements": [
+        {
+          "path": "Procedure",
+          "min": 0,
+          "max": "*"
+        },
+        {
+          "path": "Procedure.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Procedure.meta",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Meta"
+          ]
+        },
+        {
+          "path": "Procedure.implicitRules",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "Procedure.language",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+          }
+        },
+        {
+          "path": "Procedure.text",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Narrative"
+          ]
+        },
+        {
+          "path": "Procedure.contained",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Resource"
+          ]
+        },
+        {
+          "path": "Procedure.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Procedure.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Procedure.identifier",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "Procedure.instantiatesCanonical",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "canonical"
+          ]
+        },
+        {
+          "path": "Procedure.instantiatesUri",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "Procedure.basedOn",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.partOf",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.status",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/event-status|4.0.1"
+          }
+        },
+        {
+          "path": "Procedure.statusReason",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/procedure-not-performed-reason"
+          }
+        },
+        {
+          "path": "Procedure.category",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/procedure-category"
+          }
+        },
+        {
+          "path": "Procedure.code",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/procedure-code"
+          }
+        },
+        {
+          "path": "Procedure.subject",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.encounter",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.performed[x]",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "dateTime",
+            "Period",
+            "string",
+            "Age",
+            "Range"
+          ]
+        },
+        {
+          "path": "Procedure.recorder",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.asserter",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.performer",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Procedure.performer.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Procedure.performer.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Procedure.performer.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Procedure.performer.function",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/performer-role"
+          }
+        },
+        {
+          "path": "Procedure.performer.actor",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.performer.onBehalfOf",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.location",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.reasonCode",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/procedure-reason"
+          }
+        },
+        {
+          "path": "Procedure.reasonReference",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.bodySite",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/body-site"
+          }
+        },
+        {
+          "path": "Procedure.outcome",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/procedure-outcome"
+          }
+        },
+        {
+          "path": "Procedure.report",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.complication",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/condition-code"
+          }
+        },
+        {
+          "path": "Procedure.complicationDetail",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.followUp",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/procedure-followup"
+          }
+        },
+        {
+          "path": "Procedure.note",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Annotation"
+          ]
+        },
+        {
+          "path": "Procedure.focalDevice",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "Procedure.focalDevice.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "Procedure.focalDevice.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Procedure.focalDevice.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "Procedure.focalDevice.action",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/device-action"
+          }
+        },
+        {
+          "path": "Procedure.focalDevice.manipulated",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.usedReference",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "Procedure.usedCode",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/device-kind"
+          }
+        }
+      ]
+    },
+    "DocumentReference": {
+      "url": "http://hl7.org/fhir/StructureDefinition/DocumentReference",
+      "version": "4.0.1",
+      "kind": "resource",
+      "derivation": "specialization",
+      "elements": [
+        {
+          "path": "DocumentReference",
+          "min": 0,
+          "max": "*"
+        },
+        {
+          "path": "DocumentReference.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "DocumentReference.meta",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Meta"
+          ]
+        },
+        {
+          "path": "DocumentReference.implicitRules",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "uri"
+          ]
+        },
+        {
+          "path": "DocumentReference.language",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+          }
+        },
+        {
+          "path": "DocumentReference.text",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Narrative"
+          ]
+        },
+        {
+          "path": "DocumentReference.contained",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Resource"
+          ]
+        },
+        {
+          "path": "DocumentReference.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DocumentReference.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DocumentReference.masterIdentifier",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "DocumentReference.identifier",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Identifier"
+          ]
+        },
+        {
+          "path": "DocumentReference.status",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/document-reference-status|4.0.1"
+          }
+        },
+        {
+          "path": "DocumentReference.docStatus",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/composition-status|4.0.1"
+          }
+        },
+        {
+          "path": "DocumentReference.type",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/c80-doc-typecodes"
+          }
+        },
+        {
+          "path": "DocumentReference.category",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/document-classcodes"
+          }
+        },
+        {
+          "path": "DocumentReference.subject",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DocumentReference.date",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "instant"
+          ]
+        },
+        {
+          "path": "DocumentReference.author",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DocumentReference.authenticator",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DocumentReference.custodian",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DocumentReference.relatesTo",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "DocumentReference.relatesTo.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "DocumentReference.relatesTo.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DocumentReference.relatesTo.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DocumentReference.relatesTo.code",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "code"
+          ],
+          "binding": {
+            "strength": "required",
+            "valueSet": "http://hl7.org/fhir/ValueSet/document-relationship-type|4.0.1"
+          }
+        },
+        {
+          "path": "DocumentReference.relatesTo.target",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DocumentReference.description",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "DocumentReference.securityLabel",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "extensible",
+            "valueSet": "http://hl7.org/fhir/ValueSet/security-labels"
+          }
+        },
+        {
+          "path": "DocumentReference.content",
+          "min": 1,
+          "max": "*",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "DocumentReference.content.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "DocumentReference.content.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DocumentReference.content.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DocumentReference.content.attachment",
+          "min": 1,
+          "max": "1",
+          "types": [
+            "Attachment"
+          ]
+        },
+        {
+          "path": "DocumentReference.content.format",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Coding"
+          ],
+          "binding": {
+            "strength": "preferred",
+            "valueSet": "http://hl7.org/fhir/ValueSet/formatcodes"
+          }
+        },
+        {
+          "path": "DocumentReference.context",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "BackboneElement"
+          ]
+        },
+        {
+          "path": "DocumentReference.context.id",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "http://hl7.org/fhirpath/System.String"
+          ]
+        },
+        {
+          "path": "DocumentReference.context.extension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DocumentReference.context.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Extension"
+          ]
+        },
+        {
+          "path": "DocumentReference.context.encounter",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DocumentReference.context.event",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://terminology.hl7.org/ValueSet/v3-ActCode"
+          }
+        },
+        {
+          "path": "DocumentReference.context.period",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Period"
+          ]
+        },
+        {
+          "path": "DocumentReference.context.facilityType",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/c80-facilitycodes"
+          }
+        },
+        {
+          "path": "DocumentReference.context.practiceSetting",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "CodeableConcept"
+          ],
+          "binding": {
+            "strength": "example",
+            "valueSet": "http://hl7.org/fhir/ValueSet/c80-practice-codes"
+          }
+        },
+        {
+          "path": "DocumentReference.context.sourcePatientInfo",
+          "min": 0,
+          "max": "1",
+          "types": [
+            "Reference"
+          ]
+        },
+        {
+          "path": "DocumentReference.context.related",
+          "min": 0,
+          "max": "*",
+          "types": [
+            "Reference"
+          ]
+        }
+      ]
+    }
+  },
+  "valueSets": {
+    "http://hl7.org/fhir/ValueSet/encounter-status|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/encounter-status",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/encounter-status",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "planned",
+        "arrived",
+        "triaged",
+        "in-progress",
+        "onleave",
+        "finished",
+        "cancelled",
+        "entered-in-error",
+        "unknown"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/encounter-location-status|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/encounter-location-status",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/encounter-location-status",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "planned",
+        "active",
+        "reserved",
+        "completed"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/event-status|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/event-status",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/event-status",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "preparation",
+        "in-progress",
+        "not-done",
+        "on-hold",
+        "stopped",
+        "completed",
+        "entered-in-error",
+        "unknown"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/document-reference-status|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/document-reference-status",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/document-reference-status",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "current",
+        "superseded",
+        "entered-in-error"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/composition-status|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/composition-status",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/composition-status",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "preliminary",
+        "final",
+        "amended",
+        "entered-in-error"
+      ]
+    },
+    "http://hl7.org/fhir/ValueSet/document-relationship-type|4.0.1": {
+      "url": "http://hl7.org/fhir/ValueSet/document-relationship-type",
+      "version": "4.0.1",
+      "sources": [
+        {
+          "system": "http://hl7.org/fhir/document-relationship-type",
+          "enumerated": false
+        }
+      ],
+      "codes": [
+        "replaces",
+        "transforms",
+        "signs",
+        "appends"
+      ]
+    }
+  }
+}

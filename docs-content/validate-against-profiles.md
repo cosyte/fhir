@@ -37,7 +37,7 @@ finding is the error, and it is the one that moves the verdict.
 
 ## Rely on the constraints R4 declares
 
-You do not need a profile for the constraints R4 itself declares. On the eight modeled resource
+You do not need a profile for the constraints R4 itself declares. On the eleven modeled resource
 types, `validateResource` evaluates them with no options at all: a patient contact with no name,
 telecom, address, or organization breaks `pat-1`, an extension with both a value and nested
 extensions breaks `ext-1`, and an element with no value and no children breaks `ele-1`:

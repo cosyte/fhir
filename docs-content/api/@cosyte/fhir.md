@@ -6325,8 +6325,9 @@ collectQuantityIssues(resource, "Observation"); // → one VITAL_SIGN_UNIT_NONCO
 > **collectSafetyIssues**(`resource`, `rt`): [`ValidationIssue`](#validationissue)[]
 
 Collect every safety finding for a resource: fail-closed modifier extensions and repeated property
-names (both universal), the `entered-in-error` retraction note, and the named invariants (for the
-types `SAFETY_RESOURCE_TYPES` names).
+names (both universal), the `entered-in-error` retraction note (for the types
+`SAFETY_RESOURCE_TYPES` names, and `Encounter`, `Procedure` and `DocumentReference`), and the named
+invariants (for the types `SAFETY_RESOURCE_TYPES` names).
 
 #### Parameters
 
