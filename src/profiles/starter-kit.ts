@@ -23,9 +23,10 @@
  * @packageDocumentation
  */
 
+import { PATIENT_ANIMAL_EXTENSION_URL } from "../helpers/patient-animal.js";
 import { complex, list, primitive } from "../model/node.js";
 import { OBSERVATION_CATEGORY_SYSTEM, VITAL_SIGNS_CATEGORY } from "../quantity/ucum.js";
-import { defineProfile } from "./define-profile.js";
+import { defineProfile, type ProfileElementSpec } from "./define-profile.js";
 import type { StructureDefinition } from "./structure-definition.js";
 
 /** The canonical URL prefix the starter-kit profiles are published under. */
@@ -101,9 +102,88 @@ export const PATIENT_IDENTIFIER_STARTER: StructureDefinition = defineProfile({
   ],
 });
 
+// Stryker disable all: the veterinary starter is built once, when the module loads, which the mutation runner does not reload per mutant; test/starter-kit.test.ts pins its whole differential and validates instances against it
+/** A `value` discriminator on `url`, the way R4 slices an extension list. */
+const BY_URL = { discriminator: [{ type: "value", path: "url" }], rules: "open" } as const;
+
+/** One sub-extension slice of `patient-animal`, as extension-patient-animal.html defines it. */
+function animalPart(name: string, min: number, valueSet: string): readonly ProfileElementSpec[] {
+  const id = `Patient.extension:animal.extension:${name}`;
+  return [
+    {
+      path: "Patient.extension.extension",
+      id,
+      sliceName: name,
+      min,
+      max: 1,
+    },
+    {
+      path: "Patient.extension.extension.url",
+      id: `${id}.url`,
+      fixed: { type: "Uri", value: primitive(name) },
+    },
+    {
+      path: "Patient.extension.extension.value[x]",
+      id: `${id}.value[x]`,
+      min: 1,
+      type: [{ code: "CodeableConcept" }],
+      binding: { strength: "example", valueSet },
+    },
+  ];
+}
+
 /**
- * Every starter-kit profile. Iterate this to register the whole kit as a validation profile set, or
- * pick one by `url`, a starting point a consumer extends with their own site/vendor constraints.
+ * A **veterinary `Patient`** starter, grounded in the R4 `patient-animal` extension
+ * (extension-patient-animal.html). It slices `Patient.extension` by `url` and requires exactly one
+ * `animal` slice, pinned to {@link PATIENT_ANIMAL_EXTENSION_URL}, inside which `species` is required
+ * (`1..1`) and `breed` and `genderStatus` are allowed once each (`0..1`), every one carrying a
+ * `valueCodeableConcept`. The slicing stays **`open`**, so other extensions may sit beside it.
+ *
+ * The extension is **draft**, maturity level 1, and its three bindings (`AnimalSpecies`,
+ * `AnimalBreed`, `AnimalGenderStatus`) are **example** bindings: they are carried here as written,
+ * and no code is required of any of them. Read the parts with `readPatientAnimal`.
+ *
+ * It is not in {@link STARTER_PROFILES}: a profile there applies to every resource of its type, and
+ * this one would report every human Patient as missing the extension. Pass it on its own, for the
+ * Patients you know are animals, or look it up with {@link starterProfile}.
+ */
+export const VETERINARY_PATIENT_STARTER: StructureDefinition = defineProfile({
+  url: `${STARTER_PROFILE_BASE_URL}/starter-veterinary-patient`,
+  name: "StarterVeterinaryPatient",
+  type: "Patient",
+  differential: [
+    { path: "Patient.extension", slicing: BY_URL },
+    {
+      path: "Patient.extension",
+      id: "Patient.extension:animal",
+      sliceName: "animal",
+      min: 1,
+      max: 1,
+      mustSupport: true,
+      type: [{ code: "Extension", profile: [PATIENT_ANIMAL_EXTENSION_URL] }],
+    },
+    {
+      path: "Patient.extension.extension",
+      id: "Patient.extension:animal.extension",
+      slicing: BY_URL,
+    },
+    ...animalPart("species", 1, "http://hl7.org/fhir/ValueSet/animal-species"),
+    ...animalPart("breed", 0, "http://hl7.org/fhir/ValueSet/animal-breeds"),
+    ...animalPart("genderStatus", 0, "http://hl7.org/fhir/ValueSet/animal-genderstatus"),
+    {
+      path: "Patient.extension.url",
+      id: "Patient.extension:animal.url",
+      fixed: { type: "Uri", value: primitive(PATIENT_ANIMAL_EXTENSION_URL) },
+    },
+  ],
+});
+// Stryker restore all
+
+/**
+ * Every starter-kit profile that applies to any resource of its type. Iterate this to register the
+ * whole kit as a validation profile set, or pick one by `url`, a starting point a consumer extends
+ * with their own site/vendor constraints. {@link VETERINARY_PATIENT_STARTER} is left out, since it
+ * applies only to a Patient that is an animal.
  *
  * @example
  * ```ts
@@ -118,7 +198,7 @@ export const STARTER_PROFILES: readonly StructureDefinition[] = [
 ];
 
 /**
- * Look up a starter profile by its canonical `url`.
+ * Look up a starter profile by its canonical `url`, {@link VETERINARY_PATIENT_STARTER} included.
  *
  * @param url - The canonical URL (see each profile's `url`, or {@link STARTER_PROFILE_BASE_URL}).
  * @returns The matching starter profile, or `undefined`.
@@ -129,5 +209,5 @@ export const STARTER_PROFILES: readonly StructureDefinition[] = [
  * ```
  */
 export function starterProfile(url: string): StructureDefinition | undefined {
-  return STARTER_PROFILES.find((p) => p.url === url);
+  return [...STARTER_PROFILES, VETERINARY_PATIENT_STARTER].find((p) => p.url === url);
 }

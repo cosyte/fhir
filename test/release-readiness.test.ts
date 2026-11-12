@@ -1522,12 +1522,14 @@ describe("the certified public surface matches the package entry point", () => {
   });
 
   it("counts what it certifies, so a dropped ROW reds even if every name still matches", () => {
-    expect(INVENTORY.values).toHaveLength(170);
+    // Three runtime names and one type added with the patient-animal reader and the veterinary
+    // Patient starter profile.
+    expect(INVENTORY.values).toHaveLength(173);
     // S0364-fhir-safety-modifier-3: two type-only exports added (IntentReport,
     // MedicationRequestIntent), the types of the two safety readout fields that change adds.
     // S0369-fhir-safety-modifier-4: two more (DatatypeUseCode, DatatypeUseReport), the types of
     // the `use` channel on Identifier, HumanName, Address and ContactPoint.
-    expect(INVENTORY.types).toHaveLength(106);
+    expect(INVENTORY.types).toHaveLength(107);
     expect(INVENTORY.exportSubpaths).toHaveLength(3);
   });
 
