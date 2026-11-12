@@ -45,10 +45,11 @@ import {
   type PrimitiveValue,
 } from "../model/node.js";
 import {
+  assertNoForeignNamespace,
+  assertNoForeignRoot,
   assertNoShadowedProperty,
   assertSerializable,
   assertXmlArrayWrapper,
-  assertXmlForeignRoot,
   assertXmlResourceType,
   assertXmlSerializable,
   assertXmlValueChoiceWrapper,
@@ -634,9 +635,8 @@ function writeElement(
  *   document that reads `valid: true`**, because the root flag is a warning; the cost is bounded to
  *   this class. A root declaring no namespace at all is untouched, and one carrying a prefix bound to
  *   nothing is outside it too, refused on `UNSERIALIZABLE_PREFIXED_NAME` below rather than on this
- *   code. `serializeResource` emits the model exactly as it always did, so this refusal does not
- *   reach it -- a statement about that writer's output, not a claim that the JSON channel keeps the
- *   flag. See `assertXmlForeignRoot` for the window and for the route not taken.
+ *   code. `serializeResource` refuses the same model on the same code, so neither format carries
+ *   it. See `assertNoForeignRoot` for the window and for the route not taken.
  * @throws {FhirSerializeError} With `UNSERIALIZABLE_CHOICE_WRAPPER` if the model carries an array
  *   wrapper around an `Observation.value[x]` choice, at a location this library already reports as
  *   `ARRAY_WRAPPED_CHOICE`, that XML has no repeated element to spell back: one holding fewer than
@@ -720,6 +720,13 @@ function writeElement(
  *   reported and a model carrying both a name that is not a `Name` and a character that is not a
  *   `Char` draws the name code. {@link serializeResource} writes these values as JSON strings, so
  *   this refusal does not reach it and that route stays open.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_FOREIGN_NAMESPACE` if the model carries an
+ *   element the XML reader read from a namespace other than its parent's, which `readSafety`
+ *   declines. This writer would emit it in the FHIR namespace, so
+ *   `<status xmlns="urn:vendor" value="final"/>` came back as `<status value="final"/>` and the
+ *   re-read read `safeToSummarize: true`. The narrative `div` in the XHTML namespace is never marked
+ *   and is written as before. Raised last of all, so a model that trips any refusal above keeps the
+ *   code it already reported. `serializeResource` refuses the same model on the same code.
  * @example
  * ```ts
  * import { parseResource, serializeResourceXml } from "@cosyte/fhir";
@@ -759,7 +766,7 @@ export function serializeResourceXml(node: FhirComplex): string {
   assertXmlResourceType(node);
   // And this one after THAT, on the same rule once more: it is now the newest code, so a vendor root
   // that also carries dropped character data or an unwritable name keeps the code it already had.
-  assertXmlForeignRoot(node);
+  assertNoForeignRoot(node);
   // And this one at the very end of the chain, on the same rule again: it is the newest code, so a
   // document whose `value[x]` wrapper sits beside an element-level one, a shadowed member or an
   // untaggable type keeps the code it already reported and no case moves onto this one.
@@ -783,5 +790,8 @@ export function serializeResourceXml(node: FhirComplex): string {
   if (sink.refusedCharacters.length > 0) {
     refuseNonXmlCharacters([...new Set(sink.refusedCharacters)]);
   }
+  // And the element read from another namespace after all of them, on the same rule: it is the
+  // newest code, so a prefixed one keeps the prefix code it drew before.
+  assertNoForeignNamespace(node);
   return xml;
 }

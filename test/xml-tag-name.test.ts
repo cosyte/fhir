@@ -54,6 +54,7 @@ import {
   validateResource,
   type FhirComplex,
 } from "../src/index.js";
+import { jsonOfModel } from "./_util.js";
 
 const FHIR_NS = 'xmlns="http://hl7.org/fhir"';
 
@@ -728,7 +729,9 @@ describe("a model name at an XML tag position", () => {
     });
 
     it.each(COLON_MODELS)("AC-9: the JSON writer returns the pin's string for %s", (_label, c) => {
-      const json = serializeResource(c.build());
+      // A model the XML reader marked as read from another vocabulary is refused by this writer
+      // now; the pin's string is what it holds with the mark taken off.
+      const json = jsonOfModel(c.build());
       expect(json).toBe(c.json);
       expect(parseResource(json).resource.properties.map((p) => p.name)).toEqual(c.jsonNames);
     });
@@ -1656,25 +1659,25 @@ describe("a model name at an XML tag position", () => {
     );
 
     it.each(UNBOUND_MODELS)(
-      "AC-8: the JSON writer returns the pin's string, and no refusal, for %s",
+      "AC-8: the JSON writer returns the pin's string, or a foreign-vocabulary refusal, for %s",
       (_label, c) => {
-        expect(serializeResource(c.build())).toBe(c.json);
+        expect(jsonOfModel(c.build())).toBe(c.json);
       },
     );
 
     it.each(EARLIER_MODELS)(
-      "AC-8: the JSON writer returns the pin's string, and no refusal, for %s",
+      "AC-8: the JSON writer returns the pin's string, or a foreign-vocabulary refusal, for %s",
       (_label, c) => {
-        expect(serializeResource(c.build())).toBe(c.json);
+        expect(jsonOfModel(c.build())).toBe(c.json);
       },
     );
 
-    it("AC-8: the JSON writer returns the pin's string, and no refusal, for every AC-3, AC-4 and AC-5 model", () => {
+    it("AC-8: the JSON writer returns the pin's string, or a foreign-vocabulary refusal, for every AC-3, AC-4 and AC-5 model", () => {
       for (const div of [...ADMITTED_DIVS, ...FAILS_BOTH.map(([, row]) => row)]) {
         expect(serializeResource(model(narrativeJson(div)))).toBe(narrativeJson(div));
       }
       for (const [, doc, read] of ANCESTOR_BOUND) {
-        expect(serializeResource(parseResourceXml(doc).resource)).toBe(narrativeJson(read));
+        expect(jsonOfModel(parseResourceXml(doc).resource)).toBe(narrativeJson(read));
       }
     });
   });

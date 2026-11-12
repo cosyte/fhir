@@ -89,7 +89,12 @@ import {
   type FhirPrimitive,
   type PrimitiveValue,
 } from "../model/node.js";
-import { assertNoShadowedProperty, assertSerializable } from "./serialize-guard.js";
+import {
+  assertNoForeignNamespace,
+  assertNoForeignRoot,
+  assertNoShadowedProperty,
+  assertSerializable,
+} from "./serialize-guard.js";
 
 /** Serialize a scalar primitive value to its JSON text. `undefined` is a value-absent slot → `null`. */
 function emitScalar(value: PrimitiveValue | undefined): string {
@@ -308,6 +313,15 @@ function emitComplex(node: FhirComplex): string {
  *   route here that keeps the member. A repeated name inside a primitive's `_`-sibling is not
  *   modeled, and one inside a complex in a primitive's `extension` is outside the window; see
  *   `assertNoShadowedProperty` for both.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_FOREIGN_ROOT` if the model holds a resource whose
+ *   root the XML reader read out of a vocabulary other than FHIR's. JSON has no namespace, so the
+ *   resource was written as FHIR and the re-read read `safeToSummarize: true` where the XML read
+ *   declined. **Changed in a patch**: this writer used to emit such a model. `serializeResourceXml`
+ *   refuses it on the same code.
+ * @throws {FhirSerializeError} With `UNSERIALIZABLE_FOREIGN_NAMESPACE` if the model carries an
+ *   element the XML reader read from a namespace other than its parent's, which `readSafety`
+ *   declines. `<status xmlns="urn:vendor" value="final"/>` inside a FHIR resource used to come back
+ *   as `"status":"final"` and re-read safe. `serializeResourceXml` refuses it on the same code.
  * @example
  * ```ts
  * import { parseResource, serializeResource } from "@cosyte/fhir";
@@ -320,5 +334,9 @@ export function serializeResource(node: FhirComplex): string {
   // Last, so a model that also carries dropped character data keeps the code it already reported and
   // no case moves onto the newer one. Same position it takes at the end of the XML writer's chain.
   assertNoShadowedProperty(node);
+  // Then the two foreign-vocabulary refusals, newest last, on the same rule: a model that also
+  // carries dropped character data or a shadowed member keeps the code it already reported.
+  assertNoForeignRoot(node);
+  assertNoForeignNamespace(node);
   return emitComplex(node);
 }

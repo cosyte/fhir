@@ -15,11 +15,11 @@
  * {@link assertXmlSerializable}, {@link assertXmlArrayWrapper}, {@link assertXmlValueChoiceWrapper}
  * and {@link assertXmlResourceType} are
  * XML-only for the mirror-image reason: the shapes they refuse are ones the JSON writer writes, and
- * XML has no channel to write them into. {@link assertXmlForeignRoot} is XML-only for a reason of its
- * own and the difference is worth reading rather than assuming: a namespace is an XML construct, so
- * it is the XML writer that has a vocabulary to get wrong, and `serializeResource` emits that model
- * exactly as it always did. **That is not a claim the JSON channel keeps the flag** -- it does not,
- * and that half is declared open rather than closed by this one.
+ * XML has no channel to write them into. {@link assertNoForeignRoot} and
+ * {@link assertNoForeignNamespace} run in **both** writers, for the first reason again: the reader's
+ * mark that an element came from another vocabulary has no spelling in either format. JSON has no
+ * namespace at all, and the XML writer puts every element in FHIR's, so either output re-read
+ * without the mark and the safety readout's refusal was gone after one trip.
  * {@link assertNoShadowedProperty} runs in **both** for the first reason again: a
  * member a repeated property name shadowed falls outside both walks, which visit `properties` only,
  * and neither format has a spelling that re-reads as the ambiguity the model holds. No refusal here
@@ -60,7 +60,13 @@
  * invented, and no document that reads clean today changes shape. It costs the round trip only for
  * models the library already reports as `valid: false` with `safeToSummarize: false`.
  */
-import { isForeignRoot, isPrimitive, type FhirComplex, type FhirNode } from "../model/node.js";
+import {
+  isForeignNamespace,
+  isForeignRoot,
+  isPrimitive,
+  type FhirComplex,
+  type FhirNode,
+} from "../model/node.js";
 import { childPath, rootPath } from "../model/path.js";
 import { unspellableXmlValueChoices } from "../quantity/value.js";
 import { typeOf } from "../safety/codes.js";
@@ -172,20 +178,37 @@ export const SERIALIZE_ERROR_CODES = {
   UNSERIALIZABLE_RESOURCE_TYPE: "UNSERIALIZABLE_RESOURCE_TYPE",
   /**
    * The model carries, at one or more elements, a root the XML reader read out of a vocabulary that
-   * resolved to something other than FHIR's. **XML only**: `serializeResource` spells a member name
-   * and never a namespace, so it emits the model exactly as it did before this refusal existed and
-   * that route stays open -- which is a statement about that writer's output, **not** a claim that
-   * the JSON channel keeps the flag. It does not, and that half is declared open.
+   * resolved to something other than FHIR's. **Both writers**: FHIR XML puts the resource in the
+   * FHIR namespace and FHIR JSON has no namespace at all, so neither has a spelling for the
+   * sender's vocabulary.
    *
-   * FHIR XML puts the resource in the FHIR namespace, and the writer has no vendor binding to write
-   * instead, so it emitted a document in the FHIR namespace with no trace of the one the sender
-   * wrote. That output re-reads with an **empty** issue list, so the one warning that said the
-   * document came from another vocabulary is gone after a single trip and the vendor document is
-   * indistinguishable from FHIR.
+   * The XML writer emitted a document in the FHIR namespace with no trace of the one the sender
+   * wrote, and the JSON writer emitted the same members as an ordinary FHIR resource. Either output
+   * re-reads with an **empty** issue list and `safeToSummarize: true`, so the one warning that said
+   * the document came from another vocabulary, and the safety readout's refusal with it, is gone
+   * after a single trip and the vendor document is indistinguishable from FHIR.
    *
-   * See {@link assertXmlForeignRoot} for the window, the two routes weighed, and what it costs.
+   * **Changed in a patch: `serializeResource` used to emit this model and now refuses it.** A caller
+   * that converted such a document to JSON must now decide what the vendor vocabulary means before
+   * writing it as FHIR.
+   *
+   * See {@link assertNoForeignRoot} for the window, the two routes weighed, and what it costs.
    */
   UNSERIALIZABLE_FOREIGN_ROOT: "UNSERIALIZABLE_FOREIGN_ROOT",
+  /**
+   * The model carries, at one or more locations, an element the XML reader read from a namespace
+   * other than its parent's (`<status xmlns="urn:vendor" value="final"/>` inside a FHIR resource,
+   * a prefix bound to another vocabulary, or `xmlns=""`). **Both writers**, the way
+   * {@link SERIALIZE_ERROR_CODES.DROPPED_ELEMENT_TEXT} is: the mark has no spelling in either format.
+   *
+   * The reader models such an element under its local name, and `readSafety` declines it on
+   * `notAssessed`. The JSON writer emitted it as the FHIR member of that name and the XML writer
+   * emitted it in the FHIR namespace, so the re-read carried no mark and `safeToSummarize` read
+   * `true` for a status the sender wrote in another vocabulary.
+   *
+   * See {@link assertNoForeignNamespace} for the window and what it leaves.
+   */
+  UNSERIALIZABLE_FOREIGN_NAMESPACE: "UNSERIALIZABLE_FOREIGN_NAMESPACE",
   /**
    * The model holds, at one or more tag positions, a name carrying a colon. XML reads the colon as
    * a namespace prefix, and the model carries no namespace binding for the writer to declare one
@@ -812,8 +835,9 @@ export function assertXmlResourceType(node: FhirComplex): void {
 }
 
 /**
- * Refuse to serialize **to XML** a model whose root the reader read out of another vocabulary, which
- * the XML writer would emit in the FHIR namespace with nothing left to say otherwise.
+ * Refuse to serialize a model whose root the reader read out of another vocabulary, which the XML
+ * writer would emit in the FHIR namespace and the JSON writer as an ordinary FHIR resource, with
+ * nothing left to say otherwise. Runs in **both** writers.
  *
  * ## The site, measured at `2ac2d72`
  *
@@ -826,6 +850,11 @@ export function assertXmlResourceType(node: FhirComplex): void {
  * the whole reading that said the document was not FHIR was gone. The default-declaration spelling
  * of the same root (`<Observation xmlns="urn:vendor">`) laundered identically.
  *
+ * The JSON writer laundered it too, and this refusal first left that half open: `serializeResource`
+ * emitted `{"resourceType":"Observation","id":"o1","status":"entered-in-error",...}`, and the
+ * re-read carried an empty issue list and `safeToSummarize: true` where the XML read had declined.
+ * JSON has no namespace to carry the vocabulary in, so it is refused there on the same marker.
+ *
  * ## Refusing rather than recovering the vocabulary
  *
  * The other route is to carry the root's namespace in the model and write it back, which restores
@@ -837,7 +866,8 @@ export function assertXmlResourceType(node: FhirComplex): void {
  *
  * ## What it costs, stated rather than implied
  *
- * **This withdraws an XML round trip from a document that reads `valid: true`.** The root flag is a
+ * **This withdraws a round trip, in both formats, from a document that reads `valid: true`.** The
+ * root flag is a
  * warning, so the class refused here is not one this library already reports as invalid, and the
  * bound {@link assertSerializable} and {@link assertXmlArrayWrapper} hold does **not** hold here.
  * `breaksTag` and {@link assertXmlResourceType} each pay that cost already, on documents of their
@@ -845,7 +875,7 @@ export function assertXmlResourceType(node: FhirComplex): void {
  * document, a document declaring no namespace at all, and a document whose root prefix is bound to
  * nothing are all outside it. The last is refused anyway, but at its tag sites and on
  * {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_PREFIXED_NAME}, never on this code, and
- * `serializeResource` writes every one of them, this class included.
+ * `serializeResource` writes each of those three, and not this class.
  *
  * ## The window, which is the reader's own marker
  *
@@ -859,23 +889,73 @@ export function assertXmlResourceType(node: FhirComplex): void {
  * exactly as every other write-path location is, so a root whose local name is not shaped like a
  * published resource type reports `<withheld>` rather than the name.
  *
- * **Raised last**, after every refusal above it, so a model that trips two keeps the code it already
- * reported and no case moves onto this one: a vendor root that also carries dropped character data
- * still reports `DROPPED_ELEMENT_TEXT`.
+ * **Raised after every refusal older than it** in each writer, so a model that trips two keeps the
+ * code it already reported and no case moves onto this one: a vendor root that also carries dropped
+ * character data still reports `DROPPED_ELEMENT_TEXT`, in both writers.
  *
- * @param node - The model about to be serialized to XML.
+ * @param node - The model about to be serialized.
  * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_ROOT}.
  * @internal
  */
-export function assertXmlForeignRoot(node: FhirComplex): void {
+export function assertNoForeignRoot(node: FhirComplex): void {
   const locations = collectMarked(node, rootPath(typeOf(node) ?? "Resource"), isForeignRoot);
   if (locations.length === 0) return;
   throw new FhirSerializeError(
-    // Says what this refusal does not reach, in the wording the refusals beside it were narrowed to.
     // It names no namespace, no tag and no value: the marker it fires on carries none of them, and
     // the vendor URI is the one piece of document content this whole residual is about.
-    `cannot serialize to XML: ${String(locations.length)} location(s) hold a resource whose root named another vocabulary, which this writer would emit in the FHIR namespace; this refusal does not reach serializeResource`,
+    `cannot serialize: ${String(locations.length)} location(s) hold a resource whose root named another vocabulary, which neither serializeResource nor serializeResourceXml can write without writing it as FHIR`,
     SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_ROOT,
+    locations,
+  );
+}
+
+/**
+ * Refuse to serialize a model holding an element the XML reader read from a namespace other than its
+ * parent's. Runs in **both** writers, as {@link assertSerializable} does, and for the same reason:
+ * the reader's mark has no spelling in either format.
+ *
+ * ## The site
+ *
+ * `<Observation xmlns="http://hl7.org/fhir"><status xmlns="urn:vendor" value="final"/>...` reads
+ * with `Observation.status` on `notAssessed` and `safeToSummarize: false`: the format defines no
+ * such element there, whatever its local name spells. The reader still models it as `status`, so
+ * the JSON writer emitted `"status":"final"` and the XML writer `<status value="final"/>` in the
+ * FHIR namespace, and either re-read carried no mark and read `safeToSummarize: true`. One write and
+ * one re-read turned a declined status into an affirmed one.
+ *
+ * ## Refusing rather than writing the namespace back
+ *
+ * The same fork {@link assertNoForeignRoot} took, for the same reasons: the namespace URI is document
+ * content and is not kept on the model, JSON has nowhere to put it, and the mark carries no content
+ * at all. Nothing that reads as FHIR is withdrawn: the narrative `div` in the XHTML namespace is
+ * never marked, and a document with every element in the FHIR namespace is written as before. The
+ * class refused here is one `readSafety` already declines.
+ *
+ * ## The window, which is the reader's own marker
+ *
+ * `collectMarked`'s walk, selecting the nodes `isForeignNamespace` picks out: every node at every
+ * depth, a primitive's `extension` metadata, and members a repeated property name shadowed. A
+ * location is listed once, however many marked occurrences share it, and the location is bounded by
+ * `rootPath` / `childPath`, so a prefixed name not shaped like an element reports `<withheld>`.
+ * An element that merely inherits its parent's foreign namespace is not marked; its nearest marked
+ * ancestor (or a marked root, on {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_ROOT}) is what
+ * refuses.
+ *
+ * **Raised last** in both writers, so a model that trips an older refusal keeps the code it already
+ * reported: an element in another namespace that also carries dropped character data still reports
+ * `DROPPED_ELEMENT_TEXT`, and in XML a prefixed one still reports the prefix code.
+ *
+ * @param node - The model about to be serialized.
+ * @throws {FhirSerializeError} With {@link SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_NAMESPACE}.
+ * @internal
+ */
+export function assertNoForeignNamespace(node: FhirComplex): void {
+  const locations = collectMarked(node, rootPath(typeOf(node) ?? "Resource"), isForeignNamespace);
+  if (locations.length === 0) return;
+  throw new FhirSerializeError(
+    // Names no namespace, tag or value, for the reason the root refusal above gives.
+    `cannot serialize: ${String(locations.length)} location(s) hold an element read from a namespace other than its parent's, which neither serializeResource nor serializeResourceXml can write without writing it as FHIR`,
+    SERIALIZE_ERROR_CODES.UNSERIALIZABLE_FOREIGN_NAMESPACE,
     locations,
   );
 }
@@ -1024,13 +1104,13 @@ const XML_PREFIX = "xml:";
  * `<v:Observation>` with `v` bound to nothing carries no namespace to declare, so any URI the writer
  * picked would be a vocabulary the sender never sent, which is the fabrication class. Carrying the
  * source's bindings in the model instead would put a vendor URI within reach of every walker and
- * every diagnostic, the reason {@link assertXmlForeignRoot} keys on a marker rather than the
+ * every diagnostic, the reason {@link assertNoForeignRoot} keys on a marker rather than the
  * vocabulary; that route is not refuted, only not taken. Refusing invents nothing.
  *
  * **What it costs, stated rather than implied: it withdraws an XML write from models that read
  * `valid: true`.** `{"resourceType":"Patient","p:x":"v"}` reads with zero issues, and a root whose
  * prefix nothing binds reads `valid: true`. `breaksTag`, {@link assertXmlResourceType} and
- * {@link assertXmlForeignRoot} each pay that cost already; this is the fourth. `serializeResource`
+ * {@link assertNoForeignRoot} each pay that cost already; this is the fourth. `serializeResource`
  * spells a member name as a JSON string and is the route that stays open.
  *
  * **What it does NOT cover, each a separate matter rather than an oversight.** A name with no colon

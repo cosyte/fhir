@@ -283,8 +283,9 @@ describe("property: idempotent normalize", () => {
           const once = normalizeXml(raw);
           if (once === undefined) return;
           // A known gap, pinned in `test/xml-narrative-namespace.test.ts`: a narrative `div` that
-          // declares no namespace takes on the FHIR namespace once written, so its first rewrite
-          // is not a fixed point. When that test reds because the gap closed, drop this line.
+          // declares no namespace, under a root in no namespace, takes on the FHIR namespace once
+          // written, so its first rewrite is not a fixed point. One under a FHIR parent is refused
+          // now. When that test reds because the rest of the gap closed, drop this line.
           if (carriesUnscopedNarrative(parseResourceXml(raw).resource)) return;
           assert.equal(normalizeXml(once), once);
         }),
