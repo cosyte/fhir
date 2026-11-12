@@ -64,7 +64,7 @@ import {
 } from "../bundle/references.js";
 import { primitiveString } from "../safety/codes.js";
 import { UNBOUNDED, type ResourceSchema } from "../validate/schema.js";
-import { builtInSchema, conformanceIssues } from "../validate/validate.js";
+import { builtInSchema, conformanceResult } from "../validate/validate.js";
 import {
   ISSUE_SEVERITIES,
   SLICE_UNCHECKED_REASONS,
@@ -171,12 +171,12 @@ function environmentIn(
       ? closure
       : { ...closure, contained: containedIndex(target) };
     const environment = environmentIn(inner, options, depth + 1, state);
-    let issues: readonly ValidationIssue[];
+    let result: { readonly issues: readonly ValidationIssue[]; readonly valid: boolean };
     let leftOut: boolean;
     try {
       // Every layer validateResource runs, the profile's own invariants among them, so a target is
       // judged against the slice's profile exactly as it would be validated against it alone.
-      issues = conformanceIssues(target, profile, options.resolve, environment);
+      result = conformanceResult(target, profile, options.resolve, environment);
       leftOut = checksLeftOut(target, profile, options, environment);
     } catch (error) {
       // Any other throw (a caller's resolver failing, say) propagates exactly as it does unnested.
@@ -184,18 +184,12 @@ function environmentIn(
       // A profile whose snapshot cannot be generated was not available to check against.
       return SLICE_UNCHECKED_REASONS.PROFILE_UNAVAILABLE;
     }
-    if (
-      issues.some(
-        (i) => i.severity === ISSUE_SEVERITIES.ERROR || i.severity === ISSUE_SEVERITIES.FATAL,
-      )
-    ) {
-      return "no";
-    }
+    if (!result.valid) return "no";
     // Something the profile asks of the target that was not evaluated: a slicing, an invariant, a
     // resource type with no schema, a binding or a type profile no layer checks.
     const incomplete =
       leftOut ||
-      issues.some(
+      result.issues.some(
         (i) =>
           i.code === "PROFILE_SLICE_UNCHECKED" ||
           i.code === "PROFILE_SLICE_NO_SLICING" ||
@@ -245,9 +239,6 @@ function environmentIn(
   };
 }
 
-/** The base FHIR value sets, the only ones the schema's enumerated `code` bindings stand for. */
-const CORE_VALUE_SETS = "http://hl7.org/fhir/ValueSet/";
-
 /**
  * Whether the profile asks something of the target that no validation layer checks: a `required`
  * binding the schema's enumerated codes do not stand for, or a type `profile` (an extension's
@@ -266,7 +257,6 @@ function checksLeftOut(
   const schema = builtInSchema(profile.type);
   return snapshot.some(
     (el) =>
-      el.path !== profile.type &&
       (typeProfiled(el) || bindingLeftOut(el, profile.type, schema)) &&
       scope.occurrences(el).length > 0,
   );
@@ -289,9 +279,10 @@ function bindingLeftOut(
 ): boolean {
   const binding = el.binding;
   if (binding?.strength !== "required") return false;
-  const name = el.path.slice(type.length + 1);
-  const enumerated = el.path === `${type}.${name}` && schema?.elements[name]?.binding !== undefined;
-  return !(enumerated && (binding.valueSet ?? "").startsWith(CORE_VALUE_SETS));
+  // A nested path's tail has a dot, which names no schema element.
+  const enumerated = schema?.elements[el.path.slice(type.length + 1)]?.binding !== undefined;
+  // The base FHIR value sets are the only ones the schema's enumerated codes stand for.
+  return !(enumerated && binding.valueSet?.startsWith("http://hl7.org/fhir/ValueSet/") === true);
 }
 
 /**

@@ -136,7 +136,7 @@ export interface ValidateOptions {
    * A resolver from a `baseDefinition` canonical URL to a loaded `StructureDefinition`, used only to
    * generate a snapshot for a supplied profile that carries a differential but no snapshot.
    */
-  readonly resolveBase?: BaseResolver;
+  readonly resolveBase?: BaseResolver | undefined;
 }
 
 /** The result of validating a resource: the findings plus an `OperationOutcome` view of them. */
@@ -291,18 +291,18 @@ export function validateResource(
  * @param profile - The profile the slice names.
  * @param resolveBase - The base resolver for snapshot generation.
  * @param environment - The nested slice environment.
- * @returns The value-free findings, exactly as {@link validateResource} reports them.
+ * @returns The result, exactly as {@link validateResource} reports it.
  * @internal
  */
-export function conformanceIssues(
+export function conformanceResult(
   resource: FhirComplex,
   profile: StructureDefinition,
   resolveBase: BaseResolver | undefined,
   environment: SliceEnvironment,
-): readonly ValidationIssue[] {
-  const options: ValidateOptions =
-    resolveBase === undefined ? { profiles: [profile] } : { profiles: [profile], resolveBase };
-  return shareSafetyWalks(() => validateOnce(resource, options, environment)).issues;
+): ValidationResult {
+  return shareSafetyWalks(() =>
+    validateOnce(resource, { profiles: [profile], resolveBase }, environment),
+  );
 }
 
 /**

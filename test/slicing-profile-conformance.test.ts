@@ -446,7 +446,19 @@ describe("the other layers of a nested profile check", () => {
       resourceType: "StructureDefinition",
       url: `${BASE}patient-q`,
       type: "Group",
-      snapshot: { element: [{ id: "Group", path: "Group" }] },
+      snapshot: {
+        element: [
+          { id: "Group", path: "Group" },
+          {
+            id: "Group.type",
+            path: "Group.type",
+            binding: {
+              strength: "required",
+              valueSet: "http://hl7.org/fhir/ValueSet/group-type|4.0.1",
+            },
+          },
+        ],
+      },
     });
     const byGroup = loadSd({
       resourceType: "StructureDefinition",
@@ -482,5 +494,113 @@ describe("the other layers of a nested profile check", () => {
     expect(unchecked(collectProfileIssues(bundle, byGroup, { profiles: [groupQ] }))).toEqual([
       ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
     ]);
+  });
+
+  it("leaves undecided a required binding that names no value set", () => {
+    const bound = patientQ([
+      { id: "Patient.gender", path: "Patient.gender", binding: { strength: "required" } },
+    ]);
+    const result = validateResource(bundleOf({ id: "fake-1", gender: "other" }), {
+      profiles: [bundleByProfile, bound],
+    });
+    expect(unchecked(result.issues)).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
+    ]);
+  });
+
+  it("decides past a type that names no profile", () => {
+    const typed = patientQ([
+      { id: "Patient.gender", path: "Patient.gender", type: [{ code: "code" }] },
+    ]);
+    const result = validateResource(bundleOf({ id: "fake-1", gender: "other" }), {
+      profiles: [bundleByProfile, typed],
+    });
+    expect(unchecked(result.issues)).toEqual([]);
+    expect(errors(result.issues)).toEqual([]);
+  });
+
+  it("generates the slice profile's snapshot through the base resolver for what it leaves out", () => {
+    const base = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}fake-base-patient`,
+      type: "Patient",
+      snapshot: {
+        element: [
+          { id: "Patient", path: "Patient" },
+          { id: "Patient.maritalStatus", path: "Patient.maritalStatus" },
+        ],
+      },
+    });
+    const differentialOnly = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}patient-q`,
+      type: "Patient",
+      baseDefinition: base.url,
+      differential: {
+        element: [
+          {
+            id: "Patient.maritalStatus",
+            path: "Patient.maritalStatus",
+            binding: { strength: "required", valueSet: "http://example.org/ValueSet/fake-marital" },
+          },
+        ],
+      },
+    });
+    const resolveBase = (url: string) => (url === base.url ? base : undefined);
+    const result = validateResource(
+      bundleOf({ id: "fake-1", maritalStatus: { text: "fake status" } }),
+      { profiles: [bundleByProfile, differentialOnly], resolveBase },
+    );
+    expect(unchecked(result.issues)).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.PROFILE_UNDECIDED],
+    ]);
+  });
+});
+
+describe("an invariant on a slice a profile discriminator decides", () => {
+  it("is evaluated on the decided members at the top level", () => {
+    const withSliceInvariant = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}bundle-slice-invariant`,
+      type: "Bundle",
+      snapshot: {
+        element: [
+          { id: "Bundle", path: "Bundle" },
+          {
+            id: "Bundle.entry",
+            path: "Bundle.entry",
+            slicing: { discriminator: [{ type: "profile", path: "resource" }], rules: "open" },
+          },
+          { id: "Bundle.entry:pat", path: "Bundle.entry", sliceName: "pat" },
+          {
+            id: "Bundle.entry:pat.resource",
+            path: "Bundle.entry.resource",
+            type: [{ code: "Patient", profile: [`${BASE}patient-q`] }],
+          },
+          {
+            id: "Bundle.entry:pat.search",
+            path: "Bundle.entry.search",
+            constraint: [{ key: "fake-4", severity: "error", expression: "mode.exists()" }],
+          },
+        ],
+      },
+    });
+    const bundle = parse({
+      resourceType: "Bundle",
+      type: "searchset",
+      entry: [
+        {
+          fullUrl: "urn:uuid:fake-1",
+          resource: { resourceType: "Patient", id: "fake-1", name: [{ family: "Synthfamily" }] },
+          search: { score: 1 },
+        },
+      ],
+    });
+    const result = validateResource(bundle, { profiles: [withSliceInvariant, named] });
+    expect(
+      result.issues
+        .filter((i) => i.code === "INVARIANT_VIOLATED")
+        .map((i) => [i.constraint, i.expression]),
+    ).toEqual([["fake-4", "Bundle.entry.search"]]);
   });
 });
