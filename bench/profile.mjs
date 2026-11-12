@@ -227,6 +227,9 @@ async function main() {
   const search = searchsetBundle(0, 1_000);
   const feed = Array.from({ length: 64 }, (_v, i) => observation(i));
   const feedModels = feed.map(model);
+  // The caller schema of the bench's two caller-schema cases: the built-in Observation schema.
+  const callerSchemas = [fhir.buildRegistry()("Observation")];
+  const callerRegistry = fhir.buildRegistry(callerSchemas);
   const pdf = reportWithAttachment(0, 4096 * KIB);
   const txn1000Model = model(txn1000);
   const txn5000Model = model(txn5000);
@@ -250,6 +253,27 @@ async function main() {
     {
       name: "validateResource: 64 vital-signs Observations",
       pass: () => feedModels.reduce((n, m) => n + fhir.validateResource(m).issues.length + 1, 0),
+    },
+    {
+      // The two caller-schema cases of the bench, whose small-resource peaks the budget judges too.
+      name: "validateResource with caller schemas each call: 64 vital-signs Observations",
+      pass: () =>
+        feedModels.reduce(
+          (n, m) => n + fhir.validateResource(m, { schemas: callerSchemas }).issues.length + 1,
+          0,
+        ),
+    },
+    {
+      name: "validateResource with a registry built once: 64 vital-signs Observations",
+      pass: () =>
+        feedModels.reduce(
+          (n, m) =>
+            n +
+            fhir.validateResource(m, { schemas: callerSchemas, registry: callerRegistry }).issues
+              .length +
+            1,
+          0,
+        ),
     },
     {
       name: "serializeResource: transaction Bundle, 5,000 entries",
