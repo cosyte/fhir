@@ -41,16 +41,21 @@ import {
   VALIDATION_CODES,
 } from "../src/index.js";
 
+import { propertyRun } from "./_property-run.js";
+
 /**
  * High run count, fixed seed, deterministic fuzz-scale reproduction (mirrors the hl7 fuzz harness).
  * The count is CI-tunable via `FUZZ_RUNS` (the dedicated `fuzz` CI job raises it); the fixed seed
- * keeps a failure reproducible regardless of the count.
+ * keeps a failure reproducible regardless of the count. `COSYTE_PROPERTY_RUNS` and
+ * `COSYTE_PROPERTY_SEED` win over both, as for every property here (`./_property-run.ts`), which
+ * is how the nightly run takes the fuzz properties to its depth from a seed of its own.
  */
 const FUZZ_RUNS = Number.parseInt(process.env["FUZZ_RUNS"] ?? "", 10);
-const RUN_CONFIG = {
+const FUZZ_SEED = 0x07_18_2026;
+const RUN_CONFIG = propertyRun({
   numRuns: Number.isFinite(FUZZ_RUNS) && FUZZ_RUNS > 0 ? FUZZ_RUNS : 1000,
-  seed: 0x07_18_2026,
-} as const;
+  seed: FUZZ_SEED,
+});
 
 const JSON_FATAL_SET: ReadonlySet<string> = new Set(Object.values(FATAL_CODES));
 const XML_FATAL_SET: ReadonlySet<string> = new Set(Object.values(XML_FATAL_CODES));
@@ -231,7 +236,9 @@ describe("fuzz: JSON, deep nesting is a typed MAX_DEPTH_EXCEEDED, never a stack 
         expect(error).toBeInstanceOf(FhirCodecError);
         expect((error as FhirCodecError).code).toBe(FATAL_CODES.MAX_DEPTH_EXCEEDED);
       }),
-      { numRuns: 50, seed: RUN_CONFIG.seed },
+      // 50 cases on a pull request, not the fuzz count: each builds and reads a document up to
+      // 20,000 levels deep. The nightly depth runs it at 10,000.
+      propertyRun({ numRuns: 50, seed: FUZZ_SEED }),
     );
   });
 
@@ -547,7 +554,9 @@ describe("fuzz: XML, XXE / billion-laughs / entity attacks are refused by constr
           expect((error as FhirXmlError).code).toBe(XML_FATAL_CODES.DTD_FORBIDDEN);
         },
       ),
-      { numRuns: 100, seed: RUN_CONFIG.seed },
+      // 100 cases on a pull request: the prolog draws from four characters up to eight long, so
+      // the fuzz count would repeat the same few hundred inputs. The nightly depth runs 10,000.
+      propertyRun({ numRuns: 100, seed: FUZZ_SEED }),
     );
   });
 
@@ -607,7 +616,9 @@ describe("fuzz: XML, deep nesting is a typed MAX_DEPTH_EXCEEDED, never a stack o
         expect(error).toBeInstanceOf(FhirXmlError);
         expect((error as FhirXmlError).code).toBe(XML_FATAL_CODES.MAX_DEPTH_EXCEEDED);
       }),
-      { numRuns: 50, seed: RUN_CONFIG.seed },
+      // 50 cases on a pull request, not the fuzz count: each builds and reads a document up to
+      // 20,000 levels deep. The nightly depth runs it at 10,000.
+      propertyRun({ numRuns: 50, seed: FUZZ_SEED }),
     );
   });
 });

@@ -30,6 +30,7 @@ import {
   serializeResourceXml,
   type FhirComplex,
 } from "../src/index.js";
+import { propertyRun } from "./_property-run.js";
 
 const NS = ' xmlns="http://hl7.org/fhir"';
 const CODE = `<code><text value="syn"/></code>`;
@@ -266,7 +267,7 @@ describe("property: no write of a marked model re-reads safe", () => {
           readSafety(parseResourceXml(serializeResourceXml(resource)).resource).safeToSummarize,
         ).toBe(safe);
       }),
-      { numRuns: RUNS, seed: 20261111 },
+      propertyRun({ numRuns: RUNS, seed: 20261111 }),
     );
   });
 
@@ -298,7 +299,7 @@ describe("property: no write of a marked model re-reads safe", () => {
           expect(readSafety(read(out)).safeToSummarize).toBe(false);
         }
       }),
-      { numRuns: RUNS, seed: 20261111 },
+      propertyRun({ numRuns: RUNS, seed: 20261111 }),
     );
   });
 });

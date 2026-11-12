@@ -1,52 +1,69 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { DEFAULT_NUM_RUNS, resolvePropertyRun } from "@cosyte/test-utils";
 import { cosyteVitest } from "@cosyte/vitest-config";
 
-/** Every metric at 100. */
-const FULL = { lines: 100, branches: 100, functions: 100, statements: 100 };
+/** The coverage metrics `quality-floor.json` holds, each a percentage. */
+interface CoverageFloor {
+  readonly lines: number;
+  readonly branches: number;
+  readonly functions: number;
+  readonly statements: number;
+}
 
 /**
- * Vitest config for @cosyte/fhir from the shared @cosyte/vitest-config standard.
- *
- * The shared config gates the whole package and each listed `src/` directory at >= 90. We hold
- * ourselves to more: each threshold below is the coverage this package has reached, rounded down to
- * a whole percent, and a threshold only ever rises. A line that truly cannot be reached carries an
- * inline `v8 ignore` comment naming its reason rather than lowering a number. Barrels (`index.ts`)
- * are excluded by the shared config, so re-export files do not dilute the number.
+ * The coverage floor, read from `quality-floor.json`, the one place it is written. `cosyte-ratchet`
+ * holds the same file in CI, where a floor only rises: a pull request that lowers or removes one
+ * fails. A line that truly cannot be reached carries an inline `v8 ignore` comment naming its
+ * reason rather than lowering a number.
  */
+const FLOOR: CoverageFloor = (
+  JSON.parse(readFileSync(new URL("quality-floor.json", import.meta.url), "utf8")) as {
+    packages: { ".": { coverage: CoverageFloor } };
+  }
+).packages["."].coverage;
+
+/**
+ * The `src/` directories held to the floor each on its own, beside the whole package, so a
+ * well-covered directory cannot carry a poorly covered one. Barrels (`index.ts`) are excluded by
+ * the shared config, so re-export files do not dilute the number.
+ */
+const COVERAGE_DIRS = [
+  "model",
+  "codec",
+  "validate",
+  "safety",
+  "quantity",
+  "terminology",
+  "profiles",
+  "fhirpath",
+  "xml",
+  "bundle",
+  "arbitraries",
+];
+
+/**
+ * How many times deeper than a pull request this run takes every property: 1 by default, 100 when
+ * the nightly job sets `COSYTE_PROPERTY_RUNS` to 10,000. A value that is not a whole number of
+ * cases throws here, before any test runs.
+ */
+const propertyDepth = Math.max(1, resolvePropertyRun({}).numRuns / DEFAULT_NUM_RUNS);
+
+/** Vitest config for @cosyte/fhir from the shared @cosyte/vitest-config standard. */
 const config = cosyteVitest({
   coverageThresholds: {
-    ...FULL,
-    "src/model/**": FULL,
-    "src/codec/**": FULL,
-    "src/validate/**": FULL,
-    "src/safety/**": FULL,
-    "src/quantity/**": FULL,
-    "src/terminology/**": FULL,
-    "src/profiles/**": FULL,
-    "src/fhirpath/**": FULL,
-    "src/xml/**": FULL,
-    "src/bundle/**": FULL,
-    "src/arbitraries/**": FULL,
+    ...FLOOR,
+    ...Object.fromEntries(COVERAGE_DIRS.map((dir) => [`src/${dir}/**`, { ...FLOOR }])),
   },
-  coverageDirs: [
-    "model",
-    "codec",
-    "validate",
-    "safety",
-    "quantity",
-    "terminology",
-    "profiles",
-    "fhirpath",
-    "xml",
-    "bundle",
-    "arbitraries",
-  ],
+  coverageDirs: COVERAGE_DIRS,
   test: {
     globals: false,
     environment: "node",
     include: ["test/**/*.test.ts", "src/**/*.test.ts"],
-    testTimeout: 10_000,
+    // A deeper property run scales the budget with its depth, so the nightly run is not cut off by
+    // a budget set for a pull request's cases.
+    testTimeout: 10_000 * propertyDepth,
     hookTimeout: 10_000,
   },
 });

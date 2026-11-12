@@ -34,6 +34,7 @@ import {
 } from "../src/index.js";
 import { childPath } from "../src/model/path.js";
 import { ELEMENT_DEFINITIONS } from "../src/safety/element-definitions.js";
+import { propertyRun } from "./_property-run.js";
 
 const NS = ' xmlns="http://hl7.org/fhir"';
 
@@ -813,7 +814,7 @@ describe("property: an undefined element planted at random depth always declines
           expectPlanted(json(planted), childPath(spot.json, name));
         },
       ),
-      { numRuns: RUNS, seed: 20261111 },
+      propertyRun({ numRuns: RUNS, seed: 20261111 }),
     );
   });
 
@@ -829,7 +830,7 @@ describe("property: an undefined element planted at random depth always declines
           expectPlanted(xml(toXml(planted)), childPath(spot.xml, name));
         },
       ),
-      { numRuns: RUNS, seed: 20261111 },
+      propertyRun({ numRuns: RUNS, seed: 20261111 }),
     );
   });
 
@@ -863,7 +864,7 @@ describe("property: an undefined element planted at random depth always declines
             for (const location of locations) expectPlanted(resource, location);
           },
         ),
-        { numRuns: RUNS, seed: 20261111 },
+        propertyRun({ numRuns: RUNS, seed: 20261111 }),
       );
     },
   );
@@ -881,7 +882,7 @@ describe("property: an undefined element planted at random depth always declines
           expect(() => assertSafeToSummarize(resource)).not.toThrow();
           expect(unknownIn(validateResource(resource, { mode: "strict" }))).toEqual([]);
         }),
-        { numRuns: RUNS, seed: 20261111 },
+        propertyRun({ numRuns: RUNS, seed: 20261111 }),
       );
     },
   );

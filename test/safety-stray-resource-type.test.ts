@@ -27,6 +27,7 @@ import {
   readSafety,
   type FhirComplex,
 } from "../src/index.js";
+import { propertyRun } from "./_property-run.js";
 
 const NS = ' xmlns="http://hl7.org/fhir"';
 
@@ -488,7 +489,7 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
         // The planted resource itself is listed, by its own location, whatever else is.
         expect(result.notAssessed).toContain(plantedPath(path, "json"));
       }),
-      { numRuns: RUNS, seed: 20261111 },
+      propertyRun({ numRuns: RUNS, seed: 20261111 }),
     );
   });
 
@@ -501,7 +502,7 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
         // The planted resource itself is listed, by its own location, whatever else is.
         expect(result.notAssessed).toContain(plantedPath(path, "xml"));
       }),
-      { numRuns: RUNS, seed: 20261111 },
+      propertyRun({ numRuns: RUNS, seed: 20261111 }),
     );
   });
 
@@ -523,7 +524,7 @@ describe("property: a planted retracted resource of no or an unmodeled type alwa
           expect(safety.safeToSummarize).toBe(true);
           expect(() => assertSafeToSummarize(resource)).not.toThrow();
         }),
-        { numRuns: RUNS, seed: 20261111 },
+        propertyRun({ numRuns: RUNS, seed: 20261111 }),
       );
     },
   );

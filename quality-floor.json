@@ -1,0 +1,14 @@
+{
+  "$comment": "The coverage floor is what CI measured before this file existed, 100 on every metric, then held by hand-set thresholds in vitest.config.ts, which now reads this file. The mutation floor is set from a full run on GitHub-hosted runners with cosyte-ratchet raise.",
+  "packages": {
+    ".": {
+      "coverage": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100,
+        "statements": 100
+      },
+      "mutation": 0
+    }
+  }
+}

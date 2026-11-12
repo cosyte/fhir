@@ -72,11 +72,11 @@ import {
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { PROPERTY_ENV } from "@cosyte/test-utils";
 import ts from "typescript";
 
 import * as arbitraries from "../src/arbitraries/index.js";
 import * as fhir from "../src/index.js";
-import { PROPERTY_ENV } from "../test/property/_runner.js";
 
 /** The package root, derived from this file's own location so any working directory works. */
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
