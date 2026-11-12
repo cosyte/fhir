@@ -17,7 +17,7 @@
  * console.log(VERSION);
  * ```
  */
-export const VERSION: string = "0.1.17";
+export const VERSION: string = "0.1.18";
 
 // Phase 1, the no-data-loss core: precision-preserving primitives + generic model.
 export { FhirDecimal, decimal, wouldLosePrecisionAsDouble } from "./model/decimal.js";
