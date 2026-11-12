@@ -107,7 +107,8 @@ describe("a doNotPerform value outside the boolean lexical space is reported", (
           "where a code belongs, a use on an identifier, name, address or contact point this " +
           "library cannot read, a declared absence whose reason this library cannot read, or a " +
           "declared absence beside a value leaves an element this library must not flatten, or a " +
-          "resource is of a type this library does not assess (1 location(s)).",
+          "resource is of a type this library does not assess, or an element is one the FHIR " +
+          "definitions do not define (1 location(s)).",
       );
     }
   });

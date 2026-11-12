@@ -1111,12 +1111,14 @@ describe("declared non-reach residuals on the JSON read path, pinned so they can
     // A mixed array whose first entry is a scalar is read as a repeating primitive, so the object
     // entry beside it becomes a value-absent slot and there is no complex node to reach. The
     // position is reported (`UNKNOWN_PROPERTY`), so the loss is not silent, but it is not this
-    // channel that reports it and the verdict does not move.
+    // channel that reports it. The readout declines it on another: a string where the definitions
+    // put an Identifier is not the element they define there, so it is on `notAssessed`.
     const json = '{"resourceType":"Practitioner","identifier":["x",{"use":"official"}]}';
     const { resource, issues } = parseResource(json);
 
     expect(readSafety(resource).modifierElements).toEqual([]);
-    expect(readSafety(resource).safeToSummarize).toBe(true);
+    expect(readSafety(resource).notAssessed).toEqual(["Practitioner.identifier[0]"]);
+    expect(readSafety(resource).safeToSummarize).toBe(false);
     expect(issues.map((issue) => issue.code)).toEqual(["UNKNOWN_PROPERTY"]);
   });
 

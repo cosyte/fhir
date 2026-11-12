@@ -136,11 +136,61 @@ status there is still on `negations`. An empty `negations` beside a non-empty `n
 nothing was looked for, not that nothing was found. To summarize a type the readout does not model,
 read its status yourself against that type's definition first.
 
+## An element the format does not define
+
+A resource of a type the readout assesses is read element by element against what the FHIR R4 and
+R4B definitions say may be written there, at every depth: its own members, its backbone elements,
+its datatypes, its extensions and the extensions on its primitive values. An element neither release
+defines (`entry` on a `Patient`, `Entry` or `Contained` in the wrong case, an extra key on a Bundle
+entry or a coding, a member of an object written where a primitive value belongs, a `resourceType`
+on a Bundle entry) is listed on `notAssessed` by its own location, and the resource is never safe to
+summarize. So is an XML element in a namespace other than its parent's, however the namespace is
+declared: `<status xmlns="urn:vendor" value="final"/>` is spelled like the FHIR `status` and is not
+one, and neither is an element under `xmlns=""`. Only the narrative `div` in the XHTML namespace is
+exempt. No valid document carries one, but the reader keeps it, and a summary that walked the whole
+model would read whatever sits under it, a retraction included. `validateResource` reports the same
+elements as `UNKNOWN_ELEMENT`, a warning when lenient and an error when strict.
+
+A value written where the definitions put a complex type (`"code": "x"` on an `Observation`, or
+`<code value="x"/>`) is listed on `notAssessed` too, since a summary would read the string as the
+element. `validateResource` does not report it as `UNKNOWN_ELEMENT`: the element name is defined.
+
+```ts runnable
+import { parseResource, readSafety, validateResource } from "@cosyte/fhir";
+
+const { resource } = parseResource(
+  JSON.stringify({
+    resourceType: "Bundle",
+    type: "collection",
+    entry: [
+      {
+        resource: { resourceType: "Patient", id: "syn-pt-0001" },
+        note: { status: "entered-in-error" },
+      },
+    ],
+  }),
+);
+
+const safety = readSafety(resource);
+safety.notAssessed; // => ["Bundle.entry[0].note"]
+safety.safeToSummarize; // => false
+
+const unknown = validateResource(resource, { mode: "strict" }).issues.filter(
+  (issue) => issue.code === "UNKNOWN_ELEMENT",
+);
+unknown.map((issue) => issue.expression); // => ["Bundle.entry[0].note"]
+```
+
+A name either release defines is defined, so an R4B document is read as it is written. Below a
+resource of a type the readout does not assess, nothing is checked: that resource is listed as a
+whole.
+
 ## Refuse instead of warn
 
 When a summary must refuse rather than warn, `assertSafeToSummarize` is the executable form of the
 same rule: it throws a `FhirSafetyError` for an unhandled modifier, a value the document left
-ambiguous, a resource the readout does not assess, and the other shapes that make an affirmative
+ambiguous, a resource the readout does not assess, an element the definitions do not define, and
+the other shapes that make an affirmative
 summary unsafe. The error carries the
 locations that forced the refusal and never a value:
 

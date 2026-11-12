@@ -32,8 +32,9 @@
  *   declarations as it descends and models the **local** name, so both read to the same model. A
  *   prefix no in-scope declaration binds is not resolvable, so the tag is kept exactly as written
  *   and flagged rather than guessed at. An element in a namespace other than its parent's is
- *   flagged wherever it appears; a **prefixed** one additionally keeps its tag, which is what stops
- *   it from being read as the FHIR element beside it.
+ *   flagged wherever it appears and its node is marked (`foreignNamespace`), which the safety
+ *   readout and the validator read under every spelling; a **prefixed** one additionally keeps its
+ *   tag, which is what stops it from being grouped with the FHIR element beside it.
  *
  * The narrative `<div>` (XHTML) is carried **opaquely** as its full serialized string, the same
  * representation FHIR JSON uses for `Narrative.div`, so it round-trips as `<div>…</div>` and is
@@ -92,10 +93,12 @@ import {
   complex,
   list,
   markDroppedText,
+  markForeignNamespace,
   markForeignRoot,
   primitive,
   type FhirComplex,
   type FhirNode,
+  type FhirPrimitive,
   type FhirProperty,
 } from "../model/node.js";
 import { readRawXml, type XmlElement, type XmlNode } from "./raw-xml.js";
@@ -286,6 +289,11 @@ function rootVocabularyIsForeign(resolved: ResolvedName): boolean {
  * element it is spelled as, and reported as content from another vocabulary. Reading it is
  * unchanged from before namespaces were resolved at all, so it is a residual rather than a
  * regression, but it is not covered by the separation and no claim may say it is.
+ *
+ * **What does cover it is the marker {@link buildSingle} puts on the node**, under every spelling:
+ * the safety readout lists a marked node on `notAssessed` and the validator reports it as
+ * `UNKNOWN_ELEMENT`, so the readout never reads it as the FHIR element it is spelled as. The model
+ * name, the grouping, the extension test and the resource unwrap are unchanged by the marker.
  */
 function modelNameOf(element: XmlElement, resolved: ResolvedName, parentNamespace: string): string {
   if (isNarrativeDiv(resolved)) return resolved.name;
@@ -335,7 +343,8 @@ function readNested(
   opts: { isResource: boolean },
 ): FhirComplex {
   flagForeign(child.resolved, parentNamespace, path, issues);
-  return readComplex(child, path, issues, opts);
+  const node = readComplex(child, path, issues, opts);
+  return isForeign(child.resolved, parentNamespace) ? markForeignNamespace(node) : node;
 }
 
 /** Whether an XML tag name is a FHIR resource type (UpperCamelCase) vs an element name (lowerCamelCase). */
@@ -698,13 +707,37 @@ function buildNode(
   return buildSingle(only, path, issues, parentNamespace);
 }
 
-/** Build the model node for one element occurrence, resource-valued, primitive, or complex. */
+/**
+ * Build the model node for one element occurrence, and mark it when the element is in a namespace
+ * other than its parent's, the narrative `<div>` in XHTML excepted.
+ *
+ * **The marker is what closes the default-declaration residual named on {@link modelNameOf}.** A
+ * `<status xmlns="urn:vendor">` keeps the FHIR spelling, so the name alone cannot separate it; the
+ * marker goes on whatever the element is modeled as (a primitive, a complex element, or the resource
+ * a resource-valued wrapper unwraps to), under every spelling of the namespace change: a bound
+ * prefix, a default declaration, `xmlns=""`, or a prefix bound to nothing. The safety readout lists
+ * a marked node on `notAssessed` and the validator reports it as `UNKNOWN_ELEMENT`, so it is never
+ * read as the FHIR element it is spelled as. Nothing below a marked element is marked again unless
+ * it changes namespace in turn.
+ */
 function buildSingle(
   self: ScopedElement,
   path: string,
   issues: FhirIssue[],
   parentNamespace: string,
-): FhirNode {
+): FhirComplex | FhirPrimitive {
+  const node = buildElement(self, path, issues, parentNamespace);
+  const foreign = !isNarrativeDiv(self.resolved) && isForeign(self.resolved, parentNamespace);
+  return foreign ? markForeignNamespace(node) : node;
+}
+
+/** {@link buildSingle} before the marker: resource-valued, primitive, or complex. */
+function buildElement(
+  self: ScopedElement,
+  path: string,
+  issues: FhirIssue[],
+  parentNamespace: string,
+): FhirComplex | FhirPrimitive {
   const { element, resolved, modelName } = self;
   // The narrative `<div>` is the one element FHIR *requires* in a namespace other than its parent's
   // (XHTML), so it is not foreign content there, under any spelling of that namespace. A `div` in

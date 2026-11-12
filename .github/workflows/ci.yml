@@ -44,6 +44,10 @@ jobs:
   # deep nesting, `_element` games, huge/scientific numbers, prototype-chain keys) run at a raised
   # iteration count, plus the PHI-leak sweep. The contract: adversarial input never crashes / hangs /
   # OOMs, always a typed error or a bounded rejection, and no value ever reaches a diagnostic.
+  # The safety readout's files run here too, its properties at the same raised count: a resource
+  # of no or an unmodeled type, a stray `resourceType`, and an element the definitions do not
+  # define, each planted at random depth, never read as safe. This job runs on the nightly
+  # schedule above as well as on every pull request.
   fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -55,10 +59,32 @@ jobs:
           node-version: "22"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Fuzz + PHI-leak tiers (raised iteration count)
+      - name: Fuzz + PHI-leak + safety-readout tiers (raised iteration count)
         env:
           FUZZ_RUNS: "20000"
-        run: pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts
+        run: >-
+          pnpm vitest run test/fuzz.test.ts test/phi-leak.test.ts
+          test/safety-not-assessed.test.ts test/safety-resource-slots.test.ts
+          test/safety-stray-resource-type.test.ts test/safety-undefined-element.test.ts
+
+  # The safety readout's model of FHIR, held to the definitions: fetch the R4 and R4B
+  # StructureDefinition bundles at a pinned commit, refuse any whose SHA-256 is not the pinned one,
+  # re-derive test/__data__/fhir-element-definitions.json and fail on any difference. The test suite
+  # holds the source's element table and resource positions to that file, so the two checks
+  # together hold the source to the definitions.
+  definitions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Re-derive the element definitions from the pinned files (pnpm definitions:check)
+        run: pnpm definitions:check
 
   # The runnable examples under examples/: each imports @cosyte/fhir by name, which resolves through
   # this package's own `exports` to the built dist/, so the job builds first. Each example checks

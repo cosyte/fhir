@@ -229,17 +229,44 @@ describe("the reported cases", () => {
   });
 
   it("an element named like a resource position elsewhere is not a resource root", () => {
-    // `outcome` inside an Observation component is not a position R4 types as Resource.
+    // `outcome` inside an Observation component is not a position R4 types as Resource. Nor is it
+    // an element R4 defines there, so it is listed as one, and the retraction inside it is not read
+    // as a resource's: a resource root would put it on `negations`.
     const safety = readSafety(
       parseResource(
         JSON.stringify({
           resourceType: "Observation",
           status: "final",
           code: { text: "Synthetic reading" },
-          component: [{ code: { text: "Synthetic part" }, outcome: { text: "Synthetic" } }],
+          component: [
+            {
+              code: { text: "Synthetic part" },
+              outcome: { text: "Synthetic", status: "entered-in-error" },
+            },
+          ],
         }),
       ).resource,
     );
-    expect(safety.notAssessed).toEqual([]);
+    expect(safety.notAssessed).toEqual(["Observation.component[0].outcome"]);
+    expect(safety.negations).toEqual([]);
+    // `RelatedArtifact.resource` is an element R4 defines (a canonical), so it is neither a
+    // resource root nor undefined.
+    const related = readSafety(
+      parseResource(
+        JSON.stringify({
+          resourceType: "Observation",
+          status: "final",
+          code: { text: "Synthetic reading" },
+          extension: [
+            {
+              url: "http://example.org/syn-related",
+              valueRelatedArtifact: { type: "citation", resource: "http://example.org/syn" },
+            },
+          ],
+        }),
+      ).resource,
+    );
+    expect(related.notAssessed).toEqual([]);
+    expect(related.safeToSummarize).toBe(true);
   });
 });

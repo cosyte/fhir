@@ -114,6 +114,17 @@ export interface FhirPrimitive {
    * every document read from JSON. See {@link isDroppedText}.
    */
   readonly droppedText?: true;
+  /**
+   * Set when the XML document wrote this element in a **namespace other than its parent's**, under
+   * any spelling: a bound prefix (`<v:status xmlns:v="urn:vendor">`), a default declaration
+   * (`<status xmlns="urn:vendor">`), an undeclared default (`<status xmlns="">`), or a prefix bound
+   * to nothing. The narrative `<div>` in the XHTML namespace is the one element FHIR puts there and
+   * is never marked. A default declaration leaves the tag spelled exactly as the FHIR element, so
+   * the model holds it under that name; the marker is what says the format does not define it, and
+   * the safety readout and the validator read it. Absent on every conformant document and on every
+   * document read from JSON.
+   */
+  readonly foreignNamespace?: true;
 }
 
 /** A single named property of a {@link FhirComplex}. */
@@ -210,6 +221,17 @@ export interface FhirComplex {
    * and on every document read from JSON. See {@link isForeignRoot}.
    */
   readonly foreignRoot?: true;
+  /**
+   * Set when the XML document wrote this element in a **namespace other than its parent's**, under
+   * any spelling: a bound prefix (`<v:status xmlns:v="urn:vendor">`), a default declaration
+   * (`<status xmlns="urn:vendor">`), an undeclared default (`<status xmlns="">`), or a prefix bound
+   * to nothing. The narrative `<div>` in the XHTML namespace is the one element FHIR puts there and
+   * is never marked. A default declaration leaves the tag spelled exactly as the FHIR element, so
+   * the model holds it under that name; the marker is what says the format does not define it, and
+   * the safety readout and the validator read it. Absent on every conformant document and on every
+   * document read from JSON.
+   */
+  readonly foreignNamespace?: true;
 }
 
 /**
@@ -558,6 +580,41 @@ export function isForeignRoot(node: FhirNode): boolean {
  */
 export function markForeignRoot(node: FhirComplex): FhirComplex {
   return { ...node, foreignRoot: true };
+}
+
+/**
+ * Whether the XML reader read this node from an element in a namespace other than its parent's
+ * (see {@link FhirComplex.foreignNamespace}). Internal: the safety readout and the validator read
+ * it, and a consumer reads the result there, on `notAssessed` and as `UNKNOWN_ELEMENT`.
+ *
+ * @param node - Any model node.
+ * @returns `true` for a complex or primitive node so marked; `false` for a list and every other node.
+ * @internal
+ */
+export function isForeignNamespace(node: FhirNode): boolean {
+  return (node.kind === "complex" || node.kind === "primitive") && node.foreignNamespace === true;
+}
+
+/**
+ * Mark a node as read from an element in a namespace other than its parent's. The XML reader's own
+ * helper, **not part of the package's public surface**, for the same reason
+ * {@link markDroppedText} is not: a consumer marking a node of their own would inject a refusal
+ * into a document that never carried the shape.
+ *
+ * It copies the node rather than mutating it, and adds no element, property or item.
+ *
+ * @param node - The node the reader produced at that position.
+ * @internal
+ */
+export function markForeignNamespace(node: FhirComplex): FhirComplex;
+export function markForeignNamespace(node: FhirPrimitive): FhirPrimitive;
+export function markForeignNamespace(
+  node: FhirComplex | FhirPrimitive,
+): FhirComplex | FhirPrimitive;
+export function markForeignNamespace(
+  node: FhirComplex | FhirPrimitive,
+): FhirComplex | FhirPrimitive {
+  return { ...node, foreignNamespace: true };
 }
 
 /** Optional `id` / `extension` metadata for {@link primitive}. */
