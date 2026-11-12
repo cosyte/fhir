@@ -285,7 +285,7 @@ function targetType(node: FhirNode, environment: Required<SliceEnvironment>): st
   if (reference === undefined) return undefined;
   const resolved = environment.resolve(reference);
   const type = resolved === undefined ? parseReference(reference).type : resourceType(resolved);
-  return /^[A-Z][A-Za-z]*$/u.test(type ?? "") ? type : undefined;
+  return type?.match(/^[A-Z][A-Za-z]*$/u)?.[0];
 }
 
 /** The type a base R4 canonical names (its capitalized tail), or `undefined` for any other. */
@@ -353,9 +353,9 @@ function checkBound(
 
 /** The number a primitive holds, whichever reader built it, or `undefined`. */
 function decimalOf(node: FhirNode): FhirDecimal | undefined {
-  if (!isPrimitive(node)) return undefined;
-  // A `FhirDecimal` spells its own lexical text; a boolean or an absent value spells no number.
-  return decimalFromLexical(String(node.value));
+  // A `FhirDecimal` spells its own lexical text; a boolean, an absent value, and a complex or list
+  // node, which holds no `value`, spell no number.
+  return decimalFromLexical(String(Reflect.get(node, "value")));
 }
 
 /**

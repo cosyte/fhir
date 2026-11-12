@@ -811,6 +811,26 @@ describe("constraints reported as not checked", () => {
     expect(findings(differs, { ...OBS, category: [{ text: "fake-a" }] }, false)).toEqual([
       ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.category:fake", "slice-invariant"],
     ]);
+    // A slice whose only invariant the sliced element carries among others adds nothing.
+    const among = sd("Observation", [
+      {
+        id: "Observation.category",
+        path: "Observation.category",
+        slicing: { discriminator: [{ type: "pattern", path: "$this" }], rules: "open" },
+        constraint: [
+          { key: "fake-2", severity: "error", expression: "text.empty()" },
+          { key: "fake-1", severity: "error", expression: "text.exists()" },
+        ],
+      },
+      {
+        id: "Observation.category:fake",
+        path: "Observation.category",
+        sliceName: "fake",
+        patternCodeableConcept: { text: "fake-a" },
+        constraint: [{ key: "fake-1", severity: "error", expression: "text.exists()" }],
+      },
+    ]);
+    expect(findings(among, { ...OBS, category: [{ text: "fake-a" }] }, false)).toEqual([]);
     // The same expression under another key is another invariant.
     const otherKey = sd("Observation", [
       {
