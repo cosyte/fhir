@@ -9,14 +9,19 @@
  * comes back clean over a constraint it did not look at.
  *
  * - **Type lists.** An occurrence of a `choice[x]` element whose type the profile does not list is
- *   `PROFILE_TYPE_MISMATCH`. A type's `profile` is reported `type-profile`, except the R4
- *   `SimpleQuantity`, whose one rule (`sqty-1`, no `comparator`) is checked here.
- * - **Reference targets.** A `Reference` whose target's type no `targetProfile` names is
+ *   `PROFILE_TYPE_MISMATCH`. A list of profiles, or of target profiles, is met by meeting any one
+ *   of them, and two entries of one type code are alternatives the same way. A type's `profile` is
+ *   reported `type-profile`, except the R4 `SimpleQuantity`, whose one rule (`sqty-1`, no
+ *   `comparator`) is checked here: a value without a comparator meets it, and one with a comparator
+ *   breaks the list only when `SimpleQuantity` is all it names.
+ * - **Reference targets.** A `Reference` whose target's type no `targetProfile` allows is
  *   `PROFILE_REFERENCE_TARGET_MISMATCH`. The type is read from the target when it resolves in the
  *   closure (the resource's `contained` set and, for a Bundle, its entries), else from the
- *   reference's own `Type/id` form. A base R4 canonical names its type; a supplied profile names the
- *   type it constrains, and a target of that type is reported `target-profile`, since conformance to
- *   that profile is not checked. A target whose type cannot be read is reported the same way.
+ *   reference's own `Type/id` form. A base R4 canonical names its type: `Resource` allows any,
+ *   `DomainResource` any but `Binary`, `Bundle` and `Parameters`, and a logical or element name
+ *   decides nothing. A supplied profile names the type it constrains, and a target of that type is
+ *   reported `target-profile`, since conformance to that profile is not checked. A target whose type
+ *   cannot be read is reported the same way.
  * - **`maxLength`** counts UTF-16 code units, as the reference validator does, and is checked on a
  *   string value; any other value is reported `max-length`.
  * - **`minValue[x]` / `maxValue[x]`** of a number type are compared exactly, as decimals, with an
@@ -158,8 +163,10 @@ export function collectElementConstraintIssues(
       );
       continue;
     }
-    checkTypeProfiles(applies, occurrence, issues, unchecked);
-    checkTargets(applies, occurrence, context.environment, issues, unchecked);
+    for (const entries of byCode(applies)) {
+      const verdicts = entries.map((t) => typeVerdict(t, occurrence.node, context.environment));
+      reportEither(verdicts, occurrence.path, issues, unchecked);
+    }
     if (el.maxLength !== undefined) checkLength(el.maxLength, occurrence, issues, unchecked);
     // Stryker disable next-line OptionalChaining: `applies[0]` is read only when there is one entry
     const own = occurrence.type ?? (applies.length === 1 ? applies[0]?.code : undefined);
@@ -188,91 +195,153 @@ function typesFor(
   return named.length === 0 ? undefined : named;
 }
 
-/** A type's `profile`: `SimpleQuantity` is checked, any other is reported. */
-function checkTypeProfiles(
-  applies: readonly ElementType[],
-  occurrence: ElementOccurrence,
-  issues: ValidationIssue[],
-  unchecked: Unchecked,
-): void {
-  for (const t of applies) {
-    for (const canonical of t.profile ?? []) {
-      if (canonicalUrl(canonical) !== SIMPLE_QUANTITY) {
-        unchecked(PROFILE_UNCHECKED_CONSTRAINTS.TYPE_PROFILE, occurrence.path);
-      } else if (
-        isComplex(occurrence.node) &&
-        getProperty(occurrence.node, "comparator") !== undefined
-      ) {
-        issues.push(
-          validationIssue("INVARIANT_VIOLATED", ISSUE_SEVERITIES.ERROR, occurrence.path, "sqty-1"),
-        );
-      }
-    }
-  }
-}
-
-/** The `targetProfile`s of the applicable `Reference` and `canonical` types. */
-function checkTargets(
-  applies: readonly ElementType[],
-  occurrence: ElementOccurrence,
-  environment: Required<SliceEnvironment>,
-  issues: ValidationIssue[],
-  unchecked: Unchecked,
-): void {
-  for (const t of applies) {
-    const canonicals = t.targetProfile ?? [];
-    // A target of any resource narrows nothing.
-    if (canonicals.length === 0 || canonicals.some((c) => anyResource(c))) continue;
-    if (t.code !== "Reference") {
-      unchecked(PROFILE_UNCHECKED_CONSTRAINTS.TARGET_PROFILE, occurrence.path);
-      continue;
-    }
-    const verdict = targetVerdict(occurrence.node, canonicals, environment);
-    // `undefined`: a base R4 canonical names the target's type, so the constraint holds.
-    if (verdict === "mismatch") {
-      issues.push(
-        validationIssue(
-          "PROFILE_REFERENCE_TARGET_MISMATCH",
-          ISSUE_SEVERITIES.ERROR,
-          occurrence.path,
-        ),
-      );
-    } else if (verdict === "unchecked") {
-      unchecked(PROFILE_UNCHECKED_CONSTRAINTS.TARGET_PROFILE, occurrence.path);
-    }
-  }
-}
-
-/** Whether a canonical is the base `Resource` or `DomainResource`, which any target satisfies. */
-function anyResource(canonical: string): boolean {
-  const url = canonicalUrl(canonical);
-  return url === `${CORE_DEFINITION}Resource` || url === `${CORE_DEFINITION}DomainResource`;
+/** What one entry of an element's type list finds over one occurrence. */
+interface TypeVerdict {
+  /** The rules the occurrence breaks under this entry: `sqty-1`, or a target the entry does not allow. */
+  readonly broken: readonly ("sqty-1" | "target")[];
+  /** What the entry asks that was not checked. */
+  readonly open: readonly ProfileUncheckedConstraint[];
 }
 
 /**
- * Whether a reference's target is of a type its `targetProfile`s allow: `undefined` when a base R4
- * canonical names it, `mismatch` when every canonical names a known type and none is it, and
- * `unchecked` when its type cannot be read, a canonical's type is unknown, or only a constraining
- * profile names it.
+ * The applicable entries grouped by type code, in the order first seen. Entries of one code are
+ * alternatives, any one of which the occurrence may meet; entries of different codes are not, since
+ * an occurrence is of one type.
+ */
+function byCode(applies: readonly ElementType[]): readonly (readonly ElementType[])[] {
+  const groups = new Map<string, ElementType[]>();
+  for (const t of applies) {
+    const group = groups.get(t.code);
+    if (group === undefined) groups.set(t.code, [t]);
+    else group.push(t);
+  }
+  return [...groups.values()];
+}
+
+/** One entry's `profile` and `targetProfile` lists over one occurrence. */
+function typeVerdict(
+  t: ElementType,
+  node: FhirNode,
+  environment: Required<SliceEnvironment>,
+): TypeVerdict {
+  const broken: ("sqty-1" | "target")[] = [];
+  const open: ProfileUncheckedConstraint[] = [];
+  const profile = profileVerdict(t.profile ?? [], node);
+  if (profile === "broken") broken.push("sqty-1");
+  else if (profile === "open") open.push(PROFILE_UNCHECKED_CONSTRAINTS.TYPE_PROFILE);
+  const target = targetsVerdict(t, node, environment);
+  if (target === "broken") broken.push("target");
+  else if (target === "open") open.push(PROFILE_UNCHECKED_CONSTRAINTS.TARGET_PROFILE);
+  return { broken, open };
+}
+
+/**
+ * Report alternative entries over one occurrence: nothing when it meets one of them in full; else
+ * what was not checked when some entry is not broken outright; else what each entry breaks.
+ */
+function reportEither(
+  verdicts: readonly TypeVerdict[],
+  path: string,
+  issues: ValidationIssue[],
+  unchecked: Unchecked,
+): void {
+  if (verdicts.some((v) => v.broken.length === 0 && v.open.length === 0)) return;
+  const unbroken = verdicts.filter((v) => v.broken.length === 0);
+  const reported = unbroken.length > 0 ? unbroken : verdicts;
+  const broken = new Set(reported.flatMap((v) => v.broken));
+  if (broken.has("sqty-1")) {
+    issues.push(validationIssue("INVARIANT_VIOLATED", ISSUE_SEVERITIES.ERROR, path, "sqty-1"));
+  }
+  if (broken.has("target")) {
+    issues.push(validationIssue("PROFILE_REFERENCE_TARGET_MISMATCH", ISSUE_SEVERITIES.ERROR, path));
+  }
+  for (const v of reported) for (const kind of v.open) unchecked(kind, path);
+}
+
+/**
+ * A type's `profile` list, which an occurrence meets by meeting any one of them. `SimpleQuantity`
+ * asks one thing beyond `Quantity`, no `comparator` (`sqty-1`), so a value without one meets it and
+ * so the list; a value with one breaks it, which breaks the list only when nothing else is listed.
+ * Any other profile is not checked.
+ */
+function profileVerdict(
+  canonicals: readonly string[],
+  node: FhirNode,
+): "broken" | "open" | undefined {
+  if (canonicals.length === 0) return undefined;
+  const simple = canonicals.filter((c) => canonicalUrl(c) === SIMPLE_QUANTITY).length;
+  if (simple === 0) return "open";
+  if (!isComplex(node) || getProperty(node, "comparator") === undefined) return undefined;
+  return simple === canonicals.length ? "broken" : "open";
+}
+
+/**
+ * A type's `targetProfile` list, which a target meets by meeting any one of them. `Resource` allows
+ * any target; a `canonical`'s list is otherwise not checked, beyond `DomainResource`, which every
+ * resource a canonical can name is.
+ */
+function targetsVerdict(
+  t: ElementType,
+  node: FhirNode,
+  environment: Required<SliceEnvironment>,
+): "broken" | "open" | undefined {
+  const canonicals = t.targetProfile ?? [];
+  if (canonicals.length === 0) return undefined;
+  const bases = canonicals.map((c) => coreType(c));
+  if (bases.includes("Resource")) return undefined;
+  if (t.code !== "Reference") return bases.includes("DomainResource") ? undefined : "open";
+  return targetVerdict(node, canonicals, environment);
+}
+
+/**
+ * Whether a reference's target is of a type one of its `targetProfile`s allows: `undefined` when one
+ * does, `broken` when each names a type or kind of resource the target is not, and `open` when the
+ * target's type cannot be read, or a canonical names a kind of resource or a profile that may allow
+ * it but whose rules are not checked here.
  */
 function targetVerdict(
   node: FhirNode,
   canonicals: readonly string[],
   environment: Required<SliceEnvironment>,
-): "mismatch" | "unchecked" | undefined {
+): "broken" | "open" | undefined {
   const target = targetType(node, environment);
-  if (target === undefined) return "unchecked";
+  if (target === undefined) return "open";
   let open = false;
   for (const canonical of canonicals) {
     const base = coreType(canonical);
-    if (base !== undefined) {
-      if (base === target) return undefined;
-      continue;
-    }
-    const constrained = environment.profileType(canonical);
-    if (constrained === undefined || constrained === target) open = true;
+    const admits =
+      base === undefined ? profileAdmits(canonical, target, environment) : coreAdmits(base, target);
+    if (admits === true) return undefined;
+    if (admits === undefined) open = true;
   }
-  return open ? "unchecked" : "mismatch";
+  return open ? "open" : "broken";
+}
+
+/**
+ * Whether a supplied profile allows a target type: `false` when it constrains another type, else
+ * `undefined`, since a target of its type may or may not conform to it, and a profile nobody
+ * supplied names no type.
+ */
+function profileAdmits(
+  canonical: string,
+  target: string,
+  environment: Required<SliceEnvironment>,
+): false | undefined {
+  const constrained = environment.profileType(canonical);
+  return constrained === undefined || constrained === target ? undefined : false;
+}
+
+/**
+ * Whether a base R4 type allows a target type. `DomainResource` is every resource but the three R4
+ * defines on `Resource` alone; a logical or interface name (`MetadataResource`, R5's
+ * `CanonicalResource`) or an element type names no list of resources here, so it is not decided.
+ */
+function coreAdmits(base: string, target: string): boolean | undefined {
+  if (base === "DomainResource") return !["Binary", "Bundle", "Parameters"].includes(target);
+  if (["MetadataResource", "CanonicalResource", "Element", "BackboneElement"].includes(base)) {
+    return undefined;
+  }
+  return base === target;
 }
 
 /**

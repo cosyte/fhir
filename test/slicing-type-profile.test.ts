@@ -457,40 +457,44 @@ describe("what stays unchecked, each with its reason", () => {
     expect(result.reason).toBe(SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED);
   });
 
-  it.each(["Resource", "DomainResource", "Element", "BackboneElement"])(
-    "a slice that names the abstract type %s",
-    (abstractType) => {
-      const abstract = loadSd({
-        resourceType: "StructureDefinition",
-        url: `${BASE}abstract`,
-        type: "Bundle",
-        snapshot: {
-          element: [
-            { id: "Bundle", path: "Bundle" },
-            {
-              id: "Bundle.entry",
-              path: "Bundle.entry",
-              slicing: { discriminator: [{ type: "type", path: "resource" }], rules: "closed" },
-            },
-            { id: "Bundle.entry:any", path: "Bundle.entry", sliceName: "any" },
-            {
-              id: "Bundle.entry:any.resource",
-              path: "Bundle.entry.resource",
-              type: [{ code: abstractType }],
-            },
-          ],
-        },
-      });
-      const bundle = parse({
-        resourceType: "Bundle",
-        type: "collection",
-        entry: [{ resource: { resourceType: "Patient", id: "fake-1" } }],
-      });
-      expect(unchecked(collectProfileIssues(bundle, abstract))).toEqual([
-        ["Bundle.entry", SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED],
-      ]);
-    },
-  );
+  it.each([
+    "Resource",
+    "DomainResource",
+    "MetadataResource",
+    "CanonicalResource",
+    "Element",
+    "BackboneElement",
+  ])("a slice that names the abstract type %s", (abstractType) => {
+    const abstract = loadSd({
+      resourceType: "StructureDefinition",
+      url: `${BASE}abstract`,
+      type: "Bundle",
+      snapshot: {
+        element: [
+          { id: "Bundle", path: "Bundle" },
+          {
+            id: "Bundle.entry",
+            path: "Bundle.entry",
+            slicing: { discriminator: [{ type: "type", path: "resource" }], rules: "closed" },
+          },
+          { id: "Bundle.entry:any", path: "Bundle.entry", sliceName: "any" },
+          {
+            id: "Bundle.entry:any.resource",
+            path: "Bundle.entry.resource",
+            type: [{ code: abstractType }],
+          },
+        ],
+      },
+    });
+    const bundle = parse({
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [{ resource: { resourceType: "Patient", id: "fake-1" } }],
+    });
+    expect(unchecked(collectProfileIssues(bundle, abstract))).toEqual([
+      ["Bundle.entry", SLICE_UNCHECKED_REASONS.TYPE_UNDETERMINED],
+    ]);
+  });
 
   it("a profile discriminator, which is not decided yet", () => {
     const datatype = loadSd({

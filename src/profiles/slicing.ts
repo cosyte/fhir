@@ -441,6 +441,8 @@ function isAbstractType(name: string): boolean {
   return (
     name === "Resource" ||
     name === "DomainResource" ||
+    name === "MetadataResource" ||
+    name === "CanonicalResource" ||
     name === "Element" ||
     name === "BackboneElement"
   );

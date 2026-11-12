@@ -68,7 +68,13 @@ numbers.
 ## Verdicts that say "not checked" rather than passing
 
 Each of these is a finding the validator emits rather than silently letting something through. If
-you treat any non-error finding as a pass, you will misread them.
+you treat any non-error finding as a pass, you will misread them. A result carries one answer for
+all of them: `fullyChecked` is `false` when any finding below is present, or
+`PROFILE_VERSION_MISMATCH`, `RESOURCE_NOT_MODELED` or `CODE_SYSTEM_UNKNOWN`, each of which also says
+something was not checked. `valid` stays `true` beside them, since none is an error, so read
+`fullyChecked` beside `valid` before you treat a resource as conforming. Membership of a code in a
+value set is checked only through a `terminology` service you pass, and without one nothing is
+reported for it, so `fullyChecked` does not cover that.
 
 - `INVARIANT_UNCHECKED`: a constraint whose FHIRPath expression is outside the bounded expression
   subset this library evaluates, whether a profile supplied it or R4 declares it on the resource
@@ -127,7 +133,7 @@ you treat any non-error finding as a pass, you will misread them.
   `OperationOutcome` as `issue.details.text`):
   - `type-profile`: a `type.profile` the occurrence must conform to, such as an extension's own
     definition or a datatype profile. The R4 `SimpleQuantity` profile is the exception: its one rule,
-    `sqty-1`, is checked;
+    `sqty-1`, is checked when it is the only profile listed;
   - `target-profile`: a `Reference` whose target's type cannot be read (no `Type/id` form and no
     target in the resource's `contained` set or, for a Bundle, its entries), or whose target is of
     the type a constraining profile names, since conformance to that profile is not checked, or that
@@ -152,7 +158,12 @@ you treat any non-error finding as a pass, you will misread them.
     `type.aggregation`, or an extension it does not know.
 
   A `choice[x]` occurrence of a type the profile does not list is an error,
-  `PROFILE_TYPE_MISMATCH`. A base `Resource` or `DomainResource` target profile allows any target.
+  `PROFILE_TYPE_MISMATCH`. A list of type profiles, or of target profiles, is met by meeting any one
+  of them, so `sqty-1` is an error only where `SimpleQuantity` is the only profile listed; beside
+  another, a quantity with a `comparator` is reported `type-profile`. A base `Resource` target
+  profile allows any target, and `DomainResource` any target but a `Binary`, `Bundle` or
+  `Parameters`. A target profile naming `MetadataResource`, `CanonicalResource` or an element type
+  decides nothing and is reported `target-profile`.
 
 All of them exist because the alternative, staying quiet, is indistinguishable from a pass to every
 consumer downstream.

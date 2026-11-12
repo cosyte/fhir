@@ -124,6 +124,7 @@ import { canonicalJson, formatRunRecord } from "./differential/record.mjs";
 import { corpusSummaryLines, runComparison } from "./differential/run.mjs";
 import {
   formatReachReport,
+  formatConstraintUnchecked,
   formatSliceUnchecked,
   formatUsCoreDocuments,
   ucumShortfall,
@@ -238,6 +239,7 @@ function main() {
       console.log(line);
     }
     for (const line of formatSliceUnchecked(usCore.documents)) console.log(line);
+    for (const line of formatConstraintUnchecked(usCore.documents)) console.log(line);
     // The report's closing line already names the UCUM condition when it holds; it is repeated once
     // more beside the summary, on stderr, where a failing run's reader looks.
     for (const line of formatReachReport(usCore.report)) console.log(line);

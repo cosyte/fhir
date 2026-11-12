@@ -741,27 +741,59 @@ export function formatUsCoreDocuments(records, ids) {
  * @returns the printed lines
  */
 export function formatSliceUnchecked(documents) {
+  return formatUncheckedCount(documents, "PROFILE_SLICE_UNCHECKED", "sliceReason", "reason");
+}
+
+/**
+ * How often this library reported a profile constraint not checked across the US Core pass: the
+ * count of `PROFILE_CONSTRAINT_UNCHECKED` findings in the documents it validated, the documents
+ * carrying one, and the count per kind of constraint (`unstated` for a finding that names none).
+ * Printed every run, beside {@link formatSliceUnchecked}, for the same reason.
+ *
+ * @param documents - the US Core documents, each with this library's answer on it
+ * @returns the printed lines
+ */
+export function formatConstraintUnchecked(documents) {
+  return formatUncheckedCount(
+    documents,
+    "PROFILE_CONSTRAINT_UNCHECKED",
+    "uncheckedConstraint",
+    "kind",
+  );
+}
+
+/**
+ * The count of one unchecked code across the validated US Core documents, the documents carrying
+ * it, and the count per value of the field that says why.
+ *
+ * @param documents - the US Core documents, each with this library's answer on it
+ * @param code - the finding code counted
+ * @param field - the finding's field that names why
+ * @param label - what that field is called in the printed line
+ * @returns the printed lines
+ */
+function formatUncheckedCount(documents, code, field, label) {
   let findings = 0;
   let carrying = 0;
   let validated = 0;
-  const byReason = new Map();
+  const byWhy = new Map();
   for (const document of documents) {
     if (!wasValidated(document.ours)) continue;
     validated += 1;
-    const unchecked = document.ours.issues.filter((i) => i.code === "PROFILE_SLICE_UNCHECKED");
+    const unchecked = document.ours.issues.filter((i) => i.code === code);
     if (unchecked.length > 0) carrying += 1;
     findings += unchecked.length;
     for (const issue of unchecked) {
-      const reason = issue.sliceReason ?? "unstated";
-      byReason.set(reason, (byReason.get(reason) ?? 0) + 1);
+      const why = issue[field] ?? "unstated";
+      byWhy.set(why, (byWhy.get(why) ?? 0) + 1);
     }
   }
-  const reasons = [...byReason.entries()]
+  const counts = [...byWhy.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([reason, count]) => `${reason} ${String(count)}`);
+    .map(([why, count]) => `${why} ${String(count)}`);
   return [
-    `US Core pass: ${String(findings)} PROFILE_SLICE_UNCHECKED finding(s) in ${String(carrying)} of ` +
+    `US Core pass: ${String(findings)} ${code} finding(s) in ${String(carrying)} of ` +
       `${String(validated)} validated document(s)` +
-      (reasons.length === 0 ? "." : ` (by reason: ${reasons.join(", ")}).`),
+      (counts.length === 0 ? "." : ` (by ${label}: ${counts.join(", ")}).`),
   ];
 }

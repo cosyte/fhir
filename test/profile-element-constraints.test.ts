@@ -12,11 +12,13 @@ import {
   PROFILE_UNCHECKED_CONSTRAINTS,
   serializeResource,
   validateResource,
+  VALIDATION_CODES,
   type FhirComplex,
   type StructureDefinition,
   type ValidationIssue,
 } from "../src/index.js";
 import { compareDecimals } from "../src/model/decimal.js";
+import { saysNotChecked } from "../src/validate/validate.js";
 import { req } from "./_util.js";
 
 /**
@@ -1307,5 +1309,185 @@ describe("compareDecimals", () => {
   it("orders nothing that is not a decimal literal", () => {
     expect(compareDecimals(new FhirDecimal("fake"), decimal("1"))).toBeUndefined();
     expect(compareDecimals(decimal("1"), new FhirDecimal("fake"))).toBeUndefined();
+  });
+});
+
+describe("a list of profiles is met by any one of them", () => {
+  const lowTyped = (type: readonly Record<string, unknown>[]): StructureDefinition =>
+    sd("Observation", [
+      { id: "Observation.referenceRange", path: "Observation.referenceRange" },
+      { id: "Observation.referenceRange.low", path: "Observation.referenceRange.low", type },
+    ]);
+  const withLow = (low: object): FhirComplex => parse({ ...OBS, referenceRange: [{ low }] });
+  const comparator = { value: 1, comparator: "<" };
+
+  it("raises sqty-1 only when SimpleQuantity is the only profile listed", () => {
+    const either = lowTyped([
+      { code: "Quantity", profile: [`${CORE}SimpleQuantity`, `${BASE}fake-quantity`] },
+    ]);
+    const result = validateResource(withLow(comparator), { profiles: [either] });
+    expect(profileFindings(result.issues)).toEqual([
+      ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.referenceRange.low", "type-profile"],
+    ]);
+    expect(result.valid).toBe(true);
+    // Without a comparator the value fits SimpleQuantity, so it fits the list.
+    expect(profileFindings(collectProfileIssues(withLow({ value: 1 }), either))).toEqual([]);
+    // SimpleQuantity named twice, once pinned, is still SimpleQuantity alone.
+    const twice = lowTyped([
+      { code: "Quantity", profile: [`${CORE}SimpleQuantity`, `${CORE}SimpleQuantity|4.0.1`] },
+    ]);
+    expect(profileFindings(collectProfileIssues(withLow(comparator), twice))).toEqual([
+      ["INVARIANT_VIOLATED", "Observation.referenceRange.low", "sqty-1"],
+    ]);
+  });
+
+  it("reads two entries of one type code as either", () => {
+    const twoEntries = lowTyped([
+      { code: "Quantity", profile: [`${CORE}SimpleQuantity`] },
+      { code: "Quantity" },
+    ]);
+    expect(profileFindings(collectProfileIssues(withLow(comparator), twoEntries))).toEqual([]);
+    const twoProfiles = lowTyped([
+      { code: "Quantity", profile: [`${CORE}SimpleQuantity`] },
+      { code: "Quantity", profile: [`${BASE}fake-quantity`] },
+    ]);
+    expect(profileFindings(collectProfileIssues(withLow(comparator), twoProfiles))).toEqual([
+      ["PROFILE_CONSTRAINT_UNCHECKED", "Observation.referenceRange.low", "type-profile"],
+    ]);
+    const bothSimple = lowTyped([
+      { code: "Quantity", profile: [`${CORE}SimpleQuantity`] },
+      { code: "Quantity", profile: [`${CORE}SimpleQuantity|4.0.1`] },
+    ]);
+    expect(profileFindings(collectProfileIssues(withLow(comparator), bothSimple))).toEqual([
+      ["INVARIANT_VIOLATED", "Observation.referenceRange.low", "sqty-1"],
+    ]);
+  });
+
+  it("reads two Reference entries' target lists as either", () => {
+    const subject = (types: readonly Record<string, unknown>[]): StructureDefinition =>
+      sd("Observation", [{ id: "Observation.subject", path: "Observation.subject", type: types }]);
+    const twoTargets = subject([
+      { code: "Reference", targetProfile: [`${CORE}Patient`] },
+      { code: "Reference", targetProfile: [`${CORE}Group`] },
+    ]);
+    const issues = (reference: string): [string, string, string?][] =>
+      profileFindings(collectProfileIssues(parse({ ...OBS, subject: { reference } }), twoTargets));
+    expect(issues("Group/fake-1")).toEqual([]);
+    expect(issues("Patient/fake-1")).toEqual([]);
+    expect(issues("Device/fake-1")).toEqual([
+      ["PROFILE_REFERENCE_TARGET_MISMATCH", "Observation.subject"],
+    ]);
+    // One entry that fails and one that cannot be decided: not checked, never an error.
+    const fakePatient = sd("Patient", [], "fake-patient");
+    const failOrOpen = subject([
+      { code: "Reference", targetProfile: [`${CORE}Group`] },
+      { code: "Reference", targetProfile: [`${BASE}fake-patient`] },
+    ]);
+    const doc = parse({ ...OBS, subject: { reference: "Patient/fake-1" } });
+    expect(
+      profileFindings(collectProfileIssues(doc, failOrOpen, { profiles: [fakePatient] })),
+    ).toEqual([["PROFILE_CONSTRAINT_UNCHECKED", "Observation.subject", "target-profile"]]);
+  });
+});
+
+describe("a target profile that names a kind of resource", () => {
+  const subject = (target: string): StructureDefinition =>
+    sd("Observation", [
+      {
+        id: "Observation.subject",
+        path: "Observation.subject",
+        type: [{ code: "Reference", targetProfile: [target] }],
+      },
+    ]);
+  const issues = (profile: StructureDefinition, value: object): [string, string, string?][] =>
+    profileFindings(collectProfileIssues(parse({ ...OBS, subject: value }), profile));
+  const unchecked = [["PROFILE_CONSTRAINT_UNCHECKED", "Observation.subject", "target-profile"]];
+
+  it("reads DomainResource as any resource but Binary, Bundle and Parameters", () => {
+    const domain = subject(`${CORE}DomainResource`);
+    expect(issues(domain, { reference: "Group/fake-1" })).toEqual([]);
+    for (const type of ["Binary", "Bundle", "Parameters"]) {
+      expect(issues(domain, { reference: `${type}/fake-1` })).toEqual([
+        ["PROFILE_REFERENCE_TARGET_MISMATCH", "Observation.subject"],
+      ]);
+    }
+    // A target whose type cannot be read may be one of the three.
+    expect(issues(domain, { display: "fake" })).toEqual(unchecked);
+    // Resource is any resource, read or not.
+    expect(issues(subject(`${CORE}Resource`), { reference: "Bundle/fake-1" })).toEqual([]);
+    expect(issues(subject(`${CORE}Resource`), { display: "fake" })).toEqual([]);
+  });
+
+  it.each(["MetadataResource", "CanonicalResource", "Element", "BackboneElement"])(
+    "reports a target profile naming %s as not checked, never a mismatch",
+    (kind) => {
+      expect(issues(subject(`${CORE}${kind}`), { reference: "Questionnaire/fake-1" })).toEqual(
+        unchecked,
+      );
+      expect(issues(subject(`${CORE}${kind}|4.0.1`), { reference: "Patient/fake-1" })).toEqual(
+        unchecked,
+      );
+    },
+  );
+
+  it("passes a canonical whose target profile is Resource or DomainResource", () => {
+    for (const any of ["Resource", "DomainResource"]) {
+      const profile = sd("Observation", [
+        {
+          id: "Observation.instantiates[x]",
+          path: "Observation.instantiates[x]",
+          type: [{ code: "canonical", targetProfile: [`${CORE}${any}`] }],
+        },
+      ]);
+      const doc = parse({ ...OBS, instantiatesCanonical: "http://example.org/fake" });
+      expect(profileFindings(collectProfileIssues(doc, profile))).toEqual([]);
+    }
+  });
+});
+
+describe("whether a result was fully checked", () => {
+  it("is true when nothing was left unchecked, whatever the errors", () => {
+    expect(validateResource(parse(OBS)).fullyChecked).toBe(true);
+    const wrong = validateResource(parse({ ...OBS, status: "fake" }));
+    expect(wrong.valid).toBe(false);
+    expect(wrong.fullyChecked).toBe(true);
+  });
+
+  it("is false beside any finding that says something was not checked, valid or not", () => {
+    const typeProfile = sd("Observation", [
+      {
+        id: "Observation.code",
+        path: "Observation.code",
+        type: [{ code: "CodeableConcept", profile: [`${BASE}fake-concept`] }],
+      },
+    ]);
+    const result = validateResource(parse(OBS), { profiles: [typeProfile] });
+    expect(result.valid).toBe(true);
+    expect(result.fullyChecked).toBe(false);
+    // A resource type this library does not model is not checked below its root.
+    const unmodeled = validateResource(parse({ resourceType: "Basic", code: { text: "fake" } }));
+    expect(unmodeled.issues.map((i) => i.code)).toContain("RESOURCE_NOT_MODELED");
+    expect(unmodeled.fullyChecked).toBe(false);
+  });
+
+  it("reads exactly the codes that say a rule was not checked", () => {
+    const notChecked = [
+      "CODE_SYSTEM_UNKNOWN",
+      "INVARIANT_UNCHECKED",
+      "PROFILE_CONSTRAINT_UNCHECKED",
+      "PROFILE_SLICE_NO_SLICING",
+      "PROFILE_SLICE_UNCHECKED",
+      "PROFILE_VERSION_MISMATCH",
+      "RESOURCE_NOT_MODELED",
+    ];
+    const codes = Object.values(VALIDATION_CODES);
+    expect(codes.filter((code) => saysNotChecked(code))).toEqual(
+      codes.filter((code) => notChecked.includes(code)),
+    );
+    expect(codes.filter((code) => saysNotChecked(code))).toHaveLength(notChecked.length);
+    // Every code named as unchecked is among them.
+    for (const code of codes.filter((c) => c.endsWith("_UNCHECKED"))) {
+      expect(saysNotChecked(code)).toBe(true);
+    }
   });
 });

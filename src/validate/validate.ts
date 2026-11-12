@@ -138,8 +138,21 @@ export interface ValidateOptions {
 export interface ValidationResult {
   /** The value-free findings, in document order. Empty when the resource validated clean. */
   readonly issues: readonly ValidationIssue[];
-  /** Whether there were no `error`/`fatal` findings (warnings and information do not fail). */
+  /**
+   * Whether there were no `error`/`fatal` findings (warnings and information do not fail). `valid`
+   * says nothing broke a rule that was checked; read {@link ValidationResult.fullyChecked} for
+   * whether every rule was.
+   */
   readonly valid: boolean;
+  /**
+   * Whether every rule that applies was checked: `false` when any finding says one was not, at any
+   * severity. Those are `INVARIANT_UNCHECKED`, `PROFILE_SLICE_UNCHECKED`,
+   * `PROFILE_CONSTRAINT_UNCHECKED`, `PROFILE_SLICE_NO_SLICING`, `PROFILE_VERSION_MISMATCH`,
+   * `RESOURCE_NOT_MODELED` and `CODE_SYSTEM_UNKNOWN`. A result that is `valid` but not
+   * `fullyChecked` asserts nothing about the rules it lists unchecked. Code membership in a value
+   * set is checked only through a `terminology` service, and without one nothing is reported for it.
+   */
+  readonly fullyChecked: boolean;
   /** Render the findings as an `OperationOutcome` resource model (value-free, serializable). */
   toOperationOutcome: () => FhirComplex;
 }
@@ -491,5 +504,26 @@ function finalize(ctx: Ctx): ValidationResult {
   const valid = !issues.some(
     (i) => i.severity === ISSUE_SEVERITIES.ERROR || i.severity === ISSUE_SEVERITIES.FATAL,
   );
-  return { issues, valid, toOperationOutcome: () => toOperationOutcome(issues) };
+  const fullyChecked = !issues.some((i) => saysNotChecked(i.code));
+  return { issues, valid, fullyChecked, toOperationOutcome: () => toOperationOutcome(issues) };
+}
+
+/**
+ * Whether a finding of this code says a rule was not checked, which makes a result not
+ * `fullyChecked`.
+ *
+ * @param code - The finding's code.
+ * @returns `true` for the codes {@link ValidationResult.fullyChecked} lists.
+ * @internal
+ */
+export function saysNotChecked(code: ValidationCode): boolean {
+  return [
+    "INVARIANT_UNCHECKED",
+    "PROFILE_SLICE_UNCHECKED",
+    "PROFILE_CONSTRAINT_UNCHECKED",
+    "PROFILE_SLICE_NO_SLICING",
+    "PROFILE_VERSION_MISMATCH",
+    "RESOURCE_NOT_MODELED",
+    "CODE_SYSTEM_UNKNOWN",
+  ].includes(code);
 }

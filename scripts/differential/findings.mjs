@@ -89,6 +89,9 @@ export function ourFindings(text, options = {}) {
         code: String(i.code),
         ...(i.constraint === undefined ? {} : { constraint: String(i.constraint) }),
         ...(i.sliceReason === undefined ? {} : { sliceReason: String(i.sliceReason) }),
+        ...(i.uncheckedConstraint === undefined
+          ? {}
+          : { uncheckedConstraint: String(i.uncheckedConstraint) }),
       })),
       parseRefused: false,
     };
