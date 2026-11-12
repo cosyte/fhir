@@ -196,6 +196,15 @@ describe("readRawJsonLazily", () => {
     );
   });
 
+  it("reads a member name exactly, whatever its first character or length", () => {
+    const names = ["é", "éd", "ũse", "", "i", "idx", "Id", "codes", "cod"];
+    const members = names.map((name) => `${JSON.stringify(name)}:"v"`).join(",");
+    const text = `{"resourceType":"Patient",${members}}`;
+    const read = parseResource(text).resource.properties.map((p) => p.name);
+    expect(read).toEqual(["resourceType", ...names]);
+    expect(parseResource(readRawJson(text)).resource.properties.map((p) => p.name)).toEqual(read);
+  });
+
   it("is what parseResource reads text through: the same model and issues as from readRawJson", () => {
     const text = transactionBundle(5, 30);
     expect(parseResource(text)).toEqual(parseResource(readRawJson(text)));

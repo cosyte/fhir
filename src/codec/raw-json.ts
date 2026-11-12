@@ -651,7 +651,7 @@ function treeAt(tape: JsonTape, index: number): RawJson {
     const members = new Array<RawMember>(count);
     let at = index + 1;
     for (let m = 0; m < count; m++) {
-      members[m] = { key: keyAt(tape, at), value: treeAt(tape, at + 1) };
+      members[m] = { key: stringAt(tape, at), value: treeAt(tape, at + 1) };
       at = after(tokens, at + 1);
     }
     return { t: "obj", members };
@@ -667,115 +667,6 @@ function treeAt(tape: JsonTape, index: number): RawJson {
     return { t: "arr", items };
   }
   return scalarAt(tape, index);
-}
-
-/**
- * The element names a FHIR document writes most, each kept once. A member name the tape holds with
- * no escape is read as one of these when it is one, instead of as a new string copied out of the
- * source: a small resource writes `system`, `code` and `display` over and over, and each copy is
- * memory a read allocates for nothing. Any other name is copied out as before.
- */
-const COMMON_NAMES: readonly string[] = [
-  "id",
-  "url",
-  "use",
-  "code",
-  "meta",
-  "text",
-  "type",
-  "unit",
-  "value",
-  "entry",
-  "period",
-  "status",
-  "system",
-  "coding",
-  "family",
-  "given",
-  "display",
-  "subject",
-  "profile",
-  "request",
-  "fullUrl",
-  "method",
-  "resource",
-  "category",
-  "versionId",
-  "extension",
-  "reference",
-  "component",
-  "encounter",
-  "performer",
-  "identifier",
-  "lastUpdated",
-  "resourceType",
-  "valueQuantity",
-  "interpretation",
-  "effectiveDateTime",
-  "issued",
-  "name",
-  "gender",
-  "birthDate",
-  "address",
-  "telecom",
-  "line",
-  "city",
-  "state",
-  "postalCode",
-  "country",
-  "start",
-  "end",
-  "div",
-  "contained",
-  "modifierExtension",
-  "valueString",
-  "valueCodeableConcept",
-  "clinicalStatus",
-  "verificationStatus",
-  "intent",
-  "medicationCodeableConcept",
-  "dosageInstruction",
-  "authoredOn",
-  "requester",
-  "onsetDateTime",
-  "recordedDate",
-  "class",
-  "search",
-  "mode",
-  "score",
-  "link",
-  "relation",
-  "total",
-  "timestamp",
-  "note",
-];
-
-/** {@link COMMON_NAMES} by length, so a name is compared only with those of its own length. */
-const NAMES_BY_LENGTH: readonly (readonly string[] | undefined)[] = (() => {
-  const byLength: string[][] = [];
-  for (const name of COMMON_NAMES) (byLength[name.length] ??= []).push(name);
-  return byLength;
-})();
-
-/**
- * The member name a key token stands for: a shared string from {@link COMMON_NAMES} when it is one,
- * else the string read from the source. Compared in place, so a name that is not common costs the
- * comparison and nothing else.
- */
-function keyAt(tape: JsonTape, index: number): string {
-  const tokens = tape.tokens;
-  if (kindAt(tokens, index) === Tok.Str) {
-    const start = firstAt(tokens, index);
-    const names = NAMES_BY_LENGTH[secondAt(tokens, index) - start];
-    if (names !== undefined) {
-      const src = tape.src;
-      for (let i = 0; i < names.length; i++) {
-        const name = names[i] as string;
-        if (src.startsWith(name, start)) return name;
-      }
-    }
-  }
-  return stringAt(tape, index);
 }
 
 /** The kinds of value a tape token stands for, as {@link RawJson} names them. */
@@ -807,40 +698,53 @@ export const tapeReader = {
   count: (tape: JsonTape, index: number): number => firstAt(tape.tokens, index),
   /** The index of the token after the value at `index`. */
   after: (tape: JsonTape, index: number): number => after(tape.tokens, index),
-  /** The member name of the key token at `index` (see {@link keyAt}). */
-  key: keyAt,
+  /** The member name of the key token at `index`. */
+  key: stringAt,
   /** The string a string token at `index` stands for. */
   string: stringAt,
   /** The value of a boolean token at `index`. */
   isTrue: (tape: JsonTape, index: number): boolean => kindAt(tape.tokens, index) === Tok.True,
   /**
-   * Whether the object at `index` writes its members one for one: at most `limit` of them, none
-   * named with a leading `_` (and more), and no name twice. Decided on the source text, making no
-   * string; a name written with an escape is not decided here, and the object is not plain.
+   * Whether the object at `index` writes its members one for one: at most
+   * {@link PLAIN_MEMBERS} of them, none named with a leading `_` (and more), and no name twice.
+   * Decided on the source text, making no string; a name written with an escape is not decided
+   * here, and the object is not plain.
    */
-  isPlainObject: (tape: JsonTape, index: number, limit: number): boolean => {
+  isPlainObject: (tape: JsonTape, index: number): boolean => {
     const { src, tokens } = tape;
     const count = firstAt(tokens, index);
-    if (count > limit) return false;
+    if (count > PLAIN_MEMBERS) return false;
     let at = index + 1;
     for (let m = 0; m < count; m++) {
       if (kindAt(tokens, at) !== Tok.Str) return false;
       const start = firstAt(tokens, at);
       const length = secondAt(tokens, at) - start;
       if (length > 1 && src.charCodeAt(start) === Code.Underscore) return false;
-      let earlier = index + 1;
       for (let e = 0; e < m; e++) {
-        const from = firstAt(tokens, earlier);
-        if (secondAt(tokens, earlier) - from === length && sameText(src, from, start, length)) {
+        if (nameLengths[e] === length && sameText(src, nameStarts[e] as number, start, length)) {
           return false;
         }
-        earlier = after(tokens, earlier + 1);
       }
+      nameStarts[m] = start;
+      nameLengths[m] = length;
       at = after(tokens, at + 1);
     }
     return true;
   },
 } as const;
+
+/**
+ * The most members an object `tapeReader.isPlainObject` decides can have: an object with more is
+ * not plain, and is read from the raw tree, which builds the same model.
+ */
+const PLAIN_MEMBERS = 16;
+
+/**
+ * Where each member name of the object `tapeReader.isPlainObject` is reading starts, and how long
+ * it is: kept from call to call, since the check never runs inside another one.
+ */
+const nameStarts = new Int32Array(PLAIN_MEMBERS);
+const nameLengths = new Int32Array(PLAIN_MEMBERS);
 
 /** Whether the `length` characters of `src` at `a` are those at `b`. */
 function sameText(src: string, a: number, b: number, length: number): boolean {
@@ -874,7 +778,7 @@ class LazyObject implements RawObject {
     const members = new Array<RawMember>(count);
     let at = this.#index + 1;
     for (let m = 0; m < count; m++) {
-      members[m] = { key: keyAt(tape, at), value: lazyAt(tape, at + 1) };
+      members[m] = { key: stringAt(tape, at), value: lazyAt(tape, at + 1) };
       at = after(tokens, at + 1);
     }
     return (this.#members = members);

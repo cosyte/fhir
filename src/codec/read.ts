@@ -763,7 +763,7 @@ function buildComplexAt(
   issues: FhirIssue[],
   root = false,
 ): FhirComplex {
-  if (!tapeReader.isPlainObject(tape, index, SCAN_MEMBERS)) {
+  if (!tapeReader.isPlainObject(tape, index)) {
     return buildComplex(lazyAt(tape, index) as RawObject, at, issues, root);
   }
   const count = tapeReader.count(tape, index);
