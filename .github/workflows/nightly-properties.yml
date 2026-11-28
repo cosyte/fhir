@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   nightly:
-    uses: cosyte/.github/.github/workflows/nightly-properties.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # workflows-2026-11-10-398cd4ded647
+    uses: cosyte/.github/.github/workflows/nightly-properties.yml@993cd5ea41380cb12dbeb463662527ab7ad1effc # workflows-2026-11-28-993cd5ea4138
     with:
       # The whole suite, so no property can sit where the run misses it.
       test-cmd: 'echo "properties: COSYTE_PROPERTY_SEED=${GITHUB_RUN_ID}" && COSYTE_PROPERTY_SEED="${GITHUB_RUN_ID}" pnpm test'

@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   weekly:
-    uses: cosyte/.github/.github/workflows/weekly-mutation.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # workflows-2026-11-10-398cd4ded647
+    uses: cosyte/.github/.github/workflows/weekly-mutation.yml@993cd5ea41380cb12dbeb463662527ab7ad1effc # workflows-2026-11-28-993cd5ea4138
     with:
       mutate-cmd: "pnpm mutate:full"
       # About 27,000 lines of source in 60 files; the safety readout's status table alone is 2,700.
