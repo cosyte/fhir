@@ -241,9 +241,9 @@ describe("phi-scan: the synthetic payload is genuinely detectable", () => {
       "Okonkwo",
       "Adaeze",
       "1983-07-21",
-      "19 Larkspur Lane",
-      "481279035",
-      "3127942086",
+      "742 Evergreen Terrace",
+      "987654329",
+      "0000000000",
       "adaeze@mail.invalid",
     ];
     const root = makeRepo();
@@ -252,11 +252,11 @@ describe("phi-scan: the synthetic payload is genuinely detectable", () => {
       join(root, "test", "__fixtures__", "patient.json"),
       JSON.stringify({
         resourceType: "Patient",
-        identifier: [{ value: "481279035" }],
+        identifier: [{ value: "987654329" }],
         name: [{ family: "Okonkwo", given: ["Adaeze"] }],
-        telecom: [{ value: "3127942086" }, { value: "adaeze@mail.invalid" }],
+        telecom: [{ value: "0000000000" }, { value: "adaeze@mail.invalid" }],
         birthDate: "1983-07-21",
-        address: [{ line: ["19 Larkspur Lane"] }],
+        address: [{ line: ["742 Evergreen Terrace"] }],
       }) + "\n",
     );
 
@@ -1837,6 +1837,18 @@ describe("phi-scan: the sweep reads the bytes git carries, as a union with the w
     expect(r.stderr).toContain(
       `HIT: ${rel} (as git carries it)\n${hitLine("Patient.name.family", RULES.name)}`,
     );
+
+    // And each hit came from its own copy's bytes: once the working-tree name
+    // is declared, only the blob's hit is left. A route that read the working
+    // tree in place of the blob would have nothing left to report.
+    declareSynthetic(root, "NAME Okonkwo");
+    const again = runIn(root, []);
+    expect(again.code, `stdout: ${again.stdout} stderr: ${again.stderr}`).toBe(1);
+    expect(again.stderr).not.toContain(`HIT: ${rel}\n`);
+    expect(again.stderr).toContain(
+      `HIT: ${rel} (as git carries it)\n${hitLine("Patient.name.family", RULES.name)}`,
+    );
+    expect(again.stderr).toContain("1 hit(s)");
   });
 
   it("refuses a tracked gitlink OUTSIDE every walk root, naming its kind (exit 2)", () => {
