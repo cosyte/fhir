@@ -14,6 +14,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawnSync } from "node:child_process";
 import {
   writeFileSync,
+  appendFileSync,
   readFileSync,
   mkdtempSync,
   mkdirSync,
@@ -105,6 +106,40 @@ function expectNoPhi(stderr: string): void {
   for (const t of PHI_TOKENS) expect(stderr).not.toContain(t);
 }
 
+/** The rule each detector reports a hit under, as the scanner spells it. */
+const RULES = {
+  name: "person-name token not in synthetic allow-list",
+  dob: "date of birth not in synthetic allow-list",
+  street: "street address not in synthetic allow-list",
+  id: "SSN- / 9-digit-identifier-shaped value not in synthetic allow-list",
+  phone: "phone number without the 555 fake-exchange convention",
+  ssn: "dashed SSN pattern",
+  email: "email with non-test domain",
+} as const;
+
+/**
+ * The whole line a hit prints under its file: the element, then the rule. It is
+ * spelled in full, indent and newline included, so a case that expects it also
+ * shows that nothing was printed between the two.
+ */
+function hitLine(element: string, rule: string): string {
+  return `  element=${element} (${rule})\n`;
+}
+
+/**
+ * Declare tokens synthetic in a throwaway repo's own copy of the allow-list.
+ *
+ * THIS IS HOW A CASE KNOWS WHICH TEXT THE SCANNER READ. A hit names the place
+ * and the rule and never the text that matched, so a report cannot show that
+ * the reader took `Nakamura` and not a fragment of it. The allow-list can: the
+ * scanner compares what it read against what is declared, so a hit that is gone
+ * once exactly that token is declared was a hit on exactly that token. A case
+ * that used to look for the token in the report asks this instead.
+ */
+function declareSynthetic(root: string, ...lines: string[]): void {
+  appendFileSync(join(root, "scripts", "phi-allow-list.txt"), `\n${lines.join("\n")}\n`);
+}
+
 const repos: string[] = [];
 
 /**
@@ -191,8 +226,49 @@ describe("phi-scan: the synthetic payload is genuinely detectable", () => {
     writeFileSync(join(root, "src", "violator.ts"), SYNTHETIC_PHI);
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("123-45-6789");
-    expect(r.stderr).toContain("juanita.rivera@clinic.example");
+    expect(r.stderr).toContain(hitLine("(ssn)", RULES.ssn));
+    expect(r.stderr).toContain(hitLine("(email)", RULES.email));
+  });
+
+  it("a hit names the place and the rule, and no output carries the text that matched", () => {
+    // Every detector fires here: the shape pass on a source file, and each
+    // structured detector on a fixture. Each value is invented and none is in
+    // the allow-list, so each one is a hit. A report that quoted a hit would be
+    // a second copy of the leak in a CI log, so no stream may hold any of them.
+    const planted = [
+      "123-45-6789",
+      "juanita.rivera@clinic.example",
+      "Okonkwo",
+      "Adaeze",
+      "1983-07-21",
+      "19 Larkspur Lane",
+      "481279035",
+      "3127942086",
+      "adaeze@mail.invalid",
+    ];
+    const root = makeRepo();
+    writeFileSync(join(root, "src", "violator.ts"), SYNTHETIC_PHI);
+    writeFileSync(
+      join(root, "test", "__fixtures__", "patient.json"),
+      JSON.stringify({
+        resourceType: "Patient",
+        identifier: [{ value: "481279035" }],
+        name: [{ family: "Okonkwo", given: ["Adaeze"] }],
+        telecom: [{ value: "3127942086" }, { value: "adaeze@mail.invalid" }],
+        birthDate: "1983-07-21",
+        address: [{ line: ["19 Larkspur Lane"] }],
+      }) + "\n",
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("[phi-scan] HIT: src/violator.ts\n");
+    expect(r.stderr).toContain("[phi-scan] HIT: test/__fixtures__/patient.json\n");
+    for (const rule of Object.values(RULES)) expect(r.stderr).toContain(`(${rule})\n`);
+    for (const token of planted) {
+      expect(r.stdout, token).not.toContain(token);
+      expect(r.stderr, token).not.toContain(token);
+    }
   });
 
   it("a repo with no link and no violator scans clean (exit 0)", () => {
@@ -408,7 +484,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(hitLine("(ssn)", RULES.ssn));
   });
 
   it("refuses a staged gitlink under a scanned prefix, naming its kind (exit 2)", () => {
@@ -442,7 +518,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("src/violator.ts");
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(hitLine("(ssn)", RULES.ssn));
   });
 
   it("still runs the FHIR-aware structured scan on a staged fixture (exit 1)", () => {
@@ -832,8 +908,9 @@ describe("phi-scan: a scan root's OWN path is in scope, not just its contents", 
 
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("Okonkwo");
-    expect(r.stderr).toContain("(source)");
+    expect(r.stderr).toContain(hitLine("(source) name.family", RULES.name));
+    expect(r.stderr).toContain(hitLine("(source) name.given", RULES.name));
+    expect(r.stderr).toContain(hitLine("(source) birthDate", RULES.dob));
 
     // THE RESIDUAL, PINNED RATHER THAN DESCRIBED. The structured-only detectors
     // are still unreachable at this path: `identifier.value` and `telecom.value`
@@ -960,7 +1037,7 @@ describe("phi-scan: paths mode and the override-log gate", () => {
 
     const r = runIn(root, ["src/leak.ts"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(hitLine("(ssn)", RULES.ssn));
   });
 });
 
@@ -1026,8 +1103,8 @@ describe("phi-scan: a target enumerated and never read refuses the scan", () => 
 
     const r = runIn(root, [VIOLATOR, DECOY, "--allow-fixture", DECOY]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(2);
-    expect(r.stderr).toContain("123-45-6789");
-    expect(r.stderr).toContain(VIOLATOR);
+    expect(r.stderr).toContain(`HIT: ${VIOLATOR}\n`);
+    expect(r.stderr).toContain(hitLine("(ssn)", RULES.ssn));
     expect(r.stderr.indexOf("HIT:")).toBeLessThan(r.stderr.indexOf("enumerated and never read"));
   });
 
@@ -1091,7 +1168,7 @@ describe("phi-scan: a target enumerated and never read refuses the scan", () => 
 
     const r = runIn(root, [VIOLATOR, DECOY]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(hitLine("(ssn)", RULES.ssn));
     expect(r.stderr).not.toContain("enumerated and never read");
   });
 
@@ -1179,7 +1256,7 @@ describe("phi-scan: tracked files directly under test/ are in scope", () => {
 
     const r = runIn(root, ["test/phi-leak.test.ts"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("123-45-6789");
+    expect(r.stderr).toContain(hitLine("(ssn)", RULES.ssn));
   });
 });
 
@@ -1193,22 +1270,51 @@ describe("phi-scan: tracked files directly under test/ are in scope", () => {
 // recogniser would enumerate these files and still read nothing in them.
 
 describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
-  const cases: [string, string, string][] = [
-    ["a family name", 'const p = { name: [{ family: "Nakamura" }] };\n', "Nakamura"],
-    ["a given name", 'const p = { name: [{ given: ["Hiroshi", "Ken"] }] };\n', "Hiroshi"],
-    ["a date of birth", 'const p = { birthDate: "1961-11-02" };\n', "1961-11-02"],
-    ["a street address", 'const p = { address: [{ line: ["42 Wallaby Way"] }] };\n', "42 Wallaby"],
+  // Each case names the element and rule the hit is reported under, and the
+  // allow-list lines that declare exactly what the reader should have taken.
+  const cases: [string, string, string, string, string[]][] = [
+    [
+      "a family name",
+      'const p = { name: [{ family: "Nakamura" }] };\n',
+      "(source) name.family",
+      RULES.name,
+      ["NAME Nakamura"],
+    ],
+    [
+      "a given name",
+      'const p = { name: [{ given: ["Hiroshi", "Ken"] }] };\n',
+      "(source) name.given",
+      RULES.name,
+      ["NAME Hiroshi", "NAME Ken"],
+    ],
+    [
+      "a date of birth",
+      'const p = { birthDate: "1961-11-02" };\n',
+      "(source) birthDate",
+      RULES.dob,
+      ["DOB 1961-11-02"],
+    ],
+    [
+      "a street address",
+      'const p = { address: [{ line: ["42 Wallaby Way"] }] };\n',
+      "(source) address.line",
+      RULES.street,
+      ["ADDR 42 Wallaby Way"],
+    ],
   ];
 
-  for (const [label, body, token] of cases) {
+  for (const [label, body, element, rule, declared] of cases) {
     it(`reports ${label} written as a source literal, which the shape pass never saw`, () => {
       const root = makeRepo();
       writeFileSync(join(root, "test", "inline.test.ts"), body);
 
       const r = runIn(root, []);
       expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-      expect(r.stderr).toContain(token);
-      expect(r.stderr).toContain("(source)");
+      expect(r.stderr).toContain(hitLine(element, rule));
+
+      declareSynthetic(root, ...declared);
+      const again = runIn(root, []);
+      expect(again.code, `stderr: ${again.stderr}`).toBe(0);
     });
   }
 
@@ -1224,7 +1330,11 @@ describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("Nakamura");
+    expect(r.stderr).toContain(hitLine("(source) name.family", RULES.name));
+
+    declareSynthetic(root, "NAME Nakamura");
+    const again = runIn(root, []);
+    expect(again.code, `stderr: ${again.stderr}`).toBe(0);
   });
 
   // THE XML SPELLING. This package reads two wire formats and its tests write
@@ -1243,7 +1353,11 @@ describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("Nakamura");
+    expect(r.stderr).toContain(hitLine("(source) name.family", RULES.name));
+
+    declareSynthetic(root, "NAME Nakamura");
+    const again = runIn(root, []);
+    expect(again.code, `stderr: ${again.stderr}`).toBe(0);
   });
 
   it("reads a date of birth and a street address in the XML spelling too", () => {
@@ -1256,8 +1370,12 @@ describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("1961-11-02");
-    expect(r.stderr).toContain("742 Evergreen Terrace");
+    expect(r.stderr).toContain(hitLine("(source) birthDate", RULES.dob));
+    expect(r.stderr).toContain(hitLine("(source) address.line", RULES.street));
+
+    declareSynthetic(root, "DOB 1961-11-02", "ADDR 742 Evergreen Terrace");
+    const again = runIn(root, []);
+    expect(again.code, `stderr: ${again.stderr}`).toBe(0);
   });
 
   it("does not report an entity reference as a person name", () => {
@@ -1283,8 +1401,14 @@ describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("Nakamura");
-    expect(r.stderr).toContain("Rodriguez");
+    expect(r.stderr).toContain(hitLine("(source) name.family", RULES.name));
+    expect(r.stderr).toContain("2 hit(s)");
+
+    // Two tokens, and exactly these two: a reader that deleted the reference
+    // would have read one token, `NakamuraRodriguez`, which neither line clears.
+    declareSynthetic(root, "NAME Nakamura", "NAME Rodriguez");
+    const again = runIn(root, []);
+    expect(again.code, `stderr: ${again.stderr}`).toBe(0);
   });
 
   it("does not report a template substitution's expression text as a name", () => {
@@ -1303,37 +1427,49 @@ describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
   // first `]` it found: a bracket inside a string or an index expression ended
   // it early and dropped every member after, and a closing bracket past the
   // window dropped them all.
-  const readerCases: [string, string, string][] = [
+  const readerCases: [string, string, string, string, string][] = [
     [
       "a bracket inside an earlier index expression",
       'const p = { name: [{ given: [names[0], "Nakamura"] }] };\n',
-      "Nakamura",
+      "(source) name.given",
+      RULES.name,
+      "NAME Nakamura",
     ],
     [
       "a bracket inside the string itself",
       'const p = { address: [{ line: ["742 Evergreen Terrace [Apt 4]"] }] };\n',
-      "742 Evergreen Terrace",
+      "(source) address.line",
+      RULES.street,
+      "ADDR 742 Evergreen Terrace [Apt 4]",
     ],
     [
       "a comment between the key and its value",
       'const p = { name: [{ family: /* the surname */ "Nakamura" }] };\n',
-      "Nakamura",
+      "(source) name.family",
+      RULES.name,
+      "NAME Nakamura",
     ],
     [
       "an escaped-quote JSON document inside a double-quoted string",
       'const doc = "{\\"resourceType\\":\\"Patient\\",\\"name\\":[{\\"family\\":\\"Nakamura\\"}]}";\n',
-      "Nakamura",
+      "(source) name.family",
+      RULES.name,
+      "NAME Nakamura",
     ],
   ];
 
-  for (const [label, body, token] of readerCases) {
+  for (const [label, body, element, rule, declared] of readerCases) {
     it(`reads the value past ${label}`, () => {
       const root = makeRepo();
       writeFileSync(join(root, "test", "inline.test.ts"), body);
 
       const r = runIn(root, []);
       expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-      expect(r.stderr).toContain(token);
+      expect(r.stderr).toContain(hitLine(element, rule));
+
+      declareSynthetic(root, declared);
+      const again = runIn(root, []);
+      expect(again.code, `stderr: ${again.stderr}`).toBe(0);
     });
   }
 
@@ -1356,8 +1492,12 @@ describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("Nakamura");
+    expect(r.stderr).toContain(hitLine("(source) name.given", RULES.name));
     expect(r.stderr).toContain("1 hit(s)");
+
+    declareSynthetic(root, "NAME Nakamura");
+    const again = runIn(root, []);
+    expect(again.code, `stderr: ${again.stderr}`).toBe(0);
   });
 
   it("declares the diagnostic form in the allow-list rather than excluding it by shape", () => {
@@ -1374,8 +1514,14 @@ describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("JOHN_SMITH@Mercy.org");
-    expect(r.stderr).not.toContain("UNKNOWN_PROPERTY");
+    expect(r.stderr).toContain(hitLine("(email)", RULES.email));
+    // One hit, not two: the diagnostic form is not one.
+    expect(r.stderr).toContain("1 hit(s)");
+
+    // And the one hit is the address: declaring its domain clears the run.
+    declareSynthetic(root, "EMAILDOMAIN Mercy.org");
+    const again = runIn(root, []);
+    expect(again.code, `stderr: ${again.stderr}`).toBe(0);
   });
 
   it("keeps that detection on a fixture with an unexpected extension", () => {
@@ -1390,7 +1536,9 @@ describe("phi-scan: the FHIR-keyed literal recogniser reads source", () => {
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("JOHN_SMITH@Mercy.org");
+    expect(r.stderr).toContain(
+      `HIT: test/__fixtures__/vendor.hl7\n${hitLine("(email)", RULES.email)}`,
+    );
   });
 });
 
@@ -1558,8 +1706,9 @@ describe("phi-scan: the sweep reads the bytes git carries, as a union with the w
 
     const r = runIn(root, []);
     expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(`${rel} (as git carries it)`);
-    expect(r.stderr).toContain("Rivera");
+    expect(r.stderr).toContain(
+      `HIT: ${rel} (as git carries it)\n${hitLine("Patient.name.family", RULES.name)}`,
+    );
   });
 
   it("reads a tracked file that sits outside every walk root (exit 1)", () => {
@@ -1682,9 +1831,12 @@ describe("phi-scan: the sweep reads the bytes git carries, as a union with the w
 
     const r = runIn(root, []);
     expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("Okonkwo"); // the CRLF working-tree copy
-    expect(r.stderr).toContain("Rivera"); // the LF blob git carries
-    expect(r.stderr).toContain(`${rel} (as git carries it)`);
+    // The CRLF working-tree copy, then the LF blob git carries: each is a hit
+    // on its own family name.
+    expect(r.stderr).toContain(`HIT: ${rel}\n${hitLine("Patient.name.family", RULES.name)}`);
+    expect(r.stderr).toContain(
+      `HIT: ${rel} (as git carries it)\n${hitLine("Patient.name.family", RULES.name)}`,
+    );
   });
 
   it("refuses a tracked gitlink OUTSIDE every walk root, naming its kind (exit 2)", () => {
@@ -1774,8 +1926,9 @@ describe("phi-scan: an unmerged path in all-mode is read at every stage", () => 
 
     const r = runIn(root, []);
     expect(r.code, `stdout: ${r.stdout} stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(`${rel} (index stage 3)`);
-    expect(r.stderr).toContain("Rivera");
+    expect(r.stderr).toContain(
+      `HIT: ${rel} (index stage 3)\n${hitLine("Patient.name.family", RULES.name)}`,
+    );
     // The merge base is never labelled as what git carries.
     expect(r.stderr).not.toContain(`${rel} (as git carries it)`);
   });

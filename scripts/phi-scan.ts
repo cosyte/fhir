@@ -232,7 +232,6 @@ const NAME_NOISE_TOKENS = new Set<string>([
 interface Hit {
   path: string;
   location: string; // FHIR element path (e.g. "Patient.name.family") or "(ssn)"
-  value: string;
   reason: string;
 }
 
@@ -1286,7 +1285,6 @@ function checkNameString(
       hits.push({
         path,
         location,
-        value: tok,
         reason: "person-name token not in synthetic allow-list",
       });
     }
@@ -1306,7 +1304,6 @@ function checkDate(
     hits.push({
       path,
       location,
-      value,
       reason: "date of birth not in synthetic allow-list",
     });
   }
@@ -1326,7 +1323,6 @@ function checkAddressLine(
     hits.push({
       path,
       location,
-      value: street,
       reason: "street address not in synthetic allow-list",
     });
   }
@@ -1345,7 +1341,7 @@ function checkContactValue(
   if (isEmailShaped(v)) {
     const domain = (v.split("@")[1] ?? "").toLowerCase();
     if (!allow.emailDomains.has(domain)) {
-      hits.push({ path, location, value: v, reason: "email with non-test domain" });
+      hits.push({ path, location, reason: "email with non-test domain" });
     }
     return;
   }
@@ -1355,7 +1351,6 @@ function checkContactValue(
     hits.push({
       path,
       location,
-      value: v,
       reason: "SSN- / 9-digit-identifier-shaped value not in synthetic allow-list",
     });
     return;
@@ -1366,7 +1361,6 @@ function checkContactValue(
     hits.push({
       path,
       location,
-      value: v,
       reason: "phone number without the 555 fake-exchange convention",
     });
   }
@@ -1378,8 +1372,8 @@ function checkContactValue(
 
 function scanCommonShapes(path: string, content: string, allow: AllowList, hits: Hit[]): void {
   // Dashed SSN anywhere (covers Narrative.div / Annotation.text + non-FHIR src).
-  for (const m of content.matchAll(/\b\d{3}-\d{2}-\d{4}\b/g)) {
-    hits.push({ path, location: "(ssn)", value: m[0], reason: "dashed SSN pattern" });
+  for (const _match of content.matchAll(/\b\d{3}-\d{2}-\d{4}\b/g)) {
+    hits.push({ path, location: "(ssn)", reason: "dashed SSN pattern" });
   }
   // Emails whose domain is not an allow-listed reserved / test domain.
   //
@@ -1396,7 +1390,7 @@ function scanCommonShapes(path: string, content: string, allow: AllowList, hits:
   for (const m of content.matchAll(/\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g)) {
     const domain = (m[1] ?? "").toLowerCase();
     if (!allow.emailDomains.has(domain)) {
-      hits.push({ path, location: "(email)", value: m[0], reason: "email with non-test domain" });
+      hits.push({ path, location: "(email)", reason: "email with non-test domain" });
     }
   }
 }
@@ -2054,9 +2048,7 @@ function report(hits: Hit[]): void {
   for (const [path, group] of byPath) {
     process.stderr.write(`[phi-scan] HIT: ${path}\n`);
     for (const h of group) {
-      process.stderr.write(
-        `  element=${h.location} value=${JSON.stringify(h.value)} (${h.reason})\n`,
-      );
+      process.stderr.write(`  element=${h.location} (${h.reason})\n`);
     }
   }
   process.stderr.write(
