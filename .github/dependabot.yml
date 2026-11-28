@@ -23,6 +23,12 @@ updates:
       # package cannot rely on. Minor and patch updates within 22 still come through.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # The shared release workflow runs changesets/action v1, which looks for a `New tag:` line
+      # that @changesets/cli 3 does not print: on 3.0.3 a release run published to npm, then
+      # skipped the GitHub release, the docs rebuild, and the install check. Minor and patch
+      # updates within 2 still come through.
+      - dependency-name: "@changesets/cli"
+        update-types: ["version-update:semver-major"]
       # @cosyte/process owns the vitest and typescript versions; this repository declares them
       # directly only because test files import vitest and the compiler API, pinned to exactly the
       # versions process runs. `cosyte-process check` fails a vitest mismatch. They move when
