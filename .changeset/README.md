@@ -7,7 +7,10 @@ its own version heading there from the changesets it consumed. So **the changese
 changelog entry**. Write it there for a reader of the package, and do not hand-edit `CHANGELOG.md`,
 whose sections above `## Released before this file was generated` are generated output.
 
-Add a changeset for every meaningful change:
+A change to anything in the npm tarball gets a changeset: a change under `src/`, to `README.md`,
+or to a `package.json` field npm shows. A change to `docs-content/`, the tests, CI, or the scripts
+under `scripts/` gets none, and an empty changeset (`changeset add --empty`) is never written.
+Create one with:
 
 ```bash
 pnpm changeset
