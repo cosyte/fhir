@@ -1,52 +1,29 @@
 name: Em-dash gate
 
-# The brand rule (founder directive 2026-07-24, written down in the knowledgebase
-# repo at 06-brand/voice-and-tone.md) bans the em dash (U+2014) and the en dash
-# (U+2013) outright across every Cosyte surface, and names commit messages
-# explicitly. This workflow is the CI half of that rule for this repo: the tracked
-# files, and the text that is not a file.
+# Our writing rule bans the em dash (U+2014) and the en dash (U+2013) on every surface, commit
+# messages included. This workflow is the CI half of that rule for this repo: the tracked files,
+# and the pull request text that is not a file.
 #
-# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-emdash`, which runs
-# `cosyte-no-emdash`, the one dash gate every Cosyte repository shares, from the
-# `@cosyte/script-utils` devDependency. It reads every tracked file and every tracked file
-# name for both dashes as characters and in every encoded form. This repository excludes
-# nothing, so it carries no scripts/check-no-emdash.exclude. The jobs below delegate the
-# plumbing (checkout, pnpm, Node, and the install the gate needs, since it lives in
-# node_modules) to the shared gate workflow, which carries no pattern, no allow-list and
-# no file selection of its own: it prepares the tree, installs from the lockfile, runs
-# the command, and lets the command's exit status decide the job.
+# WHAT SCANS. `pnpm check:no-emdash` runs `cosyte-no-emdash`, the shared dash gate, from the
+# `@cosyte/script-utils` devDependency. It reads every tracked file and every tracked file name for
+# both dashes, as characters and in every encoded form. This repository excludes nothing, so it
+# carries no scripts/check-no-emdash.exclude. The shared gate workflow does the plumbing
+# (checkout, pnpm, Node, and the install the gate needs) and carries no pattern, no allow-list and
+# no file selection of its own: the command's exit status decides the job.
 #
-# TWO CONTEXTS, NOT ONE, AND THE JOB ID IS LOAD-BEARING. A called job's check run is named
+# TWO CONTEXTS, AND THE JOB ID IS LOAD-BEARING. A called job's check run is named
 # `<caller job id> / <inner job id>`, so the job id `no-emdash` below publishes
-# `no-emdash / tracked-files` and `no-emdash / messages`. A branch ruleset binds to those
-# exact strings: renaming the job detaches the requirement with no error anywhere, and a
-# required context nothing emits blocks every pull request. Do not rename it.
+# `no-emdash / tracked-files` and `no-emdash / messages`. A branch ruleset binds to those exact
+# strings: renaming the job detaches the requirement with no error anywhere. Do not rename it.
 #
-#   `no-emdash / tracked-files` is the half that is safe to require and the one that blocks
-#   a merge. `no-emdash / messages` runs, reds its own context, and is deliberately NOT
-#   required: Dependabot composes a pull request body out of upstream release notes, em
-#   dashes included, and a gate that fails on someone else's clock becomes a tax. The
-#   detection is unchanged either way; only what blocks is narrowed.
+#   `no-emdash / tracked-files` is the half that blocks a merge. `no-emdash / messages` runs and
+#   reds its own context, and is never required: Dependabot writes a pull request body from
+#   upstream release notes, dashes included.
 #
-# WHY A SEPARATE WORKFLOW, not a step in ci.yml.
-#
-# The message half needs the `edited` pull_request activity type. `edited` is not
-# a default, and without it a title or body changed after the last push is never
-# re-checked, so an em dash added to a PR description after the last green run
-# reaches main unseen. That matters here because the repo squash-merges: on a
-# multi-commit PR the PR title becomes the subject and the body becomes the
-# message that lands.
-#
-# ci.yml cannot afford that trigger. It runs the shared pipeline over a
-# {node 22, 24, 26} matrix, plus a fuzz job at FUZZ_RUNS=20000, plus a differential
-# job that downloads validator_cli.jar and runs a JVM oracle over four corpora.
-# Re-running all of it every time someone fixes a typo in a PR description buys
-# no extra safety and costs a great deal. This workflow is a checkout, an install
-# and one command, so it can afford the noisier trigger. Same call website made
-# (website#52) and the same reason.
-#
-# Both halves live in one workflow rather than two, so one file carries the whole
-# rule and one file is one thing to read.
+# WHY A SEPARATE WORKFLOW, not a step in ci.yml. The message half needs the `edited` pull_request
+# activity type, or a title or body changed after the last push is never checked again, and the
+# squash merge writes that title and body into `main`. ci.yml is far too heavy to run on every
+# edit of a pull request description; this workflow is a checkout, an install and one command.
 #
 # Run the file half locally with:  pnpm check:no-emdash
 

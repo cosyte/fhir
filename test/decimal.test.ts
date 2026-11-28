@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { decimal, FhirDecimal, wouldLosePrecisionAsDouble } from "../src/index.js";
 
-describe("FhirDecimal: lexical precision (ADR 0001)", () => {
+describe("FhirDecimal: lexical precision", () => {
   it("preserves the exact lexical text, trailing zeros included", () => {
     expect(decimal("0.010").toString()).toBe("0.010");
     expect(decimal("70.0").toString()).toBe("70.0");

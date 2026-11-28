@@ -47,7 +47,7 @@ import { NEGATION_CODE_READS } from "../src/safety/codes.js";
  *
  * Every assertion here is written through fields that exist at the base commit
  * (`arrayWrappedScalars`, `safeToSummarize`, `valid`, the issue list, the XML write refusal), so
- * each one measures a **behaviour** rather than the presence of a symbol. This slice adds no
+ * each one measures a **behaviour** rather than the presence of a symbol. This change adds no
  * exported symbol at all.
  *
  * All values are synthetic.
@@ -262,7 +262,7 @@ describe("what does not move, pinned in both states", () => {
     // 🔴 Do not read this pin as an endorsement. `clinicalStatus` is not a negation, so the walk
     // does not read it -- but `readSafety`'s convenience field does, off ANY resource root, because
     // `clinicalSystemFor` picks a preferred system and gates nothing. So the value below IS resolved
-    // through a wrapper nothing reports, exactly the shape this slice closes one element over. The
+    // through a wrapper nothing reports, exactly the shape this change closes one element over. The
     // read is asserted here rather than left out, so the pin measures the gap instead of implying
     // there is none. Identical at the base commit; an open residual, in its own change, and closing
     // it is a change to a CONVENIENCE READ, not a widening of this report.
@@ -305,7 +305,7 @@ describe("what does not move, pinned in both states", () => {
     // this layer takes anything from -- and it is exempt from the unreadable-shape channel too,
     // every member being one FHIR spells somewhere. That is an open residual of its own, and
     // reporting the wrapper inside it would be a report *wider* than the read, which is this
-    // slice's own defect inverted. Pinned so a later widening has to move it deliberately.
+    // change's own defect inverted. Pinned so a later widening has to move it deliberately.
     const safety = safetyOf(
       '{"resourceType":"Procedure","status":{"coding":[{"code":["not-done"]}]}}',
     );
@@ -370,7 +370,7 @@ describe("the report is derived from the read's own table", () => {
 describe("the element-level wrappers stay open residuals", () => {
   // These are the *element* names, not the `Coding` datatype's members, so reporting them needs an
   // R4 census of the cardinality each of the three modifier element names has at a resource root on
-  // every type that defines it. That is a different licence from this slice's, and it gets its own
+  // every type that defines it. That is a different licence from this change's, and it gets its own
   // change rather than riding along on this one.
 
   it("does not report an array-wrapped doNotPerform outside the cardinality table", () => {

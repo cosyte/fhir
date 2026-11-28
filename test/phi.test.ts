@@ -9,7 +9,7 @@ import {
 import { nth } from "./_util.js";
 
 /**
- * PHI posture (roadmap §7): a FHIR resource is PHI by default and the codec's own diagnostics are
+ * PHI posture: a FHIR resource is PHI by default and the codec's own diagnostics are
  * the leak vector. Every issue and every error the reader produces must be **value-free**, a coded
  * reason plus a FHIRPath location or a byte offset, never the offending value. These synthetic
  * "PHI-like" markers must appear nowhere in any emitted diagnostic.
@@ -66,11 +66,11 @@ describe("no PHI in diagnostics", () => {
 });
 
 /**
- * The redaction chokepoint lands in Phase 2: a validation `OperationOutcome` must carry the location
+ * The redaction chokepoint: a validation `OperationOutcome` must carry the location
  * and the coded reason, never the offending value. Sweep the whole outcome, issues object and the
  * serialized resource, for the synthetic markers that triggered each finding.
  */
-describe("no PHI in validation output (the Phase-2 redaction chokepoint)", () => {
+describe("no PHI in validation output (the redaction chokepoint)", () => {
   it("keeps a bad-code finding value-free (the offending code never reaches diagnostics)", () => {
     const { resource } = parseResource('{"resourceType":"Patient","gender":"99999999"}');
     const result = validateResource(resource);

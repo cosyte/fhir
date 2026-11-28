@@ -189,7 +189,7 @@ describe("a contradictory slice descendant assigns no occurrence", () => {
   });
 
   it("reads the same contradiction out of the XML spelling of the same profile", () => {
-    // The arc this slice belongs to is about a profile changing format inside this library. FHIR
+    // The arc this change belongs to is about a profile changing format inside this library. FHIR
     // spells `min` a number and `max` a string, so the pair reaches the model differently from XML;
     // the two spellings must still land on the same unsatisfiable path.
     const resource = json(slicedProfile({ min: 1, max: "0" }));
@@ -406,7 +406,7 @@ describe("the neighbours of the contradiction, unchanged in both states", () => 
  * because of that wrongful admission go with them. That is the direction this library refuses to
  * move in, so the classes are enumerated rather than summarised into a count: a slice-level
  * `CARDINALITY_MAX` fired by the wrongful count, and a LATER slice's `CARDINALITY_MIN` and
- * `MUST_SUPPORT_ABSENT` that the contradictory slice had been shadowing in the match loop.
+ * `MUST_SUPPORT_ABSENT`, which the contradictory slice had been shadowing in the match loop.
  *
  * These rows once also pinned an element-level error standing behind every retirement: the slice's
  * own contradictory descendant was checked against every component, so `min 1 / max 0` fired on each
@@ -449,8 +449,8 @@ describe("the bound on what the change can retire", () => {
     // and whatever they then do - match, or turn out UNEVALUABLE and take the whole slicing to
     // `unchecked` - the findings their emptiness earned go with them. This row covers the matching
     // half; the unevaluable half is recorded in the note rather than pinned, because it is the same
-    // de-shadowing through a control-flow arm this module already owns. Here that is a
-    // slice `CARDINALITY_MIN` (the very code this change exists to draw elsewhere) and a slice
+    // de-shadowing through a control-flow arm this module already owns. Here the retired
+    // findings are a slice `CARDINALITY_MIN` (the very code this change exists to draw elsewhere) and a slice
     // `MUST_SUPPORT_ABSENT`. Head is the more correct reading - both were artefacts of the wrongful
     // admission - but the count is a disclosure, so it is pinned rather than described. The
     // component is `B`'s member and meets `B`'s `dataAbsentReason 1..1`; `A`'s contradictory

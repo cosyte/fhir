@@ -2,8 +2,8 @@
  * Tests for the read differential's negative control (`scripts/differential-control.ts`).
  *
  * WHY THIS FILE EXISTS. The control it replaced was never exercised by anything, and it was wrong
- * for two slices running: it keyed on a hand-written document whose reading "this slice moves", that
- * document named a slice that had since merged, and so base and head agreed on it. The consequence
+ * for two changes in a row: it keyed on a hand-written document whose reading "this change moves",
+ * that document named a change that had since merged, and so base and head agreed on it. The consequence
  * is the one that matters: it fired on a MODIFIED tree and it fired on a CLEAN one, so it did not
  * distinguish them, so it cleared neither, and every zero standing behind it was inadmissible.
  *

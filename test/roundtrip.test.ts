@@ -9,9 +9,9 @@ function golden(name: string): string {
 }
 
 /**
- * Round-trip golden files (roadmap §6 tier (c)). Each is a spec-clean, canonical R4 resource; parse
- * then serialize must reproduce it **byte-for-byte**, which is the no-data-loss acceptance bar for
- * Phase 1, decimals with trailing zeros, values past 2^53, primitive extensions with null-padded
+ * Round-trip golden files. Each is a spec-clean, canonical R4 resource; parse
+ * then serialize must reproduce it **byte-for-byte**, which is the no-data-loss acceptance bar:
+ * decimals with trailing zeros, values past 2^53, primitive extensions with null-padded
  * `_`-sibling alignment, and value-absent (extension-only) primitives all survive.
  */
 describe("byte-identical round-trip (golden files)", () => {

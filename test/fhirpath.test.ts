@@ -590,7 +590,7 @@ describe("evaluate: a type test outside the System primitives is refused, never 
 
   it("refuses a FHIR type name in is / as / ofType", () => {
     // `false` there looks like a determination and is not one: the model is generic and carries no
-    // FHIR datatype name, so `code` is a question the engine cannot answer (ADR 0002).
+    // FHIR datatype name, so `code` is a question the engine cannot answer.
     expect(evalOn("gender.ofType(code).exists()", patient).unchecked).toBe(true);
     expect(evalOn("gender is code", patient).unchecked).toBe(true);
     expect(evalOn("gender as code", patient).unchecked).toBe(true);

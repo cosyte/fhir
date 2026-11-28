@@ -1,5 +1,5 @@
 /**
- * FHIR-P11 PHI-leak test tier (roadmap §7, "Redaction is tested").
+ * The PHI-leak test tier: redaction is tested.
  *
  * A FHIR resource is PHI by default and the library's own diagnostics are the leak vector. The
  * value-free-diagnostics contract (`OperationOutcome`/error findings carry a coded reason plus a

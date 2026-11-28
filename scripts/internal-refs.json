@@ -1,5 +1,5 @@
 {
-  "$comment": "The public-surface gate's axes for @cosyte/fhir, read by `cosyte-internal-refs` (pnpm check:no-internal-refs), the shared gate in @cosyte/script-utils. This file adds detection and never subtracts. The extra rule carries this repository's former phase rule as it was, so the shared gate reads at least what the former scripts/check-no-internal-refs.sh read.",
+  "$comment": "The internal-reference gate's axes for @cosyte/fhir, read by `cosyte-internal-refs` (pnpm check:no-internal-refs), the shared gate in @cosyte/script-utils. The rules are the shared ones; this file adds this package's prefixes, designations, surface, and samples the shared rules are tested against, and never subtracts.",
   "$prefixes": "Keyed on our own programme prefixes, never on a WORD-N shape: FHIR invariant ids (ait-1, con-3, obs-6), LOINC codes (8480-6) and ICD-10-CM codes are reference material here.",
   "projectPrefixes": [
     "PARSERS-PUBLIC",
@@ -84,25 +84,6 @@
       "src/**/*.ts"
     ]
   },
-  "extraRules": [
-    {
-      "id": "fhir-phase",
-      "name": "phase or wave language",
-      "pattern": {
-        "source": "\\b(?:roadmap phases?\\b[ ]?[A-Za-z0-9]*|(?<!study )(?<!clinical )(?<!trial )(?<!acute )(?<!chronic )(?<!luteal )(?<!follicular )(?<!liquid )(?<!gas )phases?[ -](?!of\\b|with\\b|in\\b|out\\b|the\\b|and\\b|is\\b|for\\b|to\\b|(?:I{1,3}|IV)\\s+(?:trial|stud|clinical|oncolog))[A-Za-z0-9]+[a-z]?\\b|wave \\d+\\b|the \\w+ and final phase\\b|documentation residual\\b|(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|twenty-first|twenty-second|twenty-third|twenty-fourth|\\d+(?:st|nd|rd|th)) (?:slice|wave)\\b)",
-        "flags": "i"
-      },
-      "positives": [
-        "Phase 5b closes it (Phase W, Phase-L and the thirteenth slice landed earlier, in wave 2), and Phases 6 and 7 preceded it",
-        "Added in Phase 9 and reworked in phase 10b",
-        "The connect-phase socket, and the phase was named"
-      ],
-      "negatives": [
-        "A Phase III oncology trial and a Phase II study; the clinical phases of a drug programme; the acute phase reactant; luteal phase dosing and follicular phase dosing; the liquid phase of a specimen; the reader stays in phase with the source system and is out of phase",
-        "Resource type is not modeled by this library; validated structurally only. A Phase III trial and the acute phase reactant are out of scope, and the reader stays in phase with the source system."
-      ]
-    }
-  ],
   "extraSamples": {
     "internal-identifier": {
       "positives": [

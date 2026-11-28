@@ -34,12 +34,12 @@ import {
 } from "../src/index.js";
 
 /**
- * The known-systems registry is a **frozen set of identities** (roadmap §5), verified URIs only, no
- * content. These pin which systems are recognized and confirm the open-question ones (ICD-10-PCS,
- * HCPCS, roadmap §10) are deliberately absent rather than guessed.
+ * The known-systems registry is a **frozen set of identities**, verified URIs only, no
+ * content. These pin which systems are recognized and confirm the unverified ones (ICD-10-PCS,
+ * HCPCS) are deliberately absent rather than guessed.
  */
 describe("known-systems registry (identities only, verified URIs)", () => {
-  it("recognizes every roadmap §5 verified system URI", () => {
+  it("recognizes every verified system URI", () => {
     for (const uri of [
       LOINC_SYSTEM,
       SNOMED_SCT,
@@ -63,7 +63,7 @@ describe("known-systems registry (identities only, verified URIs)", () => {
     expect(NDC_SYSTEM).toBe("http://hl7.org/fhir/sid/ndc");
   });
 
-  it("does NOT guess the open-question URIs (ICD-10-PCS, HCPCS: roadmap §10)", () => {
+  it("does NOT guess the unverified URIs (ICD-10-PCS, HCPCS)", () => {
     // Absence reads as 'unknown', a safe non-erroring degrade, never a false identity.
     expect(isKnownSystem("http://hl7.org/fhir/sid/icd-10-pcs")).toBe(false);
     expect(isKnownSystem("urn:oid:2.16.840.1.113883.6.285")).toBe(false); // HCPCS OID
@@ -74,13 +74,13 @@ describe("known-systems registry (identities only, verified URIs)", () => {
   });
 });
 
-/** The binding registry, the roadmap-named multi-system elements, plus caller overrides. */
+/** The binding registry, the built-in multi-system elements, plus caller overrides. */
 describe("terminology bindings (identities + strength, extensible built-ins)", () => {
   it("binds AllergyIntolerance.code extensibly to the multi-system substance value set", () => {
     const binding = buildBindingRegistry()("AllergyIntolerance.code");
     expect(binding?.strength).toBe("extensible");
     expect(binding?.valueSet).toBe(ALLERGY_SUBSTANCE_VALUESET);
-    // The roadmap §4.3 multi-system requirement: RxNorm (drug) + SNOMED (food/env + negations).
+    // The multi-system requirement: RxNorm (drug) + SNOMED (food/env + negations).
     expect(binding?.systems).toEqual([RXNORM_SYSTEM, SNOMED_SCT]);
   });
 

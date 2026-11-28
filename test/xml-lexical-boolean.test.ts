@@ -163,7 +163,7 @@ describe("the profile booleans written in XML are still unread, deliberately", (
   });
 
   it("raises no profile diagnostic off an XML must-support flag, on either tree", () => {
-    // The counterpart to the read above, and the reason no diagnostic moves in this slice:
+    // The counterpart to the read above, and the reason no diagnostic moves in this change:
     // `MUST_SUPPORT_ABSENT` is the only issue any of the censused boolean reads feeds, and this
     // one is unchanged, so `collectProfileIssues` returns the same thing base did.
     const { resource } = parseResourceXml(
@@ -245,7 +245,7 @@ describe("what is still not a boolean", () => {
 describe("declared residuals of the schema-free boolean read, pinned", () => {
   it("still affirms safeToSummarize over a doNotPerform this reader CAN read", () => {
     // The half of the original pin that was never a residual, kept as the boundary of the one that
-    // was. This slice's remedy is that `negations` carries the instruction, NOT that summarizing is
+    // was. This change's remedy is that `negations` carries the instruction, NOT that summarizing is
     // refused, so for a value that reads (`"true"`) `safeToSummarize` is unmoved and must stay so:
     // a lexical `true` is the whole R4 boolean lexical space, the read succeeds, and there is
     // nothing left over to decline. The `"1"` half moved and now lives in

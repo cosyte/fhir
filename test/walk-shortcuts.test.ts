@@ -66,7 +66,7 @@ describe("typesOf", () => {
 describe("a Coding that repeats a member", () => {
   const condition = (coding: string): string =>
     `{"resourceType":"Condition","verificationStatus":{"coding":[${coding}]},` +
-    `"subject":{"reference":"Patient/SYNTH-1"}}`;
+    `"subject":{"reference":"Patient/example-1"}}`;
 
   it("reports an array in a repeated `code` at the Coding", () => {
     const { resource } = parseResource(

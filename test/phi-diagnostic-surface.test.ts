@@ -52,7 +52,7 @@ interface Surfaces {
  *
  * **It does NOT sweep every location list, and the shortfall is named rather than counted.**
  * `unreadableBooleans` and `nearMissNegationCodes` are not collected here, a `PRE-EXISTING` gap this
- * slice widens by nothing: `unreadableNegationCodes` IS collected below, and so are the three
+ * change widens by nothing: `unreadableNegationCodes` IS collected below, and so are the three
  * absence channels, whose locations are swept here and whose `code` half is a literal from a closed
  * set this package spells rather than anything a document supplies. Closing the other two is its own
  * slice.

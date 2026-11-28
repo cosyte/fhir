@@ -19,7 +19,7 @@
  */
 export const VERSION: string = "0.1.18";
 
-// Phase 1, the no-data-loss core: precision-preserving primitives + generic model.
+// The no-data-loss core: precision-preserving primitives + generic model.
 export { FhirDecimal, decimal, wouldLosePrecisionAsDouble } from "./model/decimal.js";
 export { FhirInteger64, integer64 } from "./model/integer64.js";
 export {
@@ -55,7 +55,7 @@ export { WITHHELD } from "./model/path.js";
 export { parseReference } from "./model/reference.js";
 export type { ParsedReference, ReferenceKind } from "./model/reference.js";
 
-// Phase 1, the JSON codec: precision-preserving read, conservative write, value-free diagnostics.
+// The JSON codec: precision-preserving read, conservative write, value-free diagnostics.
 export { parseResource } from "./codec/read.js";
 export type { ReadResult } from "./codec/read.js";
 export { serializeResource } from "./codec/write.js";
@@ -87,7 +87,7 @@ export type { FatalCode, FhirIssue, IssueCode, IssueSeverity } from "./codec/iss
 export { FhirSerializeError, SERIALIZE_ERROR_CODES } from "./codec/serialize-guard.js";
 export type { SerializeErrorCode } from "./codec/serialize-guard.js";
 
-// Phase 2, structural / cardinality / value-domain validation + value-free OperationOutcome.
+// Structural / cardinality / value-domain validation + value-free OperationOutcome.
 export { validateResource } from "./validate/validate.js";
 export type { ValidateOptions, ValidationMode, ValidationResult } from "./validate/validate.js";
 export { toOperationOutcome } from "./validate/operation-outcome.js";
@@ -129,7 +129,7 @@ export type {
 } from "./validate/schema.js";
 export { collectSafetyIssues } from "./validate/safety.js";
 
-// Phase 3, the safety spine: never-droppable status/negation surfacing + fail-closed modifiers.
+// The safety spine: never-droppable status/negation surfacing + fail-closed modifiers.
 export {
   absenceMarkers,
   arrayWrappedScalars,
@@ -183,7 +183,7 @@ export {
 } from "./safety/codes.js";
 export type { Coded } from "./safety/codes.js";
 
-// Phase 4, Quantity / UCUM fidelity: value[x] discrimination, UCUM code shape, vital-signs units,
+// Quantity / UCUM fidelity: value[x] discrimination, UCUM code shape, vital-signs units,
 // dose quantities. Never converts a unit.
 export {
   LOINC_SYSTEM,
@@ -212,7 +212,7 @@ export { locateDoseQuantities, readMedicationDoses } from "./quantity/dose.js";
 export type { LocatedDoseQuantity } from "./quantity/dose.js";
 export { collectQuantityIssues } from "./validate/quantity.js";
 
-// Phase 5, terminology binding validation: strength-aware, content-free. Known-systems registry,
+// Terminology binding validation: strength-aware, content-free. Known-systems registry,
 // element→value-set bindings, and a pluggable terminology-service interface (none bundled, §5).
 export {
   isKnownSystem,
@@ -245,7 +245,7 @@ export type {
 export { collectTerminologyIssues } from "./validate/terminology.js";
 export type { TerminologyOptions } from "./validate/terminology.js";
 
-// Phase 6, StructureDefinition + US Core profile validation: snapshot generation from a differential,
+// StructureDefinition + US Core profile validation: snapshot generation from a differential,
 // slicing (R4 discriminators value|exists|pattern|type|profile, position is R5-only), fixed[x] vs
 // pattern[x], and must-support as a system obligation (never instance-presence). No profile content
 // is bundled, a caller supplies the US Core (or vendor) StructureDefinitions.
@@ -280,10 +280,11 @@ export type { ProfileOptions } from "./profiles/validate-profile.js";
 export { collectInvariantIssues } from "./profiles/invariants.js";
 export type { InvariantOptions } from "./profiles/invariants.js";
 
-// Phase 10 (half a), the profile growth loop: `defineProfile()` authors a `StructureDefinition` in
+// The profile growth loop: `defineProfile()` authors a `StructureDefinition` in
 // code (the same model `loadStructureDefinition` produces from JSON, one path, no privileged internal
 // shape), and a publishable, spec-grounded profile starter kit dogfoods it. Named real-vendor quirk
-// profiles + the Tier-2 quirk corpus are deferred to REAL-CORPUS (no invented vendor behavior).
+// profiles and a corpus of vendor quirks are not shipped until real samples ground them (no invented
+// vendor behavior).
 export { defineProfile, InvalidProfileError } from "./profiles/define-profile.js";
 export type {
   ProfileConstraintSpec,
@@ -304,7 +305,7 @@ export {
 export { PATIENT_ANIMAL_EXTENSION_URL, readPatientAnimal } from "./helpers/index.js";
 export type { PatientAnimal } from "./helpers/index.js";
 
-// Phase 7, invariants via a bounded, vendored FHIRPath subset (ADR 0002). A lexer → parser → evaluator
+// Invariants via a bounded FHIRPath subset of our own. A lexer → parser → evaluator
 // that evaluates `constraint[]` expressions; an expression outside the subset is reported UNCHECKED,
 // never a silent pass. No runtime dependency, no full third-party engine.
 export {
@@ -316,7 +317,7 @@ export {
 } from "./fhirpath/index.js";
 export type { Expr, FpColl, FpItem, InvariantResult, Token, TokenType } from "./fhirpath/index.js";
 
-// Phase 8, the XML codec + cross-format equivalence (xml.html). A zero-dependency, XXE- and
+// The XML codec + cross-format equivalence (xml.html). A zero-dependency, XXE- and
 // billion-laughs-proof XML reader (refuses any DTD / non-predefined entity), a writer that round-trips
 // a spec-clean document byte-for-byte and refuses rather than emit one a finding would not survive
 // (it is NOT unconditionally spec-clean; its exceptions and refusals are named on the function), and
@@ -330,7 +331,7 @@ export { FHIR_XML_NAMESPACE, parseResourceXml, XHTML_NAMESPACE } from "./xml/rea
 export { serializeResourceXml } from "./xml/write.js";
 export { nodesEquivalent } from "./xml/equivalence.js";
 
-// Phase 9, Bundles, references, Bulk NDJSON streaming (bundle.html, references.html, the Bulk Data
+// Bundles, references, Bulk NDJSON streaming (bundle.html, references.html, the Bulk Data
 // IG). The Bundle model + entry-processing semantics (transaction = all-or-nothing vs batch =
 // independent, modeled, never executed), reference resolution (relative/absolute/logical/#fragment)
 // with a DoS-safe, bounded cycle guard, fullUrl↔id agreement, and a streaming NDJSON reader with

@@ -299,7 +299,7 @@ describe("AC-2 / AC-3: every projected row classified, against a committed expec
 
   it("AC-3: reports evaluated totals strictly above the pin engine's over the same projection", () => {
     const totals = totalsOf(rows);
-    // The pin engine's totals over this projection equal the roadmap's own measurement (16 of 29
+    // The pin engine's totals over this projection equal the measurement taken when it was written (16 of 29
     // and 19 of 34), because the projection's row counts are that measurement's 29 and 34.
     expect(req(totals.get("6.1.0"))).toEqual({ rows: 29, evaluated: 24, pinEvaluated: 16 });
     expect(req(totals.get("9.0.0"))).toEqual({ rows: 34, evaluated: 29, pinEvaluated: 19 });
@@ -485,7 +485,7 @@ describe("differential pass AC-3: every declined row the profile layer reaches i
   const declined = classifyProjection(PROJECTION).filter((r) => r.head !== "evaluated");
   const reached = declined.filter((r) => !r.element.includes(":"));
 
-  it("names an occurrence for every declined row that is not slice-scoped", () => {
+  it("names an occurrence for every declined row not scoped to a slice", () => {
     expect(new Set(declined.filter((r) => r.element.includes(":")).map((r) => r.key))).toEqual(
       new Set(["us-core-17"]),
     );

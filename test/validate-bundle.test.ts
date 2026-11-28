@@ -100,7 +100,7 @@ describe("collectBundleIssues: Bundle integrity findings", () => {
   });
 });
 
-describe("validateResource: Bundle-integrity layer wiring (Phase 9)", () => {
+describe("validateResource: Bundle-integrity layer wiring", () => {
   it("surfaces the bundle findings through validateResource and fails on an error", () => {
     const { resource } = parseResource(
       '{"resourceType":"Bundle","type":"collection","entry":[' +

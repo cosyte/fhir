@@ -67,7 +67,7 @@ const R4_CODE_WHITESPACE = [" ", "\t", "\n", "\r"] as const;
  *  "verificationStatus":{"coding":[{"code":"REFUTED"}]}} ->  negations: []  safeToSummarize: true
  * ```
  *
- * **The exact match is CORRECT and this slice does not touch it.** FHIR `code` is case-sensitive,
+ * **The exact match is CORRECT and this change does not touch it.** FHIR `code` is case-sensitive,
  * and the `code` datatype's lexical space has no room for surrounding whitespace, so `"NOT-DONE"`
  * and `" not-done"` are **not** the code `not-done`. A reader that folded them in would accept a
  * non-conformant document as though it were conformant and hand a caller a negation its sender never
@@ -87,7 +87,7 @@ const R4_CODE_WHITESPACE = [" ", "\t", "\n", "\r"] as const;
  * `?!`-modifier-element codes rather than the two quoted, with one axis that does not exist: SNOMED
  * `716186003` is digits, so case cannot vary it at all.
  *
- * **What this slice is NOT the first of, stated so the claim stays honest.** `do-not-perform`, the
+ * **What this change is NOT the first of, stated so the claim stays honest.** `do-not-perform`, the
  * one *boolean* negation, was **already** disclosed for exactly this class of value:
  * `<doNotPerform value="TRUE"/>` and `value=" true"` have landed on `unreadableBooleans` under
  * `safeToSummarize: false` since that channel shipped. What had no complement was the **code**-valued
@@ -256,7 +256,7 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
     it("still discloses where the wrapper's own report does not reach, a declared residual", () => {
       // `arrayWrappedScalars` is scoped to a cardinality table on the safety resource types, and
       // `Procedure` is not one, so the wrapper here is unreported at BOTH states: a residual filed
-      // against the array-wrapper rule, not something this slice changes. The near-miss read goes
+      // against the array-wrapper rule, not something this change changes. The near-miss read goes
       // through the same value reader the negation read does, which sees into the wrapper, so head
       // is strictly better than base at this document rather than complete at it.
       const safety = safetyOf('{"resourceType":"Procedure","status":["NOT-DONE"]}');
@@ -369,18 +369,18 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
   /**
    * **BOTH-STATES PINS. Every assertion in this block is base-observable and passes at `fa5bfd8`
    * unchanged**, which is what makes it a control rather than a restatement of the fix: each names a
-   * document this slice must leave exactly where it found it.
+   * document this change must leave exactly where it found it.
    *
    * They are written on `safeToSummarize` and `negations` rather than on the new channel
    * deliberately. That channel does not exist at the base commit, so an
    * `expect(...nearMissNegationCodes).toEqual([])` would go red there for the trivial reason that
    * the field reads `undefined` - a red that pins **nothing** and would inflate the red-at-base
    * fraction with vacuous entries. `safeToSummarize` is `true` only if the channel is empty, so this
-   * asserts the same property through a field both states have. A previous slice in this arc
+   * asserts the same property through a field both states have. An earlier change in this arc
    * published a figure that overstated what was actually pinned; this block is written so the
    * figure reported for this one cannot.
    */
-  describe("both states: the documents this slice must not move", () => {
+  describe("both states: the documents this change must not move", () => {
     it("leaves a padded or case-varied code that is NOT a negation alone", () => {
       // The discriminating control. A rule that fired on "any code needing a trim" would pass every
       // test above and be a completely different, far wider claim.
@@ -393,7 +393,7 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
 
     it("leaves a value near a negation code by anything but case or padding alone", () => {
       // Not a fuzzy match, and deliberately not one: a rule that guessed at intent would be the
-      // coercion this slice exists to refuse, one step removed.
+      // coercion this change exists to refuse, one step removed.
       for (const value of ["notdone", "not_done", "not done", "not-don", "not-donee", "no-done"]) {
         const safety = safetyOf(`{"resourceType":"Procedure","status":${JSON.stringify(value)}}`);
         expectSafeButForType(safety);
@@ -479,8 +479,8 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
     });
 
     it("leaves the boolean negation on the channel it already had", () => {
-      // The pin that keeps this slice's claim honest: `do-not-perform` was ALREADY disclosed for a
-      // value declined over case or padding. This slice is the code-valued half, not the first
+      // The pin that keeps this change's claim honest: `do-not-perform` was ALREADY disclosed for a
+      // value declined over case or padding. This change is the code-valued half, not the first
       // disclosure of its kind, and saying otherwise would understate what the package already does.
       for (const value of ["TRUE", " true"]) {
         const safety = readSafety(
@@ -495,7 +495,7 @@ describe("a code spelling a negation bar its case or its whitespace is disclosed
     });
 
     it("raises no ValidationIssue of its own, exactly as the boolean channel does not", () => {
-      // So this slice cannot move `valid` in either direction, on any document.
+      // So this change cannot move `valid` in either direction, on any document.
       expect(parseResource('{"resourceType":"Procedure","status":"NOT-DONE"}').issues).toEqual([]);
       expect(parseResource('{"resourceType":"Procedure","status":" not-done"}').issues).toEqual([]);
     });

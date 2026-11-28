@@ -219,7 +219,7 @@ class RawXmlReader {
       }
       if (this.#startsWith("<![CDATA[")) {
         // CDATA carries no entity-expansion risk but FHIR does not use it (narrative is XHTML, and
-        // deferred in Phase 8); refuse rather than partially model it.
+        // the reader does not model it); refuse rather than partially model it.
         throw this.fail("CDATA sections are not supported");
       }
       if (this.#startsWith("<?")) {

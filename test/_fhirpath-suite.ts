@@ -3,7 +3,7 @@
  * this package's bounded engine, and put each case in exactly one bucket.
  *
  * This module is the measurement; `fhirpath-suite.test.ts` is the assertions over it. It exists to
- * turn a claim into a number. `src/fhirpath/` is a deliberately capped subset (ADR 0002) whose
+ * turn a claim into a number. `src/fhirpath/` is a deliberately capped subset whose
  * declared fallback is `INVARIANT_UNCHECKED`, and until this landed nothing in the repo had ever
  * measured how big that subset is against a suite neither side wrote.
  *
@@ -42,7 +42,7 @@
  * WHAT THIS HARNESS DOES **NOT** DO
  * ─────────────────────────────────────────────────────────────────────────────────────────────────
  * It does not widen the subset, and it does not soften a comparison to flatter it. The engine's
- * scope is fixed by ADR 0002; this file only reports where the boundary actually is.
+ * scope is fixed by design; this file only reports where the boundary actually is.
  */
 
 import { readFileSync } from "node:fs";
@@ -205,7 +205,7 @@ export interface LenientPolymorphicCase {
  * is declared rather than closed. Telling `valueQuantity` (a choice element, spelled with its type)
  * from `birthDate` or `managingOrganization` (ordinary elements that are also lowerCamelCase with an
  * internal capital) needs the FHIR *definition* of the resource. The model is generic and carries
- * none, which is the same reason FHIR-type `is` / `as` is out of scope under ADR 0002. The built-in
+ * none, which is the same reason FHIR-type `is` / `as` is out of the subset's scope. The built-in
  * element schema in `src/validate/schema.ts` does model `Observation.value[x]`, so refusing the
  * spelling is buildable, and it was built and measured: it withdraws a finding a shipped layer emits
  * today (a caller-supplied `valueQuantity.value < 2` invariant goes from `INVARIANT_VIOLATED` at

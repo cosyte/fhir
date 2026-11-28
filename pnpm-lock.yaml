@@ -34,8 +34,8 @@ importers:
         specifier: ^0.1.7
         version: 0.1.8(@types/node@22.20.5)(postcss@8.5.32)(tsx@4.23.15)(vite@8.3.7(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))(yaml@2.9.1)
       '@cosyte/script-utils':
-        specifier: ^0.1.11
-        version: 0.1.12
+        specifier: ^0.1.15
+        version: 0.1.15
       '@cosyte/test-utils':
         specifier: ^0.1.4
         version: 0.1.4(fast-check@4.10.2)
@@ -47,7 +47,7 @@ importers:
         version: 0.1.3(tsup@9.0.0(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1))
       '@cosyte/vitest-config':
         specifier: ^0.1.6
-        version: 0.1.6(@cosyte/script-utils@0.1.12)(@stryker-mutator/core@10.1.1(@types/node@22.20.5))(@stryker-mutator/vitest-runner@10.1.1(@stryker-mutator/core@10.1.1(@types/node@22.20.5))(vitest@5.1.0))(@vitest/coverage-v8@5.1.0)(typescript@5.9.3)(vite@8.3.7(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))(vitest@5.1.0)
+        version: 0.1.6(@cosyte/script-utils@0.1.15)(@stryker-mutator/core@10.1.1(@types/node@22.20.5))(@stryker-mutator/vitest-runner@10.1.1(@stryker-mutator/core@10.1.1(@types/node@22.20.5))(vitest@5.1.0))(@vitest/coverage-v8@5.1.0)(typescript@5.9.3)(vite@8.3.7(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))(vitest@5.1.0)
       '@stryker-mutator/core':
         specifier: 10.1.1
         version: 10.1.1(@types/node@22.20.5)
@@ -401,8 +401,8 @@ packages:
     engines: {node: '>=22.22.2'}
     hasBin: true
 
-  '@cosyte/script-utils@0.1.12':
-    resolution: {integrity: sha512-RvJx2SbJDFbrYZKo2OA5eT16PwEslilo1GzcB6stN415p2Jjg99tNMQODLgBGaK9Kl+9QZCVugta7ooGg6nLcA==}
+  '@cosyte/script-utils@0.1.15':
+    resolution: {integrity: sha512-sYn/Akf1BCqOX4WdSXZLJOmJ4H5TJqzl5KdpvTtBk0ZmvBAPZzTrRPitNDRP8GZtP72ql+ZuMhjaxCLGLmlwIA==}
     engines: {node: '>=22.14'}
     hasBin: true
 
@@ -3292,7 +3292,7 @@ snapshots:
       - vite
       - yaml
 
-  '@cosyte/script-utils@0.1.12': {}
+  '@cosyte/script-utils@0.1.15': {}
 
   '@cosyte/test-utils@0.1.4(fast-check@4.10.2)':
     dependencies:
@@ -3304,13 +3304,13 @@ snapshots:
     dependencies:
       tsup: 9.0.0(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)(yaml@2.9.1)
 
-  '@cosyte/vitest-config@0.1.6(@cosyte/script-utils@0.1.12)(@stryker-mutator/core@10.1.1(@types/node@22.20.5))(@stryker-mutator/vitest-runner@10.1.1(@stryker-mutator/core@10.1.1(@types/node@22.20.5))(vitest@5.1.0))(@vitest/coverage-v8@5.1.0)(typescript@5.9.3)(vite@8.3.7(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))(vitest@5.1.0)':
+  '@cosyte/vitest-config@0.1.6(@cosyte/script-utils@0.1.15)(@stryker-mutator/core@10.1.1(@types/node@22.20.5))(@stryker-mutator/vitest-runner@10.1.1(@stryker-mutator/core@10.1.1(@types/node@22.20.5))(vitest@5.1.0))(@vitest/coverage-v8@5.1.0)(typescript@5.9.3)(vite@8.3.7(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))(vitest@5.1.0)':
     dependencies:
       '@vitest/coverage-v8': 5.1.0(vitest@5.1.0)
       vite: 8.3.7(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1)
       vitest: 5.1.0(@types/node@22.20.5)(@vitest/coverage-v8@5.1.0)(vite@8.3.7(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
     optionalDependencies:
-      '@cosyte/script-utils': 0.1.12
+      '@cosyte/script-utils': 0.1.15
       '@stryker-mutator/core': 10.1.1(@types/node@22.20.5)
       '@stryker-mutator/vitest-runner': 10.1.1(@stryker-mutator/core@10.1.1(@types/node@22.20.5))(vitest@5.1.0)
       typescript: 5.9.3

@@ -580,7 +580,7 @@ describe("slice scope: element ids that do not line up with their paths", () => 
     });
   }
 
-  it("scopes an element under a slice to that slice's members only", () => {
+  it("scopes an element under a slice to the members of the slice only", () => {
     const issues = collectProfileIssues(
       observation,
       profileWith({

@@ -148,7 +148,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # P11 fuzz tier at fuzz-scale (FHIR-P11): the JSON + XML adversarial harness (XXE, billion-laughs,
+  # The fuzz tier at a raised iteration count: the JSON + XML adversarial harness (XXE, billion-laughs,
   # deep nesting, `_element` games, huge/scientific numbers, prototype-chain keys) run at a raised
   # iteration count, plus the PHI-leak sweep. The contract: adversarial input never crashes / hangs /
   # OOMs, always a typed error or a bounded rejection, and no value ever reaches a diagnostic.

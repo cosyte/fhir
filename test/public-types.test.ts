@@ -1,6 +1,5 @@
 /**
- * FHIR-P11 type-level tier (roadmap Phase 11, "type-level (`expect-type`) tests on the public
- * surface").
+ * The type-level tier: `expect-type` tests on the public surface.
  *
  * The public API's *types* are part of its contract: the discriminated unions a consumer switches on
  * (`FhirNode.kind`, `ObservationValue.type`, `ReferenceKind`), the precision-preserving value type
@@ -69,7 +68,7 @@ describe("public types: the codec surface", () => {
   });
 });
 
-describe("public types: precision preservation (ADR 0001, never a JS number)", () => {
+describe("public types: precision preservation (never a JS number)", () => {
   it("PrimitiveValue is string | boolean | FhirDecimal: a decimal is never a `number`", () => {
     expectTypeOf<PrimitiveValue>().toEqualTypeOf<string | boolean | FhirDecimal>();
     // The load-bearing negative: a JS number is NOT assignable to a primitive value.

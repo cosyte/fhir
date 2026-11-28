@@ -614,10 +614,10 @@ describe("the refusal and the readout are one verdict", () => {
   });
 });
 
-// S0364-fhir-safety-modifier-3: Patient.deceased[x], Patient.link and Immunization.isSubpotent join
+// Patient.deceased[x], Patient.link and Immunization.isSubpotent join
 // this channel, and MedicationRequest.intent is surfaced per root. The document tables below are
-// shared by the criteria that re-read them (AC-9, AC-10), so every refusal is asserted over exactly
-// the documents its own criterion names.
+// shared by the tests that re-read them, so every refusal is asserted over exactly
+// the documents its own test names.
 
 /** One document and the single `modifierElements` report it must draw. */
 interface ExpectedReport {

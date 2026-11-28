@@ -164,7 +164,7 @@ describe("XML read path: Practitioner.identifier.use", () => {
   });
 });
 
-// S0364-fhir-safety-modifier-3, AC-12: the documents of AC-1, AC-2, AC-3, AC-7 and AC-8 written
+// The modifier-element documents above, written
 // as FHIR XML read exactly as their JSON spelling does. A nested resource is written as a
 // two-entry Bundle in both spellings: FHIR XML spells a repeat by repeating the element, so a
 // single `<entry>` or `<contained>` is not an array in the model and carries no index (pinned for

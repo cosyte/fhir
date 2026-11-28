@@ -51,7 +51,7 @@ const R4_NOT_DONE_TYPES = [
  * procedure recorded as **not performed** read as a procedure with nothing to say about it.
  *
  * **The argument that dropped the `doNotPerform` type gate does not transfer to this one for free,
- * and that is the whole difficulty of this slice.** `doNotPerform` is an *element*: no R4 type
+ * and that is the whole difficulty of this change.** `doNotPerform` is an *element*: no R4 type
  * defines it as anything but an instruction not to act, so reading it anywhere cannot mis-read it.
  * `not-done` is a *value* of `status`, one element name whose value set is defined **per resource
  * type**, so "which R4 types carry this code" is a real question. It was answered against the
@@ -97,7 +97,7 @@ describe("the not-done / not-taken negations are read wherever a status spells t
 
     it("surfaces not-taken on a conformant MedicationStatement", () => {
       // A both-states pin: the one R4 element whose value set carries `not-taken`, and the type the
-      // dropped gate named. Nothing about a conformant `not-taken` document moves in this slice.
+      // dropped gate named. Nothing about a conformant `not-taken` document moves in this change.
       const safety = safetyOf('{"resourceType":"MedicationStatement","status":"not-taken"}');
 
       expect(safety.negations).toEqual(["not-taken"]);
@@ -218,7 +218,7 @@ describe("the not-done / not-taken negations are read wherever a status spells t
   });
 
   /**
-   * The retraction read this slice re-pointed at the shared function. `isRetracted` answered the
+   * The retraction read this change re-pointed at the shared function. `isRetracted` answered the
    * `status` half with the same expression before, so **every assertion here is a both-states pin**:
    * they exist to say the refactor moved nothing, and they would red if it had.
    */
@@ -273,7 +273,7 @@ describe("the not-done / not-taken negations are read wherever a status spells t
    * that is not one of the two negation codes": and the whole retraction section above is pinned in
    * both states as well.
    */
-  describe("pinned in both states: the boundaries this slice does not move", () => {
+  describe("pinned in both states: the boundaries this change does not move", () => {
     it("leaves noKnownAllergy type-gated, which is the opposite direction", () => {
       // The one negation that is a *positive* clinical assertion. Un-gating a read that can only add
       // a negation is safe; un-gating this one would claim a patient has no known allergy over a
@@ -289,10 +289,10 @@ describe("the not-done / not-taken negations are read wherever a status spells t
     it("keeps the read on a resource's own status through depth", () => {
       // **Re-keyed, and the reason is recorded rather than the assertion quietly narrowed.** This
       // pinned "a `Procedure` recorded as not performed inside a Bundle entry still leaves the
-      // Bundle's `negations` empty": a declared gap that a later slice closed, and it is pinned at
-      // its new value in `test/negation-read-scope-depth.test.ts`. That slice widened the set of
+      // Bundle's `negations` empty": a declared gap that a later change closed, and it is pinned at
+      // its new value in `test/negation-read-scope-depth.test.ts`. That change widened the set of
       // NODES the read is applied to and nothing about the read itself, so what survives here, and
-      // reads identically at this slice's base commit and at head, is the element-and-root scope
+      // reads identically at this change's base commit and at head, is the element-and-root scope
       // over the two documents below. What that scope IS, and where it over-reaches, is stated on
       // the function that decides it; do not restate it here as a universal over every backbone
       // element, which is a sentence this repo has now had to cut twice.

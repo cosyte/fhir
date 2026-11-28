@@ -307,7 +307,7 @@ describe("XML writer", () => {
   });
 });
 
-describe("XML reader: safety: XXE / billion-laughs / DoS (roadmap §6)", () => {
+describe("XML reader: safety: XXE / billion-laughs / DoS", () => {
   it("refuses any DOCTYPE (closes XXE): loudly, before any element", () => {
     const xxe =
       '<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>' +
@@ -845,7 +845,7 @@ describe("XML reader: namespace prefixes are resolved, not modeled as part of th
     it("escapes a `<` in an inherited namespace URI, so the emitted document stays well-formed", () => {
       // The raw reader refuses a literal `<` in an attribute but decodes `&lt;`, so a URI can carry
       // one. The writer emits `Narrative.div` verbatim, so an unescaped `<` in the fixup would put a
-      // document out that is not well-formed XML and does not re-read: the exact defect this slice
+      // document out that is not well-formed XML and does not re-read: the exact defect this change
       // closes, through a new door. One escaper serves both the element's attributes and the fixup.
       const src = narrative(` xmlns:v="urn:a&lt;b"`, `<div xmlns="${XHTML}"><v:x/>prose</div>`);
       const { xml } = carried(src);
@@ -1681,10 +1681,10 @@ describe("AC-8: reading every document the prefix refusal is measured on is unch
     negations: [],
     unhandledModifierExtensions: [],
     modifierElements: [],
-    // S0364-fhir-safety-modifier-3: two readout fields added; none of these documents is a
+    // Two readout fields of the modifier-element readout; none of these documents is a
     // MedicationRequest, so both read empty and nothing measured at the pin moves.
     intents: [],
-    // S0369-fhir-safety-modifier-4: two readout fields added; no covered position in these
+    // Two readout fields of the datatype `use` readout; no covered position in these
     // documents carries a `use`, so both read empty and nothing measured at the pin moves.
     datatypeUses: [],
     shadowedProperties: [],

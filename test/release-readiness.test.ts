@@ -1526,9 +1526,9 @@ describe("the certified public surface matches the package entry point", () => {
     // Patient starter profile. One more with the profile element checks:
     // PROFILE_UNCHECKED_CONSTRAINTS.
     expect(INVENTORY.values).toHaveLength(175);
-    // S0364-fhir-safety-modifier-3: two type-only exports added (IntentReport,
+    // Two type-only exports added (IntentReport,
     // MedicationRequestIntent), the types of the two safety readout fields that change adds.
-    // S0369-fhir-safety-modifier-4: two more (DatatypeUseCode, DatatypeUseReport), the types of
+    // Two more (DatatypeUseCode, DatatypeUseReport), the types of
     // the `use` channel on Identifier, HumanName, Address and ContactPoint.
     // One runtime name and three types added with the type slicing discriminator:
     // SLICE_UNCHECKED_REASONS, SliceUncheckedReason, SliceContext and SliceEnvironment. One type

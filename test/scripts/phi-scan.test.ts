@@ -2109,7 +2109,7 @@ describe("phi-scan: the positive control fires on this repository's own corpus s
     // like.
     //
     // NO COUNT IS WRITTEN HERE, DELIBERATELY. This comment carried two ("248
-    // paths", "the other 247"): the count at the BASE commit, which this slice's
+    // paths", "the other 247"): the count at the BASE commit, which this change's
     // own three added files falsified before it shipped. The mirror is built
     // from `git ls-files` at run time, so any count here is a claim about a
     // corpus that moves. The assertions below are count-free for the same
