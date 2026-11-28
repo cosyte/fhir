@@ -2,6 +2,8 @@ import { fileURLToPath } from "node:url";
 
 import { cosyteStryker } from "@cosyte/vitest-config/stryker";
 
+import { changedLinesBaseFrom } from "./scripts/stryker-changed-lines.mjs";
+
 // Mutation testing for @cosyte/fhir, on the shared StrykerJS config: per-test coverage, static
 // mutants ignored, the JSON report at reports/mutation/mutation.json, and no score threshold of its
 // own (quality-floor.json decides).
@@ -15,11 +17,14 @@ import { cosyteStryker } from "@cosyte/vitest-config/stryker";
 // code, so `src/index.ts` and the `index.ts` of each folder that only re-exports are left out, and
 // an `index.ts` that holds code of its own is mutated. A new file needs no entry here.
 //
-// On a pull request CI sets MUTATE_CHANGED_LINES_BASE to the ref the ratchet judges against, and
-// the run then tests only the mutants that touch a changed line, the ones the ratchet judges: the
-// `changed-lines` ignorer in scripts/stryker-changed-lines.mjs ignores every other mutant of the
-// changed files, which Stryker then neither places nor runs. Unset, as in the weekly full run and
-// `pnpm mutate:full`, nothing below changes.
+// With MUTATE_CHANGED_LINES_BASE set to the ref the ratchet judges against, the run tests only the
+// mutants that touch a changed line, the ones the ratchet judges: the `changed-lines` ignorer in
+// scripts/stryker-changed-lines.mjs ignores every other mutant of the changed files, which Stryker
+// then neither places nor runs. On a pull request in GitHub Actions the base is read from the
+// event when the variable is unset, so the shared `ci / mutation` job, which runs
+// `cosyte-mutate changed --base origin/<base branch>` and sets no variable of its own, judges the
+// same changed lines against the same ref as its ratchet. Unset and outside a pull request, as in
+// the weekly full run and `pnpm mutate:full`, nothing below changes.
 const config = cosyteStryker({
   // The suite without the tests that cannot judge a mutant (see that file).
   vitestConfig: "vitest.mutation.config.ts",
@@ -38,8 +43,8 @@ const config = cosyteStryker({
   },
 });
 
-const changedLinesBase = process.env.MUTATE_CHANGED_LINES_BASE;
-if (changedLinesBase !== undefined && changedLinesBase !== "") {
+const changedLinesBase = changedLinesBaseFrom(process.env);
+if (changedLinesBase !== undefined) {
   config.plugins = [
     ...config.plugins,
     fileURLToPath(new URL("scripts/stryker-changed-lines.mjs", import.meta.url)),

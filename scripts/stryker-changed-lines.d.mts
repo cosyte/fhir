@@ -20,6 +20,10 @@ export declare function changedLinesByPath(
   change: Pick<Changes, "root" | "files">,
 ): Map<string, Set<number>>;
 
+export declare function changedLinesBaseFrom(
+  env: Record<string, string | undefined>,
+): string | undefined;
+
 export declare function createChangedLinesIgnorer(input: {
   readonly changes: () => Map<string, Set<number>>;
   readonly base: string;

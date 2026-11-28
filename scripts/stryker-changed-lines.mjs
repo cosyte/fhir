@@ -5,11 +5,12 @@
 // other mutant in it too: a change to `src/codec/read.ts` and `src/safety/status.ts` came to 1,369
 // mutants and hit the job's 60-minute limit with 663 tested, so the check said nothing.
 //
-// WHAT. With `MUTATE_CHANGED_LINES_BASE` set to the ref the ratchet judges against,
-// `stryker.config.mjs` registers this plugin and names its ignorer. The ignorer reads the change
-// with `readChanges` from `@cosyte/script-utils/changes`, the reading the ratchet uses, and ignores
-// every node that touches no changed line. Stryker places no ignored mutant and runs no test for
-// one; it lists each in the report as `Ignored` with the reason below.
+// WHAT. With `MUTATE_CHANGED_LINES_BASE` set to the ref the ratchet judges against, or on a pull
+// request in GitHub Actions, whose base branch the shared mutation job hands both the run and the
+// ratchet, `stryker.config.mjs` registers this plugin and names its ignorer. The ignorer reads the
+// change with `readChanges` from `@cosyte/script-utils/changes`, the reading the ratchet uses, and
+// ignores every node that touches no changed line. Stryker places no ignored mutant and runs no
+// test for one; it lists each in the report as `Ignored` with the reason below.
 //
 // WHY AN IGNORER AND NOT A LINE RANGE. Stryker's `file:start-end` form keeps only the mutants that
 // lie wholly inside a range, so a mutant that spans a changed line but starts or ends outside it
@@ -99,20 +100,42 @@ export function createChangedLinesIgnorer({ changes, base }) {
 }
 
 /**
- * The ignorer for the base in {@link BASE_VARIABLE}, reading the change on first use. Loading
- * this module reads nothing, so a Stryker worker process that loads the plugin does no git work.
+ * The base ref a run judges its changed lines against: {@link BASE_VARIABLE} when set, else
+ * `origin/<base branch>` on a GitHub Actions `pull_request` run (the ref the shared mutation job
+ * hands `cosyte-mutate changed` and its ratchet), else none, for a run over whole files.
+ *
+ * @param {Record<string, string | undefined>} env The environment.
+ * @returns {string | undefined} The base ref, or undefined when there is none.
+ */
+export function changedLinesBaseFrom(env) {
+  const set = env[BASE_VARIABLE];
+  if (set !== undefined && set !== "") return set;
+  const baseRef = env.GITHUB_BASE_REF;
+  if (env.GITHUB_EVENT_NAME === "pull_request" && baseRef !== undefined && baseRef !== "") {
+    return `origin/${baseRef}`;
+  }
+  return undefined;
+}
+
+/**
+ * The ignorer for the base {@link changedLinesBaseFrom} finds, reading the change on first use.
+ * Loading this module reads nothing, so a Stryker worker process that loads the plugin does no git
+ * work.
  *
  * @param {Record<string, string | undefined>} [env] Where the base is read.
  * @param {typeof readChanges} [read] Reads the change; replaced in tests.
  * @returns {{ shouldIgnore(path: any): string | undefined }} The ignorer.
  */
 export function ignorerFromEnvironment(env = process.env, read = readChanges) {
-  const base = env[BASE_VARIABLE] ?? "";
+  const base = changedLinesBaseFrom(env) ?? "";
   return createChangedLinesIgnorer({
     base,
     changes: () => {
       if (base === "") {
-        throw new Error(`${IGNORER_NAME}: ${BASE_VARIABLE} is not set, so there is no change`);
+        throw new Error(
+          `${IGNORER_NAME}: ${BASE_VARIABLE} is not set and this is no pull request, ` +
+            "so there is no change",
+        );
       }
       return changedLinesByPath(read({ base, cwd: process.cwd() }));
     },
