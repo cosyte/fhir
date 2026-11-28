@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import {
   BASE_VARIABLE,
   IGNORER_NAME,
+  changedLinesBaseFrom,
   changedLinesByPath,
   createChangedLinesIgnorer,
   ignorerFromEnvironment,
@@ -257,19 +258,54 @@ describe("the plugin and its wiring", () => {
     expect(typeof strykerPlugins[0]?.value.shouldIgnore).toBe("function");
   });
 
-  it("is registered by stryker.config.mjs only when the base is set", () => {
+  it("is registered by stryker.config.mjs only when a base is found", () => {
     const text = readFileSync(new URL("../../stryker.config.mjs", import.meta.url), "utf8");
-    expect(text).toContain("process.env.MUTATE_CHANGED_LINES_BASE");
+    expect(text).toContain("changedLinesBaseFrom(process.env)");
     expect(text).toContain('"scripts/stryker-changed-lines.mjs"');
     expect(text).toContain(`config.ignorers = ["${IGNORER_NAME}"]`);
   });
 
-  it("is switched on by CI's mutation job, which fails a run that hits its limit", () => {
+  it("is switched on by the shared mutation job, which this repository no longer replaces", () => {
     const text = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
-    // The shared job mutates whole files; this repository's own job replaces it.
-    expect(text).toMatch(/^\s+run-mutation: false$/m);
-    expect(text).toMatch(/^ {2}mutation:$/m);
-    expect(text).toContain("MUTATE_CHANGED_LINES_BASE: ${{ env.MUTATION_BASE }}");
-    expect(text).toContain("did not finish inside its");
+    expect(text).toMatch(/^\s+run-mutation: true$/m);
+    expect(text).not.toMatch(/^ {2}mutation:$/m);
+  });
+});
+
+describe("the base a run judges its changed lines against", () => {
+  it("is MUTATE_CHANGED_LINES_BASE when that is set, on any event", () => {
+    expect(
+      changedLinesBaseFrom({
+        MUTATE_CHANGED_LINES_BASE: "origin/release",
+        GITHUB_EVENT_NAME: "pull_request",
+        GITHUB_BASE_REF: "main",
+      }),
+    ).toBe("origin/release");
+  });
+
+  it("is the pull request's base branch on origin when the variable is unset", () => {
+    expect(
+      changedLinesBaseFrom({ GITHUB_EVENT_NAME: "pull_request", GITHUB_BASE_REF: "main" }),
+    ).toBe("origin/main");
+    expect(
+      changedLinesBaseFrom({
+        MUTATE_CHANGED_LINES_BASE: "",
+        GITHUB_EVENT_NAME: "pull_request",
+        GITHUB_BASE_REF: "main",
+      }),
+    ).toBe("origin/main");
+  });
+
+  it("is none outside a pull request, so a full run mutates whole files", () => {
+    expect(changedLinesBaseFrom({})).toBeUndefined();
+    expect(
+      changedLinesBaseFrom({ GITHUB_EVENT_NAME: "schedule", GITHUB_BASE_REF: "" }),
+    ).toBeUndefined();
+    expect(
+      changedLinesBaseFrom({ GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_BASE_REF: "main" }),
+    ).toBeUndefined();
+    expect(
+      changedLinesBaseFrom({ GITHUB_EVENT_NAME: "pull_request", GITHUB_BASE_REF: "" }),
+    ).toBeUndefined();
   });
 });
