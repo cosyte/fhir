@@ -1,33 +1,30 @@
 /**
- * FHIR-P10b, Tier-2 real-world quirk corpus (roadmap §3 "cross-vendor quirks that bite", Phase 10).
- *
- * This is the **tier-(b) real-world-quirk** corpus of the three-tier conformance strategy (roadmap
- * §6): resources that are shaped the way real US production FHIR is shaped, not the clean spec
- * examples of tier (a), and that a naive consumer mis-handles. Each fixture asserts the exact
+ * The real-world quirk corpus: resources shaped the way real US production FHIR is shaped, not the
+ * clean spec examples, which a naive consumer mis-handles. Each fixture asserts the exact
  * value-free issue set `@cosyte/fhir` produces, so a regression that starts dropping an extension,
  * coercing a decimal, or rejecting a tolerable quirk fails the build.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────────────
- * GROUNDING (ADR 0018, public conformance resources unblock the parsers)
+ * GROUNDING: public conformance resources
  * ─────────────────────────────────────────────────────────────────────────────────────────────────
- * The anti-invention safety rule stands: a quirk is encoded **only when a real document grounds it**.
- * ADR 0018 makes explicit that "real document" includes **publicly available real artifacts**, FHIR
- * published examples, the spec's own normative rules, US Core, and documented public interop defects,
- * not only privately-supplied de-identified vendor feeds. Every fixture below cites its public
- * source in {@link QUIRK_CORPUS}. **Values are synthetic** (`Synth*`, `syn-*`, `example.org`) so the
- * PHI-leak sweep over `__fixtures__` is meaningful; the quirk *shape* is what the public source grounds.
+ * A quirk is encoded **only when a real document grounds it**. A real document includes
+ * **publicly available real artifacts**: FHIR published examples, the spec's own normative rules,
+ * US Core, and documented public interop defects, not only privately supplied de-identified vendor
+ * feeds. Every fixture below cites its public source in {@link QUIRK_CORPUS}. **Values are
+ * synthetic** (`Synth*`, `syn-*`, `example.org`) so the PHI-leak sweep over `__fixtures__` is
+ * meaningful; the quirk *shape* is what the public source grounds.
  *
  * A genuinely vendor-*proprietary* deviation that appears in **no** public sample (a named Epic/Cerner/
- * athena quirk that is not publicly documented) stays **grounded-only** and is deliberately absent,
- * inventing one is forbidden (conventions §PHI, ADR 0018). Two roadmap-§3 quirks, *missing
- * must-support* (`MUST_SUPPORT_ABSENT`, info-never-error) and *US Core version drift*
- * (`PROFILE_VERSION_MISMATCH`), are already exercised by the Phase-6 profile suite
+ * athena quirk that is not publicly documented) stays **grounded-only** and is deliberately absent:
+ * inventing one is forbidden, since only synthetic data enters this repository. Two cross-vendor
+ * quirks, *missing must-support* (`MUST_SUPPORT_ABSENT`, info-never-error) and *US Core version
+ * drift* (`PROFILE_VERSION_MISMATCH`), are already exercised by the profile suite
  * (`validate-profile.test.ts`, `profiles-coverage.test.ts`); this corpus targets the read-path /
  * codec / Bundle quirks those profile tests do not reach.
  *
- * The differential half of P10b, running this same corpus through the JVM `validator_cli.jar` oracle,
+ * The differential half, running this same corpus through the JVM `validator_cli.jar` oracle,
  * lives in `scripts/differential.mjs` (the `QUIRK_CORPUS` list) and its CI `differential` job. That
- * gate needs a JVM + the jar and so is **CI-only, not observed green in the dev container** (roadmap §6).
+ * gate needs a JVM + the jar and so runs in CI only.
  */
 
 import { readFileSync } from "node:fs";
@@ -51,7 +48,7 @@ function fixture(name: string): string {
 /**
  * The Tier-2 quirk corpus. Each entry is a fixture + the **public source that grounds the quirk** +
  * a one-line statement of the interop hazard it reproduces. This array is the corpus's provenance
- * record (ADR 0018): every quirk traces to a citable public artifact, none is invented.
+ * record: every quirk traces to a citable public artifact, none is invented.
  */
 const QUIRK_CORPUS = [
   {
@@ -85,11 +82,11 @@ const QUIRK_CORPUS = [
     file: "quirk-searchset-paging.json",
     quirk: "a searchset Bundle whose results continue via `link[relation=next]`",
     // FHIR R4 bundle-example.json models a searchset with `link` self + next. Epic/Cerner both
-    // require a consumer to follow `Bundle.link[next]` to retrieve all results (roadmap §3). The
+    // require a consumer to follow `Bundle.link[next]` to retrieve all results. The
     // paging link is not a modeled leaf here but MUST survive the round-trip, dropping it silently
     // truncates a patient's record.
     source:
-      "FHIR R4 bundle-example.json (searchset self/next link) + roadmap §3 (mandatory pagination)",
+      "FHIR R4 bundle-example.json (searchset self/next link), and paging a searchset is mandatory",
   },
   {
     file: "quirk-uscore-extensions.json",
@@ -97,13 +94,13 @@ const QUIRK_CORPUS = [
     // US Core defines the us-core-race (complex, ombCategory + text) and us-core-birthsex extensions;
     // the race example uses OMB code 2106-3 "White" verbatim. A vendor puts these on a base Patient.
     // The library does not specially model them, it must preserve them (and every sub-extension)
-    // through the round-trip, never dropped (roadmap §10 fail-safe: extensions preserved).
+    // through the round-trip, never dropped (fail-safe: extensions are preserved).
     source: "US Core StructureDefinition/us-core-race + us-core-birthsex (OMB race code 2106-3)",
   },
 ] as const;
 
 describe("Tier-2 quirk corpus: provenance", () => {
-  it("every quirk fixture cites a public source that grounds it (ADR 0018, no invented quirks)", () => {
+  it("every quirk fixture cites a public source that grounds it (no invented quirks)", () => {
     for (const entry of QUIRK_CORPUS) {
       expect(entry.source.length, `${entry.file} must cite its grounding source`).toBeGreaterThan(
         20,

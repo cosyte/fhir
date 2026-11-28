@@ -473,12 +473,12 @@ describe("declared residuals of the lexical min read, pinned", () => {
   });
 
   it("still overlays a differential max verbatim, so an upper bound CAN be relaxed", () => {
-    // Both-states pin over the mirror of the defect this slice fixed, deliberately NOT taken here.
+    // Both-states pin over the mirror of the defect this change fixed, deliberately NOT taken here.
     // `mergeElement` gives `max` no tighter-of-the-two treatment, so a differential stating a larger
     // `max` than it inherits widens the bound and retires a `CARDINALITY_MAX`. It is left standing
     // because no read feeding `max` moved in this change: FHIR spells `max` as a string in both
     // formats, so `parseMax` read it from XML at the base commit too. Tightening it is a change to
-    // the JSON path with no defect in this slice forcing it, which makes it its own decision.
+    // the JSON path with no defect in this change forcing it, which makes it its own decision.
     const base = json({
       resourceType: "StructureDefinition",
       url: "http://example.org/StructureDefinition/maxbase",

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { integer64 } from "../src/index.js";
 
-describe("FhirInteger64 (ADR 0001)", () => {
+describe("FhirInteger64", () => {
   it("preserves the exact lexical text and exposes an exact BigInt", () => {
     const n = integer64("9223372036854775807");
     expect(n.toString()).toBe("9223372036854775807");

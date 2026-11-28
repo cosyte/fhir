@@ -42,7 +42,7 @@ const ALLERGY_VERIFICATION =
 const CONDITION_VERIFICATION = "http://terminology.hl7.org/CodeSystem/condition-ver-status";
 
 /**
- * One conformant R4 resource per negation this slice moves onto the walk, each spelling its negation
+ * One conformant R4 resource per negation this change moves onto the walk, each spelling its negation
  * on an element R4 flags `?!`. Every document here is synthetic and carries no patient content.
  */
 const NESTED: readonly { kind: NegationKind; label: string; resource: string }[] = [
@@ -201,7 +201,7 @@ describe("every negation is read at every resource root, not only the one handed
       // BOTH-STATES, and the pin behind the scope contract this readout now states. A location
       // channel can name the resource it came from, so it has always covered a `Bundle`'s entries
       // and a `contained` resource; a single-valued field cannot, so it stays a root read. This
-      // slice moved `negations`, which needs no location because it is a set. If a later change
+      // change moved `negations`, which needs no location because it is a set. If a later change
       // narrows any of these to the entry root, the refusal would fall behind the read and this
       // reds first.
       const modifier = bundleWith(
@@ -292,7 +292,7 @@ describe("every negation is read at every resource root, not only the one handed
   });
 
   /**
-   * The boundaries this slice moves, pinned at their new values, and the ones it deliberately leaves
+   * The boundaries this change moves, pinned at their new values, and the ones it deliberately leaves
    * where they are. Each is red at the base commit except where it says BOTH-STATES.
    */
   describe("moved, and pinned at the new boundary", () => {
@@ -325,7 +325,7 @@ describe("every negation is read at every resource root, not only the one handed
     });
 
     it("leaves the array-wrapper report on its cardinality table at depth too", () => {
-      // Declared residual, unchanged in kind by this slice and now reachable at one more location:
+      // Declared residual, unchanged in kind by this change and now reachable at one more location:
       // on a type outside `SAFETY_RESOURCE_TYPES` the wrapper is read through and the negation
       // surfaced, but the wrapper itself draws no `ARRAY_WRAPPED_SCALAR`, because reporting one is
       // an `error` and that stays where a cardinality is known. Strictly better than the base, which
@@ -358,7 +358,7 @@ describe("every negation is read at every resource root, not only the one handed
 
   /**
    * **The deliberate both-states pins: these read identically at the base commit and at head**, so
-   * they clear nothing about this slice and are here to say what it did not touch. **They are named
+   * they clear nothing about this change and are here to say what it did not touch. **They are named
    * rather than counted**, so the set is checkable without re-running the base. The five in this
    * section, plus three marked BOTH-STATES in place above ("reports the unreadable twin at the same
    * nested location", "keeps every location channel document-wide, which is why none of them moved"
@@ -407,7 +407,7 @@ describe("every negation is read at every resource root, not only the one handed
     });
 
     it("reads no negation out of a nested element that merely spells one as a code", () => {
-      // The element scope is untouched by this slice: `status` and no other name. A nested
+      // The element scope is untouched by this change: `status` and no other name. A nested
       // `Procedure.code` spelling `not-done` is a code, not a status.
       expect(
         safetyOf(bundleWith('{"resourceType":"Procedure","code":{"coding":[{"code":"not-done"}]}}'))
@@ -421,7 +421,7 @@ describe("every negation is read at every resource root, not only the one handed
 
   /**
    * 🔴 **The declared gap, in the fail-safe direction.** `no-known-allergy` is the one negation this
-   * slice deliberately leaves root-scoped, and the reason is not caution about depth:
+   * change deliberately leaves root-scoped, and the reason is not caution about depth:
    *
    * - It is read off `AllergyIntolerance.code`, an element R4 does **not** flag `?!`. It is not a
    *   modifier element at all, but this library's own first-class concept, so the rule that licenses

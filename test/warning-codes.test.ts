@@ -10,11 +10,11 @@ import {
 
 /**
  * The public issue/fatal code registries are a stable contract, a rename is a breaking change
- * (roadmap Phase 2 snapshots the full set). This suite pins the Phase-1 codes so an accidental
+ * (`validation-codes.test.ts` snapshots the validation set). This suite pins the parse codes so an accidental
  * rename fails loudly.
  */
 describe("issue & fatal code registries (stable public contract)", () => {
-  it("pins the issue codes (Phase 1 + the Phase-8 XML-reader code + DUPLICATE_PROPERTY)", () => {
+  it("pins the issue codes (the JSON reader's, the XML reader's code, and DUPLICATE_PROPERTY)", () => {
     expect(ISSUE_CODES).toEqual({
       DECIMAL_PRECISION_AT_RISK: "DECIMAL_PRECISION_AT_RISK",
       UNKNOWN_PROPERTY: "UNKNOWN_PROPERTY",
@@ -47,7 +47,7 @@ describe("issue & fatal code registries (stable public contract)", () => {
     ]);
   });
 
-  it("pins the fatal codes (Phase 1 + the Phase-11 depth-bound DoS guard)", () => {
+  it("pins the fatal codes (the parse refusals and the depth-bound DoS guard)", () => {
     expect(FATAL_CODES).toEqual({
       MALFORMED_JSON: "MALFORMED_JSON",
       PRIMITIVE_EXTENSION_MISALIGNED: "PRIMITIVE_EXTENSION_MISALIGNED",

@@ -367,9 +367,9 @@ describe("collectProfileVersionIssues: meta.profile version pins", () => {
   });
 });
 
-describe("validateResource: Phase 6 profile layer wiring", () => {
+describe("validateResource: profile layer wiring", () => {
   it("runs the profile layer only when profiles are supplied", () => {
-    // clinicalStatus present (satisfies the Phase-3 ait-1 invariant); verificationStatus is the one
+    // clinicalStatus present (satisfies the ait-1 invariant); verificationStatus is the one
     // absent must-support element, an info finding that must not push the resource invalid.
     const allergy = parse({
       resourceType: "AllergyIntolerance",

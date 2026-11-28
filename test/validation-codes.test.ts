@@ -14,8 +14,8 @@ import {
 } from "../src/index.js";
 
 /**
- * The Phase-2 validation vocabulary is a stable public contract, a rename is a breaking change
- * (the roadmap snapshots the issue-code set here). These pin the exact registries so an accidental
+ * The validation vocabulary is a stable public contract, a rename is a breaking change
+ * (the issue-code set is snapshotted here). These pin the exact registries so an accidental
  * rename fails loudly, and confirm every code has a value-free diagnostic and a correct IssueType.
  */
 describe("validation code / severity / issue-type registries (stable public contract)", () => {
@@ -28,7 +28,7 @@ describe("validation code / severity / issue-type registries (stable public cont
     });
   });
 
-  it("pins the IssueType subset (Phase 2 + Phase 3 safety + Phase 9 bundle additions)", () => {
+  it("pins the IssueType subset (structural, safety, and bundle additions)", () => {
     expect(ISSUE_TYPES).toEqual({
       STRUCTURE: "structure",
       REQUIRED: "required",
@@ -43,7 +43,7 @@ describe("validation code / severity / issue-type registries (stable public cont
     });
   });
 
-  it("pins the validation codes (Phase 2 + Phase 3 safety + Phase 4 quantity + Phase 5 terminology + Phase 6 profile + Phase 7 invariant)", () => {
+  it("pins the validation codes (structural, safety, quantity, terminology, profile, and invariant)", () => {
     expect(VALIDATION_CODES).toEqual({
       UNKNOWN_ELEMENT: "UNKNOWN_ELEMENT",
       RESOURCE_TYPE_UNKNOWN: "RESOURCE_TYPE_UNKNOWN",

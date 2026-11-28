@@ -134,7 +134,7 @@ const ADDED: readonly CorpusDocument[] = [
     name: "added:diagnosticreport-status-trailing-space",
     json: '{"resourceType":"DiagnosticReport","status":"registered ","code":{"text":"synthetic panel"}}',
   },
-  // S0364-fhir-safety-modifier-3: one document per shape the change decides, AC-14.
+  // One document per shape the modifier-element readout decides.
   {
     name: "added:patient-deceased-boolean-true",
     json: '{"resourceType":"Patient","deceasedBoolean":true}',
@@ -159,7 +159,7 @@ const ADDED: readonly CorpusDocument[] = [
     name: "added:medicationrequest-intent-out-of-set",
     json: '{"resourceType":"MedicationRequest","status":"active","intent":"draft"}',
   },
-  // S0369-fhir-safety-modifier-4: one document per shape the change decides, AC-10.
+  // One document per shape the datatype `use` readout decides.
   {
     name: "added:patient-identifier-use-old",
     json: '{"resourceType":"Patient","identifier":[{"use":"old","value":"S1"}]}',
@@ -188,8 +188,8 @@ const ADDED: readonly CorpusDocument[] = [
     name: "added:patient-contained-organization-use",
     json: '{"resourceType":"Patient","contained":[{"resourceType":"Organization","identifier":[{"use":"old","value":"O1"}],"telecom":[{"use":"OLD","system":"phone","value":"000"}]}]}',
   },
-  // S0374-fhir-invariant-base-1: one document per base-constraint key AC-3 and AC-6 name, plus a
-  // contained resource for AC-7, AC-13. Every value is synthetic.
+  // One document per base-constraint key the base-invariant layer reads, plus a contained
+  // resource. Every value is synthetic.
   {
     name: "added:base-pat-1-contact-without-contact-detail",
     json: '{"resourceType":"Patient","contact":[{"gender":"other"}]}',

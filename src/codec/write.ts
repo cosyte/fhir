@@ -101,7 +101,7 @@ function emitScalar(value: PrimitiveValue | undefined): string {
   if (value === undefined) return "null";
   if (typeof value === "string") return JSON.stringify(value);
   if (typeof value === "boolean") return value ? "true" : "false";
-  // FhirDecimal, emit its exact lexical text, unquoted. This is the whole point of ADR 0001.
+  // FhirDecimal, emit its exact lexical text, unquoted. Keeping a decimal exactly as written is the reason FhirDecimal exists.
   return value.raw;
 }
 

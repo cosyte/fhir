@@ -325,7 +325,7 @@ function bindsEveryPrefix(
 function scalarText(value: PrimitiveValue): string {
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";
-  return value.raw; // FhirDecimal, exact lexical form (ADR 0001).
+  return value.raw; // FhirDecimal, exact lexical form.
 }
 
 /** Escape a string for use inside a double-quoted XML attribute value (round-trip-safe). */

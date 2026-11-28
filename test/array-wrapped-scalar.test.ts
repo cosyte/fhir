@@ -761,7 +761,7 @@ describe("an array-wrapped 0..1 element (generic converter output)", () => {
     });
   });
 
-  describe("what this slice deliberately does not change", () => {
+  describe("what this change deliberately does not change", () => {
     it("does NOT launder the defect through a write and re-read", () => {
       // The duplicate-key route used to launder: the writer emitted one member per name, so the
       // survivor was conformant and the re-read clean. That is closed (both writers refuse). The

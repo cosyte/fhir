@@ -429,7 +429,7 @@ describe("the content is preserved, and no walker can see it", () => {
   });
 
   it("preserves a decimal inside a nested array as its exact lexical text", () => {
-    // ADR 0001 does not stop applying because the position is unreadable: a dose that came in as
+    // A decimal is kept as written even where the position is unreadable: a dose that came in as
     // `0.010` must not come back as `0.01`, even from a position the model cannot place.
     const doc = '{"resourceType":"Observation","note":[[{"x":0.010}]]}';
     const note = itemAt(parseResource(doc).resource, "note", 0);

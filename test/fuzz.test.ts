@@ -1,9 +1,9 @@
 /**
- * FHIR-P11 fuzz tier (roadmap §6 "Fuzzing, JSON/XML-level, not byte-level").
+ * The fuzz tier: fuzzing at the JSON and XML level, not the byte level.
  *
  * FHIR is transported as text, so the attack surface of this library is adversarial JSON and XML,
  * not byte framing. The single contract this file proves, at fuzz-scale run counts, across every
- * hostile-input shape the roadmap names (truncation, deep nesting, `_element` games, huge /
+ * hostile-input shape we test for (truncation, deep nesting, `_element` games, huge /
  * scientific-notation numbers, `resourceType` games, and, for XML, XXE / billion-laughs / undefined
  * entities, and hostile narrative XHTML: script variants, entities and nesting depth), is:
  *
@@ -366,7 +366,7 @@ describe("fuzz: JSON, validateResource never throws over any resource that parse
 });
 
 /**
- * Synthetic profiles that slice by `type` and `profile` discriminators, every path form this library
+ * Synthetic profiles whose slicing uses `type` and `profile` discriminators, every path form this library
  * walks: a choice element's `$this`, a resource held in place (`resource`), and `resolve()` through
  * `contained` and Bundle entries. A `profile` discriminator is not decided: the slicings that use
  * one (`Observation.hasMember`, and `Bundle.entry` beside a `type` one) are always left unchecked.
@@ -1068,7 +1068,7 @@ describe("fuzz: NDJSON, parseNdjsonLine isolates every failure and never throws"
 });
 
 describe("fuzz: registries stay pinned (a silent code rename would be caught here)", () => {
-  it("FATAL_CODES is exactly the documented set (Phase 1 + the P11 depth-bound guard)", () => {
+  it("FATAL_CODES is exactly the documented set (the parse refusals and the depth-bound guard)", () => {
     expect(Object.keys(FATAL_CODES).sort()).toEqual(
       ["MALFORMED_JSON", "MAX_DEPTH_EXCEEDED", "PRIMITIVE_EXTENSION_MISALIGNED"].sort(),
     );

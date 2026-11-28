@@ -195,7 +195,7 @@ function checkLeaf(
   const primitiveExpected = isPrimitiveType(datatype);
 
   if (isComplex(leaf)) {
-    // A primitive datatype cannot be an object; a complex datatype's internals are Phase 6.
+    // A primitive datatype cannot be an object; a complex datatype's internals are the profile layer's.
     if (primitiveExpected) emit(ctx, "TYPE_MISMATCH", occurrencePath(at, index));
     return;
   }
@@ -221,7 +221,7 @@ function checkLeaf(
   if (verdict === "type-mismatch") emit(ctx, "TYPE_MISMATCH", occurrencePath(at, index));
   else if (verdict === "invalid") emit(ctx, "PRIMITIVE_INVALID", occurrencePath(at, index));
 
-  // Required-strength enumerated code binding (Phase 2 enforces `required` only).
+  // Required-strength enumerated code binding (this layer enforces `required` only).
   if (
     verdict === "ok" &&
     datatype === "code" &&
@@ -374,18 +374,18 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
     emit(ctx, "UNKNOWN_ELEMENT", unknown.location);
   }
 
-  // Safety layer (Phase 3): fail-closed modifier extensions (every type), retraction, and the named
+  // Safety layer: fail-closed modifier extensions (every type), retraction, and the named
   // status/negation invariants (the safety types). Independent of the structural schema above,
   // it keys off `resourceType` and the modifier elements directly, so it runs even for types the
-  // Phase-2 schema does not model.
+  // structural schema does not model.
   for (const issue of collectSafetyIssues(resource, rt)) ctx.issues.push(issue);
 
-  // Quantity / UCUM layer (Phase 4): value[x] type discrimination, UCUM code shape, vital-signs
+  // Quantity / UCUM layer: value[x] type discrimination, UCUM code shape, vital-signs
   // required-unit conformance, and dose quantities. Like the safety layer it keys off the resource
-  // model directly (independent of the Phase-2 structural schema).
+  // model directly (independent of the structural schema).
   for (const issue of collectQuantityIssues(resource, rt)) ctx.issues.push(issue);
 
-  // Bundle-integrity layer (Phase 9): for a Bundle, fullUrl↔id agreement, unresolved references, and
+  // Bundle-integrity layer: for a Bundle, fullUrl↔id agreement, unresolved references, and
   // the DoS-safe contained-cycle guard. Keys off the resource type, like the layers around it.
   if (rt === "Bundle") {
     for (const issue of collectBundleIssues(resource)) ctx.issues.push(issue);
@@ -400,7 +400,7 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   // changes the model.
   for (const issue of collectNarrativeIssues(resource, root)) ctx.issues.push(issue);
 
-  // Terminology binding layer (Phase 5): strength-aware, content-free system checks on bound codings,
+  // Terminology binding layer: strength-aware, content-free system checks on bound codings,
   // plus value-set membership when a terminology service is supplied. Degrades to warnings (never a
   // false error) with no service. Also keys off the resource model directly.
   // `options` is a superset of TerminologyOptions (it also carries `mode`/`schemas`), so it satisfies
@@ -417,7 +417,7 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
   for (const finding of base.findings) ctx.issues.push(finding.issue);
   const reportedByBase = alreadyReported(base.findings);
 
-  // Profile layer (Phase 6): validate against each supplied StructureDefinition whose `type` matches
+  // Profile layer: validate against each supplied StructureDefinition whose `type` matches
   // (fixed/pattern, must-support-as-obligation, profile cardinality, slicing), plus the resource's
   // `meta.profile` version pins against the supplied set. No profile content is bundled, a caller
   // supplies US Core (or vendor) profiles, exactly as the terminology layer takes a service.
@@ -434,9 +434,9 @@ function validateOnce(resource: FhirComplex, options: ValidateOptions): Validati
       for (const issue of collectProfileIssues(resource, profile, profileOptions)) {
         ctx.issues.push(issue);
       }
-      // Invariant layer (Phase 7): evaluate the profile's FHIRPath `constraint`s via the bounded
+      // Invariant layer: evaluate the profile's FHIRPath `constraint`s via the bounded
       // engine. An unevaluable expression is surfaced INVARIANT_UNCHECKED (never a silent pass); the
-      // seven named safety invariants are left to the always-on Phase-3 safety layer. A profile's
+      // seven named safety invariants are left to the always-on safety layer. A profile's
       // snapshot inherits the base constraints, so a finding the base-constraint layer already made
       // at the same occurrence, for the same key and code, is not reported a second time; the two
       // spell a location differently (the profile layer drops the index of a lone occurrence), so

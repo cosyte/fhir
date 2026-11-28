@@ -169,7 +169,7 @@ describe("collectInvariantIssues", () => {
     expect(req(issues[0]).constraint).toBe("hard-1");
   });
 
-  it("skips the seven safety-owned keys (the Phase-3 safety layer owns them)", () => {
+  it("skips the seven safety-owned keys (the safety layer owns them)", () => {
     const withAit = loadSd({
       resourceType: "StructureDefinition",
       url: "http://x/allergy",
@@ -285,7 +285,7 @@ describe("collectInvariantIssues", () => {
   });
 });
 
-describe("validateResource: Phase 7 invariant layer wiring", () => {
+describe("validateResource: invariant layer wiring", () => {
   const profile = loadSd({
     resourceType: "StructureDefinition",
     url: "http://x/obs",

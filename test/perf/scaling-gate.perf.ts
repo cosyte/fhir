@@ -253,7 +253,7 @@ function expectMeasured(report: ReturnType<typeof scalingGate>): void {
     );
     expect(
       axis.base.min,
-      `${report.name}, ${axis.axis} axis: base phase ${axis.base.min.toFixed(2)} ms, under ${String(LEAST_BASE_PHASE_MS)} ms`,
+      `${report.name}, ${axis.axis} axis: the base run took ${axis.base.min.toFixed(2)} ms, under ${String(LEAST_BASE_PHASE_MS)} ms`,
     ).toBeGreaterThanOrEqual(LEAST_BASE_PHASE_MS);
   }
 }

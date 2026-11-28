@@ -350,7 +350,7 @@ describe("declared residuals of the unreadable-boolean report, pinned", () => {
     // convenience read, which `#79` left matching a JS `boolean` alone because filling in a value
     // there RETIRES a `MUST_SUPPORT_ABSENT`. They are not on this channel either: `SafetyReadout` is
     // the safety spine's readout and a StructureDefinition is not a safety resource, so a report
-    // for them needs a home this slice does not build. Both remain lost, silently.
+    // for them needs a home this change does not build. Both remain lost, silently.
     const { resource } = parseResourceXml(
       `<StructureDefinition ${FHIR_NS}><url value="http://example.org/StructureDefinition/probe"/>` +
         '<type value="Observation"/><kind value="resource"/><differential><element>' +

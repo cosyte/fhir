@@ -189,8 +189,8 @@ export function collectProfileIssues(
   for (const el of snapshot) {
     if (el.path === profile.type) continue; // the root element, nothing to check on the resource itself.
     if (el.sliceName !== undefined) {
-      // A slice is handled via its sliced parent below, when that parent declares the slicing that
-      // assigns the slice its members. Without one no occurrence is assigned, so nothing under the
+      // A slice is handled via its sliced parent below, when that parent declares the slicing which
+      // gives the slice its members. Without one no occurrence is assigned, so nothing under the
       // slice is checked, and that is reported rather than passed in silence.
       if (!slicingDeclaredFor(snapshot, el)) collectNoSlicingIssues(scope, el, issues);
       continue;
@@ -203,7 +203,7 @@ export function collectProfileIssues(
     const leaf = el.path.slice(el.path.lastIndexOf(".") + 1);
     const totalChildren = groups.reduce((n, g) => n + g.children.length, 0);
 
-    // must-support: informational, never an error (roadmap §8, the load-bearing rule). Evaluated at
+    // must-support: informational, never an error (the rule everything here rests on). Evaluated at
     // the element level (absent across every present parent) so an optional repeat does not multiply it.
     if (el.mustSupport === true && totalChildren === 0) {
       issues.push(validationIssue("MUST_SUPPORT_ABSENT", ISSUE_SEVERITIES.INFORMATION, el.path));

@@ -78,7 +78,7 @@ describe("the doNotPerform negation is read wherever it is written", () => {
         // The `MedicationRequest` turn is again a both-states pin, for the same reason.
         // The read window and the report window are one window, decided in one function. If they
         // could drift, widening the read would leave `<doNotPerform value="1"/>` on the new types
-        // exactly as invisible as `value="true"` was before this slice.
+        // exactly as invisible as `value="true"` was before this change.
         const safety = safetyOf(`{"resourceType":"${resourceType}","doNotPerform":"1"}`);
 
         expect(safety.negations).toEqual([]);
@@ -185,7 +185,7 @@ describe("the doNotPerform negation is read wherever it is written", () => {
   });
 
   /**
-   * The boundaries this slice **does** move, pinned at their new values so they cannot move again in
+   * The boundaries this change **does** move, pinned at their new values so they cannot move again in
    * silence. Each of these is red at the base commit: they are not both-states pins, and grouping
    * them with the ones that are would let a vacuous assertion hide among real ones.
    */
@@ -267,7 +267,7 @@ describe("the doNotPerform negation is read wherever it is written", () => {
     });
 
     it("leaves the status-code negations to their own grounding", () => {
-      // These read the same at this slice's base commit and at its head, which is all this slice
+      // These read the same at this change's base commit and at its head, which is all this change
       // claimed: its argument is about one element name, and a status code is a value of an element
       // whose value set R4 defines per resource type. The gap they were pinned over: a conformant
       // `Procedure` whose `status` is `not-done` reading `negations: []`: was closed afterwards, by
@@ -284,11 +284,11 @@ describe("the doNotPerform negation is read wherever it is written", () => {
     it("leaves the root-scoped fields answering about the resource handed in", () => {
       // **Re-keyed, and the reason is recorded rather than the assertion quietly narrowed.** This
       // pinned "only `doNotPerform` was folded in, so a retraction inside a Bundle entry leaves the
-      // Bundle's `negations` empty": a declared gap that a later slice closed, and it is pinned at
+      // Bundle's `negations` empty": a declared gap that a later change closed, and it is pinned at
       // its new value in `test/negation-read-scope-depth.test.ts`. Its `negations: []` assertion was
-      // falsified there; what survives is the boundary THIS slice drew and this section is for: the
+      // falsified there; what survives is the boundary THIS change drew and this section is for: the
       // convenience-shaped fields stay root reads whatever a nested resource says, and both of these
-      // read identically at this slice's base commit and at head.
+      // read identically at this change's base commit and at head.
       const safety = safetyOf(
         '{"resourceType":"Bundle","type":"collection","entry":[{"resource":' +
           '{"resourceType":"Observation","status":"entered-in-error"}}]}',

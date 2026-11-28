@@ -1,61 +1,33 @@
 name: Public-surface gate
 
-# Founder directive 2026-07-27: no internal project bookkeeping on any surface a consumer
-# reads. Item identifiers, phase and wave language, ADR numbers, meta-repo paths and
-# process commentary belong in the changeset, CHANGELOG.md, the commit, the PR and the
-# umbrella's plans, never in README.md, docs-content/, the npm description, a JSDoc block a
-# consumer's editor renders, or a message string a consumer reads in their logs.
-# `cosyte-internal-refs`, the shared gate from `@cosyte/script-utils` (ST34), enforces it
+# A public repository carries no internal bookkeeping on any surface a reader sees: no item,
+# decision or standard ids, no phase, plan or wave names, no decision numbers, no private
+# repository names or paths, and no session ids. Such a reference points at a record the reader
+# cannot open. `cosyte-internal-refs`, the shared gate from `@cosyte/script-utils`, enforces it
 # here, configured by `scripts/internal-refs.json`.
 #
-# WHY A GATE AND NOT A NOTE. The founder, on the sweep that removed 149 of these across the
-# ecosystem: "it needs to not just be a memory note, but something that is addressed in the
-# workflow accordingly. This needs to not happen again." A sweep regresses the first time
-# someone writes `(Phase 12)` into a README; a job that reds does not.
+# WHAT SCANS. `pnpm check:no-internal-refs` runs `cosyte-internal-refs` from the devDependency.
+# It reads the public surface `scripts/internal-refs.json` names (README.md, LICENSE and
+# docs-content/), the files under `.changeset/`, `CLAUDE.md`, `AGENTS.md` and
+# `.github/workflows/` whole, and the comments and string literals in the source under `src/`
+# and `test/`. The shared gate workflow does the plumbing (checkout, pnpm, Node, and the install
+# the gate needs) and carries no pattern, no allow-list and no file selection of its own: the
+# command's exit status decides the job. `scripts/internal-refs.json` holds this package's own
+# prefixes, designations and surface, and one extra rule for phase and wave language.
 #
-# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-internal-refs`, which runs
-# `cosyte-internal-refs` from the `@cosyte/script-utils` devDependency. The job below
-# delegates the plumbing (checkout, pnpm, Node, and the install the gate needs) to the shared
-# gate workflow, which carries no pattern, no allow-list and no file selection of its own: it
-# prepares the tree, runs the command, and lets the command's exit status decide the job. The
-# rules are the shared ones; `scripts/internal-refs.json` holds this package's own prefixes,
-# designations, surface, the passes over `src/` doc comments and string literals, and one
-# extra rule that keeps the shared gate reading at least what this repository's former
-# checker read.
+# THE JOB ID IS LOAD-BEARING. A called job's check run is named `<caller job id> / <inner job
+# id>`, so the job id `no-internal-refs` below publishes `no-internal-refs / public-surface`, the
+# context a branch ruleset requires. Renaming the job detaches that requirement with no error
+# anywhere. Do not rename it.
 #
-# THE JOB ID IS LOAD-BEARING. A called job's check run is named
-# `<caller job id> / <inner job id>`, so the job id `no-internal-refs` below publishes
-# `no-internal-refs / public-surface`, which is the context a branch ruleset must require.
-# Renaming the job detaches that requirement with no error anywhere, and a required
-# context nothing emits blocks every pull request.
+# WHY A SEPARATE WORKFLOW, and not a job in ci.yml. The shared ci pipeline runs a fixed ladder and
+# no repository script, and keeping the gate out of ci.yml keeps it cheap: a checkout, an install
+# and one scan, where ci.yml drives a Node matrix on three systems, a fuzz job and a differential
+# job.
 #
-# WHY A SEPARATE WORKFLOW, and not a job in ci.yml. Same reasoning as the em-dash gate next
-# door, and the first half is the deciding one:
-#
-#   The shared ci pipeline is not an option. This repo's `ci` job calls
-#   cosyte/.github/.github/workflows/ci.yml at a published reference, which runs a fixed
-#   ladder and no arbitrary repo script. Adding this there would also flip every other caller red on its next run:
-#   the measured backlog was 149 internal references across 11 repos, and remediating each
-#   is its own deliberate piece of work. A shared pipeline is the wrong place to land a rule
-#   most of its callers cannot yet satisfy.
-#
-#   Within this repo, keeping it out of ci.yml also keeps it cheap: this job is a checkout,
-#   an install and one scan over the public surface and the source files, while ci.yml
-#   drives the full Node 22, 24, and 26 matrix, a fuzz job at FUZZ_RUNS=20000, and a
-#   differential job that downloads validator_cli.jar and runs a JVM oracle over four corpora.
-#
-# WHAT THIS DOES NOT CHECK, deliberately: the PR title, the PR body, and commit messages.
-# The em-dash gate scans all three because the brand rule names commit messages explicitly.
-# THIS rule says the opposite: identifiers BELONG in the commit, the PR and the changeset,
-# so a PR-text half here would red on correct work. That is also why there is no `edited`
-# trigger: nothing here reads PR text, so retitling a PR cannot change the result. It is
-# the one place this gate and the em-dash gate next door disagree about their triggers, and
-# the disagreement is the rule, not an oversight.
-#
-# The other half of this rule, the one that keeps identifiers out of a published RELEASE
-# BODY, lives in the shared pipeline: `cosyte/.github` `scripts/release-notes.mjs assert`
-# re-reads the finished body bytes and refuses to publish a violating one. This job covers
-# the repo's own files; that one covers what gets published to the releases page.
+# WHAT THIS DOES NOT CHECK: the pull request title, its body, and commit messages. There is no
+# `edited` trigger, since nothing here reads pull request text. A published release body is held
+# to the same rule by the shared release workflow, which refuses to publish one that breaks it.
 #
 # Run it locally with `pnpm check:no-internal-refs`.
 

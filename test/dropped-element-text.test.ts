@@ -66,7 +66,7 @@ describe("the three shapes the defect was filed with, each against its conforman
       `<Observation ${NS}><id value="o1"/><status value="entered-in-error"/></Observation>`,
     );
 
-    // The twin is the yardstick: it reads the retraction, and this slice must not move it.
+    // The twin is the yardstick: it reads the retraction, and this change must not move it.
     expect(readSafety(twin.resource)).toMatchObject({
       retracted: true,
       negations: ["entered-in-error"],
@@ -169,7 +169,7 @@ describe("the three shapes the defect was filed with, each against its conforman
 describe("the marker lands at every site `hasStrayText` observes text, and only there", () => {
   // The reader observes and discards character data at exactly three sites (`readComplex`, the
   // resource-valued unwrap, and the primitive branch of `buildSingle`). Counting them is the check;
-  // the previous slice was refuted twice for writing a universal the call sites did not support.
+  // the earlier change was refuted twice for writing a universal the call sites did not support.
   it("marks a primitive built without a `value` attribute", () => {
     const { resource } = parseResourceXml(
       `<Observation ${NS}><status>final</status></Observation>`,
@@ -216,7 +216,7 @@ describe("the marker lands at every site `hasStrayText` observes text, and only 
     // That is WIDER than XML's whitespace production: U+00A0 and U+FEFF trim to empty, so a text
     // node made only of those is dropped with neither a flag nor a marker. Identical on base, and
     // pinned here rather than widened, because widening changes what the reader reports on documents
-    // this change does not otherwise touch. It is why no sentence in this slice may say "wherever
+    // this change does not otherwise touch. It is why no sentence in this change may say "wherever
     // text is dropped".
     for (const invisible of ["&#160;", "&#xFEFF;"]) {
       const { resource, issues } = parseResourceXml(
@@ -354,7 +354,7 @@ describe("the refusal surface", () => {
   });
 
   it("keeps the reader's own warning rather than replacing it", () => {
-    // Additive, exactly as `NESTED_ARRAY` is: the read channel is unchanged by this slice.
+    // Additive, exactly as `NESTED_ARRAY` is: the read channel is unchanged by this change.
     const { issues } = parseResourceXml(
       `<Observation ${NS}><status>entered-in-error</status></Observation>`,
     );
@@ -505,7 +505,7 @@ describe("what the tolerance does NOT do, pinned so it cannot be mistaken for a 
     expect(isRetracted(resource)).toBe(true);
 
     // A value-absent primitive with NO marker is NOT refused: the writer's §2.6.1 residual for an
-    // `id`-only element is untouched by this slice, and is left as the separate decision it is.
+    // `id`-only element is untouched by this change, and is left as the separate decision it is.
     const idOnly = parseResource('{"resourceType":"Patient","_active":{"id":"a"}}');
     expect(serializeResourceXml(idOnly.resource)).toContain('<active id="a"/>');
   });

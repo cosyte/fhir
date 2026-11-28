@@ -94,7 +94,7 @@ describe("resolveSlices", () => {
 describe("matchSlices", () => {
   const discriminators = [{ type: "pattern", path: "$this" }];
 
-  it("assigns occurrences that match a slice's pattern and leaves others unmatched", () => {
+  it("assigns occurrences matching the pattern of a slice and leaves others unmatched", () => {
     const result = matchSlices(
       [cc("vital-signs", "http://s"), cc("laboratory")],
       slices,
@@ -294,7 +294,7 @@ describe("a re-slice decides its parent slice's membership", () => {
     ]);
   });
 
-  it("reports a required slice whose member is missing at that slice", () => {
+  it("reports a required slice whose member is missing, at the slice", () => {
     const findings = collectProfileIssues(bpObservation(["8480-6"], ["1111-1"]), bp);
 
     expect(findings.map((f) => [f.code, f.expression])).toEqual([
@@ -307,7 +307,7 @@ describe("a re-slice decides its parent slice's membership", () => {
  * A slice's own constraints apply to its members alone.
  *
  * Every element under a slice's id (`Observation.component:S.code`, and a re-slice's elements under
- * it) constrains only the occurrences the slicing assigned to that slice. The elements of the
+ * it) constrains only the occurrences the slicing assigned to the slice. The elements of the
  * sliced element itself (`Observation.component.code`) still apply to every occurrence. Applying a
  * slice's elements to every occurrence put each slice's fixed and pattern values on the other
  * slices' members, so a conformant two-component Observation drew a `PROFILE_PATTERN_MISMATCH` per
@@ -445,7 +445,7 @@ describe("a slice's constraints apply only to the occurrences assigned to it", (
     ]);
   });
 
-  it("evaluates a slice descendant's invariant on that slice's members alone", () => {
+  it("evaluates a slice descendant's invariant on the members of the slice alone", () => {
     const withInvariant = loadSd({
       resourceType: "StructureDefinition",
       url: "http://example.org/StructureDefinition/slice-invariant",

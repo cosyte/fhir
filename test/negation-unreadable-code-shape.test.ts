@@ -25,7 +25,7 @@ function safetyOfXml(xml: string): ReturnType<typeof readSafety> {
 }
 
 /**
- * The channel this slice adds, read through **one accessor**, so the whole file can be run against
+ * The channel this change adds, read through **one accessor**, so the whole file can be run against
  * the base commit by substituting this function alone: there it returns `[]`, the reading a caller
  * had before the channel existed. Every assertion below therefore measures a **behaviour**, not the
  * presence of a symbol. (`#84` measured 31/35 in the flattering direction by asserting through a
@@ -99,7 +99,7 @@ describe("content where a code belongs is disclosed, not read through", () => {
       expect(disclosed(safety)).toEqual(["Procedure.status"]);
       expect(safety.safeToSummarize).toBe(false);
       // The convenience field is a single-value string read, so it shows nothing either. Before this
-      // slice that `undefined` was indistinguishable from an absent element.
+      // change that `undefined` was indistinguishable from an absent element.
       expect(safety.status).toBeUndefined();
     });
 
@@ -394,12 +394,12 @@ describe("content where a code belongs is disclosed, not read through", () => {
   describe("declared limits, pinned in BOTH states so they cannot move in silence", () => {
     /**
      * **The both-states pins, named here rather than counted.** Each of these reads the same at the
-     * base commit `632f914` and at this one, deliberately, and each is a limit this slice declines
+     * base commit `632f914` and at this one, deliberately, and each is a limit this change declines
      * to close rather than a case it covers:
      *
      * 1. `verificationStatus` written as a bare string draws nothing. Its shape complement is a
-     *    *primitive*, and `Condition.verificationStatus` IS a `code` in DSTU2 (ADR 0004 read
-     *    tolerance), so the same predicate would report a conformant DSTU2 document. The readout
+     *    *primitive*, and `Condition.verificationStatus` IS a `code` in DSTU2 (which this
+     *    library reads tolerantly), so the same predicate would report a conformant DSTU2 document. The readout
      *    still declines it, since: a value where the R4 and R4B definitions put a complex type is
      *    not the element they define there, so it is on `notAssessed` and `safeToSummarize` is
      *    `false`. That is not this channel, and nothing is read as a negation.
@@ -412,7 +412,7 @@ describe("content where a code belongs is disclosed, not read through", () => {
      *    `notAssessed` and `safeToSummarize` is `false`.
      * 4. `clinicalStatus` written as a bare string draws nothing. It is not a negation element.
      *    Declined on `notAssessed` as in 1.
-     * 5. `validateResource` still reports `valid: true`. The safety layer is this slice's window
+     * 5. `validateResource` still reports `valid: true`. The safety layer is this change's window
      *    and no new `ValidationIssue` is raised.
      * 6. An empty array at `status` draws nothing: no position, so no content.
      * 7. A shape **all of whose members** are ones FHIR spells here draws nothing **even where the
@@ -458,7 +458,7 @@ describe("content where a code belongs is disclosed, not read through", () => {
       expect(safety.safeToSummarize).toBe(false);
     });
 
-    it("5. leaves `validateResource` reporting valid on a type it does not model, which is this slice's declared boundary", () => {
+    it("5. leaves `validateResource` reporting valid on a type it does not model, which is this change's declared boundary", () => {
       // The safety readout refuses; the validator raises no new issue code for the shape itself.
       // On a type with no built-in schema nothing tells the validator that `status` is a `code`, so
       // the document still reads valid there. `MedicationAdministration` carries `not-done` in R4

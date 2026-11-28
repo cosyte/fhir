@@ -116,7 +116,7 @@ describe("readQuantity: the coded UCUM unit is distinct from the display string"
     expect(q?.unit).toBe("units");
     expect(q?.code).toBe("U");
     expect(q?.system).toBe("http://unitsofmeasure.org");
-    // Trailing-zero precision preserved (ADR 0001, never through a JS number).
+    // Trailing-zero precision preserved (never through a JS number).
     expect(q?.value?.toString()).toBe("0.010");
   });
 
@@ -175,7 +175,7 @@ describe("validateUcumShape: structural (case/brackets), never membership", () =
 });
 
 describe("vital-signs required-unit table", () => {
-  it("maps the roadmap-named vital signs to their required UCUM codes", () => {
+  it("maps the core vital signs to their required UCUM codes", () => {
     expect(requiredVitalSignUnits("29463-7")).toEqual(["g", "kg", "[lb_av]"]); // weight
     expect(requiredVitalSignUnits("8480-6")).toEqual(["mm[Hg]"]); // systolic BP
     expect(requiredVitalSignUnits("8310-5")).toEqual(["Cel", "[degF]"]); // temperature

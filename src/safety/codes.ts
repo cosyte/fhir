@@ -670,7 +670,7 @@ function pushCoding(
   out: Coded[],
 ): void {
   if (!isComplex(item)) return;
-  // FHIR-CODING-SCALAR-WRAPPER. These read through an array wrapper, but ONLY a single-position
+  // A Coding's scalar elements wrapped in an array. These read through an array wrapper, but ONLY a single-position
   // one, and the restriction is the whole safety argument rather than caution. `Coding.system` and
   // `Coding.code` feed the `system` x `code` CROSS-PRODUCT below, so a rule yielding more than one
   // value on either side manufactures a pair the sender never wrote, and one pair matched
@@ -1046,7 +1046,7 @@ export const NEGATION_CODE_READS: readonly {
   {
     // No `unread` here, and it is a declared limit rather than an oversight. The shape complement of
     // a `CodeableConcept` read is a *primitive* at the element, and `Condition.verificationStatus`
-    // **is** a `code` in DSTU2, which ADR 0004 says this library reads tolerantly, so the same
+    // **is** a `code` in DSTU2, which this library reads tolerantly by design, so the same
     // predicate that reports a non-conformant R4 document would report a conformant DSTU2 one.
     // Deciding that needs a version this reader does not have. Filed, and pinned in both directions,
     // rather than taken here on the strength of the R4 half.
